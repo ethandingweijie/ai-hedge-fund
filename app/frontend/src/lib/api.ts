@@ -7,13 +7,15 @@ import type {
   ScreenerStock,
   WatchlistItem,
 } from './reportTypes';
+import { API_BASE_URL } from '@/config';
+import { getStoredToken } from '@/contexts/auth-context';
 
-const BASE = '/api';
+const BASE = API_BASE_URL;
 
 // ── Helper ─────────────────────────────────────────────────────────────────
 
 function _authHeaders(): HeadersInit {
-  const token = localStorage.getItem('hedge_fund_token');
+  const token = getStoredToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

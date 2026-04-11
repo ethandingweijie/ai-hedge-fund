@@ -1,13 +1,17 @@
 /**
  * auth-context.tsx
  * Global authentication state.
- * Stores the JWT in localStorage and exposes login/logout helpers.
+ * Uses SecureStorage (iOS Keychain via Capacitor, localStorage on web).
  */
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { API_BASE_URL } from '@/config';
+import { SecureStorage } from '@/lib/secure-storage';
 
-const API_BASE = 'http://localhost:8000';
 const STORAGE_KEY = 'hedge_fund_token';
+
+// In-memory cache so synchronous callers (API headers) can access the token
+let _cachedToken: string | null = null;
 
 export interface AuthUser {
   id: number;
@@ -33,21 +37,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Re-hydrate from localStorage on mount
+  // Re-hydrate from storage on mount
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      fetchMe(stored)
-        .then(u => { setUser(u); setToken(stored); })
-        .catch(() => localStorage.removeItem(STORAGE_KEY))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    SecureStorage.get(STORAGE_KEY).then(stored => {
+      if (stored) {
+        _cachedToken = stored;
+        fetchMe(stored)
+          .then(u => { setUser(u); setToken(stored); })
+          .catch(() => { SecureStorage.remove(STORAGE_KEY); _cachedToken = null; })
+          .finally(() => setLoading(false));
+      } else {
+        setLoading(false);
+      }
+    });
   }, []);
 
   async function fetchMe(jwt: string): Promise<AuthUser> {
-    const res = await fetch(`${API_BASE}/auth/me`, {
+    const res = await fetch(`${API_BASE_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${jwt}` },
     });
     if (!res.ok) throw new Error('Token invalid');
@@ -55,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function _login(endpoint: string, body: object) {
-    const res = await fetch(`${API_BASE}${endpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -65,7 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.detail ?? 'Login failed');
     }
     const data = await res.json();
-    localStorage.setItem(STORAGE_KEY, data.access_token);
+    await SecureStorage.set(STORAGE_KEY, data.access_token);
+    _cachedToken = data.access_token;
     setToken(data.access_token);
     setUser(data.user as AuthUser);
   }
@@ -79,7 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
-    localStorage.removeItem(STORAGE_KEY);
+    SecureStorage.remove(STORAGE_KEY);
+    _cachedToken = null;
     setUser(null);
     setToken(null);
   }
@@ -97,7 +105,7 @@ export function useAuth() {
   return ctx;
 }
 
-/** Returns just the stored JWT (for API calls outside React). */
+/** Returns the cached JWT for API calls outside React (synchronous). */
 export function getStoredToken(): string | null {
-  return localStorage.getItem(STORAGE_KEY);
+  return _cachedToken;
 }

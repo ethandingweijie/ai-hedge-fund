@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-import asyncio
+import os
 
 from app.backend.routes import api_router
 from app.backend.database.connection import engine
@@ -17,16 +17,18 @@ app = FastAPI(title="AI Hedge Fund API", description="Backend API for AI Hedge F
 # Initialize database tables (this is safe to run multiple times)
 Base.metadata.create_all(bind=engine)
 
-# Configure CORS
+# Configure CORS — local dev ports + any extra origins from ALLOWED_ORIGINS env var
+_dev_origins = [
+    f"http://{host}:{port}"
+    for host in ("localhost", "127.0.0.1")
+    for port in range(5173, 5180)
+]
+_extra_origins = [
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173",
-                   "http://localhost:5174", "http://127.0.0.1:5174",
-                   "http://localhost:5175", "http://127.0.0.1:5175",
-                   "http://localhost:5176", "http://127.0.0.1:5176",
-                   "http://localhost:5177", "http://127.0.0.1:5177",
-                   "http://localhost:5178", "http://127.0.0.1:5178",
-                   "http://localhost:5179", "http://127.0.0.1:5179"],
+    allow_origins=_dev_origins + ["capacitor://localhost", "http://localhost"] + _extra_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,6 +40,18 @@ app.include_router(api_router)
 @app.on_event("startup")
 async def startup_event():
     """Startup event to check Ollama availability and kick off VGPM backfill."""
+    if os.environ.get("DISABLE_OLLAMA", "").lower() in ("1", "true", "yes"):
+        logger.info("Ollama disabled via DISABLE_OLLAMA env var — skipping check")
+    else:
+        await _check_ollama()
+
+    # Start VGPM backfill scheduler in background thread.
+    import threading
+    t = threading.Thread(target=_backfill_scheduler, daemon=True)
+    t.start()
+
+
+async def _check_ollama():
     try:
         logger.info("Checking Ollama availability...")
         status = await ollama_service.check_ollama_status()
@@ -59,13 +73,6 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Could not check Ollama status: {e}")
         logger.info("ℹ Ollama integration is available if you install it later")
-
-    # Start VGPM backfill scheduler in background thread.
-    # Runs immediately if today's 9am backfill hasn't happened yet,
-    # then repeats daily at 9am local time.
-    import threading
-    t = threading.Thread(target=_backfill_scheduler, daemon=True)
-    t.start()
 
 
 # ── VGPM Backfill Scheduler ──────────────────────────────────────────────────

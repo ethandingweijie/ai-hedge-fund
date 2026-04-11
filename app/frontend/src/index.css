@@ -4,6 +4,8 @@
 
 @layer base {
   :root {
+    --safe-area-top: env(safe-area-inset-top);
+    --safe-area-bottom: env(safe-area-inset-bottom);
     --background: 0 0% 94%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
@@ -359,6 +361,11 @@
 /* Safe area for bottom nav (iPhone notch devices) */
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent iOS overscroll bounce */
+html, body {
+  overscroll-behavior: none;
 }
 
 /* Touch-friendly tap targets */
