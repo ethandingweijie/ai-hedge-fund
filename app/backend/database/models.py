@@ -3,6 +3,25 @@ from sqlalchemy.sql import func
 from .connection import Base
 
 
+class User(Base):
+    """OAuth users — created on first sign-in via Google or Apple."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Identity
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    name = Column(String(255), nullable=True)
+    avatar_url = Column(Text, nullable=True)
+
+    # Provider — "google" or "apple"
+    provider = Column(String(50), nullable=False)
+    # Provider's own user identifier (sub from Google, sub from Apple)
+    provider_sub = Column(String(255), nullable=False, index=True)
+
+
 class HedgeFundFlow(Base):
     """Table to store React Flow configurations (nodes, edges, viewport)"""
     __tablename__ = "hedge_fund_flows"
@@ -32,6 +51,8 @@ class HedgeFundFlowRun(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     flow_id = Column(Integer, ForeignKey("hedge_fund_flows.id"), nullable=False, index=True)
+    # Nullable — runs started before auth was introduced have no owner
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
@@ -92,6 +113,17 @@ class HedgeFundFlowRunCycle(Base):
     # Metadata
     trigger_reason = Column(String(100), nullable=True)  # scheduled, manual, market_event, etc.
     market_conditions = Column(JSON, nullable=True)  # Market data snapshot at cycle start
+
+
+class ResearchSummaryCache(Base):
+    """Cached LLM research summaries keyed by run_id."""
+    __tablename__ = "research_summary_cache"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    run_id     = Column(String(255), nullable=False, unique=True, index=True)
+    ticker     = Column(String(20), nullable=True)
+    summary    = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class ApiKey(Base):

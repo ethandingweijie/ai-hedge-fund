@@ -16,6 +16,17 @@ export function formatKeyboardShortcut(key: string): string {
   return `${modifierKey}${key.toUpperCase()}`;
 }
 
+/**
+ * Return the currency symbol for a ticker.
+ * HK tickers are purely numeric (1–5 digits) with an optional .HK suffix.
+ * All others default to USD ($).
+ */
+export function currencySymbol(ticker: string): string {
+  if (!ticker) return '$';
+  const clean = ticker.trim().toUpperCase().replace(/\.HK$/, '');
+  return /^\d{1,5}$/.test(clean) ? 'HK$' : '$';
+}
+
 // Provider color utility for consistent styling across components
 export function getProviderColor(provider: string): string {
   return 'bg-gray-600/20 text-primary border-gray-600/40';

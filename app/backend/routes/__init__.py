@@ -8,6 +8,10 @@ from app.backend.routes.flow_runs import router as flow_runs_router
 from app.backend.routes.ollama import router as ollama_router
 from app.backend.routes.language_models import router as language_models_router
 from app.backend.routes.api_keys import router as api_keys_router
+from app.backend.routes.analysis import router as analysis_router
+from app.backend.routes.screener import router as screener_router
+from app.backend.routes.watchlist import router as watchlist_router
+from app.backend.routes.auth import router as auth_router
 
 # Main API router
 api_router = APIRouter()
@@ -21,3 +25,7 @@ api_router.include_router(flow_runs_router, tags=["flow-runs"])
 api_router.include_router(ollama_router, tags=["ollama"])
 api_router.include_router(language_models_router, tags=["language-models"])
 api_router.include_router(api_keys_router, tags=["api-keys"])
+api_router.include_router(analysis_router, tags=["analysis"])
+api_router.include_router(screener_router, prefix="/screener", tags=["screener"])
+api_router.include_router(watchlist_router, prefix="/watchlist", tags=["watchlist"])
+api_router.include_router(auth_router, tags=["auth"])
