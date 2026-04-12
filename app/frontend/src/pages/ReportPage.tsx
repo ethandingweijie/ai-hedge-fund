@@ -191,10 +191,12 @@ function LiveResearchLabel({ pct, phaseMap }: { pct: number; phaseMap: Record<st
 
   // Determine current active phase from phaseMap
   const phases = Object.values(phaseMap);
-  const activePhase = phases.length > 0
-    ? phases.filter(p => p.status.toLowerCase() !== 'done').pop()  // latest non-done
-      ?? phases[phases.length - 1]  // fallback: last phase (all done)
-    : null;
+  // Filter out pipeline_queued to find the real active pipeline phase
+  const realPhases = phases.filter(p => p.phase !== 'pipeline_queued');
+  const activePhase = realPhases.length > 0
+    ? realPhases.filter(p => p.status.toLowerCase() !== 'done').pop()  // latest non-done
+      ?? realPhases[realPhases.length - 1]  // fallback: last completed phase
+    : (phases.length > 0 ? phases[phases.length - 1] : null);  // fall back to pipeline_queued if nothing else
   const currentPhaseLabel = activePhase
     ? (activePhase.status.toLowerCase() === 'done'
         ? (PHASE_LABELS[activePhase.phase]?.done ?? phaseLabel(activePhase.phase))
