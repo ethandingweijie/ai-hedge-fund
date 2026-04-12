@@ -730,6 +730,8 @@ export function ReportPage() {
               isResearchPhase={
                 Object.values(phaseMap).some(p =>
                   p.phase === 'deep_research_agent' && !p.status.includes('✓')
+                ) || events.some(e =>
+                  e.phase === 'deep_research_agent' && !e.status.includes('✓')
                 )
               }
               isComplete={phaseMap['deep_research_agent']?.status?.includes('✓') ?? false}

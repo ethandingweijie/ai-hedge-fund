@@ -85,8 +85,9 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
     });
   }, [liveData]);
 
-  // Don't render if no searches detected
-  if (searches.length === 0 && !isResearchPhase) return null;
+  // Don't render if no searches detected AND not in research phase
+  // During research phase, show the panel even with 0 searches (loading state)
+  if (searches.length === 0 && !isResearchPhase && sources.length === 0) return null;
 
   const searchCount = searches.length;
   const sourceCount = sources.length;
