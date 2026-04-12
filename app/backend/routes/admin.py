@@ -94,8 +94,10 @@ async def admin_dashboard(secret: str = "", db: str = "run_archive", table: str 
     # Table tabs
     table_tabs = ""
     for t in tables_info:
-        active = "background:#1e40af;color:white;" if t["name"] == table else "background:#1e293b;color:#64748b;border:1px solid #334155;"
-        table_tabs += f'<a href="{base_url}&db={db}&table={t[\"name\"]}" style="padding:4px 12px;border-radius:4px;text-decoration:none;font-size:11px;font-weight:500;{active}">{t["name"]} ({t["count"]})</a> '
+        tname = t["name"]
+        tcount = t["count"]
+        active = "background:#1e40af;color:white;" if tname == table else "background:#1e293b;color:#64748b;border:1px solid #334155;"
+        table_tabs += f'<a href="{base_url}&db={db}&table={tname}" style="padding:4px 12px;border-radius:4px;text-decoration:none;font-size:11px;font-weight:500;{active}">{tname} ({tcount})</a> '
 
     # Table rows
     table_html = ""
