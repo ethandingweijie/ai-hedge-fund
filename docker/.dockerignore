@@ -18,11 +18,18 @@ __pycache__/
 *.swp
 *.swo
 
-# Logs and data
+# Logs
 logs/
-data/
 *.log
+
+# Exclude DB files but keep src/data/ Python modules
+*.db
+
+# Frontend (not needed in backend container)
+app/frontend/node_modules/
+app/frontend/ios/
+app/frontend/dist/
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
