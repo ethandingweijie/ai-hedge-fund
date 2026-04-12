@@ -9,8 +9,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { API_BASE_URL } from '@/config';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = API_BASE_URL;
 
 const SECTION_LABELS = ['Industry Structure', 'Corporate Developments', 'Growth Potential', 'Key Risks'];
 
