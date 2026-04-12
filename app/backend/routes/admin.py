@@ -40,6 +40,24 @@ async def delete_row(secret: str = "", db: str = "run_archive", table: str = "",
     if key_col not in allowed_keys:
         raise HTTPException(status_code=400, detail=f"key_col must be one of: {allowed_keys}")
 
+    # For web_runs, use the cascading delete that also cleans up
+    # runs, ticker_signals, agent_signals, and research_summary_cache
+    if table == "web_runs" and key_col == "run_id":
+        from app.backend.services.analysis_service import delete_run
+        success = delete_run(key_val)
+        # Also clean research_summary_cache in hedge_fund.db
+        try:
+            hf_path = _get_db_paths().get("hedge_fund")
+            if hf_path and os.path.exists(hf_path):
+                hf_conn = sqlite3.connect(hf_path)
+                hf_conn.execute("DELETE FROM research_summary_cache WHERE run_id = ?", (key_val,))
+                hf_conn.commit()
+                hf_conn.close()
+        except Exception:
+            pass
+        return {"deleted": 1 if success else 0, "table": table, "key": f"{key_col}={key_val}", "cascaded": True}
+
+    # For other tables, simple row delete
     conn = sqlite3.connect(db_path)
     cur = conn.execute(f"DELETE FROM [{table}] WHERE [{key_col}] = ?", (key_val,))
     conn.commit()
