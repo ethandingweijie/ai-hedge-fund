@@ -294,6 +294,28 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         }
       } catch { /* network error, keep trying */ }
 
+      // Also poll live phase status so progress bar shows current phase
+      try {
+        const statusRes = await fetch(
+          `${API_BASE_URL}/analysis/status/${encodeURIComponent(ticker)}`
+        );
+        if (statusRes.ok) {
+          const status = await statusRes.json();
+          if (status.in_progress && status.phase) {
+            // Update phaseMap with the live phase from the backend
+            setStreamState('running');
+            const liveEvent: ProgressEvent = {
+              phase: status.phase,
+              status: status.status || '',
+              summary: status.summary || '',
+              timestamp: status.timestamp || '',
+            };
+            setStreamEvents((prev) => [...prev, liveEvent]);
+            setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
+          }
+        }
+      } catch { /* ignore */ }
+
       if (attempts >= maxAttempts) {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         setStreamError('Analysis is taking longer than expected — check History for results');

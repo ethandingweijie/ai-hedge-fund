@@ -31,6 +31,9 @@ _in_flight_lock: asyncio.Lock = asyncio.Lock()
 # ── Global pipeline cap: at most 5 concurrent pipelines ──────────────────────
 _pipeline_semaphore: asyncio.Semaphore = asyncio.Semaphore(5)
 
+# ── Live phase status per ticker (read-only endpoint for reconnecting clients) ─
+_live_phases: dict[str, dict] = {}  # ticker → latest progress event dict
+
 # ── Load .env.local once at import time so FMP_API_KEY and others are available
 # for the standalone endpoints (news, financials, intelligence) that run outside
 # the pipeline thread and don't benefit from analysis_service's loader.
@@ -263,6 +266,11 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                 if partial_data:
                     event["partial_data"] = partial_data
                 phase_events.put_nowait(event)
+                # Store latest phase for read-only status endpoint
+                _live_phases[ticker.upper() if ticker else ""] = {
+                    "phase": phase, "status": status, "summary": summary,
+                    "timestamp": timestamp or "",
+                }
             except Exception:
                 pass
 
@@ -287,6 +295,8 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                 # SSE stream is still closing.
                 async with _in_flight_lock:
                     _in_flight.pop(_dedup_key, None)
+                # Clean up live phase tracking
+                _live_phases.pop(ticker.upper(), None)
                 if _run_event is not None:
                     _run_event.set()
                 await phase_events.put(
@@ -399,6 +409,27 @@ async def delete_run(run_id: str):
     except Exception as exc:
         logger.error("delete_run(%s) failed: %s", run_id, exc)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── GET /analysis/status/{ticker} — read-only live phase for reconnecting clients
+@router.get("/status/{ticker}")
+async def get_pipeline_status(ticker: str):
+    """Return the latest progress phase for an in-flight pipeline run.
+    Safe to call repeatedly — read-only, never triggers a new run.
+    Returns null fields if no run is in progress for this ticker."""
+    t = ticker.strip().upper()
+    phase_info = _live_phases.get(t)
+    in_progress = False
+    async with _in_flight_lock:
+        in_progress = any(k.startswith(f"{t}::") for k in _in_flight)
+    return {
+        "ticker": t,
+        "in_progress": in_progress,
+        "phase": phase_info.get("phase") if phase_info else None,
+        "status": phase_info.get("status") if phase_info else None,
+        "summary": phase_info.get("summary") if phase_info else None,
+        "timestamp": phase_info.get("timestamp") if phase_info else None,
+    }
 
 
 # ── GET /analysis/popular-tickers ────────────────────────────────────────────
