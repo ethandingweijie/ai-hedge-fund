@@ -34,6 +34,7 @@ import { NewsPanel }           from '@/components/report/NewsPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel }  from '@/components/report/IndustryBriefPanel';
 import { DeepResearchPanel }   from '@/components/report/DeepResearchPanel';
+import { LiveSearchPanel }    from '@/components/report/LiveSearchPanel';
 import { SectionSkeleton }     from '@/components/report/SectionSkeleton';
 
 // ── Investor profiles ────────────────────────────────────────────────────────
@@ -719,6 +720,17 @@ export function ReportPage() {
                 />
               )}
             </div>
+            {/* Live web search panel — Claude-style "Searched the web" */}
+            <LiveSearchPanel
+              streamEvents={streamEvents}
+              liveData={liveData}
+              isResearchPhase={
+                Object.values(phaseMap).some(p =>
+                  p.phase === 'deep_research_agent' && !p.status.includes('✓')
+                )
+              }
+              isComplete={phaseMap['deep_research_agent']?.status?.includes('✓') ?? false}
+            />
           </div>
         )}
         {isError && (

@@ -1696,7 +1696,12 @@ def _research_one_ticker(
                 query = getattr(block, "input", {}).get("query", "")
                 progress.update_status(
                     agent_id, ticker,
-                    f"Web search {n_searches}/{MAX_SEARCHES}: {query[:60]}"
+                    f"Web search {n_searches}/{MAX_SEARCHES}: {query[:60]}",
+                    partial_data={"live_search_query": {
+                        "index": n_searches,
+                        "total": MAX_SEARCHES,
+                        "query": query[:80],
+                    }}
                 )
 
             # ── Extract text ──────────────────────────────────────────────────
@@ -1707,6 +1712,7 @@ def _research_one_ticker(
                 # Citations are always enabled for web_search_20260209.
                 # Each web_search_result_location has: url, title, cited_text,
                 # encrypted_index.  cited_text, title, url do NOT count as tokens.
+                _new_cits = 0
                 for cit in getattr(block, "citations", []) or []:
                     cit_type = getattr(cit, "type", "") or ""
                     if cit_type != "web_search_result_location":
@@ -1722,6 +1728,18 @@ def _research_one_ticker(
                         "title":      title,
                         "cited_text": cited_text[:150],
                     })
+                    _new_cits += 1
+
+                # Stream new sources to frontend as they're discovered
+                if _new_cits > 0:
+                    progress.update_status(
+                        agent_id, ticker,
+                        f"Found {len(server_citations)} sources",
+                        partial_data={"live_search_sources": [
+                            {"url": c["url"], "title": c["title"]}
+                            for c in server_citations
+                        ]}
+                    )
 
         # NOTE: we do NOT raise here for low/zero n_searches.
         # If the API call completed and returned text, that text is used — even if
