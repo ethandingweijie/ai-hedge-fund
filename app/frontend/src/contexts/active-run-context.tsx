@@ -6,6 +6,7 @@
  */
 import { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { startAnalysisRun, getRunResult } from '@/lib/api';
+import { API_BASE_URL } from '@/config';
 import type { ProgressEvent, RunResult } from '@/lib/reportTypes';
 
 // ── Stream types (mirrors useRunStream) ──────────────────────────────────────
@@ -276,8 +277,54 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
-      setStreamError(err instanceof Error ? err.message : String(err));
-      setStreamState('error');
+
+      // ── SSE disconnect recovery ────────────────────────────────────
+      // iOS Safari kills background SSE connections. Instead of showing
+      // "failed", poll the backend to check if the run completed or is
+      // still in progress. Only show error if the run truly failed.
+      if (activeRun) {
+        const pollForResult = async () => {
+          const maxAttempts = 30;  // poll for up to 5 minutes
+          const interval = 10000; // every 10 seconds
+          for (let i = 0; i < maxAttempts; i++) {
+            await new Promise(r => setTimeout(r, interval));
+            try {
+              // Check if a completed run exists for this ticker
+              const res = await fetch(
+                `${API_BASE_URL}/analysis/runs?page=1&page_size=1&ticker=${encodeURIComponent(ticker)}`,
+                { headers: { 'Content-Type': 'application/json' } }
+              );
+              if (!res.ok) continue;
+              const data = await res.json();
+              const runs = data.items || data.runs || [];
+              if (runs.length > 0) {
+                const latest = runs[0];
+                // Check if this run was created after we started
+                const runTime = new Date(latest.run_at).getTime();
+                const startTime = new Date(activeRun.startedAt).getTime();
+                if (runTime >= startTime - 60000 && latest.final_action) {
+                  // Run completed on the backend — show success
+                  setStreamRunId(latest.run_id);
+                  setStreamState('complete');
+                  completeRun(ticker.toUpperCase(), latest.run_id);
+                  try {
+                    const result = await getRunResult(latest.run_id);
+                    setLiveResult(result);
+                  } catch { /* ignore */ }
+                  return;
+                }
+              }
+            } catch { /* network error, retry */ }
+          }
+          // After 5 minutes of polling, truly mark as error
+          setStreamError('Connection lost — check History for results');
+          setStreamState('error');
+        };
+        pollForResult();
+      } else {
+        setStreamError(err instanceof Error ? err.message : String(err));
+        setStreamState('error');
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
