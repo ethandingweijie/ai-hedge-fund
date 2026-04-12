@@ -46,8 +46,20 @@ export function HistoryPage() {
 
   const { activeRun, recentlyCompleted, clearCompleted, streamState } = useActiveRun();
   const isStreamRunning = streamState === 'running';
-  const runTicker = activeRun?.ticker ?? '';
-  const runStartedAt = activeRun?.startedAt ?? '';
+
+  // Fallback: read activeRun from sessionStorage directly if context lost it
+  // (iOS Safari can drop React context state on background tab throttling)
+  const effectiveActiveRun = activeRun ?? (() => {
+    try {
+      const stored = sessionStorage.getItem('activeRun');
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      const age = Date.now() - new Date(parsed.startedAt).getTime();
+      return age < 30 * 60 * 1000 ? parsed : null;
+    } catch { return null; }
+  })();
+  const runTicker = effectiveActiveRun?.ticker ?? '';
+  const runStartedAt = effectiveActiveRun?.startedAt ?? '';
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -140,7 +152,7 @@ export function HistoryPage() {
           {error && <div className="mb-2 p-2 rounded-lg bg-red-500/20 text-red-300 text-[10px]">{error}</div>}
 
           {/* Ongoing run */}
-          {(activeRun || isStreamRunning) && (
+          {(effectiveActiveRun || isStreamRunning) && (
             <div className="mb-3 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/25 transition-colors"
               onClick={() => navigate('/report')}>
               <div className="flex items-center gap-2">
@@ -158,7 +170,7 @@ export function HistoryPage() {
           {/* Cards grid */}
           {history && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {history.items.length === 0 && !activeRun ? (
+              {history.items.length === 0 && !effectiveActiveRun ? (
                 <div className="col-span-full py-12 text-center text-muted-foreground/60 text-sm">No runs found.</div>
               ) : (
                 history.items.map(row => {
