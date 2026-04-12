@@ -39,6 +39,10 @@ STALE_HOURS = 24   # refresh VGPM/price if older than this
 
 
 def _get_db_path() -> str:
+    import os
+    env_path = os.environ.get("RUN_ARCHIVE_PATH")
+    if env_path:
+        return env_path
     this_file = Path(__file__)
     project_root = this_file.parent.parent.parent.parent
     return str(project_root / "src" / "data" / "run_archive.db")

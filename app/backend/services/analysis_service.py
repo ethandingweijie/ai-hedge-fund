@@ -46,11 +46,14 @@ def _sanitize_floats(obj: Any) -> Any:
 # ── DB path ───────────────────────────────────────────────────────────────────
 
 def _get_db_path() -> str:
-    """Same DB as run_archive.py — run_archive.db in src/data/."""
-    this_file = Path(__file__)  # app/backend/services/analysis_service.py
-    # go up: services -> backend -> app -> project root
+    """Same DB as run_archive.py — run_archive.db in src/data/.
+    Configurable via RUN_ARCHIVE_PATH env var for cloud deployment."""
+    import os
+    env_path = os.environ.get("RUN_ARCHIVE_PATH")
+    if env_path:
+        return env_path
+    this_file = Path(__file__)
     project_root = this_file.parent.parent.parent.parent
-    # run_archive.py stores DB at src/data/run_archive.db
     return str(project_root / "src" / "data" / "run_archive.db")
 
 
