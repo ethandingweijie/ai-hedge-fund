@@ -1147,18 +1147,27 @@ async def run_analysis_pipeline(
             # "no preference" (all agents) only when truly None, not empty list.
             _agents = selected_agents if selected_agents else None
 
-            # All LangChain agents (macro regime, industry specialist, investors, PM, etc.)
-            # use Anthropic/Claude for structured output — Qwen's thinking mode blocks
-            # function_calling which is required for Pydantic schema compliance.
-            # deep_research.py handles its own HK→Qwen routing internally.
+            # Qwen drives deep research (web search + free-text synthesis)
+            # but structured pipeline phases (macro regime, investors, sector
+            # classification, etc.) must use Claude because Qwen's thinking
+            # mode blocks function_calling / Pydantic schema compliance.
+            _is_qwen = model_name.startswith("qwen")
+            if _is_qwen:
+                os.environ["DEEP_RESEARCH_MODEL"] = model_name
+                _pipeline_model = "claude-sonnet-4-6"
+                _provider = "Anthropic"
+            else:
+                _pipeline_model = model_name
+                _provider = "Anthropic"  # default for Claude/other models
+
             state = run_advanced_pipeline(
                 tickers=[ticker.upper()],
                 start_date="2020-01-01",
                 end_date=end_date,
                 portfolio=portfolio,
                 selected_agents=_agents,
-                model_name=model_name,
-                model_provider=_resolve_provider(model_name),
+                model_name=_pipeline_model,
+                model_provider=_provider,
                 show_reasoning=True,
                 enable_post_trade_review=False,
                 on_checkpoint=_on_checkpoint,
