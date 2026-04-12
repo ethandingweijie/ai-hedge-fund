@@ -460,7 +460,7 @@ export function ScreenerPage() {
               <span className="w-[52px] text-center text-[7px] font-semibold uppercase tracking-wider text-white/70">Growth</span>
               <span className="w-[52px] text-center text-[7px] font-semibold uppercase tracking-wider text-white/70">Profit.</span>
               <span className="w-[52px] text-center text-[7px] font-semibold uppercase tracking-wider text-white/70">Momentum</span>
-              <span className="w-[42px] text-center text-[7px] font-semibold uppercase tracking-wider text-white/70">Score</span>
+              <span className="w-[34px] text-center text-[7px] font-semibold uppercase tracking-wider text-white/70">Score</span>
             </div>
           </div>
 

@@ -173,41 +173,47 @@ export function HistoryPage() {
                       className={`group relative rounded-xl bg-card border border-border shadow-sm p-3 cursor-pointer hover:bg-muted/50 transition-all ${isNew ? 'ring-1 ring-emerald-500/50' : ''}`}
                       onClick={() => navigate(`/report/${row.run_id}`)}
                     >
-                      {/* Row 1: Ticker + Action + Date */}
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-mono font-bold text-sm text-foreground">{row.ticker}</span>
-                        {row.final_action && (
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${ACTION_COLORS[row.final_action] ?? 'bg-gray-100 text-muted-foreground'}`}>
-                            {row.final_action}
-                          </span>
-                        )}
-                        {isNew && <span className="text-[8px] px-1 py-0.5 rounded-full bg-emerald-500 text-white font-bold">NEW</span>}
-                        <span className="ml-auto text-[10px] text-muted-foreground/60 font-mono">{dateStr}</span>
-                      </div>
+                      {/* Single row: Ticker+Action | Price+Upside | VGPM | Date */}
+                      <div className="flex items-center gap-2">
+                        {/* Left: ticker + action badge */}
+                        <div className="flex flex-col items-start min-w-[60px]">
+                          <span className="font-mono font-bold text-sm text-foreground">{row.ticker}</span>
+                          {row.final_action && (
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold mt-0.5 ${ACTION_COLORS[row.final_action] ?? 'bg-gray-100 text-muted-foreground'}`}>
+                              {row.final_action}
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Row 2: Target + EV Upside */}
-                      <div className="flex items-baseline gap-3 mb-2.5">
-                        <span className="text-lg font-bold text-foreground font-mono">
-                          {row.price_target != null && row.price_target > 0 ? `$${row.price_target.toFixed(0)}` : '—'}
-                        </span>
-                        {evUp != null && (
-                          <span className={`text-[11px] font-semibold ${evUp >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {evUp > 0 ? '+' : ''}{evUp.toFixed(1)}%
+                        {/* Price + upside */}
+                        <div className="flex flex-col items-start min-w-[55px]">
+                          <span className="text-sm font-bold text-foreground font-mono">
+                            {row.price_target != null && row.price_target > 0 ? `$${row.price_target.toFixed(0)}` : '—'}
                           </span>
-                        )}
-                        {name && <span className="text-[9px] text-muted-foreground/60 truncate ml-auto max-w-[80px]">{name}</span>}
-                      </div>
+                          {evUp != null && (
+                            <span className={`text-[10px] font-semibold ${evUp >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {evUp > 0 ? '+' : ''}{evUp.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Row 3: VGPM grid */}
-                      <div className="grid grid-cols-4 gap-1">
-                        <GradePill grade={row.vgpm_grades?.valuation} label="Val" />
-                        <GradePill grade={row.vgpm_grades?.growth} label="Grw" />
-                        <GradePill grade={row.vgpm_grades?.profitability} label="Prf" />
-                        <GradePill grade={row.vgpm_grades?.momentum} label="Mom" />
+                        {/* VGPM inline */}
+                        <div className="flex gap-1.5 flex-1 justify-center">
+                          <GradePill grade={row.vgpm_grades?.valuation} label="VAL" />
+                          <GradePill grade={row.vgpm_grades?.growth} label="GRW" />
+                          <GradePill grade={row.vgpm_grades?.profitability} label="PRF" />
+                          <GradePill grade={row.vgpm_grades?.momentum} label="MOM" />
+                        </div>
+
+                        {/* Date + badges */}
+                        <div className="flex flex-col items-end ml-auto">
+                          <span className="text-[10px] text-muted-foreground/60 font-mono">{dateStr}</span>
+                          {isNew && <span className="text-[8px] px-1 py-0.5 rounded-full bg-emerald-500 text-white font-bold mt-0.5">NEW</span>}
+                        </div>
                       </div>
 
                       {/* Delete button */}
-                      <div className="absolute top-2 right-2" onClick={e => e.stopPropagation()}>
+                      <div className="absolute top-1 right-1" onClick={e => e.stopPropagation()}>
                         {confirmId === row.run_id ? (
                           <span className="flex gap-1">
                             <button onClick={() => handleDelete(row.run_id)} disabled={deletingId === row.run_id}
