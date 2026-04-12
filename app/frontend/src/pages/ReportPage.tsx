@@ -321,7 +321,7 @@ export function ReportPage() {
   const runStartedAt                      = useRef<string>('');
   const observerRef = useRef<IntersectionObserver | null>(null);
 
-  const isRunning  = state === 'running';
+  const isRunning  = state === 'running' || state === 'reconnecting';
   const isComplete = state === 'complete';
   const isError    = state === 'error';
 
@@ -645,9 +645,12 @@ export function ReportPage() {
             {/* Quip + percentage on same row */}
             <div className="flex items-center gap-2 px-4">
               <div className="flex-1 min-w-0">
-                <LiveResearchLabel pct={progressPct} />
+                {state === 'reconnecting'
+                  ? <span className="text-xs text-amber-400 animate-pulse">Pipeline running on server — waiting for result...</span>
+                  : <LiveResearchLabel pct={progressPct} />
+                }
               </div>
-              <span className="text-sm font-bold tabular-nums text-primary shrink-0">{progressPct}%</span>
+              <span className="text-sm font-bold tabular-nums text-primary shrink-0">{state === 'reconnecting' ? '...' : `${progressPct}%`}</span>
               <Button variant="ghost" size="sm" className="text-[10px] h-5 px-1.5 text-muted-foreground/60" onClick={handleReset}>
                 Cancel
               </Button>
