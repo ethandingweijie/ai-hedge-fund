@@ -1,5 +1,4 @@
 import { Card } from '@/components/ui/card';
-import { Capacitor } from '@capacitor/core';
 
 interface CitationAudit {
   audit_score?: number;
@@ -20,8 +19,8 @@ function scoreColor(score: number): string {
 
 
 export function CitationPanel({ data, ticker }: CitationPanelProps) {
-  // Citation auditor is disabled on native iOS app
-  if (Capacitor.isNativePlatform()) return null;
+  // Citation auditor disabled on mobile/deployed app
+  return null;
 
   const raw = (data?.citation_audit as Record<string, unknown> | undefined)?.[ticker]
     ?? data?.citation_audit;

@@ -1,12 +1,11 @@
 /**
  * auth-context.tsx
  * Global authentication state.
- * Uses SecureStorage (iOS Keychain via Capacitor, localStorage on web).
+ * Uses centralized API_BASE_URL for cloud deployment.
  */
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { API_BASE_URL } from '@/config';
-import { SecureStorage } from '@/lib/secure-storage';
 
 const STORAGE_KEY = 'hedge_fund_token';
 
@@ -37,19 +36,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Re-hydrate from storage on mount
+  // Re-hydrate from localStorage on mount
   useEffect(() => {
-    SecureStorage.get(STORAGE_KEY).then(stored => {
-      if (stored) {
-        _cachedToken = stored;
-        fetchMe(stored)
-          .then(u => { setUser(u); setToken(stored); })
-          .catch(() => { SecureStorage.remove(STORAGE_KEY); _cachedToken = null; })
-          .finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      _cachedToken = stored;
+      fetchMe(stored)
+        .then(u => { setUser(u); setToken(stored); })
+        .catch(() => { localStorage.removeItem(STORAGE_KEY); _cachedToken = null; })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   async function fetchMe(jwt: string): Promise<AuthUser> {
@@ -71,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.detail ?? 'Login failed');
     }
     const data = await res.json();
-    await SecureStorage.set(STORAGE_KEY, data.access_token);
+    localStorage.setItem(STORAGE_KEY, data.access_token);
     _cachedToken = data.access_token;
     setToken(data.access_token);
     setUser(data.user as AuthUser);
@@ -86,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
-    SecureStorage.remove(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
     _cachedToken = null;
     setUser(null);
     setToken(null);
