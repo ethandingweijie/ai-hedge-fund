@@ -12,20 +12,28 @@ from pathlib import Path
 from typing import Dict, List, Optional, AsyncGenerator
 import logging
 import signal
-import ollama
+
+try:
+    import ollama as _ollama
+except ImportError:
+    _ollama = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
 class OllamaService:
     """Service for managing Ollama integration in the backend."""
-    
+
     def __init__(self):
         self._download_progress = {}
         self._download_processes = {}
-        
-        # Initialize async client
-        self._async_client = ollama.AsyncClient()
-        self._sync_client = ollama.Client()
+
+        # Initialize async client (lazy — None if ollama package unavailable)
+        if _ollama is not None:
+            self._async_client = _ollama.AsyncClient()
+            self._sync_client = _ollama.Client()
+        else:
+            self._async_client = None
+            self._sync_client = None
     
     # =============================================================================
     # PUBLIC API METHODS
