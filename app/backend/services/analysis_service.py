@@ -1001,6 +1001,25 @@ def get_archive_summary() -> dict:
         conn.close()
 
 
+def _resolve_provider(model_name: str) -> str:
+    """Infer provider from model name so the pipeline calls the correct API."""
+    m = model_name.lower()
+    if "qwen" in m:
+        return "Alibaba"
+    if "gpt" in m or "o1" in m or "o3" in m or "o4" in m:
+        return "OpenAI"
+    if "gemini" in m:
+        return "Google"
+    if "grok" in m:
+        return "xAI"
+    if "deepseek" in m:
+        return "DeepSeek"
+    if "groq" in m or "llama" in m or "mixtral" in m:
+        return "Groq"
+    # Default to Anthropic (Claude models)
+    return "Anthropic"
+
+
 # ── Pipeline runner ───────────────────────────────────────────────────────────
 
 async def run_analysis_pipeline(
@@ -1139,7 +1158,7 @@ async def run_analysis_pipeline(
                 portfolio=portfolio,
                 selected_agents=_agents,
                 model_name=model_name,
-                model_provider="Anthropic",
+                model_provider=_resolve_provider(model_name),
                 show_reasoning=True,
                 enable_post_trade_review=False,
                 on_checkpoint=_on_checkpoint,
