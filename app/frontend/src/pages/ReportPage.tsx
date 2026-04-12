@@ -107,6 +107,8 @@ const PHASE_LABELS: Record<string, { running: string; done: string }> = {
   strategic_router:         { running: 'Identifying the sector playbook',      done: 'Sector playbook identified' },
   intelligence_agents:      { running: 'Scanning market intelligence signals', done: 'Intelligence signals gathered' },
   deep_research_agent:      { running: 'Generating deep research report',      done: 'Deep research complete' },
+  deep_research:            { running: 'Generating deep research report',      done: 'Deep research complete' },
+  data_router:              { running: 'Fetching financial data',              done: 'Financial data ready' },
   industry_specialist:      { running: 'Consulting the industry specialist',   done: 'Industry brief ready' },
   dcf_engine:               { running: 'Computing the valuation model',        done: 'Valuation model complete' },
   investor_agents:          { running: 'Consulting the investor agents',       done: 'Investor signals received' },
@@ -732,7 +734,7 @@ export function ReportPage() {
             liveData={liveData}
             isResearchPhase={
               Object.values(phaseMap).some(p =>
-                p.phase === 'deep_research_agent' && !p.status.includes('✓')
+                p.phase === 'deep_research_agent' || p.phase === 'deep_research' && !p.status.includes('✓')
               ) || events.some(e =>
                 e.phase === 'deep_research_agent' && !e.status.includes('✓')
               )
