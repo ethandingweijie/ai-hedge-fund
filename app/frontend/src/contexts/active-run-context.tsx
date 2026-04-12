@@ -205,6 +205,39 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // ── Check if a run already completed (prevents re-triggering pipeline) ─────
+  const checkCompleted = useCallback(async (ticker: string): Promise<boolean> => {
+    const current = activeRunRef.current;
+    if (!current) return false;
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/analysis/runs?page=1&page_size=1&ticker=${encodeURIComponent(ticker)}`,
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+      if (!res.ok) return false;
+      const data = await res.json();
+      const runs = data.items || data.runs || [];
+      if (runs.length > 0) {
+        const latest = runs[0];
+        const runTime = new Date(latest.run_at).getTime();
+        const startTime = new Date(current.startedAt).getTime();
+        if (runTime >= startTime - 60000 && latest.final_action) {
+          // Run completed — mark as done
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setStreamRunId(latest.run_id);
+          setStreamState('complete');
+          completeRun(ticker.toUpperCase(), latest.run_id);
+          try {
+            const result = await getRunResult(latest.run_id);
+            setLiveResult(result);
+          } catch { /* ignore */ }
+          return true;
+        }
+      }
+    } catch { /* ignore */ }
+    return false;
+  }, []);
+
   // ── Poll backend for completion (used when SSE disconnects) ───────────────
   const startPolling = useCallback((ticker: string) => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
@@ -277,96 +310,16 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       if (!current) return;
 
       const ticker = current.ticker;
-      const checkAndReconnect = async () => {
-        try {
-          // First check if the run already completed
-          const res = await fetch(
-            `${API_BASE_URL}/analysis/runs?page=1&page_size=1&ticker=${encodeURIComponent(ticker)}`,
-            { headers: { 'Content-Type': 'application/json' } }
-          );
-          if (res.ok) {
-            const data = await res.json();
-            const runs = data.items || data.runs || [];
-            if (runs.length > 0) {
-              const latest = runs[0];
-              const runTime = new Date(latest.run_at).getTime();
-              const startTime = new Date(current.startedAt).getTime();
-              if (runTime >= startTime - 60000 && latest.final_action) {
-                // Run completed while phone was asleep!
-                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-                setStreamRunId(latest.run_id);
-                setStreamState('complete');
-                completeRun(ticker.toUpperCase(), latest.run_id);
-                try {
-                  const result = await getRunResult(latest.run_id);
-                  setLiveResult(result);
-                } catch { /* ignore */ }
-                return;
-              }
-            }
-          }
+      const checkAndResume = async () => {
+        // CRITICAL: Check if run completed FIRST — never call startAnalysisRun
+        // directly as it would trigger a new pipeline run if the dedup lock cleared.
+        const completed = await checkCompleted(ticker);
+        if (completed) return;
 
-          // Run still in progress — try SSE reconnect to resume live progress
-          // (only if we're not already streaming)
-          const reconnectController = new AbortController();
-          abortRef.current = reconnectController;
-          setStreamState('running');
-          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-
-          const sseRes = await startAnalysisRun(ticker, '', []);
-          if (!sseRes.ok) { startPolling(ticker); return; }
-          const reader = sseRes.body?.getReader();
-          if (!reader) { startPolling(ticker); return; }
-
-          const decoder = new TextDecoder();
-          let buffer = '';
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (reconnectController.signal.aborted) break;
-            buffer += decoder.decode(value, { stream: true });
-            const messages = buffer.split('\n\n');
-            buffer = messages.pop() ?? '';
-            for (const raw of messages) {
-              if (!raw.trim()) continue;
-              let eventType = 'message';
-              let dataStr = '';
-              for (const line of raw.split('\n')) {
-                if (line.startsWith('event:')) eventType = line.slice(6).trim();
-                else if (line.startsWith('data:')) dataStr = line.slice(5).trim();
-              }
-              if (!dataStr) continue;
-              try {
-                const payload = JSON.parse(dataStr);
-                if (eventType === 'progress') {
-                  const ev = payload as ProgressEvent;
-                  setStreamEvents((prev) => [...prev, ev]);
-                  setPhaseMap((prev) => ({ ...prev, [ev.phase]: ev }));
-                  if (ev.partial_data) setLiveData((prev) => ({ ...prev, ...ev.partial_data }));
-                } else if (eventType === 'cached' || eventType === 'complete') {
-                  const rid: string = payload.run_id ?? null;
-                  if (rid) {
-                    setStreamRunId(rid);
-                    setStreamState('complete');
-                    completeRun(ticker.toUpperCase(), rid);
-                    getRunResult(rid).then((r) => setLiveResult(r)).catch(() => {});
-                  }
-                  return;
-                } else if (eventType === 'error') {
-                  setStreamError(payload.error ?? 'Unknown error');
-                  setStreamState('error');
-                  return;
-                }
-              } catch { /* malformed JSON */ }
-            }
-          }
-        } catch {
-          // Reconnect failed — fall back to polling
-          startPolling(ticker);
-        }
+        // Run still in progress — start polling (safe, doesn't trigger new runs)
+        startPolling(ticker);
       };
-      checkAndReconnect();
+      checkAndResume();
     };
 
     document.addEventListener('visibilitychange', handleVisibility);
@@ -511,105 +464,22 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       if (controller.signal.aborted) return;
 
       // ── SSE disconnected (iOS screen lock, network switch, etc.) ───
-      // Try to reconnect to the SSE stream first. The backend returns
-      // the existing stream if the pipeline is still running, or a
-      // 'cached' event if it already completed.
-      // Fall back to polling if reconnect also fails.
+      // CRITICAL: Do NOT call startAnalysisRun() here — it would trigger
+      // a new pipeline run if the previous one already completed.
+      // Instead: check if completed, then fall back to polling.
       setStreamState('reconnecting');
       setStreamError(null);
 
-      const maxReconnects = 3;
-      let reconnected = false;
+      // Wait briefly for network to stabilize
+      await new Promise(r => setTimeout(r, 2000));
 
-      for (let attempt = 0; attempt < maxReconnects; attempt++) {
-        // Wait before reconnecting (2s, 4s, 8s exponential backoff)
-        await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt)));
+      // Check if run already completed while we were disconnected
+      if (!activeRunRef.current || activeRunRef.current.ticker !== ticker.toUpperCase()) return;
+      const completed = await checkCompleted(ticker);
+      if (completed) return;
 
-        // Check if the run was cancelled or completed while we waited
-        if (!activeRunRef.current || activeRunRef.current.ticker !== ticker.toUpperCase()) return;
-
-        try {
-          const reconnectController = new AbortController();
-          abortRef.current = reconnectController;
-
-          const res = await startAnalysisRun(ticker, model, agents);
-          if (!res.ok) continue;
-
-          const reader = res.body?.getReader();
-          if (!reader) continue;
-
-          // Successfully reconnected — switch back to running state
-          setStreamState('running');
-          reconnected = true;
-
-          const decoder = new TextDecoder();
-          let buffer = '';
-
-          // eslint-disable-next-line no-constant-condition
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (reconnectController.signal.aborted) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const messages = buffer.split('\n\n');
-            buffer = messages.pop() ?? '';
-
-            for (const raw of messages) {
-              if (!raw.trim()) continue;
-              let eventType = 'message';
-              let dataStr = '';
-              for (const line of raw.split('\n')) {
-                if (line.startsWith('event:')) eventType = line.slice(6).trim();
-                else if (line.startsWith('data:')) dataStr = line.slice(5).trim();
-              }
-              if (!dataStr) continue;
-              try {
-                const payload = JSON.parse(dataStr);
-                if (eventType === 'progress') {
-                  const ev = payload as ProgressEvent;
-                  setStreamEvents((prev) => [...prev, ev]);
-                  setPhaseMap((prev) => ({ ...prev, [ev.phase]: ev }));
-                  if (ev.partial_data) setLiveData((prev) => ({ ...prev, ...ev.partial_data }));
-                } else if (eventType === 'cached') {
-                  const cachedRunId: string = payload.run_id ?? null;
-                  if (cachedRunId) {
-                    setStreamRunId(cachedRunId);
-                    setStreamState('complete');
-                    completeRun(ticker.toUpperCase(), cachedRunId);
-                    getRunResult(cachedRunId).then((r) => setLiveResult(r)).catch(() => {});
-                  }
-                  return; // done
-                } else if (eventType === 'complete') {
-                  const completedRunId: string = payload.run_id ?? null;
-                  setStreamRunId(completedRunId);
-                  setStreamState('complete');
-                  if (completedRunId) {
-                    completeRun(ticker.toUpperCase(), completedRunId);
-                    getRunResult(completedRunId).then((r) => setLiveResult(r)).catch(() => {});
-                  }
-                  return; // done
-                } else if (eventType === 'error') {
-                  setStreamError(payload.error ?? 'Unknown error');
-                  setStreamState('error');
-                  return;
-                }
-              } catch { /* malformed JSON */ }
-            }
-          }
-          // If we get here, the reconnected stream ended normally
-          // (reader.read() returned done=true) — could be another disconnect
-          break; // exit reconnect loop, fall through to polling
-        } catch {
-          // Reconnect attempt failed — try again
-          continue;
-        }
-      }
-
-      // If reconnect didn't resolve the run, fall back to polling
-      if (!reconnected || streamState !== 'complete') {
-        startPolling(ticker);
-      }
+      // Run still in progress — poll for completion (safe, no new runs triggered)
+      startPolling(ticker);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
