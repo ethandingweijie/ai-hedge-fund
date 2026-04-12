@@ -100,8 +100,28 @@ function getEventsForSection(sectionId: SectionId, phaseMap: Record<string, Prog
     .map(([, ev]) => ev);
 }
 
+// ── Phase-to-label map: chain of thought ────────────────────────────────────
+const PHASE_LABELS: Record<string, { running: string; done: string }> = {
+  macro_regime_classifier:  { running: 'Reading the macro environment',        done: 'Macro environment assessed' },
+  strategic_router:         { running: 'Identifying the sector playbook',      done: 'Sector playbook identified' },
+  intelligence_agents:      { running: 'Scanning market intelligence signals', done: 'Intelligence signals gathered' },
+  deep_research_agent:      { running: 'Generating deep research report',      done: 'Deep research complete' },
+  industry_specialist:      { running: 'Consulting the industry specialist',   done: 'Industry brief ready' },
+  dcf_engine:               { running: 'Computing the valuation model',        done: 'Valuation model complete' },
+  investor_agents:          { running: 'Consulting the investor agents',       done: 'Investor signals received' },
+  debate_round:             { running: 'Bulls and bears debating',             done: 'Debate concluded' },
+  power_law_agent:          { running: 'Analysing power-law growth patterns',  done: 'Growth patterns analysed' },
+  value_trap_agent:         { running: 'Checking for value traps',             done: 'Value trap check done' },
+  phase7_complete:          { running: 'Wrapping up analytical models',        done: 'Models complete' },
+  citation_auditor:         { running: 'Verifying sources and citations',      done: 'Sources verified' },
+  advanced_risk_manager:    { running: 'Running final risk checks',            done: 'Risk assessment complete' },
+  portfolio_manager:        { running: 'Generating the investment decision',   done: 'Decision ready' },
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function phaseLabel(phase: string): string {
+  const mapped = PHASE_LABELS[phase];
+  if (mapped) return mapped.done;
   return phase.replace(/_agent$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
@@ -159,7 +179,7 @@ function getStage(pct: number): 'early' | 'mid' | 'late' | 'final' {
   return 'final';
 }
 
-function LiveResearchLabel({ pct }: { pct: number }) {
+function LiveResearchLabel({ pct, phaseMap }: { pct: number; phaseMap: Record<string, ProgressEvent> }) {
   const stage = getStage(pct);
 
   const [quipIdx,  setQuipIdx]  = useState(0);
@@ -167,7 +187,19 @@ function LiveResearchLabel({ pct }: { pct: number }) {
   const [dot,      setDot]      = useState(0);
   const prevStageRef = useRef<'early' | 'mid' | 'late' | 'final'>(stage);
 
-  // Helper: crossfade to a new quip index (cleans up the timeout on the returned fn)
+  // Determine current active phase from phaseMap
+  const phases = Object.values(phaseMap);
+  const activePhase = phases.length > 0
+    ? phases.filter(p => p.status.toLowerCase() !== 'done').pop()  // latest non-done
+      ?? phases[phases.length - 1]  // fallback: last phase (all done)
+    : null;
+  const currentPhaseLabel = activePhase
+    ? (activePhase.status.toLowerCase() === 'done'
+        ? (PHASE_LABELS[activePhase.phase]?.done ?? phaseLabel(activePhase.phase))
+        : (PHASE_LABELS[activePhase.phase]?.running ?? phaseLabel(activePhase.phase)))
+    : 'Starting analysis...';
+
+  // Helper: crossfade to a new quip index
   const crossfadeTo = useCallback((nextIdx: number) => {
     setFadeIn(false);
     const t = window.setTimeout(() => {
@@ -177,7 +209,6 @@ function LiveResearchLabel({ pct }: { pct: number }) {
     return t;
   }, []);
 
-  // When stage bucket changes, jump to quip 0 of the new bucket
   useEffect(() => {
     if (prevStageRef.current === stage) return;
     prevStageRef.current = stage;
@@ -185,7 +216,6 @@ function LiveResearchLabel({ pct }: { pct: number }) {
     return () => window.clearTimeout(t);
   }, [stage, crossfadeTo]);
 
-  // Cycle through quips in the current bucket every 5 s
   useEffect(() => {
     let fadeTimer: number;
     const interval = window.setInterval(() => {
@@ -198,14 +228,13 @@ function LiveResearchLabel({ pct }: { pct: number }) {
     };
   }, [quipIdx, crossfadeTo]);
 
-  // Animate five dots sequentially
   useEffect(() => {
     const id = window.setInterval(() => setDot(d => (d + 1) % 5), 350);
     return () => window.clearInterval(id);
   }, []);
 
   const pool = QUIPS_BY_STAGE[stage];
-  const text = pool[quipIdx] ?? pool[0];
+  const quipText = pool[quipIdx] ?? pool[0];
 
   return (
     <span className="flex items-center gap-1.5 min-w-0">
@@ -219,12 +248,17 @@ function LiveResearchLabel({ pct }: { pct: number }) {
           />
         ))}
       </span>
-      {/* Fading quip */}
-      <span
-        className="text-base text-muted-foreground truncate transition-opacity duration-300"
-        style={{ opacity: fadeIn ? 1 : 0 }}
-      >
-        {text}
+      {/* Phase label (primary) + quip (secondary) */}
+      <span className="flex flex-col min-w-0">
+        <span className="text-xs font-semibold text-foreground truncate">
+          {currentPhaseLabel}
+        </span>
+        <span
+          className="text-[10px] text-muted-foreground/60 truncate transition-opacity duration-300"
+          style={{ opacity: fadeIn ? 1 : 0 }}
+        >
+          {quipText}
+        </span>
       </span>
     </span>
   );
@@ -647,7 +681,7 @@ export function ReportPage() {
               <div className="flex-1 min-w-0">
                 {state === 'reconnecting'
                   ? <span className="text-xs text-amber-400 animate-pulse">Pipeline running on server — waiting for result...</span>
-                  : <LiveResearchLabel pct={progressPct} />
+                  : <LiveResearchLabel pct={progressPct} phaseMap={phaseMap} />
                 }
               </div>
               <span className="text-sm font-bold tabular-nums text-primary shrink-0">{state === 'reconnecting' ? '...' : `${progressPct}%`}</span>
@@ -1182,7 +1216,7 @@ export function ReportPage() {
           {isRunning && (
             <div className="flex-1 flex flex-col gap-2.5 mx-2 min-w-0 hidden sm:flex">
               <div className="flex items-center justify-between gap-4">
-                <LiveResearchLabel pct={progressPct} />
+                <LiveResearchLabel pct={progressPct} phaseMap={phaseMap} />
                 <span className="text-base font-bold tabular-nums text-primary shrink-0">
                   {progressPct}%
                 </span>
