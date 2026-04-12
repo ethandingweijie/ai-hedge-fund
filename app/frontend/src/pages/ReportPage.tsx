@@ -723,20 +723,22 @@ export function ReportPage() {
                 />
               )}
             </div>
-            {/* Live web search panel — Claude-style "Searched the web" */}
-            <LiveSearchPanel
-              streamEvents={events}
-              liveData={liveData}
-              isResearchPhase={
-                Object.values(phaseMap).some(p =>
-                  p.phase === 'deep_research_agent' && !p.status.includes('✓')
-                ) || events.some(e =>
-                  e.phase === 'deep_research_agent' && !e.status.includes('✓')
-                )
-              }
-              isComplete={phaseMap['deep_research_agent']?.status?.includes('✓') ?? false}
-            />
           </div>
+        )}
+        {/* Live web search panel — Claude-style "Searched the web" */}
+        {isRunning && (
+          <LiveSearchPanel
+            streamEvents={events}
+            liveData={liveData}
+            isResearchPhase={
+              Object.values(phaseMap).some(p =>
+                p.phase === 'deep_research_agent' && !p.status.includes('✓')
+              ) || events.some(e =>
+                e.phase === 'deep_research_agent' && !e.status.includes('✓')
+              )
+            }
+            isComplete={phaseMap['deep_research_agent']?.status?.includes('✓') ?? false}
+          />
         )}
         {isError && (
           <div className="sticky top-0 z-50 bg-red-500/10 border-b border-red-500/30 px-4 py-2 flex items-center gap-2">
