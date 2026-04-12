@@ -9,7 +9,7 @@ from src.utils.analysts import ANALYST_ORDER
 from src.llm.models import LLM_ORDER, OLLAMA_LLM_ORDER, get_model_info, ModelProvider, find_model_by_name
 from src.utils.ollama import ensure_ollama_and_model
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -70,6 +70,77 @@ def parse_tickers(tickers_arg: str | None) -> list[str]:
     return [ticker.strip() for ticker in tickers_arg.split(",") if ticker.strip()]
 
 
+def select_investor_agents(analysts_all: bool = False) -> list[str]:
+    """
+    Interactive numbered-list agent selector for the advanced 10-phase pipeline.
+    Shows the 12 INVESTOR_PERSONAS.  Always prompts unless analysts_all=True.
+    """
+    from src.pipeline_investors import INVESTOR_PERSONAS  # local import to avoid circular
+
+    INVESTOR_DISPLAY: dict[str, str] = {
+        "damodaran":      "Aswath Damodaran  — Dean of Valuation",
+        "graham":         "Ben Graham        — Father of Value Investing",
+        "ackman":         "Bill Ackman       — Activist Investor (Pershing Square)",
+        "cathie_wood":    "Cathie Wood       — Queen of Disruptive Growth (ARK)",
+        "munger":         "Charlie Munger    — Rational Thinker (Berkshire)",
+        "burry":          "Michael Burry     — Forensic Contrarian (Scion)",
+        "pabrai":         "Mohnish Pabrai    — Dhandho Investor",
+        "lynch":          "Peter Lynch       — Tenbagger Hunter (Fidelity)",
+        "fisher":         "Phil Fisher       — Scuttlebutt Investigator",
+        "jhunjhunwala":   "Rakesh Jhunjhunwala — Big Bull of India",
+        "druckenmiller":  "Stanley Druckenmiller — Macro Legend (Duquesne)",
+        "buffett":        "Warren Buffett    — Oracle of Omaha (Berkshire)",
+    }
+
+    all_keys = list(INVESTOR_PERSONAS.keys())
+
+    if analysts_all:
+        print(f"\n{Fore.WHITE}{Style.BRIGHT}Investor Agents (--analysts-all: running all {len(all_keys)}){Style.RESET_ALL}")
+        for i, key in enumerate(all_keys, 1):
+            print(f"  {Fore.GREEN}{i:2}. {INVESTOR_DISPLAY.get(key, key)}{Style.RESET_ALL}")
+        print()
+        return all_keys
+
+    # ── Interactive numbered-list prompt ─────────────────────────────────────
+    print(f"\n{Fore.WHITE}{Style.BRIGHT}Select Investor Agents to run in the Advanced Pipeline{Style.RESET_ALL}")
+    print(f"{Fore.WHITE}{'─'*60}{Style.RESET_ALL}")
+    for i, key in enumerate(all_keys, 1):
+        print(f"  {Fore.CYAN}{i:2}.{Style.RESET_ALL} {INVESTOR_DISPLAY.get(key, key)}")
+    print(f"{Fore.WHITE}{'─'*60}{Style.RESET_ALL}")
+
+    choices = questionary.checkbox(
+        "Choose agents  [Space = toggle | 'a' = all | Enter = confirm]",
+        choices=[
+            questionary.Choice(
+                f"{i+1:2}. {INVESTOR_DISPLAY.get(key, key)}",
+                value=key,
+            )
+            for i, key in enumerate(all_keys)
+        ],
+        validate=lambda x: len(x) > 0 or "Select at least one agent.",
+        style=questionary.Style([
+            ("checkbox-selected", "fg:green"),
+            ("selected",          "fg:green noinherit"),
+            ("highlighted",       "noinherit"),
+            ("pointer",           "noinherit"),
+        ]),
+    ).ask()
+
+    if not choices:
+        print("\n\nInterrupt received. Exiting...")
+        sys.exit(0)
+
+    print(
+        f"\nSelected agents: "
+        + ", ".join(
+            Fore.GREEN + INVESTOR_DISPLAY.get(c, c).split("—")[0].strip() + Style.RESET_ALL
+            for c in choices
+        )
+        + "\n"
+    )
+    return choices
+
+
 def select_analysts(flags: dict | None = None) -> list[str]:
     if flags and flags.get("analysts_all"):
         return [a[1] for a in ANALYST_ORDER]
@@ -114,6 +185,15 @@ def select_model(use_ollama: bool, model_flag: str | None = None) -> tuple[str, 
             )
             return model.model_name, model.provider.value
         else:
+            # Non-interactive fallback: treat the flag value as a literal model name
+            # and try to infer the provider from the name prefix
+            import sys
+            if not sys.stdin.isatty():
+                provider = "Anthropic" if "claude" in model_flag.lower() else \
+                           "OpenAI" if any(x in model_flag.lower() for x in ("gpt", "o1", "o3")) else \
+                           "Unknown"
+                print(f"\nUsing model (not in registry): {Fore.GREEN}{model_flag}{Style.RESET_ALL} [{provider}]\n")
+                return model_flag, provider
             print(f"{Fore.RED}Model '{model_flag}' not found. Please select a model.{Style.RESET_ALL}")
 
     if use_ollama:
@@ -209,6 +289,137 @@ def resolve_dates(start_date: str | None, end_date: str | None, *, default_month
     return final_start, final_end
 
 
+def _try_float(val: str) -> float | None:
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+_GUIDANCE_SKIP = "__skip__"   # sentinel for "skip" choice in questionary.select
+
+
+def collect_management_guidance(tickers: list[str]) -> dict[str, dict]:
+    """
+    Interactively collect per-ticker management guidance before the advanced pipeline runs.
+    All inputs are optional — pressing Enter on any numeric field or choosing "skip"
+    leaves that field as None, and the DCF agent falls back to analyst consensus or
+    historical averages.
+
+    Returns: {ticker: {revenue_growth_guide, capex_guide_bn, margin_direction, source}}
+    Called only when pipeline_mode == "advanced".
+    """
+    _qs = questionary.Style([
+        ("selected",    "fg:green bold"),
+        ("pointer",     "fg:green bold"),
+        ("highlighted", "fg:green"),
+        ("answer",      "fg:green bold"),
+        ("question",    "noinherit"),
+    ])
+
+    print(f"\n{Fore.WHITE}{Style.BRIGHT}Management Guidance Input{Style.RESET_ALL}")
+    print(f"{Fore.WHITE}{'─'*60}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}  Enter figures from the most recent earnings call or analyst day.")
+    print(f"  Press Enter on numeric fields to skip — DCF falls back to consensus.{Style.RESET_ALL}\n")
+
+    guidance_map: dict[str, dict] = {}
+
+    for ticker in tickers:
+        print(f"  {Fore.YELLOW}{Style.BRIGHT}── {ticker} ──{Style.RESET_ALL}")
+
+        # ── Revenue growth ────────────────────────────────────────────────
+        rev_raw = questionary.text(
+            f"  Revenue growth guidance % (e.g. 15 for 15%, Enter to skip):",
+            validate=lambda v: (
+                True if v.strip() == ""
+                else True if _try_float(v.strip()) is not None
+                else "Enter a number (e.g. 15) or leave blank to skip"
+            ),
+            style=_qs,
+        ).ask()
+        if rev_raw is None:
+            print("\n\nInterrupt received. Exiting...")
+            sys.exit(0)
+        rev_growth = (_try_float(rev_raw.strip()) / 100.0) if rev_raw.strip() else None
+
+        # ── CapEx ─────────────────────────────────────────────────────────
+        capex_raw = questionary.text(
+            f"  CapEx guidance USD billions (e.g. 65, Enter to skip):",
+            validate=lambda v: (
+                True if v.strip() == ""
+                else True if _try_float(v.strip()) is not None
+                else "Enter a number (e.g. 65) or leave blank to skip"
+            ),
+            style=_qs,
+        ).ask()
+        if capex_raw is None:
+            print("\n\nInterrupt received. Exiting...")
+            sys.exit(0)
+        capex = _try_float(capex_raw.strip()) if capex_raw.strip() else None
+
+        # ── Margin direction ──────────────────────────────────────────────
+        margin_raw = questionary.select(
+            f"  Margin direction:",
+            choices=[
+                questionary.Choice("stable     — margins hold",           value="stable"),
+                questionary.Choice("expanding  — margins improving",      value="expanding"),
+                questionary.Choice("compressing — margins under pressure", value="compressing"),
+                questionary.Choice("skip — use historical trend",          value=_GUIDANCE_SKIP),
+            ],
+            style=_qs,
+        ).ask()
+        if margin_raw is None:
+            print("\n\nInterrupt received. Exiting...")
+            sys.exit(0)
+        margin = None if margin_raw == _GUIDANCE_SKIP else margin_raw
+
+        # ── Source ────────────────────────────────────────────────────────
+        source_raw = questionary.text(
+            f"  Source (e.g. Q4 2024 earnings call, Enter to skip):",
+            style=_qs,
+        ).ask()
+        if source_raw is None:
+            print("\n\nInterrupt received. Exiting...")
+            sys.exit(0)
+        source = source_raw.strip() if source_raw.strip() else "manual input"
+
+        guidance_map[ticker] = {
+            "revenue_growth_guide": rev_growth,
+            "capex_guide_bn":       capex,
+            "margin_direction":     margin,
+            "source":               source,
+        }
+        print()
+
+    # ── Confirmation summary ──────────────────────────────────────────────────
+    print(f"  {Fore.WHITE}{Style.BRIGHT}Guidance Summary{Style.RESET_ALL}")
+    print(f"  {'─'*70}")
+    print(f"  {'Ticker':<8} {'Rev Growth':>12} {'CapEx $bn':>10} {'Margin':>13}  Source")
+    print(f"  {'─'*70}")
+    for t, g in guidance_map.items():
+        rg = (f"{g['revenue_growth_guide']*100:.1f}%"
+              if g["revenue_growth_guide"] is not None else "consensus")
+        cx = f"{g['capex_guide_bn']:.1f}" if g["capex_guide_bn"] is not None else "n/a"
+        mg = g["margin_direction"] or "historical"
+        print(f"  {Fore.CYAN}{t:<8}{Style.RESET_ALL} {rg:>12} {cx:>10} {mg:>13}  {g['source']}")
+    print(f"  {'─'*70}\n")
+
+    confirmed = questionary.confirm(
+        "Proceed with this guidance?",
+        default=True,
+        style=_qs,
+    ).ask()
+    if confirmed is None:
+        print("\n\nInterrupt received. Exiting...")
+        sys.exit(0)
+    if not confirmed:
+        print(f"\n  {Fore.YELLOW}Re-entering guidance...{Style.RESET_ALL}\n")
+        return collect_management_guidance(tickers)   # recurse once to re-collect
+
+    print()
+    return guidance_map
+
+
 @dataclass
 class CLIInputs:
     tickers: list[str]
@@ -221,6 +432,9 @@ class CLIInputs:
     margin_requirement: float
     show_reasoning: bool = False
     show_agent_graph: bool = False
+    pipeline_mode: str = "simple"          # "simple" | "advanced"
+    enable_post_trade_review: bool = False
+    management_guidance: dict[str, dict] = field(default_factory=dict)
     raw_args: Optional[argparse.Namespace] = None
 
 
@@ -260,16 +474,45 @@ def parse_cli_inputs(
     if include_graph_flag:
         parser.add_argument("--show-agent-graph", action="store_true", help="Show the agent graph")
 
+    parser.add_argument(
+        "--pipeline",
+        type=str,
+        choices=["simple", "advanced"],
+        default="simple",
+        dest="pipeline_mode",
+        help="Pipeline mode: 'simple' (default LangGraph) or 'advanced' (10-phase orchestrator)",
+    )
+    parser.add_argument(
+        "--post-trade-review",
+        action="store_true",
+        dest="enable_post_trade_review",
+        help="Run post-trade review phase (Phase 10) — scores prior calls and updates conviction weights",
+    )
+
     args = parser.parse_args()
 
     # Normalize parsed values
     tickers = parse_tickers(getattr(args, "tickers", None))
-    selected_analysts = select_analysts({
-        "analysts_all": getattr(args, "analysts_all", False),
-        "analysts": getattr(args, "analysts", None),
-    })
+    pipeline_mode = getattr(args, "pipeline_mode", "simple")
+    analysts_all_flag = getattr(args, "analysts_all", False)
+
+    if pipeline_mode == "advanced":
+        # Advanced pipeline uses INVESTOR_PERSONAS (12 agents), always shows interactive prompt
+        selected_analysts = select_investor_agents(analysts_all=analysts_all_flag)
+    else:
+        selected_analysts = select_analysts({
+            "analysts_all": analysts_all_flag,
+            "analysts": getattr(args, "analysts", None),
+        })
     model_name, model_provider = select_model(getattr(args, "ollama", False), getattr(args, "model", None))
     start_date, end_date = resolve_dates(getattr(args, "start_date", None), getattr(args, "end_date", None), default_months_back=default_months_back)
+
+    # Collect management guidance upfront for the advanced pipeline only.
+    # Runs after agent/model selection so the user can set up guidance in one
+    # focused block before the pipeline starts crunching data.
+    guidance: dict[str, dict] = {}
+    if pipeline_mode == "advanced" and tickers:
+        guidance = collect_management_guidance(tickers)
 
     return CLIInputs(
         tickers=tickers,
@@ -282,6 +525,9 @@ def parse_cli_inputs(
         margin_requirement=getattr(args, "margin_requirement", 0.0),
         show_reasoning=getattr(args, "show_reasoning", False),
         show_agent_graph=getattr(args, "show_agent_graph", False),
+        pipeline_mode=getattr(args, "pipeline_mode", "simple"),
+        enable_post_trade_review=getattr(args, "enable_post_trade_review", False),
+        management_guidance=guidance,
         raw_args=args,
     )
 

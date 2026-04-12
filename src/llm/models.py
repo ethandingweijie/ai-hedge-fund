@@ -157,7 +157,13 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
         if not api_key:
             print(f"API Key Error: Please make sure ANTHROPIC_API_KEY is set in your .env file or provided via API keys.")
             raise ValueError("Anthropic API key not found.  Please make sure ANTHROPIC_API_KEY is set in your .env file or provided via API keys.")
-        return ChatAnthropic(model=model_name, api_key=api_key)
+        # 64 000 = the model-ceiling for claude-sonnet-4-6 / claude-opus-4-6.
+        # The previous value of 8 192 caused the industry specialist's large
+        # JSON output (brief_text + footnotes) to be truncated mid-field,
+        # leaving brief_text empty and triggering the compact-prompt retry.
+        # Higher max_tokens does not force the model to generate more tokens —
+        # it only raises the ceiling; the model still stops when done.
+        return ChatAnthropic(model=model_name, api_key=api_key, max_tokens=64000)
     elif model_provider == ModelProvider.DEEPSEEK:
         api_key = (api_keys or {}).get("DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
         if not api_key:
@@ -216,6 +222,20 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
                 raise ValueError("GigaChat API key not found. Please make sure GIGACHAT_API_KEY is set in your .env file or provided via API keys.")
 
             return GigaChat(credentials=api_key, model=model_name)
+    elif model_provider == ModelProvider.ALIBABA:
+        # Qwen models via Alibaba Cloud OpenAI-compatible endpoint.
+        # Uses DEEP_RESEARCH_API_KEY (same Alibaba key shared with deep_research).
+        # Base URL defaults to the international compatible-mode endpoint.
+        api_key = (api_keys or {}).get("DEEP_RESEARCH_API_KEY") or os.getenv("DEEP_RESEARCH_API_KEY")
+        base_url = (
+            os.getenv("ALIBABA_COMPATIBLE_BASE_URL")
+            or os.getenv("DEEP_RESEARCH_SEARCH_BASE_URL")
+            or "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        )
+        if not api_key:
+            print("API Key Error: Please make sure DEEP_RESEARCH_API_KEY is set in your .env file.")
+            raise ValueError("Alibaba API key not found. Set DEEP_RESEARCH_API_KEY in your .env file.")
+        return ChatOpenAI(model=model_name, api_key=api_key, base_url=base_url)
     elif model_provider == ModelProvider.AZURE_OPENAI:
         # Get and validate API key
         api_key = os.getenv("AZURE_OPENAI_API_KEY")

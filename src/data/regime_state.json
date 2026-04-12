@@ -1,0 +1,29 @@
+{
+  "last_run": "2026-04-11",
+  "tickers": [
+    "EH"
+  ],
+  "regime": {
+    "risk_appetite": "risk-off",
+    "rate_direction": "neutral",
+    "dollar_trend": "neutral",
+    "volatility_regime": "medium",
+    "recession_risk": "low",
+    "regime_notes": "Despite near-zero recession risk and a healthy labour market, deeply distressed consumer sentiment (56.6), negative SPY 90-day momentum (-2.3%), and cautious headline tone overwhelmingly bias toward risk-off with medium volatility."
+  },
+  "agent_weights": {
+    "damodaran": 1.0,
+    "graham": 1.0,
+    "ackman": 1.0,
+    "cathie_wood": 1.0,
+    "munger": 1.0,
+    "burry": 1.0,
+    "pabrai": 1.0,
+    "lynch": 1.0,
+    "fisher": 1.0,
+    "jhunjhunwala": 1.0,
+    "druckenmiller": 1.0,
+    "buffett": 1.0
+  },
+  "position_size_cap": 0.7
+}

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Price(BaseModel):
@@ -172,3 +172,460 @@ class AgentStateData(BaseModel):
 class AgentStateMetadata(BaseModel):
     show_reasoning: bool = False
     model_config = {"extra": "allow"}
+
+
+# ---------------------------------------------------------------------------
+# Advanced 10-Phase Pipeline Models
+# ---------------------------------------------------------------------------
+
+from typing import Literal
+# Field, field_validator, model_validator already imported at top of file
+
+
+class MacroRegime(BaseModel):
+    risk_appetite: Literal["risk-on", "risk-off"]
+    rate_direction: Literal["tightening", "easing", "neutral"]
+    dollar_trend: Literal["strengthening", "weakening", "neutral"]
+    volatility_regime: Literal["low", "medium", "high"]
+    recession_risk: Literal["low", "elevated", "high"] = "low"   # default for backward compat
+    regime_notes: str
+
+
+class MacroRegimeOutput(BaseModel):
+    regime: MacroRegime
+    agent_weights: dict[str, float]   # LLM-suggested multipliers (0.5–2.0); overridden by rule table
+    position_size_cap: float
+    regime_notes: str
+
+
+class StrategicRouterOutput(BaseModel):
+    sector: Literal["Consumer", "Tech", "Biopharma", "Telco",
+                    "Crypto", "Energy", "Financials", "Industrials",
+                    "RealEstate", "Transportation", "Materials",
+                    "Resources", "ProfessionalServices", "HealthcareServices",
+                    "Semiconductor"]
+    raw_financials: dict[str, object]   # {FY2020: {revenue: x, ...}, ...}
+    insider_summary: str
+    routing_decision: dict[str, object]  # {specialist_block: str, data_feeds: [...]}
+
+
+class IndustryBriefOutput(BaseModel):
+    brief_text: str = ""
+    key_kpis: dict[str, object] = Field(default_factory=dict)
+    footnotes: list[dict] = Field(default_factory=list)
+    # Each footnote: {ref_id: int, source_name: str, source_type: str,
+    #                 date: str, speaker: str, claim: str, quote: str, url: str}
+
+
+class AdvancedInvestorSignal(BaseModel):
+    signal: Literal["BUY", "SELL", "SHORT", "HOLD"]
+    conviction: int = Field(ge=1, le=10)
+    time_horizon: Literal["short", "medium", "long"]
+    price_target: float
+    thesis_summary: str
+    key_risks: list[str] = Field(default_factory=list)
+    cot_log: str = ""          # optional — may be truncated if max_tokens hit
+
+
+class DebateResult(BaseModel):
+    disagreement_core: str
+    agent_a: str
+    agent_b: str
+    agent_a_rebuttal: str
+    agent_b_rebuttal: str
+    adjudication: str
+    adjudicated_signal: Literal["BUY", "SELL", "HOLD"]
+    adjudicated_conviction: int = Field(ge=1, le=10)
+
+
+class ScenarioCase(BaseModel):
+    assumptions: str
+    fair_value: float
+    probability: float   # 0.0–1.0; bull+base+bear must sum to 1.0
+
+
+class ScenarioOutput(BaseModel):
+    bull: ScenarioCase
+    base: ScenarioCase
+    bear: ScenarioCase
+    expected_value: float
+    current_price: float
+    upside_pct: float
+
+    @field_validator("current_price", "expected_value", "upside_pct", mode="before")
+    @classmethod
+    def _coerce_float(cls, v: object) -> float:
+        """Coerce None / 'unknown' / non-numeric strings to 0.0."""
+        if v is None:
+            return 0.0
+        if isinstance(v, str) and v.strip().lower() in ("unknown", "n/a", "null", "none", ""):
+            return 0.0
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return 0.0
+
+
+class PowerLawOutput(BaseModel):
+    total_score: int = Field(ge=1, le=10)
+    scale_economies: int = Field(ge=0, le=2)
+    scale_economies_note: str = ""       # positive evidence / what checks off
+    scale_economies_concern: str = ""    # risk, caveat, or gap
+    network_effects: int = Field(ge=0, le=2)
+    network_effects_note: str = ""
+    network_effects_concern: str = ""
+    winner_take_most: int = Field(ge=0, le=2)
+    winner_take_most_note: str = ""
+    winner_take_most_concern: str = ""
+    switching_costs: int = Field(ge=0, le=2)
+    switching_costs_note: str = ""
+    switching_costs_concern: str = ""
+    data_ip_moat: int = Field(ge=0, le=2)
+    data_ip_moat_note: str = ""
+    data_ip_moat_concern: str = ""
+    interpretation: str
+    multiple_implication: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _clamp_scores(cls, data: object) -> object:
+        """Clamp all score fields into valid range before Pydantic validates ge/le.
+        Handles LLM returning 0, floats (6.5), or out-of-range integers (11)."""
+        if not isinstance(data, dict):
+            return data
+        def _ci(v, lo: int, hi: int) -> int:
+            try:
+                return max(lo, min(hi, int(round(float(v)))))
+            except (TypeError, ValueError):
+                return lo
+        data["total_score"]      = _ci(data.get("total_score",      5), 1, 10)
+        data["scale_economies"]  = _ci(data.get("scale_economies",  1), 0, 2)
+        data["network_effects"]  = _ci(data.get("network_effects",  1), 0, 2)
+        data["winner_take_most"] = _ci(data.get("winner_take_most", 1), 0, 2)
+        data["switching_costs"]  = _ci(data.get("switching_costs",  1), 0, 2)
+        data["data_ip_moat"]     = _ci(data.get("data_ip_moat",     1), 0, 2)
+        return data
+
+
+class ValueTrapCheck(BaseModel):
+    status: Literal["RED", "AMBER", "GREEN"]
+    evidence: str
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalise_status(cls, v: object) -> object:
+        """Map common LLM deviations to canonical RED/AMBER/GREEN."""
+        if not isinstance(v, str):
+            return v
+        _MAP = {
+            "YELLOW": "AMBER", "ORANGE": "AMBER", "WARNING": "AMBER",
+            "CAUTION": "AMBER", "MODERATE": "AMBER",
+            "RED FLAG": "RED", "HIGH": "RED", "FLAG": "RED",
+            "CLEAR": "GREEN", "OK": "GREEN", "PASS": "GREEN",
+            "LOW": "GREEN", "NONE": "GREEN",
+            "N/A": "GREEN", "NA": "GREEN", "UNKNOWN": "GREEN",
+        }
+        return _MAP.get(v.strip().upper(), v.strip().upper())
+
+
+class ValueTrapOutput(BaseModel):
+    dividend_sustainability: ValueTrapCheck
+    structural_decline: ValueTrapCheck
+    earnings_cashflow_mismatch: ValueTrapCheck
+    insider_behaviour: ValueTrapCheck
+    balance_sheet_deterioration: ValueTrapCheck
+    overall_verdict: Literal["TRAP RISK HIGH", "TRAP RISK MEDIUM", "TRAP RISK LOW"]
+
+    @field_validator("overall_verdict", mode="before")
+    @classmethod
+    def _normalise_verdict(cls, v: object) -> object:
+        """Map LLM shorthand to the canonical three-word verdict strings."""
+        if not isinstance(v, str):
+            return v
+        u = v.strip().upper()
+        if "HIGH" in u:
+            return "TRAP RISK HIGH"
+        if "MED" in u:
+            return "TRAP RISK MEDIUM"
+        if "LOW" in u:
+            return "TRAP RISK LOW"
+        return v
+
+
+class AdvancedPortfolioDecision(BaseModel):
+    action: Literal["BUY", "SELL", "SHORT", "COVER", "HOLD"]
+    position_size_pct: float
+    entry_range: list[float]   # [low, high]
+    stop_loss: float
+    price_target: float
+    time_horizon: str
+    rationale: str
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.5 Intelligence Agent Models
+# ---------------------------------------------------------------------------
+
+class InsiderTransaction(BaseModel):
+    """Single open-market insider buy or sell transaction."""
+    name: str
+    title: str | None = None
+    transaction_type: Literal["BUY", "SELL"]
+    shares: float
+    price_per_share: float | None = None
+    value_usd: float | None = None
+    date: str
+    role_weight: float = 1.0   # CEO/CFO = 3.0, Director = 1.5, Other officer = 1.0
+
+
+class InsiderActivityOutput(BaseModel):
+    """Summary output of the Insider Activity Agent (Phase 2.5)."""
+    ticker: str
+    signal: Literal["BULLISH", "BEARISH", "NEUTRAL"]
+    cluster_buy: bool = False            # >= 2 insiders buying within 30 days
+    net_buying_30d_usd: float = 0.0
+    net_buying_90d_usd: float = 0.0
+    net_buying_12m_usd: float = 0.0
+    gross_buy_value_12m: float = 0.0   # total insider buy value (absolute) over 12 months
+    gross_sell_value_12m: float = 0.0  # total insider sell value (absolute) over 12 months
+    buy_sell_ratio_12m: float = 0.0     # total buy value / total sell value; >1 = net buying
+    conviction_sell_flag: bool = False   # CEO or CFO sold > $5M in a single transaction
+    key_transactions: list[InsiderTransaction] = Field(default_factory=list)
+    data_source: Literal["FMP", "EDGAR", "NONE"] = "NONE"
+    analysis_note: str = ""
+
+
+class EarningsSurprise(BaseModel):
+    """Single quarter earnings beat or miss."""
+    date: str
+    eps_actual: float
+    eps_estimated: float
+    surprise_pct: float
+    beat: bool
+
+
+class AnalystRevisionOutput(BaseModel):
+    """Summary output of the Analyst Revision Agent (Phase 2.5)."""
+    ticker: str
+    revision_direction: Literal[
+        "ACCELERATING_UP", "STABLE", "DECELERATING", "ACCELERATING_DOWN", "UNKNOWN"
+    ] = "UNKNOWN"
+    eps_dispersion_pct: float | None = None    # (eps_high - eps_low) / abs(eps_avg) * 100
+    revenue_dispersion_pct: float | None = None
+    analyst_count: int = 0
+    surprise_streak: int = 0            # positive = consecutive beats, negative = misses
+    surprise_direction: Literal["BEAT", "MISS", "MIXED", "UNKNOWN"] = "UNKNOWN"
+    estimate_dispersion: Literal["LOW", "MEDIUM", "HIGH", "UNKNOWN"] = "UNKNOWN"
+    recent_surprises: list[EarningsSurprise] = Field(default_factory=list)
+    analysis_note: str = ""
+
+
+class ScoredArticle(BaseModel):
+    """Single news article or press release with deterministic sentiment score."""
+    ticker: str
+    title: str
+    text: str = ""
+    date: str
+    source: str
+    url: str = ""
+    is_press_release: bool = False
+    score: float = 0.0          # -1.0 (bearish) to +1.0 (bullish); 0.0 = neutral
+    label: Literal["BULLISH", "BEARISH", "NEUTRAL"] = "NEUTRAL"
+
+
+class NewsSentimentOutput(BaseModel):
+    """Summary output of the News Sentiment Agent (Phase 2.5)."""
+    ticker: str
+    signal: Literal["BULLISH", "BEARISH", "NEUTRAL"] = "NEUTRAL"
+    composite_score: float = 0.0      # recency-weighted mean score, -1.0 to +1.0
+    article_count: int = 0            # total news articles scored
+    press_release_count: int = 0      # press releases scored separately
+    bullish_count: int = 0
+    bearish_count: int = 0
+    neutral_count: int = 0
+    press_release_signal: Literal["POSITIVE", "NEGATIVE", "NEUTRAL", "NONE"] = "NONE"
+    volume_spike: bool = False        # True if article count > 2× trailing 30-day average
+    top_headlines: list[str] = Field(default_factory=list)   # top 5 most-signal headlines
+    scored_articles: list[ScoredArticle] = Field(default_factory=list)
+    analysis_note: str = ""
+
+
+class ShortInterestOutput(BaseModel):
+    """
+    Summary output of the Short Interest Agent (Phase 2.5).
+
+    All metrics are computed deterministically from FMP /stable/short-interest.
+    No LLM is involved.  Consumed by:
+      - Pathway 1: all 12 investor agent prompts (intel_section injection)
+        with persona-specific framing for Burry (forensic/variant perception)
+        and Druckenmiller (positioning/crowded trade/squeeze risk)
+    """
+    ticker: str
+
+    # ── Latest snapshot ───────────────────────────────────────────────────────
+    report_date: str | None = None          # most recent settlement date
+    short_interest_shares: float | None = None   # number of shares sold short
+    short_float_pct: float | None = None    # short interest as % of float
+    shares_float: float | None = None       # total float shares
+    days_to_cover: float | None = None      # short interest / avg daily volume
+    borrow_rate_pct: float | None = None    # annualised cost to borrow (%)
+
+    # ── Flag classifications ───────────────────────────────────────────────────
+    short_float_flag: Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"] = "UNKNOWN"
+    # HIGH: > 20% | MEDIUM: 10–20% | LOW: < 10%
+    days_to_cover_flag: Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"] = "UNKNOWN"
+    # HIGH: > 10d | MEDIUM: 5–10d | LOW: < 5d
+    borrow_rate_flag: Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"] = "UNKNOWN"
+    # HIGH: > 50% p.a. | MEDIUM: 20–50% | LOW: < 20%
+
+    # ── Trend (change vs prior period) ───────────────────────────────────────
+    short_interest_trend: Literal["INCREASING", "STABLE", "DECREASING", "UNKNOWN"] = "UNKNOWN"
+    short_float_pct_prior: float | None = None   # previous period for delta context
+
+    # ── Composite risk flags ───────────────────────────────────────────────────
+    squeeze_risk: bool = False        # short float > 20% AND days_to_cover > 7
+    crowded_trade: bool = False       # short float > 15% — dangerous for short sellers
+    signal: Literal["HEAVILY_SHORTED", "MODERATELY_SHORTED", "LOW_SHORT_INTEREST", "UNKNOWN"] = "UNKNOWN"
+
+    # ── Persona-specific interpretations ──────────────────────────────────────
+    burry_note: str = ""        # forensic/variant-perception framing
+    druckenmiller_note: str = ""   # positioning/crowded-trade/squeeze framing
+
+    data_source: Literal["FMP", "yfinance", "NONE"] = "NONE"
+    analysis_note: str = ""
+
+
+class EarningsQualityOutput(BaseModel):
+    """
+    Summary output of the Earnings Quality Scorer (Phase 2.5).
+
+    All metrics are computed deterministically from FMP financial statement data.
+    No LLM is involved.  Consumed by:
+      - Pathway 1: all 12 investor agent prompts (intel_section injection)
+      - Pathway 2: Value Trap agent Check 3 (earnings vs cash flow mismatch)
+      - Pathway 3: Risk Manager — remark only, no weight change
+    """
+    ticker: str
+
+    # ── Accruals (Sloan 1996 — high accruals predict negative future returns) ──
+    accrual_ratio_avg: float | None = None   # 3-year avg of (NI - OCF) / Total Assets
+    accrual_ratios: list[float] = Field(default_factory=list)   # per-year, newest first
+    accrual_trend: Literal["DETERIORATING", "STABLE", "IMPROVING", "UNKNOWN"] = "UNKNOWN"
+    accrual_flag: Literal["RED", "AMBER", "GREEN", "UNKNOWN"] = "UNKNOWN"
+    # RED: avg > 0.10 | AMBER: 0.05–0.10 | GREEN: < 0.05
+
+    # ── Cash conversion (OCF / Net Income) ───────────────────────────────────
+    cash_conversion_ratio: float | None = None   # OCF / NI (most recent full year)
+    cash_conversion_flag: Literal["RED", "AMBER", "GREEN", "UNKNOWN"] = "UNKNOWN"
+    # RED: < 0.75 | AMBER: 0.75–0.85 | GREEN: ≥ 0.85
+
+    # ── Accounts receivable vs revenue growth divergence ─────────────────────
+    ar_cagr_3y: float | None = None          # AR 3-year CAGR
+    revenue_cagr_3y: float | None = None     # Revenue 3-year CAGR
+    ar_revenue_divergence: Literal["RED", "AMBER", "GREEN", "UNKNOWN"] = "UNKNOWN"
+    # RED: AR CAGR > Revenue CAGR × 1.5 | AMBER: × 1.2 | GREEN: ≤ × 1.2
+
+    # ── Days Sales Outstanding trend ─────────────────────────────────────────
+    dso_values: list[float] = Field(default_factory=list)   # per-year, newest first
+    dso_trend: Literal["RISING", "STABLE", "FALLING", "UNKNOWN"] = "UNKNOWN"
+
+    # ── Stock-based compensation drag ─────────────────────────────────────────
+    sbc_drag_pct: float | None = None        # SBC / OCF × 100 (most recent year)
+    sbc_drag_flag: Literal["HIGH", "MEDIUM", "LOW", "UNKNOWN"] = "UNKNOWN"
+    # HIGH: > 25% | MEDIUM: 15–25% | LOW: < 15%
+
+    # ── FCF vs Net Income divergence ─────────────────────────────────────────
+    fcf_ni_ratios: list[float] = Field(default_factory=list)   # per-year, newest first
+    fcf_ni_divergence: Literal["RED", "AMBER", "GREEN", "UNKNOWN"] = "UNKNOWN"
+    # RED: ratio declining 2+ consecutive years | AMBER: 1 year | GREEN: stable/improving
+
+    # ── Aggregate ─────────────────────────────────────────────────────────────
+    overall_quality_score: float = 5.0      # 0 (worst) – 10 (best)
+    quality_verdict: Literal["HIGH", "MEDIUM", "LOW"] = "MEDIUM"
+    pre_earnings_risk: Literal["HIGH", "MEDIUM", "LOW"] = "LOW"
+    flags: list[str] = Field(default_factory=list)
+    data_quality: Literal["FULL", "PARTIAL", "INSUFFICIENT"] = "INSUFFICIENT"
+    analysis_note: str = ""
+
+
+class AnalystEstimates(BaseModel):
+    """
+    Forward analyst consensus estimates from FMP /stable/analyst-estimates.
+    All financial fields in the same currency/scale as the FMP financials endpoints
+    (i.e., raw dollars, not millions). Fields absent from the API response are None.
+    """
+    ticker: str
+    period_end: str             # fiscal year end date, e.g. "2025-12-31"
+    revenue_avg: float | None = None
+    revenue_low: float | None = None
+    revenue_high: float | None = None
+    ebitda_avg: float | None = None
+    net_income_avg: float | None = None
+    eps_avg: float | None = None
+    eps_low: float | None = None
+    eps_high: float | None = None
+    analyst_count_revenue: int | None = None   # number of analysts covering revenue
+    analyst_count_eps: int | None = None       # number of analysts covering EPS
+
+
+# ---------------------------------------------------------------------------
+# Phase 7d — BU-Level Analyst Output
+# ---------------------------------------------------------------------------
+
+class BUAnalysisOutput(BaseModel):
+    """Output of the BU-Level Analyst agent (Phase 7d)."""
+    kpi_extraction: dict = Field(default_factory=dict)
+    # {unit_economics: str, backlog_rpo: str, segment_nrr: str}
+
+    margin_attribution: str = ""
+
+    capex_breakdown: dict = Field(default_factory=dict)
+    # {growth_capex_pct: float, maintenance_capex_pct: float,
+    #  capex_as_pct_revenue: float, commentary: str}
+
+    product_resilience: str = ""
+
+    segment_forecast: dict = Field(default_factory=dict)
+    # {bear: {yr1_rev_growth, yr2_rev_growth, yr3_rev_growth, ebitda_margin_yr3, assumption},
+    #  base: {...}, bull: {...}}
+
+    data_limitations: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Phase 7e — Senior Financial Editor Output
+# ---------------------------------------------------------------------------
+
+class FinancialEditorOutput(BaseModel):
+    """Output of the Senior Financial Editor agent (Phase 7e)."""
+    polished_summary: str = ""
+    # Corrected, de-duplicated, professionally worded executive summary
+
+    logic_audit_flags: list[str] = Field(default_factory=list)
+    # List of internal contradictions found: e.g. ["Bull case assumes 40% rev growth
+    # but base WACC implies capital-scarce environment"]
+
+    formatting_notes: list[str] = Field(default_factory=list)
+    # Consolidated table suggestions, nomenclature fixes
+
+    report_quality_score: int = Field(default=5, ge=1, le=10)
+    # 1-10: 10 = publication-ready, 1 = requires major revision
+
+    key_corrections: list[str] = Field(default_factory=list)
+    # Specific factual or logical corrections made
+
+
+# ---------------------------------------------------------------------------
+# Phase 7f — Governance & Citation Auditor Output
+# ---------------------------------------------------------------------------
+
+class CitationAuditOutput(BaseModel):
+    """Output of the Governance & Citation Auditor agent (Phase 7f)."""
+    hallucination_flags: list[str] = Field(default_factory=list)
+    # Claims that cannot be verified or are demonstrably incorrect
+
+    primary_source_gaps: list[str] = Field(default_factory=list)
+    # Claims citing "estimates" or "web search" that should cite SEC filings
+
+    audit_score: int = Field(default=5, ge=1, le=10)
+    # Data provenance score: 10 = 100% primary sources, 1 = mostly AI-generated

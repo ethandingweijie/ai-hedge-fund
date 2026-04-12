@@ -254,6 +254,525 @@ def print_trading_output(result: dict) -> None:
         print(f"{Fore.CYAN}{wrapped_reasoning}{Style.RESET_ALL}")
 
 
+def print_advanced_output(result: dict, show_reasoning: bool = False) -> None:
+    """
+    Rich output for the advanced 10-phase pipeline.
+
+    Sections (per ticker):
+      1. Macro Regime banner
+      2. Sector + Industry Brief excerpt
+      3. Agent Signals table  (signal | conviction/10 | horizon | target | thesis)
+         [+ cot_log block per agent when show_reasoning=True]
+      4. Debate Round result  (only if debate occurred)
+      5. Phase 7 Analytics    (scenario EV upside | power law score | value trap)
+      6. Risk Manager flags
+      7. Final Portfolio Decision
+    """
+    W = Style.BRIGHT + Fore.WHITE
+    R = Style.RESET_ALL
+
+    def _wrap(text: str, width: int = 58) -> str:
+        """Hard-wrap text at word boundaries."""
+        if not text:
+            return ""
+        words = str(text).split()
+        lines, cur = [], ""
+        for word in words:
+            if len(cur) + len(word) + 1 > width:
+                lines.append(cur)
+                cur = word
+            else:
+                cur = (cur + " " + word).strip()
+        if cur:
+            lines.append(cur)
+        return "\n".join(lines)
+
+    SIGNAL_COLOR = {
+        "BUY":   Fore.GREEN,
+        "SELL":  Fore.RED,
+        "SHORT": Fore.RED,
+        "HOLD":  Fore.YELLOW,
+        "COVER": Fore.GREEN,
+    }
+
+    AGENT_DISPLAY = {
+        "buffett":        "Warren Buffett",
+        "munger":         "Charlie Munger",
+        "graham":         "Ben Graham",
+        "damodaran":      "Aswath Damodaran",
+        "lynch":          "Peter Lynch",
+        "fisher":         "Phil Fisher",
+        "ackman":         "Bill Ackman",
+        "cathie_wood":    "Cathie Wood",
+        "burry":          "Michael Burry",
+        "pabrai":         "Mohnish Pabrai",
+        "druckenmiller":  "Stanley Druckenmiller",
+        "jhunjhunwala":   "Rakesh Jhunjhunwala",
+        "fundamentals_analyst":      "Fundamentals Analyst",
+        "growth_analyst":            "Growth Analyst",
+        "news_sentiment_analyst":    "News Sentiment Analyst",
+        "sentiment_analyst":         "Sentiment Analyst",
+        "technical_analyst":         "Technical Analyst",
+        "valuation_analyst":         "Valuation Analyst",
+    }
+
+    decisions       = result.get("decisions", {})
+    analyst_signals = result.get("analyst_signals", {})
+    debate_result   = result.get("debate_result") or {}
+    scenario        = result.get("scenario_analysis") or {}
+    power_law       = result.get("power_law_analysis") or {}
+    value_trap      = result.get("value_trap_analysis") or {}
+    macro           = result.get("macro_regime") or {}
+    sector          = result.get("sector", "—")
+    industry_brief  = result.get("industry_brief", "")
+
+    if not decisions:
+        print(f"{Fore.RED}No trading decisions available{R}")
+        return
+
+    # ── 1. Macro Regime Banner ─────────────────────────────────────────────
+    regime_line = (
+        f"  Risk Appetite: {Fore.CYAN}{macro.get('risk_appetite', '—')}{R}  |  "
+        f"Rates: {Fore.CYAN}{macro.get('rate_direction', '—')}{R}  |  "
+        f"Dollar: {Fore.CYAN}{macro.get('dollar_trend', '—')}{R}  |  "
+        f"Vol Regime: {Fore.CYAN}{macro.get('volatility_regime', '—')}{R}"
+    )
+    print(f"\n{W}{'='*70}{R}")
+    print(f"{W}  MACRO REGIME{R}")
+    print(regime_line)
+    if macro.get("regime_notes"):
+        print(f"  {Fore.WHITE}{macro['regime_notes']}{R}")
+
+    # ── 2. Sector + Industry Brief ─────────────────────────────────────────
+    print(f"\n{W}  SECTOR: {Fore.CYAN}{sector}{R}")
+    if industry_brief:
+        for line in industry_brief.splitlines()[:60]:
+            print(f"  {Fore.WHITE}{line}{R}")
+
+    # ── Per-Ticker sections ────────────────────────────────────────────────
+    for ticker, decision in decisions.items():
+        print(f"\n{W}{'='*70}{R}")
+        print(f"{W}  ANALYSIS: {Fore.CYAN}{ticker}{R}")
+        print(f"{W}{'='*70}{R}")
+
+        # ── 3. Agent Signals Table ─────────────────────────────────────────
+        agent_rows = []
+        skip_agents = {"risk_management_agent", "advanced_risk_manager"}
+        for agent_key, sig_map in analyst_signals.items():
+            if agent_key in skip_agents:
+                continue
+            if not isinstance(sig_map, dict) or ticker not in sig_map:
+                continue
+            sig = sig_map[ticker]
+            if not isinstance(sig, dict):
+                continue
+
+            raw_signal  = sig.get("signal", "—").upper()
+            conviction  = sig.get("conviction", "—")
+            horizon     = sig.get("time_horizon", "—")
+            pt          = sig.get("price_target")
+            thesis      = sig.get("thesis_summary", "")
+            key_risks   = sig.get("key_risks", [])
+
+            sc = SIGNAL_COLOR.get(raw_signal, Fore.WHITE)
+            display_name = AGENT_DISPLAY.get(agent_key, agent_key.replace("_", " ").title())
+
+            # Include first key risk in the thesis column if present
+            thesis_text = thesis
+            if key_risks:
+                thesis_text += f"  [!] {key_risks[0]}"
+
+            agent_rows.append([
+                f"{Fore.CYAN}{display_name}{R}",
+                f"{sc}{raw_signal}{R}",
+                f"{Fore.WHITE}{conviction}/10{R}",
+                f"{Fore.WHITE}{horizon}{R}",
+                f"{Fore.WHITE}${pt:.2f}{R}" if isinstance(pt, (int, float)) else f"{Fore.WHITE}—{R}",
+                f"{Fore.WHITE}{_wrap(thesis_text, 55)}{R}",
+            ])
+
+        # Sort: BUY first, then HOLD, then SELL/SHORT; within each group by conviction desc
+        def _sort_key(row):
+            raw = row[1].replace(Fore.GREEN, "").replace(Fore.RED, "").replace(Fore.YELLOW, "").replace(R, "").strip()
+            order = {"BUY": 0, "HOLD": 1, "SELL": 2, "SHORT": 2, "COVER": 0}.get(raw, 9)
+            conv_str = row[2].replace(Fore.WHITE, "").replace(R, "").replace("/10", "").strip()
+            conv = int(conv_str) if conv_str.isdigit() else 0
+            return (order, -conv)
+        agent_rows.sort(key=_sort_key)
+
+        print(f"\n{W}AGENT SIGNALS{R}")
+        print(tabulate(
+            agent_rows,
+            headers=[f"{W}Agent", "Signal", "Conviction", "Horizon", "Target", f"Thesis / Key Risk{R}"],
+            tablefmt="grid",
+            colalign=("left", "center", "center", "center", "right", "left"),
+        ))
+
+        # ── 3b. Chain-of-Thought Reasoning (--show-reasoning) ─────────────
+        if show_reasoning:
+            print(f"\n{W}AGENT CHAIN-OF-THOUGHT REASONING{R}")
+            skip_agents = {"risk_management_agent", "advanced_risk_manager"}
+            for agent_key, sig_map in analyst_signals.items():
+                if agent_key in skip_agents:
+                    continue
+                if not isinstance(sig_map, dict) or ticker not in sig_map:
+                    continue
+                sig = sig_map[ticker]
+                if not isinstance(sig, dict):
+                    continue
+                cot = sig.get("cot_log", "").strip()
+                if not cot:
+                    continue
+                display_name = AGENT_DISPLAY.get(agent_key, agent_key.replace("_", " ").title())
+                raw_signal = sig.get("signal", "—").upper()
+                sc = SIGNAL_COLOR.get(raw_signal, Fore.WHITE)
+                print(f"\n  {Fore.CYAN}{display_name}{R} [{sc}{raw_signal}{R}]")
+                print(f"  {Fore.WHITE}{'-'*66}{R}")
+                for line in cot.splitlines():
+                    print(f"  {Fore.WHITE}{line}{R}")
+
+        # ── 4. Debate Round ────────────────────────────────────────────────
+        dr = debate_result.get(ticker)
+        if dr:
+            adj_signal = dr.get("adjudicated_signal", "—").upper()
+            adj_conv   = dr.get("adjudicated_conviction", "—")
+            adj_color  = SIGNAL_COLOR.get(adj_signal, Fore.WHITE)
+            # DebateResult stores agent_a (bull) and agent_b (bear)
+            bull_key = dr.get("agent_a", "")
+            bear_key = dr.get("agent_b", "")
+            bull_name = AGENT_DISPLAY.get(bull_key, bull_key.replace("_", " ").title() if bull_key else "—")
+            bear_name = AGENT_DISPLAY.get(bear_key, bear_key.replace("_", " ").title() if bear_key else "—")
+            adjudication  = dr.get("adjudication", "")
+            disagreement  = dr.get("disagreement_core", "")
+            debate_rows = [
+                ["Bull advocate",      f"{Fore.GREEN}{bull_name}{R}"],
+                [f"  Rebuttal",        f"{Fore.WHITE}{_wrap(dr.get('agent_a_rebuttal', ''), 62)}{R}"],
+                ["Bear advocate",      f"{Fore.RED}{bear_name}{R}"],
+                [f"  Rebuttal",        f"{Fore.WHITE}{_wrap(dr.get('agent_b_rebuttal', ''), 62)}{R}"],
+                ["Core disagreement",  f"{Fore.WHITE}{_wrap(disagreement, 62)}{R}"],
+                ["Adjudicated signal", f"{adj_color}{Style.BRIGHT}{adj_signal}  conviction {adj_conv}/10{R}"],
+                ["Moderator ruling",   f"{Fore.WHITE}{_wrap(adjudication, 62)}{R}"],
+            ]
+            print(f"\n{W}DEBATE ROUND — TRIGGERED (≥3 BUY vs ≥3 SELL){R}")
+            print(tabulate(debate_rows, tablefmt="grid", colalign=("left", "left")))
+        else:
+            print(f"\n{Fore.YELLOW}  Debate: SKIPPED — no strong conflict (< 3 BUY and 3 SELL on same ticker){R}")
+
+        # ── 5. Phase 7 Analytics ───────────────────────────────────────────
+        scen = scenario.get(ticker, {})
+        pl   = power_law.get(ticker, {})
+        trap = value_trap.get(ticker, {})
+
+        trap_verdict = trap.get("overall_verdict", "—")
+        trap_color = (Fore.RED if "HIGH" in str(trap_verdict).upper()
+                      else Fore.YELLOW if "MEDIUM" in str(trap_verdict).upper()
+                      else Fore.GREEN)
+
+        # Scenario: ScenarioCase nested dicts with fair_value + probability
+        bull_fv = scen.get("bull", {}).get("fair_value")
+        base_fv = scen.get("base", {}).get("fair_value")
+        bear_fv = scen.get("bear", {}).get("fair_value")
+        bull_p  = scen.get("bull", {}).get("probability", 0)
+        base_p  = scen.get("base", {}).get("probability", 0)
+        bear_p  = scen.get("bear", {}).get("probability", 0)
+        scenario_detail = (
+            f"Bull ${bull_fv:.0f} ({bull_p*100:.0f}%)  "
+            f"Base ${base_fv:.0f} ({base_p*100:.0f}%)  "
+            f"Bear ${bear_fv:.0f} ({bear_p*100:.0f}%)"
+            if isinstance(bull_fv, (int, float)) else "—"
+        )
+
+        # Value Trap: one line per RED/AMBER check, each individually wrapped
+        trap_checks = ["dividend_sustainability", "structural_decline",
+                       "earnings_cashflow_mismatch", "insider_behaviour", "balance_sheet_deterioration"]
+        trap_flags = [
+            f"{c.replace('_', ' ').title()}: {trap[c]['status']} — {trap[c].get('evidence','')[:80]}"
+            for c in trap_checks
+            if isinstance(trap.get(c), dict) and trap[c].get("status") in ("RED", "AMBER")
+        ]
+        trap_detail = (
+            "\n".join(_wrap(flag, 62) for flag in trap_flags)
+            if trap_flags else "All checks GREEN"
+        )
+
+        # Power Law: wrap interpretation to fixed width; append dim scores on final line
+        _DETAIL_W = 62
+        pl_interp  = _wrap(pl.get("interpretation", "—"), _DETAIL_W)
+        pl_dims    = (
+            f"Scale:{pl.get('scale_economies','?')} "
+            f"Net:{pl.get('network_effects','?')} "
+            f"Win:{pl.get('winner_take_most','?')} "
+            f"Sw:{pl.get('switching_costs','?')} "
+            f"IP:{pl.get('data_ip_moat','?')}"
+        )
+        pl_detail = f"{pl_interp}\n[{pl_dims}]"
+
+        analytics_rows = [
+            [f"{W}Scenario EV Upside{R}",
+             f"{Fore.CYAN}{scen.get('upside_pct', 0):.1f}%{R}" if isinstance(scen.get("upside_pct"), (int, float)) else "—",
+             scenario_detail],
+            [f"{W}Power Law Score{R}",
+             f"{Fore.CYAN}{pl.get('total_score', '—')}/10{R}",
+             pl_detail],
+            [f"{W}Value Trap Risk{R}",
+             f"{trap_color}{trap_verdict}{R}",
+             trap_detail],
+        ]
+        print(f"\n{W}PHASE 7 — ANALYTICAL OVERLAYS{R}")
+        print(tabulate(analytics_rows, tablefmt="grid", colalign=("left", "center", "left")))
+
+        # ── 6. Risk Manager Flags ──────────────────────────────────────────
+        risk     = analyst_signals.get("advanced_risk_manager", {}).get(ticker, {})
+        approved = risk.get("approved_size_pct", 0) if risk else 0
+        if risk:
+            flags = risk.get("level1_flags", []) + risk.get("sector_flags", [])
+            risk_rows = []
+            for flag in flags:
+                risk_rows.append([f"{Fore.YELLOW}  Flag{R}", f"{Fore.YELLOW}{_wrap(flag, 62)}{R}"])
+            if not flags:
+                risk_rows.append(["  Flags", f"{Fore.GREEN}None — all checks passed{R}"])
+            print(f"\n{W}PHASE 8 — RISK MANAGER{R}")
+            print(tabulate(risk_rows, tablefmt="grid", colalign=("left", "left")))
+
+        # ── 7. Final Portfolio Decision ────────────────────────────────────
+        action     = decision.get("action", "—").upper()
+        size_pct   = decision.get("position_size_pct", 0)
+        entry      = decision.get("entry_range", [])
+        stop       = decision.get("stop_loss")
+        target     = decision.get("price_target")
+        horizon    = decision.get("time_horizon", "—")
+        rationale  = decision.get("rationale", decision.get("reasoning", ""))
+
+        ac = SIGNAL_COLOR.get(action, Fore.WHITE)
+        entry_str = (f"${entry[0]:.2f} – ${entry[1]:.2f}"
+                     if isinstance(entry, list) and len(entry) == 2
+                     else "—")
+        # Show allocated size alongside the risk manager ceiling for context
+        size_str = f"{Fore.CYAN}{size_pct:.2%}{R} (cap {Fore.CYAN}{approved:.0%}{R})"
+
+        decision_rows = [
+            ["Action",        f"{ac}{Style.BRIGHT}{action}{R}"],
+            ["Position Size", size_str],
+            ["Entry Range",   f"{Fore.WHITE}{entry_str}{R}"],
+            ["Stop Loss",     f"{Fore.RED}${stop:.2f}{R}" if isinstance(stop, (int, float)) else "—"],
+            ["Price Target",  f"{Fore.GREEN}${target:.2f}{R}" if isinstance(target, (int, float)) else "—"],
+            ["Time Horizon",  f"{Fore.WHITE}{horizon}{R}"],
+            ["Rationale",     f"{Fore.WHITE}{_wrap(rationale, 60)}{R}"],
+        ]
+        print(f"\n{W}PHASE 9 — PORTFOLIO DECISION{R}")
+        print(tabulate(decision_rows, tablefmt="grid", colalign=("left", "left")))
+
+    print(f"\n{W}{'='*70}{R}\n")
+
+    # ── Result Summary (one table per ticker) ──────────────────────────────
+    for ticker, decision in decisions.items():
+        _print_result_summary(ticker, result, decision, W, R, SIGNAL_COLOR, AGENT_DISPLAY)
+
+
+def _print_result_summary(
+    ticker: str,
+    result: dict,
+    decision: dict,
+    W: str,
+    R: str,
+    SIGNAL_COLOR: dict,
+    AGENT_DISPLAY: dict,
+) -> None:
+    """Print a compact 2-column Result Summary table for one ticker."""
+
+    def _wrap_narrow(text: str, width: int = 60) -> str:
+        if not text:
+            return ""
+        words = str(text).split()
+        lines, cur = [], ""
+        for word in words:
+            if len(cur) + len(word) + 1 > width:
+                lines.append(cur)
+                cur = word
+            else:
+                cur = (cur + " " + word).strip()
+        if cur:
+            lines.append(cur)
+        return "\n".join(lines)
+
+    macro        = result.get("macro_regime") or {}
+    sector       = result.get("sector", "-")
+    analyst_sigs = result.get("analyst_signals", {})
+    debate_res   = (result.get("debate_result") or {}).get(ticker)
+    scenario     = (result.get("scenario_analysis") or {}).get(ticker, {})
+    power_law    = (result.get("power_law_analysis") or {}).get(ticker, {})
+    trap         = (result.get("value_trap_analysis") or {}).get(ticker, {})
+    risk         = analyst_sigs.get("advanced_risk_manager", {}).get(ticker, {})
+
+    # ── Macro row ──────────────────────────────────────────────────────────
+    macro_str = (
+        f"{macro.get('risk_appetite', '-')} | "
+        f"{macro.get('rate_direction', '-')} rates | "
+        f"{macro.get('volatility_regime', '-')} vol"
+    )
+
+    # ── Agent vote counts ──────────────────────────────────────────────────
+    skip = {"risk_management_agent", "advanced_risk_manager"}
+    buy_c = sell_c = hold_c = 0
+    for ak, smap in analyst_sigs.items():
+        if ak in skip or not isinstance(smap, dict) or ticker not in smap:
+            continue
+        s = smap[ticker].get("signal", "").upper()
+        if s == "BUY":
+            buy_c += 1
+        elif s in ("SELL", "SHORT"):
+            sell_c += 1
+        else:
+            hold_c += 1
+    vote_str = (
+        f"{Fore.GREEN}{buy_c} BUY{R} / "
+        f"{Fore.RED}{sell_c} SELL{R} / "
+        f"{Fore.YELLOW}{hold_c} HOLD{R}"
+    )
+
+    # ── Agent assessment lines (one per agent) ────────────────────────────
+    agent_lines = []
+    for ak, smap in analyst_sigs.items():
+        if ak in skip or not isinstance(smap, dict) or ticker not in smap:
+            continue
+        sig = smap[ticker]
+        if not isinstance(sig, dict):
+            continue
+        raw_signal = sig.get("signal", "-").upper()
+        sc = SIGNAL_COLOR.get(raw_signal, Fore.WHITE)
+        name = AGENT_DISPLAY.get(ak, ak.replace("_", " ").title())
+        thesis = sig.get("thesis_summary", "") or sig.get("reasoning", "")
+        thesis_words = str(thesis).split()
+        thesis_short = " ".join(thesis_words[:120])
+        if len(thesis_words) > 120:
+            thesis_short += "..."
+        # Wrap long thesis lines to fit the table column
+        wrapped = _wrap_narrow(thesis_short, 56)
+        agent_lines.append(
+            f"  {Fore.CYAN}{name:<24}{R} {sc}{raw_signal:<5}{R}  {Fore.WHITE}{wrapped}{R}"
+        )
+    agent_assessment = "\n".join(agent_lines) if agent_lines else "-"
+
+    # ── Debate row ─────────────────────────────────────────────────────────
+    if debate_res:
+        adj_sig  = debate_res.get("adjudicated_signal", "-").upper()
+        adj_conv = debate_res.get("adjudicated_conviction", "-")
+        sc = SIGNAL_COLOR.get(adj_sig, Fore.WHITE)
+        debate_str = f"TRIGGERED — {sc}{adj_sig}{R} conviction {adj_conv}/10"
+    else:
+        debate_str = f"{Fore.YELLOW}Skipped (no strong conflict){R}"
+
+    # ── Phase 7 rows ───────────────────────────────────────────────────────
+    upside = scenario.get("upside_pct")
+    ev_str = (
+        f"{Fore.GREEN if upside and upside > 0 else Fore.RED}"
+        f"{upside:.1f}%{R}"
+        if isinstance(upside, (int, float)) else "-"
+    )
+    # Bull / base / bear breakdown
+    bull_fv = scenario.get("bull", {}).get("fair_value")
+    base_fv = scenario.get("base", {}).get("fair_value")
+    bear_fv = scenario.get("bear", {}).get("fair_value")
+    bull_p  = scenario.get("bull", {}).get("probability", 0)
+    base_p  = scenario.get("base", {}).get("probability", 0)
+    bear_p  = scenario.get("bear", {}).get("probability", 0)
+    if isinstance(bull_fv, (int, float)):
+        ev_str += (
+            f"  (Bull ${bull_fv:.0f} {bull_p*100:.0f}% / "
+            f"Base ${base_fv:.0f} {base_p*100:.0f}% / "
+            f"Bear ${bear_fv:.0f} {bear_p*100:.0f}%)"
+        )
+
+    pl_score = power_law.get("total_score", "-")
+    pl_interp = power_law.get("interpretation", "")
+    pl_str = f"{Fore.CYAN}{pl_score}/10{R}  {_wrap_narrow(pl_interp, 72)}"
+
+    trap_verdict = trap.get("overall_verdict", "-")
+    trap_color = (Fore.RED if "HIGH" in str(trap_verdict).upper()
+                  else Fore.YELLOW if "MEDIUM" in str(trap_verdict).upper()
+                  else Fore.GREEN)
+    trap_flags = [
+        _wrap_narrow(c.replace("_", " ").title() + ": " + trap[c].get("evidence", "")[:120], 72)
+        for c in ["dividend_sustainability", "structural_decline",
+                  "earnings_cashflow_mismatch", "insider_behaviour", "balance_sheet_deterioration"]
+        if isinstance(trap.get(c), dict) and trap[c].get("status") in ("RED", "AMBER")
+    ]
+    trap_str = f"{trap_color}{trap_verdict}{R}"
+    if trap_flags:
+        trap_str += "\n  " + "\n  ".join(trap_flags)
+
+    # ── Decision row ───────────────────────────────────────────────────────
+    cap_pct   = risk.get("approved_size_pct", 0)
+    risk_flags = risk.get("level1_flags", []) + risk.get("sector_flags", [])
+
+    # ── Liquidity row ───────────────────────────────────────────────────────
+    liq_flag  = risk.get("liquidity_flag", "")
+    liq_days  = risk.get("liquidity_days_to_exit")
+    liq_adv   = risk.get("liquidity_adv_dollars")
+    LIQ_COLOR = {"RED": Fore.RED, "AMBER": Fore.YELLOW, "GREEN": Fore.GREEN}
+    lc = LIQ_COLOR.get(liq_flag, Fore.WHITE)
+    if liq_days is not None and liq_adv is not None:
+        liq_str = (
+            f"{lc}{liq_flag}{R} — "
+            f"{liq_days:.1f}d to exit at 20% ADV "
+            f"(ADV ${liq_adv/1e6:.1f}M/day)"
+        )
+    elif liq_flag:
+        liq_str = f"{lc}{liq_flag}{R}"
+    else:
+        liq_str = f"{Fore.WHITE}N/A{R}"
+
+    action   = decision.get("action", "-").upper()
+    size_pct = decision.get("position_size_pct", 0)
+    stop     = decision.get("stop_loss")
+    target   = decision.get("price_target")
+    horizon  = decision.get("time_horizon", "-")
+    rationale = decision.get("rationale", decision.get("reasoning", ""))
+
+    ac = SIGNAL_COLOR.get(action, Fore.WHITE)
+    # Allocated size shown alongside the risk-manager ceiling for context
+    size_with_cap = (
+        f"{Fore.CYAN}{size_pct:.2%}{R} "
+        f"(cap {Fore.CYAN}{cap_pct:.0%}{R})"
+    )
+    if isinstance(target, (int, float)):
+        decision_str = (
+            f"{ac}{Style.BRIGHT}{action}{R} | "
+            f"{size_with_cap} | "
+            f"Target {Fore.GREEN}${target:.2f}{R}"
+        )
+    else:
+        decision_str = f"{ac}{Style.BRIGHT}{action}{R} | {size_with_cap}"
+    if isinstance(stop, (int, float)):
+        decision_str += f" | Stop {Fore.RED}${stop:.2f}{R}"
+    decision_str += f" | Horizon {Fore.WHITE}{horizon}{R}"
+    if risk_flags:
+        decision_str += "\n  " + "\n  ".join(f"{Fore.YELLOW}{f}{R}" for f in risk_flags)
+
+    rationale_str = _wrap_narrow(rationale, 60)
+
+    # ── Build table ────────────────────────────────────────────────────────
+    rows = [
+        [f"{W}Macro Regime{R}",       macro_str],
+        [f"{W}Sector{R}",             f"{Fore.CYAN}{sector}{R}"],
+        [f"{W}Agent Vote{R}",         vote_str],
+        [f"{W}Agent Assessment{R}",   agent_assessment],
+        [f"{W}Debate{R}",             debate_str],
+        [f"{W}Scenario EV Upside{R}", ev_str],
+        [f"{W}Power Law{R}",          pl_str],
+        [f"{W}Value Trap{R}",         trap_str],
+        [f"{W}Liquidity{R}",          liq_str],
+        [f"{W}Decision{R}",           decision_str],
+        [f"{W}Rationale{R}",          f"{Fore.WHITE}{rationale_str}{R}"],
+    ]
+
+    print(f"\n{W}{'='*70}{R}")
+    print(f"{W}  RESULT SUMMARY: {Fore.CYAN}{ticker}{R}")
+    print(f"{W}{'='*70}{R}")
+    print(tabulate(rows, tablefmt="grid", colalign=("left", "left")))
+    print()
+
+
 def print_backtest_results(table_rows: list) -> None:
     """Print the backtest results in a nicely formatted table"""
     # Clear the screen

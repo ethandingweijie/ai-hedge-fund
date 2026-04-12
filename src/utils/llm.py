@@ -2,7 +2,7 @@
 
 import json
 from pydantic import BaseModel
-from src.llm.models import get_model, get_model_info
+from src.llm.models import get_model, get_model_info, ModelProvider
 from src.utils.progress import progress
 from src.graph.state import AgentState
 
@@ -14,6 +14,7 @@ def call_llm(
     state: AgentState | None = None,
     max_retries: int = 3,
     default_factory=None,
+    max_tokens: int | None = None,
 ) -> BaseModel:
     """
     Makes an LLM call with retry logic, handling both JSON supported and non-JSON supported models.
@@ -45,8 +46,26 @@ def call_llm(
         if request and hasattr(request, 'api_keys'):
             api_keys = request.api_keys
 
+    # Ensure model_provider is a ModelProvider enum (str comparison can fail on Python 3.12+)
+    if isinstance(model_provider, str):
+        try:
+            model_provider = ModelProvider(model_provider)
+        except ValueError:
+            pass  # leave as string; get_model will fail gracefully
+
     model_info = get_model_info(model_name, model_provider)
     llm = get_model(model_name, model_provider, api_keys)
+
+    if llm is None:
+        print(f"Error: could not initialise LLM for model={model_name} provider={model_provider}")
+        if default_factory:
+            return default_factory()
+        return create_default_response(pydantic_model)
+
+    # Cap output tokens when the caller specifies a limit (e.g. agents that only
+    # need a small JSON response and must not generate 10k+ token outputs).
+    if max_tokens is not None:
+        llm = llm.bind(max_tokens=max_tokens)
 
     # For non-JSON support models, we can use structured output
     if not (model_info and not model_info.has_json_mode()):
@@ -70,6 +89,34 @@ def call_llm(
                 return result
 
         except Exception as e:
+            # Qwen returns flat JSON (no nested wrapper) — try auto-nesting
+            # e.g. MacroRegimeOutput expects {"regime": {...}, "agent_weights": ...}
+            # but Qwen returns {"risk_appetite": "risk-off", "agent_weights": ..., ...}
+            if pydantic_model and "Field required" in str(e):
+                try:
+                    import json as _json
+                    _raw = str(e)
+                    # Extract the dict from the error message
+                    _start = _raw.find("input_value={")
+                    if _start > 0:
+                        # Try parsing the flat dict and wrapping nested fields
+                        _flat = result if isinstance(result, dict) else (
+                            _json.loads(result.content) if hasattr(result, 'content') else {}
+                        )
+                        if isinstance(_flat, dict) and _flat:
+                            # Find which field is missing and try to construct it
+                            for field_name, field_info in pydantic_model.model_fields.items():
+                                if field_name not in _flat and hasattr(field_info.annotation, 'model_fields'):
+                                    # This is a nested Pydantic model — try to extract its fields from flat dict
+                                    nested_fields = field_info.annotation.model_fields.keys()
+                                    nested_data = {k: _flat.pop(k) for k in list(nested_fields) if k in _flat}
+                                    if nested_data:
+                                        _flat[field_name] = nested_data
+                            _result = pydantic_model(**_flat)
+                            return _result
+                except Exception:
+                    pass  # fall through to normal retry
+
             if agent_name:
                 progress.update_status(agent_name, None, f"Error - retry {attempt + 1}/{max_retries}")
 

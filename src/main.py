@@ -1,4 +1,18 @@
 import sys
+import warnings
+
+# Suppress pydantic.v1 compat-shim warnings on Python 3.14+
+# (langsmith / langchain_gigachat use the v1 shim internally; our code uses v2 directly)
+warnings.filterwarnings("ignore", category=UserWarning,      module=r"pydantic")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module=r"pydantic")
+
+# Force UTF-8 output on Windows (prevents UnicodeEncodeError for box-drawing / em-dashes)
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
@@ -8,7 +22,9 @@ import questionary
 from src.agents.portfolio_manager import portfolio_management_agent
 from src.agents.risk_manager import risk_management_agent
 from src.graph.state import AgentState
-from src.utils.display import print_trading_output
+from src.utils.display import print_trading_output, print_advanced_output
+from src.utils.pdf_report import generate_pdf_report, generate_pdf_reports_per_ticker
+from src.utils.alerts import check_and_send_alerts
 from src.utils.analysts import ANALYST_ORDER, get_analyst_nodes
 from src.utils.progress import progress
 from src.utils.visualize import save_graph_as_png
@@ -21,8 +37,9 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import json
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables — .env first, .env.local overrides
+load_dotenv(override=True)
+load_dotenv(".env.local", override=True)
 
 init(autoreset=True)
 
@@ -166,14 +183,36 @@ if __name__ == "__main__":
         },
     }
 
-    result = run_hedge_fund(
-        tickers=tickers,
-        start_date=inputs.start_date,
-        end_date=inputs.end_date,
-        portfolio=portfolio,
-        show_reasoning=inputs.show_reasoning,
-        selected_analysts=inputs.selected_analysts,
-        model_name=inputs.model_name,
-        model_provider=inputs.model_provider,
-    )
-    print_trading_output(result)
+    if inputs.pipeline_mode == "advanced":
+        from src.pipeline import run_advanced_pipeline
+        result = run_advanced_pipeline(
+            tickers=tickers,
+            start_date=inputs.start_date,
+            end_date=inputs.end_date,
+            portfolio=portfolio,
+            selected_agents=inputs.selected_analysts if inputs.selected_analysts else None,
+            model_name=inputs.model_name,
+            model_provider=inputs.model_provider,
+            show_reasoning=inputs.show_reasoning,
+            enable_post_trade_review=inputs.enable_post_trade_review,
+            management_guidance=inputs.management_guidance,
+        )
+    else:
+        result = run_hedge_fund(
+            tickers=tickers,
+            start_date=inputs.start_date,
+            end_date=inputs.end_date,
+            portfolio=portfolio,
+            show_reasoning=inputs.show_reasoning,
+            selected_analysts=inputs.selected_analysts,
+            model_name=inputs.model_name,
+            model_provider=inputs.model_provider,
+        )
+    if inputs.pipeline_mode == "advanced":
+        print_advanced_output(result, show_reasoning=inputs.show_reasoning)
+        pdf_paths = generate_pdf_reports_per_ticker(result)
+        for pdf_path in pdf_paths:
+            print(f"\n  PDF report saved → {pdf_path}")
+        check_and_send_alerts(result)
+    else:
+        print_trading_output(result)

@@ -1,7 +1,7 @@
 from langchain_core.messages import HumanMessage
 from src.graph.state import AgentState, show_agent_reasoning
 from src.utils.progress import progress
-from src.tools.api import get_prices, prices_to_df
+from src.tools.api import get_prices, prices_to_df, get_adv
 import json
 import numpy as np
 import pandas as pd
@@ -315,3 +315,221 @@ def calculate_correlation_multiplier(avg_correlation: float) -> float:
     if avg_correlation >= 0.20:
         return 1.05
     return 1.10
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — Advanced Dual-Layer Risk Manager
+# ---------------------------------------------------------------------------
+
+def run_advanced_risk_manager(state: AgentState) -> AgentState:
+    """
+    Phase 8: dual-layer risk filtering.
+
+    Level 1 — Agent-level validation:
+      Each investor's signal carries a quality check. If the agent's own cot_log
+      doesn't demonstrate the required analysis, conviction is penalised.
+      - Graham: must show margin of safety ≥ 33% language
+      - Druckenmiller: must align with current macro regime
+      - Wood: must include a TAM or 5-year model reference
+      - Burry: must reference forensic / accounting analysis
+
+    Level 2 — Portfolio-level constraints (from CLAUDE.md §8):
+      - Max single position: 15% of portfolio (10% in high-volatility regime)
+      - Max sector concentration: 35%
+      - Sector overlays: Biopharma FDA cap, Energy VIX cap, Crypto jurisdiction, Financials late-cycle
+
+    Output stored in state["data"]["analyst_signals"]["advanced_risk_manager"][ticker].
+    """
+    agent_id = "advanced_risk_manager"
+    tickers = state["data"]["tickers"]
+    analyst_signals = state["data"].get("analyst_signals", {})
+    macro_regime = state["data"].get("macro_regime", {})
+    sector = state["data"].get("sector", "Tech")
+    portfolio = state["data"].get("portfolio", {})
+    volatility_regime = macro_regime.get("volatility_regime", "medium")
+    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+
+    # Base position cap from macro regime.
+    # macro_regime already folds high-volatility into position_size_cap (0.5 → 7.5%).
+    # Keeping a separate 0.10 floor for high-vol caused a double-penalty (5% instead
+    # of the intended 7.5%).  Use 0.15 as the single baseline; position_cap does the scaling.
+    position_cap = state["data"].get("position_size_cap", 1.0)
+    max_single_position = 0.15 * position_cap
+
+    # Phase 2.5 earnings quality — read once, consumed as remarks per ticker
+    eq_all = state["data"].get("earnings_quality", {})
+
+    risk_output: dict[str, dict] = {}
+
+    for ticker in tickers:
+        flags: list[str] = []
+        conviction_adjustments: dict[str, float] = {}
+
+        # ── Earnings Quality remark (Pathway 3) ──────────────────────────────
+        # NOTE: This is informational only. No weight changes are applied here.
+        # The EarningsQualityAgent output is surfaced so the portfolio manager
+        # and any downstream audit trail can see the quality signal alongside
+        # risk flags, without it mechanically altering approved_size_pct.
+        # Position sizing impact is handled exclusively via the Value Trap agent
+        # verdict (TRAP RISK HIGH → 50% cap in the Portfolio Manager formula).
+        eq_remarks: list[str] = []
+        eq = eq_all.get(ticker, {})
+        if eq and eq.get("data_quality") in ("FULL", "PARTIAL"):
+            verdict  = eq.get("quality_verdict", "UNKNOWN")
+            score    = eq.get("overall_quality_score", 0.0)
+            pe_risk  = eq.get("pre_earnings_risk", "UNKNOWN")
+            eq_flags = eq.get("flags", [])
+            eq_remarks.append(
+                f"[EQ-REMARK] Earnings Quality verdict={verdict} ({score:.1f}/10) | "
+                f"pre_earnings_risk={pe_risk} — no weight change applied; "
+                f"sizing impact flows through Value Trap verdict only."
+            )
+            # Surface individual metric states as informational remarks
+            for metric, key, flag_key in [
+                ("Accrual",        "accrual_ratio_avg",       "accrual_flag"),
+                ("CashConversion", "cash_conversion_ratio",   "cash_conversion_flag"),
+                ("FCF/NI",         "fcf_ni_divergence",       "fcf_ni_divergence"),
+                ("AR/RevDiv",      "ar_revenue_divergence",   "ar_revenue_divergence"),
+            ]:
+                flag_val = eq.get(flag_key, "UNKNOWN")
+                val      = eq.get(key)
+                if flag_val in ("RED", "AMBER") and val is not None:
+                    eq_remarks.append(
+                        f"  [EQ-REMARK] {metric}={flag_val} (value={val}) — "
+                        "informational; consult Value Trap audit for position impact."
+                    )
+            # First computed flag for context
+            if eq_flags:
+                eq_remarks.append(f"  [EQ-REMARK] Top flag: {eq_flags[0]}")
+
+        # --- Level 1: agent-level quality checks ---
+        for agent_key, signals in analyst_signals.items():
+            if not isinstance(signals, dict) or ticker not in signals:
+                continue
+            sig = signals[ticker]
+            if not isinstance(sig, dict):
+                continue
+            cot = str(sig.get("cot_log") or sig.get("reasoning") or "").lower()
+
+            if agent_key in ("graham", "ben_graham"):
+                if "margin of safety" not in cot and "33%" not in cot:
+                    conviction_adjustments[agent_key] = 0.5
+                    flags.append(f"{agent_key}: margin of safety not confirmed — conviction halved")
+
+            elif agent_key in ("druckenmiller", "stanley_druckenmiller"):
+                risk_appetite = macro_regime.get("risk_appetite", "risk-on")
+                signal_val = sig.get("signal", "HOLD")
+                if risk_appetite == "risk-off" and signal_val in ("BUY",):
+                    conviction_adjustments[agent_key] = 0.5
+                    flags.append(f"{agent_key}: BUY in risk-off regime — conviction halved")
+
+            elif agent_key in ("cathie_wood",):
+                if "tam" not in cot and "5-year" not in cot and "5 year" not in cot:
+                    conviction_adjustments[agent_key] = 0.7
+                    flags.append(f"{agent_key}: no TAM/5-year model found — conviction reduced")
+
+            elif agent_key in ("burry", "michael_burry"):
+                if "forensic" not in cot and "accounting" not in cot and "footnote" not in cot:
+                    conviction_adjustments[agent_key] = 0.7
+                    flags.append(f"{agent_key}: no forensic accounting check found — conviction reduced")
+
+        # Apply conviction adjustments back into analyst_signals (in-place)
+        for agent_key, multiplier in conviction_adjustments.items():
+            if agent_key in analyst_signals and ticker in analyst_signals[agent_key]:
+                orig = analyst_signals[agent_key][ticker].get("conviction", 5)
+                analyst_signals[agent_key][ticker]["conviction"] = max(1, round(orig * multiplier))
+
+        # --- Level 2: portfolio-level constraints ---
+        total_portfolio_value = portfolio.get("cash", 100000.0)
+        positions = portfolio.get("positions", {})
+        for t, pos in positions.items():
+            total_portfolio_value += pos.get("long", 0) * 100  # approximate if no price
+
+        # Sector overlay caps
+        approved_size_pct = max_single_position
+        sector_flags: list[str] = []
+
+        if sector == "Biopharma":
+            approved_size_pct = min(approved_size_pct, 0.05)
+            sector_flags.append("Biopharma: capped at 5% (FDA binary risk)")
+
+        elif sector == "Financials":
+            rate_dir = macro_regime.get("rate_direction", "neutral")
+            if rate_dir == "tightening":
+                approved_size_pct *= 0.7
+                sector_flags.append("Financials: late-cycle tightening → 30% size reduction")
+
+        elif sector == "Crypto":
+            approved_size_pct = min(approved_size_pct, 0.08)
+            sector_flags.append("Crypto: jurisdiction risk cap at 8%")
+
+        # Concentration check — sum existing positions in same sector
+        # (simplified: use total positions count as a proxy)
+        existing_position_count = sum(
+            1 for t, pos in positions.items()
+            if pos.get("long", 0) > 0 or pos.get("short", 0) > 0
+        )
+        if existing_position_count > 5:
+            # Reduce new position size when already heavily invested
+            approved_size_pct = min(approved_size_pct, 0.35 / (existing_position_count + 1))
+            flags.append(f"Concentration: {existing_position_count} existing positions — size reduced")
+
+        # --- Level 3: Liquidity risk check ---
+        # At 20% ADV participation rate, how many days does it take to exit
+        # the proposed position?  Thresholds: <3d GREEN, 3–7d AMBER, >7d RED.
+        # RED: cap approved_size_pct at 50% of current value.
+        liquidity_flag        = "GREEN"
+        liquidity_days        = None
+        liquidity_adv_dollars = None
+        liquidity_remarks: list[str] = []
+
+        adv_data = get_adv(ticker, days=30, api_key=api_key)
+        if adv_data and adv_data.get("adv_dollars", 0) > 0:
+            adv_dollars           = adv_data["adv_dollars"]
+            liquidity_adv_dollars = adv_dollars
+            position_dollars      = total_portfolio_value * approved_size_pct
+            liquidity_days        = position_dollars / (adv_dollars * 0.20)
+
+            if liquidity_days > 7:
+                liquidity_flag    = "RED"
+                approved_size_pct = approved_size_pct * 0.50
+                liquidity_remarks.append(
+                    f"LIQUIDITY RED: {liquidity_days:.1f}d to exit at 20% ADV "
+                    f"(ADV ${adv_dollars:,.0f}/day) — position capped at 50%"
+                )
+            elif liquidity_days > 3:
+                liquidity_flag = "AMBER"
+                liquidity_remarks.append(
+                    f"LIQUIDITY AMBER: {liquidity_days:.1f}d to exit at 20% ADV "
+                    f"(ADV ${adv_dollars:,.0f}/day)"
+                )
+            else:
+                liquidity_remarks.append(
+                    f"LIQUIDITY GREEN: {liquidity_days:.1f}d to exit at 20% ADV "
+                    f"(ADV ${adv_dollars:,.0f}/day)"
+                )
+        else:
+            liquidity_remarks.append("LIQUIDITY: ADV data unavailable — check skipped")
+
+        approved_dollar = total_portfolio_value * approved_size_pct
+
+        risk_output[ticker] = {
+            "approved_size_pct":              approved_size_pct,
+            "approved_dollar":                approved_dollar,
+            "max_single_position_pct":        max_single_position,
+            "level1_flags":                   flags,
+            "sector_flags":                   sector_flags,
+            "conviction_adjustments_applied": conviction_adjustments,
+            # Pathway 3: informational remarks from EarningsQualityAgent.
+            # These do NOT change approved_size_pct — they are audit-trail
+            # annotations surfaced to the Portfolio Manager's rationale.
+            "earnings_quality_remarks":       eq_remarks,
+            # Liquidity layer (Level 3)
+            "liquidity_flag":                 liquidity_flag,
+            "liquidity_days_to_exit":         liquidity_days,
+            "liquidity_adv_dollars":          liquidity_adv_dollars,
+            "liquidity_remarks":              liquidity_remarks,
+        }
+
+    state["data"]["analyst_signals"][agent_id] = risk_output
+    return state

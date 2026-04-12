@@ -101,25 +101,48 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
             debt_to_equity=most_recent_metrics.debt_to_equity,
         )
         
-        # Prepare FCF history for enhanced DCF
+        # Prepare FCF history for internal DCF fallback
         fcf_history = []
         for li in line_items:
             if hasattr(li, 'free_cash_flow') and li.free_cash_flow is not None:
                 fcf_history.append(li.free_cash_flow)
-        
-        # Enhanced DCF with scenarios
-        dcf_results = calculate_dcf_scenarios(
-            fcf_history=fcf_history,
-            growth_metrics={
-                'revenue_growth': most_recent_metrics.revenue_growth,
-                'fcf_growth': most_recent_metrics.free_cash_flow_growth,
-                'earnings_growth': most_recent_metrics.earnings_growth
-            },
-            wacc=wacc,
-            market_cap=most_recent_metrics.market_cap or 0,
-            revenue_growth=most_recent_metrics.revenue_growth
-        )
-        
+
+        # Prefer forward-looking DCF Engine output (Phase 4.5) when available.
+        # Converts per-share IV × shares to total equity value for comparability.
+        # Falls back to internal trailing multi-stage DCF if dcf_range absent.
+        dcf_engine = state["data"].get("dcf_range", {}).get(ticker, {})
+        if dcf_engine and dcf_engine.get("base") and dcf_engine.get("shares_outstanding"):
+            _shares = dcf_engine["shares_outstanding"]
+            dcf_results = {
+                'scenarios': {
+                    'bear': dcf_engine["bear"]["intrinsic_value"] * _shares,
+                    'base': dcf_engine["base"]["intrinsic_value"] * _shares,
+                    'bull': dcf_engine["bull"]["intrinsic_value"] * _shares,
+                },
+                'expected_value': dcf_engine["base"]["intrinsic_value"] * _shares,
+                'upside':   dcf_engine["bull"]["intrinsic_value"] * _shares,
+                'downside': dcf_engine["bear"]["intrinsic_value"] * _shares,
+                'range': (
+                    dcf_engine["bull"]["intrinsic_value"]
+                    - dcf_engine["bear"]["intrinsic_value"]
+                ) * _shares,
+                '_source': 'dcf_engine',
+            }
+        else:
+            # Internal trailing multi-stage DCF (backward compat)
+            dcf_results = calculate_dcf_scenarios(
+                fcf_history=fcf_history,
+                growth_metrics={
+                    'revenue_growth': most_recent_metrics.revenue_growth,
+                    'fcf_growth': most_recent_metrics.free_cash_flow_growth,
+                    'earnings_growth': most_recent_metrics.earnings_growth
+                },
+                wacc=wacc,
+                market_cap=most_recent_metrics.market_cap or 0,
+                revenue_growth=most_recent_metrics.revenue_growth
+            )
+            dcf_results['_source'] = 'internal'
+
         dcf_val = dcf_results['expected_value']
 
         # Implied Equity Value
@@ -194,10 +217,11 @@ def valuation_analyst_agent(state: AgentState, agent_id: str = "valuation_analys
         if 'dcf_results' in locals():
             reasoning["dcf_scenario_analysis"] = {
                 "bear_case": f"${dcf_results['downside']:,.2f}",
-                "base_case": f"${dcf_results['scenarios']['base']:,.2f}",  
+                "base_case": f"${dcf_results['scenarios']['base']:,.2f}",
                 "bull_case": f"${dcf_results['upside']:,.2f}",
                 "wacc_used": f"{wacc:.1%}",
-                "fcf_periods_analyzed": len(fcf_history)
+                "fcf_periods_analyzed": len(fcf_history),
+                "dcf_source": dcf_results.get('_source', 'unknown'),
             }
 
         valuation_analysis[ticker] = {
@@ -291,9 +315,16 @@ def calculate_ev_ebitda_value(financial_metrics: list):
         return 0
 
     ebitda_now = m0.enterprise_value / m0.enterprise_value_to_ebitda_ratio
-    med_mult = statistics.median([
-        m.enterprise_value_to_ebitda_ratio for m in financial_metrics if m.enterprise_value_to_ebitda_ratio
-    ])
+    # Guard: EV/EBITDA is meaningless for negative-EBITDA companies
+    if ebitda_now <= 0:
+        return 0
+    positive_multiples = [
+        m.enterprise_value_to_ebitda_ratio for m in financial_metrics
+        if m.enterprise_value_to_ebitda_ratio and m.enterprise_value_to_ebitda_ratio > 0
+    ]
+    if not positive_multiples:
+        return 0
+    med_mult = statistics.median(positive_multiples)
     ev_implied = med_mult * ebitda_now
     net_debt = (m0.enterprise_value or 0) - (m0.market_cap or 0)
     return max(ev_implied - net_debt, 0)
