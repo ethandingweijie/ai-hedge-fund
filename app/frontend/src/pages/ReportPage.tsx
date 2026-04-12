@@ -722,7 +722,7 @@ export function ReportPage() {
             </div>
             {/* Live web search panel — Claude-style "Searched the web" */}
             <LiveSearchPanel
-              streamEvents={streamEvents}
+              streamEvents={events}
               liveData={liveData}
               isResearchPhase={
                 Object.values(phaseMap).some(p =>
