@@ -58,8 +58,8 @@ export function MobileTopBar() {
 
   return (
     <>
-      {/* Hamburger menu — top-left */}
-      <div className="absolute top-3 left-3 z-[60]">
+      {/* Hamburger menu — top-left, fixed so it stays visible on scroll */}
+      <div className="fixed top-3 left-3 z-[60]">
         <button
           onClick={() => setMenuOpen(true)}
           className="w-9 h-9 rounded-full flex items-center justify-center shadow-md bg-white/90 dark:bg-card border border-border"
@@ -68,8 +68,8 @@ export function MobileTopBar() {
         </button>
       </div>
 
-      {/* Profile icon — top-right */}
-      <div className="absolute top-3 right-3 z-[60]">
+      {/* Profile icon — top-right, fixed */}
+      <div className="fixed top-3 right-3 z-[60]">
         <button
           onClick={() => setDrawerOpen(true)}
           className="w-9 h-9 rounded-full flex items-center justify-center shadow-md bg-white/90 dark:bg-card border border-border"
