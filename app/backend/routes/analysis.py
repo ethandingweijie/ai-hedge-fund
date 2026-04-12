@@ -687,7 +687,11 @@ async def get_stock_data(ticker: str, period: str = "1y"):
     """
     import math
     import yfinance as yf
-    from src.tools.hk.ticker import is_hk_ticker, to_yfinance_code
+    try:
+        from src.tools.hk.ticker import is_hk_ticker, to_yfinance_code
+    except ImportError:
+        def is_hk_ticker(t): return False
+        def to_yfinance_code(t): return t
 
     def _safe(v):
         """Coerce to float, replacing NaN/Inf with None."""
