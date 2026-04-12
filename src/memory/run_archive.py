@@ -32,7 +32,8 @@ from typing import Any
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "run_archive.db")
+DB_PATH = os.environ.get("RUN_ARCHIVE_PATH",
+          os.path.join(os.path.dirname(__file__), "..", "data", "run_archive.db"))
 PIPELINE_VERSION = "2.0"
 
 # ── Schema (DDL for fresh databases) ─────────────────────────────────────────
