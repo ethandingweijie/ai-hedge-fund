@@ -66,13 +66,14 @@ def _get_fmp_key() -> Optional[str]:
 _DDL = """
 CREATE TABLE IF NOT EXISTS watchlist (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    ticker          TEXT NOT NULL UNIQUE,
+    ticker          TEXT NOT NULL,
     company_name    TEXT,
     added_at        TEXT NOT NULL,
     price           REAL,
     vgpm_json       TEXT,
     vgpm_updated_at TEXT,
-    vgpm_source     TEXT
+    vgpm_source     TEXT,
+    user_id         INTEGER
 )
 """
 
@@ -82,6 +83,12 @@ _MIGRATIONS = [
     "ALTER TABLE watchlist ADD COLUMN vgpm_json       TEXT",
     "ALTER TABLE watchlist ADD COLUMN vgpm_updated_at TEXT",
     "ALTER TABLE watchlist ADD COLUMN vgpm_source     TEXT",
+    "ALTER TABLE watchlist ADD COLUMN user_id         INTEGER",
+]
+
+# Replace old UNIQUE(ticker) with UNIQUE(ticker, user_id) for per-user watchlists
+_POST_MIGRATIONS = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_watchlist_user_ticker ON watchlist(user_id, ticker)",
 ]
 
 
@@ -97,6 +104,12 @@ def _ensure_table():
                 conn.commit()
             except Exception:
                 pass  # column already exists
+        for sql in _POST_MIGRATIONS:
+            try:
+                conn.execute(sql)
+                conn.commit()
+            except Exception:
+                pass
     finally:
         conn.close()
 
@@ -246,6 +259,7 @@ def _write_vgpm_to_watchlist(
     vgpm: Optional[dict],
     price: Optional[float],
     source: str = "fast",
+    user_id: Optional[int] = None,
 ):
     """Persist the latest VGPM and price back into the watchlist row.
 
@@ -255,19 +269,23 @@ def _write_vgpm_to_watchlist(
     Price is only written when non-None — never overwrites a stored price with NULL.
     """
     conn = _connect()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    # Build WHERE clause — scope to user when provided
+    where = "WHERE ticker = ?"
+    params_suffix = [ticker]
+    if user_id is not None:
+        where += " AND user_id = ?"
+        params_suffix.append(user_id)
     try:
         if price is not None:
             conn.execute(
-                "UPDATE watchlist SET vgpm_json = ?, price = ?, vgpm_updated_at = ?, vgpm_source = ? WHERE ticker = ?",
-                (json.dumps(vgpm) if vgpm else None, price,
-                 datetime.now(timezone.utc).isoformat(), source, ticker),
+                f"UPDATE watchlist SET vgpm_json = ?, price = ?, vgpm_updated_at = ?, vgpm_source = ? {where}",
+                [json.dumps(vgpm) if vgpm else None, price, now_iso, source] + params_suffix,
             )
         else:
-            # No fresh price — update VGPM/timestamp only, keep existing price intact
             conn.execute(
-                "UPDATE watchlist SET vgpm_json = ?, vgpm_updated_at = ?, vgpm_source = ? WHERE ticker = ?",
-                (json.dumps(vgpm) if vgpm else None,
-                 datetime.now(timezone.utc).isoformat(), source, ticker),
+                f"UPDATE watchlist SET vgpm_json = ?, vgpm_updated_at = ?, vgpm_source = ? {where}",
+                [json.dumps(vgpm) if vgpm else None, now_iso, source] + params_suffix,
             )
         conn.commit()
     finally:
@@ -285,9 +303,9 @@ def _composite(vgpm: Optional[dict]) -> Optional[int]:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def get_watchlist() -> list[dict]:
+def get_watchlist(user_id: Optional[int] = None) -> list[dict]:
     """
-    Load watchlist from SQLite.
+    Load watchlist from SQLite, scoped to user_id.
     - Fresh rows (updated within STALE_HOURS): returned instantly, no API call.
     - Stale rows: refreshed from FMP (backed by screener caches), persisted back.
     """
@@ -295,10 +313,17 @@ def get_watchlist() -> list[dict]:
     conn = _connect()
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            "SELECT ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source "
-            "FROM watchlist ORDER BY added_at DESC"
-        ).fetchall()
+        if user_id is not None:
+            rows = conn.execute(
+                "SELECT ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source "
+                "FROM watchlist WHERE user_id = ? ORDER BY added_at DESC",
+                (user_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source "
+                "FROM watchlist WHERE user_id IS NULL ORDER BY added_at DESC"
+            ).fetchall()
     finally:
         conn.close()
 
@@ -325,7 +350,7 @@ def get_watchlist() -> list[dict]:
 
         # Persist live price back to DB (non-None guard inside _write_vgpm_to_watchlist)
         if t in live_prices:
-            _write_vgpm_to_watchlist(t, vgpm, live_prices[t], source=current_source)
+            _write_vgpm_to_watchlist(t, vgpm, live_prices[t], source=current_source, user_id=user_id)
 
         # Refresh stale VGPM (prices already handled above)
         if _is_stale(row["vgpm_updated_at"]) or price is None:
@@ -338,20 +363,17 @@ def get_watchlist() -> list[dict]:
             fresh_source = fresh.get("source", "fast")
 
             if current_source == "pipeline":
-                # Keep existing pipeline VGPM unless a fresh pipeline is returned
                 if fresh_source == "pipeline" and fresh_vgpm:
                     vgpm = fresh_vgpm
-                # Always refresh price regardless of VGPM source
                 if fresh.get("price") is not None:
                     price = fresh["price"]
-                _write_vgpm_to_watchlist(t, vgpm, price, source="pipeline")
+                _write_vgpm_to_watchlist(t, vgpm, price, source="pipeline", user_id=user_id)
             else:
-                # Fast-sourced row: accept whatever _fetch_vgpm_and_price returns
                 if fresh_vgpm:
                     vgpm = fresh_vgpm
                 if fresh.get("price") is not None:
                     price = fresh["price"]
-                _write_vgpm_to_watchlist(t, vgpm, price, source=fresh_source)
+                _write_vgpm_to_watchlist(t, vgpm, price, source=fresh_source, user_id=user_id)
 
         items.append({
             "ticker":          t,
@@ -364,7 +386,7 @@ def get_watchlist() -> list[dict]:
     return items
 
 
-def add_ticker(ticker: str) -> dict:
+def add_ticker(ticker: str, user_id: Optional[int] = None) -> dict:
     _ensure_table()
     ticker = ticker.strip().upper()
 
@@ -387,8 +409,8 @@ def add_ticker(ticker: str) -> dict:
         conn.execute(
             """
             INSERT OR IGNORE INTO watchlist
-                (ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ticker,
@@ -398,6 +420,7 @@ def add_ticker(ticker: str) -> dict:
                 json.dumps(vgpm) if vgpm else None,
                 now,
                 source,
+                user_id,
             ),
         )
         conn.commit()
@@ -414,26 +437,34 @@ def add_ticker(ticker: str) -> dict:
     }
 
 
-def remove_ticker(ticker: str) -> bool:
+def remove_ticker(ticker: str, user_id: Optional[int] = None) -> bool:
     _ensure_table()
     ticker = ticker.strip().upper()
     conn = _connect()
     try:
-        cur = conn.execute("DELETE FROM watchlist WHERE ticker = ?", (ticker,))
+        if user_id is not None:
+            cur = conn.execute("DELETE FROM watchlist WHERE ticker = ? AND user_id = ?", (ticker, user_id))
+        else:
+            cur = conn.execute("DELETE FROM watchlist WHERE ticker = ? AND user_id IS NULL", (ticker,))
         conn.commit()
         return cur.rowcount > 0
     finally:
         conn.close()
 
 
-def is_in_watchlist(ticker: str) -> bool:
+def is_in_watchlist(ticker: str, user_id: Optional[int] = None) -> bool:
     _ensure_table()
     ticker = ticker.strip().upper()
     conn = _connect()
     try:
-        row = conn.execute(
-            "SELECT 1 FROM watchlist WHERE ticker = ?", (ticker,)
-        ).fetchone()
+        if user_id is not None:
+            row = conn.execute(
+                "SELECT 1 FROM watchlist WHERE ticker = ? AND user_id = ?", (ticker, user_id)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT 1 FROM watchlist WHERE ticker = ? AND user_id IS NULL", (ticker,)
+            ).fetchone()
         return row is not None
     finally:
         conn.close()
