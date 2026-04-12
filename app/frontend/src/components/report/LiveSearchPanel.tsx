@@ -46,27 +46,25 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
     if (isResearchPhase && !isComplete) setExpanded(true);
   }, [isResearchPhase, isComplete]);
 
-  // Extract search queries from progress events
+  // Extract search queries from ALL progress events (not just deep_research_agent phase)
+  // because the backend may send web search status under varying phase names
   const searches = useMemo(() => {
     const queries: SearchQuery[] = [];
     const seen = new Set<string>();
     for (const ev of streamEvents) {
-      if (ev.phase !== 'deep_research_agent') continue;
-
-      // From partial_data (structured)
+      // From partial_data (structured) — any phase
       const lsq = ev.partial_data?.live_search_query as SearchQuery | undefined;
       if (lsq && lsq.query && !seen.has(lsq.query)) {
         seen.add(lsq.query);
         queries.push(lsq);
+        continue;
       }
 
-      // Fallback: parse from status string "Web search N/M: query"
-      if (!lsq) {
-        const match = ev.status?.match(/^Web search (\d+)\/(\d+): (.+)$/);
-        if (match && !seen.has(match[3])) {
-          seen.add(match[3]);
-          queries.push({ index: parseInt(match[1]), total: parseInt(match[2]), query: match[3] });
-        }
+      // Fallback: parse from status string "Web search N/M: query" — any phase
+      const match = ev.status?.match(/^Web search (\d+)\/(\d+): (.+)$/);
+      if (match && !seen.has(match[3])) {
+        seen.add(match[3]);
+        queries.push({ index: parseInt(match[1]), total: parseInt(match[2]), query: match[3] });
       }
     }
     return queries;
