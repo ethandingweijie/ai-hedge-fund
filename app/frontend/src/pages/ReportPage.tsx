@@ -117,6 +117,7 @@ const PHASE_LABELS: Record<string, { running: string; done: string }> = {
   citation_auditor:         { running: 'Verifying sources and citations',      done: 'Sources verified' },
   advanced_risk_manager:    { running: 'Running final risk checks',            done: 'Risk assessment complete' },
   portfolio_manager:        { running: 'Generating the investment decision',   done: 'Decision ready' },
+  pipeline_queued:          { running: 'Analysis in progress on server',       done: 'Analysis resumed' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

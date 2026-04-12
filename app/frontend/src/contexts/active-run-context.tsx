@@ -141,7 +141,21 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
 
   // ── SSE stream state ─────────────────────────────────────────────────────
   const [streamState, setStreamState] = useState<RunState>('idle');
-  const [streamEvents, setStreamEvents] = useState<ProgressEvent[]>([]);
+  const [streamEvents, _setStreamEvents] = useState<ProgressEvent[]>(() => {
+    try {
+      const stored = sessionStorage.getItem('streamEvents');
+      if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    return [];
+  });
+  const setStreamEvents = useCallback((updater: ProgressEvent[] | ((prev: ProgressEvent[]) => ProgressEvent[])) => {
+    _setStreamEvents(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      // Only persist the last 50 events to avoid quota issues
+      try { sessionStorage.setItem('streamEvents', JSON.stringify(next.slice(-50))); } catch { /* quota */ }
+      return next;
+    });
+  }, []);
   const [phaseMap, _setPhaseMap] = useState<Record<string, ProgressEvent>>(() => {
     try {
       const stored = sessionStorage.getItem('phaseMap');
@@ -156,7 +170,20 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, []);
-  const [liveData, setLiveData] = useState<Record<string, unknown>>({});
+  const [liveData, _setLiveData] = useState<Record<string, unknown>>(() => {
+    try {
+      const stored = sessionStorage.getItem('liveData');
+      if (stored) return JSON.parse(stored);
+    } catch { /* ignore */ }
+    return {};
+  });
+  const setLiveData = useCallback((updater: Record<string, unknown> | ((prev: Record<string, unknown>) => Record<string, unknown>)) => {
+    _setLiveData(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try { sessionStorage.setItem('liveData', JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  }, []);
   const [streamRunId, setStreamRunId] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [streamTotalPhases, setStreamTotalPhases] = useState<number>(() => {
@@ -359,6 +386,8 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     try {
       sessionStorage.removeItem('phaseMap');
       sessionStorage.removeItem('streamTotalPhases');
+      sessionStorage.removeItem('streamEvents');
+      sessionStorage.removeItem('liveData');
     } catch { /* ignore */ }
   }, []);
 
@@ -373,7 +402,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     const prevTicker = lastStreamTickerRef.current;
     if (prevTicker && prevTicker !== ticker.toUpperCase()) {
       setPhaseMap({});
-      try { sessionStorage.removeItem('phaseMap'); sessionStorage.removeItem('streamTotalPhases'); } catch { /* ignore */ }
+      try { sessionStorage.removeItem('phaseMap'); sessionStorage.removeItem('streamTotalPhases'); sessionStorage.removeItem('streamEvents'); sessionStorage.removeItem('liveData'); } catch { /* ignore */ }
     }
     lastStreamTickerRef.current = ticker.toUpperCase();
     setLiveData({});
