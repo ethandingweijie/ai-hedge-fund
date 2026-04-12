@@ -29,6 +29,7 @@ export interface CompletedRunInfo {
 
 interface ActiveRunContextValue {
   activeRun: ActiveRunInfo | null;
+  activeRuns: ActiveRunInfo[];
   recentlyCompleted: CompletedRunInfo | null;
   startRun: (ticker: string) => void;
   completeRun: (ticker: string, runId: string) => void;
@@ -50,6 +51,7 @@ interface ActiveRunContextValue {
 
 const ActiveRunContext = createContext<ActiveRunContextValue>({
   activeRun: null,
+  activeRuns: [],
   recentlyCompleted: null,
   startRun: () => {},
   completeRun: () => {},
@@ -71,40 +73,70 @@ const ActiveRunContext = createContext<ActiveRunContextValue>({
 
 export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
   // ── Run-coordination state ────────────────────────────────────────────────
-  const [activeRun, setActiveRun] = useState<ActiveRunInfo | null>(() => {
+  // ── Multiple concurrent runs support ──────────────────────────────────────
+  // activeRuns is an array; activeRun returns the latest one for backward compat.
+  const [activeRuns, setActiveRuns] = useState<ActiveRunInfo[]>(() => {
     try {
-      const stored = sessionStorage.getItem('activeRun');
-      if (stored) {
-        const parsed = JSON.parse(stored) as ActiveRunInfo;
-        const age = Date.now() - new Date(parsed.startedAt).getTime();
-        if (age < 30 * 60 * 1000) return parsed;
+      // Migrate from old single-run format
+      const oldSingle = sessionStorage.getItem('activeRun');
+      if (oldSingle) {
         sessionStorage.removeItem('activeRun');
+        const parsed = JSON.parse(oldSingle) as ActiveRunInfo;
+        const age = Date.now() - new Date(parsed.startedAt).getTime();
+        if (age < 30 * 60 * 1000) {
+          sessionStorage.setItem('activeRuns', JSON.stringify([parsed]));
+          return [parsed];
+        }
+      }
+      const stored = sessionStorage.getItem('activeRuns');
+      if (stored) {
+        const parsed = JSON.parse(stored) as ActiveRunInfo[];
+        // Filter out stale runs (>30 min)
+        const fresh = parsed.filter(r => Date.now() - new Date(r.startedAt).getTime() < 30 * 60 * 1000);
+        if (fresh.length !== parsed.length) {
+          sessionStorage.setItem('activeRuns', JSON.stringify(fresh));
+        }
+        return fresh;
       }
     } catch { /* ignore */ }
-    return null;
+    return [];
   });
+  // Backward compat: activeRun = latest run (used by stream logic + ReportPage)
+  const activeRun = activeRuns.length > 0 ? activeRuns[activeRuns.length - 1] : null;
   const activeRunRef = useRef(activeRun);
   activeRunRef.current = activeRun;
 
   const [recentlyCompleted, setRecentlyCompleted] = useState<CompletedRunInfo | null>(null);
 
   const startRun = useCallback((ticker: string) => {
-    const run = { ticker, startedAt: new Date().toISOString() };
-    setActiveRun(run);
-    sessionStorage.setItem('activeRun', JSON.stringify(run));
+    const run = { ticker: ticker.toUpperCase(), startedAt: new Date().toISOString() };
+    setActiveRuns(prev => {
+      // Don't duplicate — replace if same ticker already running
+      const filtered = prev.filter(r => r.ticker !== run.ticker);
+      const next = [...filtered, run];
+      sessionStorage.setItem('activeRuns', JSON.stringify(next));
+      return next;
+    });
     setRecentlyCompleted(null);
   }, []);
 
   const completeRun = useCallback((ticker: string, runId: string) => {
-    setActiveRun(null);
-    sessionStorage.removeItem('activeRun');
+    setActiveRuns(prev => {
+      const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+      if (next.length > 0) {
+        sessionStorage.setItem('activeRuns', JSON.stringify(next));
+      } else {
+        sessionStorage.removeItem('activeRuns');
+      }
+      return next;
+    });
     setRecentlyCompleted({ ticker, runId, completedAt: new Date().toISOString() });
   }, []);
 
   const clearCompleted = useCallback(() => setRecentlyCompleted(null), []);
   const clearActive = useCallback(() => {
-    setActiveRun(null);
-    sessionStorage.removeItem('activeRun');
+    setActiveRuns([]);
+    sessionStorage.removeItem('activeRuns');
   }, []);
 
   // ── SSE stream state ─────────────────────────────────────────────────────
@@ -183,8 +215,11 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             setStreamRunId(latest.run_id);
             setStreamState('complete');
-            setActiveRun(null);
-            sessionStorage.removeItem('activeRun');
+            setActiveRuns(prev => {
+              const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+              next.length > 0 ? sessionStorage.setItem('activeRuns', JSON.stringify(next)) : sessionStorage.removeItem('activeRuns');
+              return next;
+            });
             setRecentlyCompleted({
               ticker: ticker.toUpperCase(),
               runId: latest.run_id,
@@ -403,7 +438,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ActiveRunContext.Provider value={{
-      activeRun, recentlyCompleted,
+      activeRun, activeRuns, recentlyCompleted,
       startRun, completeRun, clearCompleted, clearActive,
       streamState, streamEvents, phaseMap, liveData,
       streamRunId, streamError, streamTotalPhases, streamExpectedPhases: [], liveResult, setLiveResult,

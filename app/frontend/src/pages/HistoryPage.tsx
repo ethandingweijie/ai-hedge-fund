@@ -44,22 +44,21 @@ export function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [nameMap, setNameMap] = useState<Record<string, string>>({});
 
-  const { activeRun, recentlyCompleted, clearCompleted, streamState } = useActiveRun();
-  const isStreamRunning = streamState === 'running';
+  const { activeRuns, recentlyCompleted, clearCompleted, streamState } = useActiveRun();
+  const isStreamRunning = streamState === 'running' || streamState === 'reconnecting';
 
-  // Fallback: read activeRun from sessionStorage directly if context lost it
-  // (iOS Safari can drop React context state on background tab throttling)
-  const effectiveActiveRun = activeRun ?? (() => {
-    try {
-      const stored = sessionStorage.getItem('activeRun');
-      if (!stored) return null;
-      const parsed = JSON.parse(stored);
-      const age = Date.now() - new Date(parsed.startedAt).getTime();
-      return age < 30 * 60 * 1000 ? parsed : null;
-    } catch { return null; }
-  })();
-  const runTicker = effectiveActiveRun?.ticker ?? '';
-  const runStartedAt = effectiveActiveRun?.startedAt ?? '';
+  // Fallback: read activeRuns from sessionStorage if context lost them (iOS Safari)
+  const effectiveActiveRuns: Array<{ ticker: string; startedAt: string }> = activeRuns.length > 0
+    ? activeRuns
+    : (() => {
+        try {
+          const stored = sessionStorage.getItem('activeRuns') || sessionStorage.getItem('activeRun');
+          if (!stored) return [];
+          const parsed = JSON.parse(stored);
+          const arr = Array.isArray(parsed) ? parsed : [parsed];
+          return arr.filter((r: any) => Date.now() - new Date(r.startedAt).getTime() < 30 * 60 * 1000);
+        } catch { return []; }
+      })();
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -151,26 +150,27 @@ export function HistoryPage() {
 
           {error && <div className="mb-2 p-2 rounded-lg bg-red-500/20 text-red-300 text-[10px]">{error}</div>}
 
-          {/* Ongoing run */}
-          {(effectiveActiveRun || isStreamRunning) && (
-            <div className="mb-3 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/25 transition-colors"
+          {/* Ongoing runs — one green bar per active analysis */}
+          {effectiveActiveRuns.map(run => (
+            <div key={run.ticker}
+              className="mb-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/25 transition-colors"
               onClick={() => navigate('/report')}>
               <div className="flex items-center gap-2">
                 <svg className="h-3.5 w-3.5 animate-spin text-emerald-400" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                <span className="font-mono font-bold text-xs text-white">{runTicker}</span>
+                <span className="font-mono font-bold text-xs text-white">{run.ticker}</span>
                 <span className="text-[9px] font-bold text-emerald-300 bg-emerald-400/20 px-1.5 py-0.5 rounded ring-1 ring-emerald-400/30">ONGOING</span>
                 <span className="ml-auto text-[10px] text-emerald-400">View →</span>
               </div>
             </div>
-          )}
+          ))}
 
           {/* Cards grid */}
           {history && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {history.items.length === 0 && !effectiveActiveRun ? (
+              {history.items.length === 0 && effectiveActiveRuns.length === 0 ? (
                 <div className="col-span-full py-12 text-center text-muted-foreground/60 text-sm">No runs found.</div>
               ) : (
                 history.items.map(row => {
