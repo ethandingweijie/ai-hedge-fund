@@ -17,6 +17,8 @@ RUN poetry config virtualenvs.create false \
 # Copy rest of the source code (bust cache v2)
 COPY . /app/
 
+ENV PORT=8000
 EXPOSE 8000
 
-CMD ["uvicorn", "app.backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Railway sets PORT dynamically — use shell form so $PORT is expanded at runtime
+CMD uvicorn app.backend.main:app --host 0.0.0.0 --port $PORT
