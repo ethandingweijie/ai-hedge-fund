@@ -93,6 +93,25 @@ _WEB_RUNS_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_web_runs_user_id ON web_runs(user_id)",
 ]
 
+# Archive tables DDL — created by CLI pipeline but needed on cloud too
+_ARCHIVE_DDL = [
+    """CREATE TABLE IF NOT EXISTS runs (
+        run_id TEXT PRIMARY KEY, run_at TEXT, model_name TEXT,
+        regime_risk_appetite TEXT, sector TEXT
+    )""",
+    """CREATE TABLE IF NOT EXISTS ticker_signals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT, ticker TEXT, final_action TEXT,
+        position_size_pct REAL, price_target REAL, stop_loss REAL,
+        dcf_base_iv REAL, ev_upside_pct REAL, power_law_score REAL,
+        value_trap_verdict TEXT, outcome TEXT, pct_change REAL
+    )""",
+    """CREATE TABLE IF NOT EXISTS agent_signals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT, ticker TEXT, agent_name TEXT, signal TEXT, confidence REAL
+    )""",
+]
+
 # Archive table indexes (runs + ticker_signals live in run_archive.db too)
 _ARCHIVE_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_runs_run_at ON runs(run_at DESC)",
@@ -125,11 +144,15 @@ def _ensure_web_runs_table():
         _migrate_web_runs_columns(conn)
         for idx_sql in _WEB_RUNS_INDEXES:
             conn.execute(idx_sql)
+        # Ensure archive tables exist (created by CLI pipeline locally,
+        # but need to be bootstrapped on fresh cloud databases)
+        for ddl in _ARCHIVE_DDL:
+            conn.execute(ddl)
         for idx_sql in _ARCHIVE_INDEXES:
             try:
                 conn.execute(idx_sql)
             except Exception:
-                pass  # archive tables may not exist in this DB
+                pass
         conn.commit()
     finally:
         conn.close()
