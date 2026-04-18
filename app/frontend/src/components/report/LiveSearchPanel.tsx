@@ -1,10 +1,16 @@
 /**
- * LiveSearchPanel — Claude-chat-style "Searched the web" UI
- * Shows live web search queries and source results during deep research.
+ * LiveSearchPanel — Shows live deep research activity below the progress bar.
+ *
+ * During Qwen deep research: shows the model's thinking process (reasoning_content)
+ * streaming live, similar to how Claude shows its thinking in chat.
+ *
+ * During Anthropic deep research: shows web search queries and sources (Claude-chat style).
+ *
  * Auto-expanded during research, auto-collapsed when complete.
+ * Thinking content persisted via liveData (sessionStorage) so it survives SSE reconnects.
  */
-import { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, Search, Globe } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { ChevronDown, Brain, Search, Globe } from 'lucide-react';
 import type { ProgressEvent } from '@/lib/reportTypes';
 
 interface SearchQuery {
@@ -35,6 +41,7 @@ function extractDomain(url: string): string {
 
 export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isComplete }: LiveSearchPanelProps) {
   const [expanded, setExpanded] = useState(true);
+  const thinkingRef = useRef<HTMLDivElement>(null);
 
   // Auto-collapse when deep research completes
   useEffect(() => {
@@ -46,21 +53,28 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
     if (isResearchPhase && !isComplete) setExpanded(true);
   }, [isResearchPhase, isComplete]);
 
-  // Extract search queries from ALL progress events (not just deep_research_agent phase)
-  // because the backend may send web search status under varying phase names
+  // Extract thinking content from liveData (persisted in sessionStorage)
+  const thinking = (liveData.deep_research_thinking as string) || '';
+
+  // Extract "Thinking:" status messages from events for additional context
+  const thinkingStatuses = useMemo(() => {
+    return streamEvents
+      .filter(ev => ev.status?.startsWith('Thinking:') || ev.status?.startsWith('Writing'))
+      .map(ev => ev.status)
+      .slice(-5); // last 5 status messages
+  }, [streamEvents]);
+
+  // Extract search queries from progress events
   const searches = useMemo(() => {
     const queries: SearchQuery[] = [];
     const seen = new Set<string>();
     for (const ev of streamEvents) {
-      // From partial_data (structured) — any phase
       const lsq = ev.partial_data?.live_search_query as SearchQuery | undefined;
       if (lsq && lsq.query && !seen.has(lsq.query)) {
         seen.add(lsq.query);
         queries.push(lsq);
         continue;
       }
-
-      // Fallback: parse from status string "Web search N/M: query" — any phase
       const match = ev.status?.match(/^Web search (\d+)\/(\d+): (.+)$/);
       if (match && !seen.has(match[3])) {
         seen.add(match[3]);
@@ -74,7 +88,6 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
   const sources = useMemo(() => {
     const raw = liveData.live_search_sources as SearchSource[] | undefined;
     if (!raw || !Array.isArray(raw)) return [];
-    // Dedupe by URL
     const seen = new Set<string>();
     return raw.filter(s => {
       if (seen.has(s.url)) return false;
@@ -83,12 +96,32 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
     });
   }, [liveData]);
 
-  // Don't render if no searches detected AND not in research phase
-  // During research phase, show the panel even with 0 searches (loading state)
-  if (searches.length === 0 && !isResearchPhase && sources.length === 0) return null;
+  // Auto-scroll thinking to bottom
+  useEffect(() => {
+    if (thinkingRef.current && thinking) {
+      thinkingRef.current.scrollTop = thinkingRef.current.scrollHeight;
+    }
+  }, [thinking]);
 
-  const searchCount = searches.length;
-  const sourceCount = sources.length;
+  // Determine mode: thinking, searching, or nothing
+  const hasThinking = thinking.length > 0 || thinkingStatuses.length > 0;
+  const hasSearches = searches.length > 0;
+  const isWriting = streamEvents.some(ev => ev.status?.startsWith('Writing'));
+
+  // Don't render if nothing to show
+  if (!hasThinking && !hasSearches && !isResearchPhase && sources.length === 0) return null;
+
+  const headerText = isComplete
+    ? `Deep research complete${hasThinking ? ` (${thinking.length.toLocaleString()} chars reasoning)` : hasSearches ? ` (${searches.length} searches)` : ''}`
+    : isWriting
+      ? 'Writing research report...'
+      : hasThinking
+        ? 'Thinking through the analysis...'
+        : hasSearches
+          ? `Searching the web (${searches.length} searches)...`
+          : 'Starting deep research...';
+
+  const HeaderIcon = hasThinking ? Brain : Globe;
 
   return (
     <div className="mx-4 mb-2">
@@ -97,14 +130,9 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-1.5 w-full text-left py-1.5"
       >
-        <Globe size={13} className="text-muted-foreground/60 shrink-0" />
+        <HeaderIcon size={13} className={`shrink-0 ${hasThinking && !isComplete ? 'text-purple-400 animate-pulse' : 'text-muted-foreground/60'}`} />
         <span className="text-[11px] font-medium text-muted-foreground/80">
-          {isComplete
-            ? `Searched the web (${searchCount} searches, ${sourceCount} sources)`
-            : isResearchPhase
-              ? `Searching the web${searchCount > 0 ? ` (${searchCount} searches)` : ''}...`
-              : `Searched the web`
-          }
+          {headerText}
         </span>
         <ChevronDown
           size={12}
@@ -114,19 +142,44 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
 
       {/* Expanded content */}
       {expanded && (
-        <div className="pl-1 pb-2 space-y-2 max-h-[280px] overflow-y-auto">
-          {/* Search queries */}
-          {searches.map((sq, i) => (
-            <div key={i} className="space-y-0.5">
-              {/* Query */}
-              <div className="flex items-center gap-1.5">
-                <Search size={11} className="text-blue-400/70 shrink-0 mt-0.5" />
-                <span className="text-[11px] text-foreground/80 font-medium">{sq.query}</span>
-              </div>
+        <div className="pb-2">
+          {/* ── Thinking content (Qwen reasoning) ────────────────────── */}
+          {hasThinking && (
+            <div
+              ref={thinkingRef}
+              className="max-h-[200px] overflow-y-auto rounded-lg bg-purple-500/5 border border-purple-500/10 px-3 py-2 mb-2"
+            >
+              {thinking ? (
+                <p className="text-[11px] text-purple-300/80 leading-relaxed whitespace-pre-wrap font-mono">
+                  {thinking}
+                  {!isComplete && !isWriting && (
+                    <span className="inline-block w-1.5 h-3 bg-purple-400 animate-pulse ml-0.5 align-middle" />
+                  )}
+                </p>
+              ) : (
+                /* Show status-based thinking when no raw reasoning available */
+                thinkingStatuses.map((s, i) => (
+                  <p key={i} className="text-[11px] text-purple-300/60 leading-relaxed">
+                    {s}
+                  </p>
+                ))
+              )}
             </div>
-          ))}
+          )}
 
-          {/* Sources — shown below all queries */}
+          {/* ── Search queries (Anthropic web search) ────────────────── */}
+          {hasSearches && (
+            <div className="space-y-0.5 mb-1">
+              {searches.map((sq, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <Search size={11} className="text-blue-400/70 shrink-0" />
+                  <span className="text-[11px] text-foreground/80 font-medium">{sq.query}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Sources ──────────────────────────────────────────────── */}
           {sources.length > 0 && (
             <div className="ml-4 mt-1 space-y-0">
               {sources.map((src, i) => {
@@ -157,10 +210,10 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
             </div>
           )}
 
-          {/* Loading shimmer during active research */}
-          {isResearchPhase && !isComplete && (
-            <div className="flex items-center gap-1.5 ml-0.5 animate-pulse">
-              <Search size={11} className="text-blue-400/40" />
+          {/* ── Loading shimmer ──────────────────────────────────────── */}
+          {isResearchPhase && !isComplete && !hasThinking && !hasSearches && (
+            <div className="flex items-center gap-1.5 animate-pulse">
+              <Brain size={11} className="text-purple-400/40" />
               <div className="h-2.5 w-32 bg-muted/40 rounded" />
             </div>
           )}
