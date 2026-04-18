@@ -23,7 +23,7 @@ export function LoginPage() {
   const { loginWithGoogle, loginWithApple, user } = useAuth();
   const navigate = useNavigate();
   const location  = useLocation();
-  const from = (location.state as { from?: string })?.from ?? '/history';
+  const from = (location.state as { from?: string })?.from ?? '/report';
 
   const [error, setError]     = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null); // 'google' | 'apple'
@@ -142,11 +142,12 @@ export function LoginPage() {
 
         {/* Logo / heading */}
         <div className="text-center">
+          <img src="/icon-192x192.png" alt="Equitable" className="w-16 h-16 mx-auto mb-2" />
           <h1 className="text-2xl font-bold text-gray-900"
               style={{ fontFamily: "'Segoe UI', 'Google Sans', Arial, sans-serif" }}>
-            Sign in
+            Welcome to Equitable!
           </h1>
-          <p className="text-sm text-gray-500 mt-1">to your AI Hedge Fund account</p>
+          <p className="text-sm text-gray-500 mt-1">Sign in to start your investment research</p>
         </div>
 
         {/* Error */}

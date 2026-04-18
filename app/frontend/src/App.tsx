@@ -9,8 +9,16 @@ import { PricingPage } from './pages/PricingPage';
 import { LoginPage } from './pages/LoginPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
 import { ThemeProvider } from './contexts/theme-context';
-import { AuthProvider } from './contexts/auth-context';
+import { AuthProvider, useAuth } from './contexts/auth-context';
 import { MobileLayout } from './components/mobile/MobileLayout';
+
+/** Redirect to /login if not authenticated */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return null; // wait for auth check
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
 export default function App() {
   return (
@@ -22,16 +30,16 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Analysis routes — standalone pages without the graph IDE layout */}
-          <Route path="/report" element={<ReportPage />} />
-          <Route path="/report/:runId" element={<ReportViewPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/screener" element={<ScreenerPage />} />
-          <Route path="/watchlist" element={<WatchlistPage />} />
+          {/* All routes require authentication */}
+          <Route path="/report" element={<RequireAuth><ReportPage /></RequireAuth>} />
+          <Route path="/report/:runId" element={<RequireAuth><ReportViewPage /></RequireAuth>} />
+          <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />
+          <Route path="/screener" element={<RequireAuth><ScreenerPage /></RequireAuth>} />
+          <Route path="/watchlist" element={<RequireAuth><WatchlistPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
 
-          {/* Default: redirect to Ticker Research */}
-          <Route path="*" element={<Navigate to="/report" replace />} />
+          {/* Default: redirect to login (will redirect to /report after auth) */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </MobileLayout>
     </HashRouter>
