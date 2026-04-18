@@ -1256,6 +1256,16 @@ def _research_one_ticker(
     except Exception:
         _cached = None
 
+    # Never reuse knowledge_only results from cache — they lack live web data
+    # and should be re-run with the current model (now Qwen with web search).
+    if _cached is not None and _cached.get("research_tier") == "knowledge_only":
+        progress.update_status(
+            agent_id, ticker,
+            f"Cache contains knowledge_only result ({_cached['age_days']:.1f}d old) "
+            f"— discarding, will run fresh with live web search"
+        )
+        _cached = None
+
     if _cached is not None:
         _age = _cached["age_days"]
 
