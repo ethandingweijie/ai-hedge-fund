@@ -1909,12 +1909,55 @@ def _research_one_ticker(
         )
 
         text = ""
+        reasoning = ""
+        is_answering = False
+        _chunk_count = 0
+
         for _chunk in _stream:
             _delta = getattr(_chunk.choices[0] if _chunk.choices else None, "delta", None)
-            if _delta and getattr(_delta, "content", None):
-                text += _delta.content
+            if not _delta:
+                continue
+
+            # ── Thinking phase (reasoning_content) ───────────────────────
+            rc = getattr(_delta, "reasoning_content", None)
+            if rc:
+                reasoning += rc
+                _chunk_count += 1
+                # Stream thinking to frontend every ~20 chunks
+                if _chunk_count % 20 == 0:
+                    # Show last 150 chars of thinking as status
+                    _snippet = reasoning[-150:].replace("\n", " ").strip()
+                    progress.update_status(
+                        agent_id, ticker,
+                        f"Thinking: {_snippet}",
+                        partial_data={"deep_research_thinking": reasoning[-300:]}
+                    )
+
+            # ── Response phase (content) ─────────────────────────────────
+            c = getattr(_delta, "content", None)
+            if c:
+                if not is_answering:
+                    is_answering = True
+                    progress.update_status(
+                        agent_id, ticker,
+                        f"Writing research report ({len(reasoning)} chars of reasoning complete)..."
+                    )
+                text += c
+                _chunk_count += 1
+                # Stream writing progress every ~50 chunks
+                if _chunk_count % 50 == 0:
+                    progress.update_status(
+                        agent_id, ticker,
+                        f"Writing report ({len(text):,} chars so far)..."
+                    )
 
         text = text.strip()
+
+        if reasoning:
+            progress.update_status(
+                agent_id, ticker,
+                f"Deep research complete: {len(reasoning):,} chars thinking + {len(text):,} chars report"
+            )
 
         # Search count not available in streaming mode — use proxy of 1
         return text, 1, []   # citations not available from OpenAI-compat streaming
