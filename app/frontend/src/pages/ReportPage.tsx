@@ -316,6 +316,7 @@ export function ReportPage() {
     liveResult,
     startStream: start,
     resetStream: reset,
+    startPolling: poll,
     startRun: markRunStarted,
     clearActive: markRunCleared,
   } = useActiveRun();
@@ -374,14 +375,13 @@ export function ReportPage() {
       setTicker('');
       window.history.replaceState({}, '');
     } else if (s?.switchTicker) {
-      // User clicked a specific ongoing ticker in History — switch to it
+      // User clicked a specific ongoing ticker in History — switch view to it.
+      // Do NOT call start() — pipeline is already running on the server.
+      // Poll for progress instead of triggering a duplicate run.
       const switchTo = s.switchTicker.toUpperCase();
       setTicker(switchTo);
       setLiveMode(true);
-      // Reset stream state and start polling for this ticker's progress
-      reset();
-      start(switchTo, model, []);
-      markRunStarted(switchTo);
+      poll(switchTo);  // polls /analysis/status for progress, no new POST
       window.history.replaceState({}, '');
     } else if (s?.resume && state !== 'idle') {
       setLiveMode(true);
@@ -390,13 +390,13 @@ export function ReportPage() {
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-reconnect after refresh: if activeRun was persisted but stream is idle,
-  // re-submit the analysis. The backend dedup logic will either wait for the
-  // in-flight pipeline or return a cached result if it already completed.
+  // poll for the existing pipeline instead of POSTing a new run.
+  // The backend dedup should prevent duplicates, but polling is safer.
   useEffect(() => {
     if (isFreshRequest) return; // skip reconnect on fresh ticker
     if (activeRun && state === 'idle' && !liveMode && ticker) {
       setLiveMode(true);
-      start(ticker.toUpperCase(), model, []);
+      poll(ticker.toUpperCase());  // poll for progress, don't trigger new pipeline
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount only

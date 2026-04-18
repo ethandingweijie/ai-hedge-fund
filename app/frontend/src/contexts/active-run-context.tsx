@@ -47,6 +47,7 @@ interface ActiveRunContextValue {
   setLiveResult: (r: RunResult | null) => void;
   startStream: (ticker: string, model?: string, agents?: string[]) => void;
   resetStream: () => void;
+  startPolling: (ticker: string) => void;
 }
 
 const ActiveRunContext = createContext<ActiveRunContextValue>({
@@ -69,6 +70,7 @@ const ActiveRunContext = createContext<ActiveRunContextValue>({
   setLiveResult: () => {},
   startStream: () => {},
   resetStream: () => {},
+  startPolling: () => {},
 });
 
 export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
@@ -561,7 +563,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       startRun, completeRun, clearCompleted, clearActive,
       streamState, streamEvents, phaseMap, liveData,
       streamRunId, streamError, streamTotalPhases, streamExpectedPhases: [], liveResult, setLiveResult,
-      startStream, resetStream,
+      startStream, resetStream, startPolling,
     }}>
       {children}
     </ActiveRunContext.Provider>
