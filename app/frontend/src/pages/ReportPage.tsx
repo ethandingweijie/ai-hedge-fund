@@ -753,19 +753,23 @@ export function ReportPage() {
             </div>
           </div>
         )}
-        {/* Live web search panel — Claude-style "Searched the web" */}
+        {/* Live thinking / web search panel */}
         {isRunning && (
           <LiveSearchPanel
             streamEvents={events}
             liveData={liveData}
+            thinking={(liveData.deep_research_thinking as string) || ''}
             isResearchPhase={
               Object.values(phaseMap).some(p =>
-                p.phase === 'deep_research_agent' || p.phase === 'deep_research' && !p.status.includes('✓')
+                (p.phase === 'deep_research_agent' || p.phase === 'deep_research') && !p.status.includes('✓')
               ) || events.some(e =>
-                e.phase === 'deep_research_agent' && !e.status.includes('✓')
+                (e.phase === 'deep_research_agent' || e.phase === 'deep_research') && !e.status.includes('✓')
               )
             }
-            isComplete={phaseMap['deep_research_agent']?.status?.includes('✓') ?? false}
+            isComplete={
+              (phaseMap['deep_research_agent']?.status?.includes('✓') ?? false) ||
+              (phaseMap['deep_research']?.status?.includes('✓') ?? false)
+            }
           />
         )}
         {isError && (

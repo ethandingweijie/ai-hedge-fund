@@ -27,6 +27,7 @@ interface SearchSource {
 interface LiveSearchPanelProps {
   streamEvents: ProgressEvent[];
   liveData: Record<string, unknown>;
+  thinking?: string;  // direct prop for reactivity — extracted from liveData in parent
   isResearchPhase: boolean;
   isComplete: boolean;
 }
@@ -39,7 +40,7 @@ function extractDomain(url: string): string {
   }
 }
 
-export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isComplete }: LiveSearchPanelProps) {
+export function LiveSearchPanel({ streamEvents, liveData, thinking: thinkingProp, isResearchPhase, isComplete }: LiveSearchPanelProps) {
   const [expanded, setExpanded] = useState(true);
   const thinkingRef = useRef<HTMLDivElement>(null);
 
@@ -53,8 +54,8 @@ export function LiveSearchPanel({ streamEvents, liveData, isResearchPhase, isCom
     if (isResearchPhase && !isComplete) setExpanded(true);
   }, [isResearchPhase, isComplete]);
 
-  // Extract thinking content from liveData (persisted in sessionStorage)
-  const thinking = (liveData.deep_research_thinking as string) || '';
+  // Extract thinking content — prefer direct prop (reactive), fallback to liveData
+  const thinking = thinkingProp || (liveData.deep_research_thinking as string) || '';
 
   // Extract "Thinking:" status messages from events for additional context
   const thinkingStatuses = useMemo(() => {
