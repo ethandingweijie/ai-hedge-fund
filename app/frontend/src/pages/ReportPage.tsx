@@ -638,6 +638,22 @@ export function ReportPage() {
   // Keep doneCount alias so any other references still compile
   const doneCount = phaseDone;
 
+  // ── Prompt for notification permission on first visit (PWA home screen) ─────
+  // iOS PWA shows the prompt on first interaction. We trigger on any user tap
+  // in the app to maximize the chance the user sees and accepts the prompt.
+  useEffect(() => {
+    const promptOnce = () => {
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      } catch { /* ignore */ }
+      document.removeEventListener('click', promptOnce);
+    };
+    document.addEventListener('click', promptOnce, { once: true });
+    return () => document.removeEventListener('click', promptOnce);
+  }, []);
+
   // ── Browser notifications: document.title + Notification API ────────────────
   // (placed after liveTicker is declared so deps are in scope)
   useEffect(() => {
