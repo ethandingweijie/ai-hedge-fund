@@ -109,7 +109,8 @@ export function LiveSearchPanel({ streamEvents, liveData, thinking: thinkingProp
   const hasSearches = searches.length > 0;
   const isWriting = streamEvents.some(ev => ev.status?.startsWith('Writing'));
 
-  // Don't render if nothing to show
+  // Don't render if nothing to show OR if research is complete
+  if (isComplete) return null;
   if (!hasThinking && !hasSearches && !isResearchPhase && sources.length === 0) return null;
 
   const headerText = isComplete
