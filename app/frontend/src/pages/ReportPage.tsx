@@ -381,6 +381,7 @@ export function ReportPage() {
       const switchTo = s.switchTicker.toUpperCase();
       setTicker(switchTo);
       setLiveMode(true);
+      setLiveResult(null);  // CRITICAL: clear stale result from previous ticker
       poll(switchTo);  // polls /analysis/status for progress, no new POST
       window.history.replaceState({}, '');
     } else if (s?.resume && state !== 'idle') {
@@ -563,7 +564,11 @@ export function ReportPage() {
   }
 
   // ── Derive data — liveData accumulates partial_data from SSE; liveResult wins ─
-  const liveTicker    = liveResult?.ticker ?? ticker;
+  // When running/reconnecting, always use the ticker we're analyzing (not stale liveResult).
+  // Only use liveResult.ticker when analysis is complete (result confirmed for that ticker).
+  const liveTicker    = (isRunning || state === 'reconnecting')
+    ? (ticker || liveResult?.ticker || '')
+    : (liveResult?.ticker ?? ticker);
 
   // ── HK ticker canonical form for dict key lookups ────────────────────────────
   // Backend always keys per-ticker dicts as "NNNNN.HK". When the user typed
