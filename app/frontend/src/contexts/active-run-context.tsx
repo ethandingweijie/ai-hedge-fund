@@ -305,7 +305,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         if (statusRes.ok) {
           const status = await statusRes.json();
           if (status.in_progress && status.phase) {
-            // Pipeline still running — update phaseMap with live phase
+            // Pipeline still running — update phaseMap with ALL phases from server
             consecutiveNotRunning = 0; // reset crash counter
             setStreamState('running');
             const liveEvent: ProgressEvent = {
@@ -315,7 +315,23 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               timestamp: status.timestamp || '',
             };
             setStreamEvents((prev) => [...prev, liveEvent]);
-            setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
+            // Rebuild full phaseMap from server's all_phases (preserves completed phases
+            // that were lost when SSE disconnected — fixes progress bar regression)
+            if (status.all_phases && typeof status.all_phases === 'object') {
+              const rebuilt: Record<string, ProgressEvent> = {};
+              for (const [phaseName, phaseData] of Object.entries(status.all_phases)) {
+                const pd = phaseData as Record<string, string>;
+                rebuilt[phaseName] = {
+                  phase: pd.phase || phaseName,
+                  status: pd.status || '',
+                  summary: pd.summary || '',
+                  timestamp: pd.timestamp || '',
+                };
+              }
+              setPhaseMap(rebuilt);
+            } else {
+              setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
+            }
           } else if (!status.in_progress) {
             // Pipeline reports not running — but could be a brief gap between
             // phases, or iOS may have throttled our requests while screen was off.

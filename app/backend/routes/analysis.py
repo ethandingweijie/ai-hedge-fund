@@ -32,7 +32,10 @@ _in_flight_lock: asyncio.Lock = asyncio.Lock()
 _pipeline_semaphore: asyncio.Semaphore = asyncio.Semaphore(5)
 
 # ── Live phase status per ticker (read-only endpoint for reconnecting clients) ─
-_live_phases: dict[str, dict] = {}  # ticker → latest progress event dict
+# Stores ALL phases per ticker so reconnecting clients can rebuild the full
+# progress bar, not just the current phase.
+_live_phases: dict[str, dict] = {}       # ticker → latest progress event dict
+_live_phase_maps: dict[str, dict] = {}   # ticker → {phase_name: event_dict, ...}
 
 # ── Load .env.local once at import time so FMP_API_KEY and others are available
 # for the standalone endpoints (news, financials, intelligence) that run outside
@@ -270,10 +273,16 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                     event["partial_data"] = partial_data
                 phase_events.put_nowait(event)
                 # Store latest phase for read-only status endpoint
-                _live_phases[ticker.upper() if ticker else ""] = {
+                _tk = ticker.upper() if ticker else ""
+                _phase_event = {
                     "phase": phase, "status": status, "summary": summary,
                     "timestamp": timestamp or "",
                 }
+                _live_phases[_tk] = _phase_event
+                # Accumulate all phases so reconnecting clients can rebuild progress bar
+                if _tk not in _live_phase_maps:
+                    _live_phase_maps[_tk] = {}
+                _live_phase_maps[_tk][phase] = _phase_event
             except Exception:
                 pass
 
@@ -300,6 +309,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                     _in_flight.pop(_dedup_key, None)
                 # Clean up live phase tracking
                 _live_phases.pop(ticker.upper(), None)
+                _live_phase_maps.pop(ticker.upper(), None)
                 if _run_event is not None:
                     _run_event.set()
                 await phase_events.put(
@@ -425,6 +435,8 @@ async def get_pipeline_status(ticker: str):
     in_progress = False
     async with _in_flight_lock:
         in_progress = any(k.startswith(f"{t}::") for k in _in_flight)
+    # Return all accumulated phases so reconnecting clients can rebuild progress bar
+    all_phases = _live_phase_maps.get(t, {})
     return {
         "ticker": t,
         "in_progress": in_progress,
@@ -432,6 +444,7 @@ async def get_pipeline_status(ticker: str):
         "status": phase_info.get("status") if phase_info else None,
         "summary": phase_info.get("summary") if phase_info else None,
         "timestamp": phase_info.get("timestamp") if phase_info else None,
+        "all_phases": all_phases,  # {phase_name: {phase, status, summary, timestamp}, ...}
     }
 
 
