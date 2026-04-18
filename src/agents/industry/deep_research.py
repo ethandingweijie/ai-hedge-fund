@@ -2243,7 +2243,7 @@ def _research_one_ticker(
                     "cache_age_days": None, "cache_run_id": None,
                 }
 
-    _is_live = research_tier in ("anthropic_web", "tavily") and search_count >= _MIN_LIVE_SEARCHES
+    _is_live = research_tier in ("anthropic_web", "tavily", "qwen_web") and search_count >= _MIN_LIVE_SEARCHES
     progress.update_status(
         agent_id, ticker,
         f"Deep research complete — tier={research_tier} | {search_count} web searches | "

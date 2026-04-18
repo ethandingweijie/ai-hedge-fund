@@ -664,10 +664,12 @@ The footnotes list must be non-empty if brief_text contains any [n] markers.
 
 
 _LIVE_RESEARCH_TIERS = frozenset({
-    "anthropic_web",          # fresh 12-search Tier 1 run
+    "anthropic_web",          # fresh Tier 1 run (Anthropic web search)
+    "qwen_web",               # fresh Tier 1 run (Qwen native web search)
     "tavily",                 # fresh Tavily run
     "anthropic_web_cached",   # reused from archive, age < 2 days
     "anthropic_web_delta",    # reused base + 4-search delta top-up
+    "qwen_web_cached",        # reused Qwen result from archive
 })
 
 
