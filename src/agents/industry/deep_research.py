@@ -1894,20 +1894,44 @@ def _research_one_ticker(
         progress.update_status(agent_id, ticker, "Tier 1 — Qwen native web search (live)...")
 
         # Qwen web search requires streaming mode — non-streaming returns 400.
-        # Collect all delta chunks into a single text string.
-        _stream = _qwen_search_client.chat.completions.create(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": _research_system},
-                {"role": "user",   "content": human_msg_qwen},
-            ],
-            extra_body={
-                "enable_search": True,
-                "search_options": {"search_strategy": "agent"},
-                "enable_thinking": True,
-            },
-            stream=True,
-        )
+        # Try with enable_thinking=True first for reasoning_content streaming.
+        # Fall back to thinking=False if the API rejects the combination.
+        _messages = [
+            {"role": "system", "content": _research_system},
+            {"role": "user",   "content": human_msg_qwen},
+        ]
+        _stream = None
+        _thinking_enabled = False
+
+        # Attempt 1: with thinking enabled
+        try:
+            _stream = _qwen_search_client.chat.completions.create(
+                model=model_name,
+                messages=_messages,
+                extra_body={
+                    "enable_search": True,
+                    "search_options": {"search_strategy": "agent"},
+                    "enable_thinking": True,
+                },
+                stream=True,
+            )
+            _thinking_enabled = True
+            progress.update_status(agent_id, ticker, "Qwen deep research with thinking enabled...")
+        except Exception as _think_err:
+            # Thinking + search may not be compatible — fall back
+            progress.update_status(
+                agent_id, ticker,
+                f"Thinking mode not available ({type(_think_err).__name__}) — using standard search..."
+            )
+            _stream = _qwen_search_client.chat.completions.create(
+                model=model_name,
+                messages=_messages,
+                extra_body={
+                    "enable_search": True,
+                    "search_options": {"search_strategy": "agent"},
+                },
+                stream=True,
+            )
 
         import time as _time
         text = ""
