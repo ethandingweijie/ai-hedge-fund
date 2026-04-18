@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Menu, X, User, Plus, BarChart2, Filter, BookMarked, History } from 'lucide-react';
+import { Menu, X, User, Plus, BarChart2, Filter, BookMarked, History, Sun, Moon, Monitor, LogOut, Zap } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
-// useActiveRun not needed — "New Ticker" passes state flag, ReportPage handles the rest
-import { MobileProfileDrawer } from './MobileProfileDrawer';
+import { useTheme, type Theme } from '@/contexts/theme-context';
 import { getHistory } from '@/lib/api';
 import type { RunSummary } from '@/lib/reportTypes';
 
@@ -24,8 +23,8 @@ const NAV_ITEMS = [
 ] as const;
 
 export function MobileTopBar() {
-  const { user } = useAuth();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [recentRuns, setRecentRuns] = useState<RunSummary[]>([]);
   const location = useLocation();
@@ -68,23 +67,7 @@ export function MobileTopBar() {
         </button>
       </div>
 
-      {/* Profile icon — top-right, fixed */}
-      <div className="fixed top-3 right-3 z-[60]">
-        <button
-          onClick={() => setDrawerOpen(true)}
-          className="w-9 h-9 rounded-full flex items-center justify-center shadow-md bg-white/90 dark:bg-card border border-border"
-        >
-          {user?.avatar_url ? (
-            <img
-              src={user.avatar_url}
-              alt={user.name ?? user.email}
-              className="w-8 h-8 rounded-full object-cover"
-            />
-          ) : (
-            <User size={16} className="text-muted-foreground" />
-          )}
-        </button>
-      </div>
+      {/* Profile icon removed — settings moved to hamburger menu */}
 
       {/* Navigation drawer — slides from left */}
       {menuOpen && (
@@ -99,7 +82,7 @@ export function MobileTopBar() {
           >
             {/* Drawer header */}
             <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-              <span className="text-sm font-bold tracking-wide text-foreground">AI Hedge Fund</span>
+              <span className="text-sm font-bold tracking-wide text-foreground">Equitable</span>
               <button onClick={() => setMenuOpen(false)} className="p-1 rounded-md hover:bg-muted">
                 <X size={18} className="text-muted-foreground" />
               </button>
@@ -153,29 +136,75 @@ export function MobileTopBar() {
               })}
             </div>
 
-            {/* User info at bottom */}
-            {user && (
-              <div className="px-4 py-3 border-t border-border">
-                <div className="flex items-center gap-2">
-                  {user.avatar_url ? (
-                    <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-                      <User size={14} className="text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-medium truncate">{user.name ?? user.email}</span>
-                    <span className="text-[10px] text-muted-foreground truncate">{user.email}</span>
-                  </div>
+            {/* Settings section at bottom */}
+            <div className="border-t border-border">
+              {/* Theme toggle */}
+              <div className="px-4 py-3">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
+                <div className="flex gap-1.5">
+                  {([
+                    { value: 'light' as Theme, icon: Sun, label: 'Light' },
+                    { value: 'dark' as Theme, icon: Moon, label: 'Dark' },
+                    { value: 'auto' as Theme, icon: Monitor, label: 'Auto' },
+                  ]).map(({ value, icon: Icon, label }) => (
+                    <button
+                      key={value}
+                      onClick={() => setTheme(value)}
+                      className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-md transition-colors text-[10px] font-medium
+                        ${theme === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
+                    >
+                      <Icon size={14} />
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
+
+              {/* Pricing link */}
+              <a
+                href="#/pricing"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors"
+              >
+                <Zap size={16} className="text-amber-500" />
+                <span className="text-sm font-medium">Pricing</span>
+              </a>
+
+              {/* Sign out */}
+              {user && (
+                <button
+                  onClick={() => { logout(); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left"
+                >
+                  <LogOut size={16} className="text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">Sign out</span>
+                </button>
+              )}
+
+              {/* User info */}
+              {user && (
+                <div className="px-4 py-3 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+                        <User size={14} className="text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium truncate">{user.name ?? user.email}</span>
+                      <span className="text-[10px] text-muted-foreground truncate">{user.email}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      <MobileProfileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      {/* Profile drawer removed — settings moved to hamburger menu */}
     </>
   );
 }

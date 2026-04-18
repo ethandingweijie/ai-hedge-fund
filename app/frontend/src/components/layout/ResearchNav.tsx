@@ -84,35 +84,8 @@ export function ResearchNav() {
             {THEME_LABEL[theme]}
           </button>
 
-          {/* Profile icon */}
-          {user ? (
-            <div className="relative group ml-1">
-              {user.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt={user.name ?? user.email}
-                  className="w-8 h-8 rounded-full object-cover ring-2 ring-border cursor-pointer hover:ring-primary/60 transition-all"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center text-xs font-bold text-primary cursor-pointer ring-2 ring-border hover:ring-primary/60 transition-all">
-                  {(user.name ?? user.email)[0].toUpperCase()}
-                </div>
-              )}
-              {/* Dropdown */}
-              <div className="absolute right-0 top-10 w-48 bg-background border border-border rounded-2xl shadow-xl py-2 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-200 z-50">
-                <div className="px-4 py-2 border-b border-border/50">
-                  <p className="text-sm font-semibold truncate">{user.name ?? ''}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                </div>
-                <button
-                  onClick={logout}
-                  className="w-full text-left px-4 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          ) : (
+          {/* Profile icon removed — user profile moved to hamburger menu */}
+          {false && (
             <a
               href="#/login"
               title="Sign in"

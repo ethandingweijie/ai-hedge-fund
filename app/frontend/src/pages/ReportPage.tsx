@@ -913,8 +913,8 @@ export function ReportPage() {
 
         <div className="relative z-10 flex flex-col min-h-screen">
 
-        {/* Transparent top bar with profile icon — hidden during live report (ResearchNav has its own) */}
-        {!liveMode && (
+        {/* Profile icon removed — user profile moved to hamburger menu */}
+        {!liveMode && false && (
         <div className="flex items-center justify-end px-5 pt-4 pb-2">
           {user ? (
             <div className="relative group">
