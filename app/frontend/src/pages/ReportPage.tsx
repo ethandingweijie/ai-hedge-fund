@@ -642,12 +642,38 @@ export function ReportPage() {
 
   useEffect(() => {
     if (!isComplete || !liveMode) return;
+
+    // Browser notification (desktop Chrome/Firefox — not iOS Safari)
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       new Notification(`${liveTicker} Analysis Complete`, {
         body: 'Your investment analysis is ready to view.',
         icon: '/favicon.ico',
       });
     }
+
+    // Vibration (mobile — works on Android Chrome + some iOS scenarios)
+    try {
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    } catch { /* ignore */ }
+
+    // Audio ping (works on all platforms including iOS Safari)
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880; // A5 note
+      gain.gain.value = 0.3;
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+      // Second beep
+      const osc2 = ctx.createOscillator();
+      osc2.connect(gain);
+      osc2.frequency.value = 1100; // C#6
+      osc2.start(ctx.currentTime + 0.2);
+      osc2.stop(ctx.currentTime + 0.35);
+    } catch { /* AudioContext not available */ }
   }, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mobile layout: progressive report view matching history layout ───────────
