@@ -56,7 +56,7 @@ export function HistoryPage() {
           if (!stored) return [];
           const parsed = JSON.parse(stored);
           const arr = Array.isArray(parsed) ? parsed : [parsed];
-          return arr.filter((r: any) => Date.now() - new Date(r.startedAt).getTime() < 30 * 60 * 1000);
+          return arr.filter((r: any) => Date.now() - new Date(r.startedAt).getTime() < 45 * 60 * 1000);
         } catch { return []; }
       })();
 

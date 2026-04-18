@@ -83,7 +83,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.removeItem('activeRun');
         const parsed = JSON.parse(oldSingle) as ActiveRunInfo;
         const age = Date.now() - new Date(parsed.startedAt).getTime();
-        if (age < 30 * 60 * 1000) {
+        if (age < 45 * 60 * 1000) {
           sessionStorage.setItem('activeRuns', JSON.stringify([parsed]));
           return [parsed];
         }
@@ -92,7 +92,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       if (stored) {
         const parsed = JSON.parse(stored) as ActiveRunInfo[];
         // Filter out stale runs (>30 min)
-        const fresh = parsed.filter(r => Date.now() - new Date(r.startedAt).getTime() < 30 * 60 * 1000);
+        const fresh = parsed.filter(r => Date.now() - new Date(r.startedAt).getTime() < 45 * 60 * 1000);
         if (fresh.length !== parsed.length) {
           sessionStorage.setItem('activeRuns', JSON.stringify(fresh));
         }
@@ -246,7 +246,8 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     setStreamError(null);
 
     let attempts = 0;
-    const maxAttempts = 60; // 10 minutes at 10s intervals
+    const maxAttempts = 180; // 30 minutes at 10s intervals
+    let consecutiveNotRunning = 0; // require multiple confirmations before declaring crash
 
     pollIntervalRef.current = setInterval(async () => {
       attempts++;
@@ -303,6 +304,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
           const status = await statusRes.json();
           if (status.in_progress && status.phase) {
             // Pipeline still running — update phaseMap with live phase
+            consecutiveNotRunning = 0; // reset crash counter
             setStreamState('running');
             const liveEvent: ProgressEvent = {
               phase: status.phase,
@@ -313,18 +315,23 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
             setStreamEvents((prev) => [...prev, liveEvent]);
             setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
           } else if (!status.in_progress) {
-            // Pipeline no longer running — check if it completed or crashed
+            // Pipeline reports not running — but could be a brief gap between phases.
+            // Require 3 consecutive "not running" polls (30s) before declaring crash.
+            consecutiveNotRunning++;
+            // First check: did it actually complete?
             const completed = await checkCompleted(ticker);
             if (completed) {
-              // Result found — stop polling, show completion
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
               return;
             }
-            // No result found + not in progress = pipeline crashed
-            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            setStreamError('Analysis ended without saving results — please retry');
-            setStreamState('error');
-            return;
+            // Only declare crash after 3 consecutive not-running signals
+            if (consecutiveNotRunning >= 3) {
+              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+              setStreamError('Analysis ended without saving results — please retry');
+              setStreamState('error');
+              return;
+            }
+            // Otherwise keep polling — might be a transient gap
           }
         }
       } catch { /* ignore */ }
@@ -337,8 +344,8 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        setStreamError('Analysis is taking longer than expected — check History for results');
-        setStreamState('error');
+        setStreamError('Analysis may still be running on the server — check History shortly');
+        setStreamState('reconnecting');
       }
     }, 10000);
   }, []);
