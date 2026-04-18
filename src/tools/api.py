@@ -941,7 +941,10 @@ def get_press_releases(
             ]
         except Exception:
             return []
-    # ── SG routing — no SGX press data yet (API under maintenance) ────────
+    # ── SG routing — SGX announcements handled by Qwen deep research web search
+    # SGX API (api.sgx.com/announcements/v1.1/) requires auth token only
+    # available from the SGX Angular SPA. Press releases for SG tickers are
+    # discovered automatically by Qwen during deep research Phase 3.
     if is_sg_ticker(ticker):
         return []
     cache_key = f"fmp_press_{ticker}_{start_date or 'none'}_{end_date}_{limit}"
