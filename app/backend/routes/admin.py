@@ -36,7 +36,7 @@ async def delete_row(secret: str = "", db: str = "run_archive", table: str = "",
         raise HTTPException(status_code=404, detail=f"Database '{db}' not found")
 
     # Whitelist allowed key columns to prevent SQL injection
-    allowed_keys = ["run_id", "id", "rowid", "ticker", "email", "provider"]
+    allowed_keys = ["run_id", "id", "rowid", "ticker", "email", "provider", "cache_key"]
     if key_col not in allowed_keys:
         raise HTTPException(status_code=400, detail=f"key_col must be one of: {allowed_keys}")
 
@@ -113,6 +113,9 @@ async def admin_dashboard(secret: str = "", db: str = "run_archive", table: str 
 
         # For web_runs, exclude full_result_json (too large)
         display_cols = [c for c in columns if c != "full_result_json"]
+        # Include rowid explicitly for tables that use it as pk_col (not in PRAGMA columns)
+        if pk_col == "rowid" and "rowid" not in display_cols:
+            display_cols = ["rowid"] + display_cols
         col_list = ", ".join(display_cols)
 
         total = conn.execute(f"SELECT COUNT(*) FROM [{table}]").fetchone()[0]
