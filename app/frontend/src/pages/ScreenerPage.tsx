@@ -468,6 +468,23 @@ export function ScreenerPage() {
             </Card>
           )}
 
+          {/* Stats row with refresh timestamp */}
+          {data && (
+            <div className="flex items-center gap-2 text-[10px] text-white/50 px-1">
+              <span>{data.total} stocks</span>
+              <span>·</span>
+              <span>{vgpmCount} VGPM</span>
+              {lastRefreshed && (
+                <span className="text-green-400/70 ml-auto">
+                  prices updated {lastRefreshed.toLocaleTimeString()}
+                </span>
+              )}
+              {!lastRefreshed && data.cached && (
+                <span className="text-amber-400/70 ml-auto">cached</span>
+              )}
+            </div>
+          )}
+
           {/* Column headers — aligned over VGPM in cards */}
           <div className="flex items-center px-3 mb-1">
             <div className="flex-1" />
