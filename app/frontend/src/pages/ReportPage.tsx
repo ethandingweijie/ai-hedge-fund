@@ -368,11 +368,20 @@ export function ReportPage() {
   // ── React to navigation state changes (fresh / resume) ──────────────────────
   // Since navigate to same URL with replace doesn't remount, we watch location.state.
   useEffect(() => {
-    const s = location.state as { fresh?: boolean; resume?: boolean } | null;
+    const s = location.state as { fresh?: boolean; resume?: boolean; switchTicker?: string } | null;
     if (s?.fresh) {
       setLiveMode(false);
       setTicker('');
-      // Clear location state so refresh doesn't re-trigger
+      window.history.replaceState({}, '');
+    } else if (s?.switchTicker) {
+      // User clicked a specific ongoing ticker in History — switch to it
+      const switchTo = s.switchTicker.toUpperCase();
+      setTicker(switchTo);
+      setLiveMode(true);
+      // Reset stream state and start polling for this ticker's progress
+      reset();
+      start(switchTo, model, []);
+      markRunStarted(switchTo);
       window.history.replaceState({}, '');
     } else if (s?.resume && state !== 'idle') {
       setLiveMode(true);

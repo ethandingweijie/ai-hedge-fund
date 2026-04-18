@@ -154,7 +154,7 @@ export function HistoryPage() {
           {effectiveActiveRuns.map(run => (
             <div key={run.ticker}
               className="mb-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/25 transition-colors"
-              onClick={() => navigate('/report')}>
+              onClick={() => navigate('/report', { state: { resume: true, switchTicker: run.ticker } })}>
               <div className="flex items-center gap-2">
                 <svg className="h-3.5 w-3.5 animate-spin text-emerald-400" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
