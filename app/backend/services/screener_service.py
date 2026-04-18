@@ -472,6 +472,36 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
     api_key = _get_fmp_key()
     base = {"apikey": api_key} if api_key else {}
 
+    # ── SG ticker fast-path (bypass FMP resolve + profile) ───────────────────
+    try:
+        from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
+        if is_sg_ticker(query):
+            canonical = _sg_canonical(query)
+            from src.tools.sg.vgpm_metrics import fetch_sg_vgpm_metrics
+            from src.tools.sg.universe import get_sg_stock_info
+            stock_info = get_sg_stock_info(query)
+            metrics = fetch_sg_vgpm_metrics(query)
+            vgpm = _compute_fast_vgpm_universe({canonical: metrics}).get(canonical)
+            composite = None
+            if vgpm:
+                scores = [v["score"] for v in vgpm.values() if isinstance(v, dict) and isinstance(v.get("score"), (int, float))]
+                composite = round(sum(scores) / len(scores)) if scores else None
+            return {
+                "symbol": canonical,
+                "companyName": (stock_info or {}).get("name", canonical),
+                "sector": (stock_info or {}).get("sector", "Unknown"),
+                "industry": (stock_info or {}).get("industry", "Unknown"),
+                "marketCap": metrics.get("market_cap_sgd"),
+                "price": metrics.get("price"),
+                "exchange": "SGX",
+                "country": "SG",
+                "vgpm": vgpm,
+                "vgpm_estimated": True,
+                "composite_score": composite,
+            }
+    except Exception:
+        pass
+
     # ── HK ticker fast-path (bypass FMP resolve + profile) ───────────────────
     try:
         from src.tools.hk.ticker import is_hk_ticker, to_canonical, to_yfinance_code
@@ -2113,4 +2143,90 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
     _set_cached(cache_key, items)
     return {"items": items, "total": len(items), "cached": False}
 
+
+def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
+    """
+    Return the curated SGX universe (~80 stocks) with VGPM scores.
+
+    Universe source: src/tools/sg/universe.py (curated STI 30 + Mid Caps + REITs).
+    Metrics source:  yfinance .info + .financials (primary).
+    VGPM:            Computed within SG peer universe using same percentile-rank engine.
+    Caching:         24h in screener_cache under cache key "sg_universe_v1".
+    """
+    _ensure_tables()
+    cache_key = "sg_universe_v1"
+
+    if not force_refresh:
+        cached = _get_cached(cache_key)
+        if cached is not None:
+            return {"items": cached, "total": len(cached), "cached": True}
+
+    try:
+        from src.tools.sg.universe import get_sg_universe
+        from src.tools.sg.ticker import to_yfinance_code, to_canonical as _sg_canonical
+        from src.tools.sg.vgpm_metrics import fetch_sg_vgpm_metrics
+    except ImportError as exc:
+        _sqlog.error("SGX module import failed: %s", exc)
+        return {"items": [], "total": 0, "cached": False}
+
+    universe = get_sg_universe()
+    _sqlog.info("SGX screener: %d stocks in universe", len(universe))
+
+    import yfinance as yf
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    raw_metrics: dict[str, dict] = {}
+
+    def _fetch_one(stock: dict) -> tuple[str, dict]:
+        code = stock["code"]
+        canonical = _sg_canonical(code)
+        try:
+            metrics = fetch_sg_vgpm_metrics(code)
+            metrics["_sector"] = stock.get("sector", "Unknown")
+            metrics["_industry"] = stock.get("industry", "Unknown")
+            metrics["_name"] = stock.get("name", code)
+            return canonical, metrics
+        except Exception as e:
+            _sqlog.warning("SGX metric fetch failed for %s: %s", code, e)
+            return canonical, {"_sector": stock.get("sector"), "_industry": stock.get("industry"), "_name": stock.get("name")}
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(_fetch_one, s): s["code"] for s in universe}
+        for future in as_completed(futures):
+            canonical, metrics = future.result()
+            raw_metrics[canonical] = metrics
+
+    _sqlog.info("SGX screener: fetched metrics for %d tickers", len(raw_metrics))
+
+    scored = _compute_fast_vgpm_universe(raw_metrics)
+
+    items: list[dict] = []
+    for canonical, metrics in raw_metrics.items():
+        vgpm = scored.get(canonical)
+        composite = None
+        if vgpm:
+            scores = [v["score"] for v in vgpm.values() if isinstance(v, dict) and isinstance(v.get("score"), (int, float))]
+            composite = round(sum(scores) / len(scores)) if scores else None
+
+        items.append({
+            "symbol":          canonical,
+            "companyName":     metrics.get("_name", canonical),
+            "sector":          metrics.get("_sector", "Unknown"),
+            "industry":        metrics.get("_industry", "Unknown"),
+            "marketCap":       metrics.get("market_cap_sgd"),
+            "price":           metrics.get("price"),
+            "change_pct":      None,
+            "volume":          None,
+            "beta":            metrics.get("beta"),
+            "exchange":        "SGX",
+            "country":         "SG",
+            "vgpm":            vgpm,
+            "vgpm_estimated":  True,
+            "composite_score": composite,
+        })
+
+    items.sort(key=lambda x: (x["composite_score"] is None, -(x["composite_score"] or 0)))
+
+    _set_cached(cache_key, items)
+    return {"items": items, "total": len(items), "cached": False}
 

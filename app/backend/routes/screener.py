@@ -59,6 +59,19 @@ async def get_hk_screener_stocks(
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
+@router.get("/sg-stocks")
+async def get_sg_screener_stocks(
+    refresh: bool = Query(False, description="Force fresh yfinance fetch, bypassing 24h cache"),
+):
+    """Return ~80 SGX stocks with VGPM scores computed within the SG peer universe."""
+    try:
+        return await asyncio.to_thread(screener_service.get_sg_screener_stocks, force_refresh=refresh)
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.error("get_sg_screener_stocks failed: %s\n%s", exc, tb)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
 @router.get("/lookup")
 async def lookup_ticker(symbol: str = Query(..., description="Ticker symbol or company name to look up")):
     result = await asyncio.to_thread(screener_service.lookup_ticker, symbol)

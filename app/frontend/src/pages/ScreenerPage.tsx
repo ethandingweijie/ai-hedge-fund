@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getScreenerStocks, lookupScreenerTicker, addToWatchlist, getScreenerPrices, getHkScreenerStocks } from '@/lib/api';
+import { getScreenerStocks, lookupScreenerTicker, addToWatchlist, getScreenerPrices, getHkScreenerStocks, getSgScreenerStocks } from '@/lib/api';
 import type { ScreenerStock, ScreenerResponse } from '@/lib/reportTypes';
 import { ResearchNav } from '@/components/layout/ResearchNav';
 import { getProfile } from '@/lib/tier';
@@ -52,6 +52,19 @@ const HK_SECTORS = [
   'Energy',
 ];
 
+const SG_SECTORS = [
+  'All',
+  'Financials',
+  'REIT',
+  'Industrials',
+  'Tech',
+  'Consumer',
+  'Property',
+  'Telco',
+  'Energy',
+  'Healthcare',
+];
+
 const MARKET_CAP_RANGES: { label: string; min: number; max?: number }[] = [
   { label: '$2B – $12B',    min: 2_000_000_000,   max: 12_000_000_000  },
   { label: '$12B – $50B',   min: 12_000_000_000,  max: 50_000_000_000  },
@@ -72,7 +85,7 @@ const HK_MARKET_CAP_RANGES: { label: string; min: number; max?: number }[] = [
 ];
 const HK_CAP_RANGE_LABELS = [HK_DEFAULT_CAP, ...HK_MARKET_CAP_RANGES.map(r => r.label)];
 
-type Market  = 'US' | 'HK';
+type Market  = 'US' | 'HK' | 'SG';
 type SortKey = 'composite' | 'valuation' | 'growth' | 'profitability' | 'momentum';
 
 const SORT_LABELS: Record<SortKey, string> = {
@@ -251,6 +264,9 @@ export function ScreenerPage() {
       if (market === 'HK') {
         const result = await getHkScreenerStocks(forceRefresh);
         setData(result);
+      } else if (market === 'SG') {
+        const result = await getSgScreenerStocks(forceRefresh);
+        setData(result);
       } else {
         const capDef = MARKET_CAP_RANGES.find(r => r.label === capRange);
         const result = await getScreenerStocks({
@@ -360,11 +376,11 @@ export function ScreenerPage() {
               <div className="flex items-center gap-2">
                 {/* Market tabs */}
                 <div className="flex items-center rounded-lg border border-white/30 p-0.5 bg-white/10 backdrop-blur">
-                  {(['US', 'HK'] as Market[]).map(m => (
+                  {(['US', 'HK', 'SG'] as Market[]).map(m => (
                     <button
                       key={m}
                       type="button"
-                      onClick={() => { setMarket(m); setData(null); setSearch(''); setSector('All'); setExchange('All'); setCapRange(m === 'HK' ? HK_DEFAULT_CAP : 'All'); }}
+                      onClick={() => { setMarket(m); setData(null); setSearch(''); setSector('All'); setExchange('All'); setCapRange(m === 'HK' || m === 'SG' ? HK_DEFAULT_CAP : 'All'); }}
                       className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
                         market === m
                           ? 'bg-white text-green-900 shadow-sm'
@@ -417,7 +433,7 @@ export function ScreenerPage() {
                 <div>
                   <label className="text-[10px] text-muted-foreground block mb-1 uppercase tracking-wider">Sector</label>
                   <select value={sector} onChange={e => setSector(e.target.value)} className="w-full h-9 rounded-md border border-input bg-background px-2 text-sm">
-                    {(market === 'HK' ? HK_SECTORS : SECTORS).map(s => <option key={s} value={s}>{s}</option>)}
+                    {(market === 'HK' ? HK_SECTORS : market === 'SG' ? SG_SECTORS : SECTORS).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 {market === 'US' && (
@@ -494,7 +510,7 @@ export function ScreenerPage() {
                     <div className="flex items-baseline gap-2">
                       <span className="font-bold text-[15px] leading-none w-[72px] shrink-0">{stock.symbol}</span>
                       <span className="text-sm font-semibold tabular-nums shrink-0">
-                        {stock.price != null ? `${market === 'HK' ? 'HK$' : '$'}${(stock.price as number).toFixed(2)}` : '—'}
+                        {stock.price != null ? `${market === 'HK' ? 'HK$' : market === 'SG' ? 'S$' : '$'}${(stock.price as number).toFixed(2)}` : '—'}
                       </span>
                     </div>
                     <div className="flex items-baseline gap-2 mt-1">
@@ -558,11 +574,11 @@ export function ScreenerPage() {
         <div className="flex items-center gap-4 mb-6">
           {/* Market tabs */}
           <div className="flex items-center gap-1 rounded-lg border border-border p-0.5 bg-muted/30">
-            {(['US', 'HK'] as Market[]).map(m => (
+            {(['US', 'HK', 'SG'] as Market[]).map(m => (
               <button
                 key={m}
                 type="button"
-                onClick={() => { setMarket(m); setData(null); setSearch(''); setSector('All'); setExchange('All'); setCapRange(m === 'HK' ? HK_DEFAULT_CAP : 'All'); }}
+                onClick={() => { setMarket(m); setData(null); setSearch(''); setSector('All'); setExchange('All'); setCapRange(m === 'HK' || m === 'SG' ? HK_DEFAULT_CAP : 'All'); }}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${
                   market === m
                     ? 'bg-background text-foreground shadow-sm'
@@ -602,7 +618,7 @@ export function ScreenerPage() {
                 onChange={e => setSector(e.target.value)}
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
-                {(market === 'HK' ? HK_SECTORS : SECTORS).map(s => <option key={s} value={s}>{s}</option>)}
+                {(market === 'HK' ? HK_SECTORS : market === 'SG' ? SG_SECTORS : SECTORS).map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
 
@@ -679,7 +695,7 @@ export function ScreenerPage() {
         {/* Stats row */}
         {data && (
           <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground flex-wrap">
-            <span>{data.total} {market === 'HK' ? 'HKEX' : ''} stocks</span>
+            <span>{data.total} {market === 'HK' ? 'HKEX' : market === 'SG' ? 'SGX' : ''} stocks</span>
             <span>·</span>
             <span>{vgpmCount} with VGPM scores</span>
             <span>·</span>
@@ -772,7 +788,7 @@ export function ScreenerPage() {
                             flash === 'up'   ? 'text-green-500' :
                             flash === 'down' ? 'text-red-500'   : ''
                           }`}>
-                            {stock.price != null ? `${market === 'HK' ? 'HK$' : '$'}${(stock.price as number).toFixed(2)}` : '—'}
+                            {stock.price != null ? `${market === 'HK' ? 'HK$' : market === 'SG' ? 'S$' : '$'}${(stock.price as number).toFixed(2)}` : '—'}
                             {flash === 'up'   && <span className="text-[10px] leading-none">▲</span>}
                             {flash === 'down' && <span className="text-[10px] leading-none">▼</span>}
                           </span>

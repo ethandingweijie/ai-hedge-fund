@@ -26,6 +26,7 @@ import requests
 
 from src.data.cache import get_cache
 from src.tools.hk.ticker import is_hk_ticker, to_canonical
+from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
 from src.data.models import (
     AnalystEstimates,
     CompanyNews,
@@ -321,6 +322,17 @@ def get_prices(
         if result:
             _cache.set_prices(cache_key, [p.model_dump() for p in result])
         return result
+    # ── SG routing ────────────────────────────────────────────────────────
+    if is_sg_ticker(ticker):
+        from src.tools.sg import get_sg_prices
+        canonical = _sg_canonical(ticker)
+        cache_key = f"sg_{canonical}_{start_date}_{end_date}"
+        if cached := _cache.get_prices(cache_key):
+            return [Price(**p) for p in cached]
+        result = get_sg_prices(canonical, start_date, end_date)
+        if result:
+            _cache.set_prices(cache_key, [p.model_dump() if hasattr(p, 'model_dump') else p for p in result])
+        return result if isinstance(result, list) and result and isinstance(result[0], Price) else [Price(**p) for p in (result or [])]
     # ── US / FMP path ─────────────────────────────────────────────────────
     cache_key = f"fmp_{ticker}_{start_date}_{end_date}"
     if cached := _cache.get_prices(cache_key):
@@ -420,6 +432,19 @@ def get_financial_metrics(
         if result:
             _cache.set_financial_metrics(cache_key, [m.model_dump() for m in result])
         return result
+    # ── SG routing ────────────────────────────────────────────────────────
+    if is_sg_ticker(ticker):
+        from src.tools.sg import get_sg_financial_metrics
+        canonical = _sg_canonical(ticker)
+        cache_key = f"sg_metrics_{canonical}"
+        if cached := _cache.get_financial_metrics(cache_key):
+            return [FinancialMetrics(**m) for m in cached]
+        raw = get_sg_financial_metrics(canonical)
+        if raw:
+            fm = FinancialMetrics(**{k: v for k, v in raw.items() if k in FinancialMetrics.model_fields})
+            _cache.set_financial_metrics(cache_key, [fm.model_dump()])
+            return [fm]
+        return []
     # ── US / FMP path ─────────────────────────────────────────────────────
     cache_key = f"fmp_metrics_{ticker}_{period}_{end_date}_{limit}"
     if cached := _cache.get_financial_metrics(cache_key):
@@ -512,6 +537,17 @@ def search_line_items(
         from src.tools.hk import search_hk_line_items
         canonical = to_canonical(ticker)
         return search_hk_line_items(canonical, line_items, end_date, period, limit)
+    # ── SG routing ────────────────────────────────────────────────────────
+    if is_sg_ticker(ticker):
+        from src.tools.sg import search_sg_line_items
+        canonical = _sg_canonical(ticker)
+        raw = search_sg_line_items(canonical, line_items, period, limit)
+        # Convert dicts to LineItem models
+        result = []
+        for row in raw:
+            li_fields = {k: v for k, v in row.items() if k in LineItem.model_fields}
+            result.append(LineItem(**li_fields))
+        return result
     # ── US / FMP path ─────────────────────────────────────────────────────
     fmp_p = _fmp_period(period)
     fetch_limit = max(limit + 2, 10)
@@ -625,6 +661,12 @@ def get_insider_trades(
         if result:
             _cache.set_insider_trades(cache_key, [t.model_dump() for t in result])
         return result
+    # ── SG routing ────────────────────────────────────────────────────────
+    if is_sg_ticker(ticker):
+        from src.tools.sg import get_sg_insider_trades
+        canonical = _sg_canonical(ticker)
+        raw = get_sg_insider_trades(canonical, start_date or "", end_date, limit)
+        return [InsiderTrade(**t) for t in raw] if raw else []
     # ── US / FMP path ─────────────────────────────────────────────────────
     cache_key = f"fmp_insider_{ticker}_{start_date or 'none'}_{end_date}_{limit}"
     if cached := _cache.get_insider_trades(cache_key):
@@ -809,6 +851,12 @@ def get_company_news(
         if result:
             _cache.set_company_news(cache_key, [n.model_dump() for n in result])
         return result
+    # ── SG routing ────────────────────────────────────────────────────────
+    if is_sg_ticker(ticker):
+        from src.tools.sg import get_sg_company_news
+        canonical = _sg_canonical(ticker)
+        raw = get_sg_company_news(canonical, start_date or "", end_date, limit)
+        return [CompanyNews(**n) for n in raw] if raw else []
     # ── US / FMP path ─────────────────────────────────────────────────────
     cache_key = f"fmp_news_{ticker}_{start_date or 'none'}_{end_date}_{limit}"
     if cached := _cache.get_company_news(cache_key):
@@ -873,6 +921,9 @@ def get_press_releases(
     # ── HK routing — FMP has no HK press-release data ─────────────────────
     if is_hk_ticker(ticker):
         return []
+    # ── SG routing — no FMP press data for SGX ────────────────────────────
+    if is_sg_ticker(ticker):
+        return []
     cache_key = f"fmp_press_{ticker}_{start_date or 'none'}_{end_date}_{limit}"
     if cached := _cache.get_company_news(cache_key):
         return [CompanyNews(**n) for n in cached]
@@ -930,6 +981,10 @@ def get_market_cap(
     if is_hk_ticker(ticker):
         from src.tools.hk import get_hk_market_cap
         return get_hk_market_cap(to_canonical(ticker), end_date)
+    # ── SG routing ────────────────────────────────────────────────────────
+    if is_sg_ticker(ticker):
+        from src.tools.sg import get_sg_market_cap
+        return get_sg_market_cap(_sg_canonical(ticker))
     # ── US / FMP path ─────────────────────────────────────────────────────
     today = datetime.datetime.now().strftime("%Y-%m-%d")
 
@@ -985,6 +1040,9 @@ def get_analyst_estimates(
     """
     # ── HK routing — FMP has no HK analyst estimate data ──────────────────
     if is_hk_ticker(ticker):
+        return []
+    # ── SG routing — limited analyst estimates on free tier ────────────────
+    if is_sg_ticker(ticker):
         return []
     cache_key = f"fmp_estimates_{ticker}_{end_date}_{_fmp_period(period)}_{limit}"
     if cached := _cache.get_analyst_estimates(cache_key):
@@ -1489,6 +1547,9 @@ def get_earnings_surprises(
     # ── HK routing — FMP has no HK earnings-surprise data ─────────────────
     if is_hk_ticker(ticker):
         return []
+    # ── SG routing — no free earnings-surprise data for SGX ───────────────
+    if is_sg_ticker(ticker):
+        return []
     cache_key = f"fmp_surprises_{ticker}_{end_date}_{limit}"
     if cache_key in _EDGAR_SURPRISES_CACHE:
         return _EDGAR_SURPRISES_CACHE[cache_key]
@@ -1559,6 +1620,9 @@ def get_short_interest(
     """
     # ── HK routing — FINRA short interest data is US-only ─────────────────
     if is_hk_ticker(ticker):
+        return []
+    # ── SG routing — FINRA short interest is US-only ──────────────────────
+    if is_sg_ticker(ticker):
         return []
     cache_key = f"short_interest_yf_{ticker}"
     if cached := _cache.get_analyst_estimates(cache_key):

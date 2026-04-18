@@ -89,7 +89,7 @@ _SGX_KNOWN_CODES: frozenset[str] = frozenset({
     "T39",   # SPH (Singapore Press Holdings)
     "U09",   # United Overseas Insurance
     "S41",   # Hong Fok Corporation
-    "CY6U",  # CapitaLand Ascendas India Trust (alt code)
+    "CY6U",  # CapitaLand India Trust (alt code)
     "P40U",  # Starhill Global REIT
     "Q5T",   # Far East Hospitality Trust
     "J91U",  # ESR-LOGOS REIT

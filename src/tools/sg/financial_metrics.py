@@ -103,6 +103,86 @@ def get_sg_financial_metrics(ticker: str) -> dict:
         except Exception:
             pass
 
+        # ── REIT-specific metrics ─────────────────────────────────────────
+        # Compute FFO, AFFO, P/FFO, Cap Rate, NAV, P/NAV, payout ratio,
+        # debt-to-equity, interest coverage, LTV for REITs
+        from src.tools.sg.universe import get_sg_stock_info
+        stock_info = get_sg_stock_info(ticker)
+        is_reit = stock_info and stock_info.get("sector") == "REIT"
+
+        if is_reit:
+            try:
+                inc = t.income_stmt if 'inc' not in dir() or inc is None else inc
+                bs = t.balance_sheet if 'bs' not in dir() or bs is None else bs
+                cf = t.cashflow if 'cf' not in dir() or cf is None else cf
+
+                if inc is not None and not inc.empty:
+                    col = inc.columns[0]
+                    ni = _parse_float(inc.loc["Net Income", col] if "Net Income" in inc.index else None)
+                    dep = _parse_float(inc.loc["Reconciled Depreciation", col] if "Reconciled Depreciation" in inc.index else None)
+
+                    # FFO = Net Income + Depreciation
+                    if ni is not None and dep is not None:
+                        ffo = ni + dep
+                        result["ffo"] = ffo
+                        # P/FFO (like P/E for REITs)
+                        shares = _parse_float(info.get("sharesOutstanding"))
+                        price = result["price"]
+                        if ffo > 0 and shares and shares > 0 and price:
+                            result["price_to_ffo"] = price / (ffo / shares)
+
+                if cf is not None and not cf.empty:
+                    col = cf.columns[0]
+                    ocf = _parse_float(cf.loc["Operating Cash Flow", col] if "Operating Cash Flow" in cf.index else None)
+                    capex = _parse_float(cf.loc["Capital Expenditure", col] if "Capital Expenditure" in cf.index else None)
+
+                    # AFFO = Operating CF - Maintenance CapEx
+                    if ocf is not None:
+                        affo = ocf + (capex or 0)  # capex is negative
+                        result["affo"] = affo
+
+                # NOI = Operating Income (proxy for REITs)
+                result["noi"] = _parse_float(info.get("ebitda"))
+
+                # NAV and P/NAV
+                bv = _parse_float(info.get("bookValue"))
+                if bv and bv > 0 and result["price"]:
+                    result["price_to_nav"] = result["price"] / bv
+                result["nav_per_unit"] = bv
+
+                # Payout ratio
+                result["payout_ratio"] = _parse_float(info.get("payoutRatio"))
+
+                # Debt metrics
+                result["debt_to_equity"] = _parse_float(info.get("debtToEquity"))
+                total_debt = _parse_float(info.get("totalDebt"))
+                ebitda = _parse_float(info.get("ebitda"))
+                if total_debt and ebitda and ebitda > 0:
+                    result["net_debt_to_ebitda"] = total_debt / ebitda
+
+                # Interest coverage
+                if ebitda:
+                    int_exp = None
+                    if inc is not None and not inc.empty:
+                        int_exp = _parse_float(inc.loc["Interest Expense", inc.columns[0]] if "Interest Expense" in inc.index else None)
+                    if int_exp and abs(int_exp) > 0:
+                        result["interest_coverage"] = ebitda / abs(int_exp)
+
+                # LTV = Total Debt / Enterprise Value (proxy for property value)
+                ev = _parse_float(info.get("enterpriseValue"))
+                if total_debt and ev and ev > 0:
+                    result["ltv"] = total_debt / ev
+
+                # Cap rate = NOI / Enterprise Value
+                if ebitda and ev and ev > 0:
+                    result["cap_rate"] = ebitda / ev
+
+                # Current ratio
+                result["current_ratio"] = _parse_float(info.get("currentRatio"))
+
+            except Exception:
+                pass
+
     except Exception as e:
         print(f"  [sg/financial_metrics] Error fetching {yf_code}: {e}")
 

@@ -97,8 +97,11 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     # Normalise HK tickers to canonical "NNNNN.HK" form so the routing cache
     # and web_runs DB always see a consistent key regardless of input format.
     from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canonical
+    from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
     if is_hk_ticker(ticker):
         ticker = _hk_canonical(ticker)
+    elif is_sg_ticker(ticker):
+        ticker = _sg_canonical(ticker)
     model_name = body.get("model", "claude-sonnet-4-6")
     # Use agents list only when explicitly provided and non-empty.
     # `body.get("agents") or None` would coerce [] → None (all 12 agents),

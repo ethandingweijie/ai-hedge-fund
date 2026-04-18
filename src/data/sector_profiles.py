@@ -2820,3 +2820,144 @@ def get_wacc_profile_for_ticker(ticker: str) -> tuple[str, str]:
     if entry:
         return entry[0], entry[1]
     return ("Tech", "")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Singapore (SGX) Sector Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Singapore is AAA-rated, country risk premium ~0.5% (50bps)
+_SG_CRP = 0.005
+
+SG_SECTOR_WACC: dict[str, float] = {
+    "Financials":    SECTOR_WACC.get("Financials", 0.06)    + _SG_CRP,  # 6.5%
+    "REIT":          0.055,                                              # 5.5% — regulated, high distribution
+    "Tech":          SECTOR_WACC.get("Tech", 0.095)         + _SG_CRP,  # 10.0%
+    "Industrials":   SECTOR_WACC.get("Industrials", 0.08)   + _SG_CRP,  # 8.5%
+    "Property":      0.070,                                              # 7.0%
+    "Telco":         SECTOR_WACC.get("Telco", 0.055)        + _SG_CRP,  # 6.0%
+    "Consumer":      SECTOR_WACC.get("Consumer", 0.075)     + _SG_CRP,  # 8.0%
+    "Energy":        SECTOR_WACC.get("Energy", 0.065)       + _SG_CRP,  # 7.0%
+    "Healthcare":    SECTOR_WACC.get("Biopharma", 0.085)    + _SG_CRP,  # 9.0%
+}
+
+
+# ── REIT-specific VGPM scoring weights ───────────────────────────────────────
+# REITs need yield-based and cash-flow-based valuation rather than P/E.
+# These weights are used when the ticker's sector is "REIT" in the SGX universe.
+REIT_VGPM_WEIGHTS = {
+    "valuation": {
+        # P/FFO replaces P/E; distribution yield and P/NAV are primary
+        "div_yield":   0.30,    # distribution yield — the #1 REIT metric
+        "pb":          0.25,    # P/NAV proxy (P/Book ≈ P/NAV for REITs)
+        "fcf_yield":   0.25,    # AFFO yield proxy
+        "ev_ebitda":   0.20,    # EV/EBITDA as cap rate proxy
+    },
+    "growth": {
+        # DPU growth, revenue growth, NAV growth
+        "rev_growth":    0.30,  # same-store NOI proxy (revenue growth)
+        "rev_cagr_3y":   0.25,  # long-term organic growth
+        "eps_growth":    0.25,  # DPU growth proxy (EPS ≈ DPU for REITs)
+        "net_inc_growth": 0.20, # NPI growth
+    },
+    "profitability": {
+        # Operating margins, FCF conversion (AFFO/FFO), interest coverage
+        "net_margin":      0.25,  # NPI margin
+        "roe":             0.20,  # return on equity
+        "fcf_conversion":  0.25,  # AFFO/FFO quality
+        "piotroski":       0.15,  # financial health
+        "asset_turnover":  0.15,  # capital efficiency
+    },
+    "momentum": {
+        "price_1y":          0.30,
+        "rec_score":         0.25,
+        "earnings_revision": 0.25,
+        "price_3m":          0.20,
+    },
+}
+
+
+# ── SGX TICKER_SECTOR_LOOKUP ─────────────────────────────────────────────────
+# Format: "CODE.SI": (sector, profile_hint, industry, company_name)
+# Imported by screener_service and analysis routes for sector classification.
+SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
+    # Banks
+    "D05.SI":  ("Financials", "Banks",       "Banks",                  "DBS Group"),
+    "O39.SI":  ("Financials", "Banks",       "Banks",                  "OCBC Bank"),
+    "U11.SI":  ("Financials", "Banks",       "Banks",                  "UOB"),
+    "S68.SI":  ("Financials", "Exchange",    "Capital Markets",        "Singapore Exchange"),
+    "9CI.SI":  ("Financials", "AssetMgmt",   "Asset Management",       "CapitaLand Investment"),
+    "U09.SI":  ("Financials", "Insurance",   "Insurance",              "United Overseas Insurance"),
+    # Telco
+    "Z74.SI":  ("Telco",      "",            "Telecom Services",       "SingTel"),
+    "CC3.SI":  ("Telco",      "",            "Telecom Services",       "StarHub"),
+    # Industrials
+    "C6L.SI":  ("Industrials", "Airline",    "Air Transport",          "Singapore Airlines"),
+    "BN4.SI":  ("Industrials", "Conglomerate","Conglomerates",         "Keppel Corporation"),
+    "BS6.SI":  ("Industrials", "Shipbuilding","Shipbuilding",          "Yangzijiang Shipbuilding"),
+    "U96.SI":  ("Industrials", "Utilities",  "Utilities & Energy",     "Sembcorp Industries"),
+    "S63.SI":  ("Industrials", "Defence",    "Aerospace & Defence",    "ST Engineering"),
+    "S58.SI":  ("Industrials", "Airport",    "Airport Services",       "SATS"),
+    "C52.SI":  ("Industrials", "Transport",  "Transportation",         "ComfortDelGro"),
+    "J36.SI":  ("Industrials", "Conglomerate","Conglomerates",         "Jardine Matheson"),
+    "J37.SI":  ("Industrials", "Conglomerate","Conglomerates",         "Jardine C&C"),
+    "S51.SI":  ("Industrials", "Marine",     "Marine & Offshore",      "Seatrium"),
+    "MR7.SI":  ("Industrials", "Marine",     "Marine Services",        "Marco Polo Marine"),
+    "S56.SI":  ("Industrials", "Logistics",  "Postal & Logistics",     "Singpost"),
+    "ACV.SI":  ("Industrials", "Services",   "Vehicle Inspection",     "Vicom"),
+    # Consumer
+    "F34.SI":  ("Consumer",    "Food",       "Food Products",          "Wilmar International"),
+    "Y92.SI":  ("Consumer",    "Beverages",  "Beverages",              "Thai Beverage"),
+    "G13.SI":  ("Consumer",    "Gaming",     "Casinos & Gaming",       "Genting Singapore"),
+    "E5H.SI":  ("Consumer",    "Agri",       "Agricultural Products",  "Golden Agri-Resources"),
+    "AGS.SI":  ("Consumer",    "Retail",     "Grocery Retail",         "Sheng Siong Group"),
+    "EB5.SI":  ("Consumer",    "Agri",       "Palm Oil",               "First Resources"),
+    "P8Z.SI":  ("Consumer",    "Agri",       "Palm Oil",               "Bumitama Agri"),
+    "T14.SI":  ("Consumer",    "Food",       "Food & Agribusiness",    "Olam Group"),
+    # Tech
+    "V03.SI":  ("Tech",        "Electronics","Electronics Manufacturing","Venture Corporation"),
+    "AWX.SI":  ("Tech",        "SemiEquip",  "Semiconductor Equipment","AEM Holdings"),
+    "5DD.SI":  ("Tech",        "SemiEquip",  "Semiconductor Equipment","Micro-Mechanics"),
+    "BHK.SI":  ("Tech",        "SemiEquip",  "Semiconductor Equipment","UMS Holdings"),
+    "MZH.SI":  ("Tech",        "Materials",  "Advanced Materials",     "Nanofilm Technologies"),
+    "5CP.SI":  ("Tech",        "Software",   "Banking Software",       "Silverlake Axis"),
+    # Property
+    "C09.SI":  ("Property",    "Developer",  "Real Estate Development","City Developments"),
+    "H78.SI":  ("Property",    "Developer",  "Real Estate Development","Hongkong Land"),
+    "U14.SI":  ("Property",    "Developer",  "Real Estate Development","UOL Group"),
+    "OYY.SI":  ("Property",    "Services",   "Real Estate Services",   "PropNex"),
+    "W05.SI":  ("Property",    "Developer",  "Real Estate Development","Wing Tai Holdings"),
+    "40T.SI":  ("Property",    "Dormitory",  "Workers Dormitory",      "Centurion Corporation"),
+    # Energy
+    "RE4.SI":  ("Energy",      "Coal",       "Coal Mining",            "Geo Energy Resources"),
+    # Healthcare
+    "CLN.SI":  ("Healthcare",  "MedDevices", "Medical Gloves",         "Riverstone Holdings"),
+    "A50.SI":  ("Healthcare",  "Services",   "Healthcare Services",    "Thomson Medical Group"),
+    # REITs
+    "A17U.SI": ("REIT",        "Industrial", "Industrial REIT",        "CapitaLand Ascendas REIT"),
+    "C38U.SI": ("REIT",        "Retail",     "Retail REIT",            "CapitaLand Integrated Commercial Trust"),
+    "N2IU.SI": ("REIT",        "Commercial", "Commercial REIT",        "Mapletree Pan Asia Commercial Trust"),
+    "ME8U.SI": ("REIT",        "Industrial", "Industrial REIT",        "Mapletree Industrial Trust"),
+    "M44U.SI": ("REIT",        "Logistics",  "Logistics REIT",         "Mapletree Logistics Trust"),
+    "BUOU.SI": ("REIT",        "Logistics",  "Logistics REIT",         "Frasers Logistics & Commercial Trust"),
+    "J69U.SI": ("REIT",        "Retail",     "Retail REIT",            "Frasers Centrepoint Trust"),
+    "T82U.SI": ("REIT",        "Commercial", "Commercial REIT",        "Suntec REIT"),
+    "K71U.SI": ("REIT",        "Office",     "Office REIT",            "Keppel REIT"),
+    "AJBU.SI": ("REIT",        "DataCentre", "Data Centre REIT",       "Keppel DC REIT"),
+    "A7RU.SI": ("REIT",        "Infra",      "Infrastructure Trust",   "Keppel Infrastructure Trust"),
+    "AU8U.SI": ("REIT",        "China",      "China REIT",             "CapitaLand China Trust"),
+    "HMN.SI":  ("REIT",        "Hospitality","Hospitality REIT",       "CapitaLand Ascott Trust"),
+    "SK6U.SI": ("REIT",        "Healthcare", "Healthcare REIT",        "Parkway Life REIT"),
+    "CWBU.SI": ("REIT",        "Infra",      "Infrastructure Trust",   "NetLink NBN Trust"),
+    "J91U.SI": ("REIT",        "Industrial", "Industrial REIT",        "ESR-LOGOS REIT"),
+    "OXMU.SI": ("REIT",        "India",      "India REIT",             "CapitaLand India Trust"),
+    "CMOU.SI": ("REIT",        "Hospitality","Hospitality REIT",       "CDL Hospitality Trusts"),
+    "P40U.SI": ("REIT",        "Retail",     "Retail REIT",            "Starhill Global REIT"),
+    "Q5T.SI":  ("REIT",        "Hospitality","Hospitality REIT",       "Far East Hospitality Trust"),
+    "TS0U.SI": ("REIT",        "Commercial", "Commercial REIT",        "OUE Commercial REIT"),
+    "D8DU.SI": ("REIT",        "DataCentre", "Data Centre REIT",       "Digital Core REIT"),
+    "RW0U.SI": ("REIT",        "European",   "European REIT",          "Cromwell European REIT"),
+    "CRPU.SI": ("REIT",        "Outlet",     "Outlet Mall REIT",       "Sasseur REIT"),
+    "JYEU.SI": ("REIT",        "Commercial", "Commercial REIT",        "Lendlease Global Commercial REIT"),
+    "BTOU.SI": ("REIT",        "USOffice",   "US Office REIT",         "Manulife US REIT"),
+}

@@ -212,6 +212,10 @@ export function getHkScreenerStocks(refresh = false): Promise<ScreenerResponse> 
   return fetchJson<ScreenerResponse>(`${BASE}/screener/hk-stocks${refresh ? '?refresh=true' : ''}`);
 }
 
+export function getSgScreenerStocks(refresh = false): Promise<ScreenerResponse> {
+  return fetchJson<ScreenerResponse>(`${BASE}/screener/sg-stocks${refresh ? '?refresh=true' : ''}`);
+}
+
 /** Lightweight live quote fetch — price, marketCap, volume, beta, change_pct. No VGPM recompute. */
 export function getScreenerPrices(
   symbols: string[],

@@ -49,7 +49,7 @@ SGX_UNIVERSE: list[dict] = [
     {"code": "T82U", "name": "Suntec REIT",                     "sector": "REIT",         "industry": "Commercial REIT"},
     {"code": "K71U", "name": "Keppel REIT",                     "sector": "REIT",         "industry": "Office REIT"},
     {"code": "AJBU", "name": "Keppel DC REIT",                  "sector": "REIT",         "industry": "Data Centre REIT"},
-    {"code": "A7RU", "name": "Keppel DC REIT",                  "sector": "REIT",         "industry": "Data Centre REIT"},
+    {"code": "A7RU", "name": "Keppel Infrastructure Trust",      "sector": "REIT",         "industry": "Infrastructure Trust"},
     {"code": "AU8U", "name": "CapitaLand China Trust",          "sector": "REIT",         "industry": "China REIT"},
     {"code": "HMN",  "name": "CapitaLand Ascott Trust",         "sector": "REIT",         "industry": "Hospitality REIT"},
     {"code": "SK6U", "name": "Parkway Life REIT",               "sector": "REIT",         "industry": "Healthcare REIT"},

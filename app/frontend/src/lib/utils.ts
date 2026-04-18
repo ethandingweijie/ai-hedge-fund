@@ -19,12 +19,18 @@ export function formatKeyboardShortcut(key: string): string {
 /**
  * Return the currency symbol for a ticker.
  * HK tickers are purely numeric (1–5 digits) with an optional .HK suffix.
+ * SG tickers end with .SI suffix.
  * All others default to USD ($).
  */
 export function currencySymbol(ticker: string): string {
   if (!ticker) return '$';
-  const clean = ticker.trim().toUpperCase().replace(/\.HK$/, '');
-  return /^\d{1,5}$/.test(clean) ? 'HK$' : '$';
+  const upper = ticker.trim().toUpperCase();
+  // SG: ends with .SI
+  if (upper.endsWith('.SI')) return 'S$';
+  // HK: purely numeric
+  const cleanHK = upper.replace(/\.HK$/, '');
+  if (/^\d{1,5}$/.test(cleanHK)) return 'HK$';
+  return '$';
 }
 
 // Provider color utility for consistent styling across components
