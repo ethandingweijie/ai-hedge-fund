@@ -315,23 +315,30 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
             setStreamEvents((prev) => [...prev, liveEvent]);
             setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
           } else if (!status.in_progress) {
-            // Pipeline reports not running — but could be a brief gap between phases.
-            // Require 3 consecutive "not running" polls (30s) before declaring crash.
-            consecutiveNotRunning++;
-            // First check: did it actually complete?
+            // Pipeline reports not running — but could be a brief gap between
+            // phases, or iOS may have throttled our requests while screen was off.
+            // Check if it completed successfully first.
             const completed = await checkCompleted(ticker);
             if (completed) {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
               return;
             }
-            // Only declare crash after 3 consecutive not-running signals
-            if (consecutiveNotRunning >= 3) {
+            // Not completed — increment counter but keep polling.
+            // Only declare crash after 6 consecutive "not running" polls (60s)
+            // to handle iOS background throttling and transient gaps.
+            consecutiveNotRunning++;
+            if (consecutiveNotRunning >= 6) {
+              // Final safety check before giving up
+              const lastCheck = await checkCompleted(ticker);
+              if (lastCheck) {
+                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                return;
+              }
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              setStreamError('Analysis ended without saving results — please retry');
-              setStreamState('error');
+              setStreamError('Analysis may have ended — check History for results');
+              setStreamState('reconnecting'); // stay amber, not red error
               return;
             }
-            // Otherwise keep polling — might be a transient gap
           }
         }
       } catch { /* ignore */ }
@@ -364,7 +371,24 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         const completed = await checkCompleted(ticker);
         if (completed) return;
 
-        // Run still in progress — start polling (safe, doesn't trigger new runs)
+        // Check live status — pipeline may still be running on the server
+        // even though iOS killed our SSE / suspended our timers.
+        try {
+          const statusRes = await fetch(
+            `${API_BASE_URL}/analysis/status/${encodeURIComponent(ticker)}`
+          );
+          if (statusRes.ok) {
+            const status = await statusRes.json();
+            if (status.in_progress) {
+              // Pipeline confirmed alive — restart fresh polling (resets crash counter)
+              startPolling(ticker);
+              return;
+            }
+          }
+        } catch { /* ignore */ }
+
+        // Status says not running and not completed — start polling anyway
+        // (gives it more time to confirm before declaring anything)
         startPolling(ticker);
       };
       checkAndResume();
