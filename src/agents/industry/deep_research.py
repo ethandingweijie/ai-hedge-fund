@@ -1904,6 +1904,7 @@ def _research_one_ticker(
             extra_body={
                 "enable_search": True,
                 "search_options": {"search_strategy": "agent"},
+                "enable_thinking": True,
             },
             stream=True,
         )
