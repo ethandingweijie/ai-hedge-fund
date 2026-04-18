@@ -658,16 +658,71 @@ export function ReportPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // ── Phase milestone notifications ──────────────────────────────────────────
+  const notifiedMilestones = useRef<Set<string>>(new Set());
+
+  const sendNotification = useCallback((title: string, body: string) => {
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.ico' });
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Track phase milestones and notify at key points
+  useEffect(() => {
+    if (!liveMode || !isRunning) return;
+    const phases = Object.entries(phaseMap);
+    const sent = notifiedMilestones.current;
+
+    // Milestone: deep research started
+    const drStarted = phases.some(([k]) => k === 'deep_research' || k === 'deep_research_agent');
+    if (drStarted && !sent.has('dr_start')) {
+      sent.add('dr_start');
+      sendNotification(`${liveTicker} Deep Research`, 'Searching the web and analysing data...');
+    }
+
+    // Milestone: deep research complete
+    const drDone = phases.some(([k, v]) =>
+      (k === 'deep_research_agent' || k === 'deep_research') && v.status.toLowerCase().match(/done|complete/)
+    );
+    if (drDone && !sent.has('dr_done')) {
+      sent.add('dr_done');
+      sendNotification(`${liveTicker} Research Complete`, 'Deep research finished. Consulting investor agents...');
+    }
+
+    // Milestone: investor agents started
+    const investorStarted = phases.some(([k]) => k.startsWith('investor_'));
+    if (investorStarted && !sent.has('investors')) {
+      sent.add('investors');
+      sendNotification(`${liveTicker} Investor Analysis`, '12 investor agents are analysing the stock...');
+    }
+
+    // Milestone: risk assessment
+    const riskDone = phases.some(([k, v]) => k === 'advanced_risk_manager' && v.status.toLowerCase().match(/done|complete/));
+    if (riskDone && !sent.has('risk')) {
+      sent.add('risk');
+      sendNotification(`${liveTicker} Almost Done`, 'Risk assessment complete. Generating final decision...');
+    }
+  }, [phaseMap, liveMode, isRunning, liveTicker, sendNotification]);
+
+  // Clear milestones when starting a new run
+  useEffect(() => {
+    if (state === 'idle') {
+      notifiedMilestones.current.clear();
+    }
+  }, [state]);
+
+  // ── Completion notification ───────────────────────────────────────────────
   useEffect(() => {
     if (!isComplete || !liveMode) return;
 
-    // Browser notification (desktop Chrome/Firefox — not iOS Safari)
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-      new Notification(`${liveTicker} Analysis Complete`, {
-        body: 'Your investment analysis is ready to view.',
-        icon: '/favicon.ico',
-      });
-    }
+    // Final notification with decision
+    const decision = liveResult?.data?.decisions?.[liveTicker]?.action;
+    sendNotification(
+      `${liveTicker} Analysis Complete`,
+      decision ? `Decision: ${decision}. Tap to view full report.` : 'Your investment analysis is ready to view.'
+    );
 
     // Vibration (mobile — works on Android Chrome + some iOS scenarios)
     try {
