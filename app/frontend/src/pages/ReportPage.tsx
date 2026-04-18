@@ -443,6 +443,7 @@ export function ReportPage() {
     if (!t) return;
     const agentsToSend = activeAgents.length === ALL_AGENTS.length ? undefined : activeAgents;
     runStartedAt.current = new Date().toISOString();
+    requestNotificationPermission();  // iOS requires user gesture for permission prompt
     start(t, model, agentsToSend);  // resetStream() is called inside startStream; clears liveResult too
     markRunStarted(t);
     setLiveMode(true);
@@ -646,12 +647,16 @@ export function ReportPage() {
     if (isError)     { document.title = `✗ ${liveTicker} Analysis Failed`; return; }
   }, [liveMode, isRunning, isComplete, isError, liveTicker]);
 
-  useEffect(() => {
-    if (!liveMode || !isRunning) return;
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, [liveMode, isRunning]);
+  // Request notification permission on user gesture (not in useEffect — iOS
+  // Safari blocks permission requests that aren't triggered by user action).
+  // This is called when the user clicks "Run Analysis".
+  const requestNotificationPermission = useCallback(() => {
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   useEffect(() => {
     if (!isComplete || !liveMode) return;
