@@ -82,7 +82,10 @@ export function MobileTopBar() {
           >
             {/* Drawer header */}
             <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-              <span className="text-sm font-bold tracking-wide text-foreground">Equitable</span>
+              <div className="flex items-center gap-2">
+                <img src="/icon-192x192.png" alt="Equitable" className="w-7 h-7 rounded-full" />
+                <span className="text-sm font-bold tracking-wide text-foreground">Equitable</span>
+              </div>
               <button onClick={() => setMenuOpen(false)} className="p-1 rounded-md hover:bg-muted">
                 <X size={18} className="text-muted-foreground" />
               </button>
