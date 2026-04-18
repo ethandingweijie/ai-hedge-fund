@@ -357,10 +357,22 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
                 if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
                 return;
               }
-              // Still not found — but DON'T give up. Keep polling with longer
-              // interval. The run may still be completing (e.g. large result save).
-              // Reset counter so we get another 6 attempts.
-              consecutiveNotRunning = 0;
+              // Still not found after 60s of "not running" — pipeline finished
+              // but result may have been deleted or never saved.
+              // Give one more round (reset to 3 so 3 more polls = 30s), then stop.
+              if (consecutiveNotRunning >= 12) {
+                // 2 minutes of "not running" + no result = pipeline is truly done
+                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                // Clear the stuck active run so UI can show search form
+                setActiveRuns(prev => {
+                  const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+                  next.length > 0 ? sessionStorage.setItem('activeRuns', JSON.stringify(next)) : sessionStorage.removeItem('activeRuns');
+                  return next;
+                });
+                setStreamState('idle');
+                setStreamError(null);
+                return;
+              }
             }
           }
         }
