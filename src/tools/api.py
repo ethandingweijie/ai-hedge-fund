@@ -441,9 +441,42 @@ def get_financial_metrics(
             return [FinancialMetrics(**m) for m in cached]
         raw = get_sg_financial_metrics(canonical)
         if raw:
-            fm = FinancialMetrics(**{k: v for k, v in raw.items() if k in FinancialMetrics.model_fields})
-            _cache.set_financial_metrics(cache_key, [fm.model_dump()])
-            return [fm]
+            # SG returns short keys — map to FinancialMetrics pydantic field names
+            _SG_KEY_MAP = {
+                "pe": "price_to_earnings_ratio",
+                "pb": "price_to_book_ratio",
+                "ev_ebitda": "enterprise_value_to_ebitda_ratio",
+                "ev_sales": "enterprise_value_to_revenue_ratio",
+                "peg": "peg_ratio",
+                "fcf_yield": "free_cash_flow_yield",
+                "roe": "return_on_equity",
+                "roa": "return_on_assets",
+                "roic": "return_on_invested_capital",
+                "eps": "earnings_per_share",
+                "div_yield": "dividend_yield",
+            }
+            # Start with all model fields set to None, then overlay what we have
+            mapped: dict = {f: None for f in FinancialMetrics.model_fields}
+            mapped.update({
+                "ticker": canonical,
+                "report_period": end_date or "",
+                "period": period,
+                "currency": raw.get("currency", "SGD"),
+            })
+            # Map short keys → long model field names
+            for short_k, long_k in _SG_KEY_MAP.items():
+                if short_k in raw and long_k in FinancialMetrics.model_fields:
+                    mapped[long_k] = raw[short_k]
+            # Pass through keys that already match model field names (market_cap, net_margin, gross_margin, etc.)
+            for k, v in raw.items():
+                if k in FinancialMetrics.model_fields and k not in ("ticker", "report_period", "period", "currency"):
+                    mapped[k] = v
+            try:
+                fm = FinancialMetrics(**mapped)
+                _cache.set_financial_metrics(cache_key, [fm.model_dump()])
+                return [fm]
+            except Exception as e:
+                logger.warning(f"SG FinancialMetrics validation failed for {canonical}: {e}")
         return []
     # ── US / FMP path ─────────────────────────────────────────────────────
     cache_key = f"fmp_metrics_{ticker}_{period}_{end_date}_{limit}"
@@ -542,11 +575,23 @@ def search_line_items(
         from src.tools.sg import search_sg_line_items
         canonical = _sg_canonical(ticker)
         raw = search_sg_line_items(canonical, line_items, period, limit)
-        # Convert dicts to LineItem models
+        # Convert dicts to LineItem models — inject required base fields
         result = []
         for row in raw:
-            li_fields = {k: v for k, v in row.items() if k in LineItem.model_fields}
-            result.append(LineItem(**li_fields))
+            li_data = {
+                "ticker": canonical,
+                "report_period": row.get("date", ""),
+                "period": period,
+                "currency": "SGD",
+            }
+            # Add all requested line item values (extra="allow" on LineItem)
+            for k, v in row.items():
+                if k not in ("date", "period_label"):
+                    li_data[k] = v
+            try:
+                result.append(LineItem(**li_data))
+            except Exception:
+                pass
         return result
     # ── US / FMP path ─────────────────────────────────────────────────────
     fmp_p = _fmp_period(period)
