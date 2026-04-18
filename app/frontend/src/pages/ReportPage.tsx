@@ -313,7 +313,7 @@ export function ReportPage() {
     streamTotalPhases,
     streamRunId: runId,
     streamError: error,
-    liveResult,
+    liveResult, setLiveResult,
     startStream: start,
     resetStream: reset,
     startPolling: poll,
