@@ -302,7 +302,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         if (statusRes.ok) {
           const status = await statusRes.json();
           if (status.in_progress && status.phase) {
-            // Update phaseMap with the live phase from the backend
+            // Pipeline still running — update phaseMap with live phase
             setStreamState('running');
             const liveEvent: ProgressEvent = {
               phase: status.phase,
@@ -312,11 +312,30 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
             };
             setStreamEvents((prev) => [...prev, liveEvent]);
             setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
+          } else if (!status.in_progress) {
+            // Pipeline no longer running — check if it completed or crashed
+            const completed = await checkCompleted(ticker);
+            if (completed) {
+              // Result found — stop polling, show completion
+              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+              return;
+            }
+            // No result found + not in progress = pipeline crashed
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            setStreamError('Analysis ended without saving results — please retry');
+            setStreamState('error');
+            return;
           }
         }
       } catch { /* ignore */ }
 
       if (attempts >= maxAttempts) {
+        // Before giving up, do one final completion check
+        const lastCheck = await checkCompleted(ticker);
+        if (lastCheck) {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          return;
+        }
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         setStreamError('Analysis is taking longer than expected — check History for results');
         setStreamState('error');
