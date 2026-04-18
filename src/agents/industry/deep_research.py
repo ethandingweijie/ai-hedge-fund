@@ -1909,30 +1909,34 @@ def _research_one_ticker(
             stream=True,
         )
 
+        import time as _time
         text = ""
         reasoning = ""
         is_answering = False
         _chunk_count = 0
+        _last_update = _time.time()
 
         for _chunk in _stream:
             _delta = getattr(_chunk.choices[0] if _chunk.choices else None, "delta", None)
             if not _delta:
                 continue
 
+            now = _time.time()
+
             # ── Thinking phase (reasoning_content) ───────────────────────
             rc = getattr(_delta, "reasoning_content", None)
             if rc:
                 reasoning += rc
                 _chunk_count += 1
-                # Stream thinking to frontend every ~20 chunks
-                if _chunk_count % 20 == 0:
-                    # Show last 150 chars of thinking as status
+                # Stream thinking every 20 chunks OR every 15 seconds (SSE keepalive)
+                if _chunk_count % 20 == 0 or (now - _last_update) > 15:
                     _snippet = reasoning[-150:].replace("\n", " ").strip()
                     progress.update_status(
                         agent_id, ticker,
                         f"Thinking: {_snippet}",
                         partial_data={"deep_research_thinking": reasoning[-300:]}
                     )
+                    _last_update = now
 
             # ── Response phase (content) ─────────────────────────────────
             c = getattr(_delta, "content", None)
@@ -1941,16 +1945,26 @@ def _research_one_ticker(
                     is_answering = True
                     progress.update_status(
                         agent_id, ticker,
-                        f"Writing research report ({len(reasoning)} chars of reasoning complete)..."
+                        f"Writing research report ({len(reasoning):,} chars of reasoning complete)..."
                     )
+                    _last_update = now
                 text += c
                 _chunk_count += 1
-                # Stream writing progress every ~50 chunks
-                if _chunk_count % 50 == 0:
+                # Stream writing progress every 50 chunks OR every 15 seconds
+                if _chunk_count % 50 == 0 or (now - _last_update) > 15:
                     progress.update_status(
                         agent_id, ticker,
                         f"Writing report ({len(text):,} chars so far)..."
                     )
+                    _last_update = now
+
+            # ── SSE keepalive: if no update in 30s, send heartbeat ───────
+            if (now - _last_update) > 30:
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Deep research in progress ({len(reasoning):,} thinking + {len(text):,} content chars)..."
+                )
+                _last_update = now
 
         text = text.strip()
 
