@@ -454,6 +454,7 @@ def get_financial_metrics(
                 "roic": "return_on_invested_capital",
                 "eps": "earnings_per_share",
                 "div_yield": "dividend_yield",
+                "price_to_sales": "price_to_sales_ratio",
             }
             # Start with all model fields set to None, then overlay what we have
             mapped: dict = {f: None for f in FinancialMetrics.model_fields}

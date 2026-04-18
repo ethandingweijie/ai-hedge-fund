@@ -54,6 +54,13 @@ def get_sg_financial_metrics(ticker: str) -> dict:
         result["eps"] = _parse_float(info.get("trailingEps"))
         result["price"] = _parse_float(info.get("currentPrice") or info.get("regularMarketPrice"))
 
+        # Additional .info fields available for banks and other sectors
+        result["operating_margin"] = _parse_float(info.get("operatingMargins"))
+        result["payout_ratio"] = _parse_float(info.get("payoutRatio"))
+        result["debt_to_equity"] = _parse_float(info.get("debtToEquity"))
+        result["current_ratio"] = _parse_float(info.get("currentRatio"))
+        result["enterprise_value"] = _parse_float(info.get("enterpriseValue"))
+
         # FCF yield: freeCashflow / marketCap
         fcf = _parse_float(info.get("freeCashflow"))
         mcap = result["market_cap"]
@@ -70,13 +77,12 @@ def get_sg_financial_metrics(ticker: str) -> dict:
         if rec:
             result["rec_score"] = max(0, (5 - rec) / 4)
 
-        # ROIC: compute from statements if not in .info
-        # ROIC = NOPAT / Invested Capital
-        # NOPAT = Operating Income × (1 - tax rate)
-        # Invested Capital = Total Equity + Long Term Debt - Cash
+        # ── Compute derived metrics from financial statements ─────────────
         try:
             inc = t.income_stmt
             bs = t.balance_sheet
+            cf = t.cashflow
+
             if inc is not None and bs is not None and not inc.empty and not bs.empty:
                 latest_inc = inc.iloc[:, 0]
                 latest_bs = bs.iloc[:, 0]
@@ -87,7 +93,13 @@ def get_sg_financial_metrics(ticker: str) -> dict:
                 equity = _parse_float(latest_bs.get("Stockholders Equity") or latest_bs.get("Total Equity Gross Minority Interest"))
                 ltd = _parse_float(latest_bs.get("Long Term Debt"))
                 cash = _parse_float(latest_bs.get("Cash And Cash Equivalents"))
+                total_assets = _parse_float(latest_bs.get("Total Assets"))
+                total_debt = _parse_float(latest_bs.get("Total Debt"))
+                rev = _parse_float(latest_inc.get("Total Revenue"))
+                ni = _parse_float(latest_inc.get("Net Income"))
+                shares = _parse_float(info.get("sharesOutstanding"))
 
+                # ROIC = NOPAT / Invested Capital
                 if op_inc and pretax and tax_prov is not None:
                     tax_rate = tax_prov / pretax if pretax != 0 else 0.17
                     nopat = op_inc * (1 - tax_rate)
@@ -96,10 +108,129 @@ def get_sg_financial_metrics(ticker: str) -> dict:
                         result["roic"] = nopat / ic
 
                 # Asset turnover
-                total_assets = _parse_float(latest_bs.get("Total Assets"))
-                rev = _parse_float(latest_inc.get("Total Revenue"))
                 if rev and total_assets and total_assets > 0:
                     result["asset_turnover"] = rev / total_assets
+
+                # Enterprise value
+                ev = _parse_float(info.get("enterpriseValue"))
+                result["enterprise_value"] = ev
+
+                # Operating margin
+                if op_inc is not None and rev and rev > 0:
+                    result["operating_margin"] = op_inc / rev
+
+                # Price-to-sales
+                if result["market_cap"] and rev and rev > 0:
+                    result["price_to_sales"] = result["market_cap"] / rev
+
+                # Debt metrics
+                if total_debt is not None and total_assets and total_assets > 0:
+                    result["debt_to_assets"] = total_debt / total_assets
+                # Debt-to-equity: compute from balance sheet if not from .info
+                if not result.get("debt_to_equity") and total_debt and equity and equity > 0:
+                    result["debt_to_equity"] = (total_debt / equity) * 100  # yfinance returns as percentage
+
+                # FCF yield: compute if not already set
+                if not result.get("fcf_yield"):
+                    fcf_for_yield = _parse_float(info.get("freeCashflow"))
+                    if fcf_for_yield and result["market_cap"] and result["market_cap"] > 0:
+                        result["fcf_yield"] = fcf_for_yield / result["market_cap"]
+
+                # ROIC for banks: use ROE as proxy (bank ROIC ~ ROE)
+                if not result.get("roic") and result.get("roe"):
+                    result["roic"] = result["roe"]
+
+                # Book value per share
+                if equity and shares and shares > 0:
+                    result["book_value_per_share"] = equity / shares
+
+                # Free cash flow per share (fallback to operatingCashflow for banks)
+                fcf_val = _parse_float(info.get("freeCashflow")) or _parse_float(info.get("operatingCashflow"))
+                if fcf_val is not None and shares and shares > 0:
+                    result["free_cash_flow_per_share"] = fcf_val / shares
+
+                # Interest coverage from statements (for banks: Net Interest Income / Operating Expense)
+                if not result.get("interest_coverage"):
+                    int_exp = _parse_float(latest_inc.get("Interest Expense"))
+                    if op_inc and int_exp and abs(int_exp) > 0:
+                        result["interest_coverage"] = op_inc / abs(int_exp)
+                    elif rev and rev > 0:
+                        # Banks: use Net Interest Income / Operating Expense as proxy
+                        nii = _parse_float(latest_inc.get("Net Interest Income"))
+                        opex = _parse_float(latest_inc.get("Operating Expense"))
+                        if nii and opex and opex > 0:
+                            result["interest_coverage"] = nii / opex
+
+                # Quick ratio & cash ratio from balance sheet
+                current_assets = _parse_float(latest_bs.get("Current Assets"))
+                current_liab = _parse_float(latest_bs.get("Current Liabilities"))
+                inventory = _parse_float(latest_bs.get("Inventory"))
+                if current_assets and current_liab and current_liab > 0:
+                    if inventory:
+                        result["quick_ratio"] = (current_assets - inventory) / current_liab
+                    if cash:
+                        result["cash_ratio"] = cash / current_liab
+
+                # Operating cash flow ratio
+                if cf is not None and not cf.empty:
+                    latest_cf = cf.iloc[:, 0]
+                    ocf = _parse_float(latest_cf.get("Operating Cash Flow"))
+                    if ocf and current_liab and current_liab > 0:
+                        result["operating_cash_flow_ratio"] = ocf / current_liab
+
+                # ── Growth metrics (YoY from 2 years of statements) ──────
+                if inc.shape[1] >= 2:
+                    prev_inc = inc.iloc[:, 1]
+                    prev_rev = _parse_float(prev_inc.get("Total Revenue"))
+                    prev_ni = _parse_float(prev_inc.get("Net Income"))
+                    prev_op = _parse_float(prev_inc.get("Operating Income") or prev_inc.get("EBIT"))
+                    prev_ebitda = _parse_float(prev_inc.get("EBITDA"))
+                    prev_eps_val = _parse_float(prev_inc.get("Basic EPS") or prev_inc.get("Diluted EPS"))
+                    cur_ebitda = _parse_float(latest_inc.get("EBITDA"))
+                    cur_eps_val = _parse_float(latest_inc.get("Basic EPS") or latest_inc.get("Diluted EPS"))
+
+                    if rev and prev_rev and prev_rev != 0:
+                        result["revenue_growth"] = (rev - prev_rev) / abs(prev_rev)
+                    if ni and prev_ni and prev_ni != 0:
+                        result["earnings_growth"] = (ni - prev_ni) / abs(prev_ni)
+                    if op_inc and prev_op and prev_op != 0:
+                        result["operating_income_growth"] = (op_inc - prev_op) / abs(prev_op)
+                    if cur_ebitda and prev_ebitda and prev_ebitda != 0:
+                        result["ebitda_growth"] = (cur_ebitda - prev_ebitda) / abs(prev_ebitda)
+                    # EPS growth — try statement EPS first, fallback to NI/shares
+                    if cur_eps_val and prev_eps_val and prev_eps_val != 0:
+                        result["earnings_per_share_growth"] = (cur_eps_val - prev_eps_val) / abs(prev_eps_val)
+                    elif ni and prev_ni and shares and shares > 0:
+                        cur_eps_c = ni / shares
+                        prev_eps_c = prev_ni / shares  # approximate
+                        if prev_eps_c != 0:
+                            result["earnings_per_share_growth"] = (cur_eps_c - prev_eps_c) / abs(prev_eps_c)
+
+                    # For banks: operating_income_growth from Operating Expense if no Operating Income
+                    if not result.get("operating_income_growth"):
+                        cur_opex = _parse_float(latest_inc.get("Operating Expense"))
+                        prev_opex = _parse_float(prev_inc.get("Operating Expense"))
+                        if cur_opex and prev_opex and prev_opex != 0 and rev and prev_rev:
+                            # Cost-to-income improvement as proxy
+                            cur_oi = rev - cur_opex
+                            prev_oi = prev_rev - prev_opex
+                            if prev_oi != 0:
+                                result["operating_income_growth"] = (cur_oi - prev_oi) / abs(prev_oi)
+
+                if bs.shape[1] >= 2:
+                    prev_bs = bs.iloc[:, 1]
+                    prev_equity = _parse_float(prev_bs.get("Stockholders Equity") or prev_bs.get("Total Equity Gross Minority Interest"))
+                    if equity and prev_equity and prev_equity != 0:
+                        result["book_value_growth"] = (equity - prev_equity) / abs(prev_equity)
+
+                if cf is not None and not cf.empty and cf.shape[1] >= 2:
+                    latest_cf = cf.iloc[:, 0]
+                    prev_cf = cf.iloc[:, 1]
+                    cur_fcf = _parse_float(latest_cf.get("Free Cash Flow"))
+                    prev_fcf = _parse_float(prev_cf.get("Free Cash Flow"))
+                    if cur_fcf and prev_fcf and prev_fcf != 0:
+                        result["free_cash_flow_growth"] = (cur_fcf - prev_fcf) / abs(prev_fcf)
+
         except Exception:
             pass
 
