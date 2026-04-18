@@ -2198,7 +2198,17 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
 
     _sqlog.info("SGX screener: fetched metrics for %d tickers", len(raw_metrics))
 
-    scored = _compute_fast_vgpm_universe(raw_metrics)
+    # Convert dict[str, dict] → list[dict] with ticker/sector/industry keys
+    # as expected by _compute_fast_vgpm_universe
+    metrics_list: list[dict] = []
+    for canonical, m in raw_metrics.items():
+        entry = dict(m)
+        entry["ticker"] = canonical
+        entry["sector"] = m.get("_sector", "Unknown")
+        entry["industry"] = m.get("_industry", "Unknown")
+        metrics_list.append(entry)
+
+    scored = _compute_fast_vgpm_universe(metrics_list)
 
     items: list[dict] = []
     for canonical, metrics in raw_metrics.items():
