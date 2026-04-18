@@ -804,8 +804,8 @@ export function ReportPage() {
         {/* Progress bar at top while running — sits below hamburger/profile row */}
         {isRunning && (
           <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
-            {/* Spacer for hamburger/profile buttons */}
-            <div className="h-12" />
+            {/* Spacer for hamburger + iOS safe area */}
+            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 48px)' }} />
             {/* Quip + percentage on same row */}
             <div className="flex items-center gap-2 px-4">
               <div className="flex-1 min-w-0">
