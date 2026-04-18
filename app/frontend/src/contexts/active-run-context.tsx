@@ -210,7 +210,6 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
   // ── Check if a run already completed (prevents re-triggering pipeline) ─────
   const checkCompleted = useCallback(async (ticker: string): Promise<boolean> => {
     const current = activeRunRef.current;
-    if (!current) return false;
     try {
       const res = await fetch(
         `${API_BASE_URL}/analysis/runs?page=1&page_size=1&ticker=${encodeURIComponent(ticker)}`,
@@ -222,7 +221,11 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       if (runs.length > 0) {
         const latest = runs[0];
         const runTime = new Date(latest.run_at).getTime();
-        const startTime = new Date(current.startedAt).getTime();
+        // If we have a startedAt reference, check timing. Otherwise accept any
+        // recent run (within 45 min) — handles case where activeRun was cleaned up.
+        const startTime = current
+          ? new Date(current.startedAt).getTime()
+          : Date.now() - 45 * 60 * 1000;
         if (runTime >= startTime - 60000 && latest.final_action) {
           // Run completed — mark as done
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
@@ -333,29 +336,31 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
             }
           } else if (!status.in_progress) {
-            // Pipeline reports not running — but could be a brief gap between
-            // phases, or iOS may have throttled our requests while screen was off.
+            // Pipeline reports not running — could be:
+            //   a) Just completed — DB write may lag a few seconds
+            //   b) Brief gap between phases
+            //   c) Actual crash
             // Check if it completed successfully first.
             const completed = await checkCompleted(ticker);
             if (completed) {
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
               return;
             }
-            // Not completed — increment counter but keep polling.
-            // Only declare crash after 6 consecutive "not running" polls (60s)
-            // to handle iOS background throttling and transient gaps.
+            // Not found yet — increment counter but keep polling.
+            // DB write can lag a few seconds after pipeline finishes.
             consecutiveNotRunning++;
             if (consecutiveNotRunning >= 6) {
-              // Final safety check before giving up
+              // Wait 3s for DB write to land, then final check
+              await new Promise(r => setTimeout(r, 3000));
               const lastCheck = await checkCompleted(ticker);
               if (lastCheck) {
                 if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
                 return;
               }
-              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              setStreamError('Analysis may have ended — check History for results');
-              setStreamState('reconnecting'); // stay amber, not red error
-              return;
+              // Still not found — but DON'T give up. Keep polling with longer
+              // interval. The run may still be completing (e.g. large result save).
+              // Reset counter so we get another 6 attempts.
+              consecutiveNotRunning = 0;
             }
           }
         }
