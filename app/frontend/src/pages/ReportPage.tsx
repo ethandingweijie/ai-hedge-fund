@@ -608,18 +608,31 @@ export function ReportPage() {
   // (macro_regime, strategic_router, dcf_engine, etc.) count here too.
   // phaseDone  = all phases whose latest status is "Done"
   // totalPhases = backend-provided count: investor agents + 18 fixed terminal phases
-  const _phaseValues = Object.values(phaseMap);
-  const phaseDone    = _phaseValues.filter(e => e.status.toLowerCase() === 'done').length;
-  const phaseSeen    = _phaseValues.length;
-  const totalPhases  = streamTotalPhases; // from backend start event
+  // Group individual investor agents as ONE logical phase for progress calculation.
+  // Without grouping, 12 investor agents + 18 fixed phases = 34 total, making
+  // progress feel very slow (investor phase = 25% instead of ~60%).
+  // With grouping: ~12 logical phases, matching the 10-phase pipeline.
+  const _phaseEntries = Object.entries(phaseMap);
+  const _investorPhases = _phaseEntries.filter(([k]) => k.startsWith('investor_'));
+  const _nonInvestorPhases = _phaseEntries.filter(([k]) => !k.startsWith('investor_'));
+  const _investorAllDone = _investorPhases.length > 0 && _investorPhases.every(([, e]) => e.status.toLowerCase() === 'done');
+  const _nonInvestorDone = _nonInvestorPhases.filter(([, e]) => e.status.toLowerCase() === 'done').length;
+
+  // Count investors as 1 grouped phase (done only if ALL investor agents done)
+  const phaseDone = _nonInvestorDone + (_investorAllDone ? 1 : 0);
+  const phaseSeen = _nonInvestorPhases.length + (_investorPhases.length > 0 ? 1 : 0);
+  // Use grouped total: non-investor unique phases + 1 for investors (if any seen)
+  const totalPhases = Math.max(
+    _nonInvestorPhases.length + (_investorPhases.length > 0 ? 1 : 0),
+    12  // minimum 12 logical phases
+  );
+
   // Non-linear front-loaded curve: progress = 1 - (1 - ratio)^1.5
-  // This makes early phases feel faster and late phases (citation, portfolio)
-  // show 85–95% rather than 56–70%, better reflecting actual completion.
   const progressPct  =
     phaseSeen === 0
-      ? (isRunning ? 1 : 0)       // reconnecting: show 1% floor instead of 0%
+      ? (isRunning ? 1 : 0)
       : phaseDone === 0
-        ? Math.min(5, phaseSeen)   // small floor while phases are starting
+        ? Math.min(5, phaseSeen)
         : Math.min(99, Math.round((1 - Math.pow(1 - phaseDone / totalPhases, 1.5)) * 100));
   // Keep doneCount alias so any other references still compile
   const doneCount = phaseDone;
@@ -767,8 +780,8 @@ export function ReportPage() {
               )
             }
             isComplete={
-              (phaseMap['deep_research_agent']?.status?.includes('✓') ?? false) ||
-              (phaseMap['deep_research']?.status?.includes('✓') ?? false)
+              !!(phaseMap['deep_research_agent']?.status?.toLowerCase().match(/done|✓|complete/)) ||
+              !!(phaseMap['deep_research']?.status?.toLowerCase().match(/done|✓|complete/))
             }
           />
         )}
