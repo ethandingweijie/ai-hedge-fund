@@ -712,7 +712,19 @@ def get_insider_trades(
         from src.tools.sg import get_sg_insider_trades
         canonical = _sg_canonical(ticker)
         raw = get_sg_insider_trades(canonical, start_date or "", end_date, limit)
-        return [InsiderTrade(**t) for t in raw] if raw else []
+        if not raw:
+            return []
+        # Fill missing InsiderTrade fields with None defaults
+        result = []
+        for t in raw:
+            trade = {f: None for f in InsiderTrade.model_fields}
+            trade.update(t)
+            trade.setdefault("filing_date", t.get("transaction_date", ""))
+            try:
+                result.append(InsiderTrade(**trade))
+            except Exception:
+                pass
+        return result
     # ── US / FMP path ─────────────────────────────────────────────────────
     cache_key = f"fmp_insider_{ticker}_{start_date or 'none'}_{end_date}_{limit}"
     if cached := _cache.get_insider_trades(cache_key):
@@ -902,7 +914,17 @@ def get_company_news(
         from src.tools.sg import get_sg_company_news
         canonical = _sg_canonical(ticker)
         raw = get_sg_company_news(canonical, start_date or "", end_date, limit)
-        return [CompanyNews(**n) for n in raw] if raw else []
+        if not raw:
+            return []
+        result = []
+        for n in raw:
+            entry = {f: None for f in CompanyNews.model_fields}
+            entry.update(n)
+            try:
+                result.append(CompanyNews(**entry))
+            except Exception:
+                pass
+        return result
     # ── US / FMP path ─────────────────────────────────────────────────────
     cache_key = f"fmp_news_{ticker}_{start_date or 'none'}_{end_date}_{limit}"
     if cached := _cache.get_company_news(cache_key):
