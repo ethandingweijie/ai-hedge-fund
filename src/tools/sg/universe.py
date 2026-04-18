@@ -54,7 +54,7 @@ SGX_UNIVERSE: list[dict] = [
     {"code": "HMN",  "name": "CapitaLand Ascott Trust",         "sector": "REIT",         "industry": "Hospitality REIT"},
     {"code": "SK6U", "name": "Parkway Life REIT",               "sector": "REIT",         "industry": "Healthcare REIT"},
     {"code": "CWBU", "name": "NetLink NBN Trust",               "sector": "REIT",         "industry": "Infrastructure Trust"},
-    {"code": "J91U", "name": "ESR-LOGOS REIT",                  "sector": "REIT",         "industry": "Industrial REIT"},
+    # J91U (ESR-LOGOS REIT) removed — delisted/merged from SGX
     {"code": "OXMU", "name": "CapitaLand India Trust",          "sector": "REIT",         "industry": "India REIT"},
     {"code": "CMOU", "name": "CDL Hospitality Trusts",          "sector": "REIT",         "industry": "Hospitality REIT"},
     {"code": "P40U", "name": "Starhill Global REIT",            "sector": "REIT",         "industry": "Retail REIT"},
