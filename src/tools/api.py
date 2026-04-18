@@ -918,10 +918,30 @@ def get_press_releases(
     NOTE: Requires FMP Starter plan ($22/mo). Returns empty on free tier.
     Official company-authored releases carry higher signal weight in sentiment scoring.
     """
-    # ── HK routing — FMP has no HK press-release data ─────────────────────
+    # ── HK routing — use HKEXnews announcements as press releases ──────────
     if is_hk_ticker(ticker):
-        return []
-    # ── SG routing — no FMP press data for SGX ────────────────────────────
+        try:
+            from src.tools.hkex_news_api import search_hkex_announcements
+            canonical = to_canonical(ticker)
+            raw = search_hkex_announcements(
+                canonical.replace(".HK", ""),
+                max_results=limit,
+            )
+            return [
+                CompanyNews(
+                    ticker=canonical,
+                    title=r.get("title", "")[:200],
+                    author="",
+                    source="HKEXnews",
+                    date=r.get("date", "")[:10].replace("/", "-"),
+                    url=r.get("url", ""),
+                    sentiment=None,
+                )
+                for r in raw
+            ]
+        except Exception:
+            return []
+    # ── SG routing — no SGX press data yet (API under maintenance) ────────
     if is_sg_ticker(ticker):
         return []
     cache_key = f"fmp_press_{ticker}_{start_date or 'none'}_{end_date}_{limit}"
