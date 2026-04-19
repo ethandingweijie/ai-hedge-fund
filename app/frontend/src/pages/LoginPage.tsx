@@ -67,11 +67,23 @@ export function LoginPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const appleScriptRef = useRef(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
 
   // Already logged in → redirect
   useEffect(() => {
     if (user) navigate(from, { replace: true });
   }, [user, navigate, from]);
+
+  // Hero video — slow-motion playback (light mode only; dark mode hides via CSS)
+  useEffect(() => {
+    const v = heroVideoRef.current;
+    if (!v) return;
+    v.playbackRate = 0.5; // slow motion
+    // iOS / mobile sometimes blocks autoplay until a user gesture despite `muted` —
+    // retry attempt silently if rejected; CSS fallback covers the still frame.
+    const tryPlay = () => v.play().catch(() => { /* blocked — fallback is a static frame */ });
+    if (v.readyState >= 2) tryPlay(); else v.addEventListener('loadeddata', tryPlay, { once: true });
+  }, []);
 
   // Apple Sign In SDK
   useEffect(() => {
@@ -163,11 +175,51 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-white dark:bg-zinc-900">
-      <div className="relative flex-1 flex flex-col justify-center px-7 pt-12 max-w-sm mx-auto w-full">
-        {/* Radial gradient accent */}
+    <div className="min-h-screen w-full flex flex-col bg-white dark:bg-zinc-900 relative overflow-hidden">
+      {/* ── Hero video background (light mode only) ───────────────────────────
+         Slow-motion looped footage recoloured to Equitable green hue.
+         Hidden in dark mode via `dark:hidden`. Muted + playsInline so it
+         autoplays on mobile without sound. playbackRate set in useEffect. */}
+      <div className="absolute inset-0 z-0 pointer-events-none dark:hidden">
+        <video
+          ref={heroVideoRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            // Shift hues toward green, soften saturation so the tint reads as
+            // a brand wash rather than the original footage colour.
+            filter: 'hue-rotate(80deg) saturate(0.9) brightness(1.05) contrast(0.95)',
+            opacity: 0.55,
+          }}
+          src="/landing-hero.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-hidden="true"
+        />
+        {/* Equitable green colour wash on top of the video for brand consistency */}
         <div
-          className="absolute inset-0 opacity-60 pointer-events-none"
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(46,125,50,0.22) 0%, rgba(255,255,255,0.55) 55%, rgba(255,255,255,0.92) 100%)',
+          }}
+        />
+        {/* Soft vignette so content remains legible over moving footage */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(255,255,255,0.6) 100%)',
+          }}
+        />
+      </div>
+
+      <div className="relative z-10 flex-1 flex flex-col justify-center px-7 pt-12 max-w-sm mx-auto w-full">
+        {/* Radial gradient accent (stronger in dark mode where the video is hidden) */}
+        <div
+          className="absolute inset-0 opacity-60 pointer-events-none hidden dark:block"
           style={{
             background:
               'radial-gradient(80% 50% at 50% 0%, rgba(46,125,50,0.08), transparent 60%),' +
@@ -248,7 +300,7 @@ export function LoginPage() {
       </div>
 
       {/* Footer */}
-      <div className="h-10 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-center text-[11px] text-zinc-400 dark:text-zinc-500">
+      <div className="relative z-10 h-10 border-t border-zinc-100 dark:border-zinc-800 bg-white/70 dark:bg-transparent backdrop-blur-sm flex items-center justify-center text-[11px] text-zinc-400 dark:text-zinc-500">
         <span className="inline-flex items-center gap-1.5">
           <Check width={12} height={12} /> Secure · Private · v1.6
         </span>
