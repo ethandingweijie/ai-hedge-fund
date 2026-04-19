@@ -27,9 +27,7 @@ import type {
 import { getStockData, getCompanyName } from '@/lib/api';
 
 // Existing panel components (reused as-is)
-import { ScenarioChart } from '@/components/report/ScenarioChart';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
-import { ValuationLadder } from '@/components/report/ValuationLadder';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
 import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
@@ -566,8 +564,8 @@ function ValuationBody({
         <LoadingCard label="Scenario Probabilities" minH={140} />
       )}
 
-      {/* ── Scenario analysis (existing ScenarioChart component) ────── */}
-      {scenarioAnalysis ? (
+      {/* ── Scenario analysis (v2 native bar chart) ─────────────────── */}
+      {(bullIV != null || baseIV != null || bearIV != null) ? (
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
           <div className="flex items-start justify-between mb-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
@@ -584,15 +582,15 @@ function ValuationBody({
               Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside; bear-case downside is {Math.abs(bearDelta).toFixed(0)}%.
             </p>
           )}
-          <ScenarioChart scenario={scenarioAnalysis} ticker={ticker} />
+          <V2ScenarioBars bear={bearIV} base={baseIV} bull={bullIV} ev={evValue} current={current ?? undefined} />
         </div>
       ) : (
         <LoadingCard label="Scenario Analysis" minH={220} />
       )}
 
-      {/* ── DCF Valuation Ladder ────────────────────────────────────── */}
+      {/* ── DCF Valuation Ladder (v2 native) ────────────────────────── */}
       {dcfRange ? (
-        <ValuationLadder dcfRange={dcfRange} currentPrice={current ?? undefined} ticker={ticker} />
+        <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} />
       ) : (
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       )}
@@ -635,6 +633,163 @@ function MetricBox({
           {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
         </div>
       )}
+    </div>
+  );
+}
+
+/* ───────── V2 Scenario Bars (Bear/Base/Bull/EV) ───────── */
+function V2ScenarioBars({
+  bear, base, bull, ev, current,
+}: {
+  bear?: number | null;
+  base?: number | null;
+  bull?: number | null;
+  ev?: number | null;
+  current?: number;
+}) {
+  const bars = [
+    { label: 'Bear', value: bear,  fill: '#f43f5e' },
+    { label: 'Base', value: base,  fill: '#3b82f6' },
+    { label: 'Bull', value: bull,  fill: '#2e7d32' },
+    { label: 'EV',   value: ev,    fill: '#a855f7' },
+  ].filter(b => typeof b.value === 'number' && b.value > 0) as { label: string; value: number; fill: string }[];
+
+  if (bars.length === 0) return null;
+
+  const values = bars.map(b => b.value).concat(current ? [current] : []);
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  // Pad 10% above/below
+  const yMin = Math.max(0, rawMin * 0.85);
+  const yMax = rawMax * 1.1;
+
+  const w = 340, h = 200;
+  const padT = 14, padB = 28, padL = 42, padR = 12;
+  const chartW = w - padL - padR;
+  const chartH = h - padT - padB;
+  const yFor = (v: number) => padT + chartH * (1 - (v - yMin) / Math.max(0.001, yMax - yMin));
+  const barW = Math.min(38, (chartW / bars.length) * 0.6);
+  const step = chartW / bars.length;
+
+  // 5 Y ticks
+  const ticks: number[] = [];
+  for (let i = 0; i <= 4; i++) ticks.push(yMin + (yMax - yMin) * (i / 4));
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
+      {/* Grid */}
+      <g className="text-zinc-200 dark:text-zinc-800">
+        {ticks.map(t => (
+          <line key={t} x1={padL} y1={yFor(t)} x2={w - padR} y2={yFor(t)}
+                stroke="currentColor" strokeWidth={0.5} strokeDasharray="2,3" />
+        ))}
+      </g>
+      <g className="fill-zinc-400 dark:fill-zinc-500">
+        {ticks.map(t => (
+          <text key={t} x={padL - 4} y={yFor(t) + 3} textAnchor="end" fontSize={9}>${Math.round(t)}</text>
+        ))}
+      </g>
+
+      {/* Current line */}
+      {current && current >= yMin && current <= yMax && (
+        <g>
+          <line x1={padL} y1={yFor(current)} x2={w - padR} y2={yFor(current)}
+                className="text-zinc-400 dark:text-zinc-500" stroke="currentColor" strokeWidth={1} strokeDasharray="4,4"/>
+          <text x={w - padR - 2} y={yFor(current) - 3} textAnchor="end" fontSize={9}
+                className="fill-zinc-500 dark:fill-zinc-400">Current ${current.toFixed(2)}</text>
+        </g>
+      )}
+
+      {/* Bars */}
+      {bars.map((b, i) => {
+        const cx = padL + step * (i + 0.5);
+        const x = cx - barW / 2;
+        const y = yFor(b.value);
+        const bh = yFor(yMin) - y;
+        return (
+          <g key={b.label}>
+            <rect x={x} y={y} width={barW} height={Math.max(2, bh)} rx={2.5} fill={b.fill} />
+            <text x={cx} y={y - 4} textAnchor="middle" fontSize={9}
+                  className="fill-zinc-700 dark:fill-zinc-200" fontWeight={600}>
+              ${Math.round(b.value)}
+            </text>
+            <text x={cx} y={h - padB + 14} textAnchor="middle" fontSize={10}
+                  className="fill-zinc-500 dark:fill-zinc-400">{b.label}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ───────── V2 DCF Valuation Ladder ───────── */
+function V2ValuationLadder({
+  dcfRange, current, wacc,
+}: {
+  dcfRange: DcfRange;
+  current?: number;
+  wacc?: number | null;
+}) {
+  const bullIV = dcfRange.bull?.intrinsic_value;
+  const baseIV = dcfRange.base?.intrinsic_value;
+  const bearIV = dcfRange.bear?.intrinsic_value;
+  const bullG  = dcfRange.bull?.growth_rate;
+  const baseG  = dcfRange.base?.growth_rate;
+  const bearG  = dcfRange.bear?.growth_rate;
+
+  const maxIV = Math.max(current ?? 0, bullIV ?? 0, baseIV ?? 0, bearIV ?? 0, 1);
+  const pct = (iv?: number) => {
+    if (iv == null || current == null || current <= 0) return null;
+    return ((iv - current) / current) * 100;
+  };
+
+  const rows = [
+    { name: 'Current',   value: current,  color: 'bg-zinc-400 dark:bg-zinc-500', delta: null as number | null, growth: null as number | null | undefined },
+    { name: 'Bull case', value: bullIV,   color: 'bg-[#2e7d32] dark:bg-[#4ea354]', delta: pct(bullIV), growth: bullG },
+    { name: 'Base case', value: baseIV,   color: 'bg-blue-500 dark:bg-blue-400',   delta: pct(baseIV), growth: baseG },
+    { name: 'Bear case', value: bearIV,   color: 'bg-rose-500 dark:bg-rose-400',   delta: pct(bearIV), growth: bearG },
+  ];
+
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+          DCF Valuation Ladder
+        </span>
+        {wacc != null && (
+          <span className="text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">
+            WACC: {(wacc * 100).toFixed(1)}%
+          </span>
+        )}
+      </div>
+      <div className="space-y-2.5">
+        {rows.map(r => r.value != null && (
+          <div key={r.name} className="flex items-center gap-3">
+            <span className="text-[11.5px] text-zinc-500 dark:text-zinc-400 w-[62px] shrink-0">{r.name}</span>
+            <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${r.color}`}
+                style={{ width: `${Math.max(4, Math.min(100, (r.value / maxIV) * 100))}%` }}
+              />
+            </div>
+            <div className="flex items-baseline gap-1.5 min-w-[100px] justify-end">
+              <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">
+                ${r.value.toFixed(2)}
+              </span>
+              {r.delta != null && (
+                <span className={`text-[11px] font-medium tabular-nums ${r.delta >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+                  {r.delta >= 0 ? '+' : ''}{r.delta.toFixed(1)}%
+                </span>
+              )}
+            </div>
+            {r.growth != null && (
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums w-[38px] text-right">
+                @ {(r.growth * 100).toFixed(0)}% g
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -834,12 +989,15 @@ function RiskBody({
     { label: 'Data / IP moat',   score: powerLaw.data_ip_moat,       note: powerLaw.data_ip_moat_note, concern: powerLaw.data_ip_moat_concern },
   ] : [];
 
+  // Backend emits `status` on each check; type says `rating`. Read both.
+  const checkRating = (c: any): string | undefined => c?.rating || c?.status;
+  const checkEv     = (c: any): string | undefined => c?.evidence || c?.detail;
   const trapChecks = valueTrap ? [
-    { k: 'Dividend sustainability', rating: valueTrap.dividend_sustainability?.rating, ev: valueTrap.dividend_sustainability?.evidence ?? valueTrap.dividend_sustainability?.detail },
-    { k: 'Structural decline',      rating: valueTrap.structural_decline?.rating,      ev: valueTrap.structural_decline?.evidence ?? valueTrap.structural_decline?.detail },
-    { k: 'Earnings / cash mismatch',rating: valueTrap.earnings_cash_mismatch?.rating,  ev: valueTrap.earnings_cash_mismatch?.evidence ?? valueTrap.earnings_cash_mismatch?.detail },
-    { k: 'Insider behaviour',       rating: valueTrap.insider_behaviour?.rating,       ev: valueTrap.insider_behaviour?.evidence ?? valueTrap.insider_behaviour?.detail },
-    { k: 'Balance sheet',           rating: valueTrap.balance_sheet?.rating,           ev: valueTrap.balance_sheet?.evidence ?? valueTrap.balance_sheet?.detail },
+    { k: 'Dividend sustainability', rating: checkRating(valueTrap.dividend_sustainability), ev: checkEv(valueTrap.dividend_sustainability) },
+    { k: 'Structural decline',      rating: checkRating(valueTrap.structural_decline),      ev: checkEv(valueTrap.structural_decline) },
+    { k: 'Earnings / cash mismatch',rating: checkRating(valueTrap.earnings_cash_mismatch),  ev: checkEv(valueTrap.earnings_cash_mismatch) },
+    { k: 'Insider behaviour',       rating: checkRating(valueTrap.insider_behaviour),       ev: checkEv(valueTrap.insider_behaviour) },
+    { k: 'Balance sheet',           rating: checkRating(valueTrap.balance_sheet),           ev: checkEv(valueTrap.balance_sheet) },
   ] : [];
   const trapVerdict = valueTrap?.verdict || valueTrap?.overall_verdict || '';
 
@@ -1164,7 +1322,7 @@ function ResearchBody({
   );
 }
 
-/* ───────── Financials Tab — Income Statement + Revenue Build + Key Stats ─── */
+/* ───────── Financials Tab — Revenue Build + Income Statement + Key Stats ─── */
 function FinancialsBody({
   ticker, stockMetrics,
 }: {
@@ -1173,13 +1331,24 @@ function FinancialsBody({
 }) {
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
-      {/* Income Statement — existing FinancialsChart component handles the
-          Total Revenue / Operating Income / Net Income bar chart with
-          Annual/Quarterly toggle and YoY deltas. */}
-      <FinancialsChart ticker={ticker} />
+      {/* Revenue Build — placeholder UI until backend emits segment data.
+          Matches the NVDA reference card structure (4 segment tiles). */}
+      <V2RevenueBuildPlaceholder />
 
-      {/* Revenue Build — if the backend provides segment data we could render
-          it here. Until then, skip this card to avoid a stub. */}
+      {/* Income Statement — wrap FinancialsChart in zinc-900 dark card shell
+          matching Key Stats / Valuation cards. The inner FinancialsChart
+          has its own surface; the `v2-dark-card` wrapper overrides it. */}
+      <div className="v2-dark-card rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+        <style>{`
+          .v2-dark-card > * {
+            background: transparent !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
+        `}</style>
+        <FinancialsChart ticker={ticker} />
+      </div>
 
       {/* Financial Metric / Key Stats card — same as Summary tab */}
       {stockMetrics ? (
@@ -1187,6 +1356,46 @@ function FinancialsBody({
       ) : (
         <LoadingCard label="Financial Metrics" minH={200} />
       )}
+    </div>
+  );
+}
+
+function V2RevenueBuildPlaceholder() {
+  // Static placeholder until backend emits segment breakdown
+  const segments = [
+    { name: 'Segment A', value: '—', delta: null },
+    { name: 'Segment B', value: '—', delta: null },
+    { name: 'Segment C', value: '—', delta: null },
+    { name: 'Segment D', value: '—', delta: null },
+  ];
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+          Revenue Build
+        </span>
+        <span className="text-[10px] text-zinc-400 dark:text-zinc-500">LTM · coming soon</span>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {segments.map(s => (
+          <div key={s.name} className="p-2.5 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40">
+            <div className="text-[9.5px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400">
+              {s.name}
+            </div>
+            <div className="text-[14px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">
+              {s.value}
+            </div>
+            {s.delta != null && (
+              <div className="text-[10px] font-medium tabular-nums mt-0.5 text-[#2e7d32] dark:text-[#4ea354]">
+                +{s.delta}%
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 mt-2.5 leading-relaxed">
+        Segment breakdown will populate once the backend emits product-level revenue data.
+      </p>
     </div>
   );
 }
