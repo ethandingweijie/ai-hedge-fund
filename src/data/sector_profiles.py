@@ -2975,6 +2975,7 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "J91U.SI": ("REIT",        "Industrial", "Industrial REIT",        "ESR-LOGOS REIT"),
     "CY6U.SI": ("REIT",        "India",      "India REIT",             "CapitaLand India Trust"),
     "OXMU.SI": ("REIT",        "US Office",  "US Office REIT",         "Prime US REIT"),
+    "8C8U.SI": ("REIT",        "Accommodation", "Accommodation REIT",  "Centurion Accommodation REIT"),
     "CMOU.SI": ("REIT",        "Hospitality","Hospitality REIT",       "CDL Hospitality Trusts"),
     "P40U.SI": ("REIT",        "Retail",     "Retail REIT",            "Starhill Global REIT"),
     "Q5T.SI":  ("REIT",        "Hospitality","Hospitality REIT",       "Far East Hospitality Trust"),

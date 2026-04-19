@@ -96,6 +96,7 @@ _SGX_KNOWN_CODES: frozenset[str] = frozenset({
     "TS0U",  # OUE Commercial REIT
     "D8DU",  # Digital Core REIT
     "BTOU",  # Manulife US REIT
+    "8C8U",  # Centurion Accommodation REIT (CAREIT) — listed Sep 2025
     # ── Notable Catalist / Others ───────────────────────────────────────
     "1D0",   # Koh Brothers Eco Engineering
     "MR7",   # Marco Polo Marine
