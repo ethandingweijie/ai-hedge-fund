@@ -72,14 +72,64 @@ def _interpretation_for(score: int) -> str:
     return "commodity risk"
 
 
+def _rescore_single_dict(
+    pl: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str, dict[str, Any]]:
+    """Apply rescale + recompute to one power_law dict.
+
+    Returns (new_dict_or_None, action, change_meta). `action` is one of:
+      'rescale_and_recompute' — legacy 0-2 → 0-10
+      'recompute_total'       — dims already 0-10 but total_score disagrees
+      'skip_already_new'      — already on 0-10 scale and total agrees
+      'skip_invalid'          — dims missing or non-numeric
+    """
+    raw_dims = [_coerce_int(pl.get(k), 0, 10) for k in DIM_KEYS]
+    if any(v is None for v in raw_dims):
+        return None, "skip_invalid", {"reason": "non-numeric dim", "dims": raw_dims}
+    dims_clean: list[int] = [int(v) for v in raw_dims if v is not None]  # type: ignore[arg-type]
+    old_total = pl.get("total_score")
+
+    if _is_legacy(dims_clean):
+        rescaled = [v * 5 for v in dims_clean]
+        new_dims = {k: rescaled[i] for i, k in enumerate(DIM_KEYS)}
+        new_total = _compute_total(new_dims)
+        new_interp = _interpretation_for(new_total)
+        new_pl = dict(pl)
+        for k in DIM_KEYS:
+            new_pl[k] = new_dims[k]
+        new_pl["total_score"] = new_total
+        new_pl["interpretation"] = new_interp
+        return new_pl, "rescale_and_recompute", {
+            "old_total": old_total, "new_total": new_total,
+            "old_dims": dims_clean, "new_dims": rescaled,
+        }
+
+    # Already on 0-10 — recompute total via weighted mean for internal consistency.
+    new_dims = {k: dims_clean[i] for i, k in enumerate(DIM_KEYS)}
+    new_total = _compute_total(new_dims)
+    if old_total == new_total:
+        return None, "skip_already_new", {"total": new_total, "dims": list(new_dims.values())}
+    new_interp = _interpretation_for(new_total)
+    new_pl = dict(pl)
+    new_pl["total_score"] = new_total
+    new_pl["interpretation"] = new_interp
+    return new_pl, "recompute_total", {
+        "old_total": old_total, "new_total": new_total,
+        "dims": list(new_dims.values()),
+    }
+
+
 @router.post("/admin/rescore-power-law")
 async def rescore_power_law(
     secret: str = Query("", description="Must match DB_UPLOAD_SECRET env var"),
     tickers: str = Query("", description="Optional comma-separated ticker filter"),
     dry_run: bool = Query(False, description="If true, report what would change without writing"),
 ):
-    """Rescale legacy 0-2 power_law_json rows in ticker_signals to 0-10 and
-    recompute total_score via the Helmer-weighted mean."""
+    """Rescale legacy 0-2 power_law analysis inside web_runs.full_result_json
+    to 0-10 and recompute total_score via the Helmer-weighted mean.
+
+    Also handles ticker_signals.power_law_json for self-hosted archives.
+    """
     if not UPLOAD_SECRET or secret != UPLOAD_SECRET:
         raise HTTPException(status_code=403, detail="Invalid or missing secret")
 
@@ -94,92 +144,151 @@ async def rescore_power_law(
     conn.execute("PRAGMA busy_timeout=5000")
     cur = conn.cursor()
 
-    # Pull all candidates with a non-null power_law_json, optionally filtered by ticker.
-    if ticker_filter:
-        placeholders = ",".join("?" for _ in ticker_filter)
-        query = (
-            f"SELECT id, ticker, run_id, power_law_json, power_law_score "
-            f"FROM ticker_signals WHERE power_law_json IS NOT NULL "
-            f"AND UPPER(ticker) IN ({placeholders})"
-        )
-        rows = cur.execute(query, ticker_filter).fetchall()
-    else:
-        rows = cur.execute(
-            "SELECT id, ticker, run_id, power_law_json, power_law_score "
-            "FROM ticker_signals WHERE power_law_json IS NOT NULL"
-        ).fetchall()
-
-    scanned = len(rows)
+    scanned = 0
     updated = 0
     skipped_already_new = 0
     skipped_invalid = 0
+    skipped_no_powerlaw = 0
     changes: list[dict[str, Any]] = []
 
-    for row_id, ticker, run_id, pl_json, old_total in rows:
+    # ── web_runs.full_result_json (the path used by the web backend) ────────
+    if ticker_filter:
+        placeholders = ",".join("?" for _ in ticker_filter)
+        web_rows = cur.execute(
+            f"SELECT run_id, ticker, full_result_json FROM web_runs "
+            f"WHERE full_result_json IS NOT NULL AND UPPER(ticker) IN ({placeholders})",
+            ticker_filter,
+        ).fetchall()
+    else:
+        web_rows = cur.execute(
+            "SELECT run_id, ticker, full_result_json FROM web_runs "
+            "WHERE full_result_json IS NOT NULL"
+        ).fetchall()
+
+    for run_id, ticker, full_json in web_rows:
+        scanned += 1
         try:
-            data = json.loads(pl_json) if pl_json else {}
+            result = json.loads(full_json)
         except json.JSONDecodeError:
             skipped_invalid += 1
             continue
-        if not isinstance(data, dict):
+        if not isinstance(result, dict):
             skipped_invalid += 1
             continue
 
-        raw_dims = [_coerce_int(data.get(k), 0, 10) for k in DIM_KEYS]
-        if any(v is None for v in raw_dims):
-            skipped_invalid += 1
-            continue
-        dims_clean: list[int] = [int(v) for v in raw_dims if v is not None]  # type: ignore[arg-type]
+        # Look for power_law_analysis nested under data (pipeline structure) or at top.
+        data_block = result.get("data") if isinstance(result.get("data"), dict) else None
+        pl_root = None
+        path_used = None
+        if data_block and isinstance(data_block.get("power_law_analysis"), dict):
+            pl_root = data_block["power_law_analysis"]
+            path_used = "data.power_law_analysis"
+        elif isinstance(result.get("power_law_analysis"), dict):
+            pl_root = result["power_law_analysis"]
+            path_used = "power_law_analysis"
+        elif isinstance(result.get("power_law"), dict):
+            pl_root = result["power_law"]
+            path_used = "power_law"
 
-        if not _is_legacy(dims_clean):
-            # Already on 0-10 scale — but we still want total_score to be the
-            # new weighted mean (LLM may have given a different value).
-            new_dims = {k: dims_clean[i] for i, k in enumerate(DIM_KEYS)}
-            new_total = _compute_total(new_dims)
-            if new_total == (old_total or 0) and data.get("total_score") == new_total:
+        if pl_root is None:
+            skipped_no_powerlaw += 1
+            continue
+
+        # pl_root may be a single dict or {ticker: dict}. Detect.
+        run_any_changed = False
+        per_run_changes: list[dict[str, Any]] = []
+
+        def _maybe_update(target_dict: dict[str, Any]) -> None:
+            nonlocal run_any_changed
+            new_pl, action, meta = _rescore_single_dict(target_dict)
+            per_run_changes.append({"action": action, **meta})
+            if action == "skip_already_new":
+                pass
+            elif action == "skip_invalid":
+                pass
+            elif new_pl is not None:
+                target_dict.clear()
+                target_dict.update(new_pl)
+                run_any_changed = True
+
+        looks_like_ticker_map = all(isinstance(v, dict) for v in pl_root.values()) \
+            and not any(k in pl_root for k in DIM_KEYS)
+        if looks_like_ticker_map:
+            for tk, tk_pl in list(pl_root.items()):
+                if isinstance(tk_pl, dict):
+                    _maybe_update(tk_pl)
+        else:
+            _maybe_update(pl_root)
+
+        # Aggregate per-run result
+        actions = [c["action"] for c in per_run_changes]
+        if run_any_changed:
+            updated += 1
+            if not dry_run:
+                cur.execute(
+                    "UPDATE web_runs SET full_result_json = ? WHERE run_id = ?",
+                    (json.dumps(result), run_id),
+                )
+            changes.append({
+                "source": "web_runs",
+                "path": path_used,
+                "run_id": run_id,
+                "ticker": ticker,
+                "changes": per_run_changes,
+            })
+        else:
+            if all(a == "skip_already_new" for a in actions):
+                skipped_already_new += 1
+            elif all(a == "skip_invalid" for a in actions):
+                skipped_invalid += 1
+
+    # ── ticker_signals.power_law_json (secondary path) ──────────────────────
+    try:
+        if ticker_filter:
+            placeholders = ",".join("?" for _ in ticker_filter)
+            ts_rows = cur.execute(
+                f"SELECT id, ticker, run_id, power_law_json, power_law_score "
+                f"FROM ticker_signals WHERE power_law_json IS NOT NULL "
+                f"AND UPPER(ticker) IN ({placeholders})",
+                ticker_filter,
+            ).fetchall()
+        else:
+            ts_rows = cur.execute(
+                "SELECT id, ticker, run_id, power_law_json, power_law_score "
+                "FROM ticker_signals WHERE power_law_json IS NOT NULL"
+            ).fetchall()
+
+        for row_id, ticker, run_id, pl_json, _old_total in ts_rows:
+            scanned += 1
+            try:
+                pl = json.loads(pl_json) if pl_json else {}
+            except json.JSONDecodeError:
+                skipped_invalid += 1
+                continue
+            if not isinstance(pl, dict):
+                skipped_invalid += 1
+                continue
+            new_pl, action, meta = _rescore_single_dict(pl)
+            if action == "skip_already_new":
                 skipped_already_new += 1
                 continue
-            # total_score needs recompute but dims are already 0-10 — write back.
-            new_interp = _interpretation_for(new_total)
-            data["total_score"] = new_total
-            data["interpretation"] = new_interp
+            if action == "skip_invalid" or new_pl is None:
+                skipped_invalid += 1
+                continue
             if not dry_run:
                 cur.execute(
                     "UPDATE ticker_signals SET power_law_json = ?, power_law_score = ? WHERE id = ?",
-                    (json.dumps(data), new_total, row_id),
+                    (json.dumps(new_pl), new_pl["total_score"], row_id),
                 )
             updated += 1
             changes.append({
-                "id": row_id, "ticker": ticker, "run_id": run_id,
-                "action": "recompute_total",
-                "old_total": old_total, "new_total": new_total,
-                "dims": list(new_dims.values()),
+                "source": "ticker_signals", "id": row_id,
+                "ticker": ticker, "run_id": run_id,
+                "action": action, **meta,
             })
-            continue
-
-        # Legacy 0-2 → rescale to 0-10.
-        rescaled = [v * 5 for v in dims_clean]
-        new_dims = {k: rescaled[i] for i, k in enumerate(DIM_KEYS)}
-        new_total = _compute_total(new_dims)
-        new_interp = _interpretation_for(new_total)
-
-        for k in DIM_KEYS:
-            data[k] = new_dims[k]
-        data["total_score"] = new_total
-        data["interpretation"] = new_interp
-
-        if not dry_run:
-            cur.execute(
-                "UPDATE ticker_signals SET power_law_json = ?, power_law_score = ? WHERE id = ?",
-                (json.dumps(data), new_total, row_id),
-            )
-        updated += 1
-        changes.append({
-            "id": row_id, "ticker": ticker, "run_id": run_id,
-            "action": "rescale_and_recompute",
-            "old_total": old_total, "new_total": new_total,
-            "old_dims": dims_clean, "new_dims": rescaled,
-        })
+    except sqlite3.OperationalError:
+        # Table missing or schema mismatch on this DB — ignore.
+        pass
 
     if not dry_run:
         conn.commit()
@@ -193,6 +302,7 @@ async def rescore_power_law(
         "updated": updated,
         "skipped_already_new_scale": skipped_already_new,
         "skipped_invalid_json": skipped_invalid,
-        "changes": changes[:50],  # cap payload size
+        "skipped_no_powerlaw_block": skipped_no_powerlaw,
+        "changes": changes[:50],
         "changes_truncated": len(changes) > 50,
     }
