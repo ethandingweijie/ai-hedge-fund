@@ -275,11 +275,38 @@ def get_sg_financial_metrics(ticker: str) -> dict:
                 # NOI = Operating Income (proxy for REITs)
                 result["noi"] = _parse_float(info.get("ebitda"))
 
-                # NAV and P/NAV
-                bv = _parse_float(info.get("bookValue"))
-                if bv and bv > 0 and result["price"]:
-                    result["price_to_nav"] = result["price"] / bv
-                result["nav_per_unit"] = bv
+                # NAV and P/NAV — use balance sheet total equity (NOT yfinance bookValue)
+                # yfinance bookValue is tangible book value (~$1.089 for CY6U),
+                # but published REIT NAV uses Total Equity Gross Minority Interest
+                # which reflects investment properties at fair value (IAS 40).
+                # For CY6U: total equity per unit = $1.41 vs bookValue $1.09 (30% gap).
+                shares_out = _parse_float(info.get("sharesOutstanding"))
+                nav_per_unit = None
+                if bs is not None and not bs.empty and shares_out and shares_out > 0:
+                    # Prefer "Total Equity Gross Minority Interest" (includes minorities —
+                    # reflects full REIT economic value before debt).
+                    # Fallback to Stockholders Equity / Common Stock Equity.
+                    eq_keys = [
+                        "Total Equity Gross Minority Interest",
+                        "Stockholders Equity",
+                        "Common Stock Equity",
+                    ]
+                    latest_bs_col = bs.iloc[:, 0]
+                    total_eq = None
+                    for _k in eq_keys:
+                        if _k in bs.index:
+                            _v = _parse_float(latest_bs_col.get(_k))
+                            if _v and _v > 0:
+                                total_eq = _v
+                                break
+                    if total_eq:
+                        nav_per_unit = total_eq / shares_out
+                # Fallback to yfinance bookValue if balance sheet unavailable
+                if nav_per_unit is None:
+                    nav_per_unit = _parse_float(info.get("bookValue"))
+                if nav_per_unit and nav_per_unit > 0 and result["price"]:
+                    result["price_to_nav"] = result["price"] / nav_per_unit
+                result["nav_per_unit"] = nav_per_unit
 
                 # Payout ratio
                 result["payout_ratio"] = _parse_float(info.get("payoutRatio"))
