@@ -116,7 +116,6 @@ const PHASE_LABELS: Record<string, { running: string; done: string }> = {
   power_law_agent:          { running: 'Analysing power-law growth patterns',  done: 'Growth patterns analysed' },
   value_trap_agent:         { running: 'Checking for value traps',             done: 'Value trap check done' },
   phase7_complete:          { running: 'Wrapping up analytical models',        done: 'Models complete' },
-  citation_auditor:         { running: 'Verifying sources and citations',      done: 'Sources verified' },
   advanced_risk_manager:    { running: 'Running final risk checks',            done: 'Risk assessment complete' },
   portfolio_manager:        { running: 'Generating the investment decision',   done: 'Decision ready' },
   pipeline_queued:          { running: 'Analysis in progress on server',       done: 'Analysis resumed' },

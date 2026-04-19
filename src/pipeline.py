@@ -41,7 +41,8 @@ from src.agents.analysis.debate_round import run_debate_round, should_trigger_de
 from src.agents.analysis.scenario_agent import run_scenario_agent
 from src.agents.analysis.power_law_agent import run_power_law_agent
 from src.agents.analysis.value_trap_agent import run_value_trap_agent
-from src.agents.analysis.citation_auditor import run_citation_auditor
+# Citation auditor removed from pipeline — see commit notes.
+# citation_audit dict is still seeded empty for backward compat with PDF/frontend.
 from src.agents.risk_manager import run_advanced_risk_manager, risk_management_agent
 from src.agents.portfolio_manager import run_advanced_portfolio_manager
 from src.agents.portfolio.post_trade_review import run_post_trade_review
@@ -522,47 +523,12 @@ def run_advanced_pipeline(
                                              "vgpm":               _vgpm})
 
         # ----------------------------------------------------------------
-        # PHASE 7.5 — Citation Auditor
+        # PHASE 7.5 — Citation Auditor  [REMOVED]
         # ----------------------------------------------------------------
-        print(f"\n{'='*60}")
-        print("[7.5/10] Phase 7.5: Citation Auditor")
-        print('='*60)
-
-
-        # Citation auditor: skip if cached within 14 days (citations are tied to deep research)
-        if _all_cached("citation_audit", age_days=14.0):
-            cached_ca: dict = {}
-            for _t in tickers:
-                cached_ca[_t] = _phase_cache[_t]["citation_audit"]  # type: ignore[index]
-                progress.update_status("citation_auditor", _t,
-                                       f"[cache] Loaded from archive ({_phase_cache[_t]['age_days']:.1f}d old)")  # type: ignore[index]
-            state["data"]["citation_audit"] = cached_ca
-            print(f"  [cache] Citation audit loaded from archive — skipping LLM call")
-        else:
-            try:
-                state = run_citation_auditor(state)
-            except Exception as _ca_err:
-                # Citation auditor failure must not abort the pipeline — all prior
-                # phases are complete and the result should still be saved.
-                print(f"  [citation_auditor] Non-fatal error — skipping audit: {_ca_err}")
-                for _t in tickers:
-                    progress.update_status("citation_auditor", _t,
-                                           f"Skipped — error: {_ca_err}")
-                # Seed empty audit so downstream code (PDF, frontend) doesn't KeyError
-                state["data"].setdefault("citation_audit", {})
-                for _t in tickers:
-                    state["data"]["citation_audit"].setdefault(_t, {
-                        "hallucination_flags": [f"Citation auditor skipped: {_ca_err}"],
-                        "primary_source_gaps": [],
-                        "audit_score": 5,
-                    })
-        for ticker in tickers:
-            ca = state["data"].get("citation_audit", {}).get(ticker, {})
-            print(f"  {ticker} Citations: audit score {ca.get('audit_score','?')}/10"
-                  f" | {len(ca.get('hallucination_flags', []))} hallucination flag(s)")
-        progress.update_status("citation_auditor", primary_ticker, "✓ Citations complete",
-                               partial_data={"citation_registry": state["data"].get("citation_registry", []),
-                                             "citation_audit":    state["data"].get("citation_audit", {})})
+        # Citation auditor phase was removed from the pipeline.
+        # Seed empty citation_audit dict so downstream consumers (PDF generator,
+        # frontend, run archive) don't KeyError on missing field.
+        state["data"].setdefault("citation_audit", {ticker: {} for ticker in tickers})
 
         # ----------------------------------------------------------------
         # PHASE 8 — Advanced Risk Manager (dual-layer)

@@ -239,15 +239,15 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         # portfolio_manager, risk_manager, fundamentals, growth_agent,
         # news_sentiment, sentiment, technicals, valuation
         # Always-terminal phases = investor agents + fixed pipeline phases
-        # Fixed breakdown (22):
-        #   Pipeline "✓" (11): macro_regime_classifier, strategic_router, intelligence_agents,
+        # Fixed breakdown (21):  (citation_auditor removed from pipeline)
+        #   Pipeline "✓" (10): macro_regime_classifier, strategic_router, intelligence_agents,
         #                       deep_research_agent, industry_specialist, dcf_engine,
-        #                       investor_agents (synthetic), phase7_complete, citation_auditor,
+        #                       investor_agents (synthetic), phase7_complete,
         #                       advanced_risk_manager, portfolio_manager
         #   System "Done"  (7): fundamentals, growth_agent, news_sentiment, sentiment,
         #                       technicals, valuation, advanced_portfolio_manager
         #   Other terminal (4): edgar_hkex_resolver, power_law_agent, value_trap_agent, data_router
-        _FIXED_DONE_COUNT = 22
+        _FIXED_DONE_COUNT = 21
         _investor_count = len(agents) if agents else 12
         _total_done = _investor_count + _FIXED_DONE_COUNT
         yield f"event: start\ndata: {json.dumps({'ticker': ticker, 'model': model_name, 'total_done_phases': _total_done})}\n\n"
