@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { getHistory, getCompanyNames, deleteRun } from '@/lib/api';
 import type { HistoryResponse, RunSummary } from '@/lib/reportTypes';
@@ -449,30 +450,59 @@ function FilterPill({
   active?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const btnRef    = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  // Viewport-fixed position so we escape the parent's overflow-x-auto clip.
+  const [pos, setPos] = useState<{ top: number; left: number; minWidth: number } | null>(null);
 
+  const recomputePos = useCallback(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const minWidth = Math.max(r.width, 160);
+    const viewportW = window.innerWidth;
+    // Clamp left so the dropdown never overflows the right edge (common on
+    // the last pill "Any action" which sits far right).
+    const desiredLeft = r.left;
+    const left = Math.min(desiredLeft, viewportW - minWidth - 8);
+    setPos({ top: r.bottom + 4, left: Math.max(8, left), minWidth });
+  }, []);
+
+  // Open/close side-effects: position, outside-click, Escape, scroll/resize.
   useEffect(() => {
     if (!open) return;
+    recomputePos();
     const onDown = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    // Any scroll in the document (inc. the chip row itself) should reposition.
+    const onScroll = () => recomputePos();
+    const onResize = () => recomputePos();
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true); // capture to catch nested scrollers
+    window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
     };
-  }, [open]);
+  }, [open, recomputePos]);
 
   const display = label ?? value;
 
   return (
-    <div ref={wrapperRef} className="relative shrink-0">
+    <>
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={`h-8 pl-2.5 pr-1.5 text-[11px] rounded-lg border flex items-center gap-1 transition-colors ${
+        className={`h-8 pl-2.5 pr-1.5 text-[11px] rounded-lg border flex items-center gap-1 shrink-0 transition-colors ${
           active
             ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 border-[#d0e7d2] dark:border-[#2e7d32]/50 text-[#2e7d32] dark:text-[#4ea354]'
             : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 active:bg-zinc-50 dark:active:bg-zinc-800'
@@ -484,10 +514,12 @@ function FilterPill({
         <ChevronDn width={11} height={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <div
+          ref={popoverRef}
           role="listbox"
-          className="absolute top-full left-0 mt-1 min-w-[160px] max-h-[60vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg z-30 py-1"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.minWidth, maxHeight: '60vh' }}
+          className="overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl z-[200] py-1"
         >
           {options.map(opt => {
             const selected = opt === value;
@@ -513,8 +545,9 @@ function FilterPill({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
