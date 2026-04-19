@@ -6,7 +6,7 @@ import { getRunResult } from '@/lib/api';
 import type { RunResult } from '@/lib/reportTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
-import { MobileReportView } from '@/components/mobile/MobileReportView';
+import { V2ReportView } from '@/components/v2/V2ReportView';
 
 import { ResearchNav } from '@/components/layout/ResearchNav';
 import { ReportHeader } from '@/components/report/ReportHeader';
@@ -143,10 +143,19 @@ export function ReportViewPage() {
 
   const currentPrice = scenarioAnalysis?.current_price;
 
-  // Mobile layout
+  // Mobile layout — reimagined v2 tab view (Summary/Valuation/Investors/Risk/Research/Financials)
   if (isMobile) {
     return (
-      <MobileReportView result={result} runId={runId!} />
+      <V2ReportView
+        result={result}
+        runId={runId!}
+        isRunning={false}
+        isComplete={true}
+        phaseMap={{}}
+        progressPct={100}
+        events={[]}
+        liveData={{}}
+      />
     );
   }
 
