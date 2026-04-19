@@ -19,13 +19,65 @@ import {
   X,
   Clock,
   ChevRight,
-  Filter,
+  ChevronDn,
   ActionPill,
   GradeChip,
   Delta,
   SwipeRow,
 } from '@/components/v2/shared';
 import { toast } from 'sonner';
+
+/* ───────── Filter option sets ───────── */
+// Union of sector labels across US, HK, SG markets (per ScreenerPage).
+// Covers everything RunSummary.sector could hold.
+const SECTOR_OPTIONS = [
+  'All sectors',
+  'Technology', 'Tech',
+  'Communication Services',
+  'Financial Services', 'Financials',
+  'Consumer Cyclical', 'Consumer Defensive', 'Consumer',
+  'Healthcare',
+  'Industrials',
+  'Energy',
+  'Real Estate', 'Property', 'REIT',
+  'Utilities',
+  'Basic Materials',
+  'Telco',
+] as const;
+
+type MarketOption = 'All markets' | 'US' | 'HK' | 'SG';
+const MARKET_OPTIONS: readonly MarketOption[] = ['All markets', 'US', 'HK', 'SG'];
+
+type TimeOption = 'Last 30 days' | 'Last 10 days' | 'Last 5 days' | 'Yesterday';
+const TIME_OPTIONS: readonly TimeOption[] = ['Last 30 days', 'Last 10 days', 'Last 5 days', 'Yesterday'];
+
+type ActionOption = 'Any action' | 'BUY' | 'HOLD' | 'SELL' | 'SHORT';
+const ACTION_OPTIONS: readonly ActionOption[] = ['Any action', 'BUY', 'HOLD', 'SELL', 'SHORT'];
+
+/** Infer listing market from a ticker symbol. */
+function marketOf(ticker: string): MarketOption {
+  const t = (ticker || '').toUpperCase();
+  if (t.endsWith('.HK')) return 'HK';
+  if (t.endsWith('.SI')) return 'SG';
+  return 'US';
+}
+
+/** Convert a TimeOption into a cutoff Date; entries older than this are filtered out. */
+function timeCutoff(opt: TimeOption): Date {
+  const now = new Date();
+  const d = new Date(now);
+  switch (opt) {
+    case 'Yesterday':
+      d.setDate(d.getDate() - 1); d.setHours(0, 0, 0, 0); return d;
+    case 'Last 5 days':
+      d.setDate(d.getDate() - 5); return d;
+    case 'Last 10 days':
+      d.setDate(d.getDate() - 10); return d;
+    case 'Last 30 days':
+    default:
+      d.setDate(d.getDate() - 30); return d;
+  }
+}
 
 function daysAgo(iso: string): string {
   const d = new Date(iso);
@@ -48,6 +100,11 @@ export function HistoryPage() {
   const [names, setNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
+  // ── Filter state ──────────────────────────────────────────────────────────
+  const [sectorFilter, setSectorFilter] = useState<string>('All sectors');
+  const [marketFilter, setMarketFilter] = useState<MarketOption>('All markets');
+  const [timeFilter, setTimeFilter]     = useState<TimeOption>('Last 30 days');
+  const [actionFilter, setActionFilter] = useState<ActionOption>('Any action');
   const [page, setPage] = useState(1);
   const deleteGuard = useRef<Set<string>>(new Set());
 
@@ -100,16 +157,43 @@ export function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recentlyCompleted]);
 
-  // ── Filter by search ──────────────────────────────────────────────────────
+  // ── Filter by search + filter chips ───────────────────────────────────────
   const rows = useMemo(() => {
     const items = history?.items ?? [];
-    if (!q) return items;
-    const query = q.toLowerCase();
-    return items.filter(r =>
-      r.ticker.toLowerCase().includes(query) ||
-      (names[r.ticker] || '').toLowerCase().includes(query)
-    );
-  }, [history, q, names]);
+    const query = q.trim().toLowerCase();
+    const cutoff = timeCutoff(timeFilter);
+
+    return items.filter(r => {
+      // Text search
+      if (query) {
+        const matches = r.ticker.toLowerCase().includes(query) ||
+                        (names[r.ticker] || '').toLowerCase().includes(query);
+        if (!matches) return false;
+      }
+      // Sector
+      if (sectorFilter !== 'All sectors' && (r.sector || '').toLowerCase() !== sectorFilter.toLowerCase()) {
+        return false;
+      }
+      // Market (inferred from ticker)
+      if (marketFilter !== 'All markets' && marketOf(r.ticker) !== marketFilter) {
+        return false;
+      }
+      // Time window — compare run_at to cutoff; Yesterday is a single day window
+      const runDate = new Date(r.run_at);
+      if (timeFilter === 'Yesterday') {
+        const end = new Date(cutoff); end.setDate(end.getDate() + 1);
+        if (runDate < cutoff || runDate >= end) return false;
+      } else {
+        if (runDate < cutoff) return false;
+      }
+      // Action
+      if (actionFilter !== 'Any action') {
+        const a = (r.final_action || '').toUpperCase();
+        if (!a.includes(actionFilter)) return false;
+      }
+      return true;
+    });
+  }, [history, q, names, sectorFilter, marketFilter, timeFilter, actionFilter]);
 
   const handleDelete = async (runId: string) => {
     if (deleteGuard.current.has(runId)) return;
@@ -147,19 +231,34 @@ export function HistoryPage() {
         </div>
       </div>
 
-      {/* Filter chips (static for now — filters already in backend endpoint) */}
+      {/* Filter chips — each is a working dropdown. Funnel icon removed per design. */}
       <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5 overflow-x-auto phone-scroll">
-        {['All sectors', 'US · HK · SGX', 'Last 30d', 'Any action'].map(c => (
-          <span key={c} className="h-8 px-2.5 text-[11px] rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 flex items-center gap-1 shrink-0">
-            {c}
-          </span>
-        ))}
-        <button
-          className="h-8 w-8 rounded-lg border border-zinc-200 dark:border-zinc-800 active:bg-zinc-50 dark:active:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400 shrink-0"
-          aria-label="Filter"
-        >
-          <Filter width={13} height={13}/>
-        </button>
+        <FilterPill
+          value={sectorFilter}
+          options={SECTOR_OPTIONS as readonly string[]}
+          onChange={v => setSectorFilter(v)}
+          active={sectorFilter !== 'All sectors'}
+        />
+        <FilterPill
+          label="Market"
+          value={marketFilter}
+          options={MARKET_OPTIONS as readonly string[]}
+          onChange={v => setMarketFilter(v as MarketOption)}
+          active={marketFilter !== 'All markets'}
+        />
+        <FilterPill
+          label="Last search"
+          value={timeFilter}
+          options={TIME_OPTIONS as readonly string[]}
+          onChange={v => setTimeFilter(v as TimeOption)}
+          active={timeFilter !== 'Last 30 days'}
+        />
+        <FilterPill
+          value={actionFilter}
+          options={ACTION_OPTIONS as readonly string[]}
+          onChange={v => setActionFilter(v as ActionOption)}
+          active={actionFilter !== 'Any action'}
+        />
       </div>
 
       <div className="flex-1 px-3 pt-2 pb-6">
@@ -327,5 +426,95 @@ function HistoryRow({
         </div>
       </div>
     </SwipeRow>
+  );
+}
+
+/* ───────── FilterPill ───────────────────────────────────────────────────────
+   Chip with a small chevron that opens a lightweight dropdown of options.
+   - `label` overrides the displayed text when provided (e.g. "Market" instead
+     of the raw selected value "US"). When omitted, the current value is shown.
+   - `active` colours the pill when a non-default option is selected.
+   - Closes on outside-click and on Escape. */
+function FilterPill({
+  label,
+  value,
+  options,
+  onChange,
+  active,
+}: {
+  label?: string;
+  value: string;
+  options: readonly string[];
+  onChange: (v: string) => void;
+  active?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const display = label ?? value;
+
+  return (
+    <div ref={wrapperRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`h-8 pl-2.5 pr-1.5 text-[11px] rounded-lg border flex items-center gap-1 transition-colors ${
+          active
+            ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 border-[#d0e7d2] dark:border-[#2e7d32]/50 text-[#2e7d32] dark:text-[#4ea354]'
+            : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 active:bg-zinc-50 dark:active:bg-zinc-800'
+        }`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {display}
+        <ChevronDn width={11} height={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute top-full left-0 mt-1 min-w-[160px] max-h-[60vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg z-30 py-1"
+        >
+          {options.map(opt => {
+            const selected = opt === value;
+            return (
+              <button
+                key={opt}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => { onChange(opt); setOpen(false); }}
+                className={`w-full text-left px-3 py-1.5 text-[12px] flex items-center justify-between gap-2 transition-colors ${
+                  selected
+                    ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 text-[#2e7d32] dark:text-[#4ea354] font-medium'
+                    : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                }`}
+              >
+                <span>{opt}</span>
+                {selected && (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
