@@ -1286,13 +1286,21 @@ function ResearchBody({
       )}
 
       {/* Sub-tab body */}
-      {hasData && runId && sub === 'summary' && (
-        <ResearchSummaryPanel
-          runId={runId}
-          ticker={ticker}
-          industryBrief={industryBrief}
-          deepResearch={deepResearch}
-        />
+      {hasData && sub === 'summary' && (
+        runId ? (
+          <ResearchSummaryPanel
+            runId={runId}
+            ticker={ticker}
+            industryBrief={industryBrief}
+            deepResearch={deepResearch}
+          />
+        ) : (
+          <StreamingResearchSummary
+            ticker={ticker}
+            industryBrief={industryBrief}
+            deepResearch={deepResearch}
+          />
+        )
       )}
       {hasData && sub === 'brief' && industryBrief && (
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
@@ -1317,6 +1325,75 @@ function ResearchBody({
         <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center">
           Research streaming — thinking stream shown above. Sections fill in as synthesis completes.
         </p>
+      )}
+    </div>
+  );
+}
+
+/* ───────── Streaming Research Summary (no runId available yet) ───────────── */
+/**
+ * Rendered during ongoing research when runId is not yet persisted.
+ * Shows whatever industry brief / deep research text has streamed in so far,
+ * using the same collapsible accordion layout as the completed view — but
+ * without the backend Qwen /analysis/research-summary call (no cache key yet).
+ */
+function StreamingResearchSummary({
+  ticker, industryBrief, deepResearch,
+}: {
+  ticker: string;
+  industryBrief: string | undefined;
+  deepResearch: string | undefined;
+}) {
+  const [briefOpen, setBriefOpen] = useState(true);
+  const [deepOpen, setDeepOpen]   = useState(!industryBrief); // expand deep if brief absent
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Streaming banner — explains why Qwen summary is absent vs. completed view */}
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+            Research streaming · {ticker}
+          </span>
+        </div>
+        <p className="text-[12px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+          Industry brief and deep research are populating live. The AI summary card appears once synthesis completes.
+        </p>
+      </div>
+
+      {industryBrief && (
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900">
+          <button
+            onClick={() => setBriefOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-zinc-50 dark:active:bg-zinc-800/60"
+          >
+            <span>Industry Intelligence Brief</span>
+            <span className="text-[11px] text-zinc-400">{briefOpen ? '▲' : '▼'}</span>
+          </button>
+          {briefOpen && (
+            <div className="border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 text-[12.5px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
+              {industryBrief}
+            </div>
+          )}
+        </div>
+      )}
+
+      {deepResearch && (
+        <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900">
+          <button
+            onClick={() => setDeepOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-zinc-50 dark:active:bg-zinc-800/60"
+          >
+            <span>Deep Research</span>
+            <span className="text-[11px] text-zinc-400">{deepOpen ? '▲' : '▼'}</span>
+          </button>
+          {deepOpen && (
+            <div className="border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 text-[12.5px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
+              {deepResearch}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
