@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { getStockData, searchCompanies, getPopularTickers, type CompanySearchResult, type PopularTicker } from '@/lib/api';
 // v2 imports
 import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
+import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun } from '@/contexts/active-run-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileReportView } from '@/components/mobile/MobileReportView';
@@ -784,20 +785,40 @@ export function ReportPage() {
     } catch { /* AudioContext not available */ }
   }, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Mobile layout: progressive report view matching history layout ───────────
-  // When complete with liveResult, use MobileReportView directly.
-  // When still running, render the same mobile layout with live-streaming data
-  // so sections fill in progressively as the pipeline completes each phase.
+  // ── Mobile layout: reimagined V2ReportView with 6 tabs ───────────────────
   if (isMobile && liveMode) {
-    if (liveResult) {
-      return (
-        <>
-          <MobileReportView result={liveResult} runId={runId ?? ''} />
-          {/* Navigation via hamburger menu in MobileTopBar */}
-        </>
-      );
-    }
+    // Always hand V2ReportView a result object (real or partial)
+    const displayResult: import('@/lib/reportTypes').RunResult = liveResult ?? {
+      run_id: runId ?? '',
+      ticker: liveTicker || ticker,
+      run_at: runStartedAt.current || new Date().toISOString(),
+      model_name: model,
+      decisions: decision ? { [liveTicker || ticker]: decision } : {},
+      data: data,
+      vgpm: vgpm ? { [liveTicker || ticker]: vgpm } : undefined,
+    };
+    const currentPhaseKey = Object.keys(phaseMap).pop();
+    const currentPhaseEvent = currentPhaseKey ? phaseMap[currentPhaseKey] : null;
+    const currentPhaseLabel = currentPhaseEvent?.summary || currentPhaseEvent?.status || undefined;
 
+    return (
+      <V2ReportView
+        result={displayResult}
+        runId={runId ?? ''}
+        isRunning={isRunning}
+        isComplete={isComplete}
+        phaseMap={phaseMap}
+        progressPct={progressPct}
+        currentPhaseLabel={currentPhaseLabel}
+        events={events}
+        liveData={liveData}
+        onCancel={handleReset}
+      />
+    );
+  }
+
+  // ── Legacy mobile fallback (unused — kept for type compat) ───────────────
+  if (false && isMobile && liveMode) {
     // Build a partial RunResult from streaming data so MobileReportView can render progressively
     const partialResult: import('@/lib/reportTypes').RunResult = {
       run_id: runId ?? '',
