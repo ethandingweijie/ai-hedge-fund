@@ -14,6 +14,7 @@ from app.backend.routes.watchlist import router as watchlist_router
 from app.backend.routes.auth import router as auth_router
 from app.backend.routes.db_upload import router as db_upload_router
 from app.backend.routes.admin import router as admin_router
+from app.backend.routes.power_law_migrate import router as power_law_migrate_router
 
 # Main API router
 api_router = APIRouter()
@@ -33,3 +34,4 @@ api_router.include_router(watchlist_router, prefix="/watchlist", tags=["watchlis
 api_router.include_router(auth_router, tags=["auth"])
 api_router.include_router(db_upload_router, tags=["admin"])
 api_router.include_router(admin_router, tags=["admin"])
+api_router.include_router(power_law_migrate_router, tags=["admin"])
