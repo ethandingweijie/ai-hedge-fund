@@ -1,7 +1,9 @@
 /**
- * LoginPage.tsx
- * Full-screen login with Google and Apple sign-in.
- * Shares the same green leaf wallpaper as the home page.
+ * LoginPage.tsx — Reimagined UI
+ *
+ * Minimal-fintech Linear/Stripe aesthetic. Zinc-neutral palette, 1px borders,
+ * Equitable green (#2e7d32) reserved for logo. Wires real Google GSI + Apple
+ * OAuth flows from auth-context into the new button shells.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -13,28 +15,65 @@ declare global {
     AppleID?: {
       auth: {
         init: (cfg: object) => void;
-        signIn: () => Promise<{ authorization: { id_token: string }; user?: { name?: { firstName?: string; lastName?: string } } }>;
+        signIn: () => Promise<{
+          authorization: { id_token: string };
+          user?: { name?: { firstName?: string; lastName?: string } };
+        }>;
       };
     };
   }
 }
 
+const BRAND = '#2e7d32';
+
+function Leaf({ size = 28 }: { size?: number }) {
+  return (
+    <div
+      className="rounded-[6px] flex items-center justify-center text-white font-extrabold"
+      style={{
+        backgroundColor: BRAND,
+        width: size,
+        height: size,
+        fontSize: size * 0.65,
+        lineHeight: 1,
+        letterSpacing: '-0.04em',
+      }}
+    >
+      e
+    </div>
+  );
+}
+
+function Divider({ className = '' }: { className?: string }) {
+  return <div className={`h-px bg-zinc-200 dark:bg-zinc-800 ${className}`} />;
+}
+
+function Check({ width = 12, height = 12 }: { width?: number; height?: number }) {
+  return (
+    <svg width={width} height={height} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 export function LoginPage() {
   const { loginWithGoogle, loginWithApple, user } = useAuth();
   const navigate = useNavigate();
-  const location  = useLocation();
+  const location = useLocation();
   const from = (location.state as { from?: string })?.from ?? '/report';
 
-  const [error, setError]     = useState<string | null>(null);
-  const [loading, setLoading] = useState<string | null>(null); // 'google' | 'apple'
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
   const appleScriptRef = useRef(false);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
   // Already logged in → redirect
   useEffect(() => {
     if (user) navigate(from, { replace: true });
   }, [user, navigate, from]);
 
-  // Load Apple Sign In JS SDK once
+  // Apple Sign In SDK
   useEffect(() => {
     if (appleScriptRef.current) return;
     appleScriptRef.current = true;
@@ -55,22 +94,10 @@ export function LoginPage() {
     document.head.appendChild(script);
   }, []);
 
-  // ── Google (GSI script renders the button, gives us id_token via callback) ──
-  function handleGoogleCredential(credential: string) {
-    setError(null);
-    setLoading('google');
-    loginWithGoogle(credential)
-      .then(() => navigate(from, { replace: true }))
-      .catch(e => { setError(e.message); setLoading(null); });
-  }
-
-  // Render Google One Tap button via GSI script (gives us id_token directly)
-  const googleBtnRef = useRef<HTMLDivElement>(null);
+  // Google GSI — renders an invisible button we trigger programmatically
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) return;
-
-    // Load Google Identity Services script
     const existing = document.getElementById('google-gsi-script');
     if (existing) {
       initGoogleButton(clientId);
@@ -82,6 +109,7 @@ export function LoginPage() {
     script.async = true;
     script.onload = () => initGoogleButton(clientId);
     document.head.appendChild(script);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function initGoogleButton(clientId: string) {
@@ -95,27 +123,36 @@ export function LoginPage() {
       w.google.accounts.id.renderButton(googleBtnRef.current, {
         theme: 'outline',
         size: 'large',
-        width: 320,
-        text: 'signin_with',
-        shape: 'pill',
+        width: 340,
+        text: 'continue_with',
+        shape: 'rectangular',
+        logo_alignment: 'center',
       });
     }
   }
 
-  // ── Apple ───────────────────────────────────────────────────────────────────
+  function handleGoogleCredential(credential: string) {
+    setError(null);
+    setLoading('google');
+    loginWithGoogle(credential)
+      .then(() => navigate(from, { replace: true }))
+      .catch((e) => { setError(e.message); setLoading(null); });
+  }
+
   async function handleAppleSignIn() {
     if (!window.AppleID) {
-      setError('Apple Sign In is not available. Make sure VITE_APPLE_CLIENT_ID is set.');
+      setError('Apple Sign In is not available. Ensure VITE_APPLE_CLIENT_ID is set.');
       return;
     }
     setError(null);
     setLoading('apple');
     try {
       const res = await window.AppleID.auth.signIn();
-      const idToken = res.authorization.id_token;
-      const firstName = res.user?.name?.firstName;
-      const lastName  = res.user?.name?.lastName;
-      await loginWithApple(idToken, firstName, lastName);
+      await loginWithApple(
+        res.authorization.id_token,
+        res.user?.name?.firstName,
+        res.user?.name?.lastName,
+      );
       navigate(from, { replace: true });
     } catch (e: any) {
       if (e?.error !== 'popup_closed_by_user') {
@@ -126,91 +163,96 @@ export function LoginPage() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{
-        backgroundImage: 'url(/bg-wallpaper.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/45 pointer-events-none" />
+    <div className="min-h-screen w-full flex flex-col bg-white dark:bg-zinc-900">
+      <div className="relative flex-1 flex flex-col justify-center px-7 pt-12 max-w-sm mx-auto w-full">
+        {/* Radial gradient accent */}
+        <div
+          className="absolute inset-0 opacity-60 pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(80% 50% at 50% 0%, rgba(46,125,50,0.08), transparent 60%),' +
+              'radial-gradient(60% 40% at 0% 100%, rgba(46,125,50,0.05), transparent 60%)',
+          }}
+        />
 
-      {/* Card */}
-      <div className="relative z-10 w-full max-w-sm bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl px-8 py-10 flex flex-col items-center gap-6">
-
-        {/* Logo / heading */}
-        <div className="text-center">
-          <img src="/icon-192x192.png" alt="Equitable" className="w-16 h-16 mx-auto mb-2" />
-          <h1 className="text-2xl font-bold text-gray-900"
-              style={{ fontFamily: "'Segoe UI', 'Google Sans', Arial, sans-serif" }}>
-            Welcome to Equitable!
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to start your investment research</p>
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div className="w-full bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 text-center">
-            {error}
+        <div className="relative w-full">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 mb-10">
+            <Leaf size={28} />
+            <span className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+              Equitable
+            </span>
           </div>
-        )}
 
-        {/* Google button — rendered by GSI SDK into this div */}
-        <div className="w-full flex flex-col items-center gap-3">
-          {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
-            <div ref={googleBtnRef} className={loading === 'google' ? 'opacity-60 pointer-events-none' : ''} />
-          ) : (
-            <div className="w-full flex items-center justify-center gap-3 h-12 rounded-full border border-gray-300 bg-white text-sm font-medium text-gray-400 cursor-not-allowed select-none">
-              <GoogleIcon />
-              Google (add VITE_GOOGLE_CLIENT_ID)
+          {/* Heading */}
+          <h1 className="text-[28px] leading-[1.1] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            Sign in
+          </h1>
+          <p className="text-[14px] text-zinc-500 dark:text-zinc-400 mt-2">
+            Investment research, on every market that matters.
+          </p>
+
+          {/* Error */}
+          {error && (
+            <div className="mt-6 text-[13px] rounded-lg border border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300 px-3.5 py-2.5">
+              {error}
             </div>
           )}
 
-          {/* Apple button */}
-          <button
-            type="button"
-            onClick={handleAppleSignIn}
-            disabled={!!loading}
-            className="w-full flex items-center justify-center gap-3 h-12 rounded-full bg-black text-white text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            style={{ minWidth: 280 }}
-          >
-            {loading === 'apple' ? (
-              <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+          {/* Auth buttons */}
+          <div className="mt-8 space-y-2.5">
+            {/* Google — GSI renders its own button into the ref */}
+            {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
+              <div
+                ref={googleBtnRef}
+                className={`w-full flex justify-center ${loading === 'google' ? 'opacity-60 pointer-events-none' : ''}`}
+                style={{ minHeight: 48 }}
+              />
             ) : (
-              <AppleIcon />
+              <div className="w-full h-12 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[14px] font-medium text-zinc-400 flex items-center justify-center gap-2.5 select-none">
+                Google (configure VITE_GOOGLE_CLIENT_ID)
+              </div>
             )}
-            {loading === 'apple' ? 'Signing in…' : 'Sign in with Apple'}
-          </button>
-        </div>
 
-        {/* Divider note */}
-        <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-          By signing in you agree to our terms. Your searches are stored in a shared database and visible only to you when logged in.
-        </p>
+            {/* Apple */}
+            <button
+              type="button"
+              onClick={handleAppleSignIn}
+              disabled={!!loading}
+              className="w-full h-12 rounded-lg bg-zinc-900 dark:bg-white active:bg-zinc-800 dark:active:bg-zinc-200 text-[14px] font-medium text-white dark:text-zinc-900 flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {loading === 'apple' ? (
+                <div className="w-4 h-4 border-2 border-white/40 border-t-white dark:border-zinc-400 dark:border-t-zinc-900 rounded-full animate-spin" />
+              ) : (
+                <svg width="14" height="17" viewBox="0 0 17 20" fill="currentColor">
+                  <path d="M13.87 10.56c-.02-2.17 1.77-3.21 1.85-3.27-1.01-1.48-2.58-1.68-3.14-1.7-1.33-.14-2.6.79-3.28.79-.68 0-1.72-.77-2.83-.75-1.45.02-2.79.85-3.54 2.15C1.1 10.4 2.13 14.7 3.9 17.12c.88 1.27 1.93 2.69 3.3 2.64 1.33-.05 1.83-.86 3.43-.86 1.6 0 2.05.86 3.44.84 1.43-.02 2.33-1.29 3.2-2.57.99-1.47 1.4-2.88 1.43-2.96-.03-.01-2.76-1.06-2.79-4.19l-.04-.46zM11.4 3.6C12.1 2.74 12.57 1.55 12.44.34c-1.04.04-2.3.7-3.04 1.55-.67.77-1.25 2-1.1 3.17 1.16.09 2.34-.59 3.1-1.46z" />
+                </svg>
+              )}
+              {loading === 'apple' ? 'Signing in…' : 'Continue with Apple'}
+            </button>
+          </div>
+
+          {/* Market chip divider */}
+          <div className="mt-8 flex items-center gap-3">
+            <Divider className="flex-1" />
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 uppercase tracking-[0.1em]">
+              US · HK · SGX
+            </span>
+            <Divider className="flex-1" />
+          </div>
+
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center mt-6 leading-relaxed">
+            By signing in you agree to the Terms &amp; Privacy. Your searches are private to your account.
+          </p>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="h-10 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-center text-[11px] text-zinc-400 dark:text-zinc-500">
+        <span className="inline-flex items-center gap-1.5">
+          <Check width={12} height={12} /> Secure · Private · v1.6
+        </span>
       </div>
     </div>
-  );
-}
-
-// ── Icons ──────────────────────────────────────────────────────────────────────
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
-      <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-    </svg>
-  );
-}
-
-function AppleIcon() {
-  return (
-    <svg width="17" height="20" viewBox="0 0 17 20" fill="white" xmlns="http://www.w3.org/2000/svg">
-      <path d="M13.87 10.56c-.02-2.17 1.77-3.21 1.85-3.27-1.01-1.48-2.58-1.68-3.14-1.7-1.33-.14-2.6.79-3.28.79-.68 0-1.72-.77-2.83-.75-1.45.02-2.79.85-3.54 2.15C1.1 10.4 2.13 14.7 3.9 17.12c.88 1.27 1.93 2.69 3.3 2.64 1.33-.05 1.83-.86 3.43-.86 1.6 0 2.05.86 3.44.84 1.43-.02 2.33-1.29 3.2-2.57.99-1.47 1.4-2.88 1.43-2.96-.03-.01-2.76-1.06-2.79-4.19l-.04-.46zM11.4 3.6C12.1 2.74 12.57 1.55 12.44.34c-1.04.04-2.3.7-3.04 1.55-.67.77-1.25 2-1.1 3.17 1.16.09 2.34-.59 3.1-1.46z"/>
-    </svg>
   );
 }
