@@ -37,6 +37,8 @@ import { DebatePanel } from '@/components/report/DebatePanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
 import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
+import { MobileChartStrip } from '@/components/mobile/MobileChartStrip';
+import { MobileKeyStats } from '@/components/mobile/MobileKeyStats';
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
 
@@ -86,6 +88,7 @@ export function V2ReportView({
   const [tab, setTab] = useState<TabId>('summary');
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [priceChangePct, setPriceChangePct] = useState<number | null>(null);
+  const [stockMetrics, setStockMetrics] = useState<Record<string, number | undefined> | null>(null);
 
   const ticker = result?.ticker ?? '';
   const data = result?.data ?? {};
@@ -109,7 +112,9 @@ export function V2ReportView({
   const deepAnnotated = data.deep_research_annotated as string | undefined;
   const citations = data.citation_registry as CitationRegistryEntry[] | undefined;
 
-  // Live price fetch
+  // Live price + financial metrics fetch — runs as soon as ticker is known,
+  // even before the pipeline has produced decisions/VGPM. Lets us show the
+  // chart + key stats on Summary during the ongoing-research phase.
   useEffect(() => {
     if (!ticker) return;
     getStockData(ticker, '1y')
@@ -121,6 +126,7 @@ export function V2ReportView({
           setLivePrice(latest);
           if (first > 0) setPriceChangePct(((latest - first) / first) * 100);
         }
+        setStockMetrics((d?.metrics as Record<string, number | undefined>) ?? null);
       })
       .catch(() => { /* ignore */ });
   }, [ticker]);
@@ -227,10 +233,10 @@ export function V2ReportView({
 
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'summary'    && <SummaryBody    result={result} decision={decision} vgpm={vgpm} isRunning={isRunning} />}
-        {tab === 'valuation'  && <ValuationBody  dcfRange={dcfRange} scenarioAnalysis={scenarioAnalysis} decision={decision} ticker={ticker} currentPrice={livePrice} />}
-        {tab === 'investors'  && <InvestorsBody  agentSignals={agentSignals} debateResult={debateResult} ticker={ticker} />}
-        {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} ticker={ticker} />}
+        {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} />}
+        {tab === 'valuation'  && <ValuationBody  dcfRange={dcfRange} scenarioAnalysis={scenarioAnalysis} decision={decision} ticker={ticker} currentPrice={livePrice} isRunning={isRunning} />}
+        {tab === 'investors'  && <InvestorsBody  agentSignals={agentSignals} debateResult={debateResult} ticker={ticker} isRunning={isRunning} />}
+        {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} ticker={ticker} isRunning={isRunning} />}
         {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} deepAnnotated={deepAnnotated} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
         {tab === 'financials' && <FinancialsBody ticker={ticker} />}
       </div>
@@ -288,29 +294,65 @@ function ProgressHeader({
 }
 
 /* ───────── Summary Tab ───────── */
+function LoadingSpinner({ size = 16 }: { size?: number }) {
+  return (
+    <span
+      className="inline-block rounded-full border-2 border-[#2e7d32] dark:border-[#4ea354] border-t-transparent animate-spin"
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
+function LoadingCard({ label, minH = 80 }: { label: string; minH?: number }) {
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
+        {label}
+      </div>
+      <div className="flex items-center justify-center gap-2.5 text-zinc-400 dark:text-zinc-500" style={{ minHeight: minH }}>
+        <LoadingSpinner size={14} />
+        <span className="text-[12px]">Computing…</span>
+      </div>
+    </div>
+  );
+}
+
+function LoadingGradeChip({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1 min-w-[28px]">
+      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">{label}</span>
+      <span className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md bg-zinc-50 dark:bg-zinc-800/60">
+        <LoadingSpinner size={10} />
+      </span>
+    </div>
+  );
+}
+
 function SummaryBody({
-  result, decision, vgpm, isRunning,
+  ticker, stockMetrics, decision, vgpm, isRunning,
 }: {
-  result: RunResult | null;
+  ticker: string;
+  stockMetrics: Record<string, number | undefined> | null;
   decision: any;
   vgpm: VgpmResult | undefined;
   isRunning: boolean;
 }) {
-  if (!result && isRunning) {
-    return (
-      <div className="px-4 pt-4 pb-8 space-y-4">
-        <div className="text-[12.5px] text-zinc-500 dark:text-zinc-400 text-center py-8">
-          Partial results will appear here as the pipeline completes each phase.
-        </div>
-      </div>
-    );
-  }
-  if (!result) return <EmptyTab />;
-
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
-      {/* PM decision card */}
-      {decision && (
+      {/* Stock chart — always rendered (fetches independently) */}
+      {ticker && <MobileChartStrip ticker={ticker} />}
+
+      {/* Key financial metrics — fetched via getStockData in parent */}
+      {ticker && (
+        stockMetrics ? (
+          <MobileKeyStats ticker={ticker} metrics={stockMetrics} />
+        ) : (
+          <LoadingCard label="Key Stats" minH={100} />
+        )
+      )}
+
+      {/* Portfolio Manager hero card — loading skeleton while pipeline runs */}
+      {decision ? (
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-2">
             Portfolio Manager
@@ -342,47 +384,74 @@ function SummaryBody({
             </p>
           )}
         </div>
-      )}
-
-      {/* VGPM scorecard */}
-      {vgpm && (
+      ) : (
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
-            VGPM Scorecard
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-2">
+            Portfolio Manager
           </div>
-          <div className="grid grid-cols-4 gap-3">
-            <GradeChip grade={vgpm.valuation?.grade}     label="Valuation" />
-            <GradeChip grade={vgpm.growth?.grade}        label="Growth" />
-            <GradeChip grade={vgpm.profitability?.grade} label="Profit." />
-            <GradeChip grade={vgpm.momentum?.grade}      label="Momentum" />
+          <div className="flex items-center gap-2.5 py-2 text-zinc-400 dark:text-zinc-500">
+            <LoadingSpinner size={16} />
+            <span className="text-[12px]">
+              {isRunning ? 'Investor agents running...' : 'Waiting for decision'}
+            </span>
           </div>
         </div>
       )}
+
+      {/* VGPM scorecard — always rendered, with spinners per grade until ready */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
+          VGPM Scorecard
+          {!vgpm && isRunning && <span className="ml-2 text-zinc-400 dark:text-zinc-500 normal-case font-normal tracking-normal">· computing…</span>}
+        </div>
+        <div className="grid grid-cols-4 gap-3">
+          {vgpm?.valuation?.grade
+            ? <GradeChip grade={vgpm.valuation.grade} label="Valuation" />
+            : <LoadingGradeChip label="Valuation" />}
+          {vgpm?.growth?.grade
+            ? <GradeChip grade={vgpm.growth.grade} label="Growth" />
+            : <LoadingGradeChip label="Growth" />}
+          {vgpm?.profitability?.grade
+            ? <GradeChip grade={vgpm.profitability.grade} label="Profit." />
+            : <LoadingGradeChip label="Profit." />}
+          {vgpm?.momentum?.grade
+            ? <GradeChip grade={vgpm.momentum.grade} label="Momentum" />
+            : <LoadingGradeChip label="Momentum" />}
+        </div>
+      </div>
     </div>
   );
 }
 
 /* ───────── Valuation Tab ───────── */
 function ValuationBody({
-  dcfRange, scenarioAnalysis, decision, ticker, currentPrice,
+  dcfRange, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
 }: {
   dcfRange: DcfRange | undefined;
   scenarioAnalysis: ScenarioAnalysis | undefined;
   decision: any;
   ticker: string;
   currentPrice: number | null;
+  isRunning: boolean;
 }) {
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
+      {/* DCF Valuation Ladder */}
       {dcfRange ? (
         <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice ?? undefined} ticker={ticker} />
       ) : (
-        <EmptyTab label="DCF valuation not yet available" />
+        <LoadingCard label="DCF Valuation Ladder" minH={120} />
       )}
-      {scenarioAnalysis && (
+
+      {/* Scenario analysis */}
+      {scenarioAnalysis ? (
         <ScenarioChart scenario={scenarioAnalysis} ticker={ticker} />
+      ) : (
+        <LoadingCard label="Scenario Analysis" minH={100} />
       )}
-      {decision?.price_target != null && (
+
+      {/* Price target */}
+      {decision?.price_target != null ? (
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-2">
             Price target
@@ -391,6 +460,12 @@ function ValuationBody({
             ${decision.price_target.toFixed(2)}
           </div>
         </div>
+      ) : (
+        <LoadingCard label="Price Target" minH={60} />
+      )}
+
+      {!isRunning && !dcfRange && !scenarioAnalysis && (
+        <EmptyTab label="Valuation data not available for this run." />
       )}
     </div>
   );
@@ -398,37 +473,62 @@ function ValuationBody({
 
 /* ───────── Investors Tab ───────── */
 function InvestorsBody({
-  agentSignals, debateResult, ticker,
+  agentSignals, debateResult, ticker, isRunning,
 }: {
   agentSignals: AgentSignals | undefined;
   debateResult: DebateResult | undefined;
   ticker: string;
+  isRunning: boolean;
 }) {
-  if (!agentSignals) return <EmptyTab label="Investor signals not yet available" />;
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
-      <AgentSignalsPanel agentSignals={agentSignals} ticker={ticker} />
-      {debateResult && <DebatePanel debateResult={debateResult} ticker={ticker} />}
+      {agentSignals ? (
+        <AgentSignalsPanel agentSignals={agentSignals} ticker={ticker} />
+      ) : (
+        <LoadingCard
+          label={isRunning ? 'Investor Agents (12 running in parallel)' : 'Investor Signals'}
+          minH={120}
+        />
+      )}
+      {debateResult ? (
+        <DebatePanel debateResult={debateResult} ticker={ticker} />
+      ) : (
+        <LoadingCard
+          label={isRunning ? 'Agent Debate (if triggered)' : 'Agent Debate'}
+          minH={80}
+        />
+      )}
     </div>
   );
 }
 
 /* ───────── Risk Tab ───────── */
 function RiskBody({
-  powerLaw, valueTrap, ticker,
+  powerLaw, valueTrap, ticker, isRunning,
 }: {
   powerLaw: PowerLawAnalysis | undefined;
   valueTrap: ValueTrapAnalysis | undefined;
   ticker: string;
+  isRunning: boolean;
 }) {
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
       {powerLaw ? (
         <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
       ) : (
-        <EmptyTab label="Power Law analysis not yet available" />
+        <LoadingCard
+          label={isRunning ? 'Power Law Moat Analysis' : 'Power Law Moat'}
+          minH={140}
+        />
       )}
-      {valueTrap && <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />}
+      {valueTrap ? (
+        <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
+      ) : (
+        <LoadingCard
+          label={isRunning ? 'Value Trap Audit' : 'Value Trap Checks'}
+          minH={120}
+        />
+      )}
     </div>
   );
 }
