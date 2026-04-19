@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import traceback
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -307,9 +308,31 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                 # SSE stream is still closing.
                 async with _in_flight_lock:
                     _in_flight.pop(_dedup_key, None)
-                # Clean up live phase tracking
-                _live_phases.pop(ticker.upper(), None)
-                _live_phase_maps.pop(ticker.upper(), None)
+
+                # Write a synthetic "pipeline_complete" phase marker so reconnecting
+                # clients can detect completion even if the DB write hasn't landed yet.
+                # This stays in _live_phases for 120s before normal cleanup.
+                _tk_done = ticker.upper()
+                _completion_marker = {
+                    "phase": "pipeline_complete",
+                    "status": "done",
+                    "summary": f"Run completed: {result_container.get('run_id', '')}",
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "run_id": result_container.get("run_id", ""),
+                    "completed": True,
+                }
+                _live_phases[_tk_done] = _completion_marker
+                if _tk_done not in _live_phase_maps:
+                    _live_phase_maps[_tk_done] = {}
+                _live_phase_maps[_tk_done]["pipeline_complete"] = _completion_marker
+
+                # Schedule delayed cleanup — give clients 2 min to poll and see completion
+                async def _delayed_cleanup():
+                    await asyncio.sleep(120)
+                    _live_phases.pop(_tk_done, None)
+                    _live_phase_maps.pop(_tk_done, None)
+                asyncio.create_task(_delayed_cleanup())
+
                 if _run_event is not None:
                     _run_event.set()
                 await phase_events.put(

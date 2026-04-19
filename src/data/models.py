@@ -59,6 +59,18 @@ class FinancialMetrics(BaseModel):
     earnings_per_share: float | None
     book_value_per_share: float | None
     free_cash_flow_per_share: float | None
+    # ── REIT / Business Trust specific metrics (optional, default None) ────────
+    # Populated for REIT sector tickers; None for non-REIT equities.
+    ffo: float | None = None                    # Funds From Operations
+    affo: float | None = None                   # Adjusted FFO
+    noi: float | None = None                    # Net Operating Income
+    price_to_ffo: float | None = None           # P/FFO (like P/E for REITs)
+    price_to_nav: float | None = None           # P/NAV (price to net asset value)
+    nav_per_unit: float | None = None           # Book value per unit (proxy for NAV)
+    cap_rate: float | None = None               # NOI / Enterprise Value
+    ltv: float | None = None                    # Loan-to-Value (Total Debt / EV)
+    net_debt_to_ebitda: float | None = None     # Leverage ratio
+    dividend_yield: float | None = None         # Distribution yield
 
 
 class FinancialMetricsResponse(BaseModel):

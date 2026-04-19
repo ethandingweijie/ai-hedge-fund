@@ -77,6 +77,10 @@ SECTOR_WACC: dict[str, float] = {
     "Industrials":         0.080,
     # Damo: R.E.I.T. 5.32%, Real Estate Development 5.82%
     "RealEstate":          0.055,
+    # SGX REITs and Business Trusts — same as RealEstate (REIT sub-segment).
+    # REITs have high leverage (typically 35-45% LTV) and high distribution payout,
+    # compressing equity volatility and WACC despite rate sensitivity.
+    "REIT":                0.055,
     # Damo: Transportation (railroads) 7.27%, Trucking 7.52%, Air Transport 6.72%
     "Transportation":      0.072,
     # Damo: Metals & Mining 8.20%, Chemical Basic 6.22%, Chemical Specialty 7.25%
@@ -236,7 +240,12 @@ def get_wacc(sector: str, leverage: float = 0.0,
     else:
         base    = SECTOR_WACC.get(sector, 0.090)
         lev_cap = 0.040
-    leverage_premium = max(0.0, (leverage - 1.5) * 0.01)
+    # REITs and Business Trusts have high leverage by design (35-45% LTV is standard).
+    # Do NOT apply leverage premium — the 5.5% empirical WACC already reflects this.
+    if sector in ("REIT", "RealEstate"):
+        leverage_premium = 0.0
+    else:
+        leverage_premium = max(0.0, (leverage - 1.5) * 0.01)
     overlay = _MACRO_WACC_OVERLAY.get(macro_regime, 0.0)
     return round(min(base + leverage_premium + overlay, base + lev_cap), 4)
 
@@ -293,6 +302,11 @@ TERMINAL_GROWTH_RATES: dict[str, dict[str, float]] = {
         "base": 0.020,
         "bull": 0.030,   # rent growth + development pipeline
     },
+    "REIT": {
+        "bear": 0.010,   # same as RealEstate — SGX uses "REIT" as sector
+        "base": 0.020,
+        "bull": 0.030,
+    },
     "Transportation": {
         "bear": 0.005,   # fuel cost and demand cycle headwinds
         "base": 0.015,
@@ -337,6 +351,7 @@ FCF_MARGIN_FLOOR: dict[str, float] = {
     "Financials":          0.00,   # financial FCF proxied via retained earnings
     "Industrials":         0.02,
     "RealEstate":          0.05,   # REITs should maintain positive distributable cash
+    "REIT":                0.05,   # SGX REITs (same as RealEstate)
     "Transportation":      0.00,   # airlines can go FCF-negative in downturns
     "Materials":           0.01,   # commodity producers maintain thin but positive FCF at cycle trough
     "Resources":           0.00,   # E&P/mining FCF can be zero at commodity trough
@@ -1591,6 +1606,10 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Travel & Dining":     {"ev_ebitda": 14.0, "pe": 22.0, "ev_revenue": 3.0,  "pb": 6.0,  "fcf_yield": 0.040, "growth_avg": 0.08},
     "Industrials":         {"ev_ebitda": 13.0, "pe": 18.0, "ev_revenue": 2.0,  "pb": 3.0,  "fcf_yield": 0.050, "growth_avg": 0.06},
     "RealEstate":          {"ev_ebitda": 20.0, "pe": 35.0, "ev_revenue": 8.0,  "pb": 1.5,  "fcf_yield": 0.045, "growth_avg": 0.05},
+    # REIT: SGX/APAC REITs trade at tighter multiples than US REITs (lower growth).
+    # P/B around 0.9-1.0 (trading near NAV), P/E 12-15x (distributable income focus),
+    # FCF yield ~6-7% (higher payout ratio norm).
+    "REIT":                {"ev_ebitda": 15.0, "pe": 14.0, "ev_revenue": 6.0,  "pb": 1.0,  "fcf_yield": 0.065, "growth_avg": 0.03},
     "Transportation":      {"ev_ebitda": 8.0,  "pe": 12.0, "ev_revenue": 1.5,  "pb": 2.0,  "fcf_yield": 0.065, "growth_avg": 0.05},
     "Materials":           {"ev_ebitda": 8.0,  "pe": 12.0, "ev_revenue": 1.2,  "pb": 1.5,  "fcf_yield": 0.065, "growth_avg": 0.04},
     "Resources":           {"ev_ebitda": 6.0,  "pe": 12.0, "ev_revenue": 2.0,  "pb": 1.5,  "fcf_yield": 0.070, "growth_avg": 0.04},
@@ -1791,7 +1810,9 @@ def classify_valuation_profile(
     Returns the profile key string to look up in INDUSTRY_VALUATION_PROFILES.
     Falls back to the first (anchor) profile for that sector if no rule matches.
     """
-    profiles = INDUSTRY_VALUATION_PROFILES.get(sector, {})
+    # Normalize sector key: "REIT" (from SGX universe) maps to "RealEstate"
+    sector_lookup = "RealEstate" if sector == "REIT" else sector
+    profiles = INDUSTRY_VALUATION_PROFILES.get(sector_lookup, {})
     if not profiles:
         return ""
 
@@ -1946,7 +1967,7 @@ def classify_valuation_profile(
     if sector == "Crypto":
         return "Pre-Revenue Tech"
 
-    if sector == "RealEstate":
+    if sector in ("RealEstate", "REIT"):
         return "REIT"
 
     if sector == "Transportation":
@@ -2019,7 +2040,9 @@ def get_valuation_profile(
         sector, revenue_cagr, fcf_margin, debt_to_equity, is_pre_revenue,
         revenue_base=revenue_base,
     )
-    profiles = INDUSTRY_VALUATION_PROFILES.get(sector, {})
+    # Normalize sector key: "REIT" (from SGX universe) → "RealEstate" (profiles key)
+    sector_lookup = "RealEstate" if sector == "REIT" else sector
+    profiles = INDUSTRY_VALUATION_PROFILES.get(sector_lookup, {})
     return profile_key, profiles.get(profile_key, {})
 
 

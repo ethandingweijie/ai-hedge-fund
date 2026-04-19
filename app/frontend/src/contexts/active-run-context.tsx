@@ -222,11 +222,17 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         const latest = runs[0];
         const runTime = new Date(latest.run_at).getTime();
         // If we have a startedAt reference, check timing. Otherwise accept any
-        // recent run (within 45 min) — handles case where activeRun was cleaned up.
+        // recent run (within 60 min) — handles case where activeRun was cleaned up.
+        // Relaxed to 5-min window tolerance (was 60s) to handle DB write lag.
         const startTime = current
           ? new Date(current.startedAt).getTime()
-          : Date.now() - 45 * 60 * 1000;
-        if (runTime >= startTime - 60000 && latest.final_action) {
+          : Date.now() - 60 * 60 * 1000;
+        // Accept if: (a) run completed AFTER we started (within 5 min tolerance) OR
+        //            (b) no activeRun reference AND run is within last 60 min
+        const timingOK = current
+          ? runTime >= startTime - 5 * 60 * 1000
+          : runTime >= Date.now() - 60 * 60 * 1000;
+        if (timingOK && latest.final_action) {
           // Run completed — mark as done
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           setStreamRunId(latest.run_id);
@@ -307,6 +313,44 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         );
         if (statusRes.ok) {
           const status = await statusRes.json();
+
+          // ── NEW: Detect pipeline_complete marker from backend ─────────────
+          // Backend sets this in the finally block after the pipeline finishes,
+          // BEFORE the DB commit may have fully landed. We can mark complete
+          // immediately and fetch the result from the run_id in the marker.
+          if (status.phase === 'pipeline_complete' || status.completed === true) {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            const completedRunId = status.run_id || '';
+            setStreamRunId(completedRunId);
+            setStreamState('complete');
+            setActiveRuns(prev => {
+              const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+              next.length > 0 ? sessionStorage.setItem('activeRuns', JSON.stringify(next)) : sessionStorage.removeItem('activeRuns');
+              return next;
+            });
+            setRecentlyCompleted({
+              ticker: ticker.toUpperCase(),
+              runId: completedRunId,
+              completedAt: new Date().toISOString(),
+            });
+            // Fetch the result — retry a few times if DB write is still landing
+            if (completedRunId) {
+              const fetchResult = async (attempts = 0): Promise<void> => {
+                try {
+                  const result = await getRunResult(completedRunId);
+                  setLiveResult(result);
+                } catch {
+                  if (attempts < 5) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    return fetchResult(attempts + 1);
+                  }
+                }
+              };
+              fetchResult();
+            }
+            return;
+          }
+
           if (status.in_progress && status.phase) {
             // Pipeline still running — update phaseMap with ALL phases from server
             consecutiveNotRunning = 0; // reset crash counter
@@ -414,6 +458,29 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
           );
           if (statusRes.ok) {
             const status = await statusRes.json();
+            // Check for completion marker first
+            if (status.phase === 'pipeline_complete' || status.completed === true) {
+              const completedRunId = status.run_id || '';
+              setStreamRunId(completedRunId);
+              setStreamState('complete');
+              setActiveRuns(prev => {
+                const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+                next.length > 0 ? sessionStorage.setItem('activeRuns', JSON.stringify(next)) : sessionStorage.removeItem('activeRuns');
+                return next;
+              });
+              setRecentlyCompleted({
+                ticker: ticker.toUpperCase(),
+                runId: completedRunId,
+                completedAt: new Date().toISOString(),
+              });
+              if (completedRunId) {
+                try {
+                  const result = await getRunResult(completedRunId);
+                  setLiveResult(result);
+                } catch { /* ignore */ }
+              }
+              return;
+            }
             if (status.in_progress) {
               // Pipeline confirmed alive — restart fresh polling (resets crash counter)
               startPolling(ticker);
