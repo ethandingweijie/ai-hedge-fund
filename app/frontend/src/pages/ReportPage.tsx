@@ -336,6 +336,11 @@ export function ReportPage() {
   const searchDebounceRef                 = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchReqIdRef                    = useRef(0); // increments on every search; stale responses are ignored
   const searchBarRef                      = useRef<HTMLDivElement>(null);
+  // Hero video refs — matches the LoginPage slow-motion green-hue background.
+  // Light + dark videos are mounted concurrently and toggled via Tailwind
+  // `dark:hidden` / `hidden dark:block`.
+  const heroVideoRef                       = useRef<HTMLVideoElement>(null);
+  const heroVideoDarkRef                   = useRef<HTMLVideoElement>(null);
 
   // ── Fresh ticker: clear everything and show landing page ────────────────────
   // Must run before liveMode init so state is clean on first render.
@@ -388,6 +393,26 @@ export function ReportPage() {
       window.history.replaceState({}, '');
     }
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Hero videos: slow-motion playback on the new-ticker (!liveMode) screen ──
+  // Videos are only mounted when !liveMode, so refs attach only on that screen.
+  // Re-run when liveMode flips back to false so playback resumes after navigating
+  // away and returning.
+  useEffect(() => {
+    if (liveMode) return;
+    const boot = (v: HTMLVideoElement | null) => {
+      if (!v) return;
+      v.playbackRate = 0.5; // slow motion
+      const tryPlay = () => v.play().catch(() => { /* iOS autoplay blocked — poster is the fallback */ });
+      if (v.readyState >= 2) tryPlay(); else v.addEventListener('loadeddata', tryPlay, { once: true });
+    };
+    // Defer one frame so refs are attached after the !liveMode JSX mounts.
+    const raf = requestAnimationFrame(() => {
+      boot(heroVideoRef.current);
+      boot(heroVideoDarkRef.current);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [liveMode]);
 
   // ── Auto-reconnect after refresh: if activeRun was persisted but stream is idle,
   // poll for the existing pipeline instead of POSTing a new run.
@@ -941,16 +966,65 @@ export function ReportPage() {
 
     return (
       <div className="min-h-screen flex flex-col bg-white dark:bg-zinc-900 relative overflow-hidden">
-        {/* Ambient green radial accent */}
-        <div
-          className="absolute inset-x-0 top-0 h-[60%] pointer-events-none opacity-60"
-          aria-hidden="true"
-          style={{
-            background:
-              'radial-gradient(90% 60% at 50% 0%,  rgba(46,125,50,0.08), transparent 62%),' +
-              'radial-gradient(50% 35% at 90% 18%, rgba(46,125,50,0.05), transparent 60%)',
-          }}
-        />
+        {/* ── Hero video background — LIGHT MODE ──────────────────────────────
+           Slow-motion looped footage recoloured toward Equitable green.
+           Shared with LoginPage; playbackRate driven below via useEffect. */}
+        <div className="absolute inset-0 z-0 pointer-events-none dark:hidden" aria-hidden="true">
+          <video
+            ref={heroVideoRef}
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{
+              filter: 'hue-rotate(80deg) saturate(0.9) brightness(1.05) contrast(0.95)',
+              opacity: 0.55,
+            }}
+            src="/landing-hero.mp4"
+            autoPlay muted loop playsInline preload="auto"
+          />
+          {/* Brand green wash top → white bottom so form content remains legible */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(46,125,50,0.22) 0%, rgba(255,255,255,0.55) 55%, rgba(255,255,255,0.92) 100%)',
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(255,255,255,0.6) 100%)',
+            }}
+          />
+        </div>
+
+        {/* ── Hero video background — DARK MODE ───────────────────────────────
+           Descending green-hue footage (already green-tinted). */}
+        <div className="absolute inset-0 z-0 pointer-events-none hidden dark:block" aria-hidden="true">
+          <video
+            ref={heroVideoDarkRef}
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{
+              filter: 'saturate(1.05) brightness(0.85) contrast(1.0)',
+              opacity: 0.55,
+            }}
+            src="/landing-hero-dark.mp4"
+            autoPlay muted loop playsInline preload="auto"
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(24,24,27,0.35) 0%, rgba(24,24,27,0.55) 55%, rgba(24,24,27,0.85) 100%)',
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(24,24,27,0.7) 100%)',
+            }}
+          />
+        </div>
 
         <div className="relative z-10 flex-1 flex flex-col">
           <div className="flex-1 min-h-[40px]" />
