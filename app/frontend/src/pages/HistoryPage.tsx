@@ -1,51 +1,55 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+/**
+ * HistoryPage.tsx — Reimagined UI (v2)
+ *
+ * Past analyses list wired to the real backend.
+ * - Ongoing runs (green "Ongoing" cards with spinner) — clickable to resume viewing
+ * - Search box
+ * - Recent analyses with action pill + price target + upside + VGPM grades
+ * - SwipeRow: swipe left → Delete
+ * - Pagination (page_size=50)
+ */
+
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/auth-context';
 import { getHistory, getCompanyNames, deleteRun } from '@/lib/api';
-import type { HistoryResponse } from '@/lib/reportTypes';
+import type { HistoryResponse, RunSummary } from '@/lib/reportTypes';
 import { useActiveRun } from '@/contexts/active-run-context';
-import { ResearchNav } from '@/components/layout/ResearchNav';
-import { gradeColorClass } from '@/lib/gradeColors';
-import { Filter, X } from 'lucide-react';
+import {
+  Search,
+  X,
+  Clock,
+  ChevRight,
+  Filter,
+  ActionPill,
+  GradeChip,
+  Delta,
+  SwipeRow,
+} from '@/components/v2/shared';
+import { toast } from 'sonner';
 
-const ACTION_COLORS: Record<string, string> = {
-  BUY:   'bg-green-600 text-white',
-  SELL:  'bg-red-600 text-white',
-  SHORT: 'bg-orange-500 text-white',
-  COVER: 'bg-blue-600 text-white',
-  HOLD:  'bg-yellow-500 text-white',
-};
-
-function GradePill({ grade, label }: { grade?: string; label: string }) {
-  const clean = grade?.replace(/^~/, '') ?? '—';
-  const isBlank = clean === '—';
-  return (
-    <div className="flex flex-col items-center gap-0.5">
-      <span className="text-[8px] font-medium uppercase tracking-wider text-gray-400 dark:text-white/30">{label}</span>
-      <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${isBlank ? 'text-muted-foreground/40' : gradeColorClass(clean)}`}>
-        {clean}
-      </span>
-    </div>
-  );
+function daysAgo(iso: string): string {
+  const d = new Date(iso);
+  const ms = Date.now() - d.getTime();
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  if (days === 0) {
+    const hrs = Math.floor(ms / (1000 * 60 * 60));
+    if (hrs === 0) return `${Math.max(1, Math.floor(ms / 60000))}m ago`;
+    return `${hrs}h ago`;
+  }
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
-
-const nameCache: Record<string, string> = {};
 
 export function HistoryPage() {
   const navigate = useNavigate();
-  const { user, logout, loading: authLoading } = useAuth();
-
-  useEffect(() => {
-    if (!authLoading && !user) navigate('/login', { state: { from: '/history' }, replace: true });
-  }, [user, authLoading, navigate]);
+  const { activeRuns, recentlyCompleted, clearCompleted } = useActiveRun();
 
   const [history, setHistory] = useState<HistoryResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [nameMap, setNameMap] = useState<Record<string, string>>({});
-
-  const { activeRuns, recentlyCompleted, clearCompleted, streamState } = useActiveRun();
-  const isStreamRunning = streamState === 'running' || streamState === 'reconnecting';
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const deleteGuard = useRef<Set<string>>(new Set());
 
   // Fallback: read activeRuns from sessionStorage if context lost them (iOS Safari)
   const effectiveActiveRuns: Array<{ ticker: string; startedAt: string }> = activeRuns.length > 0
@@ -60,203 +64,268 @@ export function HistoryPage() {
         } catch { return []; }
       })();
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const handleDelete = async (runId: string) => {
-    setDeletingId(runId);
+  // ── Fetch history ─────────────────────────────────────────────────────────
+  const load = useCallback(async (p: number = page) => {
+    setLoading(true);
     try {
-      await deleteRun(runId);
-      setHistory(prev => prev ? { ...prev, items: prev.items.filter(r => r.run_id !== runId), total: prev.total - 1 } : prev);
-      setConfirmId(null);
-    } catch {} finally { setDeletingId(null); }
-  };
-
-  useEffect(() => {
-    if (!recentlyCompleted) return;
-    const t = setTimeout(() => clearCompleted(), 60_000);
-    return () => clearTimeout(t);
-  }, [recentlyCompleted, clearCompleted]);
-
-  const [showFilters, setShowFilters] = useState(false);
-  const [ticker, setTicker] = useState('');
-  const [sector, setSector] = useState('');
-  const [regime, setRegime] = useState('');
-  const [action, setAction] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [page, setPage] = useState(1);
-
-  const load = useCallback(async (p = 1) => {
-    setLoading(true); setError(null);
-    try {
-      const data = await getHistory({ ticker: ticker || undefined, sector: sector || undefined, regime: regime || undefined, action: action || undefined, date_from: dateFrom || undefined, date_to: dateTo || undefined, page: p, page_size: 50 });
-      setHistory(data); setPage(p);
-      const tickers = [...new Set(data.items.map(r => r.ticker))].filter(t => !nameCache[t]);
+      const data = await getHistory({ page: p, page_size: 50 });
+      setHistory(data);
+      // Fetch company names in one batch
+      const tickers = Array.from(new Set(data.items.map(r => r.ticker)));
       if (tickers.length > 0) {
         try {
-          const names = await getCompanyNames(tickers);
-          const map: Record<string, string> = {};
-          for (const n of names) { map[n.ticker] = n.name; nameCache[n.ticker] = n.name; }
-          setNameMap(prev => ({ ...prev, ...map }));
-        } catch {}
+          const nameMap = await getCompanyNames(tickers);
+          const simplified: Record<string, string> = {};
+          for (const [t, profile] of Object.entries(nameMap)) {
+            simplified[t] = (profile as any)?.name || t;
+          }
+          setNames(prev => ({ ...prev, ...simplified }));
+        } catch { /* ignore */ }
       }
-    } catch (err: unknown) { setError(err instanceof Error ? err.message : 'Failed to load'); } finally { setLoading(false); }
-  }, [ticker, sector, regime, action, dateFrom, dateTo]);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [page]);
 
-  // Load on mount AND when any filter changes (load depends on all filter states via useCallback)
-  useEffect(() => { load(1); }, [load]);
-  const totalPages = history ? Math.ceil(history.total / 50) : 0;
-  if (authLoading || !user) return null;
+  useEffect(() => { load(page); }, [load, page]);
 
+  // Refresh on newly completed run
+  useEffect(() => {
+    if (recentlyCompleted) {
+      load(1);
+      setTimeout(() => clearCompleted(), 3000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentlyCompleted]);
+
+  // ── Filter by search ──────────────────────────────────────────────────────
+  const rows = useMemo(() => {
+    const items = history?.items ?? [];
+    if (!q) return items;
+    const query = q.toLowerCase();
+    return items.filter(r =>
+      r.ticker.toLowerCase().includes(query) ||
+      (names[r.ticker] || '').toLowerCase().includes(query)
+    );
+  }, [history, q, names]);
+
+  const handleDelete = async (runId: string) => {
+    if (deleteGuard.current.has(runId)) return;
+    deleteGuard.current.add(runId);
+    try {
+      await deleteRun(runId);
+      setHistory(prev => prev
+        ? { ...prev, items: prev.items.filter(r => r.run_id !== runId), total: prev.total - 1 }
+        : prev);
+      toast.success('Run deleted');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      deleteGuard.current.delete(runId);
+    }
+  };
+
+  const handleOpenOngoing = (ticker: string) => {
+    navigate('/report', { state: { resume: true, switchTicker: ticker } });
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen relative" style={{ backgroundImage: 'url(/bg-wallpaper.jpg)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
-      <div className="absolute inset-0 bg-black/40 dark:bg-background pointer-events-none" />
-      <div className="relative z-10">
-        <ResearchNav />
-        <div className="max-w-5xl mx-auto px-3 pt-3 pb-6">
+    <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
+      {/* Search */}
+      <div className="px-3 pt-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" width={15} height={15}/>
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Search ticker or company"
+            className="w-full h-10 pl-8 pr-3 text-[13px] rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 focus:bg-white dark:focus:bg-zinc-900 focus:border-zinc-300 dark:focus:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#2e7d32]/10 placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-50"
+          />
+        </div>
+      </div>
 
-          {/* Header */}
-          <div className="flex items-center justify-between mb-3">
-            <div />
-            <div className="flex items-center gap-2">
-              <select value={sector} onChange={e => { setSector(e.target.value); /* auto-loads via useEffect on load */; }}
-                className="h-7 px-2 text-[10px] rounded-lg bg-muted text-muted-foreground border border-border">
-                <option value="">All Sectors</option>
-                {['Tech','Semiconductor','Financials','Consumer','Biopharma','Energy','Industrials','ProfessionalServices'].map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); /* auto-loads via useEffect on load */; }}
-                className="h-7 px-1.5 text-[10px] rounded-lg bg-muted text-muted-foreground border border-border" />
-              <button onClick={() => setShowFilters(v => !v)} title="Filters"
-                className={`w-7 h-7 rounded-lg flex items-center justify-center ${showFilters ? 'bg-white text-emerald-900' : 'bg-gray-100 text-muted-foreground hover:bg-muted'}`}>
-                <Filter size={12} />
+      {/* Filter chips (static for now — filters already in backend endpoint) */}
+      <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5 overflow-x-auto phone-scroll">
+        {['All sectors', 'US · HK · SGX', 'Last 30d', 'Any action'].map(c => (
+          <span key={c} className="h-8 px-2.5 text-[11px] rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 flex items-center gap-1 shrink-0">
+            {c}
+          </span>
+        ))}
+        <button
+          className="h-8 w-8 rounded-lg border border-zinc-200 dark:border-zinc-800 active:bg-zinc-50 dark:active:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400 shrink-0"
+          aria-label="Filter"
+        >
+          <Filter width={13} height={13}/>
+        </button>
+      </div>
+
+      <div className="flex-1 px-3 pt-2 pb-6">
+        {/* Ongoing runs */}
+        {effectiveActiveRuns.map(r => (
+          <button
+            key={r.ticker}
+            onClick={() => handleOpenOngoing(r.ticker)}
+            className="w-full mb-3 p-3 rounded-xl border border-[#d0e7d2] dark:border-[#2e7d32]/40 bg-[#ecf5ed]/70 dark:bg-[#2e7d32]/10 active:bg-[#ecf5ed] text-left flex items-center gap-2.5 transition-colors"
+          >
+            <div className="relative w-8 h-8 rounded-md bg-white dark:bg-zinc-900 border border-[#d0e7d2] dark:border-[#2e7d32]/40 flex items-center justify-center">
+              <span className="absolute inset-0 rounded-md border-2 border-[#2e7d32] border-t-transparent animate-spin" />
+              <Clock width={12} height={12} className="text-[#2e7d32] dark:text-[#4ea354]" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">{r.ticker}</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#2e7d32] dark:text-[#4ea354]">Ongoing</span>
+              </div>
+              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                started {daysAgo(r.startedAt)}
+              </div>
+            </div>
+            <ChevRight width={14} height={14} className="text-[#2e7d32] dark:text-[#4ea354]" />
+          </button>
+        ))}
+
+        {/* Recent analyses header */}
+        <div className="flex items-center justify-between px-1 mb-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400 dark:text-zinc-500">
+            Recent analyses
+          </span>
+          <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+            {history?.total ?? 0} total
+          </span>
+        </div>
+
+        {/* History list */}
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
+          {loading && !history ? (
+            <div className="px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500">Loading…</div>
+          ) : rows.length === 0 ? (
+            <div className="px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500">
+              {q ? 'No matches. Clear search to see all runs.' : 'No analysis runs yet. Run your first one from Home.'}
+            </div>
+          ) : (
+            rows.map((r, i) => <HistoryRow
+              key={r.run_id}
+              row={r}
+              name={names[r.ticker]}
+              isNew={recentlyCompleted?.runId === r.run_id}
+              className={i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : ''}
+              onOpen={() => navigate(`/report/${r.run_id}`)}
+              onDelete={() => handleDelete(r.run_id)}
+            />)
+          )}
+        </div>
+
+        {/* Pagination */}
+        {history && history.total > 50 && (
+          <div className="flex items-center justify-between mt-4 px-1">
+            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+              Page {history.page} · {history.items.length} of {history.total}
+            </span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="h-8 px-3 text-[11px] rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 active:bg-zinc-50 dark:active:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={page * 50 >= history.total}
+                className="h-8 px-3 text-[11px] rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 active:bg-zinc-50 dark:active:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
               </button>
             </div>
           </div>
-
-          {showFilters && (
-            <div className="mb-3 p-2 rounded-xl bg-card/90 backdrop-blur border border-border flex flex-wrap gap-2 items-center">
-              <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())} placeholder="Ticker"
-                className="h-7 w-20 px-2 text-[10px] rounded-lg bg-white/10 text-white border border-border placeholder:text-muted-foreground/60" />
-              <select value={action} onChange={e => setAction(e.target.value)}
-                className="h-7 px-2 text-[10px] rounded-lg bg-muted text-muted-foreground border border-border">
-                <option value="">Action</option>
-                {['BUY','SELL','SHORT','HOLD'].map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-              <button onClick={() => load(1)} className="h-7 px-3 text-[10px] font-bold rounded-lg bg-white text-emerald-900">Go</button>
-              <button onClick={() => { setTicker(''); setSector(''); setRegime(''); setAction(''); setDateFrom(''); setDateTo(''); /* auto-loads via useEffect on load */; }}
-                className="text-muted-foreground/60 hover:text-white"><X size={12} /></button>
-            </div>
-          )}
-
-          {error && <div className="mb-2 p-2 rounded-lg bg-red-500/20 text-red-300 text-[10px]">{error}</div>}
-
-          {/* Ongoing runs — one green bar per active analysis */}
-          {effectiveActiveRuns.map(run => (
-            <div key={run.ticker}
-              className="mb-2 p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 cursor-pointer hover:bg-emerald-500/25 transition-colors"
-              onClick={() => navigate('/report', { state: { resume: true, switchTicker: run.ticker } })}>
-              <div className="flex items-center gap-2">
-                <svg className="h-3.5 w-3.5 animate-spin text-emerald-400" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-                <span className="font-mono font-bold text-xs text-white">{run.ticker}</span>
-                <span className="text-[9px] font-bold text-emerald-300 bg-emerald-400/20 px-1.5 py-0.5 rounded ring-1 ring-emerald-400/30">ONGOING</span>
-                <span className="ml-auto text-[10px] text-emerald-400">View →</span>
-              </div>
-            </div>
-          ))}
-
-          {/* Cards grid */}
-          {history && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {history.items.length === 0 && effectiveActiveRuns.length === 0 ? (
-                <div className="col-span-full py-12 text-center text-muted-foreground/60 text-sm">No runs found.</div>
-              ) : (
-                history.items.map(row => {
-                  const isNew = recentlyCompleted?.runId === row.run_id;
-                  const evUp = row.ev_upside_pct;
-                  const d = new Date(row.run_at);
-                  const dateStr = `${d.getDate()}/${d.getMonth() + 1}`;
-                  const name = nameMap[row.ticker] || nameCache[row.ticker];
-                  return (
-                    <div
-                      key={row.run_id}
-                      className={`group relative rounded-xl bg-card border border-border shadow-sm p-3 cursor-pointer hover:bg-muted/50 transition-all ${isNew ? 'ring-1 ring-emerald-500/50' : ''}`}
-                      onClick={() => navigate(`/report/${row.run_id}`)}
-                    >
-                      {/* Single row: Ticker+Action | Price+Upside | VGPM | Date */}
-                      <div className="flex items-center gap-2">
-                        {/* Left: ticker + action badge */}
-                        <div className="flex flex-col items-start min-w-[60px]">
-                          <span className="font-mono font-bold text-sm text-foreground">{row.ticker}</span>
-                          {row.final_action && (
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold mt-0.5 ${ACTION_COLORS[row.final_action] ?? 'bg-gray-100 text-muted-foreground'}`}>
-                              {row.final_action}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Price + upside */}
-                        <div className="flex flex-col items-start min-w-[55px]">
-                          <span className="text-sm font-bold text-foreground font-mono">
-                            {row.price_target != null && row.price_target > 0 ? `$${row.price_target.toFixed(0)}` : '—'}
-                          </span>
-                          {evUp != null && (
-                            <span className={`text-[10px] font-semibold ${evUp >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {evUp > 0 ? '+' : ''}{evUp.toFixed(1)}%
-                            </span>
-                          )}
-                        </div>
-
-                        {/* VGPM inline */}
-                        <div className="flex gap-1.5 flex-1 justify-center">
-                          <GradePill grade={row.vgpm_grades?.valuation} label="VAL" />
-                          <GradePill grade={row.vgpm_grades?.growth} label="GRW" />
-                          <GradePill grade={row.vgpm_grades?.profitability} label="PRF" />
-                          <GradePill grade={row.vgpm_grades?.momentum} label="MOM" />
-                        </div>
-
-                        {/* Date + badges */}
-                        <div className="flex flex-col items-end ml-auto">
-                          <span className="text-[10px] text-muted-foreground/60 font-mono">{dateStr}</span>
-                          {isNew && <span className="text-[8px] px-1 py-0.5 rounded-full bg-emerald-500 text-white font-bold mt-0.5">NEW</span>}
-                        </div>
-                      </div>
-
-                      {/* Delete button */}
-                      <div className="absolute top-1 right-1" onClick={e => e.stopPropagation()}>
-                        {confirmId === row.run_id ? (
-                          <span className="flex gap-1">
-                            <button onClick={() => handleDelete(row.run_id)} disabled={deletingId === row.run_id}
-                              className="text-[9px] text-red-400 font-bold">{deletingId === row.run_id ? '…' : '✓'}</button>
-                            <button onClick={() => setConfirmId(null)} className="text-[9px] text-muted-foreground/60">✗</button>
-                          </span>
-                        ) : (
-                          <button onClick={() => setConfirmId(row.run_id)}
-                            className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all">
-                            <X size={11} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-3">
-              <span className="text-[9px] text-muted-foreground/60">{history?.total} runs · {page}/{totalPages}</span>
-              <div className="flex gap-1">
-                <button disabled={page <= 1} onClick={() => load(page - 1)} className="px-2 py-1 text-[9px] rounded bg-gray-100 text-muted-foreground disabled:opacity-30">←</button>
-                <button disabled={page >= totalPages} onClick={() => load(page + 1)} className="px-2 py-1 text-[9px] rounded bg-gray-100 text-muted-foreground disabled:opacity-30">→</button>
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/* ───────── Row ───────── */
+function HistoryRow({
+  row,
+  name,
+  isNew,
+  className = '',
+  onOpen,
+  onDelete,
+}: {
+  row: RunSummary;
+  name?: string;
+  isNew?: boolean;
+  className?: string;
+  onOpen: () => void;
+  onDelete: () => void;
+}) {
+  const upside = typeof row.ev_upside_pct === 'number' ? row.ev_upside_pct : null;
+
+  return (
+    <SwipeRow
+      onClick={onOpen}
+      className={className}
+      actions={[
+        {
+          icon: <X width={20} height={20} strokeWidth={2}/>,
+          label: 'Delete',
+          color: '#ef4444',
+          onClick: onDelete,
+        },
+      ]}
+    >
+      <div
+        className={`w-full text-left p-3 flex items-center gap-3 active:bg-zinc-50 dark:active:bg-zinc-800 transition-colors ${isNew ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/10' : ''}`}
+      >
+        <div className="min-w-0 w-[40%]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight">
+              {row.ticker}
+            </span>
+            {isNew && (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-[#2e7d32] dark:text-[#4ea354]">
+                new
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+            {name || row.sector || '—'}
+          </div>
+          <div className="mt-1 flex items-center gap-1.5">
+            <ActionPill action={row.final_action || null} />
+            <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              {daysAgo(row.run_at)}
+            </span>
+          </div>
+        </div>
+        <div className="w-[24%]">
+          {row.price_target != null ? (
+            <>
+              <div className="text-[12px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">
+                ${row.price_target.toLocaleString(undefined, {
+                  maximumFractionDigits: row.price_target < 10 ? 2 : 0,
+                })}
+              </div>
+              <div className="text-[10px]"><Delta v={upside}/></div>
+              <div className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-0.5 uppercase tracking-wider">
+                Target
+              </div>
+            </>
+          ) : (
+            <div className="text-[10px] text-zinc-400 dark:text-zinc-500">—</div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-auto">
+          <GradeChip grade={row.vgpm_grades?.valuation}     label="V"/>
+          <GradeChip grade={row.vgpm_grades?.growth}        label="G"/>
+          <GradeChip grade={row.vgpm_grades?.profitability} label="P"/>
+          <GradeChip grade={row.vgpm_grades?.momentum}      label="M"/>
+        </div>
+      </div>
+    </SwipeRow>
   );
 }
