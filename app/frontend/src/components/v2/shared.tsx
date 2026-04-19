@@ -188,12 +188,14 @@ export function SwipeRow({
   const start = useRef<number | null>(null);
   const base = useRef(0);
   const moved = useRef(false);
+  const downTarget = useRef<Element | null>(null);
   const actionsWidth = actions.length * 64;
 
   const onPointerDown = (e: React.PointerEvent) => {
     start.current = e.clientX;
     base.current = open ? -actionsWidth : 0;
     moved.current = false;
+    downTarget.current = e.target as Element;
     try { (e.target as Element).setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
   };
   const onPointerMove = (e: React.PointerEvent) => {
@@ -209,7 +211,16 @@ export function SwipeRow({
     const shouldOpen = Math.abs(dx) > actionsWidth * 0.4;
     setOpen(shouldOpen);
     setDx(shouldOpen ? -actionsWidth : 0);
-    if (!wasMove) onClick?.();
+    // Only fire onClick if the tap landed inside a data-tap="open" element.
+    // This lets consumers restrict the click-through target (e.g. only the
+    // ticker column, not the price / VGPM cells) while the swipe gesture
+    // still works across the full row.
+    const target = downTarget.current;
+    downTarget.current = null;
+    if (wasMove) return;
+    if (target && target.closest('[data-tap="open"]')) {
+      onClick?.();
+    }
   };
 
   return (

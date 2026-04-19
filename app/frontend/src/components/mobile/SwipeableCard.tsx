@@ -39,10 +39,16 @@ export function SwipeableCard({ children, actions, onClick, className = '' }: Sw
     setOffset(prev => prev > maxSwipe / 2 ? maxSwipe : 0);
   };
 
-  const handleClick = () => {
+  // Only fire onClick if the tap target is inside a data-tap="open" element.
+  // Lets the consumer restrict the click-through region (e.g. ticker column)
+  // while the swipe gesture still works across the full card.
+  const handleClick = (e: React.MouseEvent) => {
     if (offset > 0) {
       setOffset(0);
-    } else {
+      return;
+    }
+    const target = e.target as Element | null;
+    if (target && target.closest('[data-tap="open"]')) {
       onClick?.();
     }
   };

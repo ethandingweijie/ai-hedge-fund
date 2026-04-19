@@ -379,9 +379,12 @@ function HistoryRow({
       ]}
     >
       <div
-        className={`w-full text-left p-3 flex items-center gap-3 active:bg-zinc-50 dark:active:bg-zinc-800 transition-colors ${isNew ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/10' : ''}`}
+        className={`w-full text-left p-3 flex items-center gap-3 transition-colors ${isNew ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/10' : ''}`}
       >
-        <div className="min-w-0 w-[40%]">
+        {/* Only the ticker column triggers the open action — price + VGPM
+            cells sit outside the data-tap="open" subtree. Swipe-to-delete
+            still works anywhere on the row. */}
+        <div data-tap="open" className="min-w-0 w-[40%] active:bg-zinc-50 dark:active:bg-zinc-800 rounded-md -m-1 p-1 cursor-pointer">
           <div className="flex items-center gap-1.5">
             <span className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight">
               {row.ticker}

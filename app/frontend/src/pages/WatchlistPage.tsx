@@ -292,8 +292,10 @@ export function WatchlistPage() {
                       },
                     ]}
                   >
-                    {/* Left: Ticker + Company stacked */}
-                    <div className="shrink-0 w-[80px]">
+                    {/* Left: Ticker + Company stacked — only this subtree opens
+                        the report. Taps on price / VGPM do nothing; swipe
+                        actions still work anywhere on the card. */}
+                    <div data-tap="open" className="shrink-0 w-[80px] active:bg-zinc-50 dark:active:bg-zinc-800 rounded-md -m-1 p-1 cursor-pointer">
                       <span className="font-bold text-[15px] leading-none block text-zinc-900 dark:text-zinc-50">{item.ticker}</span>
                       <span className="text-[9px] text-zinc-500 dark:text-zinc-400 leading-tight block mt-1">
                         {item.companyName}
