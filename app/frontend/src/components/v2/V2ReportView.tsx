@@ -24,7 +24,7 @@ import type {
   ProgressEvent,
   MacroRegime,
 } from '@/lib/reportTypes';
-import { getStockData } from '@/lib/api';
+import { getStockData, getCompanyName } from '@/lib/api';
 
 // Existing panel components (reused as-is)
 import { ScenarioChart } from '@/components/report/ScenarioChart';
@@ -84,6 +84,8 @@ export function V2ReportView({
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [priceChangePct, setPriceChangePct] = useState<number | null>(null);
   const [stockMetrics, setStockMetrics] = useState<Record<string, number | undefined> | null>(null);
+  const [companyName, setCompanyName] = useState<string>('');
+  const [companyExchange, setCompanyExchange] = useState<string>('');
 
   const ticker = result?.ticker ?? '';
   const data = result?.data ?? {};
@@ -106,6 +108,17 @@ export function V2ReportView({
   const deepResearch = (data.deep_research ?? data.deep_research_report) as string | undefined;
   const deepAnnotated = data.deep_research_annotated as string | undefined;
   const citations = data.citation_registry as CitationRegistryEntry[] | undefined;
+
+  // Company name fetch (sets header "NVDA · NVIDIA Corporation" style)
+  useEffect(() => {
+    if (!ticker) return;
+    getCompanyName(ticker)
+      .then((d) => {
+        setCompanyName(d?.name || '');
+        // Derive exchange chip from industry/sector if present — best effort
+      })
+      .catch(() => { /* ignore */ });
+  }, [ticker]);
 
   // Live price + financial metrics fetch — runs as soon as ticker is known,
   // even before the pipeline has produced decisions/VGPM. Lets us show the
@@ -136,20 +149,29 @@ export function V2ReportView({
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
-      {/* Ticker header */}
+      {/* Ticker header — offset from top so it clears the iOS status bar.
+          The hamburger is a fixed top-left button (in MobileTopBar); we leave
+          a 48px top gutter so the ticker row sits just below that button. */}
       <div
-        className="sticky z-20 bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 px-4 pt-3 pb-3"
-        style={{ top: 'env(safe-area-inset-top, 0px)' }}
+        className="sticky z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 px-5 pb-3"
+        style={{ top: 0, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 56px)' }}
       >
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-[20px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums">
+              <span
+                className="text-[22px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums leading-none"
+                style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
+              >
                 {ticker || '—'}
               </span>
-              {decision?.action && <ActionPill action={decision.action} size="lg" />}
+              {companyName && (
+                <span className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate leading-none">
+                  {companyName}
+                </span>
+              )}
             </div>
-            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
               {sector && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
                   {sector}
@@ -157,18 +179,21 @@ export function V2ReportView({
               )}
               {regime?.risk_appetite && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
-                  {regime.risk_appetite} · {regime.volatility_regime ?? ''} vol
+                  {regime.risk_appetite}{regime.volatility_regime ? ` · ${regime.volatility_regime} vol` : ''}
                 </span>
               )}
             </div>
           </div>
           {livePrice != null && (
             <div className="text-right shrink-0">
-              <div className="text-[18px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums leading-none">
+              <div
+                className="text-[22px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums leading-none"
+                style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
+              >
                 ${livePrice.toFixed(2)}
               </div>
               {priceChangePct != null && (
-                <div className="mt-1 text-[11px]">
+                <div className="mt-1.5 text-[12px]">
                   <Delta v={priceChangePct} />
                   <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">1Y</span>
                 </div>
@@ -180,7 +205,7 @@ export function V2ReportView({
 
       {/* Tab strip */}
       <div className="sticky z-10 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800"
-           style={{ top: 'calc(env(safe-area-inset-top, 0px) + 72px)' }}>
+           style={{ top: 'calc(env(safe-area-inset-top, 0px) + 120px)' }}>
         <div className="px-3 flex items-center gap-1 overflow-x-auto phone-scroll">
           {TABS.map(t => (
             <button
