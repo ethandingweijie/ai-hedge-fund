@@ -173,12 +173,24 @@ export function PowerLawRadar({ powerLaw, ticker }: PowerLawRadarProps) {
     );
   }
 
+  // Backend now emits each dimension on a 0-10 scale. Legacy cached runs
+  // (pre-v1.7.1) stored dims on the old 0-2 scale — detect and rescale here
+  // so both render correctly on the 0-10 radar axis.
+  const rawDims = [
+    powerLaw.scale_economies ?? 0,
+    powerLaw.network_effects ?? 0,
+    powerLaw.winner_take_most ?? 0,
+    powerLaw.switching_costs ?? 0,
+    powerLaw.data_ip_moat ?? 0,
+  ];
+  const isLegacy = rawDims.every(v => v >= 0 && v <= 2) && Math.max(...rawDims) > 0;
+  const scale = isLegacy ? 5 : 1;
   const radarData = [
-    { subject: 'Scale Eco.', value: (powerLaw.scale_economies ?? 0) * 5 },
-    { subject: 'Network Fx', value: (powerLaw.network_effects ?? 0) * 5 },
-    { subject: 'Winner-All', value: (powerLaw.winner_take_most ?? 0) * 5 },
-    { subject: 'Switch Cost', value: (powerLaw.switching_costs ?? 0) * 5 },
-    { subject: 'Data/IP',    value: (powerLaw.data_ip_moat ?? 0) * 5 },
+    { subject: 'Scale Eco.', value: (powerLaw.scale_economies ?? 0) * scale },
+    { subject: 'Network Fx', value: (powerLaw.network_effects ?? 0) * scale },
+    { subject: 'Winner-All', value: (powerLaw.winner_take_most ?? 0) * scale },
+    { subject: 'Switch Cost', value: (powerLaw.switching_costs ?? 0) * scale },
+    { subject: 'Data/IP',    value: (powerLaw.data_ip_moat ?? 0) * scale },
   ];
 
   const totalScore  = powerLaw.total_score ?? powerLaw.score ?? 0;

@@ -279,30 +279,43 @@ class ScenarioOutput(BaseModel):
 
 
 class PowerLawOutput(BaseModel):
-    total_score: int = Field(ge=1, le=10)
-    scale_economies: int = Field(ge=0, le=2)
+    # total_score is derived in the backend (weighted mean of dimensions); the
+    # LLM no longer produces it directly. Kept as a field for storage + UI.
+    total_score: int = Field(ge=0, le=10, default=5)
+    scale_economies: int = Field(ge=0, le=10)
     scale_economies_note: str = ""       # positive evidence / what checks off
     scale_economies_concern: str = ""    # risk, caveat, or gap
-    network_effects: int = Field(ge=0, le=2)
+    network_effects: int = Field(ge=0, le=10)
     network_effects_note: str = ""
     network_effects_concern: str = ""
-    winner_take_most: int = Field(ge=0, le=2)
+    winner_take_most: int = Field(ge=0, le=10)
     winner_take_most_note: str = ""
     winner_take_most_concern: str = ""
-    switching_costs: int = Field(ge=0, le=2)
+    switching_costs: int = Field(ge=0, le=10)
     switching_costs_note: str = ""
     switching_costs_concern: str = ""
-    data_ip_moat: int = Field(ge=0, le=2)
+    data_ip_moat: int = Field(ge=0, le=10)
     data_ip_moat_note: str = ""
     data_ip_moat_concern: str = ""
-    interpretation: str
-    multiple_implication: str
+    # interpretation is derived from total_score server-side, but we keep the
+    # field for backwards compat with stored rows (old rows may still have
+    # "solid compounder" / "commodity risk").
+    interpretation: str = "average"
+    multiple_implication: str = ""
 
     @model_validator(mode="before")
     @classmethod
     def _clamp_scores(cls, data: object) -> object:
         """Clamp all score fields into valid range before Pydantic validates ge/le.
-        Handles LLM returning 0, floats (6.5), or out-of-range integers (11)."""
+
+        Handles:
+        - LLM returning floats (6.5) → rounded to nearest integer
+        - LLM returning out-of-range values (11, -1) → clamped
+        - Legacy cached rows on the 0-2 scale → auto-rescaled to 0-10 (×5).
+          Heuristic: if every dimension is in [0, 2] and total_score is 1-10,
+          the row is legacy — multiply dimensions by 5 so the radar + pentagon
+          render consistently with the new rubric.
+        """
         if not isinstance(data, dict):
             return data
         def _ci(v, lo: int, hi: int) -> int:
@@ -310,12 +323,30 @@ class PowerLawOutput(BaseModel):
                 return max(lo, min(hi, int(round(float(v)))))
             except (TypeError, ValueError):
                 return lo
-        data["total_score"]      = _ci(data.get("total_score",      5), 1, 10)
-        data["scale_economies"]  = _ci(data.get("scale_economies",  1), 0, 2)
-        data["network_effects"]  = _ci(data.get("network_effects",  1), 0, 2)
-        data["winner_take_most"] = _ci(data.get("winner_take_most", 1), 0, 2)
-        data["switching_costs"]  = _ci(data.get("switching_costs",  1), 0, 2)
-        data["data_ip_moat"]     = _ci(data.get("data_ip_moat",     1), 0, 2)
+
+        dim_keys = ("scale_economies", "network_effects", "winner_take_most",
+                    "switching_costs", "data_ip_moat")
+        raw_dims = [data.get(k) for k in dim_keys]
+
+        # Legacy-rescale: old schema had dims in 0-2. If every provided dim is
+        # a number ≤ 2, multiply by 5 to bring into the new 0-10 scale.
+        def _is_num(x) -> bool:
+            try: float(x); return True
+            except (TypeError, ValueError): return False
+        numeric_dims = [float(x) for x in raw_dims if _is_num(x)]
+        is_legacy = (
+            len(numeric_dims) == 5
+            and all(0 <= x <= 2 for x in numeric_dims)
+            and max(numeric_dims) <= 2
+        )
+        if is_legacy:
+            for k in dim_keys:
+                if _is_num(data.get(k)):
+                    data[k] = float(data[k]) * 5.0
+
+        data["total_score"]      = _ci(data.get("total_score",      5), 0, 10)
+        for k in dim_keys:
+            data[k] = _ci(data.get(k, 5), 0, 10)
         return data
 
 

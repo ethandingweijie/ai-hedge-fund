@@ -981,12 +981,27 @@ function RiskBody({
 }) {
   const powerLawOverall = powerLaw?.score ?? powerLaw?.total_score ?? null;
 
+  // Legacy rescale: pre-v1.7.1 runs stored dimensions on the 0-2 scale.
+  // Detect by max ≤ 2 and multiply by 5 so the pentagon + dimension bars
+  // render on the same 0-10 axis used by new runs.
+  const _rawPowerLawDims = powerLaw ? [
+    powerLaw.scale_economies ?? 0,
+    powerLaw.network_effects ?? 0,
+    powerLaw.winner_take_most ?? 0,
+    powerLaw.switching_costs ?? 0,
+    powerLaw.data_ip_moat ?? 0,
+  ] : [];
+  const _isLegacyPowerLaw = _rawPowerLawDims.length === 5
+    && _rawPowerLawDims.every(v => v >= 0 && v <= 2)
+    && Math.max(..._rawPowerLawDims) > 0;
+  const _plScale = _isLegacyPowerLaw ? 5 : 1;
+
   const dims = powerLaw ? [
-    { label: 'Scale economies',  score: powerLaw.scale_economies,    note: powerLaw.scale_economies_note, concern: powerLaw.scale_economies_concern },
-    { label: 'Network effects',  score: powerLaw.network_effects,    note: powerLaw.network_effects_note, concern: powerLaw.network_effects_concern },
-    { label: 'Winner-take-most', score: powerLaw.winner_take_most,   note: powerLaw.winner_take_most_note, concern: powerLaw.winner_take_most_concern },
-    { label: 'Switching costs',  score: powerLaw.switching_costs,    note: powerLaw.switching_costs_note, concern: powerLaw.switching_costs_concern },
-    { label: 'Data / IP moat',   score: powerLaw.data_ip_moat,       note: powerLaw.data_ip_moat_note, concern: powerLaw.data_ip_moat_concern },
+    { label: 'Scale economies',  score: (powerLaw.scale_economies  ?? 0) * _plScale, note: powerLaw.scale_economies_note,  concern: powerLaw.scale_economies_concern },
+    { label: 'Network effects',  score: (powerLaw.network_effects  ?? 0) * _plScale, note: powerLaw.network_effects_note,  concern: powerLaw.network_effects_concern },
+    { label: 'Winner-take-most', score: (powerLaw.winner_take_most ?? 0) * _plScale, note: powerLaw.winner_take_most_note, concern: powerLaw.winner_take_most_concern },
+    { label: 'Switching costs',  score: (powerLaw.switching_costs  ?? 0) * _plScale, note: powerLaw.switching_costs_note,  concern: powerLaw.switching_costs_concern },
+    { label: 'Data / IP moat',   score: (powerLaw.data_ip_moat     ?? 0) * _plScale, note: powerLaw.data_ip_moat_note,     concern: powerLaw.data_ip_moat_concern },
   ] : [];
 
   // Backend emits `status` on each check; type says `rating`. Read both.
