@@ -210,6 +210,21 @@ export function V2ReportView({
         </div>
       )}
 
+      {/* Live Qwen thinking stream — visible on ALL tabs while streaming.
+          User asked for this to sit directly below the progress bar so the
+          reasoning output is always visible regardless of which tab is active. */}
+      {isRunning && !isComplete && (isResearchPhase || !!(liveData.deep_research_thinking as string)) && (
+        <div className="px-4 pt-3">
+          <LiveSearchPanel
+            streamEvents={events}
+            liveData={liveData}
+            thinking={(liveData.deep_research_thinking as string) || ''}
+            isResearchPhase={isResearchPhase}
+            isComplete={isComplete}
+          />
+        </div>
+      )}
+
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'summary'    && <SummaryBody    result={result} decision={decision} vgpm={vgpm} isRunning={isRunning} />}
@@ -436,16 +451,8 @@ function ResearchBody({
 }) {
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
-      {/* Live thinking / searching panel — visible during deep research phase */}
-      {isResearchPhase && !isComplete && (
-        <LiveSearchPanel
-          streamEvents={events}
-          liveData={liveData}
-          thinking={(liveData.deep_research_thinking as string) || ''}
-          isResearchPhase={isResearchPhase}
-          isComplete={isComplete}
-        />
-      )}
+      {/* Live thinking panel is rendered globally below the progress bar in
+          V2ReportView so it shows on every tab. Do not duplicate here. */}
 
       {/* Research summary (4-category bullets from LLM) */}
       {industryBrief && runId && (
