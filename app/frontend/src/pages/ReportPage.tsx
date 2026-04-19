@@ -1,16 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/contexts/theme-context';
-import { CheckCircle } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 import { ResearchNav } from '@/components/layout/ResearchNav';
 import { getActiveTier, STARTER_ALLOWED_AGENTS } from '@/lib/tier';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { getStockData, searchCompanies, type CompanySearchResult } from '@/lib/api';
-import { PopularTickerTape } from '@/components/report/PopularTickerTape';
-import { AgentOrbIcon }     from '@/components/report/AgentOrbIcon';
+import { getStockData, searchCompanies, getPopularTickers, type CompanySearchResult, type PopularTicker } from '@/lib/api';
+// v2 imports
+import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
 import { useActiveRun } from '@/contexts/active-run-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileReportView } from '@/components/mobile/MobileReportView';
@@ -331,6 +329,7 @@ export function ReportPage() {
   const [expandCustom, setExpandCustom]   = useState(false);
   const [suggestions, setSuggestions]     = useState<CompanySearchResult[]>([]);
   const [showSugg, setShowSugg]           = useState(false);
+  const [v2Popular, setV2Popular]         = useState<PopularTicker[]>([]);
   const [suggLoading, setSuggLoading]     = useState(false);
   const [searchNoMatch, setSearchNoMatch] = useState(false);
   const searchDebounceRef                 = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -400,6 +399,13 @@ export function ReportPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount only
+
+  // ── Load popular tickers for the Home marquee (once) ─────────────────────────
+  useEffect(() => {
+    getPopularTickers(15)
+      .then(setV2Popular)
+      .catch(() => setV2Popular([]));
+  }, []);
 
   // ── Fetch current price from FMP as soon as run starts ──────────────────────
   useEffect(() => {
@@ -913,437 +919,240 @@ export function ReportPage() {
     const { user, logout } = useAuth();
 
     return (
-      <div
-        className="min-h-screen flex flex-col"
-        style={{
-          backgroundImage: 'url(/bg-wallpaper.jpg)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        {/* Dark overlay for legibility */}
-        <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+      <div className="min-h-screen flex flex-col bg-white dark:bg-zinc-900 relative overflow-hidden">
+        {/* Ambient green radial accent */}
+        <div
+          className="absolute inset-x-0 top-0 h-[60%] pointer-events-none opacity-60"
+          aria-hidden="true"
+          style={{
+            background:
+              'radial-gradient(90% 60% at 50% 0%,  rgba(46,125,50,0.08), transparent 62%),' +
+              'radial-gradient(50% 35% at 90% 18%, rgba(46,125,50,0.05), transparent 60%)',
+          }}
+        />
 
-        <div className="relative z-10 flex flex-col min-h-screen">
+        <div className="relative z-10 flex-1 flex flex-col">
+          <div className="flex-1 min-h-[40px]" />
 
-        {/* Profile icon removed — user profile moved to hamburger menu */}
-        {!liveMode && false && (
-        <div className="flex items-center justify-end px-5 pt-4 pb-2">
-          {user ? (
-            <div className="relative group">
-              {user.avatar_url ? (
-                <img
-                  src={user.avatar_url}
-                  alt={user.name ?? user.email}
-                  className="w-10 h-10 rounded-full object-cover ring-2 ring-white/40 cursor-pointer hover:ring-white/70 transition-all shadow-lg"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-sm font-bold text-gray-700 cursor-pointer ring-2 ring-white/40 hover:ring-white/70 transition-all shadow-lg">
-                  {(user.name ?? user.email)[0].toUpperCase()}
-                </div>
-              )}
-              {/* Dropdown on hover */}
-              <div className="absolute right-0 top-12 w-48 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 py-2 opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-all duration-200 z-50">
-                <div className="px-4 py-2 border-b border-gray-100">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{user.name ?? ''}</p>
-                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
-                </div>
-                <button
-                  onClick={logout}
-                  className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          ) : (
-            <a
-              href="#/login"
-              className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center ring-2 ring-white/30 hover:bg-white/30 hover:ring-white/50 transition-all shadow-lg"
-              title="Sign in"
-            >
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            </a>
-          )}
-        </div>
-        )}
-
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-2xl flex flex-col items-center gap-6">
-
-          {/* Hero heading */}
-          <div className="text-center mb-2">
-            {user && (
-              <p
-                className="text-2xl font-bold tracking-tight text-white/70 drop-shadow-lg mb-0.5"
-                style={{ fontFamily: "'Segoe UI', 'Google Sans', 'Nunito', sans-serif", fontWeight: 700 }}
-              >
-                Hello, {user.name ?? user.email}!
-              </p>
-            )}
-            <h1
-              className="text-2xl font-bold tracking-tight text-white drop-shadow-lg"
-              style={{ fontFamily: "'Segoe UI', 'Google Sans', 'Nunito', sans-serif", fontWeight: 700 }}
-            >
+          {/* Greeting */}
+          <div className="px-6 text-center">
+            <p className="text-[15px] text-zinc-500 dark:text-zinc-400">
+              Hello, {user?.name ?? user?.email ?? 'friend'}
+            </p>
+            <h1 className="mt-1 text-[24px] leading-[1.15] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
               What ticker are we analysing?
             </h1>
           </div>
 
-          <form onSubmit={handleSubmit} className="w-full flex flex-col items-center gap-4">
-
-            {/* ── Search pill ── */}
-            <div className="w-full relative" ref={searchBarRef}>
-              <div className={`flex items-center w-full h-16 rounded-full px-5 gap-3 border-2 transition-all duration-200 ${
-                showSugg
-                  ? 'border-white/60 bg-white/95 shadow-2xl rounded-b-none border-b-transparent'
-                  : 'border-white/40 bg-white/85 hover:border-white/60 hover:bg-white/90 focus-within:border-white/70 focus-within:bg-white/95 focus-within:shadow-xl'
-              }`}>
-
-                {/* Search input */}
-                <input
-                  placeholder="Search ticker or company name…"
-                  value={ticker}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    setTicker(raw);
-                    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                    if (raw.trim().length >= 2) {
-                      setSuggLoading(true);
-                      // Increment request ID — any response with a lower ID is stale and discarded
-                      const reqId = ++searchReqIdRef.current;
-                      searchDebounceRef.current = setTimeout(() => {
-                        searchCompanies(raw.trim())
-                          .then(data => {
-                            if (reqId !== searchReqIdRef.current) return; // stale — ignore
-                            setSuggestions(data);
-                            setShowSugg(data.length > 0);
-                            setSearchNoMatch(data.length === 0 && raw.trim().length >= 2);
-                            setSuggLoading(false);
-                          })
-                          .catch(() => {
-                            if (reqId !== searchReqIdRef.current) return;
-                            setSuggLoading(false);
-                          });
-                      }, 280);
-                    } else {
-                      searchReqIdRef.current++;   // invalidate any in-flight request
-                      setSuggestions([]);
-                      setShowSugg(false);
-                      setSuggLoading(false);
-                      setSearchNoMatch(false);
-                    }
-                  }}
-                  onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
-                  onBlur={() => setTimeout(() => setShowSugg(false), 150)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') { setShowSugg(false); setSuggestions([]); setShowArchetype(false); }
-                  }}
-                  className="flex-1 bg-transparent outline-none text-base font-normal text-left text-gray-800 placeholder:text-gray-400 placeholder:font-normal placeholder:text-base placeholder:tracking-normal"
-                  style={{ fontFamily: "'Google Sans', 'Segoe UI', Arial, sans-serif" }}
-                  maxLength={60}
-                  autoFocus
-                />
-
-                {/* Clear × */}
-                {ticker && (
-                  <button type="button" tabIndex={-1}
-                    onClick={() => { setTicker(''); setSuggestions([]); setShowSugg(false); }}
-                    className="text-muted-foreground/40 hover:text-muted-foreground transition-colors shrink-0 text-xl leading-none"
-                  >×</button>
-                )}
-
-                {/* Spinner */}
-                {suggLoading && (
-                  <div className="w-4 h-4 border-2 border-border border-t-primary rounded-full animate-spin shrink-0" />
-                )}
-
-                {/* Divider */}
-                <div className="w-px h-6 bg-border/50 shrink-0" />
-
-                {/* Agent orb icon — rightmost element, opens archetype panel */}
-                <button
-                  type="button"
-                  title={`Investor archetype: ${archetypeLabel}`}
-                  onClick={() => { setShowArchetype(v => !v); setShowSugg(false); }}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 ${
-                    showArchetype
-                      ? 'bg-foreground text-background shadow-md'
-                      : archetypeReady
-                      ? 'bg-muted/60 text-foreground/30 hover:bg-muted hover:text-foreground/60'
-                      : 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 animate-pulse'
-                  }`}
-                >
-                  <AgentOrbIcon size={22} />
-                </button>
-              </div>
-
-              {/* ── Autocomplete suggestions ── */}
+          {/* Search form */}
+          <form onSubmit={handleSubmit} className="px-4 mt-6 flex items-center gap-2">
+            <div className="flex-1 relative" ref={searchBarRef}>
+              <V2Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" width={16} height={16}/>
+              <input
+                value={ticker}
+                onChange={(e) => {
+                  const raw = e.target.value.toUpperCase();
+                  setTicker(raw);
+                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                  if (raw.trim().length >= 2) {
+                    setSuggLoading(true);
+                    const reqId = ++searchReqIdRef.current;
+                    searchDebounceRef.current = setTimeout(() => {
+                      searchCompanies(raw.trim())
+                        .then(data => {
+                          if (reqId !== searchReqIdRef.current) return;
+                          setSuggestions(data);
+                          setShowSugg(data.length > 0);
+                          setSearchNoMatch(data.length === 0 && raw.trim().length >= 2);
+                          setSuggLoading(false);
+                        })
+                        .catch(() => { if (reqId === searchReqIdRef.current) setSuggLoading(false); });
+                    }, 280);
+                  } else {
+                    searchReqIdRef.current++;
+                    setSuggestions([]);
+                    setShowSugg(false);
+                    setSuggLoading(false);
+                    setSearchNoMatch(false);
+                  }
+                }}
+                onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
+                onBlur={() => setTimeout(() => setShowSugg(false), 150)}
+                placeholder="Search ticker or company..."
+                className="w-full h-11 pl-9 pr-4 text-[13px] rounded-full bg-white/90 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 focus:bg-white dark:focus:bg-zinc-900 focus:border-[#2e7d32] dark:focus:border-[#4ea354] focus:outline-none focus:ring-2 focus:ring-[#2e7d32]/10 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-zinc-900 dark:text-zinc-50 shadow-sm transition-colors"
+                maxLength={60}
+                autoFocus
+              />
+              {/* Autocomplete dropdown */}
               {showSugg && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 bg-white border-2 border-t-0 border-white/60 rounded-b-3xl shadow-xl z-40 overflow-hidden">
-                  {suggestions.map((s, i) => (
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg max-h-80 overflow-y-auto z-20">
+                  {suggestions.map(s => (
                     <button
-                      key={`${s.ticker}-${i}`}
+                      key={s.ticker}
                       type="button"
-                      onMouseDown={() => {
+                      onMouseDown={(e) => {
+                        e.preventDefault();
                         setTicker(s.ticker);
-                        setSuggestions([]);
                         setShowSugg(false);
-                        setSearchNoMatch(false);
+                        setSuggestions([]);
                       }}
-                      className="w-full flex items-center gap-3 px-6 py-3 hover:bg-muted/50 transition-colors text-left"
+                      className="w-full text-left px-3 py-2 text-[13px] hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 flex items-center justify-between gap-3"
                     >
-                      <svg className="w-4 h-4 text-muted-foreground/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                      </svg>
-                      <span className="font-mono font-bold text-sm w-16 shrink-0">{s.ticker}</span>
-                      <span className="text-sm text-muted-foreground flex-1 truncate">{s.name}</span>
-                      {s.exchange && <span className="text-[10px] text-muted-foreground/40 font-mono shrink-0">{s.exchange}</span>}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">{s.ticker}</div>
+                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{s.name}</div>
+                      </div>
+                      {s.exchange && (
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">{s.exchange}</span>
+                      )}
                     </button>
                   ))}
-                  <div className="px-6 py-2 border-t border-border/20">
-                    <p className="text-[10px] text-muted-foreground/40">
-                      <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">↵</kbd> to run · click to select
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* ── No-match error ── */}
-              {searchNoMatch && !showSugg && (
-                <p className="mt-2 text-xs text-red-500 text-center">No matching ticker or company found.</p>
-              )}
-
-              {/* ── Archetype panel — floats below pill, full width ── */}
-              {showArchetype && (
-                <div className="absolute top-[calc(100%+6px)] left-0 right-0 bg-background border border-border rounded-2xl shadow-xl z-30 overflow-hidden">
-
-                  {/* Header */}
-                  <div className="px-5 py-3 border-b border-border/50 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Investor Archetype</span>
-                    {archetypeLabel !== 'Custom' ? (
-                      <span className="text-xs text-primary font-medium">{archetypeLabel}</span>
-                    ) : hasCustomAgents ? (
-                      <span className="text-xs text-primary font-medium">{customAgents.length} investors selected</span>
-                    ) : (
-                      <span className="text-xs text-amber-500/80">Select investors below</span>
-                    )}
-                  </div>
-
-                  {/* Archetype rows */}
-                  {PROFILES.filter((_, i) => i !== 0).map((p, displayIdx) => {
-                    const realIdx = displayIdx + 1;
-                    const selected = profileIdx === realIdx;
-                    const isThisCustom = p.label === 'Custom';
-                    const locked = isProfileLocked(p.agents);
-                    const chips = p.agents.slice(0, 3).map(a => AGENT_LABELS[a]);
-
-                    return (
-                      <div key={p.label}>
-                        <button
-                          type="button"
-                          disabled={locked}
-                          onClick={() => {
-                            if (locked) return;
-                            setProfileIdx(realIdx);
-                            if (isThisCustom) {
-                              setExpandCustom(v => !v);
-                            } else {
-                              setExpandCustom(false);
-                              setShowArchetype(false);
-                            }
-                          }}
-                          className={`w-full flex items-center gap-4 px-5 py-3.5 transition-colors text-left ${
-                            locked
-                              ? 'opacity-40 cursor-not-allowed'
-                              : selected ? 'bg-primary/8' : 'hover:bg-muted/40'
-                          }`}
-                        >
-                          {/* Selection dot or lock */}
-                          {locked ? (
-                            <svg className="w-3 h-3 text-muted-foreground/50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            </svg>
-                          ) : (
-                            <span className={`w-2 h-2 rounded-full shrink-0 transition-colors ${selected ? 'bg-primary' : 'bg-border'}`} />
-                          )}
-
-                          {/* Label + chips */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className={`font-semibold text-sm ${locked ? 'text-muted-foreground' : selected ? 'text-primary' : 'text-foreground'}`}>
-                                {p.label}
-                              </span>
-                              {locked && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 leading-none">
-                                  PRO
-                                </span>
-                              )}
-                            </div>
-                            {chips.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {chips.map(name => (
-                                  <span key={name} className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                                    locked ? 'bg-muted/50 text-muted-foreground/50' :
-                                    selected ? 'bg-primary/15 text-primary/80' : 'bg-muted text-muted-foreground'
-                                  }`}>{name}</span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Custom: chevron */}
-                          {isThisCustom && (
-                            <svg className={`w-4 h-4 text-muted-foreground/50 shrink-0 transition-transform ${expandCustom ? 'rotate-180' : ''}`}
-                              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                            </svg>
-                          )}
-                        </button>
-
-                        {/* Custom sub-dropdown */}
-                        {isThisCustom && expandCustom && (
-                          <div className="border-t border-border/30 bg-muted/20 px-4 py-3">
-                            {/* Search */}
-                            <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2 mb-2">
-                              <svg className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                              </svg>
-                              <input
-                                type="text"
-                                placeholder="Search investors…"
-                                value={agentSearch}
-                                onChange={e => setAgentSearch(e.target.value)}
-                                className="bg-transparent flex-1 outline-none text-sm placeholder:text-muted-foreground/40"
-                              />
-                              {customAgents.length > 0 && (
-                                <span className="text-xs font-semibold text-primary shrink-0">{customAgents.length}</span>
-                              )}
-                            </div>
-
-                            {/* Investor list */}
-                            <div className="max-h-44 overflow-y-auto space-y-0.5">
-                              {filteredAgents.map(agent => {
-                                const agentLocked = isAgentLocked(agent);
-                                const checked = customAgents.includes(agent);
-                                return (
-                                  <button
-                                    key={agent}
-                                    type="button"
-                                    disabled={agentLocked}
-                                    onClick={() => { if (!agentLocked) toggleCustomAgent(agent); }}
-                                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm transition-colors text-left ${
-                                      agentLocked
-                                        ? 'opacity-40 cursor-not-allowed text-muted-foreground'
-                                        : checked ? 'bg-primary/10 text-primary' : 'hover:bg-background text-foreground'
-                                    }`}
-                                  >
-                                    {agentLocked ? (
-                                      <svg className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                      </svg>
-                                    ) : (
-                                      <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                                        checked ? 'bg-primary border-primary' : 'border-border'
-                                      }`}>
-                                        {checked && (
-                                          <svg className="w-2 h-2 text-primary-foreground" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M2 6l3 3 5-5" />
-                                          </svg>
-                                        )}
-                                      </span>
-                                    )}
-                                    <span className="flex-1">{AGENT_LABELS[agent]}</span>
-                                    {agentLocked && (
-                                      <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                                        PRO
-                                      </span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {/* Selected chips */}
-                            {customAgents.length > 0 && (
-                              <div className="mt-2 pt-2 border-t border-border/30 flex flex-wrap gap-1 items-center">
-                                {customAgents.map(a => (
-                                  <button key={a} type="button" onClick={() => toggleCustomAgent(a)}
-                                    className="inline-flex items-center gap-0.5 text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full border border-primary/20 hover:bg-red-500/10 hover:text-red-400 hover:border-red-400/20 transition-colors">
-                                    {AGENT_LABELS[a]}<span className="opacity-50 ml-0.5">×</span>
-                                  </button>
-                                ))}
-                                <button type="button" onClick={() => setCustomAgents([])}
-                                  className="text-[11px] text-muted-foreground/50 hover:text-muted-foreground ml-1">Clear</button>
-                              </div>
-                            )}
-
-                            {customAgents.length === 0 && (
-                              <p className="text-xs text-amber-500/70 mt-1.5">Select at least one investor.</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* Starter tier upgrade nudge */}
-                  {isStarterTier && (
-                    <div className="px-5 py-2.5 border-t border-border/30 bg-muted/20 flex items-center justify-between">
-                      <p className="text-[11px] text-muted-foreground/60">
-                        5 agents locked — deep value analysts included in Starter
-                      </p>
-                      <a href="#/pricing" className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 underline underline-offset-2 hover:opacity-80">
-                        Upgrade →
-                      </a>
-                    </div>
-                  )}
-
                 </div>
               )}
             </div>
-
-            {/* Navigation pill bubbles */}
-            <div className="flex items-center gap-3 flex-wrap justify-center mt-1">
-              {[
-                { label: 'Stock Screener', href: '#/screener' },
-                { label: 'Watchlist',      href: '#/watchlist' },
-                { label: 'History',        href: '#/history' },
-              ].map(({ label, href }) => (
-                <a
-                  key={label}
-                  href={href}
-                  className="px-4 py-2 rounded-full text-sm font-medium text-white border border-white/40 bg-white/15 backdrop-blur-sm hover:bg-white/25 hover:border-white/60 transition-all duration-200 shadow-sm"
-                >
-                  {label}
-                </a>
-              ))}
-            </div>
-
-            {/* Archetype prompt — shown when ticker is filled but Custom has no agents */}
-            {ticker.trim() && !archetypeReady && (
-              <p className="text-xs text-amber-200/90 text-center -mt-1">
-                Click the <span className="font-semibold">investor icon</span> to choose your archetype before running.
-              </p>
-            )}
-
-            {/* Hidden submit — disabled when not ready */}
-            <button type="submit" disabled={!canSubmit} className="sr-only" aria-hidden="true" tabIndex={-1} />
-
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="h-11 px-4 rounded-full bg-[#2e7d32] active:bg-[#265c29] text-white text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition-colors"
+            >
+              Analyse
+            </button>
           </form>
 
-          {/* Popular ticker tape */}
-          <div className="w-full mt-2">
-            <PopularTickerTape onSelect={(t) => { setTicker(t); setSuggestions([]); setShowSugg(false); }} />
+          {/* Archetype / profile hint */}
+          <div className="px-4 mt-2.5 text-center">
+            <button
+              type="button"
+              onClick={() => setShowArchetype(v => !v)}
+              className="text-[11px] text-zinc-500 dark:text-zinc-400"
+            >
+              <V2Users width={11} height={11} className="inline-block mr-1 -mt-0.5 text-[#2e7d32]" />
+              <span className="font-medium text-zinc-700 dark:text-zinc-200">{archetypeLabel}</span>
+              <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">.</span>
+              {activeAgents.length} agent{activeAgents.length === 1 ? '' : 's'}
+              <span className="ml-1.5 text-[#2e7d32] dark:text-[#4ea354] font-medium">change</span>
+            </button>
           </div>
 
-        </div>
-        </div>
+          {/* Archetype panel (collapsible) */}
+          {showArchetype && (
+            <div className="mx-4 mt-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
+                Investor archetype
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {PROFILES.map((p, idx) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => setProfileIdx(idx)}
+                    disabled={isProfileLocked(p.agents)}
+                    className={`h-8 px-2.5 text-[11px] rounded-lg border transition-colors
+                      ${profileIdx === idx
+                        ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[#2e7d32] dark:text-[#4ea354]'
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 active:bg-zinc-50 dark:active:bg-zinc-800'}
+                      disabled:opacity-40 disabled:cursor-not-allowed`}
+                  >
+                    {p.label}
+                    {isProfileLocked(p.agents) && ' *'}
+                  </button>
+                ))}
+              </div>
+              {isStarterTier && (
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-2">
+                  Starter plan: some profiles restricted. Upgrade for full access.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Quick chips */}
+          <div className="px-4 mt-5 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/screener')}
+              className="h-9 px-3.5 rounded-full bg-white/80 dark:bg-zinc-800/60 border border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[12px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-white dark:active:bg-zinc-800 flex items-center gap-1.5 transition-colors"
+            >
+              <V2Scales className="text-[#2e7d32] dark:text-[#4ea354]" width={13} height={13}/>
+              Screener
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/watchlist')}
+              className="h-9 px-3.5 rounded-full bg-white/80 dark:bg-zinc-800/60 border border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[12px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-white dark:active:bg-zinc-800 flex items-center gap-1.5 transition-colors"
+            >
+              <V2Star className="text-[#2e7d32] dark:text-[#4ea354]" width={13} height={13}/>
+              Watchlist
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/history')}
+              className="h-9 px-3.5 rounded-full bg-white/80 dark:bg-zinc-800/60 border border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[12px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-white dark:active:bg-zinc-800 flex items-center gap-1.5 transition-colors"
+            >
+              <V2Clock className="text-[#2e7d32] dark:text-[#4ea354]" width={13} height={13}/>
+              History
+            </button>
+          </div>
+
+          {/* Popular marquee tape */}
+          {v2Popular.length > 0 && (
+            <div className="mt-8 mb-6">
+              <div className="px-4 mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+                  Popular
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+                  <span className="w-1 h-1 rounded-full bg-[#2e7d32] dark:bg-[#4ea354] animate-pulse" />
+                  live
+                </span>
+              </div>
+              <div
+                className="relative overflow-hidden"
+                style={{
+                  WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 6%, black 94%, transparent 100%)',
+                  maskImage:       'linear-gradient(to right, transparent 0, black 6%, black 94%, transparent 100%)',
+                  scrollbarWidth:  'none',
+                }}
+              >
+                <div className="flex items-center gap-2 w-max px-4" style={{ animation: 'v2-marquee 42s linear infinite' }}>
+                  {[...v2Popular, ...v2Popular].map((t, i) => {
+                    const delta = t.change_pct ?? 0;
+                    return (
+                      <button
+                        key={`${t.ticker}-${i}`}
+                        type="button"
+                        onClick={() => { setTicker(t.ticker); setTimeout(() => { const f = document.querySelector('form'); if (f) (f as HTMLFormElement).requestSubmit(); }, 0); }}
+                        className="shrink-0 px-3 py-2 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 flex items-center gap-2 active:bg-zinc-50 dark:active:bg-zinc-800 transition-colors"
+                      >
+                        <span className="text-[12px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight">{t.ticker}</span>
+                        {t.price != null && (
+                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">${t.price.toFixed(2)}</span>
+                        )}
+                        <span className={`text-[11px] font-medium tabular-nums ${delta >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {delta >= 0 ? '^' : 'v'} {Math.abs(delta).toFixed(2)}%
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <style>{`@keyframes v2-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }`}</style>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1" />
+
+          {/* Footer hint */}
+          <div className="px-6 pb-6 text-center">
+            <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+              Results stream in over 4-6 minutes . US . HK . SGX universe
+            </p>
+          </div>
         </div>
       </div>
     );
   }
+
 
   // ── Live report view ─────────────────────────────────────────────────────────
   return (
