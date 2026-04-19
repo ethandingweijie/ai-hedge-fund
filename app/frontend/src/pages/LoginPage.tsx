@@ -68,21 +68,27 @@ export function LoginPage() {
   const appleScriptRef = useRef(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
+  const heroVideoDarkRef = useRef<HTMLVideoElement>(null);
 
   // Already logged in → redirect
   useEffect(() => {
     if (user) navigate(from, { replace: true });
   }, [user, navigate, from]);
 
-  // Hero video — slow-motion playback (light mode only; dark mode hides via CSS)
+  // Hero videos — slow-motion playback. Both the light-mode and dark-mode
+  // videos are mounted concurrently; Tailwind `dark:hidden` / `hidden dark:block`
+  // toggles visibility, but either can be driven regardless of theme. iOS
+  // sometimes blocks autoplay until a user gesture despite `muted` — we retry
+  // silently; the static first frame is the fallback.
   useEffect(() => {
-    const v = heroVideoRef.current;
-    if (!v) return;
-    v.playbackRate = 0.5; // slow motion
-    // iOS / mobile sometimes blocks autoplay until a user gesture despite `muted` —
-    // retry attempt silently if rejected; CSS fallback covers the still frame.
-    const tryPlay = () => v.play().catch(() => { /* blocked — fallback is a static frame */ });
-    if (v.readyState >= 2) tryPlay(); else v.addEventListener('loadeddata', tryPlay, { once: true });
+    const boot = (v: HTMLVideoElement | null) => {
+      if (!v) return;
+      v.playbackRate = 0.5; // slow motion
+      const tryPlay = () => v.play().catch(() => { /* blocked — poster/first frame is the fallback */ });
+      if (v.readyState >= 2) tryPlay(); else v.addEventListener('loadeddata', tryPlay, { once: true });
+    };
+    boot(heroVideoRef.current);
+    boot(heroVideoDarkRef.current);
   }, []);
 
   // Apple Sign In SDK
@@ -176,10 +182,9 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col bg-white dark:bg-zinc-900 relative overflow-hidden">
-      {/* ── Hero video background (light mode only) ───────────────────────────
-         Slow-motion looped footage recoloured to Equitable green hue.
-         Hidden in dark mode via `dark:hidden`. Muted + playsInline so it
-         autoplays on mobile without sound. playbackRate set in useEffect. */}
+      {/* ── Hero video background — LIGHT MODE ────────────────────────────────
+         Slow-motion looped footage recoloured to Equitable green hue. Hidden
+         in dark mode. Muted + playsInline so it autoplays on mobile. */}
       <div className="absolute inset-0 z-0 pointer-events-none dark:hidden">
         <video
           ref={heroVideoRef}
@@ -216,16 +221,46 @@ export function LoginPage() {
         />
       </div>
 
-      <div className="relative z-10 flex-1 flex flex-col justify-center px-7 pt-12 max-w-sm mx-auto w-full">
-        {/* Radial gradient accent (stronger in dark mode where the video is hidden) */}
+      {/* ── Hero video background — DARK MODE ────────────────────────────────
+         Descending green-hue footage (already green-tinted, so no hue-rotate).
+         Shown only in dark mode. */}
+      <div className="absolute inset-0 z-0 pointer-events-none hidden dark:block">
+        <video
+          ref={heroVideoDarkRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{
+            // Footage is already green-themed — just dim + soften saturation
+            // so it sits behind the zinc-900 surface as ambient motion.
+            filter: 'saturate(1.05) brightness(0.85) contrast(1.0)',
+            opacity: 0.55,
+          }}
+          src="/landing-hero-dark.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          aria-hidden="true"
+        />
+        {/* Dark wash: zinc-900 fades in toward the bottom so the sign-in card sits on a solid surface */}
         <div
-          className="absolute inset-0 opacity-60 pointer-events-none hidden dark:block"
+          className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(80% 50% at 50% 0%, rgba(46,125,50,0.08), transparent 60%),' +
-              'radial-gradient(60% 40% at 0% 100%, rgba(46,125,50,0.05), transparent 60%)',
+              'linear-gradient(180deg, rgba(24,24,27,0.35) 0%, rgba(24,24,27,0.55) 55%, rgba(24,24,27,0.85) 100%)',
           }}
         />
+        {/* Radial vignette — dark edges, lighter centre */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(24,24,27,0.7) 100%)',
+          }}
+        />
+      </div>
+
+      <div className="relative z-10 flex-1 flex flex-col justify-center px-7 pt-12 max-w-sm mx-auto w-full">
 
         <div className="relative w-full">
           {/* Logo */}
