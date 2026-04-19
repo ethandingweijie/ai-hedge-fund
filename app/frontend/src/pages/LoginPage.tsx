@@ -337,7 +337,7 @@ export function LoginPage() {
       {/* Footer */}
       <div className="relative z-10 h-10 border-t border-zinc-100 dark:border-zinc-800 bg-white/70 dark:bg-transparent backdrop-blur-sm flex items-center justify-center text-[11px] text-zinc-400 dark:text-zinc-500">
         <span className="inline-flex items-center gap-1.5">
-          <Check width={12} height={12} /> Secure · Private · v1.6
+          <Check width={12} height={12} /> Secure · Private · v1.7.1
         </span>
       </div>
     </div>
