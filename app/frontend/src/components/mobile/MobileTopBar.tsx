@@ -80,8 +80,12 @@ export function MobileTopBar() {
             className="absolute top-0 left-0 bottom-0 w-64 bg-background border-r border-border shadow-2xl animate-in slide-in-from-left duration-200 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drawer header */}
-            <div className="flex items-center justify-between px-4 py-4 border-b border-border">
+            {/* Drawer header — respects iOS safe-area-inset-top so the Equitable
+                logo/text don't collide with the status bar (time / battery). */}
+            <div
+              className="flex items-center justify-between px-4 pb-4 border-b border-border"
+              style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
+            >
               <div className="flex items-center gap-2">
                 <img src="/icon-192x192.png" alt="Equitable" className="w-7 h-7 rounded-full" />
                 <span className="text-sm font-bold tracking-wide text-foreground">Equitable</span>
