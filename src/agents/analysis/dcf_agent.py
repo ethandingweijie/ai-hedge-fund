@@ -342,6 +342,7 @@ def _compute_method_value(
     is_hk: bool = False,
     growth_premium: float = 1.0,
     sbc_pe_discount: float = 1.0,
+    profile_name: str = "",
 ) -> Optional[float]:
     """
     Compute intrinsic value per share for a single valuation method.
@@ -352,12 +353,18 @@ def _compute_method_value(
     for the company's growth rate relative to its sector average.  1.0 = no
     adjustment.  DCF/EPV methods are NOT adjusted (they already use growth_base).
 
+    profile_name: sub-profile override (e.g. "REIT", "Money Center Bank") so
+    peer multiples are looked up at the profile level when one exists. Critical
+    for REITs — without it, SGX REITs resolve to the US RealEstate peer table
+    (pe=35, pb=1.5) instead of the REIT table (pe=14, pb=1.0), producing
+    intrinsic values 2-3x too high.
+
     Non-implementable methods (marked in INDUSTRY_VALUATION_PROFILES with
     'implementable': False + 'proxy': ...) are resolved to their proxy method
     before reaching here by the caller — so this function only sees implementable
     method names or proxy names.
     """
-    peer = get_sector_peer_multiples(sector, is_hk=is_hk)
+    peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name)
     ebitda = most_recent.get("ebitda")
     net_income = most_recent.get("net_income")
     ebit = most_recent.get("ebit")
@@ -687,6 +694,7 @@ def _run_backward_gate(
                         scenario="base",
                         reported_currency=reported_currency,
                         is_hk=_is_hk_ticker(ticker),
+                        profile_name=profile_name,
                     )
 
             for ex in profile_data.get("excluded", []):
@@ -1256,6 +1264,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             is_hk=_is_hk,
                             growth_premium=growth_premium,
                             sbc_pe_discount=_sbc_discount,
+                            profile_name=profile_name,
                         )
 
                 # Check excluded methods are not used
