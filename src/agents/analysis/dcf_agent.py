@@ -834,13 +834,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         net_debt     = most_recent["net_debt"] or 0.0
 
         # ── Fetch latest price for trailing P/E (Deep Value Recovery) ────
+        # Also captures market_cap for the WACC credit-spread overlay.
         _trailing_pe: float | None = None
+        _market_cap: float | None = None
         try:
             _latest_prices = get_prices(ticker, end_date, end_date, api_key=api_key)
             if _latest_prices:
                 _p = _latest_prices[-1]
                 _close = float(_p.close) if hasattr(_p, "close") else float(_p.get("close", 0))
                 _ni = most_recent.get("net_income")
+                if _close > 0 and shares and shares > 0:
+                    _market_cap = _close * shares
                 if _close > 0 and _ni and shares and shares > 0 and _ni > 0:
                     _trailing_pe = _close / (_ni / shares)
                     most_recent["price_to_earnings_ratio"] = _trailing_pe
@@ -1015,13 +1019,40 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"No valuation profile for sector='{sector}' — DCF only"
             )
 
-        # ── WACC ─────────────────────────────────────────────────────────
-        # Pass profile so Energy sub-types (IPP, Regulated Utility, Merchant Power)
-        # use Damodaran-calibrated base rates instead of the flat 9% Energy base.
-        # Fix 3c: prevents 13% WACC for U.S. IPPs in neutral macro (VST audit).
-        # HK-listed stocks add China Country Risk Premium (+150 bps) via get_wacc_for_exchange.
-        wacc = get_wacc_for_exchange(sector, leverage, macro_regime=_risk_appetite,
-                                     profile=profile_name, is_hk=_is_hk)
+        # ── WACC (hybrid: Damodaran sector base + live credit overlay) ───
+        # The sector base WACC preserves all existing calibration (Damodaran
+        # Jan 2026, profile sub-types, HK CRP, macro regime, leverage premium).
+        # On top, a cyclical overlay uses FRED's live ICE BofA OAS to flex
+        # cost of debt by current credit conditions — tight credit shrinks WACC
+        # modestly, stressed credit widens it. The overlay falls to zero when
+        # FRED is unreachable or when market_cap / net_debt are unavailable,
+        # so WACC collapses to the legacy sector value as a safe no-op.
+        _ebit_v = most_recent.get("ebit")
+        _int_v  = most_recent.get("interest_expense")
+        if _int_v and _int_v > 0 and _ebit_v is not None:
+            _coverage = _ebit_v / _int_v
+        else:
+            _coverage = None  # no interest expense → rated AAA
+        try:
+            from src.data.sector_profiles import compute_wacc_hybrid as _compute_wacc_hybrid
+            _wacc_info = _compute_wacc_hybrid(
+                sector=sector,
+                leverage=leverage,
+                macro_regime=_risk_appetite,
+                profile=profile_name or "",
+                is_hk=_is_hk,
+                interest_coverage=_coverage,
+                net_debt=net_debt,
+                market_cap=_market_cap,
+            )
+            wacc = _wacc_info["wacc"]
+        except Exception as _wacc_exc:  # noqa: BLE001 — never block DCF on audit
+            _log.warning("[DCF] %s: hybrid WACC failed, using sector base: %s",
+                         ticker, _wacc_exc)
+            wacc = get_wacc_for_exchange(
+                sector, leverage, macro_regime=_risk_appetite,
+                profile=profile_name, is_hk=_is_hk,
+            )
 
         # Deep-research risk_flag → WACC loading (+50bps HIGH, +25bps MEDIUM)
         _risk_flag = dcf_cal.get("risk_flag", "MEDIUM")

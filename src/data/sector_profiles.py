@@ -250,6 +250,218 @@ def get_wacc(sector: str, leverage: float = 0.0,
     return round(min(base + leverage_premium + overlay, base + lev_cap), 4)
 
 
+# ── 1b. Synthetic credit rating + cost of debt ────────────────────────────────
+# Damodaran's synthetic rating: interest coverage ratio → letter rating.
+# Two tables because FINANCIAL service firms have structurally lower interest
+# coverage (deposits are their business model) and require much looser thresholds
+# for the same rating. The distinction is non-financial vs financial, NOT
+# large-vs-small cap.
+#
+# FRED free-tier OAS covers 7 rating-aggregate buckets {AAA, AA, A, BBB, BB, B,
+# CCC & Lower}; we collapse Damodaran's +/- modifiers into those 7 buckets and
+# map anything below CCC (CC, C, D) to CCC since that's the FRED floor.
+#
+# Source: Aswath Damodaran, January 2026 synthetic-rating table:
+#   pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ratings.htm
+# Spreads in the original table are included in _FALLBACK_SPREAD_BPS below;
+# live spreads come from FRED (see FRED_RATING_SERIES).
+
+# Non-financial service firms (industrials, tech, consumer, energy, etc.)
+# Key: lower-bound of interest coverage ratio; first matching band wins.
+_RATING_NON_FINANCIAL: list[tuple[float, str]] = [
+    (8.50,  "AAA"),    # Aaa/AAA              (coverage > 8.5)
+    (6.50,  "AA"),     # Aa2/AA               (6.5 – 8.5)
+    (3.00,  "A"),      # collapses A+ / A / A- (3.0 – 6.5)
+    (2.50,  "BBB"),    # Baa2/BBB             (2.5 – 3.0)
+    (2.00,  "BB"),     # collapses BB / BB+   (2.0 – 2.5)
+    (1.25,  "B"),      # collapses B+ / B / B- (1.25 – 2.0)
+    (0.00,  "CCC"),    # collapses CCC / CC / C / D into FRED floor
+]
+
+# Financial service firms (banks, insurers, asset managers, REITs if treated
+# financially). Coverage thresholds are materially looser — a bank at 3x long-
+# term interest coverage is AAA-quality by any honest measure because that
+# structure is the business model, not a sign of distress.
+_RATING_FINANCIAL: list[tuple[float, str]] = [
+    (3.00,  "AAA"),    # Aaa/AAA              (coverage > 3.0)
+    (2.50,  "AA"),     # Aa2/AA               (2.5 – 3.0)
+    (1.20,  "A"),      # collapses A+ / A / A- (1.2 – 2.5)
+    (0.90,  "BBB"),    # Baa2/BBB             (0.9 – 1.2)
+    (0.60,  "BB"),     # collapses BB / BB+   (0.6 – 0.9)
+    (0.30,  "B"),      # collapses B+ / B / B- (0.3 – 0.6)
+    (0.00,  "CCC"),    # collapses CCC / CC / C / D
+]
+
+# FRED ICE BofA Option-Adjusted Spread series (rating-aggregate, all sectors).
+# Values are in percentage points (e.g. 1.01 means 101 bps).
+# Source: https://fred.stlouisfed.org/release?rid=209
+FRED_RATING_SERIES: dict[str, str] = {
+    "AAA": "BAMLC0A1CAAA",
+    "AA":  "BAMLC0A2CAA",
+    "A":   "BAMLC0A3CA",
+    "BBB": "BAMLC0A4CBBB",
+    "BB":  "BAMLH0A1HYBB",
+    "B":   "BAMLH0A2HYB",
+    "CCC": "BAMLH0A3HYC",
+}
+
+# Credit-bucket assignment. FRED free-tier only publishes rating-aggregate OAS
+# (no sector × rating cuts), so we apply a static structural multiplier to the
+# aggregate to approximate industrial / financial / utility spread premia.
+# Multipliers derived from long-run ICE BofA sector-vs-aggregate ratios (2010-
+# 2024 average at IG level). They are stable within ±10% outside crisis windows.
+SECTOR_CREDIT_MULTIPLIERS: dict[str, float] = {
+    "Industrial": 1.00,   # baseline (by construction)
+    "Financial":  1.15,   # banks/insurers trade wider at same rating
+    "Utility":    0.80,   # regulated cash flows trade tighter
+}
+
+# Sector / profile → credit bucket. Energy is profile-aware because regulated
+# utilities and merchant power have very different credit profiles even though
+# both live under the "Energy" sector.
+_CREDIT_BUCKET_MAP: dict[str, str] = {
+    # Financial bucket
+    "Financials":             "Financial",
+    # Utility-like bucket
+    "RealEstate":             "Utility",   # REITs: regulated-like, high LTV by design
+    "REIT":                   "Utility",
+    # Industrial (default) bucket — everything else
+    "Consumer":               "Industrial",
+    "Tech":                   "Industrial",
+    "Biopharma":              "Industrial",
+    "Telco":                  "Industrial",
+    "Crypto":                 "Industrial",
+    "Energy":                 "Industrial",  # overridden below by profile
+    "Industrials":            "Industrial",
+    "Transportation":         "Industrial",
+    "Materials":              "Industrial",
+    "Resources":              "Industrial",
+    "ProfessionalServices":   "Industrial",
+    "HealthcareServices":     "Industrial",
+}
+
+# Energy profile overrides: regulated-like profiles map to Utility bucket.
+_ENERGY_PROFILE_CREDIT_BUCKET: dict[str, str] = {
+    "Regulated Utility":   "Utility",
+    "IPP":                 "Utility",    # PPA-backed, semi-regulated
+    "Merchant Power":      "Industrial",
+    "EPC Contractor":      "Industrial",
+    "Energy Tech Licensor":"Industrial",
+}
+
+# Hard fallback when FRED is unreachable. Values are in percentage points.
+# These are the Damodaran Jan 2026 static spreads; collapsed modifiers (A+/A/A-)
+# map to the middle value (A) by convention — see table comments.
+# Source: Damodaran Jan 2026 synthetic-rating + default-spread table.
+_FALLBACK_SPREAD_BPS: dict[str, float] = {
+    "AAA": 0.40,   # Aaa/AAA
+    "AA":  0.55,   # Aa2/AA
+    "A":   0.78,   # A2/A (middle of A+/A/A-: 0.70/0.78/0.89)
+    "BBB": 1.11,   # Baa2/BBB
+    "BB":  1.61,   # average of BB (1.84) and BB+ (1.38)
+    "B":   3.21,   # B2/B (middle of B+/B/B-: 2.75/3.21/5.09)
+    "CCC": 8.85,   # Caa/CCC — FRED BAMLH0A3HYC includes CC & lower (typically wider)
+}
+
+
+def resolve_credit_bucket(sector: str, profile: str = "") -> str:
+    """Map (sector, profile) → "Industrial" | "Financial" | "Utility".
+
+    Profile is only consulted for Energy (regulated utilities trade much tighter
+    than merchant power at the same rating). All other sectors are determined
+    by the sector key alone.
+    """
+    if sector == "Energy" and profile in _ENERGY_PROFILE_CREDIT_BUCKET:
+        return _ENERGY_PROFILE_CREDIT_BUCKET[profile]
+    return _CREDIT_BUCKET_MAP.get(sector, "Industrial")
+
+
+def synthetic_rating(interest_coverage: float | None,
+                     is_financial: bool = False) -> str:
+    """Map interest coverage (EBIT / interest expense) to a Damodaran synthetic
+    letter rating. Returns one of the 7 FRED buckets (AAA..CCC).
+
+    ``is_financial`` selects the financial-firm coverage table (much looser
+    thresholds — a bank at 3x is AAA). Non-financial firms use the stricter
+    table where 8.5x is needed for AAA.
+
+    A ``None`` coverage — typically a company with no interest expense — is
+    treated as unambiguously investment grade (returns "AAA") since there is
+    no debt-service risk to price in. A negative coverage maps to CCC.
+    """
+    if interest_coverage is None:
+        return "AAA"
+    table = _RATING_FINANCIAL if is_financial else _RATING_NON_FINANCIAL
+    # table is sorted high → low by lower-bound; first matching band wins
+    for lower_bound, rating in table:
+        if interest_coverage >= lower_bound:
+            return rating
+    return "CCC"
+
+
+def get_cost_of_debt(
+    interest_coverage: float | None,
+    sector: str,
+    profile: str = "",
+    risk_free_rate: float = 0.0395,
+    as_of: str | None = None,
+) -> dict:
+    """Compute live cost of debt using FRED aggregate spread × sector multiplier.
+
+    Returns a dict with:
+      - rating            : synthetic letter rating
+      - bucket            : "Industrial" | "Financial" | "Utility"
+      - aggregate_bps     : FRED aggregate OAS in basis points (None if fallback)
+      - multiplier        : sector-bucket multiplier applied
+      - spread_bps        : adjusted spread in basis points
+      - cost_of_debt      : rf + spread (decimal form, e.g. 0.0512 = 5.12%)
+      - source            : "fred" | "fallback-damodaran"
+      - series_id         : FRED series used (or "static-table" on fallback)
+      - audit             : human-readable one-line audit string
+
+    Never raises. On any FRED failure, falls back to the Damodaran static table.
+    ``as_of`` is currently unused (FRED returns latest observation) but reserved
+    for historical backtests.
+    """
+    from src.tools.fred import get_fred_spread  # local import: avoid cycle
+
+    bucket  = resolve_credit_bucket(sector, profile)
+    rating  = synthetic_rating(interest_coverage, is_financial=(bucket == "Financial"))
+    mult    = SECTOR_CREDIT_MULTIPLIERS.get(bucket, 1.00)
+    series  = FRED_RATING_SERIES.get(rating, "BAMLC0A4CBBB")
+
+    # Tier 1: live FRED aggregate for this rating
+    agg_pct = get_fred_spread(series)
+    source, series_id = "fred", series
+    if agg_pct is None:
+        # Tier 2: hard fallback to Damodaran static table
+        agg_pct = _FALLBACK_SPREAD_BPS.get(rating, 1.60)
+        source, series_id = "fallback-damodaran", "static-table"
+
+    aggregate_bps = round(agg_pct * 100, 1)          # pct → bps
+    spread_bps    = round(aggregate_bps * mult, 1)
+    cost_of_debt  = risk_free_rate + spread_bps / 10000.0
+
+    cov_str = f"{interest_coverage:.1f}x" if interest_coverage is not None else "n/a"
+    audit = (
+        f"Cost of debt {cost_of_debt:.2%} = rf {risk_free_rate:.2%} + "
+        f"{spread_bps:.0f}bps (rating {rating} @ coverage {cov_str}, "
+        f"bucket {bucket} ×{mult:.2f}, source {source}:{series_id})"
+    )
+
+    return {
+        "rating":        rating,
+        "bucket":        bucket,
+        "aggregate_bps": aggregate_bps,
+        "multiplier":    mult,
+        "spread_bps":    spread_bps,
+        "cost_of_debt":  round(cost_of_debt, 4),
+        "source":        source,
+        "series_id":     series_id,
+        "audit":         audit,
+    }
+
+
 # ── 2. Terminal Growth Rates ──────────────────────────────────────────────────
 
 # Terminal growth rates for Gordon Growth Model in DCF scenarios.
@@ -1759,6 +1971,142 @@ def get_wacc_for_exchange(
         lev_cap = 0.040
     leverage_premium = max(0.0, (leverage - 1.5) * 0.01)
     return round(min(base + leverage_premium + overlay, base + lev_cap), 4)
+
+
+# ── 1c. Hybrid WACC with live credit-spread overlay ───────────────────────────
+# Applies a cyclical credit-spread overlay on top of the Damodaran sector WACC.
+#
+# Math (equivalent to a full Re/Rd decomposition with Re held constant):
+#
+#     WACC_hybrid = WACC_base + (rd_live - rd_baseline) × (D/V) × (1 - tax)
+#
+# Where:
+#   WACC_base   — existing sector WACC from get_wacc_for_exchange() (unchanged
+#                  — preserves all the Damodaran sector calibration, macro
+#                  overlay, profile sub-type logic, HK CRP, leverage premium).
+#   rd_live     — live cost of debt from FRED (see get_cost_of_debt()).
+#   rd_baseline — long-run baseline cost of debt for the SAME rating, taken
+#                  from Damodaran's Jan 2026 static spread table. The delta
+#                  therefore captures *only* cyclical credit-cycle deviation
+#                  from Damodaran's implicit baseline — benign cycles shrink
+#                  WACC slightly, stress cycles expand it.
+#   D/V         — company-specific market-value debt weight.
+#   tax         — marginal tax rate (25% per Damodaran Jan 2026 dataset).
+#
+# When FRED is unreachable the overlay is ~zero (live spread equals baseline
+# by construction of the fallback table), so WACC_hybrid collapses to
+# WACC_base — a safe no-op.
+
+_DEFAULT_TAX_RATE = 0.25        # Damodaran Jan 2026 marginal tax assumption
+_DEFAULT_RISK_FREE = 0.0395     # Damodaran Jan 2026 Rf (10-yr UST)
+
+
+def compute_wacc_hybrid(
+    sector: str,
+    leverage: float = 0.0,
+    macro_regime: str = "neutral",
+    profile: str = "",
+    is_hk: bool = False,
+    # ── Live cost-of-debt inputs ─────────────────────────────────────────
+    interest_coverage: float | None = None,
+    net_debt: float | None = None,
+    market_cap: float | None = None,
+    tax_rate: float = _DEFAULT_TAX_RATE,
+    risk_free_rate: float = _DEFAULT_RISK_FREE,
+) -> dict:
+    """Compute WACC with a live credit-spread overlay.
+
+    Returns a dict with the final WACC plus full diagnostic breakdown so the
+    calling agent can surface an audit line. Never raises — on any missing
+    input or FRED failure, returns the sector-level WACC unchanged with
+    ``source="no-overlay"`` or ``"fallback-damodaran"`` accordingly.
+
+    All monetary inputs (net_debt, market_cap) must already be in the same
+    currency (caller's responsibility after FX conversion).
+    """
+    wacc_base = get_wacc_for_exchange(
+        sector, leverage, macro_regime=macro_regime, profile=profile, is_hk=is_hk
+    )
+
+    # Short-circuit when we can't compute D/V cleanly
+    if market_cap is None or market_cap <= 0 or net_debt is None:
+        return {
+            "wacc":          wacc_base,
+            "wacc_base":     wacc_base,
+            "rd_live":       None,
+            "rd_baseline":   None,
+            "dv_ratio":      0.0,
+            "credit_delta":  0.0,
+            "rating":        None,
+            "bucket":        resolve_credit_bucket(sector, profile),
+            "source":        "no-overlay-missing-inputs",
+            "series_id":     None,
+            "audit":         (
+                f"WACC {wacc_base:.2%} (sector base; no credit overlay — "
+                f"market_cap or net_debt unavailable)"
+            ),
+        }
+
+    D = max(net_debt, 0.0)                   # net cash → zero debt weight
+    E = market_cap
+    V = D + E
+    dv_ratio = D / V if V > 0 else 0.0
+
+    # Zero-debt / net-cash companies: no credit overlay makes sense
+    if dv_ratio <= 0.0:
+        return {
+            "wacc":          wacc_base,
+            "wacc_base":     wacc_base,
+            "rd_live":       None,
+            "rd_baseline":   None,
+            "dv_ratio":      0.0,
+            "credit_delta":  0.0,
+            "rating":        "AAA",
+            "bucket":        resolve_credit_bucket(sector, profile),
+            "source":        "no-overlay-net-cash",
+            "series_id":     None,
+            "audit":         (
+                f"WACC {wacc_base:.2%} (sector base; net-cash position, "
+                f"no debt weight to overlay)"
+            ),
+        }
+
+    cod = get_cost_of_debt(
+        interest_coverage=interest_coverage,
+        sector=sector,
+        profile=profile,
+        risk_free_rate=risk_free_rate,
+    )
+    rd_live     = cod["cost_of_debt"]
+    rating      = cod["rating"]
+    # Baseline uses the same sector-bucket multiplier as live so that the delta
+    # captures ONLY the cyclical deviation from Damodaran's long-run table. When
+    # FRED is unreachable and live falls back to the same static table, delta
+    # collapses exactly to zero (no spurious overlay on top of wacc_base).
+    rd_baseline_bps = _FALLBACK_SPREAD_BPS.get(rating, 1.60) * cod["multiplier"]
+    rd_baseline  = risk_free_rate + rd_baseline_bps / 100.0
+    credit_delta = (rd_live - rd_baseline) * dv_ratio * (1.0 - tax_rate)
+    wacc_hybrid  = wacc_base + credit_delta
+
+    return {
+        "wacc":          round(wacc_hybrid, 4),
+        "wacc_base":     wacc_base,
+        "rd_live":       round(rd_live, 4),
+        "rd_baseline":   round(rd_baseline, 4),
+        "dv_ratio":      round(dv_ratio, 4),
+        "credit_delta":  round(credit_delta, 6),
+        "rating":        rating,
+        "bucket":        cod["bucket"],
+        "source":        cod["source"],
+        "series_id":     cod["series_id"],
+        "audit":         (
+            f"WACC {wacc_hybrid:.2%} = base {wacc_base:.2%} + credit overlay "
+            f"{credit_delta*10000:+.0f}bps "
+            f"(rd_live {rd_live:.2%} vs baseline {rd_baseline:.2%} for {rating} "
+            f"× D/V {dv_ratio:.1%} × {(1-tax_rate):.2f}) "
+            f"[{cod['source']}:{cod['series_id']}]"
+        ),
+    }
 
 
 # Macro confidence modifier table — applied as C_macro in the blended IV formula.
