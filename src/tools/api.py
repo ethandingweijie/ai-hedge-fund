@@ -1147,6 +1147,18 @@ def get_analyst_estimates(
     if not data or not isinstance(data, list):
         return []
 
+    # FMP renamed fields in the /stable/analyst-estimates response at some point:
+    # legacy  → "estimatedRevenueAvg", "numberAnalystEstimatedRevenue", etc.
+    # current → "revenueAvg",          "numAnalystsRevenue",            etc.
+    # Accept either by checking both keys per field. _pick() returns the first
+    # non-None value.
+    def _pick(row: dict, *keys):
+        for k in keys:
+            v = row.get(k)
+            if v is not None:
+                return v
+        return None
+
     estimates: list[AnalystEstimates] = []
     for row in data:
         period_end = (row.get("date") or "")[:10]
@@ -1154,19 +1166,31 @@ def get_analyst_estimates(
         if not period_end or period_end <= end_date:
             continue
         try:
-            rev_count = row.get("numberAnalystEstimatedRevenue")
-            eps_count = row.get("numberAnalystsEstimatedEps")
+            rev_count = _pick(row, "numAnalystsRevenue", "numberAnalystEstimatedRevenue")
+            eps_count = _pick(row, "numAnalystsEps",     "numberAnalystsEstimatedEps")
             estimates.append(AnalystEstimates(
                 ticker=row.get("symbol", ticker),
                 period_end=period_end,
-                revenue_avg=_safe_float(row.get("estimatedRevenueAvg")),
-                revenue_low=_safe_float(row.get("estimatedRevenueLow")),
-                revenue_high=_safe_float(row.get("estimatedRevenueHigh")),
-                ebitda_avg=_safe_float(row.get("estimatedEbitdaAvg")),
-                net_income_avg=_safe_float(row.get("estimatedNetIncomeAvg")),
-                eps_avg=_safe_float(row.get("estimatedEpsAvg")),
-                eps_low=_safe_float(row.get("estimatedEpsLow")),
-                eps_high=_safe_float(row.get("estimatedEpsHigh")),
+                # Revenue band
+                revenue_avg  = _safe_float(_pick(row, "revenueAvg",  "estimatedRevenueAvg")),
+                revenue_low  = _safe_float(_pick(row, "revenueLow",  "estimatedRevenueLow")),
+                revenue_high = _safe_float(_pick(row, "revenueHigh", "estimatedRevenueHigh")),
+                # EBITDA band
+                ebitda_avg   = _safe_float(_pick(row, "ebitdaAvg",   "estimatedEbitdaAvg")),
+                ebitda_low   = _safe_float(_pick(row, "ebitdaLow",   "estimatedEbitdaLow")),
+                ebitda_high  = _safe_float(_pick(row, "ebitdaHigh",  "estimatedEbitdaHigh")),
+                # EBIT band
+                ebit_avg     = _safe_float(_pick(row, "ebitAvg",     "estimatedEbitAvg")),
+                ebit_low     = _safe_float(_pick(row, "ebitLow",     "estimatedEbitLow")),
+                ebit_high    = _safe_float(_pick(row, "ebitHigh",    "estimatedEbitHigh")),
+                # Net income band
+                net_income_avg  = _safe_float(_pick(row, "netIncomeAvg",  "estimatedNetIncomeAvg")),
+                net_income_low  = _safe_float(_pick(row, "netIncomeLow",  "estimatedNetIncomeLow")),
+                net_income_high = _safe_float(_pick(row, "netIncomeHigh", "estimatedNetIncomeHigh")),
+                # EPS band
+                eps_avg      = _safe_float(_pick(row, "epsAvg",  "estimatedEpsAvg")),
+                eps_low      = _safe_float(_pick(row, "epsLow",  "estimatedEpsLow")),
+                eps_high     = _safe_float(_pick(row, "epsHigh", "estimatedEpsHigh")),
                 analyst_count_revenue=int(rev_count) if rev_count is not None else None,
                 analyst_count_eps=int(eps_count) if eps_count is not None else None,
             ))

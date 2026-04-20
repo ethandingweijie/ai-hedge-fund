@@ -596,17 +596,33 @@ class AnalystEstimates(BaseModel):
     Forward analyst consensus estimates from FMP /stable/analyst-estimates.
     All financial fields in the same currency/scale as the FMP financials endpoints
     (i.e., raw dollars, not millions). Fields absent from the API response are None.
+
+    Includes low/avg/high bands for revenue, EBITDA, EBIT, net income, EPS so the
+    DCF engine can drive bear/base/bull scenarios directly from analyst dispersion.
     """
     ticker: str
     period_end: str             # fiscal year end date, e.g. "2025-12-31"
+    # Revenue band
     revenue_avg: float | None = None
     revenue_low: float | None = None
     revenue_high: float | None = None
+    # EBITDA band
     ebitda_avg: float | None = None
+    ebitda_low: float | None = None
+    ebitda_high: float | None = None
+    # EBIT band
+    ebit_avg: float | None = None
+    ebit_low: float | None = None
+    ebit_high: float | None = None
+    # Net income band
     net_income_avg: float | None = None
+    net_income_low: float | None = None
+    net_income_high: float | None = None
+    # EPS band
     eps_avg: float | None = None
     eps_low: float | None = None
     eps_high: float | None = None
+    # Coverage quality
     analyst_count_revenue: int | None = None   # number of analysts covering revenue
     analyst_count_eps: int | None = None       # number of analysts covering EPS
 

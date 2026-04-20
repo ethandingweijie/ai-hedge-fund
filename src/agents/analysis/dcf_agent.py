@@ -56,7 +56,12 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from src.graph.state import AgentState
-from src.tools.api import search_line_items, get_analyst_estimates, get_prices, get_fx_rate
+from src.tools.api import (
+    search_line_items,
+    get_analyst_estimates,
+    get_prices,
+    get_fx_rate,
+)
 from src.data.sector_profiles import (
     get_wacc,
     get_wacc_for_exchange,
@@ -153,7 +158,21 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "ebit":                _safe(getattr(li, "ebit", None)),
             "interest_expense":    _safe(getattr(li, "interest_expense", None)),
             "invested_capital":    _safe(getattr(li, "invested_capital", None)),
+            "stock_based_compensation": _safe(getattr(li, "stock_based_compensation", None)),
         })
+
+    # SBC-adjusted (owner-earnings) FCF: reported FCF treats SBC as non-cash and
+    # adds it back to OCF. Owner-earnings FCF subtracts it back out because SBC
+    # is a real dilution cost to shareholders even when it isn't a cash outflow.
+    # Falls back to reported FCF when SBC is not disclosed (e.g. some utilities).
+    for row in rows:
+        fcf = row["free_cash_flow"]
+        sbc = row["stock_based_compensation"]
+        if fcf is not None and sbc is not None:
+            row["fcf_owner_earnings"] = fcf - abs(sbc)
+        else:
+            row["fcf_owner_earnings"] = fcf
+
     rows.sort(key=lambda r: r["period"])
     return rows, reported_currency
 
@@ -194,7 +213,7 @@ def _historical_cagr(series: list[dict], revenue_base: Optional[float] = None) -
         return None
 
 
-def _mean_fcf_margin(series: list[dict]) -> Optional[float]:
+def _mean_fcf_margin(series: list[dict], field: str = "free_cash_flow") -> Optional[float]:
     """Compute 5-year average FCF margin with outlier exclusion.
 
     One-time acquisition capex (e.g. Cogentrix for VST) or restructuring years
@@ -202,11 +221,14 @@ def _mean_fcf_margin(series: list[dict]) -> Optional[float]:
     FCF margin deviates from the median by more than 2× IQR, then return the
     mean of remaining years. If fewer than 2 years remain after filtering,
     fall back to the median.
+
+    ``field`` selects which cash-flow series to average. Default is reported
+    ``free_cash_flow``; pass ``fcf_owner_earnings`` to get SBC-adjusted margin.
     """
     margins = []
     for row in series[-5:]:
         rev = row["revenue"]
-        fcf = row["free_cash_flow"]
+        fcf = row.get(field)
         if fcf is not None and rev and rev != 0:
             margins.append(fcf / rev)
     if not margins:
@@ -236,6 +258,103 @@ def _analyst_revenue_growth(estimates: list, revenue_base: float) -> Optional[fl
     if rev_est is None or rev_est <= 0:
         return None
     return (rev_est / revenue_base) - 1
+
+
+def _normalized_earnings(
+    series: list[dict],
+    field: str,
+    window: int = 5,
+) -> Optional[float]:
+    """Cycle-normalized earnings figure for ``field`` (e.g. net_income, ebitda).
+
+    Method (Damodaran): compute the mean of (field / revenue) over the window,
+    then multiply by current revenue. This captures *what would earnings be if
+    current revenue ran at average-cycle profitability?* — the correct
+    normalization for cyclicals where revenue trends upward but margins cycle.
+    For stable businesses the adjustment is nearly a no-op, so applying it
+    uniformly across profiles is safe.
+
+    Uses IQR-based outlier exclusion (same pattern as ``_mean_fcf_margin``)
+    to reject one-off years — massive goodwill write-downs, COVID anomalies,
+    special dividends, etc.
+
+    Returns None when fewer than 2 usable observations are available.
+    """
+    tail = series[-window:]
+    if not tail:
+        return None
+    margins: list[float] = []
+    for row in tail:
+        rev = row.get("revenue")
+        val = row.get(field)
+        if rev and rev > 0 and val is not None:
+            margins.append(val / rev)
+    if len(margins) < 2:
+        return None
+
+    if len(margins) <= 2:
+        avg_margin = statistics.mean(margins)
+    else:
+        sorted_m = sorted(margins)
+        q1 = sorted_m[len(sorted_m) // 4]
+        q3 = sorted_m[3 * len(sorted_m) // 4]
+        iqr = q3 - q1
+        med = statistics.median(margins)
+        threshold = max(iqr * 2, 0.05)
+        filtered = [m for m in margins if abs(m - med) <= threshold]
+        avg_margin = statistics.mean(filtered) if len(filtered) >= 2 else med
+
+    current_revenue = tail[-1].get("revenue")
+    if current_revenue is None or current_revenue <= 0:
+        return None
+    return avg_margin * current_revenue
+
+
+def _analyst_growth_bands(
+    estimates: list,
+    revenue_base: float,
+    min_analysts: int = 3,
+) -> Optional[dict]:
+    """Derive bear / base / bull revenue growth rates from analyst dispersion.
+
+    Uses the nearest forward-year estimate's low / avg / high revenue figures
+    (and the analyst-count quality gate) to produce asymmetric scenario growth
+    rates that reflect actual market disagreement, rather than the symmetric
+    ±45% multiplier used when dispersion data is unavailable.
+
+    Returns a dict ``{"bear","base","bull","analyst_count"}`` or None if:
+      - estimates list empty / no revenue_base
+      - any of low / avg / high is missing
+      - fewer than ``min_analysts`` analysts cover revenue (noisy single-analyst
+        dispersions would otherwise distort scenarios)
+      - values are not monotonic (low ≤ avg ≤ high) — malformed data
+
+    Growth rates are clamped to [-30%, +100%] to match the DCF engine's
+    existing safety bounds.
+    """
+    if not estimates or not revenue_base or revenue_base <= 0:
+        return None
+    est = estimates[0]
+    lo  = _safe(getattr(est, "revenue_low",  None))
+    av  = _safe(getattr(est, "revenue_avg",  None))
+    hi  = _safe(getattr(est, "revenue_high", None))
+    cov = getattr(est, "analyst_count_revenue", None)
+    if lo is None or av is None or hi is None:
+        return None
+    if cov is None or cov < min_analysts:
+        return None
+    if lo <= 0 or av <= 0 or hi <= 0 or not (lo <= av <= hi):
+        return None
+
+    def _implied(rev_est: float) -> float:
+        return max(min((rev_est / revenue_base) - 1.0, 1.0), -0.30)
+
+    return {
+        "bear":           _implied(lo),
+        "base":           _implied(av),
+        "bull":           _implied(hi),
+        "analyst_count":  int(cov),
+    }
 
 
 def _guided_growth(guidance: dict, revenue_base: float = 0.0) -> Optional[float]:
@@ -343,6 +462,7 @@ def _compute_method_value(
     growth_premium: float = 1.0,
     sbc_pe_discount: float = 1.0,
     profile_name: str = "",
+    forward_consensus: Optional[dict] = None,
 ) -> Optional[float]:
     """
     Compute intrinsic value per share for a single valuation method.
@@ -417,6 +537,21 @@ def _compute_method_value(
             return max((ev - (net_debt or 0.0)) / shares, 0.0)
         return None
 
+    # ── EV/EBITDA (norm) — uses 5-yr cycle-normalized EBITDA ──────────────
+    # Same peer multiple, but anchored on Damodaran-normalized EBITDA
+    # (mean EBITDA margin × current revenue) so peak/trough years don't
+    # distort the multiple application. Critical for cyclicals: mining,
+    # merchant power, auto, semis, chemicals.
+    if method_name in {"EV/EBITDA (norm)", "EV/EBITDA norm", "Normalized EV/EBITDA"}:
+        norm_ebitda = most_recent.get("normalized_ebitda")
+        if norm_ebitda is None or norm_ebitda <= 0 or shares <= 0:
+            return None
+        mult = peer.get("ev_ebitda", 12.0) * sm * growth_premium
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = norm_ebitda * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
     # ── EV/Revenue and variants ────────────────────────────────────────────
     if method_name in {"EV/NTM Revenue", "EV/NTM Rev", "EV/Revenue", "EV/Fwd Rev"}:
         mult = peer.get("ev_revenue", 4.0) * sm * growth_premium
@@ -430,13 +565,61 @@ def _compute_method_value(
             return max((ev - (net_debt or 0.0)) / shares, 0.0)
         return None
 
-    # ── P/E (normalized) ──────────────────────────────────────────────────
-    if method_name in {"P/E", "P/E (norm)", "P/E (ops)", "P/E (Premium)", "P/E (Ops)"}:
+    # ── P/E (TTM / operating) ─────────────────────────────────────────────
+    # Uses trailing-12m net income. "P/E (ops)" and "P/E (Premium)" share
+    # this branch — they differ only in documentation intent, not earnings
+    # source. For the TRUE cycle-normalized path use "P/E (norm)" below.
+    if method_name in {"P/E", "P/E (ops)", "P/E (Premium)", "P/E (Ops)"}:
         mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
         eps = (net_income / shares) if (net_income is not None and shares > 0) else None
         if eps and eps > 0:
             return eps * mult
         return None
+
+    # ── P/E (norm) — uses 5-yr cycle-normalized net income ────────────────
+    # For cyclicals the trailing net income reflects one point in the cycle;
+    # applying a peer P/E at peak earnings produces trough IV (and vice-versa).
+    # The normalized anchor is Damodaran-style: mean(NI margin) × current
+    # revenue. Falls back to None (method skipped) when insufficient history.
+    if method_name in {"P/E (norm)", "P/E norm", "Normalized P/E"}:
+        norm_ni = most_recent.get("normalized_net_income")
+        if norm_ni is None or norm_ni <= 0 or shares <= 0:
+            return None
+        mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
+        eps_norm = norm_ni / shares
+        return eps_norm * mult
+
+    # ── Forward P/E (consensus EPS × peer P/E) ─────────────────────────────
+    # Uses analyst consensus EPS for the nearest forward fiscal year instead
+    # of trailing net income. Scenarios map directly to the analyst dispersion
+    # (eps_low / eps_avg / eps_high) so there is no scenario multiplier (sm)
+    # — dispersion IS the scenario signal. Growth premium and SBC discount
+    # still apply to the multiple.
+    if method_name in {"Forward P/E", "Fwd P/E", "NTM P/E"}:
+        if forward_consensus is None:
+            return None
+        eps_fwd = forward_consensus.get("eps", {}).get(scenario)
+        if eps_fwd is None or eps_fwd <= 0:
+            return None
+        mult = peer.get("pe", 18.0) * growth_premium * sbc_pe_discount
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        return eps_fwd * mult
+
+    # ── Forward EV/EBITDA (consensus EBITDA × peer EV/EBITDA) ──────────────
+    # Uses analyst consensus EBITDA; scenarios map to low/avg/high dispersion.
+    # Same no-sm logic as Forward P/E.
+    if method_name in {"Forward EV/EBITDA", "Fwd EV/EBITDA", "NTM EV/EBITDA"}:
+        if forward_consensus is None:
+            return None
+        ebitda_fwd = forward_consensus.get("ebitda", {}).get(scenario)
+        if ebitda_fwd is None or ebitda_fwd <= 0 or shares <= 0:
+            return None
+        mult = peer.get("ev_ebitda", 12.0) * growth_premium
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = ebitda_fwd * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
 
     # ── P/BV ──────────────────────────────────────────────────────────────
     if method_name in {"P/BV", "P/Rate Base", "NAV Discount", "SOTP / NAV",
@@ -453,7 +636,10 @@ def _compute_method_value(
     if method_name in {"FCF Yield", "P/CF", "Price/CF"}:
         target_yield = peer.get("fcf_yield", 0.05) / (sm * growth_premium)  # higher growth → lower yield req → higher price
         target_yield = max(target_yield, 0.01)
-        fcf = most_recent.get("free_cash_flow")
+        # Prefer SBC-adjusted (owner-earnings) FCF; falls back to reported FCF
+        # when SBC isn't disclosed (fcf_owner_earnings is seeded to reported
+        # FCF in _extract_annual_series when SBC is missing).
+        fcf = most_recent.get("fcf_owner_earnings") or most_recent.get("free_cash_flow")
         if fcf and fcf > 0 and shares > 0:
             return (fcf / shares) / target_yield
         return None
@@ -754,7 +940,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     # Fall back to shared sector for single-ticker runs.
     sectors_map = state["data"].get("sectors", {})
     _primary_sector = state["data"].get("sector", "Tech")
-    mgmt_guidance_all    = state["data"].get("management_guidance", {})
+    mgmt_guidance_all      = state["data"].get("management_guidance", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -874,7 +1060,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         fx_note    = ""
         revenue_base_raw_ccy = None  # Set only for non-USD tickers (Change 9)
         _FX_MONETARY = {
-            "revenue", "free_cash_flow", "net_debt", "ebitda", "net_income",
+            "revenue", "free_cash_flow", "fcf_owner_earnings",
+            "net_debt", "ebitda", "net_income",
             "total_assets", "total_equity", "ebit", "interest_expense",
             "invested_capital", "capital_expenditure",
             "research_and_development", "stock_based_compensation",
@@ -920,8 +1107,69 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"FX rate unavailable for {reported_currency}→{_target_ccy} — values unscaled"
                 )
 
-        # ── FCF margin ───────────────────────────────────────────────────
-        fcf_margin_base = _mean_fcf_margin(series) or 0.0
+        # ── Ticker-level forward flags (seed; all subsequent blocks append) ──
+        ticker_forward_flags: list[str] = []
+
+        # ── Normalized (cycle-adjusted) earnings for P/E (norm), EV/EBITDA (norm) ──
+        # Damodaran-style: mean(field / revenue) over last 5 yrs × current revenue.
+        # For cyclicals this prevents peak-year P/E multiples from producing a
+        # trough-earnings IV (and vice versa). For stable businesses the delta
+        # is small — safe to apply uniformly. Stored on most_recent so the method
+        # branches pick them up automatically; None when insufficient history.
+        _norm_ni     = _normalized_earnings(series, "net_income", window=5)
+        _norm_ebitda = _normalized_earnings(series, "ebitda",     window=5)
+        _norm_ebit   = _normalized_earnings(series, "ebit",       window=5)
+        most_recent["normalized_net_income"] = _norm_ni
+        most_recent["normalized_ebitda"]     = _norm_ebitda
+        most_recent["normalized_ebit"]       = _norm_ebit
+        # Audit flag when normalization materially moves earnings (>15% delta)
+        _cur_ni = most_recent.get("net_income")
+        if _norm_ni is not None and _cur_ni and _cur_ni > 0:
+            _delta_pct = (_norm_ni - _cur_ni) / _cur_ni
+            if abs(_delta_pct) > 0.15:
+                ticker_forward_flags.append(
+                    f"Normalized NI: TTM ${_cur_ni/1e9:.2f}B → 5y-cycle "
+                    f"${_norm_ni/1e9:.2f}B ({_delta_pct:+.0%}) — "
+                    f"P/E (norm) will use normalized figure"
+                )
+
+        # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────
+        # Reported FCF treats stock-based comp as non-cash (adds it back to
+        # OCF). For valuation we prefer owner-earnings FCF = reported FCF −
+        # |SBC|, because SBC is a real dilution cost to shareholders. The
+        # adjustment flows into every DCF-family method and the FCF-Yield
+        # method via fcf_margin_base / most_recent["fcf_owner_earnings"].
+        # Requires SBC disclosed in ≥3 of the last 5 years to be trusted;
+        # otherwise we fall back to the reported FCF margin unchanged.
+        fcf_margin_reported = _mean_fcf_margin(series) or 0.0
+        fcf_margin_owner = _mean_fcf_margin(series, field="fcf_owner_earnings")
+        _sbc_years = sum(
+            1 for row in series[-5:]
+            if row.get("stock_based_compensation") is not None
+        )
+        if fcf_margin_owner is not None and _sbc_years >= 3:
+            fcf_margin_base = fcf_margin_owner
+            _drag_bps = int(round((fcf_margin_reported - fcf_margin_owner) * 10000))
+            if _drag_bps > 0:
+                ticker_forward_flags.append(
+                    f"SBC drag: FCF margin {fcf_margin_reported:.1%} → "
+                    f"{fcf_margin_owner:.1%} (−{_drag_bps} bps, "
+                    f"{_sbc_years}/5 yr SBC data)"
+                )
+        else:
+            fcf_margin_base = fcf_margin_reported
+
+        # ── Analyst estimates (fetched eagerly — cached) ──────────────────
+        # Pulled BEFORE the growth waterfall so dispersion bands are available
+        # for scenario construction even when guidance or historical drives the
+        # point estimate. Feeds both growth_base (analyst revenue_avg) AND the
+        # bear/base/bull band scenarios + Forward P/E / Forward EV/EBITDA methods.
+        try:
+            estimates = get_analyst_estimates(
+                ticker, end_date, period="annual", limit=3, api_key=api_key
+            )
+        except Exception:
+            estimates = []
 
         # ── Growth rate — priority: guided > analyst > historical ────────
         data_source = "historical"
@@ -931,12 +1179,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if growth_base is not None:
             data_source = "guided"
         else:
-            try:
-                estimates = get_analyst_estimates(
-                    ticker, end_date, period="annual", limit=3, api_key=api_key
-                )
-            except Exception:
-                estimates = []
             growth_base = _analyst_revenue_growth(estimates, revenue_base)
             if growth_base is not None:
                 data_source = "analyst"
@@ -948,6 +1190,44 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                        "Cannot derive growth rate — skipping")
                 dcf_range[ticker] = {}
                 continue
+
+        # ── Consensus dispersion bands (Feature 1a) ─────────────────────
+        # Derives asymmetric bear / base / bull growth rates from analyst
+        # revenue low/avg/high when ≥3 analysts cover the name. Replaces the
+        # symmetric ±45% multiplier used when dispersion is unavailable.
+        # Per-ticker value — does not vary across the three scenarios.
+        _analyst_bands = _analyst_growth_bands(estimates, revenue_base)
+        if _analyst_bands is not None:
+            ticker_forward_flags.append(
+                f"Analyst dispersion ({_analyst_bands['analyst_count']} analysts): "
+                f"bear {_analyst_bands['bear']:+.1%} / "
+                f"base {_analyst_bands['base']:+.1%} / "
+                f"bull {_analyst_bands['bull']:+.1%}"
+            )
+
+        # ── Forward consensus point estimates (Feature 1b inputs) ──────
+        # Absolute EPS / EBITDA consensus by scenario, used by Forward P/E
+        # and Forward EV/EBITDA methods downstream. None-safe: methods skip
+        # when the particular scenario's value is missing. FMP returns these
+        # in reported currency, so we apply the same FX multiplier used on
+        # the historical series to keep everything in the target currency.
+        forward_consensus = None
+        if estimates:
+            _fwd = estimates[0]
+            _fxm = fx_rate if (fx_rate and fx_rate > 0) else 1.0
+            def _fx(v):
+                return (v * _fxm) if v is not None else None
+            forward_consensus = {
+                "eps":    {"bear": _fx(_safe(getattr(_fwd, "eps_low",  None))),
+                           "base": _fx(_safe(getattr(_fwd, "eps_avg",  None))),
+                           "bull": _fx(_safe(getattr(_fwd, "eps_high", None)))},
+                "ebitda": {"bear": _fx(_safe(getattr(_fwd, "ebitda_low",  None))),
+                           "base": _fx(_safe(getattr(_fwd, "ebitda_avg",  None))),
+                           "bull": _fx(_safe(getattr(_fwd, "ebitda_high", None)))},
+                "analyst_count_eps":     getattr(_fwd, "analyst_count_eps",     None),
+                "analyst_count_revenue": getattr(_fwd, "analyst_count_revenue", None),
+                "period_end":            getattr(_fwd, "period_end",            ""),
+            }
 
         # ── Deep-research DCF calibration (from sections 2D + 2F) ────────
         # Applied AFTER the guided/analyst/historical waterfall so it acts as a
@@ -1046,6 +1326,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 market_cap=_market_cap,
             )
             wacc = _wacc_info["wacc"]
+            ticker_forward_flags.append(_wacc_info["audit"])
         except Exception as _wacc_exc:  # noqa: BLE001 — never block DCF on audit
             _log.warning("[DCF] %s: hybrid WACC failed, using sector base: %s",
                          ticker, _wacc_exc)
@@ -1175,7 +1456,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _base_pv_tv_per_share: float = 0.0
 
         for scenario in ("bear", "base", "bull"):
-            g = growth_base * _GROWTH_MULT[scenario]
+            # Prefer analyst-dispersion-based growth when available (Feature 1a).
+            # Falls back to symmetric multiplier when no analyst coverage / FMP
+            # doesn't return low/high for this name.
+            if _analyst_bands is not None:
+                g = _analyst_bands[scenario]
+            else:
+                g = growth_base * _GROWTH_MULT[scenario]
             g = max(min(g, 1.0), -0.30)
 
             md = _MARGIN_DELTA_PER_YEAR[scenario]
@@ -1185,7 +1472,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             tgr = tgr_table.get(scenario, _DEFAULT_TGR[scenario])
 
             # ── Forward Gate B: ROIC < WACC → TGR = 0 ────────────────────
-            forward_flags: list[str] = []
+            forward_flags: list[str] = list(ticker_forward_flags)
             ebit_val = most_recent.get("ebit")
             ic_val = most_recent.get("invested_capital")
             if ebit_val and ic_val and ic_val > 0:
@@ -1296,6 +1583,38 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             growth_premium=growth_premium,
                             sbc_pe_discount=_sbc_discount,
                             profile_name=profile_name,
+                            forward_consensus=forward_consensus,
+                        )
+
+                # ── Shadow-compute Forward P/E, Forward EV/EBITDA (Feature 1b)
+                # Values surface in the per-method table for transparency; they
+                # are only included in the blended IV when the profile explicitly
+                # references them.
+                _shadow_methods: list[str] = []
+                if forward_consensus is not None:
+                    _shadow_methods.extend(["Forward P/E", "Forward EV/EBITDA"])
+                for _shadow_name in _shadow_methods:
+                    if _shadow_name not in method_values:
+                        method_values[_shadow_name] = _compute_method_value(
+                            method_name=_shadow_name,
+                            most_recent=most_recent,
+                            revenue_base=revenue_base,
+                            shares=shares,
+                            net_debt=net_debt,
+                            market_cap=revenue_base * 10,
+                            wacc=wacc,
+                            growth_base=g,
+                            fcf_margin_base=fcf_margin_base,
+                            tgr=tgr,
+                            fcf_floor=fcf_floor,
+                            sector=sector,
+                            scenario=scenario,
+                            reported_currency=reported_currency,
+                            is_hk=_is_hk,
+                            growth_premium=growth_premium,
+                            sbc_pe_discount=_sbc_discount,
+                            profile_name=profile_name,
+                            forward_consensus=forward_consensus,
                         )
 
                 # Check excluded methods are not used
