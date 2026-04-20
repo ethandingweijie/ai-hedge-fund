@@ -1147,6 +1147,18 @@ def get_analyst_estimates(
     if not data or not isinstance(data, list):
         return []
 
+    # FMP renamed fields in the /stable/analyst-estimates response at some point:
+    # legacy  → "estimatedRevenueAvg", "numberAnalystEstimatedRevenue", etc.
+    # current → "revenueAvg",          "numAnalystsRevenue",            etc.
+    # Accept either by checking both keys per field. _pick() returns the first
+    # non-None value.
+    def _pick(row: dict, *keys):
+        for k in keys:
+            v = row.get(k)
+            if v is not None:
+                return v
+        return None
+
     estimates: list[AnalystEstimates] = []
     for row in data:
         period_end = (row.get("date") or "")[:10]
@@ -1154,19 +1166,31 @@ def get_analyst_estimates(
         if not period_end or period_end <= end_date:
             continue
         try:
-            rev_count = row.get("numberAnalystEstimatedRevenue")
-            eps_count = row.get("numberAnalystsEstimatedEps")
+            rev_count = _pick(row, "numAnalystsRevenue", "numberAnalystEstimatedRevenue")
+            eps_count = _pick(row, "numAnalystsEps",     "numberAnalystsEstimatedEps")
             estimates.append(AnalystEstimates(
                 ticker=row.get("symbol", ticker),
                 period_end=period_end,
-                revenue_avg=_safe_float(row.get("estimatedRevenueAvg")),
-                revenue_low=_safe_float(row.get("estimatedRevenueLow")),
-                revenue_high=_safe_float(row.get("estimatedRevenueHigh")),
-                ebitda_avg=_safe_float(row.get("estimatedEbitdaAvg")),
-                net_income_avg=_safe_float(row.get("estimatedNetIncomeAvg")),
-                eps_avg=_safe_float(row.get("estimatedEpsAvg")),
-                eps_low=_safe_float(row.get("estimatedEpsLow")),
-                eps_high=_safe_float(row.get("estimatedEpsHigh")),
+                # Revenue band
+                revenue_avg  = _safe_float(_pick(row, "revenueAvg",  "estimatedRevenueAvg")),
+                revenue_low  = _safe_float(_pick(row, "revenueLow",  "estimatedRevenueLow")),
+                revenue_high = _safe_float(_pick(row, "revenueHigh", "estimatedRevenueHigh")),
+                # EBITDA band
+                ebitda_avg   = _safe_float(_pick(row, "ebitdaAvg",   "estimatedEbitdaAvg")),
+                ebitda_low   = _safe_float(_pick(row, "ebitdaLow",   "estimatedEbitdaLow")),
+                ebitda_high  = _safe_float(_pick(row, "ebitdaHigh",  "estimatedEbitdaHigh")),
+                # EBIT band
+                ebit_avg     = _safe_float(_pick(row, "ebitAvg",     "estimatedEbitAvg")),
+                ebit_low     = _safe_float(_pick(row, "ebitLow",     "estimatedEbitLow")),
+                ebit_high    = _safe_float(_pick(row, "ebitHigh",    "estimatedEbitHigh")),
+                # Net income band
+                net_income_avg  = _safe_float(_pick(row, "netIncomeAvg",  "estimatedNetIncomeAvg")),
+                net_income_low  = _safe_float(_pick(row, "netIncomeLow",  "estimatedNetIncomeLow")),
+                net_income_high = _safe_float(_pick(row, "netIncomeHigh", "estimatedNetIncomeHigh")),
+                # EPS band
+                eps_avg      = _safe_float(_pick(row, "epsAvg",  "estimatedEpsAvg")),
+                eps_low      = _safe_float(_pick(row, "epsLow",  "estimatedEpsLow")),
+                eps_high     = _safe_float(_pick(row, "epsHigh", "estimatedEpsHigh")),
                 analyst_count_revenue=int(rev_count) if rev_count is not None else None,
                 analyst_count_eps=int(eps_count) if eps_count is not None else None,
             ))
@@ -1179,6 +1203,107 @@ def get_analyst_estimates(
     if estimates:
         _cache.set_analyst_estimates(cache_key, [e.model_dump() for e in estimates])
     return estimates
+
+
+# ── 9. Revenue Segmentation (product + geographic) ───────────────────────────
+
+def _fetch_revenue_segmentation(
+    endpoint: str,
+    ticker: str,
+    end_date: str,
+    period: str,
+    api_key: str | None,
+) -> list[dict]:
+    """Shared core for FMP /stable/revenue-{product,geographic}-segmentation.
+
+    Returns list of yearly-sorted (ascending) dicts:
+        [{"period_end": "YYYY-MM-DD",
+          "fiscal_year": int | None,
+          "reported_currency": str | None,
+          "segments": {segment_name: revenue, ...}}, ...]
+
+    Only records with period_end ≤ ``end_date`` are kept (so backtests are
+    point-in-time correct). Always returns [] on failure — caller must treat
+    emptiness as "no segment data available".
+    """
+    if is_hk_ticker(ticker):
+        return []                       # FMP has no HK segment data
+    if is_sg_ticker(ticker):
+        return []
+
+    data = _fmp_get(
+        f"{_STABLE}/{endpoint}",
+        {"symbol": ticker, "period": _fmp_period(period)},
+        api_key,
+    )
+    if not data or not isinstance(data, list):
+        return []
+
+    out: list[dict] = []
+    for row in data:
+        period_end = (row.get("date") or "")[:10]
+        if not period_end or period_end > end_date:
+            continue
+        # FMP structure: segments live in a nested "data" dict
+        seg_raw = row.get("data")
+        if not isinstance(seg_raw, dict):
+            # Fallback: treat any numeric top-level keys as segments
+            reserved = {"symbol", "fiscalYear", "period", "reportedCurrency",
+                        "date", "cik", "acceptedDate"}
+            seg_raw = {k: v for k, v in row.items()
+                       if k not in reserved and isinstance(v, (int, float))}
+        # Coerce values to floats and drop None / non-numeric
+        segments = {}
+        for name, val in seg_raw.items():
+            try:
+                fv = float(val)
+                if fv > 0:
+                    segments[str(name)] = fv
+            except (TypeError, ValueError):
+                continue
+        if not segments:
+            continue
+        out.append({
+            "period_end":        period_end,
+            "fiscal_year":       row.get("fiscalYear"),
+            "reported_currency": row.get("reportedCurrency"),
+            "segments":          segments,
+        })
+
+    out.sort(key=lambda r: r["period_end"])
+    return out
+
+
+def get_revenue_product_segmentation(
+    ticker: str,
+    end_date: str,
+    period: str = "annual",
+    api_key: str | None = None,
+) -> list[dict]:
+    """Fetch product-segment revenue breakdown from FMP.
+
+    Endpoint: /stable/revenue-product-segmentation
+    Paid-tier endpoint on FMP; returns [] on 402/403.
+    """
+    return _fetch_revenue_segmentation(
+        "revenue-product-segmentation", ticker, end_date, period, api_key,
+    )
+
+
+def get_revenue_geographic_segments(
+    ticker: str,
+    end_date: str,
+    period: str = "annual",
+    api_key: str | None = None,
+) -> list[dict]:
+    """Fetch geographic-segment revenue breakdown from FMP.
+
+    Endpoint: /stable/revenue-geographic-segments
+    Paid-tier endpoint on FMP; returns [] on 402/403.
+    """
+    return _fetch_revenue_segmentation(
+        "revenue-geographic-segments", ticker, end_date, period, api_key,
+    )
 
 
 # ── Tavily Web Intelligence ───────────────────────────────────────────────────
