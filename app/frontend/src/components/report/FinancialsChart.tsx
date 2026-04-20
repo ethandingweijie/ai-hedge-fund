@@ -234,53 +234,80 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
         </div>
       ) : (
         <>
-          {/* Bar chart */}
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart
-              data={chartData}
-              margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
-              barCategoryGap="28%"
-            >
-              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
-              <XAxis
-                dataKey="periodLabel"
-                tick={{ fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                tickFormatter={fmtAxis}
-                tick={{ fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                width={68}
-              />
-              <Tooltip
-                content={<CustomTooltip metricLabel={metric.label} />}
-                cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
-              />
-              {hasNegative && (
-                <ReferenceLine
-                  y={0}
-                  stroke="hsl(var(--border))"
-                  strokeWidth={1.5}
-                />
-              )}
-              <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={60}>
-                {chartData.map((entry, i) => (
-                  <Cell
-                    key={`cell-${i}`}
-                    fill={barColor(metric, entry.rawValue)}
-                    fillOpacity={0.9}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {/*
+            Quarterly view can hold up to 20 data points — squeezing them into
+            a mobile-width card collapses the bar x-axis labels and overlaps
+            the data-table cells beneath. We scroll horizontally for quarter
+            mode by wrapping BOTH the chart and the table in one scroll
+            container with a shared minWidth. Annual (≤5 points) fits in the
+            viewport, so keep its 100%-width layout.
+          */}
+          {(() => {
+            // Label col 88px + 72px per data column → readable "$260.12B" and
+            // "Q4 2024" without truncation. Pulled out so chart + table share
+            // the same minWidth when scrolling.
+            const LABEL_COL = 88;
+            const DATA_COL  = 72;
+            const minInner  = LABEL_COL + items.length * DATA_COL;
+            const isQuarter = periodType === 'quarter';
+            const outerClass = isQuarter
+              ? 'overflow-x-auto -mx-2 px-2 pb-1'
+              : '';
+            const innerStyle: React.CSSProperties = isQuarter
+              ? { minWidth: minInner }
+              : {};
 
-          {/* ── Aligned data table ──────────────────────────────────────── */}
-          <div className="mt-1 overflow-x-auto">
-            <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+            return (
+              <div className={outerClass}>
+                <div style={innerStyle}>
+                  {/* Bar chart */}
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
+                      barCategoryGap="28%"
+                    >
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.5} />
+                      <XAxis
+                        dataKey="periodLabel"
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                        interval={0}
+                      />
+                      <YAxis
+                        tickFormatter={fmtAxis}
+                        tick={{ fontSize: 10 }}
+                        tickLine={false}
+                        axisLine={false}
+                        width={68}
+                      />
+                      <Tooltip
+                        content={<CustomTooltip metricLabel={metric.label} />}
+                        cursor={{ fill: 'hsl(var(--muted))', opacity: 0.5 }}
+                      />
+                      {hasNegative && (
+                        <ReferenceLine
+                          y={0}
+                          stroke="hsl(var(--border))"
+                          strokeWidth={1.5}
+                        />
+                      )}
+                      <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={60}>
+                        {chartData.map((entry, i) => (
+                          <Cell
+                            key={`cell-${i}`}
+                            fill={barColor(metric, entry.rawValue)}
+                            fillOpacity={0.9}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  {/* ── Aligned data table ─────────────────────────────── */}
+                  <div className="mt-1">
+                    <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 {/* Label column */}
                 <col style={{ width: '88px' }} />
@@ -348,7 +375,11 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
                 </tr>
               </tbody>
             </table>
-          </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
     </Card>

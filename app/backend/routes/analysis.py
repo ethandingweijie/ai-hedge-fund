@@ -857,6 +857,18 @@ async def get_stock_data(ticker: str, period: str = "1y"):
                 _prefer_fmp("pe_ratio",                   rt.get("priceToEarningsRatioTTM"))
                 _prefer_fmp("price_to_sales",             rt.get("priceToSalesRatioTTM"))
                 _prefer_fmp("net_margin",                 rt.get("netProfitMarginTTM"))
+
+                # /stable/quote → 52wk range. FMP's yearHigh/yearLow update
+                # intraday from the official exchange feed; yfinance's
+                # fiftyTwoWeekHigh/Low can lag during the trading day.
+                try:
+                    q_raw = _fmp_get(f"{_STABLE}/quote", {"symbol": sym}, api_key)
+                    q = (q_raw[0] if isinstance(q_raw, list) and q_raw
+                         else q_raw if isinstance(q_raw, dict) else {}) or {}
+                    _prefer_fmp("fifty_two_week_high", q.get("yearHigh"))
+                    _prefer_fmp("fifty_two_week_low",  q.get("yearLow"))
+                except Exception:
+                    pass  # yfinance values remain as fallback
         except Exception:
             pass  # Best-effort; yfinance values remain as the baseline
     # Final fallback — ROA as a proxy for ROIC when neither FMP nor HK path filled it
