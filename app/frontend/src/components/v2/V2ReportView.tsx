@@ -1468,6 +1468,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
   const [data, setData]       = useState<RevenueSegmentation | null>(null);
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
+  const [period, setPeriod]   = useState<'annual' | 'quarter'>('annual');
 
   useEffect(() => {
     if (!ticker) return;
@@ -1475,12 +1476,12 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
     setLoading(true);
     setErrored(false);
     const fn = kind === 'product' ? getRevenueProductSegmentation : getRevenueGeoSegmentation;
-    fn(ticker)
+    fn(ticker, period)
       .then(r => { if (!cancelled) setData(r); })
       .catch(() => { if (!cancelled) setErrored(true); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [ticker, kind]);
+  }, [ticker, kind, period]);
 
   const title    = kind === 'product' ? 'Revenue Build — Product' : 'Revenue Build — Geography';
   const emptyLbl = kind === 'product'
@@ -1501,13 +1502,34 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
     return cleaned.length > 28 ? cleaned.slice(0, 26) + '…' : cleaned;
   };
 
-  const card = (body: React.ReactNode, headerExtra?: React.ReactNode) => (
+  // Segmented toggle — Annual | Quarter. Sits in the header regardless of
+  // loading / empty state so the user can always switch.
+  const toggle = (
+    <div className="flex items-center p-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800">
+      {(['annual', 'quarter'] as const).map(p => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => setPeriod(p)}
+          className={`h-5 px-2 text-[9.5px] font-medium rounded uppercase tracking-wider transition-colors ${
+            period === p
+              ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm'
+              : 'text-zinc-500 dark:text-zinc-400 active:text-zinc-800'
+          }`}
+        >
+          {p === 'annual' ? 'Annual' : 'Quarter'}
+        </button>
+      ))}
+    </div>
+  );
+
+  const card = (body: React.ReactNode) => (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
           {title}
         </span>
-        {headerExtra}
+        {toggle}
       </div>
       {body}
     </div>
@@ -1580,8 +1602,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           Total {data.total_revenue != null ? `${fmtMoney(data.total_revenue)} ${currency}` : '—'}
         </span>
       </div>
-    </>,
-    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{periodLabel}</span>
+    </>
   );
 }
 

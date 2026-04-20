@@ -966,7 +966,17 @@ def _fmp_segmentation(fmp_path: str, ticker: str, period: str) -> dict:
 
     # FMP sorts newest first per symbol (verified 2026-04-20).
     current = raw[0] if isinstance(raw[0], dict) else {}
-    prior   = raw[1] if len(raw) > 1 and isinstance(raw[1], dict) else {}
+    # Prior comparable: for annual this is the prior year (index 1). For
+    # quarter we want the same quarter last year (index 4) to get true YoY
+    # growth; if the company only has <4 quarters of history, fall back to
+    # the immediately prior quarter (QoQ) so something renders.
+    prior_idx = 4 if period == "quarter" else 1
+    if len(raw) > prior_idx and isinstance(raw[prior_idx], dict):
+        prior = raw[prior_idx]
+    elif len(raw) > 1 and isinstance(raw[1], dict):
+        prior = raw[1]
+    else:
+        prior = {}
 
     cur_data   = current.get("data") or {}
     prior_data = prior.get("data") or {}
