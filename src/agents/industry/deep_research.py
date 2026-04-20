@@ -459,6 +459,147 @@ def _extract_dcf_calibration(
                 "risk_flag": "MEDIUM", "notes": f"Extraction failed: {exc}"}
 
 
+# ── Segment-scenario extractor (probabilistic SOTP 12m) ──────────────────────
+
+def _extract_segment_scenarios(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    deep_research: str,
+    ticker: str,
+) -> dict:
+    """
+    LLM pass over the deep research report to produce per-segment 12-month
+    growth SCENARIO TREES (probabilities + rates + evidence + confidence).
+
+    The output is consumed by the probabilistic SOTP 12m method: each segment
+    draws a scenario weighted by its probability during Monte Carlo, so the
+    distribution of IVs captures right-tail hypergrowth (NVDA data center,
+    biotech launches) and left-tail contraction (AI capex pullback).
+
+    NO CLAMP on rates — the LLM is trusted to reason over the research
+    evidence and produce defensible scenarios, including >100% or <-30%
+    when the evidence supports it. The evidence field surfaces that logic
+    in the audit trail.
+
+    Returns a dict mapping segment-name → scenario block:
+        {
+          "<segment>": {
+             "scenarios": [{"prob": float, "rate": float, "label": str}, ...],
+             "evidence":  str,
+             "confidence": "low"|"medium"|"high",
+          },
+          ...
+        }
+
+    Invalid outputs (prob sum out-of-tolerance, missing fields, model error)
+    collapse to {} so the downstream SOTP falls back to deterministic mode.
+    """
+    if not deep_research and not sections:
+        return {}
+
+    # Prefer structured sections; fall back to full report text
+    section_2d = sections.get("2d") or sections.get("2D") or ""
+    section_2f = sections.get("2f") or sections.get("2F") or ""
+    section_2e = sections.get("2e") or sections.get("2E") or ""
+    combined = (section_2d + "\n\n" + section_2e + "\n\n" + section_2f).strip()
+    if not combined:
+        # Use first 6000 chars of the full report as context
+        combined = (deep_research or "")[:6000]
+    if not combined:
+        return {}
+
+    try:
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=1500,
+            system=(
+                "You are a sector research analyst producing probabilistic 12-month "
+                "growth scenarios for each major revenue segment. Read the provided "
+                "research excerpts and output ONLY valid JSON — no commentary, no "
+                "markdown fences.\n\n"
+                "Schema: an object mapping segment-name to a scenario block. Each "
+                "segment block has:\n"
+                "  - scenarios: array of 2-6 items, each with {prob, rate, label}\n"
+                "      prob  — float 0..1, all probs in one segment MUST sum to 1.0 (±0.02)\n"
+                "      rate  — 12-month revenue growth rate as decimal (0.15 = 15%);\n"
+                "              NO CAP — use high values (>1.0) when evidence supports\n"
+                "              hypergrowth, negative values when research indicates\n"
+                "              contraction. Defend the rate in evidence.\n"
+                "      label — short narrative name for the scenario (≤40 chars)\n"
+                "  - evidence: one-sentence justification citing the research signal\n"
+                "                (≤200 chars)\n"
+                "  - confidence: 'low' | 'medium' | 'high'\n\n"
+                "Rules:\n"
+                "  * Segment names must match the exact terminology used in the research "
+                "    (e.g. 'Services', 'iPhone', 'AWS', 'Intelligent Cloud', 'Data center').\n"
+                "  * Produce scenarios only for major segments mentioned in the research.\n"
+                "    If the research doesn't substantiate a forecast for a segment, OMIT it.\n"
+                "  * Scenarios should span realistic outcomes — include at least one downside, "
+                "    one base, one upside when evidence permits.\n"
+                "  * For high-uncertainty segments (binary drug approvals, new-product launches), "
+                "    include an explicit tail scenario with appropriate probability.\n"
+                "  * confidence='high' only when research explicitly supports the distribution\n"
+                "    (management guidance, clear analyst consensus); 'medium' is the default\n"
+                "    when directionally supported; 'low' when inferred.\n\n"
+                "If the research is too thin for ANY segment, return {} (empty object)."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Research excerpts (cycle + risk + KPI sections):\n{combined[:8000]}"
+                ),
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return {}
+
+        # Validate each segment block — invalid blocks dropped silently
+        out: dict[str, dict] = {}
+        for seg_name, block in parsed.items():
+            if not isinstance(block, dict):
+                continue
+            scenarios = block.get("scenarios")
+            if not isinstance(scenarios, list) or len(scenarios) < 1:
+                continue
+            cleaned: list[dict] = []
+            prob_sum = 0.0
+            for s in scenarios:
+                if not isinstance(s, dict):
+                    continue
+                try:
+                    p = float(s.get("prob"))
+                    r = float(s.get("rate"))
+                except (TypeError, ValueError):
+                    continue
+                if not (0.0 <= p <= 1.0):
+                    continue
+                cleaned.append({
+                    "prob":  p,
+                    "rate":  r,
+                    "label": str(s.get("label", ""))[:60],
+                })
+                prob_sum += p
+            # Probabilities must sum to ~1.0 (±0.02 tolerance)
+            if not cleaned or abs(prob_sum - 1.0) > 0.02:
+                continue
+            out[str(seg_name)] = {
+                "scenarios":  cleaned,
+                "evidence":   str(block.get("evidence", ""))[:300],
+                "confidence": str(block.get("confidence", "medium")).lower(),
+            }
+        return out
+    except Exception:
+        return {}
+
+
 # ── Delta research helpers ────────────────────────────────────────────────────
 
 def _build_delta_system(year: str, last_run_date: str) -> str:
@@ -2331,6 +2472,17 @@ def _research_one_ticker(
         f"risk={dcf_calibration.get('risk_flag')}"
     )
 
+    # ── Segment-scenario tree for probabilistic SOTP 12m ─────────────────────
+    segment_scenarios = _extract_segment_scenarios(
+        sdk_client, _synthesis_model, sections, final_report, ticker,
+    )
+    if segment_scenarios:
+        progress.update_status(
+            agent_id, ticker,
+            f"Segment scenarios: {len(segment_scenarios)} segments with "
+            f"{sum(len(b['scenarios']) for b in segment_scenarios.values())} total scenarios"
+        )
+
     return {
         "deep_research":            final_report,
         "deep_research_annotated":  annotated_report,
@@ -2342,6 +2494,7 @@ def _research_one_ticker(
         "cache_age_days":         None,
         "cache_run_id":           None,
         "dcf_calibration":        dcf_calibration,
+        "segment_scenarios":      segment_scenarios,
     }
 
 
@@ -2491,6 +2644,14 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if cal:
             dcf_calibration_signals[t] = cal
     state["data"]["dcf_calibration_signals"] = dcf_calibration_signals
+
+    # ── Per-ticker segment scenarios (for probabilistic SOTP 12m) ─────────────
+    segment_scenarios_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        scen = res.get("segment_scenarios")
+        if scen:
+            segment_scenarios_all[t] = scen
+    state["data"]["segment_scenarios"] = segment_scenarios_all
 
     # ── Per-ticker management guidance extraction ─────────────────────────────
     mgmt_guidance: dict[str, dict] = {}

@@ -61,6 +61,7 @@ from src.tools.api import (
     get_analyst_estimates,
     get_prices,
     get_fx_rate,
+    get_revenue_product_segmentation,
 )
 from src.data.sector_profiles import (
     get_wacc,
@@ -258,6 +259,349 @@ def _analyst_revenue_growth(estimates: list, revenue_base: float) -> Optional[fl
     if rev_est is None or rev_est <= 0:
         return None
     return (rev_est / revenue_base) - 1
+
+
+# ── Segment-type EV/Revenue multiples (for SOTP method) ──────────────────────
+# Segment names are keyword-matched to a type label (hardware / services / ...),
+# and the type label resolves to an EV/Revenue multiple VIA the tier table.
+#
+# Tiers reflect the quality of the business backing the segment:
+#   "default" — generic industry averages. A commodity smartphone maker's
+#               hardware segment, a small-cap IT services firm, a regional
+#               retail chain. Multiples track long-run sector averages.
+#   "premium" — ecosystem leaders where each segment is worth materially more
+#               than the industry average because of moat / recurring revenue /
+#               pricing power. AAPL, MSFT, GOOGL, AMZN, V, MA, LVMH. Multiples
+#               are ~2× the default tier, calibrated so that SOTP approximates
+#               market cap for names with healthy market-multiple valuations.
+#
+# Tier selection is driven by ``profile`` name (see _PROFILE_TIER_MAP below),
+# not by ticker. A company sitting in the "Hyperscaler / Tech Conglomerate"
+# profile automatically gets premium multiples on its segments.
+#
+# Note on EV/Revenue vs EV/EBITDA: we use EV/Revenue because FMP segment data
+# is revenue-only (no segment-level EBITDA disclosure). Each multiple already
+# bakes in a typical segment margin — e.g. premium services at 14× EV/Rev
+# corresponds to ~28× EV/EBITDA at 50% EBITDA margin, which matches the
+# analyst benchmark range for AAPL Services et al.
+
+_SEGMENT_TYPE_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
+    # (matching keywords — case-insensitive substring — first match wins,  type label)
+    # ORDER MATTERS: specific-before-generic. The top rules catch composite
+    # bucket names (GOOGL "subscriptions, platforms, and devices", META
+    # "Family of Apps", AMZN "Online stores") before they fall through to the
+    # generic services / retail / software buckets.
+    #
+    # Keywords include both singular and plural so FMP labels like "Service"
+    # (AAPL) and "Services" (MSFT) both match.
+    #
+    # Mixed bucket — GOOGL-style blended (subscription + hardware + platform).
+    # Placed first so it beats the generic "subscription" match on services.
+    (("subscriptions, platforms", "platforms and devices",
+      "subscriptions and devices", "subscriptions, platforms, and devices"),
+                                                                          "mixed_platform"),
+    # Marketplace — commission businesses (AMZN 3P, Etsy)
+    (("third-party", "seller", "marketplace", "commission"),              "marketplace"),
+    # Advertising (includes META-specific "Family of Apps", social, newsfeed)
+    (("advertising", "ads", "marketing", "search",
+      "family of apps", "newsfeed", "social network", "social media"),    "advertising"),
+    # 1P retail — razor-thin margin commodity e-commerce (AMZN "Online stores")
+    # MUST come before generic retail / services so "online store" doesn't
+    # match "store" alone (which would mix into the higher retail multiple).
+    (("online store", "1p retail", "first-party retail",
+      "e-commerce"),                                                      "retail_1p"),
+    # Services (generic recurring / cloud / subscription)
+    (("service", "cloud", "aws", "azure", "gcp", "saas", "subscription"), "services"),
+    # Software — includes productivity / office / linkedin / workplace
+    (("software", "apps", "application", "platform",
+      "productivity", "business process", "office", "linkedin",
+      "workplace"),                                                       "software"),
+    (("data center", "data-center", "networking", "infrastructure"),      "infrastructure"),
+    # Hardware — includes personal computing / windows
+    (("iphone", "mac", "ipad", "watch", "hardware", "product", "device",
+      "consumer electronics", "phone", "handset", "smartphone",
+      "wearable", "personal computing", "windows"),                       "hardware"),
+    (("retail", "store", "brick-and-mortar", "physical"),                 "retail"),
+    (("wholesale", "distribution"),                                       "wholesale"),
+    (("gaming", "games", "entertainment", "media"),                       "media"),
+    (("automotive", "auto", "vehicle", "ev ", "battery"),                 "auto"),
+    (("energy", "oil", "gas", "power", "utility"),                        "energy"),
+    (("bank", "loan", "lending", "deposit", "insurance",
+      "asset management"),                                                "financial"),
+    (("health", "medical", "pharmacy", "drug", "clinical"),               "healthcare"),
+]
+
+_SEGMENT_MULTIPLE_TIERS: dict[str, dict[str, float]] = {
+    # EV/Revenue multiples — bakes in typical operating margin for the segment type.
+    # Three tiers by moat quality: default (no moat), mid (moderate / transitioning),
+    # premium (ecosystem leaders). Tier assignment is driven by sector profile
+    # (see _PROFILE_TIER_MAP below).
+    "default": {
+        "services":       6.0,
+        "software":       5.5,
+        "advertising":    6.5,
+        "infrastructure": 5.0,
+        "marketplace":    3.5,   # commission business (Mercari, Etsy)
+        "mixed_platform": 4.5,   # blended subscription / hardware / platform
+        "retail_1p":      0.7,   # commodity 1P e-commerce — razor-thin margins
+        "hardware":       2.5,
+        "retail":         1.5,
+        "wholesale":      1.2,
+        "media":          4.0,
+        "auto":           2.0,
+        "energy":         1.8,
+        "financial":      3.0,
+        "healthcare":     4.5,
+        "default":        3.0,
+    },
+    "mid": {
+        # Transitioning franchises — ORCL/SAP-scale legacy businesses with real
+        # cloud momentum but not AAPL-level moats. Services ~9x EV/Rev ≈ 18x
+        # EV/EBITDA at 50% margin — between generic-IT (12x) and hyperscaler
+        # (30x+). Calibrated so a cloud-pivot name sits roughly 60% between
+        # default and premium on most segment types.
+        "services":       9.0,
+        "software":       8.0,
+        "advertising":    7.0,
+        "infrastructure": 6.0,
+        "marketplace":    4.5,
+        "mixed_platform": 5.5,
+        "retail_1p":      0.85,
+        "hardware":       3.5,
+        "retail":         1.8,
+        "wholesale":      1.4,
+        "media":          5.0,
+        "auto":           2.5,
+        "energy":         2.0,
+        "financial":      3.5,
+        "healthcare":     5.5,
+        "default":        3.5,
+    },
+    "premium": {
+        # Ecosystem leaders — recurring revenue, pricing power, annuity-like hardware.
+        # Services 15.5x ≈ 31x EV/EBITDA at 50% margin (AAPL Services top of range).
+        # Hardware 5.5x ≈ 17-18x EV/EBITDA at 30% margin (AAPL iPhone top of range).
+        # Advertising 8.0x ≈ 22-24x EV/EBITDA at 35% margin (antitrust-discounted GOOGL).
+        # Marketplace 6.0x ≈ AMZN 3P analyst SOTP range (0.8-1.0T EV on ~$156B rev).
+        # Mixed platform 7.0x ≈ weighted avg of subscription (15x) + hardware (5x).
+        # Retail_1P 1.0x ≈ Amazon 1P scale with Prime moat.
+        "services":       15.5,
+        "software":       12.0,
+        "advertising":     8.0,
+        "infrastructure":  8.0,
+        "marketplace":     6.0,
+        "mixed_platform":  7.0,
+        "retail_1p":       1.0,
+        "hardware":        5.5,
+        "retail":          2.5,
+        "wholesale":       1.8,
+        "media":           7.0,
+        "auto":            3.5,
+        "energy":          2.5,
+        "financial":       4.5,
+        "healthcare":      7.0,
+        "default":         4.5,
+    },
+}
+
+# Profile → tier mapping. Profiles not listed here default to "default" tier.
+# Premium tier is reserved for profiles whose archetypal member has AAPL-level
+# moats (pricing power, recurring revenue, ecosystem lock-in). Mid tier is for
+# transitioning franchises — legacy names with real cloud/digital momentum but
+# without peak-franchise multiples (ORCL, SAP, TXN).
+_PROFILE_TIER_MAP: dict[str, str] = {
+    # Premium — full ecosystem leader multiples
+    "Hyperscaler / Tech Conglomerate":           "premium",
+    "Growth SaaS":                               "premium",
+    "Cybersecurity / Mission-Critical SaaS":     "premium",
+    "Payment Networks":                          "premium",
+    "Market Infrastructure":                     "premium",
+    "Luxury Goods":                              "premium",
+    "Membership / Subscription Retail":          "premium",
+    "Large Cap Pharma":                          "premium",
+    "Managed Care":                              "premium",
+    # Mid — transitioning franchises with moderate moats
+    "Mature SaaS":                               "mid",
+}
+
+
+def _resolve_segment_tier(sector: str, profile: str) -> str:
+    """Return "premium" or "default" based on the company's valuation profile."""
+    return _PROFILE_TIER_MAP.get(profile or "", "default")
+
+
+def _classify_segment(name: str, tier: str = "default") -> tuple[str, float]:
+    """Classify a segment name → (type_label, EV/Revenue multiple for that tier).
+
+    Case-insensitive substring match; first matching keyword wins. Falls back
+    to "default" type (tier's default multiple) when nothing matches.
+    """
+    mults = _SEGMENT_MULTIPLE_TIERS.get(tier, _SEGMENT_MULTIPLE_TIERS["default"])
+    n = (name or "").lower()
+    for keywords, type_label in _SEGMENT_TYPE_KEYWORDS:
+        if any(k in n for k in keywords):
+            return type_label, mults.get(type_label, mults["default"])
+    return "default", mults["default"]
+
+
+def _sotp_enterprise_value(
+    segments: dict[str, float],
+    tier: str = "default",
+) -> Optional[float]:
+    """Sum per-segment EV using tier-adjusted type multiples.
+
+    Returns aggregate EV across all segments, or None when input is empty /
+    all-zero. Multiples vary by ``tier`` — see ``_SEGMENT_MULTIPLE_TIERS``.
+    """
+    if not segments:
+        return None
+    total_ev = 0.0
+    for seg_name, seg_rev in segments.items():
+        if seg_rev is None or seg_rev <= 0:
+            continue
+        _, mult = _classify_segment(seg_name, tier=tier)
+        total_ev += seg_rev * mult
+    return total_ev if total_ev > 0 else None
+
+
+# ── Segment-name normalization for scenario → segment lookup ─────────────────
+# FMP labels (e.g. "Service", "iPhone") and LLM-output labels (e.g. "Services",
+# "iPhone segment") can differ slightly. Normalize both sides before matching
+# so minor differences don't drop the scenario lookup.
+
+def _normalize_segment_name(name: str) -> str:
+    """Lowercase + strip whitespace + common punctuation for fuzzy matching."""
+    return "".join(c for c in (name or "").lower().strip() if c.isalnum())
+
+
+def _find_scenario_for_segment(
+    segment_name: str,
+    scenarios_by_segment: dict[str, dict],
+) -> Optional[dict]:
+    """Return the scenario block whose key best matches ``segment_name``.
+
+    Tries exact match first, then normalized (punctuation/whitespace/case-
+    insensitive) match, then bidirectional substring on the normalized keys.
+    Returns None if no reasonable match exists.
+    """
+    if not scenarios_by_segment:
+        return None
+    # Exact
+    if segment_name in scenarios_by_segment:
+        return scenarios_by_segment[segment_name]
+    # Normalized
+    norm_target = _normalize_segment_name(segment_name)
+    normalized_map = {_normalize_segment_name(k): (k, v)
+                      for k, v in scenarios_by_segment.items()}
+    if norm_target in normalized_map:
+        return normalized_map[norm_target][1]
+    # Bidirectional substring on normalized keys
+    for n_key, (_, v) in normalized_map.items():
+        if n_key and (n_key in norm_target or norm_target in n_key):
+            return v
+    return None
+
+
+# ── Probabilistic SOTP 12m (Monte Carlo) ─────────────────────────────────────
+# Consumes segment-scenario trees from the deep research extractor. Each
+# segment has a list of (prob, rate) scenarios summing to 1.0. For each
+# Monte Carlo iteration we draw one scenario per segment (independent) and
+# compute total EV. The resulting distribution captures right-tail hypergrowth
+# (e.g. 5% chance of NVDA data center 3x-ing) and left-tail contraction
+# without any hardcoded numeric clamp.
+
+_SOTP_MC_ITERATIONS = 10_000
+
+
+def _draw_scenario_rate(scenarios: list[dict], rng: "random.Random") -> float:
+    """Sample one scenario from the list by its probability. Returns the rate."""
+    r = rng.random()
+    cumulative = 0.0
+    for s in scenarios:
+        cumulative += s.get("prob", 0.0)
+        if r <= cumulative:
+            return float(s.get("rate", 0.0))
+    # Numerical edge: cumulative just under 1.0; return last scenario's rate
+    return float(scenarios[-1].get("rate", 0.0))
+
+
+def _sotp_12m_probabilistic(
+    segments: dict[str, float],
+    scenarios_by_segment: dict[str, dict],
+    tier: str,
+    net_debt: float,
+    shares: float,
+    fallback_growth: float = 0.0,
+    n_iter: int = _SOTP_MC_ITERATIONS,
+    seed: int = 20260421,
+) -> Optional[dict]:
+    """Monte Carlo probabilistic SOTP 12m.
+
+    For each of ``n_iter`` iterations, draws one scenario per segment
+    (segments without scenarios use ``fallback_growth`` as a single-point rate)
+    and sums segment EV = revenue × (1 + rate) × tier_multiple. Subtracts
+    net_debt to get equity, divides by shares for per-share IV.
+
+    Returns a dict with:
+        mean, p10, p50, p90, p99, stdev  — distribution stats per share
+        segments_with_scenarios          — how many segments had scenario data
+        segments_fallback                — how many fell back to flat growth
+        sample_iv_p50                    — median IV (primary output)
+    Or None if preconditions fail (no segments, non-positive shares, etc.).
+
+    Deterministic via ``seed`` so identical inputs yield identical stats
+    across runs — critical for reproducibility in a valuation pipeline.
+    """
+    import random as _random
+    if not segments or shares is None or shares <= 0:
+        return None
+
+    # Pre-resolve scenario lookup for each segment (skip segments with zero rev)
+    segment_data = []
+    n_with_scenarios = 0
+    n_fallback = 0
+    for name, rev in segments.items():
+        if rev is None or rev <= 0:
+            continue
+        _, mult = _classify_segment(name, tier=tier)
+        scen_block = _find_scenario_for_segment(name, scenarios_by_segment)
+        scenarios = scen_block.get("scenarios") if scen_block else None
+        if scenarios:
+            n_with_scenarios += 1
+        else:
+            n_fallback += 1
+        segment_data.append((name, float(rev), mult, scenarios))
+
+    if not segment_data:
+        return None
+
+    rng = _random.Random(seed)
+    per_share_ivs: list[float] = []
+    for _ in range(n_iter):
+        total_ev = 0.0
+        for _name, rev, mult, scen in segment_data:
+            rate = _draw_scenario_rate(scen, rng) if scen else fallback_growth
+            total_ev += rev * (1.0 + rate) * mult
+        equity = total_ev - (net_debt or 0.0)
+        per_share_ivs.append(max(equity / shares, 0.0))
+
+    per_share_ivs.sort()
+    def pct(p: float) -> float:
+        idx = min(n_iter - 1, max(0, int(round(p * (n_iter - 1)))))
+        return per_share_ivs[idx]
+
+    mean_iv = sum(per_share_ivs) / n_iter
+    var = sum((v - mean_iv) ** 2 for v in per_share_ivs) / n_iter
+    return {
+        "mean":    round(mean_iv, 2),
+        "p10":     round(pct(0.10), 2),
+        "p50":     round(pct(0.50), 2),
+        "p90":     round(pct(0.90), 2),
+        "p99":     round(pct(0.99), 2),
+        "stdev":   round(var ** 0.5, 2),
+        "segments_with_scenarios": n_with_scenarios,
+        "segments_fallback":       n_fallback,
+    }
 
 
 def _normalized_earnings(
@@ -551,6 +895,67 @@ def _compute_method_value(
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = norm_ebitda * mult
         return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # ── SOTP (Sum of Parts) — per-segment EV/Revenue multiples ────────────
+    # Uses FMP product-segment revenue breakdown with keyword-matched multiples
+    # per segment type (Services ~6x, Hardware ~2.5x, Retail ~1.5x, etc.).
+    # Only fires when the ticker disclosed segments and they landed on
+    # ``most_recent["segment_breakdown"]`` (set by run_dcf_agent). Deliberately
+    # ignores scenario multiplier (sm) — the scenario signal lives in the
+    # segment revenue levels when/if analysts update them, not in an artificial
+    # ±25% overlay.
+    if method_name in {"SOTP (segments)", "Sum of Parts", "SOTP", "SOTP (Segments)"}:
+        seg = most_recent.get("segment_breakdown")
+        if not seg or shares <= 0:
+            return None
+        # Tier-adjust segment multiples: ecosystem leaders (AAPL, MSFT, V/MA,
+        # luxury) get "premium" multiples on each segment type, materially
+        # uplifting SOTP so it tracks market cap for healthy market-multiple
+        # names. Tier is driven by the sector profile (see _PROFILE_TIER_MAP).
+        tier = _resolve_segment_tier(sector, profile_name)
+        total_ev = _sotp_enterprise_value(seg, tier=tier)
+        if total_ev is None:
+            return None
+        # Apply growth premium to the aggregate, same pattern as EV/Revenue.
+        # No CNY haircut here — the per-segment multiples are already generic
+        # (not peer-table sourced), so the ADR discount would be speculative.
+        # Equity = EV − net_debt; when net_debt < 0 (net cash), this adds the
+        # cash pile back — matches the standard SOTP accounting for AAPL etc.
+        total_ev *= growth_premium
+        return max((total_ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # ── SOTP 12m (probabilistic) — Monte Carlo with scenario trees ────────
+    # Same tier-based multiples, but each segment revenue is grown by a rate
+    # sampled from a probabilistic scenario tree produced by the deep research
+    # agent. Scenarios have no clamp — hypergrowth and contraction tails flow
+    # through honestly. Output is by scenario: bear → p10, base → p50, bull → p90.
+    # If segment scenarios are unavailable, segments fall back to a flat
+    # ``fallback_growth`` (from most_recent) so the method still produces a
+    # deterministic number equivalent to the current SOTP × (1 + growth_base).
+    if method_name in {"SOTP 12m (probabilistic)", "SOTP 12m", "Probabilistic SOTP"}:
+        seg = most_recent.get("segment_breakdown")
+        if not seg or shares <= 0:
+            return None
+        scenarios = most_recent.get("segment_scenarios") or {}
+        tier = _resolve_segment_tier(sector, profile_name)
+        fallback_g = most_recent.get("_sotp_fallback_growth", 0.0)
+        dist = _sotp_12m_probabilistic(
+            segments=seg,
+            scenarios_by_segment=scenarios,
+            tier=tier,
+            net_debt=(net_debt or 0.0),
+            shares=shares,
+            fallback_growth=float(fallback_g),
+        )
+        if dist is None:
+            return None
+        # Stash the full distribution on most_recent so the DCF engine's
+        # reporting layer can surface percentiles beyond the single returned IV.
+        most_recent.setdefault("sotp_12m_distribution", {})[scenario] = dist
+        # Map bear/base/bull → P10/P50/P90 so the existing scenario plumbing
+        # picks up asymmetric tail exposure automatically.
+        pct_key = {"bear": "p10", "base": "p50", "bull": "p90"}.get(scenario, "p50")
+        return dist.get(pct_key)
 
     # ── EV/Revenue and variants ────────────────────────────────────────────
     if method_name in {"EV/NTM Revenue", "EV/NTM Rev", "EV/Revenue", "EV/Fwd Rev"}:
@@ -941,6 +1346,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     sectors_map = state["data"].get("sectors", {})
     _primary_sector = state["data"].get("sector", "Tech")
     mgmt_guidance_all      = state["data"].get("management_guidance", {})
+    segment_scenarios_all  = state["data"].get("segment_scenarios", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -1132,6 +1538,54 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"${_norm_ni/1e9:.2f}B ({_delta_pct:+.0%}) — "
                     f"P/E (norm) will use normalized figure"
                 )
+
+        # ── Product-segment revenue breakdown (Feature 3) ───────────────
+        # FMP /stable/revenue-product-segmentation. Paid-tier endpoint — a
+        # free-tier key returns [] and the downstream SOTP method just skips.
+        # Segments arrive in reported currency; apply the same FX multiplier
+        # used on the historical series so multiples are applied in the target
+        # currency. Only the MOST-RECENT year's segments feed SOTP.
+        try:
+            product_segments = get_revenue_product_segmentation(
+                ticker, end_date, period="annual", api_key=api_key,
+            )
+        except Exception:
+            product_segments = []
+        if product_segments:
+            _latest_seg = product_segments[-1]
+            _fxm = fx_rate if (fx_rate and fx_rate > 0) else 1.0
+            _converted = {k: v * _fxm for k, v in _latest_seg["segments"].items()}
+            most_recent["segment_breakdown"] = _converted
+            # Build top-5 mix string for the audit flag
+            _total = sum(_converted.values()) or 1.0
+            _mix = sorted(_converted.items(), key=lambda x: -x[1])[:5]
+            _mix_str = ", ".join(f"{n} {v/_total:.0%}" for n, v in _mix)
+            ticker_forward_flags.append(
+                f"Product segments ({_latest_seg['period_end']}): {_mix_str}"
+            )
+
+            # Attach segment scenarios from deep research (feeds probabilistic
+            # SOTP 12m method). Missing ticker → empty dict → method falls back
+            # to flat growth = growth_base (attached further below).
+            _ticker_scenarios = segment_scenarios_all.get(ticker, {})
+            if _ticker_scenarios:
+                most_recent["segment_scenarios"] = _ticker_scenarios
+                # One-line audit: first scenario per segment with its evidence
+                _scen_mix = []
+                for _seg_name, _block in list(_ticker_scenarios.items())[:4]:
+                    _scens = _block.get("scenarios", [])
+                    if _scens:
+                        _rates = [s.get("rate", 0.0) for s in _scens]
+                        _rate_lo = min(_rates)
+                        _rate_hi = max(_rates)
+                        _scen_mix.append(
+                            f"{_seg_name} [{_rate_lo:+.0%}→{_rate_hi:+.0%}]"
+                        )
+                if _scen_mix:
+                    ticker_forward_flags.append(
+                        f"Segment scenarios ({len(_ticker_scenarios)} segments, "
+                        f"conf={_block.get('confidence','?')}): " + ", ".join(_scen_mix)
+                    )
 
         # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────
         # Reported FCF treats stock-based comp as non-cash (adds it back to
@@ -1587,12 +2041,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         )
 
                 # ── Shadow-compute Forward P/E, Forward EV/EBITDA (Feature 1b)
-                # Values surface in the per-method table for transparency; they
-                # are only included in the blended IV when the profile explicitly
-                # references them.
+                # and SOTP segments (Feature 3). Values surface in the per-method
+                # table for transparency; they are only included in the blended
+                # IV when the profile explicitly references them.
                 _shadow_methods: list[str] = []
                 if forward_consensus is not None:
                     _shadow_methods.extend(["Forward P/E", "Forward EV/EBITDA"])
+                if most_recent.get("segment_breakdown"):
+                    _shadow_methods.append("SOTP (segments)")
+                    # Always shadow-compute probabilistic SOTP too; when the
+                    # deep research didn't produce scenarios, the method falls
+                    # back to flat growth = growth_base (attached below).
+                    most_recent["_sotp_fallback_growth"] = g
+                    _shadow_methods.append("SOTP 12m (probabilistic)")
                 for _shadow_name in _shadow_methods:
                     if _shadow_name not in method_values:
                         method_values[_shadow_name] = _compute_method_value(

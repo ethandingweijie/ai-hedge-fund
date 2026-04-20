@@ -1205,6 +1205,107 @@ def get_analyst_estimates(
     return estimates
 
 
+# ── 9. Revenue Segmentation (product + geographic) ───────────────────────────
+
+def _fetch_revenue_segmentation(
+    endpoint: str,
+    ticker: str,
+    end_date: str,
+    period: str,
+    api_key: str | None,
+) -> list[dict]:
+    """Shared core for FMP /stable/revenue-{product,geographic}-segmentation.
+
+    Returns list of yearly-sorted (ascending) dicts:
+        [{"period_end": "YYYY-MM-DD",
+          "fiscal_year": int | None,
+          "reported_currency": str | None,
+          "segments": {segment_name: revenue, ...}}, ...]
+
+    Only records with period_end ≤ ``end_date`` are kept (so backtests are
+    point-in-time correct). Always returns [] on failure — caller must treat
+    emptiness as "no segment data available".
+    """
+    if is_hk_ticker(ticker):
+        return []                       # FMP has no HK segment data
+    if is_sg_ticker(ticker):
+        return []
+
+    data = _fmp_get(
+        f"{_STABLE}/{endpoint}",
+        {"symbol": ticker, "period": _fmp_period(period)},
+        api_key,
+    )
+    if not data or not isinstance(data, list):
+        return []
+
+    out: list[dict] = []
+    for row in data:
+        period_end = (row.get("date") or "")[:10]
+        if not period_end or period_end > end_date:
+            continue
+        # FMP structure: segments live in a nested "data" dict
+        seg_raw = row.get("data")
+        if not isinstance(seg_raw, dict):
+            # Fallback: treat any numeric top-level keys as segments
+            reserved = {"symbol", "fiscalYear", "period", "reportedCurrency",
+                        "date", "cik", "acceptedDate"}
+            seg_raw = {k: v for k, v in row.items()
+                       if k not in reserved and isinstance(v, (int, float))}
+        # Coerce values to floats and drop None / non-numeric
+        segments = {}
+        for name, val in seg_raw.items():
+            try:
+                fv = float(val)
+                if fv > 0:
+                    segments[str(name)] = fv
+            except (TypeError, ValueError):
+                continue
+        if not segments:
+            continue
+        out.append({
+            "period_end":        period_end,
+            "fiscal_year":       row.get("fiscalYear"),
+            "reported_currency": row.get("reportedCurrency"),
+            "segments":          segments,
+        })
+
+    out.sort(key=lambda r: r["period_end"])
+    return out
+
+
+def get_revenue_product_segmentation(
+    ticker: str,
+    end_date: str,
+    period: str = "annual",
+    api_key: str | None = None,
+) -> list[dict]:
+    """Fetch product-segment revenue breakdown from FMP.
+
+    Endpoint: /stable/revenue-product-segmentation
+    Paid-tier endpoint on FMP; returns [] on 402/403.
+    """
+    return _fetch_revenue_segmentation(
+        "revenue-product-segmentation", ticker, end_date, period, api_key,
+    )
+
+
+def get_revenue_geographic_segments(
+    ticker: str,
+    end_date: str,
+    period: str = "annual",
+    api_key: str | None = None,
+) -> list[dict]:
+    """Fetch geographic-segment revenue breakdown from FMP.
+
+    Endpoint: /stable/revenue-geographic-segments
+    Paid-tier endpoint on FMP; returns [] on 402/403.
+    """
+    return _fetch_revenue_segmentation(
+        "revenue-geographic-segments", ticker, end_date, period, api_key,
+    )
+
+
 # ── Tavily Web Intelligence ───────────────────────────────────────────────────
 
 def get_web_intelligence(
