@@ -1667,19 +1667,23 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
     })}`;
   };
 
-  // 12-cell grid in request order. FMP-sourced fields (roic) fall back to
-  // yfinance ROA when FMP is unavailable (handled backend-side).
+  // 14-cell grid. For US tickers, valuation + profitability rows prefer FMP
+  // TTM values (/key-metrics-ttm + /ratios-ttm) over yfinance info which can
+  // lag by a quarter. ROIC falls back to ROA if neither FMP nor HK path
+  // provided a value (handled backend-side).
   const rows: { k: string; v: string }[] = [
     { k: 'Market cap', v: fmtMoney(metrics.market_cap) },
     { k: 'Rev TTM',    v: fmtMoney(metrics.revenue) },
     { k: 'FCF',        v: fmtMoney(metrics.free_cash_flow) },
     { k: 'Net margin', v: fmtPct(metrics.net_margin) },
     { k: 'P/E',        v: fmtMult(metrics.pe_ratio) },
+    { k: 'P/S',        v: fmtMult(metrics.price_to_sales) },
     { k: 'Rev growth', v: fmtPct(metrics.revenue_growth) },
     { k: 'EV/EBITDA',  v: fmtMult(metrics.ev_to_ebitda) },
     { k: 'ROE',        v: fmtPct(metrics.return_on_equity) },
     { k: 'ROIC',       v: fmtPct(metrics.return_on_invested_capital ?? metrics.return_on_assets) },
     { k: 'Net cash',   v: fmtMoney(metrics.net_cash) },
+    { k: 'FCF yield',  v: fmtPct(metrics.free_cash_flow_yield) },
     { k: '52wk high',  v: fmtPrice(metrics.fifty_two_week_high) },
     { k: '52wk low',   v: fmtPrice(metrics.fifty_two_week_low) },
   ];
