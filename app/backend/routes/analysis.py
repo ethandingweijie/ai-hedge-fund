@@ -904,6 +904,108 @@ async def get_stock_data(ticker: str, period: str = "1y"):
     return {"ticker": ticker.upper(), "history": history, "metrics": metrics}
 
 
+# ── Revenue Segmentation helpers ─────────────────────────────────────────────
+
+def _fmp_segmentation(fmp_path: str, ticker: str, period: str) -> dict:
+    """Shared fetch+shape helper for FMP segmentation endpoints.
+
+    Returns a response dict with `segments` sorted by revenue desc and each
+    entry carrying `pct` of total and (when prior year is available) `yoy_pct`.
+    """
+    sym = ticker.upper()
+    try:
+        from src.tools.api import _fmp_get, _STABLE, _get_key
+    except ImportError:
+        raise HTTPException(status_code=500, detail="FMP tools not available")
+
+    api_key = _get_key(None)
+    if not api_key:
+        raise HTTPException(status_code=503, detail="FMP_API_KEY not configured")
+
+    try:
+        raw = _fmp_get(
+            f"{_STABLE}/{fmp_path}",
+            {"symbol": sym, "period": period, "structure": "flat"},
+            api_key,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"FMP error: {exc}")
+
+    if not isinstance(raw, list) or not raw:
+        # Company doesn't report this segmentation (common for pure service
+        # cos, holding cos, REITs, some Asian tickers).
+        return {
+            "ticker":        sym,
+            "fiscal_year":   None,
+            "period":        None,
+            "currency":      None,
+            "total_revenue": None,
+            "segments":      [],
+        }
+
+    # FMP sorts newest first per symbol (verified 2026-04-20).
+    current = raw[0] if isinstance(raw[0], dict) else {}
+    prior   = raw[1] if len(raw) > 1 and isinstance(raw[1], dict) else {}
+
+    cur_data   = current.get("data") or {}
+    prior_data = prior.get("data") or {}
+    if not isinstance(cur_data, dict):
+        cur_data = {}
+    if not isinstance(prior_data, dict):
+        prior_data = {}
+
+    def _num(v):
+        try:
+            f = float(v)
+            return None if f != f else f  # filter NaN
+        except (TypeError, ValueError):
+            return None
+
+    cur_items = [(name, _num(v)) for name, v in cur_data.items() if _num(v) is not None and _num(v) != 0]
+    total_revenue = sum(v for _, v in cur_items) if cur_items else None
+
+    segments = []
+    for name, rev in sorted(cur_items, key=lambda kv: kv[1], reverse=True):
+        pct = (rev / total_revenue * 100.0) if total_revenue else None
+        prev = _num(prior_data.get(name))
+        yoy_pct = ((rev - prev) / prev * 100.0) if (prev is not None and prev != 0) else None
+        segments.append({
+            "name":    name,
+            "revenue": rev,
+            "pct":     pct,
+            "yoy_pct": yoy_pct,
+        })
+
+    return {
+        "ticker":        sym,
+        "fiscal_year":   current.get("fiscalYear"),
+        "period":        current.get("period"),
+        "currency":      current.get("reportedCurrency"),
+        "total_revenue": total_revenue,
+        "segments":      segments,
+    }
+
+
+# ── GET /analysis/revenue-segmentation/{ticker} ──────────────────────────────
+
+@router.get("/revenue-segmentation/{ticker}")
+async def get_revenue_product_segmentation(ticker: str, period: str = "annual"):
+    """Product-level revenue breakdown via FMP
+    /stable/revenue-product-segmentation. See _fmp_segmentation for shape."""
+    return _fmp_segmentation("revenue-product-segmentation", ticker, period)
+
+
+# ── GET /analysis/revenue-geo-segmentation/{ticker} ──────────────────────────
+
+@router.get("/revenue-geo-segmentation/{ticker}")
+async def get_revenue_geo_segmentation(ticker: str, period: str = "annual"):
+    """Geographic revenue breakdown via FMP
+    /stable/revenue-geographic-segmentation. Same response shape as product
+    segmentation — segment names are regions (e.g. "Americas Segment",
+    "Greater China Segment") instead of product lines."""
+    return _fmp_segmentation("revenue-geographic-segmentation", ticker, period)
+
+
 # ── GET /analysis/intelligence/{ticker} ──────────────────────────────────────
 
 @router.get("/intelligence/{ticker}")

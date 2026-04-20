@@ -24,7 +24,11 @@ import type {
   ProgressEvent,
   MacroRegime,
 } from '@/lib/reportTypes';
-import { getStockData, getCompanyName } from '@/lib/api';
+import {
+  getStockData, getCompanyName,
+  getRevenueProductSegmentation, getRevenueGeoSegmentation,
+  type RevenueSegmentation,
+} from '@/lib/api';
 
 // Existing panel components (reused as-is)
 import { FinancialsChart } from '@/components/report/FinancialsChart';
@@ -1423,9 +1427,11 @@ function FinancialsBody({
 }) {
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
-      {/* Revenue Build — placeholder UI until backend emits segment data.
-          Matches the NVDA reference card structure (4 segment tiles). */}
-      <V2RevenueBuildPlaceholder />
+      {/* Revenue Build — FMP product segmentation (LTM fiscal year) */}
+      <V2RevenueBuild ticker={ticker} kind="product" />
+
+      {/* Revenue Build — FMP geographic segmentation (LTM fiscal year) */}
+      <V2RevenueBuild ticker={ticker} kind="geo" />
 
       {/* Income Statement — wrap FinancialsChart in zinc-900 dark card shell
           matching Key Stats / Valuation cards. The inner FinancialsChart
@@ -1452,43 +1458,130 @@ function FinancialsBody({
   );
 }
 
-function V2RevenueBuildPlaceholder() {
-  // Static placeholder until backend emits segment breakdown
-  const segments = [
-    { name: 'Segment A', value: '—', delta: null },
-    { name: 'Segment B', value: '—', delta: null },
-    { name: 'Segment C', value: '—', delta: null },
-    { name: 'Segment D', value: '—', delta: null },
-  ];
-  return (
+/* ───────── Revenue Build (product or geographic) ─────────────────────────
+   Fetches FMP /stable/revenue-{product|geographic}-segmentation via the
+   backend, shows each segment with its share of total and YoY delta plus a
+   share bar. Falls back to an empty-state card when FMP returns no
+   segmentation (common for pure service cos, Asian tickers, REITs).
+*/
+function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'geo' }) {
+  const [data, setData]       = useState<RevenueSegmentation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errored, setErrored] = useState(false);
+
+  useEffect(() => {
+    if (!ticker) return;
+    let cancelled = false;
+    setLoading(true);
+    setErrored(false);
+    const fn = kind === 'product' ? getRevenueProductSegmentation : getRevenueGeoSegmentation;
+    fn(ticker)
+      .then(r => { if (!cancelled) setData(r); })
+      .catch(() => { if (!cancelled) setErrored(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [ticker, kind]);
+
+  const title    = kind === 'product' ? 'Revenue Build — Product' : 'Revenue Build — Geography';
+  const emptyLbl = kind === 'product'
+    ? 'Company does not report product-level revenue.'
+    : 'Company does not report geographic revenue.';
+
+  const fmtMoney = (v: number) => {
+    const abs = Math.abs(v);
+    if (abs >= 1e12) return `$${(abs / 1e12).toFixed(2)}T`;
+    if (abs >= 1e9)  return `$${(abs / 1e9).toFixed(1)}B`;
+    if (abs >= 1e6)  return `$${(abs / 1e6).toFixed(0)}M`;
+    return `$${abs.toLocaleString()}`;
+  };
+  // Truncate long FMP segment names (e.g. "Wearables, Home and Accessories",
+  // "Greater China Segment") for the tight 2-col grid on mobile.
+  const shortName = (n: string) => {
+    const cleaned = n.replace(/\s+Segment$/i, '').trim();
+    return cleaned.length > 28 ? cleaned.slice(0, 26) + '…' : cleaned;
+  };
+
+  const card = (body: React.ReactNode, headerExtra?: React.ReactNode) => (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
-          Revenue Build
+          {title}
         </span>
-        <span className="text-[10px] text-zinc-400 dark:text-zinc-500">LTM · coming soon</span>
+        {headerExtra}
       </div>
-      <div className="grid grid-cols-4 gap-2">
-        {segments.map(s => (
-          <div key={s.name} className="p-2.5 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40">
-            <div className="text-[9.5px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400">
-              {s.name}
-            </div>
-            <div className="text-[14px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">
-              {s.value}
-            </div>
-            {s.delta != null && (
-              <div className="text-[10px] font-medium tabular-nums mt-0.5 text-[#2e7d32] dark:text-[#4ea354]">
-                +{s.delta}%
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-      <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 mt-2.5 leading-relaxed">
-        Segment breakdown will populate once the backend emits product-level revenue data.
-      </p>
+      {body}
     </div>
+  );
+
+  if (loading) {
+    return card(
+      <div className="flex items-center gap-2 text-[12px] text-zinc-400 dark:text-zinc-500">
+        <div className="w-3 h-3 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-[#2e7d32] dark:border-t-[#4ea354] animate-spin" />
+        Loading segmentation…
+      </div>
+    );
+  }
+  if (errored || !data) {
+    return card(
+      <p className="text-[12px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+        Segment data unavailable.
+      </p>
+    );
+  }
+  if (!data.segments.length) {
+    return card(
+      <p className="text-[12px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+        {emptyLbl}
+      </p>
+    );
+  }
+
+  const periodLabel = data.fiscal_year
+    ? `FY${data.fiscal_year}${data.period && data.period !== 'FY' ? ` · ${data.period}` : ''}`
+    : '';
+  const currency = data.currency || 'USD';
+
+  return card(
+    <>
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {data.segments.slice(0, 6).map(s => {
+          const pctLabel = s.pct != null ? `${s.pct.toFixed(1)}%` : '—';
+          const yoy = s.yoy_pct;
+          return (
+            <div key={s.name} className="p-2.5 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40">
+              <div className="text-[9.5px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400 truncate" title={s.name}>
+                {shortName(s.name)}
+              </div>
+              <div className="text-[14px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">
+                {fmtMoney(s.revenue)}
+              </div>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">{pctLabel}</span>
+                {yoy != null && (
+                  <span className={`text-[10px] font-medium tabular-nums ${yoy >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+                    {yoy >= 0 ? '+' : ''}{yoy.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {/* Share bar */}
+              <div className="mt-1.5 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                <div
+                  className="h-full bg-[#2e7d32] dark:bg-[#4ea354]"
+                  style={{ width: `${Math.max(2, Math.min(100, s.pct ?? 0))}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between text-[10.5px] text-zinc-400 dark:text-zinc-500">
+        <span>{periodLabel}</span>
+        <span className="tabular-nums">
+          Total {data.total_revenue != null ? `${fmtMoney(data.total_revenue)} ${currency}` : '—'}
+        </span>
+      </div>
+    </>,
+    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{periodLabel}</span>
   );
 }
 

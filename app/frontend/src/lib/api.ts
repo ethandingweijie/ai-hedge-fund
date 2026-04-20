@@ -256,3 +256,33 @@ export function getStockData(ticker: string, period = '1y'): Promise<{
 }> {
   return fetchJson(`${BASE}/analysis/stock/${encodeURIComponent(ticker.toUpperCase())}?period=${period}`);
 }
+
+// ── Revenue segmentation (FMP product + geographic) ─────────────────────────
+
+export interface RevenueSegment {
+  name: string;
+  revenue: number;
+  pct: number | null;
+  yoy_pct: number | null;
+}
+
+export interface RevenueSegmentation {
+  ticker: string;
+  fiscal_year: number | null;
+  period: string | null;
+  currency: string | null;
+  total_revenue: number | null;
+  segments: RevenueSegment[];
+}
+
+/** Product-level revenue breakdown for a ticker. FMP-backed; US tickers
+ *  get the best coverage. Empty `segments` = company doesn't report. */
+export function getRevenueProductSegmentation(ticker: string, period: 'annual' | 'quarter' = 'annual'): Promise<RevenueSegmentation> {
+  return fetchJson(`${BASE}/analysis/revenue-segmentation/${encodeURIComponent(ticker.toUpperCase())}?period=${period}`);
+}
+
+/** Geographic revenue breakdown for a ticker. Same shape as product
+ *  segmentation — segment names are regions instead of product lines. */
+export function getRevenueGeoSegmentation(ticker: string, period: 'annual' | 'quarter' = 'annual'): Promise<RevenueSegmentation> {
+  return fetchJson(`${BASE}/analysis/revenue-geo-segmentation/${encodeURIComponent(ticker.toUpperCase())}?period=${period}`);
+}
