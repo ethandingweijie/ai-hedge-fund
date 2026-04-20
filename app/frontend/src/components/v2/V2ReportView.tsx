@@ -1640,13 +1640,17 @@ function V2StockChart({ ticker }: { ticker: string }) {
 
 /* ───────── V2 Key Stats (zinc card, 2-col grid) ───────── */
 function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }) {
+  // Signed money formatter — used for Net Cash where negative (net debt) is
+  // meaningful. Market cap / revenue / FCF are non-signed and render via
+  // `fmtMoney` (absolute value, with a minus prefix when negative).
   const fmtMoney = (v: number | undefined) => {
     if (v == null) return '—';
+    const sign = v < 0 ? '-' : '';
     const abs = Math.abs(v);
-    if (abs >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
-    if (abs >= 1e9)  return `$${(v / 1e9).toFixed(1)}B`;
-    if (abs >= 1e6)  return `$${(v / 1e6).toFixed(0)}M`;
-    return `$${v.toLocaleString()}`;
+    if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(1)}T`;
+    if (abs >= 1e9)  return `${sign}$${(abs / 1e9).toFixed(1)}B`;
+    if (abs >= 1e6)  return `${sign}$${(abs / 1e6).toFixed(0)}M`;
+    return `${sign}$${abs.toLocaleString()}`;
   };
   const fmtPct = (v: number | undefined) => {
     if (v == null) return '—';
@@ -1654,16 +1658,30 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
   };
   const fmtMult = (v: number | undefined) => v == null ? '—' : `${v.toFixed(1)}×`;
+  // Per-share price — 52wk high/low are raw dollar levels, not aggregates
+  const fmtPrice = (v: number | undefined) => {
+    if (v == null) return '—';
+    return `$${v.toLocaleString(undefined, {
+      minimumFractionDigits: v < 10 ? 2 : 0,
+      maximumFractionDigits: v < 10 ? 2 : 0,
+    })}`;
+  };
 
+  // 12-cell grid in request order. FMP-sourced fields (roic) fall back to
+  // yfinance ROA when FMP is unavailable (handled backend-side).
   const rows: { k: string; v: string }[] = [
     { k: 'Market cap', v: fmtMoney(metrics.market_cap) },
-    { k: 'P/E (fwd)',  v: fmtMult(metrics.pe_ratio) },
-    { k: 'P/S',        v: fmtMult(metrics.ev_to_sales ?? metrics.price_to_sales) },
+    { k: 'Rev TTM',    v: fmtMoney(metrics.revenue) },
+    { k: 'FCF',        v: fmtMoney(metrics.free_cash_flow) },
+    { k: 'Net margin', v: fmtPct(metrics.net_margin) },
+    { k: 'P/E',        v: fmtMult(metrics.pe_ratio) },
     { k: 'Rev growth', v: fmtPct(metrics.revenue_growth) },
-    { k: 'Op. margin', v: fmtPct(metrics.operating_margin) },
-    { k: 'ROIC',       v: fmtPct(metrics.return_on_equity ?? metrics.return_on_invested_capital) },
-    { k: 'Net cash',   v: fmtMoney(metrics.free_cash_flow) },
-    { k: 'FCF yield',  v: fmtPct(metrics.fcf_yield) },
+    { k: 'EV/EBITDA',  v: fmtMult(metrics.ev_to_ebitda) },
+    { k: 'ROE',        v: fmtPct(metrics.return_on_equity) },
+    { k: 'ROIC',       v: fmtPct(metrics.return_on_invested_capital ?? metrics.return_on_assets) },
+    { k: 'Net cash',   v: fmtMoney(metrics.net_cash) },
+    { k: '52wk high',  v: fmtPrice(metrics.fifty_two_week_high) },
+    { k: '52wk low',   v: fmtPrice(metrics.fifty_two_week_low) },
   ];
 
   return (

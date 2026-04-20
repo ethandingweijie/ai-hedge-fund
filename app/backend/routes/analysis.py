@@ -786,18 +786,44 @@ async def get_stock_data(ticker: str, period: str = "1y"):
             for idx, row in hist.iterrows()
             if (c := _safe(row.get("Close"))) is not None
         ]
+        total_cash = _safe(info.get("totalCash"))
+        total_debt = _safe(info.get("totalDebt"))
+        net_cash   = (total_cash - total_debt) if (total_cash is not None and total_debt is not None) else None
         metrics: dict = {
-            "market_cap":       _safe(info.get("marketCap")),
-            "revenue":          _safe(info.get("totalRevenue")),
-            "free_cash_flow":   _safe(info.get("freeCashflow")),
-            "net_margin":       _safe(info.get("profitMargins")),
-            "pe_ratio":         _safe(info.get("trailingPE")),
-            "revenue_growth":   _safe(info.get("revenueGrowth")),
-            "ev_to_ebitda":     _safe(info.get("enterpriseToEbitda")),
-            "return_on_equity": _safe(info.get("returnOnEquity")),
+            "market_cap":                 _safe(info.get("marketCap")),
+            "revenue":                    _safe(info.get("totalRevenue")),
+            "free_cash_flow":             _safe(info.get("freeCashflow")),
+            "net_margin":                 _safe(info.get("profitMargins")),
+            "pe_ratio":                   _safe(info.get("trailingPE")),
+            "revenue_growth":             _safe(info.get("revenueGrowth")),
+            "ev_to_ebitda":               _safe(info.get("enterpriseToEbitda")),
+            "return_on_equity":           _safe(info.get("returnOnEquity")),
+            # Added for the expanded Summary Key Stats (v1.7.2)
+            "return_on_assets":           _safe(info.get("returnOnAssets")),
+            "return_on_invested_capital": None,  # FMP-filled below for US tickers
+            "total_cash":                 total_cash,
+            "total_debt":                 total_debt,
+            "net_cash":                   net_cash,
+            "fifty_two_week_high":        _safe(info.get("fiftyTwoWeekHigh")),
+            "fifty_two_week_low":         _safe(info.get("fiftyTwoWeekLow")),
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+    # ── US / FMP gap-fill: ROIC from key-metrics-ttm (yfinance has no ROIC) ──
+    if not hk and metrics["return_on_invested_capital"] is None:
+        try:
+            from src.tools.api import _fmp_get, _STABLE, _get_key
+            api_key = _get_key(None)
+            if api_key:
+                km = _fmp_get(f"{_STABLE}/key-metrics-ttm", {"symbol": sym}, api_key)
+                row = (km[0] if isinstance(km, list) and km else km if isinstance(km, dict) else {}) or {}
+                metrics["return_on_invested_capital"] = _safe(row.get("returnOnInvestedCapitalTTM"))
+        except Exception:
+            pass  # Best-effort; ROA shown as fallback in the UI
+    # Final fallback — ROA as a proxy for ROIC when neither FMP nor HK path filled it
+    if metrics["return_on_invested_capital"] is None and metrics.get("return_on_assets") is not None:
+        metrics["return_on_invested_capital"] = metrics["return_on_assets"]
 
     # ── HK gap-fill: AKShare fills any None values that yfinance missed ───────
     if hk:
