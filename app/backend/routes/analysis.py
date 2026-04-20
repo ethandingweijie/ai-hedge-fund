@@ -775,7 +775,15 @@ async def get_stock_data(ticker: str, period: str = "1y"):
 
     sym    = ticker.upper()
     hk     = is_hk_ticker(sym)
-    yf_sym = to_yfinance_code(sym) if hk else sym
+    # yfinance uses hyphens for share-class tickers (BRK-B, BF-B) even though
+    # users type them with dots (BRK.B). Normalise for yfinance only — the
+    # canonical symbol stored + returned to the client stays the user input.
+    if hk:
+        yf_sym = to_yfinance_code(sym)
+    elif "." in sym and not sym.endswith((".HK", ".SI", ".SZ", ".SS", ".T")):
+        yf_sym = sym.replace(".", "-")
+    else:
+        yf_sym = sym
 
     try:
         t    = yf.Ticker(yf_sym)
@@ -795,13 +803,15 @@ async def get_stock_data(ticker: str, period: str = "1y"):
             "free_cash_flow":             _safe(info.get("freeCashflow")),
             "net_margin":                 _safe(info.get("profitMargins")),
             "pe_ratio":                   _safe(info.get("trailingPE")),
-            "price_to_sales":             None,  # FMP-filled below for US tickers
+            # yfinance has priceToSalesTrailing12Months on most tickers — use
+            # it as the baseline; FMP overwrites for US tickers (more current).
+            "price_to_sales":             _safe(info.get("priceToSalesTrailing12Months")),
             "revenue_growth":             _safe(info.get("revenueGrowth")),
             "ev_to_ebitda":               _safe(info.get("enterpriseToEbitda")),
             "return_on_equity":           _safe(info.get("returnOnEquity")),
             "return_on_assets":           _safe(info.get("returnOnAssets")),
             "return_on_invested_capital": None,  # FMP-filled below for US tickers
-            "free_cash_flow_yield":       None,  # FMP-filled below for US tickers
+            "free_cash_flow_yield":       None,  # FMP-filled below; else computed
             "total_cash":                 total_cash,
             "total_debt":                 total_debt,
             "net_cash":                   net_cash,
@@ -900,6 +910,17 @@ async def get_stock_data(ticker: str, period: str = "1y"):
                 )
         except Exception:
             pass   # HK gap-fill is best-effort; silently degrade
+
+    # ── Final computed fallbacks (market-agnostic) ──────────────────────────
+    # HK / SG tickers that didn't get FMP coverage still benefit from these
+    # arithmetic derivations. Keep them LAST so any primary-source value wins.
+    mc  = metrics.get("market_cap")
+    rev = metrics.get("revenue")
+    fcf = metrics.get("free_cash_flow")
+    if metrics.get("price_to_sales") is None and mc and rev and rev > 0:
+        metrics["price_to_sales"] = mc / rev
+    if metrics.get("free_cash_flow_yield") is None and fcf is not None and mc and mc > 0:
+        metrics["free_cash_flow_yield"] = fcf / mc
 
     return {"ticker": ticker.upper(), "history": history, "metrics": metrics}
 
