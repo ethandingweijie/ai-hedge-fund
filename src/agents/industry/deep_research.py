@@ -600,6 +600,145 @@ def _extract_segment_scenarios(
         return {}
 
 
+# ── Pipeline-asset extractor (rNPV input) ────────────────────────────────────
+
+def _extract_pipeline_assets(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    deep_research: str,
+    ticker: str,
+) -> list[dict]:
+    """
+    LLM pass over the deep research report to extract individual biopharma
+    pipeline assets (drugs / therapies / devices) with their current clinical
+    phase and peak-sales forecasts.
+
+    Consumed by _compute_rnpv() in dcf_agent.py. Each asset is risk-adjusted
+    by phase-appropriate PoS and discounted to today, producing an asset-level
+    NPV that is summed across the pipeline.
+
+    Returns a list of asset dicts — an empty list means rNPV falls back to
+    its DCF proxy. Invalid individual assets are silently dropped; we trust
+    the research but validate field structure.
+
+    Asset schema:
+        {
+          "name":            str,    # drug/therapy name or indication shorthand
+          "phase":           str,    # preclinical | phase_1 | phase_2 | phase_3 |
+                                    #  filed | approved (or alias handled by
+                                    #  normalize_phase in sector_profiles.py)
+          "peak_sales_usd":  float,  # forecast annual peak sales in USD
+          "launch_year":     int,    # expected first-year commercial launch
+          "indication":      str,    # disease area (optional, informational)
+          "evidence":        str,    # source fragment from research (≤200 chars)
+        }
+
+    The extractor is intentionally permissive on peak_sales — for pre-approval
+    assets with no analyst consensus, the LLM may extract management guidance,
+    TAM × reasonable penetration, or comparable-drug sales. Evidence field
+    surfaces the reasoning in the audit trail.
+    """
+    if not deep_research and not sections:
+        return []
+
+    # Biopharma pipeline content lives mostly in 2A (moat/product), 2D (cycle)
+    # and 2F (KPI framework — which for biopharma is typically trial data /
+    # readouts). Fall back to the whole report if sections are thin.
+    section_2a = sections.get("2a") or sections.get("2A") or ""
+    section_2d = sections.get("2d") or sections.get("2D") or ""
+    section_2f = sections.get("2f") or sections.get("2F") or ""
+    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    if not combined or len(combined) < 500:
+        combined = (deep_research or "")[:8000]
+    if not combined:
+        return []
+
+    try:
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=2000,
+            system=(
+                "You are a biopharma pipeline analyst. Read the provided deep research "
+                "excerpts and extract the company's drug/therapy/device pipeline as "
+                "structured JSON. Respond ONLY with a valid JSON array — no commentary, "
+                "no markdown code fences.\n\n"
+                "Schema: array of asset objects, each with:\n"
+                "  - name:            string (drug name, therapy code, or indication shorthand)\n"
+                "  - phase:           one of: 'preclinical', 'phase_1', 'phase_2', 'phase_3', "
+                "'filed', 'approved' (use these exact snake_case keys)\n"
+                "  - peak_sales_usd:  number (annual peak sales in USD; use analyst "
+                "consensus if cited, otherwise management-disclosed TAM × reasonable "
+                "penetration, or comparable-drug sales)\n"
+                "  - launch_year:     integer (4-digit year of expected commercial launch; "
+                "use current year if already approved/launched)\n"
+                "  - indication:      string (short disease/use-case tag; can be empty)\n"
+                "  - evidence:        string (≤200 chars, one-sentence source from the research)\n\n"
+                "Rules:\n"
+                "  * Extract ONLY assets explicitly mentioned in the research. If the research "
+                "does not mention a pipeline, return [].\n"
+                "  * Include approved/marketed drugs AS WELL AS clinical-stage assets — "
+                "the rNPV model values the whole portfolio.\n"
+                "  * For approved drugs, use recent annual revenue as peak_sales_usd (or "
+                "consensus peak if analysts expect further growth).\n"
+                "  * For early-stage assets with no peak-sales forecast, estimate from TAM "
+                "× peak market share (e.g. $5B TAM × 15% share = $750M peak). Explain in "
+                "evidence.\n"
+                "  * Non-biopharma companies: return [].\n"
+                "  * If the company is a biopharma but no pipeline details are discussed, "
+                "return [].\n"
+                "  * Maximum 15 assets — focus on the most material.\n"
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Research excerpts (moat + cycle + KPI sections):\n{combined[:10000]}"
+                ),
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+        # Strip markdown code fences if present
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list):
+            return []
+
+        out: list[dict] = []
+        for a in parsed:
+            if not isinstance(a, dict):
+                continue
+            name = str(a.get("name", "")).strip()[:120]
+            phase = str(a.get("phase", "")).strip().lower()
+            try:
+                peak = float(a.get("peak_sales_usd", 0))
+            except (TypeError, ValueError):
+                continue
+            try:
+                launch = int(a.get("launch_year", 0))
+            except (TypeError, ValueError):
+                launch = 0
+            # Basic sanity: name, phase, positive peak sales
+            if not name or not phase or peak <= 0:
+                continue
+            # Reject peak sales so large they're implausible (>$100B/yr single-asset)
+            if peak > 100e9:
+                continue
+            out.append({
+                "name":           name,
+                "phase":          phase,
+                "peak_sales_usd": peak,
+                "launch_year":    launch if 1990 <= launch <= 2060 else 0,
+                "indication":     str(a.get("indication", ""))[:80],
+                "evidence":       str(a.get("evidence", ""))[:300],
+            })
+        return out[:15]
+    except Exception:
+        return []
+
+
 # ── Delta research helpers ────────────────────────────────────────────────────
 
 def _build_delta_system(year: str, last_run_date: str) -> str:
@@ -2483,6 +2622,16 @@ def _research_one_ticker(
             f"{sum(len(b['scenarios']) for b in segment_scenarios.values())} total scenarios"
         )
 
+    # ── Biopharma pipeline assets for rNPV ───────────────────────────────────
+    pipeline_assets = _extract_pipeline_assets(
+        sdk_client, _synthesis_model, sections, final_report, ticker,
+    )
+    if pipeline_assets:
+        progress.update_status(
+            agent_id, ticker,
+            f"Pipeline assets: {len(pipeline_assets)} extracted for rNPV"
+        )
+
     return {
         "deep_research":            final_report,
         "deep_research_annotated":  annotated_report,
@@ -2495,6 +2644,7 @@ def _research_one_ticker(
         "cache_run_id":           None,
         "dcf_calibration":        dcf_calibration,
         "segment_scenarios":      segment_scenarios,
+        "pipeline_assets":        pipeline_assets,
     }
 
 
@@ -2652,6 +2802,14 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if scen:
             segment_scenarios_all[t] = scen
     state["data"]["segment_scenarios"] = segment_scenarios_all
+
+    # ── Per-ticker pipeline assets (for Biopharma rNPV method) ───────────────
+    pipeline_assets_all: dict[str, list[dict]] = {}
+    for t, res in deep_research_map.items():
+        assets = res.get("pipeline_assets")
+        if assets:
+            pipeline_assets_all[t] = assets
+    state["data"]["pipeline_assets"] = pipeline_assets_all
 
     # ── Per-ticker management guidance extraction ─────────────────────────────
     mgmt_guidance: dict[str, dict] = {}

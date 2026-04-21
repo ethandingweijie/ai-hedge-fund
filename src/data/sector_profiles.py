@@ -572,6 +572,192 @@ FCF_MARGIN_FLOOR: dict[str, float] = {
 }
 
 
+# ── 3b. Biopharma rNPV parameters ─────────────────────────────────────────────
+#
+# Risk-adjusted NPV inputs for the Biopharma rNPV method. These replace the
+# prior manual dependency on TICKER_SECTOR_LOOKUP for phase classification —
+# any biotech ticker can now produce a pipeline rNPV as long as deep research
+# surfaces at least one asset with a phase tag.
+#
+# Sources:
+#   * Clinical phase transition probabilities — BIO / Biomedtracker / Amplion
+#     "Clinical Development Success Rates 2011-2020" (industry aggregate across
+#     all indications). Values are the per-phase PROBABILITY of advancing to
+#     the next clinical stage (not to approval).
+#   * FDA regulatory approval probability — filed-to-approval historical rate,
+#     ~85% across NDAs/BLAs (industry long-run average, FDA CDER data).
+#   * Years-to-launch medians — aggregated from Tufts CSDD pipeline studies
+#     and analyst timeline conventions; these are not literal averages but
+#     standard analyst defaults used in rNPV modeling.
+#
+# Cumulative PoS to approval is the product of remaining transition
+# probabilities × the 85% regulatory approval rate. Intentionally conservative:
+# indication-specific PoS (e.g., oncology Ph2 ≈ 25%, metabolic Ph2 ≈ 40%) is
+# not modeled here — that refinement would require indication classification
+# per asset, which belongs in a follow-on extractor upgrade.
+
+PHASE_POS_TABLE: dict[str, dict[str, float]] = {
+    # phase_key → {transition_prob, cum_pos_to_approval, years_to_launch}
+    "preclinical": {"transition": 0.52, "cum_pos": 0.050, "years_to_launch":  9.0},
+    "phase_1":     {"transition": 0.63, "cum_pos": 0.096, "years_to_launch":  7.0},
+    "phase_2":     {"transition": 0.31, "cum_pos": 0.153, "years_to_launch":  5.0},
+    "phase_3":     {"transition": 0.58, "cum_pos": 0.493, "years_to_launch":  3.0},
+    "filed":       {"transition": 0.85, "cum_pos": 0.850, "years_to_launch":  1.0},
+    "approved":    {"transition": 1.00, "cum_pos": 1.000, "years_to_launch":  0.0},
+}
+
+# Phase-label aliases — LLM pipeline extractor will produce varied labels;
+# these normalize to PHASE_POS_TABLE keys. Unknown phases fall back to Phase 1
+# (most conservative reasonable assumption when a drug is in development).
+_PHASE_ALIASES: dict[str, str] = {
+    "preclinical":   "preclinical", "pre-clinical": "preclinical", "discovery": "preclinical",
+    "ind":           "preclinical", "ind-enabling": "preclinical",
+    "phase 1":       "phase_1",     "phase i":      "phase_1", "ph1": "phase_1", "ph 1": "phase_1",
+    "phase 1/2":     "phase_1",     "phase i/ii":   "phase_1",
+    "phase 2":       "phase_2",     "phase ii":     "phase_2", "ph2": "phase_2", "ph 2": "phase_2",
+    "phase 2/3":     "phase_2",     "phase ii/iii": "phase_2",
+    "phase 3":       "phase_3",     "phase iii":    "phase_3", "ph3": "phase_3", "ph 3": "phase_3",
+    "pivotal":       "phase_3",     "registrational": "phase_3",
+    "filed":         "filed",       "nda":          "filed", "bla": "filed", "submitted": "filed",
+    "under review":  "filed",       "pdufa":        "filed",
+    "approved":      "approved",    "commercial":   "approved", "marketed": "approved",
+    "launched":      "approved",    "on-market":    "approved", "on market": "approved",
+}
+
+
+def normalize_phase(phase_label: str | None) -> str:
+    """Normalize any phase label to a PHASE_POS_TABLE key.
+
+    Unknown/missing phases fall back to 'phase_1' — this is the most
+    conservative assumption a drug tagged with an unclear phase is at least
+    in clinical development. Use 'preclinical' explicitly if the label says so.
+    """
+    if not phase_label:
+        return "phase_1"
+    key = str(phase_label).strip().lower()
+    if key in PHASE_POS_TABLE:
+        return key
+    return _PHASE_ALIASES.get(key, "phase_1")
+
+
+def phase_pos(phase_label: str | None) -> float:
+    """Cumulative probability-of-success to approval for a phase label."""
+    return PHASE_POS_TABLE[normalize_phase(phase_label)]["cum_pos"]
+
+
+def phase_years_to_launch(phase_label: str | None) -> float:
+    """Median years from current phase to commercial launch."""
+    return PHASE_POS_TABLE[normalize_phase(phase_label)]["years_to_launch"]
+
+
+# rNPV commercial-stream defaults (used when asset-level values aren't
+# specified in the deep research extraction). These are stylized but are
+# standard analyst conventions for biopharma rNPV modeling.
+RNPV_COMMERCIAL_DEFAULTS: dict[str, float] = {
+    "peak_op_margin":     0.40,   # approved-drug operating margin (pre-tax, at scale)
+    "effective_tax_rate": 0.21,   # US statutory blended with int'l mix
+}
+
+# Bell-shaped commercial cash-flow profile as a fraction of peak sales, by
+# year since launch (year 1 = first full year of commercial sales). Replaces
+# the prior level-annuity stylization — flat 10y at peak substantially
+# over-counts the ramp years and entirely ignores the post-LOE cliff.
+#
+# Design:
+#   * Years 1–3: ramp (20%, 50%, 80%) — typical specialty/novel drug launch curve
+#   * Years 4–10: plateau at 100% of peak (7y at peak — main exclusivity window)
+#   * Years 11–13: LOE erosion (40%, 20%, 10%) — approximates branded revenue
+#                   decay after generic/biosimilar entry on typical 12y patent life
+# Total effective duration ≈ 13 years; total cumulative CF at flat-discount
+# ≈ 8.2 × peak (vs 10× for level annuity → ~18% less optimistic).
+#
+# Used ONLY for rNPV assets flagged as not-yet-launched (phase ≠ approved
+# or launch_year > current year). Already-approved drugs still use peak-
+# sales revenue directly inside Σ with no phase ramp-up, but LOE erosion
+# still applies to them once they pass years-since-launch of 10.
+RNPV_RAMP_PROFILE: list[float] = [
+    0.20, 0.50, 0.80,              # years 1-3: ramp
+    1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00,  # years 4-10: peak
+    0.40, 0.20, 0.10,              # years 11-13: post-LOE erosion
+]
+
+# Therapeutic-area PoS multipliers — applied on top of aggregate phase PoS
+# when the deep research extractor tags an asset's indication. Multiplies
+# the cum_pos value from PHASE_POS_TABLE.
+#
+# Sources: BIO / Biomedtracker / Amplion 2011-2020 data, therapeutic-area
+# aggregate Ph1-to-approval success rates, normalized vs industry mean (9.6%):
+#   Oncology:      5.3% → 0.55x
+#   CNS/Neuro:     5.9% → 0.60x
+#   Cardiovascular: 8.7% → 0.85x
+#   Allergy/Derm:  9.4% → 1.0x (default)
+#   Infectious:   10.6% → 1.1x
+#   Metabolic:    11.7% → 1.2x
+#   Hematology:   13.2% → 1.4x
+#   Rare Disease: 17.0% → 1.7x (includes Orphan PRV designations)
+#
+# Multipliers are applied to cum_pos, then final PoS is clamped to
+# [0.005, 1.0] so a pathological multi-stack (e.g. small-indication
+# preclinical onco asset) doesn't zero out and a filed/approved indication
+# doesn't exceed 100%.
+_THERAPEUTIC_AREA_POS_MULTIPLIERS: dict[str, float] = {
+    "oncology":       0.55,  "cancer":         0.55,  "tumor":        0.55,
+    "solid tumor":    0.55,  "hematologic malignancy": 0.70,   # hema-onc (slightly better than solid)
+    "cns":            0.60,  "neurology":      0.60,  "neurological": 0.60,
+    "alzheimer":      0.45,  "parkinson":      0.55,  "psychiatric":  0.60,
+    "depression":     0.60,  "schizophrenia":  0.55,
+    "cardiovascular": 0.85,  "cardio":         0.85,  "heart":        0.85,
+    "allergy":        1.00,  "dermatology":    1.00,  "derm":         1.00,
+    "infectious":     1.10,  "antiviral":      1.10,  "antibacterial": 1.10,
+    "vaccine":        1.15,  "anti-infective": 1.10,
+    "metabolic":      1.20,  "diabetes":       1.20,  "obesity":      1.20,
+    "endocrine":      1.20,  "glp-1":          1.30,  # obesity/diabetes — recent high success
+    "hematology":     1.40,  "blood":          1.40,
+    "rare disease":   1.70,  "orphan":         1.70,  "genetic":      1.70,
+    "rare":           1.70,  "ultra-rare":     1.80,
+    "gene therapy":   1.30,  "cell therapy":   1.30,  # modality premium, high unmet need
+    "respiratory":    1.00,  "ophthalmology":  1.10,  "ophtho":       1.10,
+    "urology":        1.10,  "autoimmune":     1.10,  "immunology":   1.10,
+    "gastroenterology": 1.05, "gi":            1.05,  "gastro":       1.05,
+}
+
+
+def therapeutic_area_pos_multiplier(indication: str | None) -> float:
+    """Lookup therapeutic-area PoS multiplier from a free-text indication label.
+
+    Checks exact match first, then substring match against known keys. Returns
+    1.0 (no adjustment) when the indication is missing or doesn't match any
+    known area. This intentionally biases toward the aggregate BIO PoS rather
+    than guessing a harsh/generous multiplier from thin context.
+    """
+    if not indication:
+        return 1.0
+    key = str(indication).strip().lower()
+    if key in _THERAPEUTIC_AREA_POS_MULTIPLIERS:
+        return _THERAPEUTIC_AREA_POS_MULTIPLIERS[key]
+    # Substring match — pick the longest matching key so "hematologic
+    # malignancy" beats "hematology" when both apply.
+    best_match = None
+    best_len   = 0
+    for k, v in _THERAPEUTIC_AREA_POS_MULTIPLIERS.items():
+        if k in key and len(k) > best_len:
+            best_match = v
+            best_len   = len(k)
+    return best_match if best_match is not None else 1.0
+
+
+# Pre-approval (clinical-stage) biopharma WACC uplift — the Damodaran
+# Biopharma rate (8.49%) fits Big Pharma with stable FCF and diversified
+# pipelines. Pre-revenue biotechs have materially higher cost of equity
+# due to (a) lack of asset diversification (binary trial outcomes dominate),
+# (b) liquidity risk (thinner trading, frequent capital raises), and (c)
+# governance risk (first-time commercial teams). Industry analysts typically
+# use 11–15% for pre-revenue biotechs; we apply 12% as a mid-range default.
+# WACC for Pre-approval Biotech profile is applied as an override in
+# dcf_agent.py._compute_rnpv().
+PRE_APPROVAL_BIOTECH_WACC: float = 0.120
+
+
 # ── 4. Tech Stack Layers ──────────────────────────────────────────────────────
 
 # GS AI stack taxonomy — used by specialist.py and dcf_agent.py for growth
@@ -1276,27 +1462,35 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Biopharma": {
         "Pre-approval Biotech": {
             "methods": [
-                {"name": "rNPV",          "weight": 0.45, "anchor": True,  "implementable": False, "proxy": "DCF"},
+                {"name": "rNPV",          "weight": 0.45, "anchor": True,  "implementable": True},
                 {"name": "EV/R&D",        "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "Pipeline NAV",  "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
                 {"name": "Cash Runway",   "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": ["P/E", "EPV", "EV/EBITDA"],
             "rationale": (
-                "Pre-revenue biotech with negative earnings. rNPV (proxy DCF) anchors pipeline "
-                "value. EV/R&D values IP as a multiple of R&D investment (4-8x). P/E and EPV "
-                "excluded — meaningless with negative earnings."
+                "Pre-revenue biotech with negative earnings. rNPV anchors pipeline value "
+                "using per-asset phase PoS × therapeutic-area multiplier × bell-shaped "
+                "cash flow stream (ramp + plateau + LOE decay). EV/R&D values IP as a "
+                "multiple of R&D investment (4-8x). P/E and EPV excluded — meaningless "
+                "with negative earnings. When rNPV returns None (no pipeline extracted), "
+                "weight flows to EV/R&D + Pipeline NAV + Cash Runway via blend fallback."
             ),
         },
         "Large Cap Pharma": {
             "methods": [
                 {"name": "P/E",             "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "rNPV (Pipeline)", "weight": 0.30, "anchor": False, "implementable": False, "proxy": "DCF"},
+                {"name": "rNPV (Pipeline)", "weight": 0.30, "anchor": False, "implementable": True},
                 {"name": "DCF",             "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "EV/EBITDA",       "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
-            "rationale": "Blends steady earnings from off-patent drugs with risk-adjusted pipeline value.",
+            "rationale": (
+                "Blends steady earnings from off-patent drugs (P/E, DCF, EV/EBITDA) with "
+                "risk-adjusted pipeline value (rNPV — same engine as Pre-approval Biotech, "
+                "but uses base 8.5% WACC since diversified cash flows fund R&D without "
+                "dilution). When rNPV returns None, weight flows to P/E/DCF/EV/EBITDA."
+            ),
         },
         "Managed Care": {
             "methods": [
