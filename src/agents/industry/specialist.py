@@ -166,13 +166,27 @@ Compute and analyse:
 - Key question: Does SOTP exceed market cap with quality PPAs providing cash flow visibility?
 """,
     "Financials": """
-Compute and analyse:
-- Net Interest Margin (NIM) trend — last 8 quarters
-- Non-Performing Loan ratio (NPL%) vs. sector average
-- Common Equity Tier 1 ratio (CET1) vs. regulatory minimum
-- Return on Equity vs. Cost of Equity spread
-- Loan-to-deposit ratio
-- Key question: Is RoE sustainably above CoE with a fortress balance sheet?
+Compute and analyse (be explicit — these feed a 2-stage Residual Income model):
+- **Common Equity Tier 1 (CET1) ratio** vs. regulatory minimum and vs. management target.
+  Cite the latest quarter's reported CET1 as a decimal (0.153 = 15.3%). For US GSIBs
+  compare to the stress-test minimum + management buffer (typically 11-13%). For HK/
+  China banks compare to PBOC's TLAC requirement.
+- **Net Interest Margin (NIM)** — last 4-8 quarters. Report as decimal (0.026 = 2.6%).
+  Note the direction (expanding / flat / compressing) and whether guidance cites a
+  through-cycle NIM target.
+- **Efficiency ratio** = operating expense / (net interest income + non-interest income).
+  Target <55% for US Money Center; <50% for EM Banks (lower cost base); <60% for
+  European banks. Flag if >60% (inefficient).
+- **Non-Performing Loan (NPL) ratio** and net charge-offs. NPL <2% signals healthy
+  credit book; >4% signals workout cycle.
+- **Management target ROE / ROTCE** — often cited in earnings calls as through-cycle
+  goal. For JPM this is currently 17% ROTCE; for HSBC 15% RoTE; for ICBC ~13%.
+  Report as decimal. This override feeds the Residual Income fade terminal.
+- **Loan-to-deposit ratio** — core funding health. <85% = liquidity cushion.
+- **Dividend sustainability** — dividend payout / net income. Compare to management
+  payout policy (JPM 30% target, HSBC 50%, ICBC 30%).
+- Key question: Is ROE sustainably above CoE with CET1 above target (excess capital
+  deployable) and efficiency ratio in the target band?
 
 ASSET MANAGER NOTE (applies when profile is "Asset Manager" or "Alt Asset Manager", e.g. BLK, BX, KKR, AB, APO):
 The standard bank framework does not apply. Replace with:

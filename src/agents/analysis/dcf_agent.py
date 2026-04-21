@@ -174,6 +174,13 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "depreciation_and_amortization": _safe(getattr(li, "depreciation_and_amortization", None)),
             "operating_cash_flow":  _safe(getattr(li, "operating_cash_flow", None)),
             "cash_and_equivalents": _safe(getattr(li, "cash_and_equivalents", None)),
+            # Bank-specific: NII reconstruction, credit cost, TBV
+            "interest_income":           _safe(getattr(li, "interest_income", None)),
+            "provision_for_loan_losses": _safe(getattr(li, "provision_for_loan_losses", None)),
+            "goodwill":                  _safe(getattr(li, "goodwill", None)),
+            "intangible_assets":         _safe(getattr(li, "intangible_assets", None)),
+            "total_liabilities":         _safe(getattr(li, "total_liabilities", None)),
+            "operating_expense":         _safe(getattr(li, "operating_expense", None)),
         })
 
     # SBC-adjusted (owner-earnings) FCF: reported FCF treats SBC as non-cash and
@@ -1004,6 +1011,295 @@ def _compute_reit_metrics(
     }
 
 
+# ── Bank-specific valuation (Tier 2 item 3) ───────────────────────────────────
+#
+# Institutional-grade bank valuation. Replaces the prior primitive Residual
+# Income formula (single-period ROE-CoE spread × 0.5) with a full 2-stage RI
+# model with profile-specific ROE fade, CET1 capital-adequacy overlay,
+# Tangible Book Value (P/TBV) multiple, and geography-aware sub-profiles.
+#
+# Design references:
+#   * Damodaran "Valuing Financial Service Firms" (2013, updated 2026)
+#   * McKinsey "Valuation: Measuring and Managing the Value of Companies"
+#     ch. 36 (bank-specific chapter, 7th ed.)
+#   * Basel III capital framework for CET1 / RWA mechanics
+#
+# Why not DCF for banks:
+#   Banks are book-value businesses — interest-earning assets and deposits
+#   ARE the business. Free cash flow is not a natural unit of output because
+#   capital reinvestment (retained earnings becoming regulatory capital) is
+#   an accounting flow, not a cash flow. RI sums excess-return-over-cost-of-
+#   capital directly on the equity base.
+
+# ── Per-profile bank calibration ─────────────────────────────────────────────
+
+# Target ROE, CoE, P/TBV, P/E, fade years per sub-profile. Used by the
+# 2-stage RI model and the P/TBV / P/E method branches. "CoE" overrides the
+# engine's hybrid WACC for bank profiles because bank WACC collapses to CoE
+# when D/(D+E) ≈ 0 (deposits are not equity).
+_BANK_PROFILE_CALIBRATION: dict[str, dict] = {
+    # US Global Systemically Important Banks (GSIBs)
+    "Money Center Bank":    {"target_roe": 0.12, "coe": 0.090, "p_tbv": 1.4, "pe": 12.0, "fade_years": 5,
+                              "target_cet1": 0.12, "rwa_to_assets": 0.55},
+    # European Money Center — structural regulatory drag, higher CoE
+    "Money Center Bank (EU)": {"target_roe": 0.10, "coe": 0.110, "p_tbv": 0.8, "pe": 8.0,  "fade_years": 5,
+                              "target_cet1": 0.14, "rwa_to_assets": 0.60},
+    # Regional banks — healthy (USB, TFC, PNC)
+    "Regional Bank":        {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
+                              "target_cet1": 0.11, "rwa_to_assets": 0.70},
+    # Super-regionals (TD, BMO, RBC)
+    "Super-Regional Bank":  {"target_roe": 0.11, "coe": 0.095, "p_tbv": 1.3, "pe": 11.0, "fade_years": 5,
+                              "target_cet1": 0.11, "rwa_to_assets": 0.65},
+    # EM banks — China SOEs (ICBC, CCB, BOC) — national-service risk
+    "EM Bank":              {"target_roe": 0.14, "coe": 0.130, "p_tbv": 1.2, "pe": 9.0,  "fade_years": 5,
+                              "target_cet1": 0.105, "rwa_to_assets": 0.65},
+    # EM Bank Premium — India private sector (HDFC, ICICI, Kotak) —
+    # credit-to-GDP gap supports sustained 16-18% ROE
+    "EM Bank (Premium)":    {"target_roe": 0.16, "coe": 0.130, "p_tbv": 2.0, "pe": 14.0, "fade_years": 7,
+                              "target_cet1": 0.115, "rwa_to_assets": 0.62},
+    # Investment banks — cyclical (GS, MS)
+    "Investment Bank":      {"target_roe": 0.13, "coe": 0.110, "p_tbv": 1.2, "pe": 10.0, "fade_years": 5,
+                              "target_cet1": 0.13, "rwa_to_assets": 0.40},
+    # Mortgage/GSE (FNMA, FMCC) — conservatorship overhang
+    "Mortgage/GSE":         {"target_roe": 0.09, "coe": 0.110, "p_tbv": 0.8, "pe": 9.0,  "fade_years": 5,
+                              "target_cet1": 0.08, "rwa_to_assets": 0.50},
+    # Neo/Challenger banks — J-curve ROEs, extended fade
+    "Neo/Challenger":       {"target_roe": 0.18, "coe": 0.120, "p_tbv": 2.8, "pe": 22.0, "fade_years": 10,
+                              "target_cet1": 0.11, "rwa_to_assets": 0.45},
+    # Brokerage (SCHW, IBKR) — fee + NII blended
+    "Brokerage":            {"target_roe": 0.16, "coe": 0.100, "p_tbv": 2.8, "pe": 18.0, "fade_years": 5,
+                              "target_cet1": 0.10, "rwa_to_assets": 0.35},
+    # Default fallback
+    "default":              {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
+                              "target_cet1": 0.11, "rwa_to_assets": 0.60},
+}
+
+
+def _bank_profile_calibration(profile_name: str) -> dict:
+    """Lookup bank calibration with default fallback."""
+    return _BANK_PROFILE_CALIBRATION.get(profile_name, _BANK_PROFILE_CALIBRATION["default"])
+
+
+def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> dict:
+    """
+    Compute derived bank KPIs from the latest annual line-item row.
+
+    Returns dict with:
+        nim                  — net interest margin (NII / interest-earning assets)
+        net_interest_income  — interest_income − interest_expense
+        efficiency_ratio     — operating_expense / (NII + non-interest income)
+                                (proxied when non-interest income breakout unavailable)
+        credit_cost_ratio    — provision_for_loan_losses / total_loans
+                                (fallback: / total_assets proxy)
+        tbv                  — total_equity − goodwill − intangible_assets
+        tbv_per_share        — TBV / shares
+        roe                  — net_income / total_equity
+        retention_rate       — 1 − (dividends_paid / net_income), clamped [0.3, 0.8]
+        rwa_estimate         — total_assets × profile-specific RWA proxy ratio
+        cet1_implied         — total_equity / rwa_estimate (proxy when deep-research
+                                doesn't provide actual cet1_ratio)
+
+    Missing components return as None; downstream method branches skip gracefully.
+    """
+    ni        = most_recent.get("net_income")
+    equity    = most_recent.get("total_equity")
+    assets    = most_recent.get("total_assets")
+    int_inc   = most_recent.get("interest_income")
+    int_exp   = most_recent.get("interest_expense")
+    op_exp    = most_recent.get("operating_expense")
+    revenue   = most_recent.get("revenue")
+    prov      = most_recent.get("provision_for_loan_losses")
+    dividends_ps = most_recent.get("dividends_per_share") or 0.0
+    shares    = most_recent.get("shares_outstanding")
+    goodwill  = most_recent.get("goodwill") or 0.0
+    intang    = most_recent.get("intangible_assets") or 0.0
+
+    # NII — bank's core top-line
+    nii = None
+    if int_inc is not None and int_exp is not None:
+        nii = int_inc - abs(int_exp)
+    elif revenue is not None and int_exp is not None:
+        # Fallback: revenue − interest expense approximates NII for banks
+        # that don't cleanly break out interest_income
+        nii = revenue - abs(int_exp)
+
+    # NIM — prefer interest_income / assets ratio, fallback to NII / assets
+    nim = None
+    if nii and assets and assets > 0:
+        nim = nii / assets
+
+    # Efficiency ratio — operating_expense / (NII + non-interest income)
+    # Proxy: op_exp / revenue since non-interest income rolls into revenue
+    efficiency_ratio = None
+    if op_exp and revenue and revenue > 0:
+        efficiency_ratio = abs(op_exp) / revenue
+
+    # Credit cost — provisions / total_assets proxy (total_loans unavailable)
+    credit_cost_ratio = None
+    if prov is not None and assets and assets > 0:
+        credit_cost_ratio = abs(prov) / assets
+
+    # TBV — strip goodwill + intangibles from equity
+    # Note: per Gemini critique, do NOT aggressively strip deferred tax assets
+    # (DTAs) — these are often recoverable in most jurisdictions. DTAs are a
+    # separate balance sheet line not included in our goodwill/intangible map.
+    tbv = None
+    if equity is not None:
+        tbv = max(equity - (goodwill or 0) - (intang or 0), equity * 0.70)
+        # Floor at 70% of equity prevents pathological strips (e.g. if the
+        # data source double-counts goodwill as both goodwill and intangible)
+    tbv_per_share = (tbv / shares) if (tbv is not None and shares and shares > 0) else None
+
+    # ROE + retention rate for 2-stage RI projection
+    roe = (ni / equity) if (ni is not None and equity and equity > 0) else None
+    retention_rate = None
+    if ni and ni > 0 and dividends_ps and shares:
+        total_divs = dividends_ps * shares
+        payout = total_divs / ni
+        retention_rate = max(0.30, min(0.80, 1.0 - payout))
+    else:
+        retention_rate = 0.60   # default: banks retain ~60% on average
+
+    # RWA proxy — from profile calibration table
+    cfg = _bank_profile_calibration(profile_name)
+    rwa_estimate = (assets * cfg["rwa_to_assets"]) if (assets and assets > 0) else None
+    cet1_implied = (equity / rwa_estimate) if (rwa_estimate and rwa_estimate > 0 and equity) else None
+
+    return {
+        "nii":                 nii,
+        "nim":                 nim,
+        "efficiency_ratio":    efficiency_ratio,
+        "credit_cost_ratio":   credit_cost_ratio,
+        "tbv":                 tbv,
+        "tbv_per_share":       tbv_per_share,
+        "roe":                 roe,
+        "retention_rate":      retention_rate,
+        "rwa_estimate":        rwa_estimate,
+        "cet1_implied":        cet1_implied,
+    }
+
+
+def _compute_residual_income_2stage(
+    most_recent: dict,
+    shares: float,
+    profile_name: str,
+    research_target_roe: Optional[float] = None,
+) -> Optional[float]:
+    """
+    Full 2-stage Residual Income model for banks (Damodaran/McKinsey standard).
+
+    Stage 1 (5 years, or 7/10 for India/Neo): ROE fades linearly from current
+             level to profile target. BVPS grows at retention × ROE per year.
+    Stage 2 (terminal): ROE = CoE, so RI = 0 → TV contribution is zero.
+             (This is the "fair value" assumption: no excess return in perpetuity.)
+
+    Formula:
+        V_per_share = BVPS_0 + Σ_{t=1..N} RI_t / (1 + CoE)^t
+        RI_t = (ROE_t - CoE) × BVPS_{t-1}
+        BVPS_t = BVPS_{t-1} × (1 + retention_rate × ROE_t)
+
+    research_target_roe overrides the profile's target_roe when deep research
+    provides a management-guided target (e.g. "JPM targets 17% ROTCE through
+    cycle" from earnings calls).
+
+    Returns None when inputs insufficient.
+    """
+    bank_m = _compute_bank_metrics(most_recent, profile_name)
+    cfg    = _bank_profile_calibration(profile_name)
+
+    roe_current = bank_m.get("roe")
+    bvps_0      = most_recent.get("book_value_per_share")
+    equity      = most_recent.get("total_equity")
+
+    # Fall back to TBV per share when BVPS missing (happens on some
+    # HK/SG data sources where yfinance only exposes total_equity)
+    if (bvps_0 is None or bvps_0 <= 0) and bank_m.get("tbv_per_share"):
+        bvps_0 = bank_m["tbv_per_share"]
+
+    if (roe_current is None or bvps_0 is None or bvps_0 <= 0
+            or shares <= 0 or equity is None or equity <= 0):
+        return None
+
+    coe         = cfg["coe"]
+    target_roe  = research_target_roe if research_target_roe else cfg["target_roe"]
+    fade_years  = cfg["fade_years"]
+    retention   = bank_m["retention_rate"]
+
+    # Clamp current ROE to prevent pathological extremes (negative ROE, >50% ROE)
+    roe_current = max(-0.05, min(0.50, roe_current))
+
+    v_per_share = bvps_0
+    bvps_t = bvps_0
+    for t in range(1, fade_years + 1):
+        # Linear fade from current to target
+        fade_frac = t / fade_years
+        roe_t = roe_current + (target_roe - roe_current) * fade_frac
+
+        ri_t = (roe_t - coe) * bvps_t
+        pv_ri = ri_t / ((1 + coe) ** t)
+        v_per_share += pv_ri
+
+        # Grow book value for next period (retained earnings compound)
+        bvps_t = bvps_t * (1 + retention * roe_t)
+
+    # Terminal: ROE = CoE → zero excess return → TV = 0
+    # (Intentionally conservative; matches Damodaran standard.)
+
+    # Floor at 50% of TBV to prevent deep pathological discounts when
+    # current ROE is transiently negative (e.g. 2020 COVID year for US banks)
+    floor = bank_m.get("tbv_per_share") or (bvps_0 * 0.85)
+    return max(v_per_share, floor * 0.50)
+
+
+def _compute_excess_capital(
+    most_recent: dict,
+    shares: float,
+    profile_name: str,
+    research_cet1: Optional[float] = None,
+) -> Optional[float]:
+    """
+    Excess-capital-per-share from CET1 overlay.
+
+    If CET1 > target: excess_capital is distributable → adds to IV
+                      (haircut 0.7x since not all excess is truly releasable —
+                      management buffer, pending stress test, etc.)
+    If CET1 < target: capital_deficit must be retained → subtracts from IV
+                      (full haircut — regulator can force dilutive raise)
+
+    Asymmetric haircut matches regulatory reality: approval to deploy excess
+    is much slower than approval to retain.
+
+    Returns positive, negative, or None (no data).
+    """
+    cfg = _bank_profile_calibration(profile_name)
+    target_cet1  = cfg["target_cet1"]
+    rwa_ratio    = cfg["rwa_to_assets"]
+
+    cet1_actual = research_cet1 if research_cet1 else None
+    if cet1_actual is None:
+        # Use the implied CET1 from book equity / proxy RWA as a rough fallback
+        bank_m = _compute_bank_metrics(most_recent, profile_name)
+        cet1_actual = bank_m.get("cet1_implied")
+
+    if cet1_actual is None:
+        return None
+
+    total_assets = most_recent.get("total_assets")
+    if not total_assets or total_assets <= 0 or shares <= 0:
+        return None
+
+    rwa = total_assets * rwa_ratio
+
+    if cet1_actual >= target_cet1:
+        # Excess — haircut by 30% (not all distributable)
+        excess_dollars = (cet1_actual - target_cet1) * rwa
+        return (excess_dollars / shares) * 0.70
+    else:
+        # Deficit — full haircut (must be retained)
+        deficit_dollars = (target_cet1 - cet1_actual) * rwa
+        return -(deficit_dollars / shares)
+
+
 # ── Insider-activity WACC overlay (Tier 3) ────────────────────────────────────
 
 def _insider_wacc_modifier(
@@ -1479,12 +1775,24 @@ def _compute_method_value(
     # For cyclicals the trailing net income reflects one point in the cycle;
     # applying a peer P/E at peak earnings produces trough IV (and vice-versa).
     # The normalized anchor is Damodaran-style: mean(NI margin) × current
-    # revenue. Falls back to None (method skipped) when insufficient history.
+    # revenue. For banks (which don't have commodity-cycle volatility) falls
+    # back to trailing NI when normalization wasn't computed — trailing ≈
+    # normalized for smooth-earnings businesses. Uses profile-specific P/E
+    # from _BANK_PROFILE_CALIBRATION for bank profiles.
     if method_name in {"P/E (norm)", "P/E norm", "Normalized P/E"}:
         norm_ni = most_recent.get("normalized_net_income")
+        _is_bank = (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
+                    or "Bank" in (profile_name or "")
+        if (norm_ni is None or norm_ni <= 0) and _is_bank and net_income and net_income > 0:
+            # Bank fallback: trailing NI as normalization proxy
+            norm_ni = net_income
         if norm_ni is None or norm_ni <= 0 or shares <= 0:
             return None
-        mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
+        if _is_bank:
+            cfg = _bank_profile_calibration(profile_name)
+            mult = cfg["pe"] * sm * growth_premium * sbc_pe_discount
+        else:
+            mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
         eps_norm = norm_ni / shares
         return eps_norm * mult
 
@@ -1689,16 +1997,73 @@ def _compute_method_value(
                 return max((entry_ev - (net_debt or 0.0)) / shares, 0.0)
         return None
 
-    # ── Residual Income ───────────────────────────────────────────────────
+    # ── Residual Income (2-stage institutional model) ─────────────────────
+    # Replaces the prior primitive single-period formula. Full Damodaran
+    # template: ROE fades linearly from current level to profile target
+    # over 5-10 years, BVPS compounds at retention × ROE, terminal RI = 0
+    # (ROE reverts to CoE in perpetuity). research_target_roe overrides
+    # profile default when deep research provides management guidance.
     if method_name == "Residual Income":
-        # RI model: BV + PV(excess returns)
+        # Bank path — profile-aware 2-stage model with CoE override
+        if (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
+                or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
+            research_target_roe = most_recent.get("_bank_target_roe_research")
+            iv = _compute_residual_income_2stage(
+                most_recent, shares=shares, profile_name=profile_name,
+                research_target_roe=research_target_roe,
+            )
+            return iv
+        # Non-bank path — keep legacy simple spread (for utility-company
+        # RI proxy usage and any other profile that invokes RI generically)
         roe = (net_income / total_equity) if (net_income and total_equity and total_equity > 0) else None
         if roe is not None and bvps is not None and bvps > 0 and wacc > 0:
             excess_return = (roe - wacc) * bvps
-            # Capitalise excess return: assume mean-reversion over 10 years → multiply by 5x
             ri_premium = (excess_return / wacc) * 0.5 * sm
             return max(bvps + ri_premium, bvps * 0.5)
         return None
+
+    # ── P/TBV — Price-to-Tangible-Book-Value (bank-specific) ──────────────
+    # Standard bank multiple: TBV = Equity − Goodwill − Intangibles. Strips
+    # M&A-related intangibles that aren't regulatory capital. Preferred over
+    # P/B for banks with significant acquisition history (BAC, C, HSBC).
+    if method_name in {"P/TBV", "Price/TBV", "P/Tangible BV"}:
+        cfg = _bank_profile_calibration(profile_name)
+        bank_m = _compute_bank_metrics(most_recent, profile_name)
+        tbv_ps = bank_m.get("tbv_per_share")
+        if tbv_ps is None or tbv_ps <= 0 or shares <= 0:
+            return None
+        mult = cfg["p_tbv"] * sm * growth_premium
+        return tbv_ps * mult
+
+    # ── Excess Capital — CET1 overlay (bank-specific) ─────────────────────
+    # Quantifies the capital-adequacy delta. Positive when CET1 > target
+    # (excess distributable via buybacks/dividends — boosts IV). Negative
+    # when CET1 < target (must retain — discount IV). Asymmetric haircut
+    # reflects regulator approval asymmetry.
+    #
+    # Returns the capital DELTA per share, not a full IV — the blend engine
+    # adds this to weighted IV via its small (5%) weight. Because it's a
+    # delta not a level, this method can return negative values; the blend
+    # code already handles `value is None or value <= 0` so we cap
+    # downside at 0 (negative capital deficit is surfaced in audit only).
+    if method_name in {"Excess Capital", "CET1 Capital"}:
+        research_cet1 = most_recent.get("_bank_cet1_research")
+        delta_ps = _compute_excess_capital(
+            most_recent, shares=shares, profile_name=profile_name,
+            research_cet1=research_cet1,
+        )
+        if delta_ps is None:
+            return None
+        # Method blend expects a positive IV value. For negative (deficit)
+        # cases, we route the full signal via an audit flag instead and
+        # return the TBV floor so the 5% weight doesn't go to zero.
+        if delta_ps <= 0:
+            bank_m = _compute_bank_metrics(most_recent, profile_name)
+            return bank_m.get("tbv_per_share") or (bvps or 0.0)
+        # Excess capital: surface as a valuation line item = TBV + excess_ps
+        bank_m = _compute_bank_metrics(most_recent, profile_name)
+        tbv_ps = bank_m.get("tbv_per_share") or (bvps or 0.0)
+        return tbv_ps + delta_ps
 
     # ── ROE vs CoE (Gordon-Growth RoE spread) ─────────────────────────────
     if method_name == "ROE vs CoE":
@@ -1962,6 +2327,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     # Per-ticker REIT metrics (cap rate override, occupancy, WALE, DPU/AFFO).
     # Produced by _extract_reit_metrics() in deep_research.py.
     reit_metrics_all       = state["data"].get("reit_metrics", {})
+    # Per-ticker bank metrics (CET1, target ROE, NIM, efficiency, NPL).
+    # Produced by _extract_bank_metrics() in deep_research.py.
+    bank_metrics_all       = state["data"].get("bank_metrics", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -2018,7 +2386,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                  "research_and_development", "stock_based_compensation",
                  # REIT-specific
                  "depreciation_and_amortization", "operating_cash_flow",
-                 "cash_and_equivalents"],
+                 "cash_and_equivalents",
+                 # Bank-specific (Tier 2)
+                 "interest_income", "provision_for_loan_losses",
+                 "goodwill", "intangible_assets", "total_liabilities",
+                 "operating_expense"],
                 end_date,
                 period="annual",
                 limit=7,
@@ -2308,6 +2680,57 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _rm_parts:
                     ticker_forward_flags.append(
                         "REIT research metrics: " + " | ".join(_rm_parts)
+                    )
+
+        # ── Bank metrics attachment + audit (Tier 2 item 3) ─────────────────
+        # For Financials/bank profiles: compute derived metrics (NIM, efficiency,
+        # TBV, credit_cost) from line items and layer deep-research overrides
+        # on top (CET1, management target ROE). Both feed the 2-stage
+        # Residual Income + P/TBV + Excess Capital method dispatches.
+        if (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
+                or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
+            _bank_m = _compute_bank_metrics(most_recent, profile_name=profile_name)
+            _bank_cfg = _bank_profile_calibration(profile_name)
+
+            # Layer research overrides onto most_recent (consumed by method dispatch)
+            _bm_override = (bank_metrics_all or {}).get(ticker) or {}
+            if _bm_override.get("cet1_ratio"):
+                most_recent["_bank_cet1_research"] = _bm_override["cet1_ratio"]
+            if _bm_override.get("management_target_roe"):
+                most_recent["_bank_target_roe_research"] = _bm_override["management_target_roe"]
+
+            # Audit flag: derived metrics + profile calibration
+            def _fmt_pct(v):
+                return f"{v:.2%}" if v is not None else "n/a"
+
+            _bank_parts = [
+                f"ROE {_fmt_pct(_bank_m.get('roe'))}",
+                f"NIM {_fmt_pct(_bank_m.get('nim'))}",
+                f"eff {_fmt_pct(_bank_m.get('efficiency_ratio'))}",
+                f"credit_cost {_fmt_pct(_bank_m.get('credit_cost_ratio'))}",
+                f"TBV/sh ${_bank_m.get('tbv_per_share'):.2f}" if _bank_m.get('tbv_per_share') else "TBV/sh n/a",
+                f"CET1 implied {_fmt_pct(_bank_m.get('cet1_implied'))}",
+            ]
+            ticker_forward_flags.append(
+                f"Bank metrics ({profile_name}, target ROE {_bank_cfg['target_roe']:.1%} / "
+                f"CoE {_bank_cfg['coe']:.1%} / fade {_bank_cfg['fade_years']}y / "
+                f"target CET1 {_bank_cfg['target_cet1']:.1%}): " + " | ".join(_bank_parts)
+            )
+
+            # Research overrides audit
+            if _bm_override:
+                _or_parts = []
+                if _bm_override.get("cet1_ratio"):
+                    _or_parts.append(f"CET1 {_bm_override['cet1_ratio']:.2%} (research override)")
+                if _bm_override.get("management_target_roe"):
+                    _or_parts.append(f"mgmt target ROE {_bm_override['management_target_roe']:.1%}")
+                if _bm_override.get("efficiency_ratio"):
+                    _or_parts.append(f"efficiency {_bm_override['efficiency_ratio']:.1%}")
+                if _bm_override.get("npl_ratio"):
+                    _or_parts.append(f"NPL {_bm_override['npl_ratio']:.2%}")
+                if _or_parts:
+                    ticker_forward_flags.append(
+                        "Bank research overrides: " + " | ".join(_or_parts)
                     )
 
         # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────

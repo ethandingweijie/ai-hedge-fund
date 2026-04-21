@@ -1228,13 +1228,109 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Bank / Lending Institution": {
             "methods": [
-                {"name": "P/BV",            "weight": 0.50, "anchor": True,  "implementable": True},
-                {"name": "Residual Income",  "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "ROE vs CoE",       "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",       "weight": 0.05, "anchor": False, "implementable": True},
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF"],
-            "rationale": "Book value tracks net asset quality; Residual Income captures excess returns over capital cost.",
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": (
+                "Institutional-grade bank valuation. 2-stage Residual Income anchors "
+                "at 55% — ROE fades linearly to profile target over 5-10 years, BVPS "
+                "compounds at retention × ROE, terminal RI = 0 (ROE reverts to CoE in "
+                "perpetuity). P/TBV replaces P/BV — strips goodwill + intangibles from "
+                "the equity base to match Basel regulatory capital definition. Excess "
+                "Capital overlay surfaces CET1 vs target (positive = distributable "
+                "buffer, negative = mandatory retention). ROE vs CoE removed — it was "
+                "effectively a single-period version of Residual Income and caused "
+                "60% weight concentration on the same signal."
+            ),
+        },
+        # ── Bank sub-profiles (Tier 2 item 3) ─────────────────────────────
+        # Each sub-profile shares the 4-method RI+P/TBV+P/E+ExcessCap structure
+        # but gets distinct calibration via dcf_agent._BANK_PROFILE_CALIBRATION
+        # (target_roe, CoE, P/TBV multiple, CET1 target, fade years, RWA proxy).
+        # classify_valuation_profile + TICKER_SECTOR_LOOKUP resolve tickers to
+        # the appropriate sub-profile key below.
+        "Money Center Bank": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "US GSIB Money Center bank (JPM/BAC/C/WFC). Target ROE 12%, CoE 9%, P/TBV 1.4x, CET1 target 12%.",
+        },
+        "Money Center Bank (EU)": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "European Money Center (HSBC/Barclays/DB) — higher CoE (11%) and CET1 target (14%) from regulatory drag; lower target ROE (10%) and P/TBV (0.8x).",
+        },
+        "Regional Bank": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "US Regional (USB/TFC/PNC). Target ROE 11%, CoE 10%, P/TBV 1.2x, CET1 11%. Higher RWA density (0.70x assets) for CRE-heavy books.",
+        },
+        "Super-Regional Bank": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "Super-regional (TD/BMO/RBC). Canadian Big-Six scale + diversification. CoE 9.5%, P/TBV 1.3x.",
+        },
+        "EM Bank": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "EM SOE banks (ICBC/CCB/BOC/ABC). Target ROE 14% (high NIM), CoE 13% (national-service risk premium), P/TBV 1.2x, CET1 10.5%.",
+        },
+        "EM Bank (Premium)": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "EM Premium — India private banks (HDFC/ICICI/Kotak) sustain 16-18% ROE on credit-to-GDP gap. 7-year fade, P/TBV 2.0x.",
+        },
+        "Investment Bank": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "Investment Bank (GS/MS). Target ROE 13% (cyclical), CoE 11% (trading VaR premium), P/TBV 1.2x, RWA proxy 0.40x (market-risk-weighted).",
+        },
+        "Neo/Challenger": {
+            "methods": [
+                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "rationale": "Neo/Challenger (NU/SOFI) — J-curve ROE. Target 18%, P/TBV 2.8x, 10-year fade (extended because current ROE still ramping).",
         },
         "Insurance": {
             "methods": [
@@ -3173,13 +3269,13 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "01816.HK": ("Energy",      "",  "Nuclear Power",            "CGN Power"),
 
     # Financials
-    "00005.HK": ("Financials",  "",  "Banking",                  "HSBC Holdings"),
+    "00005.HK": ("Financials",  "Money Center Bank (EU)",  "Banking",  "HSBC Holdings"),
     "01299.HK": ("Financials",  "",  "Insurance",                "AIA Group"),
     "02318.HK": ("Financials",  "",  "Insurance",                "Ping An Insurance"),
-    "03988.HK": ("Financials",  "",  "Banking",                  "Bank of China"),
-    "01398.HK": ("Financials",  "",  "Banking",                  "ICBC"),
-    "00939.HK": ("Financials",  "",  "Banking",                  "China Construction Bank"),
-    "03968.HK": ("Financials",  "",  "Banking",                  "China Merchants Bank"),
+    "03988.HK": ("Financials",  "EM Bank",          "Banking",        "Bank of China"),
+    "01398.HK": ("Financials",  "EM Bank",          "Banking",        "ICBC"),
+    "00939.HK": ("Financials",  "EM Bank",          "Banking",        "China Construction Bank"),
+    "03968.HK": ("Financials",  "EM Bank",          "Banking",        "China Merchants Bank"),
     "02628.HK": ("Financials",  "",  "Insurance",                "China Life Insurance"),
     "01288.HK": ("Financials",  "",  "Banking",                  "Agricultural Bank of China"),
     "00998.HK": ("Financials",  "",  "Banking",                  "CITIC Bank"),
@@ -3484,7 +3580,7 @@ REIT_VGPM_WEIGHTS = {
 # Imported by screener_service and analysis routes for sector classification.
 SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     # Banks
-    "D05.SI":  ("Financials", "Banks",       "Banks",                  "DBS Group"),
+    "D05.SI":  ("Financials", "Money Center Bank", "Banks",           "DBS Group"),
     "O39.SI":  ("Financials", "Banks",       "Banks",                  "OCBC Bank"),
     "U11.SI":  ("Financials", "Banks",       "Banks",                  "UOB"),
     "S68.SI":  ("Financials", "Exchange",    "Capital Markets",        "Singapore Exchange"),
