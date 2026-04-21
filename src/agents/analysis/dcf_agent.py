@@ -794,6 +794,83 @@ def _project_dcf(
     return iv, pv_sum / shares, pv_tv / shares, annual_rows
 
 
+# ── Insider-activity WACC overlay (Tier 3) ────────────────────────────────────
+
+def _insider_wacc_modifier(
+    insider_data: dict | None,
+    market_cap: float | None,
+) -> tuple[float, str]:
+    """
+    Translate the Phase 2.5 insider-activity summary into a WACC modifier.
+
+    Concentrated insider BUYING is a management-conviction signal that the
+    market typically under-reacts to for ~6-12 months (Lakonishok & Lee 2001,
+    Cohen-Malloy-Pomorski 2012). Cluster buys (multiple insiders <30 days)
+    and CEO/CFO conviction sales are the highest-signal sub-cases.
+
+    Mechanism: small ±bp modifier on WACC. Chosen over growth_base adjustment
+    because (a) growth_base is already captured by deep-research dcf_calibration
+    and analyst estimates, and (b) WACC is the single cleanest lever to surface
+    a "management prior" without double-counting other signals.
+
+    Returns (bps_modifier, audit_string). If no usable data, returns (0.0, "").
+    bps_modifier is clamped to [-50, +50] (recap spec).
+
+    Scaling:
+        signal_pct = net_buying_12m_usd / market_cap
+        base_bps   = clamp(-signal_pct * 5000, -25, +25)
+          → 0.5% of market cap net-bought maps to -25 bp WACC (tightening)
+          → 0.5% net sold maps to +25 bp (loosening, skeptical prior)
+        +  cluster_buy with 30d net > 0:    -10 bp (amplify conviction)
+        +  conviction_sell_flag:            +15 bp (widen on CEO/CFO >$5M dump)
+        final clamp [-50, +50] so no single signal dominates the DCF.
+    """
+    if not insider_data or not market_cap or market_cap <= 0:
+        return 0.0, ""
+
+    net_12m = float(insider_data.get("net_buying_12m_usd") or 0.0)
+    net_30d = float(insider_data.get("net_buying_30d_usd") or 0.0)
+    cluster = bool(insider_data.get("cluster_buy"))
+    conv_sell = bool(insider_data.get("conviction_sell_flag"))
+    signal_pct = net_12m / market_cap
+    gross_buy  = float(insider_data.get("gross_buy_value_12m") or 0.0)
+    gross_sell = float(insider_data.get("gross_sell_value_12m") or 0.0)
+
+    # Skip if the signal is noise: tiny activity relative to company size
+    # (< 0.02% of market cap) produces sub-basis-point moves after clamping,
+    # not worth emitting an audit flag for.
+    if abs(signal_pct) < 0.0002 and not cluster and not conv_sell:
+        return 0.0, ""
+
+    base_bps = -max(-25.0, min(25.0, signal_pct * 5000))
+    if cluster and net_30d > 0:
+        base_bps -= 10.0
+    if conv_sell:
+        base_bps += 15.0
+    final_bps = max(-50.0, min(50.0, base_bps))
+
+    # Build audit line with dollar values scaled for readability
+    def _fmt(v: float) -> str:
+        absv = abs(v)
+        if absv >= 1e9:
+            return f"${v/1e9:.2f}B"
+        if absv >= 1e6:
+            return f"${v/1e6:.1f}M"
+        if absv >= 1e3:
+            return f"${v/1e3:.0f}K"
+        return f"${v:.0f}"
+
+    modifier_sign = "tightening" if final_bps < 0 else ("widening" if final_bps > 0 else "no-op")
+    audit = (
+        f"Insider activity: net_12m={_fmt(net_12m)} ({signal_pct:+.2%} mkt cap), "
+        f"gross {_fmt(gross_buy)} buy / {_fmt(gross_sell)} sell"
+        + (f", cluster_buy" if cluster else "")
+        + (f", conviction_sell" if conv_sell else "")
+        + f" -> WACC {final_bps:+.0f}bp ({modifier_sign})"
+    )
+    return final_bps, audit
+
+
 # ── rNPV (Biopharma pipeline) helpers ─────────────────────────────────────────
 
 def _compute_rnpv(
@@ -2056,6 +2133,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 sector, leverage, macro_regime=_risk_appetite,
                 profile=profile_name, is_hk=_is_hk,
             )
+
+        # ── Insider-activity WACC overlay (Tier 3) ──────────────────────
+        # The Phase 2.5 insider_activity_agent populates
+        # state["data"]["insider_activity"][ticker] with 12m/90d/30d net
+        # buying and conviction flags. That data was previously unused by
+        # the DCF. Apply a small ±bp WACC modifier so net-buying signals
+        # tighten (lower WACC) and net-selling widens (higher WACC).
+        # Capped at ±50bp by the helper so no single signal dominates.
+        try:
+            _insider_data = (
+                state["data"].get("insider_activity", {}) or {}
+            ).get(ticker)
+            _ins_bps, _ins_audit = _insider_wacc_modifier(_insider_data, _market_cap)
+            if _ins_bps != 0.0:
+                wacc = wacc + _ins_bps / 10000.0
+                if _ins_audit:
+                    ticker_forward_flags.append(_ins_audit)
+        except Exception as _ins_exc:  # noqa: BLE001 — never block DCF on insider overlay
+            _log.warning("[DCF] %s: insider WACC overlay failed (ignored): %s",
+                         ticker, _ins_exc)
 
         # Deep-research risk_flag → WACC loading (+50bps HIGH, +25bps MEDIUM)
         _risk_flag = dcf_cal.get("risk_flag", "MEDIUM")
