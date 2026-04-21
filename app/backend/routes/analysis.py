@@ -785,15 +785,135 @@ async def get_stock_data(ticker: str, period: str = "1y"):
     else:
         yf_sym = sym
 
+    # ── US tickers: FMP historical-price-eod/full for charts (FAST) + ─────────
+    #     parallel FMP TTM fetches for metrics. yfinance history was the main
+    #     latency culprit (1s → 10s regression after adding FMP gap-fills);
+    #     FMP's CDN-served historical endpoint is ~5x faster and we parallelize
+    #     all four FMP calls (history + key-metrics + ratios + quote) via
+    #     asyncio.gather. yfinance.info is kept for non-FMP-exposed fields
+    #     (totalCash, totalDebt, fiftyTwoWeekHigh/Low fallbacks) but runs in
+    #     parallel with the FMP fan-out — no sequential blocking.
+    history: list[dict] = []
+    info: dict = {}
+    km: dict = {}
+    rt: dict = {}
+    q: dict = {}
+    use_fmp_for_us = (not hk) and ("." not in sym or sym.endswith((".HK", ".SI", ".SZ", ".SS", ".T")) is False)
+    # Detect SG: FMP doesn't cover .SI tickers, fall through to yf-only path
     try:
-        t    = yf.Ticker(yf_sym)
-        hist = t.history(period=period)
-        info = t.info
-        history = [
-            {"date": idx.strftime("%Y-%m-%d"), "close": round(c, 2)}
-            for idx, row in hist.iterrows()
-            if (c := _safe(row.get("Close"))) is not None
-        ]
+        from src.tools.sg.ticker import is_sg_ticker as _is_sg
+        _sg = _is_sg(sym)
+    except Exception:
+        _sg = False
+    if _sg:
+        use_fmp_for_us = False   # SG → yfinance only
+
+    # Map FMP period param (we only need a couple of lookbacks; FMP returns full history)
+    _fmp_days = {"1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730,
+                 "5y": 1825, "10y": 3650}.get(period, 365)
+
+    if use_fmp_for_us:
+        # Parallelize: FMP history + yf.info + FMP key-metrics + ratios + quote
+        from src.tools.api import _fmp_get, _STABLE, _get_key
+        api_key = _get_key(None)
+
+        async def _fmp_history():
+            if not api_key:
+                return []
+            try:
+                raw = await asyncio.to_thread(
+                    _fmp_get, f"{_STABLE}/historical-price-eod/full",
+                    {"symbol": sym}, api_key,
+                )
+                if not isinstance(raw, list):
+                    return []
+                # FMP returns newest-first; slice to _fmp_days then reverse to oldest-first
+                out: list[dict] = []
+                from datetime import datetime as _dt2, timedelta as _td2
+                cutoff = _dt2.now() - _td2(days=_fmp_days)
+                for bar in raw:
+                    d = bar.get("date") or ""
+                    c = _safe(bar.get("close"))
+                    if not d or c is None:
+                        continue
+                    try:
+                        if _dt2.strptime(d[:10], "%Y-%m-%d") < cutoff:
+                            continue
+                    except Exception:
+                        continue
+                    out.append({"date": d[:10], "close": round(c, 2)})
+                out.sort(key=lambda x: x["date"])
+                return out
+            except Exception:
+                return []
+
+        async def _yf_info_only():
+            # Only the .info dict — no .history() since FMP handles charts now
+            try:
+                return await asyncio.to_thread(lambda: yf.Ticker(yf_sym).info)
+            except Exception:
+                return {}
+
+        async def _fmp_km():
+            if not api_key:
+                return {}
+            try:
+                raw = await asyncio.to_thread(
+                    _fmp_get, f"{_STABLE}/key-metrics-ttm",
+                    {"symbol": sym}, api_key,
+                )
+                if isinstance(raw, list) and raw:
+                    return raw[0]
+                return raw if isinstance(raw, dict) else {}
+            except Exception:
+                return {}
+
+        async def _fmp_rt():
+            if not api_key:
+                return {}
+            try:
+                raw = await asyncio.to_thread(
+                    _fmp_get, f"{_STABLE}/ratios-ttm",
+                    {"symbol": sym}, api_key,
+                )
+                if isinstance(raw, list) and raw:
+                    return raw[0]
+                return raw if isinstance(raw, dict) else {}
+            except Exception:
+                return {}
+
+        async def _fmp_quote():
+            if not api_key:
+                return {}
+            try:
+                raw = await asyncio.to_thread(
+                    _fmp_get, f"{_STABLE}/quote",
+                    {"symbol": sym}, api_key,
+                )
+                if isinstance(raw, list) and raw:
+                    return raw[0]
+                return raw if isinstance(raw, dict) else {}
+            except Exception:
+                return {}
+
+        history, info, km, rt, q = await asyncio.gather(
+            _fmp_history(), _yf_info_only(), _fmp_km(), _fmp_rt(), _fmp_quote()
+        )
+    else:
+        # HK / SG / other non-US: yfinance only (FMP doesn't cover)
+        try:
+            t    = yf.Ticker(yf_sym)
+            hist = await asyncio.to_thread(lambda: t.history(period=period))
+            info = await asyncio.to_thread(lambda: t.info)
+            history = [
+                {"date": idx.strftime("%Y-%m-%d"), "close": round(c, 2)}
+                for idx, row in hist.iterrows()
+                if (c := _safe(row.get("Close"))) is not None
+            ]
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+    try:
         total_cash = _safe(info.get("totalCash"))
         total_debt = _safe(info.get("totalDebt"))
         net_cash   = (total_cash - total_debt) if (total_cash is not None and total_debt is not None) else None
@@ -821,56 +941,30 @@ async def get_stock_data(ticker: str, period: str = "1y"):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    # ── US / FMP TTM gap-fill ────────────────────────────────────────────────
-    # Pulls from /stable/key-metrics-ttm + /stable/ratios-ttm in one FMP round
-    # trip each. FMP TTM values are generally more current than yfinance's info
-    # dict (which can lag by a quarter on enterpriseToEbitda / profitMargins).
-    # For every overlapping field we PREFER FMP when both return a value.
-    # Fields exclusive to FMP: priceToSalesRatioTTM, returnOnInvestedCapitalTTM,
-    # freeCashFlowYieldTTM. Fields only yfinance has: revenueGrowth,
-    # fiftyTwoWeekHigh/Low, totalRevenue, freeCashflow absolute.
-    if not hk:
-        try:
-            from src.tools.api import _fmp_get, _STABLE, _get_key
-            api_key = _get_key(None)
-            if api_key:
-                km_raw = _fmp_get(f"{_STABLE}/key-metrics-ttm", {"symbol": sym}, api_key)
-                rt_raw = _fmp_get(f"{_STABLE}/ratios-ttm",      {"symbol": sym}, api_key)
-                km = (km_raw[0] if isinstance(km_raw, list) and km_raw
-                      else km_raw if isinstance(km_raw, dict) else {}) or {}
-                rt = (rt_raw[0] if isinstance(rt_raw, list) and rt_raw
-                      else rt_raw if isinstance(rt_raw, dict) else {}) or {}
+    # ── US: apply pre-fetched FMP TTM gap-fill to key stats ──────────────────
+    # km, rt, q were fetched in parallel with history + info above via
+    # asyncio.gather — no additional round trips here. FMP TTM values prefer
+    # over yfinance .info because they update more frequently on
+    # enterpriseToEbitda / profitMargins / 52wk range.
+    if use_fmp_for_us and (km or rt or q):
+        def _prefer_fmp(key: str, fmp_value):
+            fv = _safe(fmp_value)
+            if fv is not None:
+                metrics[key] = fv
 
-                # Prefer FMP when available — else keep yfinance value already set.
-                def _prefer_fmp(key: str, fmp_value):
-                    fv = _safe(fmp_value)
-                    if fv is not None:
-                        metrics[key] = fv
+        _prefer_fmp("market_cap",                 km.get("marketCap"))
+        _prefer_fmp("ev_to_ebitda",               km.get("evToEBITDATTM"))
+        _prefer_fmp("return_on_equity",           km.get("returnOnEquityTTM"))
+        _prefer_fmp("return_on_assets",           km.get("returnOnAssetsTTM"))
+        _prefer_fmp("return_on_invested_capital", km.get("returnOnInvestedCapitalTTM"))
+        _prefer_fmp("free_cash_flow_yield",       km.get("freeCashFlowYieldTTM"))
 
-                _prefer_fmp("market_cap",                 km.get("marketCap"))
-                _prefer_fmp("ev_to_ebitda",               km.get("evToEBITDATTM"))
-                _prefer_fmp("return_on_equity",           km.get("returnOnEquityTTM"))
-                _prefer_fmp("return_on_assets",           km.get("returnOnAssetsTTM"))
-                _prefer_fmp("return_on_invested_capital", km.get("returnOnInvestedCapitalTTM"))
-                _prefer_fmp("free_cash_flow_yield",       km.get("freeCashFlowYieldTTM"))
+        _prefer_fmp("pe_ratio",                   rt.get("priceToEarningsRatioTTM"))
+        _prefer_fmp("price_to_sales",             rt.get("priceToSalesRatioTTM"))
+        _prefer_fmp("net_margin",                 rt.get("netProfitMarginTTM"))
 
-                _prefer_fmp("pe_ratio",                   rt.get("priceToEarningsRatioTTM"))
-                _prefer_fmp("price_to_sales",             rt.get("priceToSalesRatioTTM"))
-                _prefer_fmp("net_margin",                 rt.get("netProfitMarginTTM"))
-
-                # /stable/quote → 52wk range. FMP's yearHigh/yearLow update
-                # intraday from the official exchange feed; yfinance's
-                # fiftyTwoWeekHigh/Low can lag during the trading day.
-                try:
-                    q_raw = _fmp_get(f"{_STABLE}/quote", {"symbol": sym}, api_key)
-                    q = (q_raw[0] if isinstance(q_raw, list) and q_raw
-                         else q_raw if isinstance(q_raw, dict) else {}) or {}
-                    _prefer_fmp("fifty_two_week_high", q.get("yearHigh"))
-                    _prefer_fmp("fifty_two_week_low",  q.get("yearLow"))
-                except Exception:
-                    pass  # yfinance values remain as fallback
-        except Exception:
-            pass  # Best-effort; yfinance values remain as the baseline
+        _prefer_fmp("fifty_two_week_high",        q.get("yearHigh"))
+        _prefer_fmp("fifty_two_week_low",         q.get("yearLow"))
     # Final fallback — ROA as a proxy for ROIC when neither FMP nor HK path filled it
     if metrics["return_on_invested_capital"] is None and metrics.get("return_on_assets") is not None:
         metrics["return_on_invested_capital"] = metrics["return_on_assets"]
