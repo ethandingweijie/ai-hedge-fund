@@ -74,6 +74,15 @@ from src.data.sector_profiles import (
     compute_c_macro,
     get_valuation_profile,
     get_wacc_profile_for_ticker,
+    # ── Biopharma rNPV helpers (Tier 2) ──
+    phase_pos,
+    phase_years_to_launch,
+    normalize_phase,
+    therapeutic_area_pos_multiplier,
+    RNPV_COMMERCIAL_DEFAULTS,
+    RNPV_RAMP_PROFILE,
+    PRE_APPROVAL_BIOTECH_WACC,
+    LARGE_CAP_PHARMA_WACC,
 )
 from src.tools.hk.ticker import is_hk_ticker as _is_hk_ticker
 from src.utils.progress import progress
@@ -785,6 +794,204 @@ def _project_dcf(
     return iv, pv_sum / shares, pv_tv / shares, annual_rows
 
 
+# ── rNPV (Biopharma pipeline) helpers ─────────────────────────────────────────
+
+def _compute_rnpv(
+    pipeline_assets: list[dict],
+    most_recent: dict,
+    shares: float,
+    net_debt: float,
+    wacc: float,
+    profile_name: str,
+    scenario: str = "base",
+) -> tuple[Optional[float], dict]:
+    """
+    Risk-adjusted NPV of a biopharma pipeline. Each asset is valued as a
+    bell-shaped cash flow stream (ramp + plateau + LOE decay) starting at
+    its expected launch year, weighted by cumulative phase PoS × therapeutic-
+    area multiplier, and discounted to today.
+
+    Returns (iv_per_share, audit_dict). iv_per_share is None when the pipeline
+    is empty or no assets survive validation. audit_dict surfaces per-asset
+    PV contributions, applied PoS, and bridge to equity value.
+
+    Scenario multipliers: scenarios adjust peak-sales expectation symmetrically
+    around base — bear applies 0.75× peak, bull 1.25× peak. This is narrower
+    than the scenario multipliers used for relative-valuation methods because
+    clinical/commercial uncertainty is already loaded into PoS and WACC; adding
+    another wide scenario band would double-count the risk.
+
+    Parameters
+    ----------
+    pipeline_assets : list of asset dicts from _extract_pipeline_assets().
+    most_recent     : latest annual record — read for cash (-net_debt), R&D,
+                      and current year for launch_year discounting.
+    shares          : reported shares outstanding (will be diluted +10% for
+                      Pre-approval Biotech profile to approximate future raises
+                      when FMP doesn't expose diluted share count).
+    net_debt        : net debt from most_recent (used in equity bridge).
+    wacc            : base WACC from the engine — OVERRIDDEN to 12% for
+                      Pre-approval Biotech profile (clinical-stage premium).
+    profile_name    : "Pre-approval Biotech" | "Large Cap Pharma" | other.
+    scenario        : "bear" | "base" | "bull" — peak-sales multiplier.
+    """
+    if not pipeline_assets or shares <= 0:
+        return None, {}
+
+    # Profile-specific WACC — rNPV uses tighter rates than the sector default:
+    #   Large Cap Pharma:      7.85% (Damodaran Drugs Pharma, Jan 2026)
+    #   Pre-approval Biotech: 11.00% (Damodaran Biotech 8.49% + clinical-stage
+    #                                  premium for liquidity/diversification risk)
+    # Other Biopharma sub-profiles (Managed Care, MedTech, CDMO) use the
+    # engine's sector WACC input unchanged — rNPV doesn't currently route
+    # to those profiles, but the fallback keeps the contract stable.
+    if profile_name == "Large Cap Pharma":
+        effective_wacc = LARGE_CAP_PHARMA_WACC
+    elif profile_name == "Pre-approval Biotech":
+        effective_wacc = max(wacc, PRE_APPROVAL_BIOTECH_WACC)
+    else:
+        effective_wacc = wacc
+
+    # Dilution reserve — the `shares` input is already FMP's diluted count
+    # (weightedAverageShsOutDil — includes options, warrants, convertibles).
+    # The 10% buffer here projects ADDITIONAL dilution from expected future
+    # secondary offerings between today and commercialization. Only applied
+    # to pre-revenue biotech; Big Pharma funds R&D from approved-drug cash
+    # flows and does not routinely raise equity.
+    dilution_factor = 1.10 if profile_name == "Pre-approval Biotech" else 1.00
+    effective_shares = shares * dilution_factor
+
+    # Scenario → peak-sales multiplier (narrow band, see docstring)
+    peak_scen_mult = {"bear": 0.75, "base": 1.0, "bull": 1.25}.get(scenario, 1.0)
+
+    # Profile-specific margin + tax — Large Cap Pharma benefits from Irish/Swiss
+    # IP structures (eff. tax ~14%) and mature 45% op margins; Pre-approval
+    # biotechs taxed at US statutory 21% with narrower novel-drug margins 40%.
+    # Unknown profiles fall through to default (40% / 21%).
+    _margin_cfg = RNPV_COMMERCIAL_DEFAULTS.get(profile_name, RNPV_COMMERCIAL_DEFAULTS["default"])
+    op_margin = _margin_cfg["peak_op_margin"]
+    tax       = _margin_cfg["effective_tax_rate"]
+
+    current_year = datetime.now().year
+
+    total_pipeline_pv = 0.0
+    asset_breakdown: list[dict] = []
+    weighted_years_to_launch = 0.0
+    total_raw_peak = 0.0
+
+    for asset in pipeline_assets:
+        phase_key = normalize_phase(asset.get("phase"))
+        base_pos  = phase_pos(phase_key)
+        # TA multiplier applies to PRE-APPROVAL assets only — once a drug is
+        # approved, the clinical/scientific risk is realized. Continuing to
+        # discount for therapeutic-area risk would double-penalize (e.g. an
+        # approved oncology drug would lose 45% of its value despite being
+        # on-market and generating revenue).
+        if phase_key == "approved":
+            ta_mult = 1.0
+        else:
+            ta_mult = therapeutic_area_pos_multiplier(asset.get("indication"))
+        pos = max(0.005, min(1.0, base_pos * ta_mult))
+
+        # Years-to-launch: prefer asset-supplied launch_year if sane, else
+        # fall back to phase median
+        explicit_launch = asset.get("launch_year") or 0
+        if explicit_launch and current_year <= explicit_launch <= current_year + 15:
+            years_to_launch = float(explicit_launch - current_year)
+        else:
+            years_to_launch = phase_years_to_launch(phase_key)
+        # Already-launched assets (approved + launch in past) contribute
+        # immediately (years_to_launch = 0)
+        if phase_key == "approved" and years_to_launch < 0:
+            years_to_launch = 0.0
+
+        peak_sales = float(asset.get("peak_sales_usd", 0)) * peak_scen_mult
+        if peak_sales <= 0:
+            continue
+
+        # Cash-flow stream: pre-approval assets follow the full ramp + plateau
+        # + LOE profile. Already-approved assets skip the ramp years (they
+        # are at plateau) and use only plateau + LOE decay. Without this gate
+        # a marketed blockbuster is valued as if just-launched (year-1 at 20%
+        # of peak), which under-counts Big Pharma's approved-drug value by
+        # ~30-40%.
+        #
+        # Assumption: when the extractor doesn't supply a launch_year, we
+        # assume marketed drugs have already consumed ~2 years of their
+        # commercial window (i.e. start at year 3 of the ramp profile, which
+        # is near-peak). This is a rough mid-point; for pinpoint accuracy the
+        # extractor should supply launch_year and years_since_launch gets
+        # computed directly. The current-year launch_year path also lands
+        # here via years_to_launch == 0 and approved phase.
+        if phase_key == "approved":
+            cf_profile = RNPV_RAMP_PROFILE[2:]   # skip 20% + 50% ramp years
+        else:
+            cf_profile = RNPV_RAMP_PROFILE
+
+        asset_pv = 0.0
+        for ramp_idx, ramp_frac in enumerate(cf_profile):
+            t_from_today = years_to_launch + ramp_idx + 1  # year 1 of sales = launch_year+1
+            after_tax_cf = peak_sales * ramp_frac * op_margin * (1 - tax)
+            pv = after_tax_cf / ((1 + effective_wacc) ** t_from_today)
+            asset_pv += pv
+
+        asset_rnpv = asset_pv * pos
+        total_pipeline_pv += asset_rnpv
+        weighted_years_to_launch += years_to_launch * peak_sales
+        total_raw_peak += peak_sales
+
+        asset_breakdown.append({
+            "name":              asset.get("name"),
+            "phase":             phase_key,
+            "indication":        asset.get("indication", ""),
+            "base_phase_pos":    base_pos,
+            "ta_multiplier":     ta_mult,
+            "effective_pos":     pos,
+            "peak_sales_usd":    peak_sales,
+            "years_to_launch":   years_to_launch,
+            "undiscounted_cf":   asset_pv / pos if pos > 0 else 0.0,
+            "risk_adjusted_pv":  asset_rnpv,
+        })
+
+    if not asset_breakdown:
+        return None, {}
+
+    # Equity bridge: + cash − debt − PV of future R&D burn (pre-revenue only)
+    cash = max(-(net_debt or 0.0), 0.0)   # net_debt < 0 implies net cash
+    debt = max((net_debt or 0.0), 0.0)
+
+    future_rd_pv = 0.0
+    if profile_name == "Pre-approval Biotech":
+        current_rd = most_recent.get("research_and_development") or 0.0
+        avg_years_to_launch = (
+            weighted_years_to_launch / total_raw_peak if total_raw_peak > 0 else 5.0
+        )
+        # PV of R&D annuity for `avg_years_to_launch` years at effective WACC.
+        # pv_annuity_factor = (1 - (1+r)^-n) / r
+        if effective_wacc > 0 and avg_years_to_launch > 0 and current_rd > 0:
+            annuity_factor = (1 - (1 + effective_wacc) ** (-avg_years_to_launch)) / effective_wacc
+            future_rd_pv = current_rd * annuity_factor
+
+    equity_value = total_pipeline_pv + cash - debt - future_rd_pv
+    iv_per_share = max(equity_value / effective_shares, 0.0)
+
+    audit = {
+        "pipeline_pv":              total_pipeline_pv,
+        "cash":                     cash,
+        "debt":                     debt,
+        "future_rd_pv":             future_rd_pv,
+        "equity_value":             equity_value,
+        "shares_reported":          shares,
+        "shares_diluted":           effective_shares,
+        "effective_wacc":           effective_wacc,
+        "assets":                   asset_breakdown,
+        "n_assets":                 len(asset_breakdown),
+        "scenario":                 scenario,
+        "peak_scenario_multiplier": peak_scen_mult,
+    }
+    return iv_per_share, audit
+
+
 # ── Multi-Method Valuation Engine ─────────────────────────────────────────────
 
 def _compute_method_value(
@@ -1048,6 +1255,33 @@ def _compute_method_value(
         if fcf and fcf > 0 and shares > 0:
             return (fcf / shares) / target_yield
         return None
+
+    # ── rNPV (Biopharma pipeline) ─────────────────────────────────────────
+    # Risk-adjusted NPV of the drug pipeline. Pipeline assets are extracted
+    # from deep research by _extract_pipeline_assets(); each asset is valued
+    # as a bell-shaped cash flow stream (ramp + plateau + LOE) weighted by
+    # cumulative phase PoS × therapeutic-area multiplier. When no pipeline
+    # assets are available the method returns None (falls through to the
+    # profile's DCF proxy via the blend engine).
+    if method_name in {"rNPV", "rNPV (Pipeline)"}:
+        assets = most_recent.get("pipeline_assets") or []
+        if not assets:
+            return None
+        iv, audit = _compute_rnpv(
+            pipeline_assets=assets,
+            most_recent=most_recent,
+            shares=shares,
+            net_debt=(net_debt or 0.0),
+            wacc=wacc,
+            profile_name=profile_name,
+            scenario=scenario,
+        )
+        if iv is not None:
+            # Stash the audit on most_recent for the engine to surface in
+            # ticker_forward_flags. Keyed by scenario so bear/base/bull all
+            # retain their own audit trail.
+            most_recent.setdefault("_rnpv_audit", {})[scenario] = audit
+        return iv
 
     # ── EV/R&D (for pre-revenue biotech) ─────────────────────────────────
     if method_name in {"EV/R&D", "EV/R&D Spend"}:
@@ -1347,6 +1581,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     _primary_sector = state["data"].get("sector", "Tech")
     mgmt_guidance_all      = state["data"].get("management_guidance", {})
     segment_scenarios_all  = state["data"].get("segment_scenarios", {})
+    # Per-ticker Biopharma pipeline assets for the rNPV method.
+    # Produced by _extract_pipeline_assets() in deep_research.py.
+    pipeline_assets_all    = state["data"].get("pipeline_assets", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -1586,6 +1823,37 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"Segment scenarios ({len(_ticker_scenarios)} segments, "
                         f"conf={_block.get('confidence','?')}): " + ", ".join(_scen_mix)
                     )
+
+        # ── Attach Biopharma pipeline assets for rNPV method ────────────────
+        # Deep research extractor produces a list of {name, phase, peak_sales_usd,
+        # launch_year, indication} per ticker. _compute_method_value reads this
+        # from most_recent["pipeline_assets"] when dispatching the rNPV method.
+        # Absent assets → rNPV returns None → blended IV falls to DCF proxy.
+        _ticker_pipeline = pipeline_assets_all.get(ticker) or []
+        if _ticker_pipeline:
+            most_recent["pipeline_assets"] = _ticker_pipeline
+            # Pipeline-composition audit: phase mix + top assets by peak_sales.
+            # Full per-asset rNPV table surfaces later from _compute_rnpv audit.
+            from src.data.sector_profiles import normalize_phase as _norm_phase
+            _phase_mix: dict[str, int] = {}
+            for _a in _ticker_pipeline:
+                _p = _norm_phase(_a.get("phase"))
+                _phase_mix[_p] = _phase_mix.get(_p, 0) + 1
+            _phase_str = ", ".join(
+                f"{k.replace('phase_', 'Ph')}={v}" for k, v in sorted(_phase_mix.items())
+            )
+            _top_assets = sorted(
+                _ticker_pipeline, key=lambda x: x.get("peak_sales_usd", 0), reverse=True
+            )[:3]
+            _top_str = "; ".join(
+                f"{a.get('name', '?')} ({_norm_phase(a.get('phase'))}, "
+                f"${a.get('peak_sales_usd', 0)/1e9:.1f}B peak)"
+                for a in _top_assets
+            )
+            ticker_forward_flags.append(
+                f"Pipeline assets ({len(_ticker_pipeline)}): {_phase_str} | "
+                f"Top: {_top_str}"
+            )
 
         # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────
         # Reported FCF treats stock-based comp as non-cash (adds it back to
@@ -2202,6 +2470,43 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "methods_count":     len(method_iv_table),
                 "growth_premium":    round(growth_premium, 3) if profile_data else 1.0,
             }
+
+        # ── rNPV per-asset audit (Biopharma only) ────────────────────────
+        # The base-scenario rNPV audit was stashed on most_recent during the
+        # scenario loop. Emit a single multi-line audit flag with per-asset
+        # PoS × peak-sales × PV contribution so analysts can trace the
+        # blended rNPV back to individual pipeline drugs.
+        _rnpv_audit_base = (most_recent.get("_rnpv_audit") or {}).get("base")
+        if _rnpv_audit_base and _rnpv_audit_base.get("n_assets"):
+            _rnpv_lines = [
+                f"rNPV valuation ({_rnpv_audit_base['n_assets']} assets, "
+                f"wacc={_rnpv_audit_base['effective_wacc']:.1%}, "
+                f"diluted shares {_rnpv_audit_base['shares_diluted']/1e6:.1f}M):"
+            ]
+            _rnpv_lines.append(
+                f"  pipeline_PV=${_rnpv_audit_base['pipeline_pv']/1e9:.2f}B + "
+                f"cash=${_rnpv_audit_base['cash']/1e9:.2f}B − "
+                f"debt=${_rnpv_audit_base['debt']/1e9:.2f}B − "
+                f"fut_R&D_PV=${_rnpv_audit_base['future_rd_pv']/1e9:.2f}B = "
+                f"equity=${_rnpv_audit_base['equity_value']/1e9:.2f}B"
+            )
+            # Per-asset breakdown — top 5 by risk-adjusted PV
+            _assets_sorted = sorted(
+                _rnpv_audit_base["assets"],
+                key=lambda a: a.get("risk_adjusted_pv", 0),
+                reverse=True,
+            )[:5]
+            for _a in _assets_sorted:
+                _rnpv_lines.append(
+                    f"  • {_a['name']} ({_a['phase']}"
+                    + (f", {_a['indication']}" if _a.get("indication") else "")
+                    + f"): peak ${_a['peak_sales_usd']/1e9:.1f}B, "
+                    f"PoS {_a['effective_pos']:.1%} "
+                    f"(ta_mult {_a['ta_multiplier']:.2f}x), "
+                    f"launch +{_a['years_to_launch']:.0f}y, "
+                    f"rPV ${_a['risk_adjusted_pv']/1e9:.2f}B"
+                )
+            ticker_forward_flags.append("\n".join(_rnpv_lines))
 
         # ── Backward Logic Gate (T-1 Year Test) ──────────────────────────
         base_tgr = tgr_table.get("base", _DEFAULT_TGR["base"])
