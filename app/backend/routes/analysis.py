@@ -1785,7 +1785,45 @@ async def get_financials(ticker: str, period: str = "annual"):
         items.sort(key=lambda x: x["date"])
         return {"ticker": sym, "period_type": period, "items": items}
 
-    # ── US / non-HK path (FMP) ────────────────────────────────────────────────
+    # ── SGX ticker path (yfinance) ────────────────────────────────────────────
+    # FMP Starter plan returns 402 Payment Required for .SI tickers. Route
+    # to yfinance via search_sg_line_items — same pattern as HK → AKShare.
+    try:
+        from src.tools.sg.ticker import is_sg_ticker
+        _sg = is_sg_ticker(sym)
+    except Exception:
+        _sg = False
+
+    if _sg:
+        try:
+            from src.tools.sg.line_items import search_sg_line_items
+            period_arg = "quarterly" if period == "quarter" else "annual"
+            limit = 20 if period == "quarter" else 5
+            rows = await asyncio.to_thread(
+                search_sg_line_items,
+                sym,
+                ["revenue", "operating_income", "net_income"],
+                period=period_arg,
+                limit=limit,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"yfinance financials error for {sym}: {exc}")
+
+        items = []
+        for row in rows:
+            date_str = row.get("date") or ""
+            period_label = row.get("period_label") or f"FY{date_str[:4]}"
+            items.append({
+                "date":             date_str,
+                "period_label":     period_label,
+                "revenue":          row.get("revenue"),
+                "net_income":       row.get("net_income"),
+                "operating_income": row.get("operating_income"),
+            })
+        items.sort(key=lambda x: x["date"])
+        return {"ticker": sym, "period_type": period, "items": items}
+
+    # ── US / non-HK / non-SG path (FMP) ───────────────────────────────────────
     try:
         import requests as _req
     except ImportError:
