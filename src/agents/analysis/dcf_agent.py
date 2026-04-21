@@ -3014,7 +3014,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "Investment Bank", "Insurance", "FinTech", "Asset Manager",
             "Bank / Lending Institution",   # FMP routing label
         }
-        _use_pe_only = (profile_name in _BANK_PROFILES) or (sector == "Financials")
+        _is_reit = sector in {"REIT", "RealEstate"} or profile_name == "REIT"
+        # Banks/GSEs: EV-based methods produce nonsense because massive deposit
+        # liabilities make (EV − net_debt) negative. Use P/E directly.
+        # REITs: EV/EBITDA also produces nonsense because REIT EBITDA is inflated
+        # by D&A add-back (real-estate depreciation is non-cash) and the high LTV
+        # (35-45%) makes EV-net_debt swings wild. Use P/FFO (represented via
+        # peer.pe for the 12m PT since FFO ≈ NI + D&A and peer.pe is REIT-calibrated
+        # to 14x which roughly equals P/FFO 15x × 0.93 payout quality factor).
+        _use_pe_only = (
+            profile_name in _BANK_PROFILES
+            or sector == "Financials"
+            or _is_reit
+        )
         # Growth premium for 12m PT: use base scenario growth rate
         _base_g = scenario_results.get("base", {}).get("growth_rate", growth_base)
         _sector_g_avg_pt = peer.get("growth_avg", 0.08)
