@@ -19,6 +19,7 @@ _YF_INCOME_MAP = {
     "Operating Income": "operating_income",
     "Gross Profit": "gross_profit",
     "EBITDA": "ebitda",
+    "EBIT": "ebit",
     "Basic EPS": "eps",
     "Interest Expense": "interest_expense",
     "Tax Provision": "tax_provision",
@@ -26,6 +27,13 @@ _YF_INCOME_MAP = {
     "Cost Of Revenue": "cost_of_revenue",
     "Operating Expense": "operating_expense",
     "Research Development": "research_development",
+    # REIT-critical: D&A for FFO reconstruction. yfinance sometimes exposes
+    # this under "Reconciled Depreciation" (on income_stmt) or in the cashflow
+    # statement. The fetcher tries both statements so either match populates.
+    "Reconciled Depreciation":             "depreciation_and_amortization",
+    "Depreciation And Amortization":       "depreciation_and_amortization",
+    "Depreciation Amortization Depletion": "depreciation_and_amortization",
+    "Depreciation":                        "depreciation_and_amortization",
 }
 
 _YF_BALANCE_MAP = {
@@ -94,6 +102,22 @@ def search_sg_line_items(
         if inc is None or inc.empty:
             return []
 
+        # Build a dividend-per-share lookup by fiscal year by summing the
+        # event-level .dividends Series. yfinance's .info["dividendRate"] is
+        # a forward-looking annualized number; summing the actual dividend
+        # events per year is the accurate historical DPS. Empty Series
+        # (non-dividend-paying ticker) results in an empty dict; downstream
+        # DPS remains None. Only relevant for REITs / high-yield SGX names.
+        dps_by_year: dict[int, float] = {}
+        try:
+            div_series = t.dividends
+            if div_series is not None and len(div_series) > 0:
+                for ts, amt in div_series.items():
+                    if hasattr(ts, "year"):
+                        dps_by_year[ts.year] = dps_by_year.get(ts.year, 0.0) + float(amt)
+        except Exception:
+            dps_by_year = {}
+
         # Build all mappings
         all_maps = {}
         all_maps.update(_YF_INCOME_MAP)
@@ -132,6 +156,16 @@ def search_sg_line_items(
                                 break
                         if val is not None:
                             break
+
+                # REIT-critical: dividends_per_share derived from the annual
+                # sum of .dividends event series (yfinance doesn't expose DPS
+                # directly for SGX securities). Pulled out of the per-stmt
+                # search so the event-series fallback runs even when the three
+                # statements don't have a matching row.
+                if field == "dividends_per_share" and val is None:
+                    _yr = col.year if hasattr(col, "year") else None
+                    if _yr and _yr in dps_by_year:
+                        val = dps_by_year[_yr]
 
                 row[field] = val
 

@@ -1791,13 +1791,23 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "RealEstate": {
         "REIT": {
             "methods": [
-                {"name": "NAV (Cap Rates)", "weight": 0.50, "anchor": True,  "implementable": False, "proxy": "P/BV"},
-                {"name": "P/FFO",           "weight": 0.30, "anchor": False, "implementable": False, "proxy": "P/E"},
-                {"name": "P/AFFO",          "weight": 0.15, "anchor": False, "implementable": False, "proxy": "P/E"},
+                {"name": "NAV (Cap Rates)", "weight": 0.50, "anchor": True,  "implementable": True,  "scenario_invariant": True},
+                {"name": "P/FFO",           "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/AFFO",          "weight": 0.15, "anchor": False, "implementable": True},
                 {"name": "DDM",             "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF"],
-            "rationale": "REITs are valued on asset quality and distributable cash; NAV is the primary anchor.",
+            "excluded": ["DCF", "P/BV"],
+            "rationale": (
+                "REITs are valued on asset quality and distributable cash. NAV (Cap "
+                "Rates) anchors to property value via NOI/cap_rate − debt + cash; "
+                "scenario-invariant because NAV is asset-backed and doesn't scale "
+                "bear/base/bull like growth methods. P/FFO and P/AFFO use REIT-"
+                "specific cash multiples (not P/E — GAAP earnings are depressed by "
+                "non-cash real-estate depreciation). AFFO-gated DDM prevents yield-"
+                "trap valuations of unsustainable distributions. DCF and P/BV "
+                "excluded — DCF is irrelevant for high-payout trusts, P/BV is "
+                "superseded by NAV."
+            ),
         },
     },
 

@@ -158,6 +158,7 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "shares_outstanding":  _safe(getattr(li, "shares_outstanding", None)),
             "debt_to_equity":      _safe(getattr(li, "debt_to_equity", None)),
             "net_debt":            _safe(getattr(li, "net_debt", None)),
+            "total_debt":          _safe(getattr(li, "total_debt", None)),
             "ebitda":              _safe(getattr(li, "ebitda", None)),
             "net_income":          _safe(getattr(li, "net_income", None)),
             "total_assets":        _safe(getattr(li, "total_assets", None)),
@@ -168,7 +169,11 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "ebit":                _safe(getattr(li, "ebit", None)),
             "interest_expense":    _safe(getattr(li, "interest_expense", None)),
             "invested_capital":    _safe(getattr(li, "invested_capital", None)),
-            "stock_based_compensation": _safe(getattr(li, "stock_based_compensation", None)),
+            "stock_based_compensation":   _safe(getattr(li, "stock_based_compensation", None)),
+            # REIT-specific: D&A for FFO reconstruction, OCF for AFFO, cash for NAV bridge
+            "depreciation_and_amortization": _safe(getattr(li, "depreciation_and_amortization", None)),
+            "operating_cash_flow":  _safe(getattr(li, "operating_cash_flow", None)),
+            "cash_and_equivalents": _safe(getattr(li, "cash_and_equivalents", None)),
         })
 
     # SBC-adjusted (owner-earnings) FCF: reported FCF treats SBC as non-cash and
@@ -794,6 +799,211 @@ def _project_dcf(
     return iv, pv_sum / shares, pv_tv / shares, annual_rows
 
 
+# ── REIT metrics (Tier 2) ─────────────────────────────────────────────────────
+
+# Sub-type-aware maintenance capex as % of revenue (Gemini point 6 fix).
+# Protects AFFO from being under-stated when a growth REIT books heavy
+# acquisition / development capex. We subtract min(actual_capex,
+# sub_type_rate × revenue) so AFFO reflects a normalized maintenance
+# reserve rather than the full reported capex.
+#
+# Industry-standard ranges per sub-type:
+#   Data Center / Lab  2-3%  (specialized OpEx, low recurring)
+#   Industrial / Self-Storage  3%    (minimal recurring)
+#   Residential / Healthcare   4%    (moderate turnover)
+#   Retail                     5-6%  (TI + common area)
+#   Office                     6%    (TI-heavy, build-out)
+#   Hospitality                7-8%  (FF&E reserves)
+_REIT_MAINT_CAPEX_PCT: dict[str, float] = {
+    "data_center":    0.02,
+    "lab":            0.025,
+    "industrial":     0.03,
+    "self_storage":   0.03,
+    "residential":    0.04,
+    "healthcare":     0.04,
+    "retail":         0.055,
+    "office":         0.060,
+    "hospitality":    0.075,
+    "infrastructure": 0.085,   # infra concessions — heavy recurring maint reserves
+    "default":        0.045,
+}
+
+# Default cap rates and REIT multiples by sub-type — used for NAV (Cap Rates),
+# P/FFO, and P/AFFO method branches. Source: BofA REIT sector research +
+# Green Street quarterly reports, calibrated 2026-04.
+#
+# cap_rate is the implied yield on NOI used to capitalize property value
+# (NAV = NOI / cap_rate). Lower cap rate = premium asset class.
+# p_ffo / p_affo are REIT-specific distribution multiples (NOT P/E — these
+# apply to cash-adjusted metrics that REITs report in supplemental disclosures).
+_REIT_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
+    "data_center":    {"cap_rate": 0.045, "p_ffo": 22.0, "p_affo": 25.0},
+    "lab":            {"cap_rate": 0.050, "p_ffo": 20.0, "p_affo": 22.0},
+    "industrial":     {"cap_rate": 0.055, "p_ffo": 18.0, "p_affo": 20.0},
+    "self_storage":   {"cap_rate": 0.052, "p_ffo": 19.0, "p_affo": 21.0},
+    "residential":    {"cap_rate": 0.055, "p_ffo": 17.0, "p_affo": 19.0},
+    "healthcare":     {"cap_rate": 0.060, "p_ffo": 15.0, "p_affo": 17.0},
+    "retail":         {"cap_rate": 0.068, "p_ffo": 14.0, "p_affo": 15.0},
+    "office":         {"cap_rate": 0.075, "p_ffo": 12.0, "p_affo": 13.0},
+    "hospitality":    {"cap_rate": 0.080, "p_ffo": 11.0, "p_affo": 12.0},
+    # Infrastructure trusts (Keppel Infrastructure, Asian Pay Television,
+    # Hutchison Port Holdings) — SGX/HK business trust structures that own
+    # long-term concession assets rather than fee-simple property. Cap rate
+    # is higher than property REITs to reflect terminal-value uncertainty at
+    # concession expiry and lack of underlying property asset to liquidate.
+    # P/FFO compressed because FFO is less stable (regulatory price caps,
+    # concession step-downs). Treated as REITs for framework purposes per
+    # SGX/HK market convention — they distribute 90%+ like S-REITs and trade
+    # on yield + DPU sustainability.
+    "infrastructure": {"cap_rate": 0.085, "p_ffo": 10.0, "p_affo": 11.0},
+    "default":        {"cap_rate": 0.065, "p_ffo": 15.0, "p_affo": 17.0},
+}
+
+
+def _classify_reit_subtype(ticker: str, notes: str = "") -> str:
+    """
+    Classify a REIT into one of the 10 sub-types:
+      data_center, lab, industrial, self_storage, residential, healthcare,
+      retail, office, hospitality, non_reit
+      + "default" (blended multiples) when no match.
+
+    "infrastructure" catches SGX/HK business trusts that own long-term
+    concession assets — Keppel Infrastructure Trust, Asian Pay Television,
+    Hutchison Port Holdings — and applies a higher cap rate / lower P/FFO
+    to reflect terminal-value risk at concession expiry. These still get
+    REIT-framework valuation because they distribute 90%+ of cash flow
+    like S-REITs and trade on yield + DPU sustainability per SGX/HK
+    convention.
+
+    Keyword-based; defaults to "default" on no match. Checked in this order
+    (most specific first): infrastructure → data_center/lab → industrial/
+    storage → residential → healthcare → retail (incl. SGX China retail
+    trusts) → office → hospitality.
+    """
+    combined = (ticker + " " + (notes or "")).lower()
+    keywords = [
+        # Infrastructure trust gate — these own concession assets (power,
+        # water, transport, telecom) and are valued as REITs with adjusted
+        # cap rates (8.5% vs property REITs 4.5-6.5%).
+        ("infrastructure", ("infrastructure trust", "business trust",
+                            "infra trust", "pay television", "port trust",
+                            "shipping trust", "maritime trust")),
+        ("data_center",  ("data center", "data centre", "data-center", "digital realty",
+                          "equinix", "dlr", "eqix", "gds", "keppel dc")),
+        ("lab",          ("lab ", "life science", "biotech rent", "alexandria",
+                          " are ", "parkway life")),
+        ("industrial",   ("industrial", "warehouse", "logistics", "prologis", "pld",
+                          "stag", "egp", "mapletree logistics", "mapletree industrial",
+                          "frasers logistics", "ascendas reit", "ara logos",
+                          "esr-logos")),
+        ("self_storage", ("self storage", "self-storage", "storage", "psa",
+                          "public storage", "exr", "extra space", "cube")),
+        ("residential",  ("residential", "apartment", "multifamily", "single family",
+                          "avb", "eqr", "essex", "inv", "camden", "mid-america",
+                          "maa", "student accommodation", "centurion accommodation")),
+        ("healthcare",   ("healthcare", "health care", "senior housing",
+                          "medical office", "vtr", "pea", "omega", "welltower",
+                          "well ", "hcp", "doc", "healthpeak", "first reit")),
+        ("retail",       ("retail", "mall", "shopping", "outlet", "spg", "simon",
+                          "macerich", "mac", "reg", "kim", "kimco", "federal realty",
+                          "frt", "china trust", "china reit", "capitaland china",
+                          "sasseur", "lippo", "dasin", "starhill", "frasers centrepoint",
+                          "cmt ", "mct ", "capitaland integrated",
+                          "bhg retail")),
+        ("office",       ("office", "tower", "corporate center", "boston properties",
+                          "bxp", "vno", "sl green", "slg", "hiw", "kilroy", "krc",
+                          "keppel reit", "suntec", "ireit global",
+                          "india reit", "india trust", "capitaland india",
+                          "it park", "it business park")),
+        ("hospitality",  ("hospitality", "hotel", "lodging", "resort", "host", "hst",
+                          "ryman", "rhp", "pebblebrook", "peb",
+                          "apple hospitality", "aple",
+                          "cdl hospitality", "far east hospitality", "ascott",
+                          "frasers hospitality")),
+    ]
+    for subtype, kws in keywords:
+        if any(k in combined for k in kws):
+            return subtype
+    return "default"
+
+
+def _compute_reit_metrics(
+    most_recent: dict,
+    subtype: str = "default",
+) -> dict:
+    """
+    Compute REIT-specific metrics (FFO, AFFO, NOI, cap rate, maintenance capex)
+    from the latest annual series row.
+
+    NOI proxy: EBITDA (operating income + D&A) is the cleanest readily-available
+    approximation of Net Operating Income since most REIT GAAP filings don't
+    break out property-level NOI. KNOWN LIMITATION: property-management fees
+    are treated as OpEx below EBITDA in internalized PM structures and above
+    it in externalized structures (many APAC REITs), leading to small cross-
+    structure incomparability. Not material at v1.
+
+    FFO  = net_income + depreciation_and_amortization
+           (Nareit definition; adds back non-cash real estate depreciation)
+    AFFO = FFO - normalized_maintenance_capex
+           where normalized_maintenance_capex = min(|total_capex|,
+           _REIT_MAINT_CAPEX_PCT[subtype] × revenue)
+           (caps the capex deduction so growth REITs with acquisition capex
+            aren't unfairly penalized)
+    cap_rate_implied = NOI / (market_cap + total_debt - cash)
+           (reverse-engineered from current EV; useful for auditing)
+
+    Returns dict with ffo, affo, noi, normalized_maintenance_capex,
+    cap_rate_implied. Missing components return as None; downstream method
+    branches skip gracefully.
+    """
+    ni   = most_recent.get("net_income")
+    da   = most_recent.get("depreciation_and_amortization")
+    ocf  = most_recent.get("operating_cash_flow")
+    capex = most_recent.get("capital_expenditure")
+    rev  = most_recent.get("revenue")
+    ebitda = most_recent.get("ebitda")
+
+    # FFO = NI + D&A (standard Nareit definition)
+    ffo = None
+    if ni is not None and da is not None:
+        ffo = ni + abs(da)   # D&A often negative on cash flow statement; take absolute
+    elif ocf is not None:
+        # Fallback: some issuers don't disclose D&A — use OCF as loose FFO proxy
+        # (overstates because OCF = FFO + working capital changes)
+        ffo = ocf
+
+    # Maintenance capex floor — sub-type-aware as fraction of revenue
+    maint_pct = _REIT_MAINT_CAPEX_PCT.get(subtype, _REIT_MAINT_CAPEX_PCT["default"])
+    maint_capex = None
+    if rev and rev > 0:
+        rev_based = rev * maint_pct
+        if capex is not None:
+            # Capex from cash flow is typically negative; take absolute
+            maint_capex = min(abs(capex), rev_based)
+        else:
+            maint_capex = rev_based
+
+    # AFFO = FFO - normalized maintenance capex
+    affo = None
+    if ffo is not None and maint_capex is not None:
+        affo = ffo - maint_capex
+    elif ffo is not None:
+        affo = ffo   # no capex info → AFFO = FFO (loose)
+
+    # NOI ≈ EBITDA (limitation noted in docstring). For pure-play REITs
+    # reporting Operating Income directly, EBITDA is a close proxy since
+    # interest/tax are below the line and D&A adds back non-cash.
+    noi = ebitda if ebitda and ebitda > 0 else None
+
+    return {
+        "ffo":                         ffo,
+        "affo":                        affo,
+        "noi":                         noi,
+        "normalized_maintenance_capex": maint_capex,
+        "maint_capex_pct_used":        maint_pct,
+    }
+
+
 # ── Insider-activity WACC overlay (Tier 3) ────────────────────────────────────
 
 def _insider_wacc_modifier(
@@ -1370,11 +1580,99 @@ def _compute_method_value(
         return None
 
     # ── DDM (Gordon Growth) ───────────────────────────────────────────────
+    # For REIT profiles the dividend is AFFO-gated — REITs sometimes
+    # distribute >100% of AFFO by drawing on revolvers during occupancy
+    # dips, which accounting DPS captures but is unsustainable. Capping
+    # div at AFFO/share catches those "yield traps" and values only the
+    # cash-coverable portion of the distribution.
     if method_name == "DDM":
         div = dividends_ps
         if div and div > 0 and wacc > tgr:
+            # AFFO-gate for REITs (sector=RealEstate/REIT or profile matches)
+            if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
+                # Prefer research-sourced AFFO/share when available (parsed
+                # from the REIT's distribution statement / supplementals by
+                # _extract_reit_metrics). Falls back to line-item-derived
+                # AFFO when research doesn't disclose per-unit figures.
+                affo_ps_research = most_recent.get("affo_per_share_research")
+                if affo_ps_research and affo_ps_research > 0:
+                    affo_ps = affo_ps_research
+                else:
+                    reit_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
+                        most_recent.get("_ticker", ""),
+                        most_recent.get("_lookup_notes", ""),
+                    )
+                    _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
+                    affo = _reit.get("affo")
+                    affo_ps = (affo / shares) if (affo and affo > 0 and shares > 0) else None
+                if affo_ps and affo_ps > 0 and div > affo_ps:
+                    div = affo_ps
             d_next = div * (1 + tgr)
             return d_next / (wacc - tgr)
+        return None
+
+    # ── NAV (Cap Rates) — REIT asset-backed valuation ─────────────────────
+    # NAV = NOI / cap_rate − total_debt + cash
+    # Scenario-INVARIANT: NAV is anchored to property value, which doesn't
+    # scale bear/base/bull the way growth-driven methods do. Only cap rate
+    # and occupancy move across scenarios, and those are embedded in the
+    # method's peer cap_rate lookup (sub-type-specific).
+    #
+    # KNOWN LIMITATION: total_debt from FMP does not include operating
+    # lease liabilities under ASC 842 / IFRS 16. For healthcare REITs and
+    # some retail REITs with significant ground leases this understates
+    # net liability side of the bridge. Most equity REITs own property
+    # fee-simple so this isn't material.
+    if method_name in {"NAV (Cap Rates)", "NAV"}:
+        reit_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
+            most_recent.get("_ticker", ""), most_recent.get("_lookup_notes", "")
+        )
+        mults = _REIT_SUBTYPE_MULTIPLES.get(reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
+        cap_rate = most_recent.get("cap_rate_market") or mults["cap_rate"]
+
+        _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
+        noi = _reit.get("noi")
+        if noi is None or noi <= 0 or cap_rate <= 0 or shares <= 0:
+            return None
+
+        total_debt = most_recent.get("total_debt") or 0.0
+        cash = most_recent.get("cash_and_equivalents") or 0.0
+        gross_asset_value = noi / cap_rate
+        nav = gross_asset_value - total_debt + cash
+        return max(nav / shares, 0.0)
+
+    # ── P/FFO — REIT cash-earnings multiple ────────────────────────────────
+    # FFO (Funds From Operations) adds back real-estate depreciation, which
+    # is non-cash for REITs. REITs trade on P/FFO, not P/E, because D&A
+    # dominates GAAP earnings and distorts the P/E multiple.
+    if method_name in {"P/FFO"}:
+        reit_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
+            most_recent.get("_ticker", ""), most_recent.get("_lookup_notes", "")
+        )
+        mults = _REIT_SUBTYPE_MULTIPLES.get(reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
+        mult = mults["p_ffo"] * sm * growth_premium
+
+        _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
+        ffo = _reit.get("ffo")
+        if ffo and ffo > 0 and shares > 0:
+            return (ffo / shares) * mult
+        return None
+
+    # ── P/AFFO — REIT sustainable-cash multiple ────────────────────────────
+    # AFFO strips maintenance capex from FFO; it's the closest proxy to
+    # distributable cash and typically gets a slight premium multiple over
+    # P/FFO (cleaner quality of earnings).
+    if method_name in {"P/AFFO"}:
+        reit_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
+            most_recent.get("_ticker", ""), most_recent.get("_lookup_notes", "")
+        )
+        mults = _REIT_SUBTYPE_MULTIPLES.get(reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
+        mult = mults["p_affo"] * sm * growth_premium
+
+        _reit = _compute_reit_metrics(most_recent, subtype=reit_subtype)
+        affo = _reit.get("affo")
+        if affo and affo > 0 and shares > 0:
+            return (affo / shares) * mult
         return None
 
     # ── LBO Floor ─────────────────────────────────────────────────────────
@@ -1661,6 +1959,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     # Per-ticker Biopharma pipeline assets for the rNPV method.
     # Produced by _extract_pipeline_assets() in deep_research.py.
     pipeline_assets_all    = state["data"].get("pipeline_assets", {})
+    # Per-ticker REIT metrics (cap rate override, occupancy, WALE, DPU/AFFO).
+    # Produced by _extract_reit_metrics() in deep_research.py.
+    reit_metrics_all       = state["data"].get("reit_metrics", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -1710,11 +2011,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             line_items = search_line_items(
                 ticker,
                 ["revenue", "free_cash_flow", "shares_outstanding",
-                 "debt_to_equity", "net_debt", "ebitda", "net_income",
+                 "debt_to_equity", "net_debt", "total_debt", "ebitda", "net_income",
                  "total_equity", "total_assets", "dividends_per_share",
                  "book_value_per_share", "capital_expenditure", "ebit",
                  "interest_expense", "invested_capital",
-                 "research_and_development", "stock_based_compensation"],
+                 "research_and_development", "stock_based_compensation",
+                 # REIT-specific
+                 "depreciation_and_amortization", "operating_cash_flow",
+                 "cash_and_equivalents"],
                 end_date,
                 period="annual",
                 limit=7,
@@ -1931,6 +2235,80 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"Pipeline assets ({len(_ticker_pipeline)}): {_phase_str} | "
                 f"Top: {_top_str}"
             )
+
+        # ── REIT sub-type classification + audit (Tier 2) ───────────────────
+        # For RealEstate/REIT tickers, classify into 9 sub-types (data_center,
+        # lab, industrial, self_storage, residential, healthcare, retail,
+        # office, hospitality) using ticker + TICKER_SECTOR_LOOKUP notes as
+        # keyword source. Sub-type drives cap rate, P/FFO, P/AFFO multiples,
+        # and maintenance capex % for AFFO compute. Falls to "default" on no
+        # keyword match. Cached on most_recent so NAV/P/FFO/P/AFFO/DDM
+        # dispatches don't re-classify.
+        if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
+            from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as _TSL
+            from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP as _SGX_TSL
+            _lookup_notes = ""
+            _lookup_entry = _TSL.get(ticker.upper()) or _SGX_TSL.get(ticker.upper())
+            if _lookup_entry and len(_lookup_entry) >= 4:
+                _lookup_notes = _lookup_entry[3] or ""
+            _reit_subtype = _classify_reit_subtype(ticker, _lookup_notes)
+            most_recent["_reit_subtype"]  = _reit_subtype
+            most_recent["_ticker"]        = ticker
+            most_recent["_lookup_notes"]  = _lookup_notes
+
+            # Pre-compute metrics for audit-flag emission (also used by method dispatch)
+            _reit_m = _compute_reit_metrics(most_recent, subtype=_reit_subtype)
+            _mults  = _REIT_SUBTYPE_MULTIPLES.get(_reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
+
+            def _fmt_b(v: float | None) -> str:
+                if v is None:
+                    return "n/a"
+                if abs(v) >= 1e9:
+                    return f"${v/1e9:.2f}B"
+                if abs(v) >= 1e6:
+                    return f"${v/1e6:.0f}M"
+                return f"${v:.0f}"
+
+            ticker_forward_flags.append(
+                f"REIT sub-type: {_reit_subtype} | cap_rate "
+                f"{_mults['cap_rate']:.2%} | P/FFO {_mults['p_ffo']:.0f}x | "
+                f"P/AFFO {_mults['p_affo']:.0f}x | maint_capex "
+                f"{_reit_m['maint_capex_pct_used']:.1%} rev | "
+                f"FFO={_fmt_b(_reit_m['ffo'])} AFFO={_fmt_b(_reit_m['affo'])} "
+                f"NOI={_fmt_b(_reit_m['noi'])}"
+            )
+
+            # Deep-research overrides — populated by _extract_reit_metrics().
+            # cap_rate_market overrides sub-type default in NAV method.
+            # sustainable_dpu (derived from affo_per_unit_cents) gates DDM.
+            _rm_override = (reit_metrics_all or {}).get(ticker) or {}
+            if _rm_override:
+                if "cap_rate_market" in _rm_override:
+                    most_recent["cap_rate_market"] = _rm_override["cap_rate_market"]
+                if "affo_per_unit_cents" in _rm_override:
+                    # Store per-share AFFO (converted from cents → units)
+                    most_recent["affo_per_share_research"] = _rm_override["affo_per_unit_cents"] / 100.0
+                # Audit flag: what deep research contributed
+                _rm_parts = []
+                if "cap_rate_market" in _rm_override:
+                    _rm_parts.append(f"cap_rate {_rm_override['cap_rate_market']:.2%} "
+                                     f"(override from default {_mults['cap_rate']:.2%})")
+                if "occupancy_rate" in _rm_override:
+                    _rm_parts.append(f"occupancy {_rm_override['occupancy_rate']:.0%}")
+                if "wale_years" in _rm_override:
+                    _rm_parts.append(f"WALE {_rm_override['wale_years']:.1f}y")
+                if "dpu_cents" in _rm_override and "affo_per_unit_cents" in _rm_override:
+                    _dpu = _rm_override['dpu_cents']
+                    _affo_u = _rm_override['affo_per_unit_cents']
+                    _cov = _dpu / _affo_u if _affo_u > 0 else 0
+                    _rm_parts.append(f"DPU/AFFO coverage {_cov:.1%} "
+                                     f"({'sustainable' if _cov <= 1.0 else 'UNSUSTAINABLE'})")
+                if "leverage_ratio" in _rm_override:
+                    _rm_parts.append(f"leverage {_rm_override['leverage_ratio']:.0%}")
+                if _rm_parts:
+                    ticker_forward_flags.append(
+                        "REIT research metrics: " + " | ".join(_rm_parts)
+                    )
 
         # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────
         # Reported FCF treats stock-based comp as non-cash (adds it back to

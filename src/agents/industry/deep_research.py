@@ -600,6 +600,166 @@ def _extract_segment_scenarios(
         return {}
 
 
+# ── REIT metrics extractor (NAV cap-rate override) ───────────────────────────
+
+def _extract_reit_metrics(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    deep_research: str,
+    ticker: str,
+) -> dict:
+    """
+    LLM pass over the deep research report to extract REIT-specific metrics
+    that override DCF engine defaults: portfolio cap rate, occupancy, WALE,
+    sub-type mix, geographic mix, DPU-to-AFFO coverage.
+
+    Consumed by the NAV (Cap Rates) method in dcf_agent.py via
+    most_recent["cap_rate_market"] (overrides the sub-type default cap rate)
+    and by the AFFO-gated DDM via most_recent["sustainable_dpu"].
+
+    Returns a dict. Empty dict when the report doesn't substantiate any REIT
+    metrics (non-REIT ticker or thin research).
+
+    Schema:
+        {
+          "cap_rate_market": float,     # portfolio weighted-average cap rate
+                                         # (e.g. 0.075 = 7.5%)
+          "occupancy_rate": float,      # 0-1 (e.g. 0.95 = 95%)
+          "wale_years": float,          # weighted-avg lease expiry
+          "subtype_mix": {
+            "office": 0.6, "industrial": 0.2, ...
+          },
+          "geographic_mix": {
+            "Singapore": 0.4, "India": 0.3, "Australia": 0.3
+          },
+          "dpu_cents": float,           # distribution per unit (local cents)
+          "affo_per_unit_cents": float, # AFFO per unit (local cents)
+          "leverage_ratio": float,      # debt / NAV (e.g. 0.37 = 37%)
+          "evidence": str,              # ≤300 chars — source / justification
+        }
+
+    Fields missing from the research are omitted (not present in the dict),
+    so the caller checks with .get() and falls through to engine defaults.
+    """
+    if not deep_research and not sections:
+        return {}
+
+    # 2F (KPI framework) is the primary section REITs get analyzed in; 2A
+    # (moat/product) carries portfolio composition; 2D (cycle) has rates context
+    section_2a = sections.get("2a") or sections.get("2A") or ""
+    section_2d = sections.get("2d") or sections.get("2D") or ""
+    section_2f = sections.get("2f") or sections.get("2F") or ""
+    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    if not combined or len(combined) < 500:
+        combined = (deep_research or "")[:8000]
+    if not combined:
+        return {}
+
+    try:
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=800,
+            system=(
+                "You are a REIT / real estate analyst. Extract structured metrics from the "
+                "provided research excerpts and return ONLY valid JSON (no markdown fences, "
+                "no commentary).\n\n"
+                "Schema (all fields OPTIONAL — omit if not substantiated by the research):\n"
+                "  cap_rate_market:    float (0.03-0.12, portfolio weighted-avg cap rate)\n"
+                "  occupancy_rate:     float (0.5-1.0, portfolio-weighted occupancy)\n"
+                "  wale_years:         float (1-15, weighted-avg lease expiry in years)\n"
+                "  subtype_mix:        object mapping sub-type to fraction (sums to ~1.0).\n"
+                "                      Keys: office, retail, industrial, data_center, lab,\n"
+                "                      healthcare, residential, hospitality, self_storage,\n"
+                "                      infrastructure\n"
+                "  geographic_mix:     object mapping country/region to fraction\n"
+                "  dpu_cents:          float (distribution per unit, LOCAL cents/pennies)\n"
+                "  affo_per_unit_cents: float (AFFO per unit, same unit as dpu_cents)\n"
+                "  leverage_ratio:     float (debt/NAV or aggregate leverage, 0-0.60)\n"
+                "  evidence:           string ≤300 chars citing the research source\n\n"
+                "Rules:\n"
+                "  * Return {} if the research doesn't discuss real estate / property assets.\n"
+                "  * Only include fields the research EXPLICITLY substantiates. Don't infer\n"
+                "    or guess; missing fields signal the DCF engine to use its defaults.\n"
+                "  * cap_rate_market should come from cited valuations (CBRE/JLL/Knight Frank),\n"
+                "    acquisition cap rates, or implied cap rate from reported NAV. Report as\n"
+                "    decimal (0.075 = 7.5%), NOT percentage.\n"
+                "  * For SGX/HK REITs, the annual report typically discloses a portfolio\n"
+                "    valuation table with per-property cap rates — report the weighted avg.\n"
+                "  * dpu_cents and affo_per_unit_cents must be in the SAME LOCAL UNIT (both\n"
+                "    Singapore cents, or both Hong Kong cents, or both US pennies).\n"
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Research excerpts (moat + cycle + KPI sections):\n{combined[:8000]}"
+                ),
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return {}
+
+        # Validate + clamp numeric fields into safe ranges (prevent LLM
+        # hallucinations from corrupting the DCF). Fields that fail validation
+        # are dropped silently.
+        out: dict = {}
+
+        _cap = parsed.get("cap_rate_market")
+        if isinstance(_cap, (int, float)) and 0.02 < _cap < 0.20:
+            out["cap_rate_market"] = float(_cap)
+
+        _occ = parsed.get("occupancy_rate")
+        if isinstance(_occ, (int, float)) and 0.3 < _occ <= 1.0:
+            out["occupancy_rate"] = float(_occ)
+
+        _wale = parsed.get("wale_years")
+        if isinstance(_wale, (int, float)) and 0.5 < _wale < 30:
+            out["wale_years"] = float(_wale)
+
+        _lev = parsed.get("leverage_ratio")
+        if isinstance(_lev, (int, float)) and 0 <= _lev < 0.80:
+            out["leverage_ratio"] = float(_lev)
+
+        _dpu = parsed.get("dpu_cents")
+        if isinstance(_dpu, (int, float)) and 0 < _dpu < 500:
+            out["dpu_cents"] = float(_dpu)
+
+        _affo = parsed.get("affo_per_unit_cents")
+        if isinstance(_affo, (int, float)) and 0 < _affo < 500:
+            out["affo_per_unit_cents"] = float(_affo)
+
+        _sub = parsed.get("subtype_mix")
+        if isinstance(_sub, dict) and _sub:
+            cleaned_sub = {}
+            for k, v in _sub.items():
+                if isinstance(v, (int, float)) and 0 <= v <= 1.0:
+                    cleaned_sub[str(k).lower()] = float(v)
+            if cleaned_sub and abs(sum(cleaned_sub.values()) - 1.0) < 0.10:
+                out["subtype_mix"] = cleaned_sub
+
+        _geo = parsed.get("geographic_mix")
+        if isinstance(_geo, dict) and _geo:
+            cleaned_geo = {}
+            for k, v in _geo.items():
+                if isinstance(v, (int, float)) and 0 <= v <= 1.0:
+                    cleaned_geo[str(k)] = float(v)
+            if cleaned_geo and abs(sum(cleaned_geo.values()) - 1.0) < 0.10:
+                out["geographic_mix"] = cleaned_geo
+
+        if "evidence" in parsed:
+            out["evidence"] = str(parsed["evidence"])[:300]
+
+        return out
+    except Exception:
+        return {}
+
+
 # ── Pipeline-asset extractor (rNPV input) ────────────────────────────────────
 
 def _extract_pipeline_assets(
@@ -2632,6 +2792,16 @@ def _research_one_ticker(
             f"Pipeline assets: {len(pipeline_assets)} extracted for rNPV"
         )
 
+    # ── REIT metrics (cap rate override, occupancy, DPU coverage) ────────────
+    reit_metrics = _extract_reit_metrics(
+        sdk_client, _synthesis_model, sections, final_report, ticker,
+    )
+    if reit_metrics:
+        progress.update_status(
+            agent_id, ticker,
+            f"REIT metrics: {sorted(reit_metrics.keys())}"
+        )
+
     return {
         "deep_research":            final_report,
         "deep_research_annotated":  annotated_report,
@@ -2645,6 +2815,7 @@ def _research_one_ticker(
         "dcf_calibration":        dcf_calibration,
         "segment_scenarios":      segment_scenarios,
         "pipeline_assets":        pipeline_assets,
+        "reit_metrics":           reit_metrics,
     }
 
 
@@ -2810,6 +2981,14 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if assets:
             pipeline_assets_all[t] = assets
     state["data"]["pipeline_assets"] = pipeline_assets_all
+
+    # ── Per-ticker REIT metrics (cap rate override + DPU coverage) ───────────
+    reit_metrics_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        rm = res.get("reit_metrics")
+        if rm:
+            reit_metrics_all[t] = rm
+    state["data"]["reit_metrics"] = reit_metrics_all
 
     # ── Per-ticker management guidance extraction ─────────────────────────────
     mgmt_guidance: dict[str, dict] = {}
