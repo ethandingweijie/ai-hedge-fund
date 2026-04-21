@@ -1,5 +1,62 @@
 # Equitable — Changelog
 
+## v1.8 — 2026-04-22
+
+### Tier 2 Bank Methodology (institutional rebuild)
+- **2-stage Residual Income** replaces primitive ROE-CoE spread. ROE fades linearly current → profile target over 5-10 years; BVPS compounds at `retention × ROE_t`; terminal spread (+50-100 bps moat premium for GSIBs/Super-Regionals/Indian privates) captures durable excess returns over perpetuity.
+- **P/TBV multiple** replaces P/BV — strips goodwill + intangibles to match Basel regulatory capital definition. 70%-of-equity floor prevents pathological data-artifact strips.
+- **CET1 Excess Capital overlay** — CET1 > target returns `(actual - target) × RWA × 0.70` per share (asymmetric haircut: only 70% distributable); CET1 < target subtracts deficit at full haircut (regulator forces retention). RWA proxied via sub-profile-specific asset ratios (GSIB 0.55x, Regional 0.70x, IB 0.40x) when FMP lacks it.
+- **P/E (norm) through-cycle fallback** — when normalized NI isn't computed, uses `equity × target_ROE` instead of trailing NI. Immune to credit-cycle provision distortion.
+- **Buyback-aware retention rate** — includes `share_buyback` alongside dividends (JPM returned ~$25B via repurchases in 2024; dividend-only retention overstated by 30+ pp).
+- **Profile weights flipped**: RI 55% / P/TBV 25% / P/E (norm) 15% / Excess Capital 5%. Dropped "ROE vs CoE" (double-counted RI per Gemini critique).
+- **10 bank sub-profiles with geography-aware calibration**: Money Center (US/EU), Regional, Super-Regional, EM Bank (China SOE), EM Bank Premium (India private, 7y fade + 16% target ROE), Investment Bank, Mortgage/GSE, Neo/Challenger (10y J-curve fade), Brokerage.
+- **HK/SG classification fix**: 00005.HK HSBC → Money Center Bank (EU), 01398.HK ICBC / 00939.HK CCB / 03988.HK BOC / 03968.HK CMB → EM Bank, D05.SI DBS → Money Center Bank. Previously empty sub-profile → fell to generic Financials.
+- **Deep research `_extract_bank_metrics()`** — LLM extracts CET1, NIM, efficiency ratio, NPL, management target ROE/ROTCE, loan/deposit growth, dividend payout. Overrides profile defaults in RI + Excess Capital dispatches.
+
+### Tier 2 REIT NAV / P/FFO / P/AFFO (replaces all-proxy)
+- **NAV (Cap Rates)** — `NOI / cap_rate − total_debt + cash`. Scenario-invariant (asset-backed, not growth-driven).
+- **P/FFO + P/AFFO** — sub-type-specific multiples, replacing prior P/E proxy (GAAP earnings depressed by non-cash real-estate D&A).
+- **AFFO-gated DDM** — clamps dividends to AFFO/share, catches yield-trap valuations of unsustainable distributions.
+- **11 REIT sub-types with maintenance capex caps**: data_center 2% / lab 2.5% / industrial 3% / self_storage 3% / residential 4% / healthcare 4% / retail 5.5% / office 6% / hospitality 7.5% / infrastructure 8.5% of revenue. Protects AFFO on growth REITs with heavy acquisition capex.
+- **SGX REIT sub-type aware** — Capitaland India (office), Capitaland China (retail), Keppel Infrastructure (infrastructure), Mapletree Logistics (industrial), Frasers Centrepoint (retail), Keppel DC (data_center), Ascott (hospitality).
+- **Deep research `_extract_reit_metrics()`** — cited cap rate, occupancy, WALE, sub-type/geo mix, DPU vs AFFO coverage, leverage. Overrides sub-type defaults via `cap_rate_market`.
+
+### Tier 2 Biopharma rNPV (replaces DCF proxy)
+- **2-stage rNPV**: per-asset `peak_sales × op_margin × (1-tax) × ramp_profile × cumulative_PoS × discount(years_to_launch)`.
+- **PHASE_POS_TABLE**: Ph1 9.6%, Ph2 15.3%, Ph3 49.3%, Filed 85%, Approved 100% (BIO 2011-2020 industry stats + FDA historical).
+- **Therapeutic-area PoS multipliers** — Oncology 0.55x, CNS 0.60x, Rare 1.7x, Hematology 1.4x, GLP-1 1.30x (BIO TA-specific rates).
+- **Bell-shaped commercial stream** (20/50/80% ramp + 7 years peak + 40/20/10% LOE decay) replaces level annuity.
+- **Profile-specific WACC + margin**: Large Cap Pharma 7.85% / 45% op margin / 14% tax (Irish IP structure); Pre-approval Biotech 11% / 40% / 21% (clinical-stage premium + US statutory).
+- **`_extract_pipeline_assets()` extractor** from deep research sections 2A/2D/2F — per-asset JSON with name, phase, peak_sales, launch_year, indication, evidence.
+
+### Tier 3 Insider-Activity WACC Overlay
+- Net 12m insider buying / selling translates to ±bp WACC modifier (capped at ±50 bp). Cluster buys get additional tightening; CEO/CFO conviction sells widen. Consumes existing `state["data"]["insider_activity"]` (previously unused by DCF). Threshold gate at 0.02% of mkt cap suppresses noise.
+
+### Backend + Frontend Hotfixes
+- **Chart latency regression fixed (1s → 10s back to 1s)**: US stock endpoint now uses FMP `/historical-price-eod/full` (CDN-served) + parallelizes FMP history + yf.info + FMP key-metrics-ttm + ratios-ttm + quote via `asyncio.gather`. Previously 4 sequential fetches.
+- **/analysis/financials 500 on SGX tickers fixed**: FMP returns 402 Payment Required for `.SI` suffix. Routed SGX tickers to yfinance via `search_sg_line_items`, mirroring HK → AKShare pattern.
+- **REIT 12m PT $5.23 overshoot fixed**: REITs no longer fall through EV/EBITDA waterfall (produces nonsense on high-LTV REITs with D&A-inflated EBITDA). Now gated to P/E-only path alongside banks.
+- **SGX D&A + DPS coverage added to yfinance mapping**: `Reconciled Depreciation` maps to `depreciation_and_amortization`; DPS derived by summing `.dividends` event series per fiscal year. Unblocks FFO + DDM methods for SGX REITs.
+
+### Deep Research Prompt Enrichment
+- **Financials sector** — explicit asks for CET1 (decimal), NIM last 4Q with direction, efficiency ratio with sub-profile target bands, management target ROE/ROTCE cited from earnings calls, dividend sustainability vs payout policy.
+- **Real Estate sector** — cited portfolio cap rate (CBRE/JLL/Knight Frank weighted avg), sub-type mix (office/retail/industrial/DC %), geographic mix (US/India/China %), DPU vs AFFO coverage, aggregate leverage.
+
+### Valuation Engine Coverage Validation
+Synthetic-pipeline tests on realistic FY2024 financials:
+- **Banks** (JPM / GS / DBS / ICBC): 56% / 46% / 56% / 162% coverage vs market. 46-56% on GSIBs reflects value-discipline anchor; ICBC 162% = "fair value before China governance discount" (intentional).
+- **REITs** (CY6U / AU8U / A7RU / M44U / J69U / AJBU / HMN): 125% / 136% / 124% / 109% / 76% / 122% / 66% coverage with research cap rate overrides. Every overridden ticker moved toward 100%.
+- **Biopharma** (CRSP / BEAM / MRNA / BIIB / VRTX / PFE): 69% / 12% / 72% / 48% / 30% / 27% pipeline-only contribution. BEAM 12% reflects market-priced Ph1 optionality beyond aggregate BIO PoS.
+
+### Known v1.5+ Follow-ups
+- Insurance Embedded Value rebuild (still proxied to P/BV)
+- Alt Asset Manager SOTP (still proxied to EPV)
+- EM regional governance discount overlay (China VIE, India G-Sec live yield)
+- Live local-yield CoE fetchers (India 10Y, China 10Y via FRED OECD series)
+- HDFC/ICICI India stress test
+
+---
+
 ## v1.5 — 2026-04-18
 
 ### SGX (Singapore) Ticker Support
