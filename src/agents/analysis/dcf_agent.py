@@ -181,6 +181,10 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "intangible_assets":         _safe(getattr(li, "intangible_assets", None)),
             "total_liabilities":         _safe(getattr(li, "total_liabilities", None)),
             "operating_expense":         _safe(getattr(li, "operating_expense", None)),
+            # Buybacks for retention_rate (banks return large % of earnings via
+            # repurchases alongside dividends — ignoring this inflates retention)
+            "share_buyback":             _safe(getattr(li, "share_buyback", None)),
+            "common_stock_repurchased":  _safe(getattr(li, "common_stock_repurchased", None)),
         })
 
     # SBC-adjusted (owner-earnings) FCF: reported FCF treats SBC as non-cash and
@@ -1037,41 +1041,49 @@ def _compute_reit_metrics(
 # 2-stage RI model and the P/TBV / P/E method branches. "CoE" overrides the
 # engine's hybrid WACC for bank profiles because bank WACC collapses to CoE
 # when D/(D+E) ≈ 0 (deposits are not equity).
+#
+# terminal_spread: ROE premium over CoE sustained in perpetuity (stage 2 of
+# the 2-stage RI). Captures durable moat premium for scale-advantaged banks.
+#   0.01 (+100 bps)    — GSIBs / Super-Regionals / Indian private — durable moat
+#   0.005 (+50 bps)    — Investment Banks / Money Center EU / Brokerage —
+#                        cyclical but scaled
+#   0.0                — Regional / Mortgage-GSE / Neo — less moat durability
+# Rationale: TV = (ROE_terminal - CoE) × BVPS_terminal / CoE, discounted back.
 _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
     # US Global Systemically Important Banks (GSIBs)
     "Money Center Bank":    {"target_roe": 0.12, "coe": 0.090, "p_tbv": 1.4, "pe": 12.0, "fade_years": 5,
-                              "target_cet1": 0.12, "rwa_to_assets": 0.55},
+                              "target_cet1": 0.12, "rwa_to_assets": 0.55, "terminal_spread": 0.010},
     # European Money Center — structural regulatory drag, higher CoE
     "Money Center Bank (EU)": {"target_roe": 0.10, "coe": 0.110, "p_tbv": 0.8, "pe": 8.0,  "fade_years": 5,
-                              "target_cet1": 0.14, "rwa_to_assets": 0.60},
+                              "target_cet1": 0.14, "rwa_to_assets": 0.60, "terminal_spread": 0.005},
     # Regional banks — healthy (USB, TFC, PNC)
     "Regional Bank":        {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.70},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.70, "terminal_spread": 0.0},
     # Super-regionals (TD, BMO, RBC)
     "Super-Regional Bank":  {"target_roe": 0.11, "coe": 0.095, "p_tbv": 1.3, "pe": 11.0, "fade_years": 5,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.65},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.65, "terminal_spread": 0.010},
     # EM banks — China SOEs (ICBC, CCB, BOC) — national-service risk
     "EM Bank":              {"target_roe": 0.14, "coe": 0.130, "p_tbv": 1.2, "pe": 9.0,  "fade_years": 5,
-                              "target_cet1": 0.105, "rwa_to_assets": 0.65},
+                              "target_cet1": 0.105, "rwa_to_assets": 0.65, "terminal_spread": 0.0},
     # EM Bank Premium — India private sector (HDFC, ICICI, Kotak) —
     # credit-to-GDP gap supports sustained 16-18% ROE
     "EM Bank (Premium)":    {"target_roe": 0.16, "coe": 0.130, "p_tbv": 2.0, "pe": 14.0, "fade_years": 7,
-                              "target_cet1": 0.115, "rwa_to_assets": 0.62},
+                              "target_cet1": 0.115, "rwa_to_assets": 0.62, "terminal_spread": 0.010},
     # Investment banks — cyclical (GS, MS)
     "Investment Bank":      {"target_roe": 0.13, "coe": 0.110, "p_tbv": 1.2, "pe": 10.0, "fade_years": 5,
-                              "target_cet1": 0.13, "rwa_to_assets": 0.40},
+                              "target_cet1": 0.13, "rwa_to_assets": 0.40, "terminal_spread": 0.005},
     # Mortgage/GSE (FNMA, FMCC) — conservatorship overhang
     "Mortgage/GSE":         {"target_roe": 0.09, "coe": 0.110, "p_tbv": 0.8, "pe": 9.0,  "fade_years": 5,
-                              "target_cet1": 0.08, "rwa_to_assets": 0.50},
+                              "target_cet1": 0.08, "rwa_to_assets": 0.50, "terminal_spread": 0.0},
     # Neo/Challenger banks — J-curve ROEs, extended fade
     "Neo/Challenger":       {"target_roe": 0.18, "coe": 0.120, "p_tbv": 2.8, "pe": 22.0, "fade_years": 10,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.45},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.45, "terminal_spread": 0.0},
     # Brokerage (SCHW, IBKR) — fee + NII blended
     "Brokerage":            {"target_roe": 0.16, "coe": 0.100, "p_tbv": 2.8, "pe": 18.0, "fade_years": 5,
-                              "target_cet1": 0.10, "rwa_to_assets": 0.35},
+                              "target_cet1": 0.10, "rwa_to_assets": 0.35, "terminal_spread": 0.005},
     # Default fallback
     "default":              {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.60},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.60, "terminal_spread": 0.0},
 }
 
 
@@ -1150,13 +1162,22 @@ def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> d
         # data source double-counts goodwill as both goodwill and intangible)
     tbv_per_share = (tbv / shares) if (tbv is not None and shares and shares > 0) else None
 
-    # ROE + retention rate for 2-stage RI projection
+    # ROE + retention rate for 2-stage RI projection. Buybacks are treated
+    # as distributions to shareholders (same economic substance as dividends
+    # per Gemini critique) — otherwise retention is wildly overstated for
+    # banks like JPM that return 60%+ of earnings via buybacks.
     roe = (ni / equity) if (ni is not None and equity and equity > 0) else None
+    buybacks = most_recent.get("share_buyback") or most_recent.get("common_stock_repurchased") or 0
+    # Normalize sign — cash flow statement may report buybacks as negative
+    buybacks = abs(buybacks) if buybacks else 0
     retention_rate = None
-    if ni and ni > 0 and dividends_ps and shares:
-        total_divs = dividends_ps * shares
-        payout = total_divs / ni
-        retention_rate = max(0.30, min(0.80, 1.0 - payout))
+    if ni and ni > 0:
+        total_payout = 0.0
+        if dividends_ps and shares:
+            total_payout += dividends_ps * shares
+        total_payout += buybacks
+        payout_ratio = total_payout / ni
+        retention_rate = max(0.30, min(0.80, 1.0 - payout_ratio))
     else:
         retention_rate = 0.60   # default: banks retain ~60% on average
 
@@ -1242,8 +1263,20 @@ def _compute_residual_income_2stage(
         # Grow book value for next period (retained earnings compound)
         bvps_t = bvps_t * (1 + retention * roe_t)
 
-    # Terminal: ROE = CoE → zero excess return → TV = 0
-    # (Intentionally conservative; matches Damodaran standard.)
+    # Terminal: ROE fades to (CoE + terminal_spread) in perpetuity. Captures
+    # durable moat premium for scale-advantaged banks (GSIBs, Indian privates,
+    # Super-Regionals) that sustainably earn above CoE forever. Setting
+    # terminal_spread=0 recovers the Damodaran-standard conservative TV=0.
+    # Per Gemini critique: even a small 50-100 bps moat premium closes the
+    # "missing 30%" gap we see on JPM/GS/DBS where current IV is 55-70% of
+    # market price. Perpetuity formula:
+    #   TV = (terminal_spread) × BVPS_terminal / CoE
+    # Discounted back: PV(TV) = TV / (1 + CoE)^fade_years
+    terminal_spread = cfg.get("terminal_spread", 0.0)
+    if terminal_spread > 0 and coe > 0:
+        tv_per_share = (terminal_spread * bvps_t) / coe
+        pv_tv = tv_per_share / ((1 + coe) ** fade_years)
+        v_per_share += pv_tv
 
     # Floor at 50% of TBV to prevent deep pathological discounts when
     # current ROE is transiently negative (e.g. 2020 COVID year for US banks)
@@ -1774,18 +1807,27 @@ def _compute_method_value(
     # ── P/E (norm) — uses 5-yr cycle-normalized net income ────────────────
     # For cyclicals the trailing net income reflects one point in the cycle;
     # applying a peer P/E at peak earnings produces trough IV (and vice-versa).
-    # The normalized anchor is Damodaran-style: mean(NI margin) × current
-    # revenue. For banks (which don't have commodity-cycle volatility) falls
-    # back to trailing NI when normalization wasn't computed — trailing ≈
-    # normalized for smooth-earnings businesses. Uses profile-specific P/E
-    # from _BANK_PROFILE_CALIBRATION for bank profiles.
+    # Banks: trailing NI is distorted by credit-cycle provisions. When engine-
+    # computed normalization isn't available, falls back to
+    # through-cycle earning power = BVPS × target_ROE × shares, tethering the
+    # P/E method to the capital base × sustainable ROE rather than this
+    # quarter's provision-swing NI (per Gemini critique). Uses profile-
+    # specific P/E from _BANK_PROFILE_CALIBRATION.
     if method_name in {"P/E (norm)", "P/E norm", "Normalized P/E"}:
         norm_ni = most_recent.get("normalized_net_income")
         _is_bank = (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
                     or "Bank" in (profile_name or "")
-        if (norm_ni is None or norm_ni <= 0) and _is_bank and net_income and net_income > 0:
-            # Bank fallback: trailing NI as normalization proxy
-            norm_ni = net_income
+        if (norm_ni is None or norm_ni <= 0) and _is_bank:
+            # Through-cycle normalized earnings = equity × target_ROE.
+            # Immune to credit-cycle provision distortion (low provisions →
+            # inflated NI at cycle peak → overvalued bank; high provisions →
+            # depressed NI at cycle trough → undervalued bank).
+            cfg = _bank_profile_calibration(profile_name)
+            eq = most_recent.get("total_equity")
+            _research_roe = most_recent.get("_bank_target_roe_research")
+            _target_roe = _research_roe if _research_roe else cfg["target_roe"]
+            if eq and eq > 0:
+                norm_ni = eq * _target_roe
         if norm_ni is None or norm_ni <= 0 or shares <= 0:
             return None
         if _is_bank:
