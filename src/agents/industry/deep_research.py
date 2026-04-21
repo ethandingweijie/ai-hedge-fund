@@ -600,6 +600,112 @@ def _extract_segment_scenarios(
         return {}
 
 
+# ── Bank metrics extractor (RI target ROE + CET1 override) ───────────────────
+
+def _extract_bank_metrics(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    deep_research: str,
+    ticker: str,
+) -> dict:
+    """
+    LLM pass to extract bank-specific metrics that override DCF engine defaults:
+    CET1 ratio, NIM, efficiency ratio, NPL, management target ROE, LDR.
+
+    Consumed by:
+      * _compute_excess_capital via most_recent["_bank_cet1_research"]
+      * _compute_residual_income_2stage via most_recent["_bank_target_roe_research"]
+      * AFFO-gated sustainability signal in audit
+
+    Returns {} when ticker isn't a bank or research too thin. Invalid numeric
+    fields are dropped silently (clamped to safe ranges).
+    """
+    if not deep_research and not sections:
+        return {}
+
+    section_2a = sections.get("2a") or sections.get("2A") or ""
+    section_2d = sections.get("2d") or sections.get("2D") or ""
+    section_2f = sections.get("2f") or sections.get("2F") or ""
+    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    if not combined or len(combined) < 500:
+        combined = (deep_research or "")[:8000]
+    if not combined:
+        return {}
+
+    try:
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=600,
+            system=(
+                "You are a bank / financial institution analyst. Extract structured "
+                "metrics from the research and return ONLY valid JSON (no markdown "
+                "fences, no commentary).\n\n"
+                "Schema (all fields OPTIONAL — omit if not substantiated by research):\n"
+                "  cet1_ratio:              float (0.05-0.25, latest CET1 as decimal)\n"
+                "  nim_pct:                 float (0.005-0.08, last-quarter NIM decimal)\n"
+                "  efficiency_ratio:        float (0.30-0.80, op_exp / total income)\n"
+                "  npl_ratio:               float (0.0-0.10, non-performing loan %)\n"
+                "  net_charge_offs_pct:     float (0.0-0.05, annualized NCO / avg loans)\n"
+                "  management_target_roe:   float (0.05-0.25, through-cycle ROE/ROTCE\n"
+                "                                  target cited in earnings calls)\n"
+                "  loan_to_deposit_ratio:   float (0.40-1.20)\n"
+                "  dividend_payout_ratio:   float (0.10-0.90)\n"
+                "  loan_growth_yoy:         float (-0.10 to 0.30)\n"
+                "  deposit_growth_yoy:      float (-0.10 to 0.30)\n"
+                "  evidence:                string ≤300 chars citing the source\n\n"
+                "Rules:\n"
+                "  * Return {} if the research doesn't discuss a bank / lender.\n"
+                "  * Only include fields EXPLICITLY substantiated by the research.\n"
+                "  * cet1_ratio: reported in bank regulatory filings & earnings calls.\n"
+                "    Convert to decimal (15.3% → 0.153).\n"
+                "  * management_target_roe: look for phrases like 'targets X% ROE/ROTCE',\n"
+                "    'through-the-cycle ROE target', 'aspires to Y% ROTCE'. Convert to\n"
+                "    decimal (17% → 0.17).\n"
+                "  * efficiency_ratio: lower is better; reported as decimal (55% → 0.55).\n"
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Research excerpts:\n{combined[:8000]}"
+                ),
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return {}
+
+        out: dict = {}
+        _clamps = {
+            "cet1_ratio":            (0.05, 0.25),
+            "nim_pct":               (0.005, 0.08),
+            "efficiency_ratio":      (0.30, 0.80),
+            "npl_ratio":             (0.0, 0.15),
+            "net_charge_offs_pct":   (0.0, 0.05),
+            "management_target_roe": (0.05, 0.25),
+            "loan_to_deposit_ratio": (0.40, 1.20),
+            "dividend_payout_ratio": (0.0, 1.0),
+            "loan_growth_yoy":       (-0.30, 0.40),
+            "deposit_growth_yoy":    (-0.30, 0.40),
+        }
+        for k, (lo, hi) in _clamps.items():
+            v = parsed.get(k)
+            if isinstance(v, (int, float)) and lo <= v <= hi:
+                out[k] = float(v)
+
+        if "evidence" in parsed:
+            out["evidence"] = str(parsed["evidence"])[:300]
+
+        return out
+    except Exception:
+        return {}
+
+
 # ── REIT metrics extractor (NAV cap-rate override) ───────────────────────────
 
 def _extract_reit_metrics(
@@ -2802,6 +2908,16 @@ def _research_one_ticker(
             f"REIT metrics: {sorted(reit_metrics.keys())}"
         )
 
+    # ── Bank metrics (CET1, target ROE, NIM, efficiency, NPL) ────────────────
+    bank_metrics = _extract_bank_metrics(
+        sdk_client, _synthesis_model, sections, final_report, ticker,
+    )
+    if bank_metrics:
+        progress.update_status(
+            agent_id, ticker,
+            f"Bank metrics: {sorted(bank_metrics.keys())}"
+        )
+
     return {
         "deep_research":            final_report,
         "deep_research_annotated":  annotated_report,
@@ -2816,6 +2932,7 @@ def _research_one_ticker(
         "segment_scenarios":      segment_scenarios,
         "pipeline_assets":        pipeline_assets,
         "reit_metrics":           reit_metrics,
+        "bank_metrics":           bank_metrics,
     }
 
 
@@ -2989,6 +3106,14 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if rm:
             reit_metrics_all[t] = rm
     state["data"]["reit_metrics"] = reit_metrics_all
+
+    # ── Per-ticker bank metrics (CET1 + target ROE overrides) ────────────────
+    bank_metrics_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        bm = res.get("bank_metrics")
+        if bm:
+            bank_metrics_all[t] = bm
+    state["data"]["bank_metrics"] = bank_metrics_all
 
     # ── Per-ticker management guidance extraction ─────────────────────────────
     mgmt_guidance: dict[str, dict] = {}
