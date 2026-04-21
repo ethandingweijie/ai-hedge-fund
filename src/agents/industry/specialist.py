@@ -230,13 +230,24 @@ Compute and analyse:
 - Key question: Is take rate stable and contribution margin per trip improving toward positive, with MAPC growing at CAC below LTV?
 """,
     "RealEstate": """
-Compute and analyse:
+Compute and analyse (be explicit with numbers — these feed a cap-rate-based NAV model):
 - Funds From Operations (FFO) yield = FFO per share / Price
-- Net Asset Value (NAV) — discount or premium to NAV
-- Occupancy rate and weighted average lease expiry (WALE) in years
-- Cap rate = Net Operating Income / Property Value
-- Debt-to-NAV ratio (target <45%)
-- Key question: Is FFO yield above the cost of debt with occupancy stable and NAV growing?
+- Net Asset Value (NAV) per unit — discount or premium to market price
+- **Portfolio capitalisation rate** — cite the specific % from the latest independent valuation
+  (CBRE / JLL / Knight Frank / Colliers appraisal). For SGX/HK REITs this is disclosed in
+  the valuation notes of the annual report; for US REITs look at "implied cap rate" from
+  earnings supplementals. Report the weighted-average cap rate across the portfolio.
+- **Occupancy rate** and **weighted average lease expiry (WALE)** in years
+- **Portfolio sub-type mix** — % by asset type (office / retail / industrial / data_center /
+  healthcare / residential / hospitality / self_storage / lab). Cite from the latest
+  portfolio overview.
+- **Geographic mix** — % by country / region. Critical for emerging-market risk premium
+  (India/China REITs should apply a 150–250bp cap-rate premium vs developed markets).
+- **Distribution per unit (DPU) vs AFFO per unit** — report both in cents. A DPU > AFFO
+  signals unsustainable payout (draw-down on revolver / sponsor support).
+- Debt-to-NAV ratio / aggregate leverage (target <45% for SGX S-REITs; <40% for US)
+- Key question: Is FFO yield above the cost of debt with occupancy stable, NAV growing,
+  and DPU covered by AFFO?
 """,
     "Materials": """
 Compute and analyse:
