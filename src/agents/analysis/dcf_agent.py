@@ -82,6 +82,7 @@ from src.data.sector_profiles import (
     RNPV_COMMERCIAL_DEFAULTS,
     RNPV_RAMP_PROFILE,
     PRE_APPROVAL_BIOTECH_WACC,
+    LARGE_CAP_PHARMA_WACC,
 )
 from src.tools.hk.ticker import is_hk_ticker as _is_hk_ticker
 from src.utils.progress import progress
@@ -837,11 +838,19 @@ def _compute_rnpv(
     if not pipeline_assets or shares <= 0:
         return None, {}
 
-    # Clinical-stage WACC uplift — see PRE_APPROVAL_BIOTECH_WACC rationale
-    # in sector_profiles.py. Big Pharma profiles keep the base WACC.
-    effective_wacc = wacc
-    if profile_name == "Pre-approval Biotech":
+    # Profile-specific WACC — rNPV uses tighter rates than the sector default:
+    #   Large Cap Pharma:      7.85% (Damodaran Drugs Pharma, Jan 2026)
+    #   Pre-approval Biotech: 11.00% (Damodaran Biotech 8.49% + clinical-stage
+    #                                  premium for liquidity/diversification risk)
+    # Other Biopharma sub-profiles (Managed Care, MedTech, CDMO) use the
+    # engine's sector WACC input unchanged — rNPV doesn't currently route
+    # to those profiles, but the fallback keeps the contract stable.
+    if profile_name == "Large Cap Pharma":
+        effective_wacc = LARGE_CAP_PHARMA_WACC
+    elif profile_name == "Pre-approval Biotech":
         effective_wacc = max(wacc, PRE_APPROVAL_BIOTECH_WACC)
+    else:
+        effective_wacc = wacc
 
     # Dilution reserve — the `shares` input is already FMP's diluted count
     # (weightedAverageShsOutDil — includes options, warrants, convertibles).
@@ -855,8 +864,13 @@ def _compute_rnpv(
     # Scenario → peak-sales multiplier (narrow band, see docstring)
     peak_scen_mult = {"bear": 0.75, "base": 1.0, "bull": 1.25}.get(scenario, 1.0)
 
-    op_margin = RNPV_COMMERCIAL_DEFAULTS["peak_op_margin"]
-    tax       = RNPV_COMMERCIAL_DEFAULTS["effective_tax_rate"]
+    # Profile-specific margin + tax — Large Cap Pharma benefits from Irish/Swiss
+    # IP structures (eff. tax ~14%) and mature 45% op margins; Pre-approval
+    # biotechs taxed at US statutory 21% with narrower novel-drug margins 40%.
+    # Unknown profiles fall through to default (40% / 21%).
+    _margin_cfg = RNPV_COMMERCIAL_DEFAULTS.get(profile_name, RNPV_COMMERCIAL_DEFAULTS["default"])
+    op_margin = _margin_cfg["peak_op_margin"]
+    tax       = _margin_cfg["effective_tax_rate"]
 
     current_year = datetime.now().year
 

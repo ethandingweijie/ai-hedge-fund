@@ -650,12 +650,30 @@ def phase_years_to_launch(phase_label: str | None) -> float:
     return PHASE_POS_TABLE[normalize_phase(phase_label)]["years_to_launch"]
 
 
-# rNPV commercial-stream defaults (used when asset-level values aren't
-# specified in the deep research extraction). These are stylized but are
-# standard analyst conventions for biopharma rNPV modeling.
-RNPV_COMMERCIAL_DEFAULTS: dict[str, float] = {
-    "peak_op_margin":     0.40,   # approved-drug operating margin (pre-tax, at scale)
-    "effective_tax_rate": 0.21,   # US statutory blended with int'l mix
+# rNPV commercial-stream defaults by profile. Peak operating margin and
+# effective tax rate are profile-aware because:
+#   * Large Cap Pharma benefits from Irish/Swiss IP holding structures
+#     (effective tax rate 10-15% in practice) and mature portfolio margins
+#     (45-55% operating margins on high-moat drugs like Ibrance/Eliquis).
+#   * Pre-approval biotechs don't yet enjoy those structures and typically
+#     get taxed at the US/domicile statutory rate with narrower margins on
+#     novel-drug launches (still-proving manufacturing + commercial learning
+#     curve), so a more conservative 40% margin / 21% tax is appropriate.
+# The profile lookup is done in dcf_agent.py:_compute_rnpv() with a fallback
+# to the "default" entry for any profile not explicitly listed.
+RNPV_COMMERCIAL_DEFAULTS: dict[str, dict[str, float]] = {
+    "Large Cap Pharma": {
+        "peak_op_margin":     0.45,   # mature portfolio margin at peak
+        "effective_tax_rate": 0.14,   # Irish/Swiss IP structure blended rate
+    },
+    "Pre-approval Biotech": {
+        "peak_op_margin":     0.40,   # conservative for novel-drug launches
+        "effective_tax_rate": 0.21,   # US statutory (no IP structures yet)
+    },
+    "default": {
+        "peak_op_margin":     0.40,
+        "effective_tax_rate": 0.21,
+    },
 }
 
 # Bell-shaped commercial cash-flow profile as a fraction of peak sales, by
@@ -746,16 +764,25 @@ def therapeutic_area_pos_multiplier(indication: str | None) -> float:
     return best_match if best_match is not None else 1.0
 
 
-# Pre-approval (clinical-stage) biopharma WACC uplift — the Damodaran
-# Biopharma rate (8.49%) fits Big Pharma with stable FCF and diversified
-# pipelines. Pre-revenue biotechs have materially higher cost of equity
-# due to (a) lack of asset diversification (binary trial outcomes dominate),
-# (b) liquidity risk (thinner trading, frequent capital raises), and (c)
-# governance risk (first-time commercial teams). Industry analysts typically
-# use 11–15% for pre-revenue biotechs; we apply 12% as a mid-range default.
-# WACC for Pre-approval Biotech profile is applied as an override in
-# dcf_agent.py._compute_rnpv().
-PRE_APPROVAL_BIOTECH_WACC: float = 0.120
+# Biopharma profile-specific rNPV WACC. The Damodaran January 2026 dataset
+# distinguishes between Drugs (Pharmaceutical) — 7.85% — and Drugs (Biotech)
+# — 8.49%. The sector-level Biopharma WACC (8.5%) is a midpoint; for rNPV
+# valuations we use profile-specific rates to better reflect the risk
+# profile of each company type:
+#
+#   * Large Cap Pharma — Damodaran Drugs Pharma: 7.85%. Mature, diversified
+#     portfolio, stable FCF funds R&D without equity dilution. Used directly.
+#   * Pre-approval Biotech — 11.0%. Damodaran Drugs Biotech (8.49%) + ~250bp
+#     clinical-stage premium for (a) lack of asset diversification (binary
+#     trial outcomes dominate), (b) liquidity risk (thinner trading, frequent
+#     capital raises), and (c) governance risk (first-time commercial teams).
+#     Industry analysts typically use 11–15% for pre-revenue biotechs; we
+#     apply the low-end 11% as a default so the model stays conservative
+#     while not double-penalizing via already-clamped aggregate PoS.
+#   * Managed Care / MedTech / CDMO — use base sector WACC from SECTOR_WACC
+#     (rNPV doesn't apply to these profiles today).
+LARGE_CAP_PHARMA_WACC:    float = 0.0785
+PRE_APPROVAL_BIOTECH_WACC: float = 0.110
 
 
 # ── 4. Tech Stack Layers ──────────────────────────────────────────────────────
