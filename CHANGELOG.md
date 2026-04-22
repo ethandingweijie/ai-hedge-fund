@@ -1,5 +1,63 @@
 # Equitable — Changelog
 
+## v1.9 — 2026-04-22 (Sector-Specific Valuation UI + TBV/NAV Calibration)
+
+### REIT Valuation Panel (frontend)
+- Ships `app/frontend/src/components/report/reit/REITValuationPanel.tsx` — 8 sector-specific sub-panels.
+- **NAV Hero card**: centered NAV/sh with upside vs current price + quad grid below (NOI / GAV / Debt tinted red / Cash tinted green).
+- **REIT Key Stats grid**: Implied cap, Dist. yield, AFFO coverage, Leverage, Occupancy, WALE, FFO/sh, AFFO/sh with threshold color-coding.
+- **Distribution Quality gauge** with 100% safety line for AFFO coverage.
+- **NPI + DPU history** 5-year bar charts (CLINT-style) via recharts.
+- **Portfolio Composition pies** (asset class + geography) — always rendered with classified sub-type fallback (single 100% slice) when research extractor hasn't populated subtype_mix/geographic_mix.
+- **Cap-Rate × NOI-Growth 3×3 sensitivity matrix** with peer cell highlighted.
+- Backend: `dcf_range.reit_breakdown` emitter with 5y history arrays.
+
+### Bank Valuation Panel (frontend)
+- Ships `app/frontend/src/components/report/bank/BankValuationPanel.tsx` — 8 panels matching DBS / OCBC institutional research driver hierarchy (Asset Quality, NIM, ROE, Capital Management, Loan Growth).
+- **P/TBV Fair Value Hero** (Gordon-growth identity): `Fair = TBV × (1 + (ROE−CoE) / CoE)`. JPM Fair Value $186.00 (TBV $106.85 × 1.74x), GS $472.21 (TBV $377.94 × 1.25x).
+- **Quad grid**: TBV/sh, BVPS, ROE tinted green when ≥ target, CET1 buffer tinted.
+- **ROE vs CoE Spread gauge** with zero-line marker + "strong value creator / creator / marginal / below-CoC / destroyer" labels.
+- **Capital Return card**: total yield hero (div + buyback) + 4-tile row with payout ratio + CET1 distributable surplus.
+- **PPOP, NIM, CIR, BVPS 5y bar charts** via `_compute_ppop` 3-tier fallback (operating_income+provisions → NII+non_int_inc−opex → revenue−int_exp−opex with positivity gate).
+- **NIM Rate Sensitivity tile** (research-sourced) — shows "X bps NIM per 100 bps rate" with forward guidance caption.
+- **Book Quality card** — NPL, NPL coverage gauge with 100% safety line, credit cost, management overlays.
+- Backend: `dcf_range.bank_breakdown` emitter gated on `sector=="Financials" + profile in _BANK_PROFILE_CALIBRATION` OR `"Bank" in profile_name` OR `profile=="Mortgage/GSE"`.
+
+### Research extractor schema expansion
+- `_extract_bank_metrics()` schema expanded with:
+  - `npl_coverage_ratio` (OCBC-style 150% = 1.50)
+  - `management_overlays_bn` (OCBC reports S$700m = 0.70)
+  - `nim_rate_sensitivity_bps` (DBS reports 11 bps per 100 bp rate move)
+  - `forward_loan_growth_guidance`, `forward_nim_guidance` (verbatim mgmt quotes)
+
+### Sector routing + data integrity fixes
+- **JPM TBV bug (Gemini critique)** — `_BALANCE_MAP` was mapping `goodwillAndIntangibleAssets` → `intangible_assets`, causing `_compute_bank_metrics` to double-count goodwill and hit the 70%-of-equity floor. Fixed to map `intangibleAssets` directly (just intangibles, no goodwill). Also added FMP's pre-computed `tangibleBookValuePerShare` from `/stable/ratios` as primary TBV/sh source. **JPM Fair Value $158.08 → $186.00** (within 1% of Gemini's $187.15).
+- **Realty Income NAV bug (Gemini critique)** — O was classified as `default` sub-type with 6.5% cap rate, producing NAV/sh $24.55 vs actual BV $40-45. Added new `net_lease` sub-type (cap 5.0%, P/FFO 16x, P/AFFO 18x, maint capex 1%) and keyword classifier with "net lease / triple net / nnn / single-tenant / realty income / agree realty / spirit realty / wpc / w.p. carey / broadstone". **O NAV/sh $24.55 → $42.66**. Cascades to ADC ($80.96), WPC ($80.39), NNN, BNL.
+- **12M PT methodology — REITs** — previously routed through `_use_pe_only` (EPS × 35x RealEstate peer PE) which is conceptually wrong because REIT GAAP EPS is depressed by non-cash D&A. New REIT branch: `FFO/sh × (1+g) × P/FFO_sub-type` blended 60/40 with AFFO path. No growth_premium on top (multiples already embed growth). DLR 12M PT base $136 → $237, matching 22x P/FFO_fwd market multiple.
+- **_BALANCE_MAP extended** with `netLoans` / `loansAndLeasesReceivables` / `loansHeldForInvestment` / `totalDeposits` for future bank loan-book coverage (FMP coverage inconsistent, but cheap to add).
+
+### Deterministic ticker routing
+- 27 major US REITs + 6 net-lease REITs added to `TICKER_SECTOR_LOOKUP`: DLR, EQIX, PSA, EXR, ARE, WELL, VTR, AVB, EQR, MAA, ESS, VICI, BXP, VNO, STAG, HST, RHP, APLE, KIM, FRT, REG, MAC, DOC, OHI, ADC, NNN, WPC, SRC, BNL. Removes dependency on LLM sector classifier.
+- SGX banks upgraded: O39.SI (OCBC) and U11.SI (UOB) from generic "Banks" profile to "Money Center Bank" (same calibration as D05.SI DBS).
+
+### Backfill tooling
+- `scripts/backfill_reit_breakdown.py` and `scripts/backfill_bank_breakdown.py` — re-derive `{reit,bank}_breakdown` from line items for archived runs. Targets `web_runs.full_result_json`.
+- `POST /admin/backfill-reit-breakdown` + `/admin/backfill-bank-breakdown` — one-shot HTTP endpoints gated behind `DB_UPLOAD_SECRET`. Dry-run default; ticker filter + force re-derive supported.
+- Backfill auto-corrects `sector` column when archived rows had LLM-misclassified sectors.
+
+### Frontend wiring
+- REIT + Bank panels wired into all 3 render paths: `pages/ReportPage.tsx` (live), `pages/ReportViewPage.tsx` (historic desktop), `components/v2/V2ReportView.tsx` (mobile).
+- Gate ordering: REIT → Bank → generic DCF Ladder.
+- Zinc palette alignment: swapped shadcn `bg-card` / `border-border` / `text-foreground` tokens to explicit `bg-white dark:bg-zinc-900` / `border-zinc-200 dark:border-zinc-800` / `text-zinc-900 dark:text-zinc-50` to match v2 card surfaces exactly.
+- TypeScript types: `ReitBreakdown` + `BankBreakdown` interfaces added to `lib/reportTypes.ts`.
+
+### Build numbers
+- `app/backend/main.py` FastAPI version → 1.9.0
+- `app/frontend/package.json` → 1.9.0
+- `pyproject.toml` → 1.9.0
+
+---
+
 ## v1.8 — 2026-04-22
 
 ### Tier 2 Bank Methodology (institutional rebuild)
