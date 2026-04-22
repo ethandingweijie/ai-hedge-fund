@@ -1431,10 +1431,13 @@ export function ReportPage() {
         ))}
 
         {/* ── Analysis ────────────────────────────────────────────────────── */}
+        {/* Renders as soon as partial_data.industry_brief OR .deep_research */}
+        {/* arrives via SSE (mid-run streaming). runId is only populated on */}
+        {/* event: complete — previously gating here blocked mid-run display. */}
         <SectionAnchor id="analysis" label="Analysis" />
-        {(industryBrief || deepResearch) && runId ? (
+        {(industryBrief || deepResearch) ? (
           <ResearchSummaryPanel
-            runId={runId}
+            runId={runId ?? ''}
             ticker={liveTicker}
             industryBrief={industryBrief}
             deepResearch={deepResearch}
