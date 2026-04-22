@@ -2930,155 +2930,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"Top: {_top_str}"
             )
 
-        # ── REIT sub-type classification + audit (Tier 2) ───────────────────
-        # For RealEstate/REIT tickers, classify into 9 sub-types (data_center,
-        # lab, industrial, self_storage, residential, healthcare, retail,
-        # office, hospitality) using ticker + TICKER_SECTOR_LOOKUP notes as
-        # keyword source. Sub-type drives cap rate, P/FFO, P/AFFO multiples,
-        # and maintenance capex % for AFFO compute. Falls to "default" on no
-        # keyword match. Cached on most_recent so NAV/P/FFO/P/AFFO/DDM
-        # dispatches don't re-classify.
-        if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
-            from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as _TSL
-            from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP as _SGX_TSL
-            _lookup_notes = ""
-            _lookup_entry = _TSL.get(ticker.upper()) or _SGX_TSL.get(ticker.upper())
-            if _lookup_entry and len(_lookup_entry) >= 4:
-                _lookup_notes = _lookup_entry[3] or ""
-            _reit_subtype = _classify_reit_subtype(ticker, _lookup_notes)
-            most_recent["_reit_subtype"]  = _reit_subtype
-            most_recent["_ticker"]        = ticker
-            most_recent["_lookup_notes"]  = _lookup_notes
-
-            # Pre-compute metrics for audit-flag emission (also used by method dispatch)
-            _reit_m = _compute_reit_metrics(most_recent, subtype=_reit_subtype)
-            _mults  = _REIT_SUBTYPE_MULTIPLES.get(_reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
-
-            def _fmt_b(v: float | None) -> str:
-                if v is None:
-                    return "n/a"
-                if abs(v) >= 1e9:
-                    return f"${v/1e9:.2f}B"
-                if abs(v) >= 1e6:
-                    return f"${v/1e6:.0f}M"
-                return f"${v:.0f}"
-
-            ticker_forward_flags.append(
-                f"REIT sub-type: {_reit_subtype} | cap_rate "
-                f"{_mults['cap_rate']:.2%} | P/FFO {_mults['p_ffo']:.0f}x | "
-                f"P/AFFO {_mults['p_affo']:.0f}x | maint_capex "
-                f"{_reit_m['maint_capex_pct_used']:.1%} rev | "
-                f"FFO={_fmt_b(_reit_m['ffo'])} AFFO={_fmt_b(_reit_m['affo'])} "
-                f"NOI={_fmt_b(_reit_m['noi'])}"
-            )
-
-            # Deep-research overrides — populated by _extract_reit_metrics().
-            # cap_rate_market overrides sub-type default in NAV method.
-            # sustainable_dpu (derived from affo_per_unit_cents) gates DDM.
-            _rm_override = (reit_metrics_all or {}).get(ticker) or {}
-            if _rm_override:
-                if "cap_rate_market" in _rm_override:
-                    most_recent["cap_rate_market"] = _rm_override["cap_rate_market"]
-                if "affo_per_unit_cents" in _rm_override:
-                    # Store per-share AFFO (converted from cents → units)
-                    most_recent["affo_per_share_research"] = _rm_override["affo_per_unit_cents"] / 100.0
-                # Audit flag: what deep research contributed
-                _rm_parts = []
-                if "cap_rate_market" in _rm_override:
-                    _rm_parts.append(f"cap_rate {_rm_override['cap_rate_market']:.2%} "
-                                     f"(override from default {_mults['cap_rate']:.2%})")
-                if "occupancy_rate" in _rm_override:
-                    _rm_parts.append(f"occupancy {_rm_override['occupancy_rate']:.0%}")
-                if "wale_years" in _rm_override:
-                    _rm_parts.append(f"WALE {_rm_override['wale_years']:.1f}y")
-                if "dpu_cents" in _rm_override and "affo_per_unit_cents" in _rm_override:
-                    _dpu = _rm_override['dpu_cents']
-                    _affo_u = _rm_override['affo_per_unit_cents']
-                    _cov = _dpu / _affo_u if _affo_u > 0 else 0
-                    _rm_parts.append(f"DPU/AFFO coverage {_cov:.1%} "
-                                     f"({'sustainable' if _cov <= 1.0 else 'UNSUSTAINABLE'})")
-                if "leverage_ratio" in _rm_override:
-                    _rm_parts.append(f"leverage {_rm_override['leverage_ratio']:.0%}")
-                if _rm_parts:
-                    ticker_forward_flags.append(
-                        "REIT research metrics: " + " | ".join(_rm_parts)
-                    )
-
-        # ── Bank metrics attachment + audit (Tier 2 item 3) ─────────────────
-        # For Financials/bank profiles: compute derived metrics (NIM, efficiency,
-        # TBV, credit_cost) from line items and layer deep-research overrides
-        # on top (CET1, management target ROE). Both feed the 2-stage
-        # Residual Income + P/TBV + Excess Capital method dispatches.
-        if (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
-                or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
-            _bank_m = _compute_bank_metrics(most_recent, profile_name=profile_name)
-            _bank_cfg = _bank_profile_calibration(profile_name)
-
-            # Layer research overrides onto most_recent (consumed by method dispatch)
-            _bm_override = (bank_metrics_all or {}).get(ticker) or {}
-            if _bm_override.get("cet1_ratio"):
-                most_recent["_bank_cet1_research"] = _bm_override["cet1_ratio"]
-            if _bm_override.get("management_target_roe"):
-                most_recent["_bank_target_roe_research"] = _bm_override["management_target_roe"]
-
-            # Audit flag: derived metrics + profile calibration
-            def _fmt_pct(v):
-                return f"{v:.2%}" if v is not None else "n/a"
-
-            _bank_parts = [
-                f"ROE {_fmt_pct(_bank_m.get('roe'))}",
-                f"NIM {_fmt_pct(_bank_m.get('nim'))}",
-                f"eff {_fmt_pct(_bank_m.get('efficiency_ratio'))}",
-                f"credit_cost {_fmt_pct(_bank_m.get('credit_cost_ratio'))}",
-                f"TBV/sh ${_bank_m.get('tbv_per_share'):.2f}" if _bank_m.get('tbv_per_share') else "TBV/sh n/a",
-                f"CET1 implied {_fmt_pct(_bank_m.get('cet1_implied'))}",
-            ]
-            ticker_forward_flags.append(
-                f"Bank metrics ({profile_name}, target ROE {_bank_cfg['target_roe']:.1%} / "
-                f"CoE {_bank_cfg['coe']:.1%} / fade {_bank_cfg['fade_years']}y / "
-                f"target CET1 {_bank_cfg['target_cet1']:.1%}): " + " | ".join(_bank_parts)
-            )
-
-            # Research overrides audit
-            if _bm_override:
-                _or_parts = []
-                if _bm_override.get("cet1_ratio"):
-                    _or_parts.append(f"CET1 {_bm_override['cet1_ratio']:.2%} (research override)")
-                if _bm_override.get("management_target_roe"):
-                    _or_parts.append(f"mgmt target ROE {_bm_override['management_target_roe']:.1%}")
-                if _bm_override.get("efficiency_ratio"):
-                    _or_parts.append(f"efficiency {_bm_override['efficiency_ratio']:.1%}")
-                if _bm_override.get("npl_ratio"):
-                    _or_parts.append(f"NPL {_bm_override['npl_ratio']:.2%}")
-                if _or_parts:
-                    ticker_forward_flags.append(
-                        "Bank research overrides: " + " | ".join(_or_parts)
-                    )
-
-        # ── SaaS metrics attach (Tier 2 Tech) ──────────────────────────────
-        # For Tech sector tickers, attach research-sourced SaaS KPIs onto
-        # most_recent for consumption by Rule of 40 method + NRR confidence
-        # weighting in the blend. Absent metrics → methods fall back to
-        # financial-metric-derived values (Rule of 40 from growth + FCF margin).
-        if sector == "Tech":
-            _saas_override = (saas_metrics_all or {}).get(ticker) or {}
-            if _saas_override:
-                most_recent["_saas_metrics"] = _saas_override
-                _saas_parts = []
-                if "nrr_pct" in _saas_override:
-                    _saas_parts.append(f"NRR {_saas_override['nrr_pct']:.0%}")
-                if "rule_of_40_score" in _saas_override:
-                    _saas_parts.append(f"Rule of 40 {_saas_override['rule_of_40_score']:.0f}")
-                if "cac_payback_months" in _saas_override:
-                    _saas_parts.append(f"CAC payback {_saas_override['cac_payback_months']:.0f}mo")
-                if "magic_number" in _saas_override:
-                    _saas_parts.append(f"magic # {_saas_override['magic_number']:.2f}")
-                if "gross_retention_pct" in _saas_override:
-                    _saas_parts.append(f"gross retention {_saas_override['gross_retention_pct']:.0%}")
-                if _saas_parts:
-                    ticker_forward_flags.append(
-                        "SaaS research metrics: " + " | ".join(_saas_parts)
-                    )
+        # ── (Tier 2 REIT/Bank/SaaS research attachment moved to after ──────
+        #     profile_name is finalized, approx line 3258. Previously here
+        #     but triggered UnboundLocalError on profile_name for non-REIT
+        #     tickers because profile_name is only assigned at line ~3228.)
 
         # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────
         # Reported FCF treats stock-based comp as non-cash (adds it back to
@@ -3255,6 +3110,133 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 agent_id, ticker,
                 f"No valuation profile for sector='{sector}' — DCF only"
             )
+
+        # ── REIT sub-type classification + audit (Tier 2) ───────────────────
+        # For RealEstate/REIT tickers, classify into 9 sub-types (data_center,
+        # lab, industrial, self_storage, residential, healthcare, retail,
+        # office, hospitality) using ticker + TICKER_SECTOR_LOOKUP notes as
+        # keyword source. Sub-type drives cap rate, P/FFO, P/AFFO multiples,
+        # and maintenance capex % for AFFO compute. Falls to "default" on no
+        # keyword match. Cached on most_recent so NAV/P/FFO/P/AFFO/DDM
+        # dispatches don't re-classify.
+        if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
+            from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as _TSL
+            from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP as _SGX_TSL
+            _lookup_notes = ""
+            _lookup_entry = _TSL.get(ticker.upper()) or _SGX_TSL.get(ticker.upper())
+            if _lookup_entry and len(_lookup_entry) >= 4:
+                _lookup_notes = _lookup_entry[3] or ""
+            _reit_subtype = _classify_reit_subtype(ticker, _lookup_notes)
+            most_recent["_reit_subtype"]  = _reit_subtype
+            most_recent["_ticker"]        = ticker
+            most_recent["_lookup_notes"]  = _lookup_notes
+
+            _reit_m = _compute_reit_metrics(most_recent, subtype=_reit_subtype)
+            _mults  = _REIT_SUBTYPE_MULTIPLES.get(_reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
+
+            def _fmt_b(v):
+                if v is None:
+                    return "n/a"
+                if abs(v) >= 1e9:
+                    return f"${v/1e9:.2f}B"
+                if abs(v) >= 1e6:
+                    return f"${v/1e6:.0f}M"
+                return f"${v:.0f}"
+
+            ticker_forward_flags.append(
+                f"REIT sub-type: {_reit_subtype} | cap_rate "
+                f"{_mults['cap_rate']:.2%} | P/FFO {_mults['p_ffo']:.0f}x | "
+                f"P/AFFO {_mults['p_affo']:.0f}x | maint_capex "
+                f"{_reit_m['maint_capex_pct_used']:.1%} rev | "
+                f"FFO={_fmt_b(_reit_m['ffo'])} AFFO={_fmt_b(_reit_m['affo'])} "
+                f"NOI={_fmt_b(_reit_m['noi'])}"
+            )
+
+            _rm_override = (reit_metrics_all or {}).get(ticker) or {}
+            if _rm_override:
+                if "cap_rate_market" in _rm_override:
+                    most_recent["cap_rate_market"] = _rm_override["cap_rate_market"]
+                if "affo_per_unit_cents" in _rm_override:
+                    most_recent["affo_per_share_research"] = _rm_override["affo_per_unit_cents"] / 100.0
+                _rm_parts = []
+                if "cap_rate_market" in _rm_override:
+                    _rm_parts.append(f"cap_rate {_rm_override['cap_rate_market']:.2%} "
+                                     f"(override from default {_mults['cap_rate']:.2%})")
+                if "occupancy_rate" in _rm_override:
+                    _rm_parts.append(f"occupancy {_rm_override['occupancy_rate']:.0%}")
+                if "wale_years" in _rm_override:
+                    _rm_parts.append(f"WALE {_rm_override['wale_years']:.1f}y")
+                if "dpu_cents" in _rm_override and "affo_per_unit_cents" in _rm_override:
+                    _dpu = _rm_override['dpu_cents']
+                    _affo_u = _rm_override['affo_per_unit_cents']
+                    _cov = _dpu / _affo_u if _affo_u > 0 else 0
+                    _rm_parts.append(f"DPU/AFFO coverage {_cov:.1%} "
+                                     f"({'sustainable' if _cov <= 1.0 else 'UNSUSTAINABLE'})")
+                if "leverage_ratio" in _rm_override:
+                    _rm_parts.append(f"leverage {_rm_override['leverage_ratio']:.0%}")
+                if _rm_parts:
+                    ticker_forward_flags.append("REIT research metrics: " + " | ".join(_rm_parts))
+
+        # ── Bank metrics attachment + audit (Tier 2 item 3) ─────────────────
+        if (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
+                or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
+            _bank_m = _compute_bank_metrics(most_recent, profile_name=profile_name)
+            _bank_cfg = _bank_profile_calibration(profile_name)
+
+            _bm_override = (bank_metrics_all or {}).get(ticker) or {}
+            if _bm_override.get("cet1_ratio"):
+                most_recent["_bank_cet1_research"] = _bm_override["cet1_ratio"]
+            if _bm_override.get("management_target_roe"):
+                most_recent["_bank_target_roe_research"] = _bm_override["management_target_roe"]
+
+            def _fmt_pct(v):
+                return f"{v:.2%}" if v is not None else "n/a"
+
+            _bank_parts = [
+                f"ROE {_fmt_pct(_bank_m.get('roe'))}",
+                f"NIM {_fmt_pct(_bank_m.get('nim'))}",
+                f"eff {_fmt_pct(_bank_m.get('efficiency_ratio'))}",
+                f"credit_cost {_fmt_pct(_bank_m.get('credit_cost_ratio'))}",
+                f"TBV/sh ${_bank_m.get('tbv_per_share'):.2f}" if _bank_m.get('tbv_per_share') else "TBV/sh n/a",
+                f"CET1 implied {_fmt_pct(_bank_m.get('cet1_implied'))}",
+            ]
+            ticker_forward_flags.append(
+                f"Bank metrics ({profile_name}, target ROE {_bank_cfg['target_roe']:.1%} / "
+                f"CoE {_bank_cfg['coe']:.1%} / fade {_bank_cfg['fade_years']}y / "
+                f"target CET1 {_bank_cfg['target_cet1']:.1%}): " + " | ".join(_bank_parts)
+            )
+
+            if _bm_override:
+                _or_parts = []
+                if _bm_override.get("cet1_ratio"):
+                    _or_parts.append(f"CET1 {_bm_override['cet1_ratio']:.2%} (research override)")
+                if _bm_override.get("management_target_roe"):
+                    _or_parts.append(f"mgmt target ROE {_bm_override['management_target_roe']:.1%}")
+                if _bm_override.get("efficiency_ratio"):
+                    _or_parts.append(f"efficiency {_bm_override['efficiency_ratio']:.1%}")
+                if _bm_override.get("npl_ratio"):
+                    _or_parts.append(f"NPL {_bm_override['npl_ratio']:.2%}")
+                if _or_parts:
+                    ticker_forward_flags.append("Bank research overrides: " + " | ".join(_or_parts))
+
+        # ── SaaS metrics attach (Tier 2 Tech) ──────────────────────────────
+        if sector == "Tech":
+            _saas_override = (saas_metrics_all or {}).get(ticker) or {}
+            if _saas_override:
+                most_recent["_saas_metrics"] = _saas_override
+                _saas_parts = []
+                if "nrr_pct" in _saas_override:
+                    _saas_parts.append(f"NRR {_saas_override['nrr_pct']:.0%}")
+                if "rule_of_40_score" in _saas_override:
+                    _saas_parts.append(f"Rule of 40 {_saas_override['rule_of_40_score']:.0f}")
+                if "cac_payback_months" in _saas_override:
+                    _saas_parts.append(f"CAC payback {_saas_override['cac_payback_months']:.0f}mo")
+                if "magic_number" in _saas_override:
+                    _saas_parts.append(f"magic # {_saas_override['magic_number']:.2f}")
+                if "gross_retention_pct" in _saas_override:
+                    _saas_parts.append(f"gross retention {_saas_override['gross_retention_pct']:.0%}")
+                if _saas_parts:
+                    ticker_forward_flags.append("SaaS research metrics: " + " | ".join(_saas_parts))
 
         # ── WACC (hybrid: Damodaran sector base + live credit overlay) ───
         # The sector base WACC preserves all existing calibration (Damodaran
