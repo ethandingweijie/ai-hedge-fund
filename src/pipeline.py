@@ -323,7 +323,27 @@ def run_advanced_pipeline(
             state["data"]["dcf_range"] = cached_dcf
             print(f"  [cache] DCF range loaded from archive — skipping recalculation")
         else:
-            state = run_dcf_agent(state)
+            # Defensive exception handling — surface any silent DCF crash via
+            # progress.update_status so the error is visible in /analysis/status
+            # and the frontend SSE stream. Previously an exception in run_dcf_agent
+            # would propagate up through run_advanced_pipeline, be caught by the
+            # analysis_service wrapper, and become an invisible RuntimeError —
+            # user would see "pipeline_complete" with no valuation and no trace.
+            try:
+                progress.update_status("dcf_engine", primary_ticker, "Starting DCF engine")
+                state = run_dcf_agent(state)
+            except Exception as _dcf_exc:
+                import traceback as _tb
+                _err_head = f"{type(_dcf_exc).__name__}: {str(_dcf_exc)[:200]}"
+                _err_trace = _tb.format_exc()[:1500]
+                progress.update_status(
+                    "dcf_engine", primary_ticker,
+                    f"DCF CRASHED — {_err_head}"
+                )
+                print(f"\n[ERROR] DCF engine crashed:\n{_err_trace}\n")
+                # Ensure dcf_range is set to empty dict for each ticker so
+                # downstream code doesn't re-throw on missing key
+                state["data"]["dcf_range"] = {t: {} for t in tickers}
         dcf_range = state["data"].get("dcf_range", {})
         for ticker in tickers:
             dcf = dcf_range.get(ticker, {})
