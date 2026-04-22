@@ -3905,6 +3905,100 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"HK output in HKD | base IV HK${scenario_results['base']['intrinsic_value']:.2f}"
             )
 
+        # ── REIT breakdown — raw ingredients the UI reconstructs NAV/formulas from ──
+        # Every field here must be either a real number or an explicit None so the
+        # React panels know what to show vs. hide. Derivation formulas (NAV bridge,
+        # AFFO coverage, implied cap rate, leverage) run on the frontend against
+        # these ingredients so analysts can see the math, not just the answer.
+        reit_breakdown: Optional[dict] = None
+        _is_reit = sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or "")
+        if _is_reit:
+            _rb_subtype = most_recent.get("_reit_subtype") or _classify_reit_subtype(
+                ticker, most_recent.get("_lookup_notes", "")
+            )
+            _rb_mults   = _REIT_SUBTYPE_MULTIPLES.get(_rb_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
+            _rb_m       = _compute_reit_metrics(most_recent, subtype=_rb_subtype)
+            _rb_research = (reit_metrics_all or {}).get(ticker) or {}
+
+            _rb_total_debt = most_recent.get("total_debt")
+            _rb_cash       = most_recent.get("cash_and_equivalents")
+            _rb_dps_direct = most_recent.get("dividends_per_share")
+            # DPU → per-share (research extractor reports in local cents)
+            _rb_dps_research = None
+            if "dpu_cents" in _rb_research:
+                _rb_dps_research = _rb_research["dpu_cents"] / 100.0
+            _rb_affo_ps_research = most_recent.get("affo_per_share_research")
+            _rb_ffo_ps = (_rb_m["ffo"] / shares) if (_rb_m.get("ffo") and shares > 0) else None
+            _rb_affo_ps = (_rb_m["affo"] / shares) if (_rb_m.get("affo") and shares > 0) else (
+                _rb_affo_ps_research
+            )
+            # Cap rate: research override > peer default
+            _rb_cap_rate_used = most_recent.get("cap_rate_market") or _rb_mults["cap_rate"]
+
+            reit_breakdown = {
+                "subtype":                _rb_subtype,
+                # Absolute figures (for NAV Bridge + audit)
+                "ffo":                    _rb_m.get("ffo"),
+                "affo":                   _rb_m.get("affo"),
+                "noi":                    _rb_m.get("noi"),
+                "normalized_maintenance_capex": _rb_m.get("normalized_maintenance_capex"),
+                "maint_capex_pct":        _rb_m.get("maint_capex_pct_used"),
+                "total_debt":             _rb_total_debt,
+                "cash":                   _rb_cash,
+                "shares":                 shares,
+                # Per-share figures (for KPI header + distribution quality)
+                "ffo_per_share":          round(_rb_ffo_ps, 4) if _rb_ffo_ps else None,
+                "affo_per_share":         round(_rb_affo_ps, 4) if _rb_affo_ps else None,
+                "dps":                    _rb_dps_research if _rb_dps_research else _rb_dps_direct,
+                # Multiples used
+                "cap_rate_used":          round(_rb_cap_rate_used, 5),
+                "cap_rate_peer":          round(_rb_mults["cap_rate"], 5),
+                "p_ffo_peer":             _rb_mults["p_ffo"],
+                "p_affo_peer":            _rb_mults["p_affo"],
+                # Research overrides (may be None)
+                "occupancy_rate":         _rb_research.get("occupancy_rate"),
+                "wale_years":             _rb_research.get("wale_years"),
+                "leverage_ratio_research": _rb_research.get("leverage_ratio"),
+                "subtype_mix":            _rb_research.get("subtype_mix"),
+                "geographic_mix":         _rb_research.get("geographic_mix"),
+                "research_evidence":      _rb_research.get("evidence"),
+                # Bridge components (frontend reconstructs but we emit for verification)
+                "gross_asset_value":      (
+                    round(_rb_m["noi"] / _rb_cap_rate_used, 0)
+                    if (_rb_m.get("noi") and _rb_m["noi"] > 0 and _rb_cap_rate_used > 0)
+                    else None
+                ),
+                "nav_total":              None,   # filled below when components present
+                "nav_per_share":          None,
+            }
+            if (reit_breakdown["gross_asset_value"] is not None
+                    and _rb_total_debt is not None
+                    and _rb_cash is not None
+                    and shares and shares > 0):
+                _rb_nav = reit_breakdown["gross_asset_value"] - _rb_total_debt + _rb_cash
+                reit_breakdown["nav_total"]     = round(_rb_nav, 0)
+                reit_breakdown["nav_per_share"] = round(_rb_nav / shares, 2)
+
+            # ── Historical series (7y NPI + DPU) — CLINT-style bar charts ──
+            # NPI proxy: EBITDA. We intentionally emit the full series (even
+            # rows with None) so the frontend can show gaps as "—" instead
+            # of silently dropping years and shifting the x-axis.
+            _rb_npi_hist: list[dict] = []
+            _rb_dpu_hist: list[dict] = []
+            for _row in series:
+                _lbl = (_row.get("period") or "")[:4]   # "FY23-12-31" → "FY23" / "2024-12-31" → "2024"
+                _rb_npi_hist.append({
+                    "period": _lbl,
+                    "value":  round(_row["ebitda"], 0) if _row.get("ebitda") else None,
+                })
+                _rb_dpu_hist.append({
+                    "period": _lbl,
+                    "value":  round(_row["dividends_per_share"], 4)
+                              if _row.get("dividends_per_share") else None,
+                })
+            reit_breakdown["npi_history"] = _rb_npi_hist
+            reit_breakdown["dpu_history"] = _rb_dpu_hist
+
         dcf_range[ticker] = {
             **scenario_results,
             "wacc":               round(wacc, 4),
@@ -3941,6 +4035,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # revenue_base_raw is the original-currency value (only set for non-USD).
             "revenue_base_usd":   revenue_base,       # Always USD after FX conversion
             "revenue_base_raw":   revenue_base_raw_ccy,  # Original currency; None for USD tickers
+            # REIT-specific breakdown — None for non-REITs so ReportPage can
+            # feature-flag the REIT panels off cleanly.
+            "reit_breakdown":     reit_breakdown,
         }
 
         base_iv = scenario_results["base"]["intrinsic_value"]
