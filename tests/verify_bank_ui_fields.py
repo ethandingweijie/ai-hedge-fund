@@ -109,7 +109,9 @@ def verify(ticker: str, end_date: str | None = None) -> int:
          "cash_and_equivalents",
          # Bank-specific
          "interest_income", "provision_for_loan_losses",
-         "goodwill", "intangible_assets", "total_liabilities",
+         "goodwill", "intangible_assets",
+         "tangible_book_value_per_share",
+         "total_liabilities",
          "operating_expense", "operating_income",
          "share_buyback", "common_stock_repurchased",
          "loans_receivable", "loans_held_for_investment", "total_deposits"],

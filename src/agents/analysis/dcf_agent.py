@@ -179,6 +179,10 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "provision_for_loan_losses": _safe(getattr(li, "provision_for_loan_losses", None)),
             "goodwill":                  _safe(getattr(li, "goodwill", None)),
             "intangible_assets":         _safe(getattr(li, "intangible_assets", None)),
+            # FMP's pre-computed TBV/sh from /stable/ratios — preferred over our
+            # blind goodwill+intang strip because FMP applies the bank's own
+            # reporting convention (e.g. JPM treats MSRs as tangible, not strip).
+            "tangible_book_value_per_share": _safe(getattr(li, "tangible_book_value_per_share", None)),
             "total_liabilities":         _safe(getattr(li, "total_liabilities", None)),
             "operating_expense":         _safe(getattr(li, "operating_expense", None)),
             "operating_income":          _safe(getattr(li, "operating_income", None)),
@@ -1290,12 +1294,25 @@ def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> d
     # Note: per Gemini critique, do NOT aggressively strip deferred tax assets
     # (DTAs) — these are often recoverable in most jurisdictions. DTAs are a
     # separate balance sheet line not included in our goodwill/intangible map.
+    # Prefer FMP's pre-computed tangibleBookValuePerShare from /stable/ratios
+    # (via _RATIOS_MAP). FMP's ratio applies the bank's own reporting convention
+    # — e.g. JPM excludes goodwill + "soft" intangibles but retains MSRs
+    # (Mortgage Servicing Rights) as tangible. Our blind-strip derivation
+    # over-strips for JPM by ~$15B and hits the 70% floor, producing $90.81/sh
+    # instead of reported $106.85/sh. Derivation remains as fallback for
+    # smaller/foreign banks where FMP hasn't pre-computed the ratio.
     tbv = None
     if equity is not None:
         tbv = max(equity - (goodwill or 0) - (intang or 0), equity * 0.70)
-        # Floor at 70% of equity prevents pathological strips (e.g. if the
-        # data source double-counts goodwill as both goodwill and intangible)
-    tbv_per_share = (tbv / shares) if (tbv is not None and shares and shares > 0) else None
+    tbv_ps_direct = most_recent.get("tangible_book_value_per_share")
+    if tbv_ps_direct and tbv_ps_direct > 0:
+        tbv_per_share = tbv_ps_direct                     # Primary — FMP direct
+        if shares and shares > 0:
+            tbv = tbv_ps_direct * shares                  # Back-solve total TBV
+    elif tbv is not None and shares and shares > 0:
+        tbv_per_share = tbv / shares                      # Fallback — our derivation
+    else:
+        tbv_per_share = None
 
     # ROE + retention rate for 2-stage RI projection. Buybacks are treated
     # as distributions to shareholders (same economic substance as dividends
@@ -2767,7 +2784,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                  "cash_and_equivalents",
                  # Bank-specific (Tier 2)
                  "interest_income", "provision_for_loan_losses",
-                 "goodwill", "intangible_assets", "total_liabilities",
+                 "goodwill", "intangible_assets",
+                 "tangible_book_value_per_share",     # FMP-direct TBV (fixes JPM over-strip bug)
+                 "total_liabilities",
                  "operating_expense",
                  # Tech/Payment-processor methods
                  "gross_profit", "cost_of_revenue"],

@@ -96,7 +96,17 @@ _BALANCE_MAP: dict[str, str] = {
     "totalStockholdersEquity":           "shareholders_equity",
     # Sector-specific additions
     "deferredRevenue":                   "deferred_revenue",           # Tech: SaaS ARR proxy
-    "goodwillAndIntangibleAssets":       "intangible_assets",          # Tech/Biopharma: IP moat
+    # Goodwill + intangibles — FMP exposes THREE related fields:
+    #   goodwill                     = $52.73B (just goodwill)
+    #   intangibleAssets             = $11.73B (just intangibles, excl goodwill)
+    #   goodwillAndIntangibleAssets  = $64.46B (sum of the above)
+    # We want `intangible_assets` to be JUST intangibles (no goodwill) so that
+    # TBV = equity − goodwill − intangible_assets doesn't double-count goodwill.
+    # Previous mapping used goodwillAndIntangibleAssets → intangible_assets which
+    # caused every bank TBV to hit the 70%-of-equity floor. JPM TBV went from
+    # an incorrect $90.81/sh to the correct $106.85/sh after this fix.
+    "intangibleAssets":                  "intangible_assets",          # Just intangibles (excl goodwill) — PRIMARY
+    "goodwillAndIntangibleAssets":       "goodwill_plus_intangibles",  # Combined — fallback name, don't strip twice
     "goodwill":                          "goodwill",                   # Biopharma: acquisition pipeline
     # Bank-specific additions (Tier 2 bank UI) — loan book + deposit base.
     # FMP coverage is inconsistent: some tickers populate these fields
@@ -143,6 +153,11 @@ _RATIOS_MAP: dict[str, str] = {
     "dividendPayoutRatio":               "payout_ratio",
     "operatingCashFlowRatio":            "operating_cash_flow_ratio",
     "bookValuePerShare":                 "book_value_per_share",
+    # Bank-specific: FMP pre-computes TBV/sh matching the bank's own reporting
+    # convention (excludes goodwill + "soft" intangibles; retains MSRs and other
+    # tangible-reported items). Prefer this over our derivation when present —
+    # reconciles to JPM's Q4'25 reported $107.56/sh.
+    "tangibleBookValuePerShare":         "tangible_book_value_per_share",
     "freeCashFlowPerShare":              "free_cash_flow_per_share",
     "operatingCashFlowPerShare":         "operating_cash_flow_per_share",
     "dividendPerShare":                  "dividends_per_share",        # Bank/REIT DDM input
