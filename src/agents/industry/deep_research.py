@@ -600,6 +600,103 @@ def _extract_segment_scenarios(
         return {}
 
 
+# ── SaaS metrics extractor (Rule of 40 + NRR + CAC + Magic Number) ───────────
+
+def _extract_saas_metrics(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    deep_research: str,
+    ticker: str,
+) -> dict:
+    """
+    LLM pass to extract SaaS-specific KPIs that drive Tech valuation overlays:
+    NRR, gross retention, CAC payback, Rule of 40, magic number, RPO growth.
+
+    Consumed by:
+      * Rule of 40 method in dcf_agent._compute_method_value (tier multiplier)
+      * NRR confidence weight on EV/Revenue weight in Growth SaaS blend
+      * Growth premium modifier for NRR > 120% (best-in-class retention)
+
+    Returns {} when ticker isn't a SaaS / tech company or research too thin.
+    Numeric fields validated with clamps.
+    """
+    if not deep_research and not sections:
+        return {}
+
+    section_2a = sections.get("2a") or sections.get("2A") or ""
+    section_2d = sections.get("2d") or sections.get("2D") or ""
+    section_2f = sections.get("2f") or sections.get("2F") or ""
+    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    if not combined or len(combined) < 500:
+        combined = (deep_research or "")[:8000]
+    if not combined:
+        return {}
+
+    try:
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=500,
+            system=(
+                "You are a SaaS / tech-company analyst. Extract structured KPIs "
+                "from the research and return ONLY valid JSON (no markdown fences, "
+                "no commentary).\n\n"
+                "Schema (all fields OPTIONAL — omit if not substantiated by research):\n"
+                "  nrr_pct:              float (0.80-1.50, net revenue retention decimal)\n"
+                "  gross_retention_pct:  float (0.80-1.00, gross retention decimal)\n"
+                "  cac_payback_months:   float (3-60, CAC payback in months)\n"
+                "  ltv_cac_ratio:        float (1-15, LTV:CAC ratio)\n"
+                "  rule_of_40_score:     float (-30 to 120, growth% + FCF margin%)\n"
+                "  magic_number:         float (0.1-3.0, new ARR / prior-qtr S&M)\n"
+                "  rpo_growth_yoy:       float (-0.20 to 0.80, remaining perf obligation growth)\n"
+                "  billings_growth_yoy:  float (-0.20 to 0.80)\n"
+                "  evidence:             string ≤300 chars citing research source\n\n"
+                "Rules:\n"
+                "  * Return {} if the company isn't a SaaS / subscription business.\n"
+                "  * Convert percentages to decimals (120% NRR → 1.20; 40 Rule of 40 score → 40).\n"
+                "  * NRR: look for phrases like 'NRR', 'net retention', 'net dollar retention',\n"
+                "    '$NRR', 'net expansion' — cited directly from earnings call.\n"
+                "  * Rule of 40: sum of revenue growth % + FCF margin %. E.g. 35% growth + 25%\n"
+                "    FCF margin = 60.\n"
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Research excerpts:\n{combined[:8000]}"
+                ),
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return {}
+
+        out: dict = {}
+        _clamps = {
+            "nrr_pct":              (0.80, 1.50),
+            "gross_retention_pct":  (0.80, 1.00),
+            "cac_payback_months":   (3, 60),
+            "ltv_cac_ratio":        (1, 15),
+            "rule_of_40_score":     (-30, 120),
+            "magic_number":         (0.1, 3.0),
+            "rpo_growth_yoy":       (-0.20, 0.80),
+            "billings_growth_yoy":  (-0.20, 0.80),
+        }
+        for k, (lo, hi) in _clamps.items():
+            v = parsed.get(k)
+            if isinstance(v, (int, float)) and lo <= v <= hi:
+                out[k] = float(v)
+        if "evidence" in parsed:
+            out["evidence"] = str(parsed["evidence"])[:300]
+        return out
+    except Exception:
+        return {}
+
+
 # ── Bank metrics extractor (RI target ROE + CET1 override) ───────────────────
 
 def _extract_bank_metrics(
@@ -2881,14 +2978,15 @@ def _research_one_ticker(
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     _extractor_tasks = {
-        "dcf_calibration": lambda: _extract_dcf_calibration(sdk_client, _synthesis_model, sections, ticker),
+        "dcf_calibration":   lambda: _extract_dcf_calibration(sdk_client, _synthesis_model, sections, ticker),
         "segment_scenarios": lambda: _extract_segment_scenarios(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "pipeline_assets":  lambda: _extract_pipeline_assets(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "reit_metrics":     lambda: _extract_reit_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "bank_metrics":     lambda: _extract_bank_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "pipeline_assets":   lambda: _extract_pipeline_assets(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "reit_metrics":      lambda: _extract_reit_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "bank_metrics":      lambda: _extract_bank_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "saas_metrics":      lambda: _extract_saas_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
     }
     _results: dict = {}
-    with ThreadPoolExecutor(max_workers=5) as _ex:
+    with ThreadPoolExecutor(max_workers=6) as _ex:
         _futures = {_ex.submit(fn): name for name, fn in _extractor_tasks.items()}
         for _fut in as_completed(_futures):
             _name = _futures[_fut]
@@ -2904,6 +3002,7 @@ def _research_one_ticker(
     pipeline_assets   = _results.get("pipeline_assets", [])
     reit_metrics      = _results.get("reit_metrics", {})
     bank_metrics      = _results.get("bank_metrics", {})
+    saas_metrics      = _results.get("saas_metrics", {})
 
     progress.update_status(
         agent_id, ticker,
@@ -2931,6 +3030,11 @@ def _research_one_ticker(
             agent_id, ticker,
             f"Bank metrics: {sorted(bank_metrics.keys())}"
         )
+    if saas_metrics:
+        progress.update_status(
+            agent_id, ticker,
+            f"SaaS metrics: {sorted(saas_metrics.keys())}"
+        )
 
     return {
         "deep_research":            final_report,
@@ -2947,6 +3051,7 @@ def _research_one_ticker(
         "pipeline_assets":        pipeline_assets,
         "reit_metrics":           reit_metrics,
         "bank_metrics":           bank_metrics,
+        "saas_metrics":           saas_metrics,
     }
 
 
@@ -3128,6 +3233,14 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         if bm:
             bank_metrics_all[t] = bm
     state["data"]["bank_metrics"] = bank_metrics_all
+
+    # ── Per-ticker SaaS metrics (NRR + Rule of 40 + CAC payback) ─────────────
+    saas_metrics_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        sm = res.get("saas_metrics")
+        if sm:
+            saas_metrics_all[t] = sm
+    state["data"]["saas_metrics"] = saas_metrics_all
 
     # ── Per-ticker management guidance extraction ─────────────────────────────
     mgmt_guidance: dict[str, dict] = {}

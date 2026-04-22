@@ -185,6 +185,9 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             # repurchases alongside dividends — ignoring this inflates retention)
             "share_buyback":             _safe(getattr(li, "share_buyback", None)),
             "common_stock_repurchased":  _safe(getattr(li, "common_stock_repurchased", None)),
+            # Tech/Payment-processor methods: EV/Gross Profit
+            "gross_profit":              _safe(getattr(li, "gross_profit", None)),
+            "cost_of_revenue":           _safe(getattr(li, "cost_of_revenue", None)),
         })
 
     # SBC-adjusted (owner-earnings) FCF: reported FCF treats SBC as non-cash and
@@ -1015,6 +1018,80 @@ def _compute_reit_metrics(
     }
 
 
+# ── Tech sub-type multiples (Tier 2 item 4) ───────────────────────────────────
+#
+# Profile-level peer multiples for Tech sub-types. The prior architecture had
+# all 8 Tech sub-profiles (Hyperscaler, Growth SaaS, Mature SaaS, etc.) share
+# the same sector-level 22x EV/EBITDA, which incorrectly equates AMZN
+# (Hyperscaler) with ADBE (Mature SaaS) at the same multiple.
+#
+# Sources: current trading multiples for representative tickers in each
+# sub-type (calibrated 2026-04-22 using FMP /key-metrics-ttm):
+#   Hyperscaler      (MSFT, GOOGL, AMZN, META):    blended 20-22x EV/EBITDA
+#   Mature SaaS      (ADBE, NOW, CRM, ORCL):       28-32x EV/EBITDA
+#   Growth SaaS      (SNOW, DDOG, CRWD, NET, MDB): 40-50x EV/EBITDA
+#   Cybersecurity    (PANW, FTNT, ZS, S):          35-45x EV/EBITDA
+#   Hyper-Growth     (PLTR, NET, SHOP):            55-65x EV/EBITDA
+#   Semiconductor    (NVDA, AVGO, AMD):            separate sector (Semiconductor)
+_TECH_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
+    # Hyperscaler / Tech Conglomerate
+    "Hyperscaler / Tech Conglomerate": {
+        "ev_ebitda": 20.0, "ev_revenue": 7.5, "pe": 28.0, "p_s": 6.8, "ev_ebit": 24.0,
+    },
+    # Mature Platform / SaaS — Adobe, ServiceNow, Salesforce, Oracle
+    # Calibration 2026-04-22: ADBE/ORCL trading at 15-22x EV/EBITDA in 2025
+    # post-Figma + AI disruption concerns. Prior 30x was mid-2022 peak.
+    "Mature Platform": {
+        "ev_ebitda": 18.0, "ev_revenue": 6.5, "pe": 24.0, "p_s": 5.8, "ev_ebit": 22.0,
+    },
+    "Mature SaaS": {
+        "ev_ebitda": 22.0, "ev_revenue": 10.0, "pe": 28.0, "p_s": 9.0, "ev_ebit": 26.0,
+    },
+    # Growth SaaS — Snowflake, Datadog, CrowdStrike, Cloudflare
+    "Growth SaaS": {
+        "ev_ebitda": 45.0, "ev_revenue": 22.0, "pe": 65.0, "p_s": 19.8, "ev_ebit": 54.0,
+    },
+    # Cybersecurity — Palo Alto, Fortinet, ZScaler, SentinelOne
+    # Calibration 2026-04-22: PANW 65-75x EBITDA, CRWD 80-90x EBITDA in 2025-26
+    # on mission-critical demand + AI-driven SOC expansion. Prior 40x was stale.
+    "Cybersecurity / Mission-Critical SaaS": {
+        "ev_ebitda": 55.0, "ev_revenue": 22.0, "pe": 70.0, "p_s": 19.8, "ev_ebit": 66.0,
+    },
+    # Hyper-Growth Platform — Palantir, Cloudflare, Shopify, ServiceTitan
+    "Hyper-Growth Platform": {
+        "ev_ebitda": 55.0, "ev_revenue": 25.0, "pe": 80.0, "p_s": 22.5, "ev_ebit": 66.0,
+    },
+    # High-Growth Tech / AI (pre-revenue or negative FCF) — reverse DCF preferred
+    "High-Growth Tech / AI": {
+        "ev_ebitda": 65.0, "ev_revenue": 30.0, "pe": 100.0, "p_s": 27.0, "ev_ebit": 78.0,
+    },
+    # Early Platform (GMV-model) — Airbnb, Uber, DoorDash
+    "Early Platform": {
+        "ev_ebitda": 25.0, "ev_revenue": 4.0, "pe": 35.0, "p_s": 3.6, "ev_ebit": 30.0,
+    },
+    # Levered Subscription — Comcast, Netflix
+    "Levered Subscription": {
+        "ev_ebitda": 12.0, "ev_revenue": 4.0, "pe": 18.0, "p_s": 3.6, "ev_ebit": 14.0,
+    },
+    # Default Tech fallback — matches prior sector-level numbers
+    "default": {
+        "ev_ebitda": 22.0, "ev_revenue": 6.5, "pe": 28.0, "p_s": 5.9, "ev_ebit": 26.0,
+    },
+}
+
+
+def _tech_subtype_multiples(profile_name: str) -> dict:
+    """Lookup tech sub-type multiples with default fallback."""
+    return _TECH_SUBTYPE_MULTIPLES.get(profile_name, _TECH_SUBTYPE_MULTIPLES["default"])
+
+
+def _is_tech_subtype(sector: str, profile_name: str) -> bool:
+    """True when the (sector, profile_name) pair warrants tech-specific
+    multiples. Excludes Semiconductor (separate sector table).
+    """
+    return sector == "Tech" and profile_name in _TECH_SUBTYPE_MULTIPLES
+
+
 # ── Bank-specific valuation (Tier 2 item 3) ───────────────────────────────────
 #
 # Institutional-grade bank valuation. Replaces the prior primitive Residual
@@ -1693,8 +1770,25 @@ def _compute_method_value(
         return None
 
     # ── EV/EBITDA (+ EBITDAR proxy: same logic, EBITDAR ≈ EBITDA+rent) ────
+    # Tier 2 Tech: tech sub-type multiples (from _TECH_SUBTYPE_MULTIPLES)
+    # override the sector-level peer multiple when profile is a known tech
+    # sub-type. This stops AMZN/Hyperscaler from using 22x and NOW/Mature
+    # SaaS from using 22x — they're 20x and 30x respectively.
+    # SBC extension: tech companies with SBC > 10% of revenue get 10%
+    # multiple haircut (SBC is real dilution, not non-cash).
     if method_name in {"EV/EBITDA", "EV/EBIT", "Utility P/E", "EV/EBITDAR"}:
-        mult = peer.get("ev_ebitda", 12.0) * sm * growth_premium
+        if _is_tech_subtype(sector, profile_name):
+            tech_mults = _tech_subtype_multiples(profile_name)
+            base_mult = tech_mults["ev_ebitda"] if method_name != "EV/EBIT" else tech_mults["ev_ebit"]
+        else:
+            base_mult = peer.get("ev_ebitda", 12.0)
+        mult = base_mult * sm * growth_premium
+        # Tier 2 Tech SBC discount on EV multiples
+        _sbc_v = most_recent.get("stock_based_compensation")
+        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+            _sbc_pct = abs(_sbc_v) / revenue_base
+            if _sbc_pct > 0.10:
+                mult *= 0.90   # 10% haircut on EV/EBITDA
         # Change 7: apply Chinese ADR multiple haircut for CNY-reporting US-listed companies
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
@@ -1781,17 +1875,104 @@ def _compute_method_value(
         return dist.get(pct_key)
 
     # ── EV/Revenue and variants ────────────────────────────────────────────
-    if method_name in {"EV/NTM Revenue", "EV/NTM Rev", "EV/Revenue", "EV/Fwd Rev"}:
+    # EV/NTM Revenue: forward-looking — uses analyst consensus revenue for the
+    # nearest forward fiscal year (bear=low, base=avg, bull=high from FMP's
+    # /stable/analyst-estimates). Fallback to TTM × (1 + analyst 1yr growth)
+    # when consensus has <3 analysts or is missing. Per Gemini critique:
+    # never fall back to 5-year CAGR for SaaS — deceleration curves are
+    # steep and historical CAGR systematically overshoots NTM for growth
+    # companies. growth_base passed by the engine already applies analyst-
+    # preferred waterfall, so the fallback uses growth_base directly.
+    #
+    # EV/Revenue (no NTM prefix) keeps legacy TTM behavior for non-growth
+    # sectors that don't benefit from forward-looking multiples.
+    if method_name in {"EV/NTM Revenue", "EV/NTM Rev", "EV/Fwd Rev"}:
+        # Prefer consensus revenue when ≥3 analysts
+        fwd_rev = None
+        if forward_consensus is not None:
+            _rev_dict = forward_consensus.get("revenue") or {}
+            _count = forward_consensus.get("analyst_count_revenue")
+            if _count and _count >= 3:
+                fwd_rev = _rev_dict.get(scenario)
+        # Fallback: TTM × (1 + NTM growth rate)
+        if fwd_rev is None and revenue_base and revenue_base > 0:
+            fwd_rev = revenue_base * (1 + growth_base)
+        if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
+            return None
+        # Forward method — sm NOT applied (scenario already mapped to
+        # analyst low/avg/high); growth_premium + SBC haircut still apply.
+        # Tech sub-type multiples override when applicable (Tier 2 Tech).
+        if _is_tech_subtype(sector, profile_name):
+            base_mult = _tech_subtype_multiples(profile_name)["ev_revenue"]
+        else:
+            base_mult = peer.get("ev_revenue", 4.0)
+        mult = base_mult * growth_premium
+        # SBC extension (Tier 2 Tech): tech companies with SBC > 10% of
+        # revenue get a multiple haircut because SBC is shareholder
+        # dilution disguised as non-cash expense. Resolves the "cheap on
+        # EBITDA, expensive on FCF" paradox for SNOW/PLTR/DDOG.
+        _sbc_v = most_recent.get("stock_based_compensation")
+        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+            _sbc_pct = abs(_sbc_v) / revenue_base
+            if _sbc_pct > 0.10:
+                mult *= 0.93   # 7% haircut on EV/Revenue
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = fwd_rev * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # EV/Revenue (trailing TTM) — legacy path for non-growth sectors
+    if method_name in {"EV/Revenue"}:
         mult = peer.get("ev_revenue", 4.0) * sm * growth_premium
-        # Change 7: apply Chinese ADR multiple haircut — CNY-reporting US-listed
-        # companies trade at a persistent discount to Western peers due to VIE risk,
-        # regulatory uncertainty and capital controls. Source: Damodaran 2025 ADR study.
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         if revenue_base > 0 and shares > 0:
             ev = revenue_base * mult
             return max((ev - (net_debt or 0.0)) / shares, 0.0)
         return None
+
+    # ── Forward P/S — forward Revenue / shares × peer P/S ─────────────────
+    # Similar to EV/NTM Revenue but uses direct P/S multiple (no net_debt
+    # subtraction). For early-stage SaaS where EV-net_debt produces noise.
+    if method_name in {"Forward P/S", "Fwd P/S", "NTM P/S"}:
+        if forward_consensus is None:
+            return None
+        _rev_dict = forward_consensus.get("revenue") or {}
+        fwd_rev = _rev_dict.get(scenario)
+        if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
+            return None
+        # Prefer tech sub-type p_s multiple (explicitly calibrated); fall back
+        # to EV/Revenue × 0.90 adjust for sectors without a direct P/S multiple.
+        if _is_tech_subtype(sector, profile_name):
+            ps_mult = _tech_subtype_multiples(profile_name)["p_s"] * growth_premium
+        else:
+            ps_mult = peer.get("ev_revenue", 4.0) * 0.90 * growth_premium
+        if reported_currency == "CNY":
+            ps_mult *= peer.get("cn_adr_haircut", 1.0)
+        return (fwd_rev / shares) * ps_mult
+
+    # ── Forward EV/EBIT (consensus EBIT × peer EV/EBIT ≈ peer EV/EBITDA × 1.2) ─
+    # Uses analyst consensus EBIT (NEW — FMP exposes ebitLow/Avg/High in the
+    # same payload as EPS/Revenue/EBITDA; Tier 1 plumbing already fetched
+    # these fields but only EPS + EBITDA were wired). EV/EBIT is cleaner than
+    # EV/EBITDA for asset-heavy tech (semis) because it captures D&A burden.
+    if method_name in {"Forward EV/EBIT", "Fwd EV/EBIT", "NTM EV/EBIT"}:
+        if forward_consensus is None:
+            return None
+        _ebit_dict = forward_consensus.get("ebit") or {}
+        ebit_fwd = _ebit_dict.get(scenario)
+        if ebit_fwd is None or ebit_fwd <= 0 or shares <= 0:
+            return None
+        # Tech sub-type has direct ev_ebit multiple; else use EV/EBITDA × 1.20
+        if _is_tech_subtype(sector, profile_name):
+            base_mult = _tech_subtype_multiples(profile_name)["ev_ebit"]
+        else:
+            base_mult = peer.get("ev_ebitda", 12.0) * 1.20
+        mult = base_mult * growth_premium
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = ebit_fwd * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
 
     # ── P/E (TTM / operating) ─────────────────────────────────────────────
     # Uses trailing-12m net income. "P/E (ops)" and "P/E (Premium)" share
@@ -2130,6 +2311,100 @@ def _compute_method_value(
             return max((ev - (net_debt or 0.0)) / shares, 0.0)
         return None
 
+    # ── Rule of 40 — SaaS quality governor (Tier 2 Tech) ─────────────────
+    # Growth% + FCF margin% — the industry-standard SaaS quality metric.
+    # <40 = low quality (unprofitable growth or slow decay); 40-60 = healthy;
+    # >60 = best-in-class. Applied as a tier multiplier on EV/Revenue-based
+    # valuation. Prevents the "50% growth at -40% FCF margin" trap where
+    # pure EV/Revenue would overvalue unprofitable growth.
+    #
+    # Prefers research-sourced Rule of 40 score (captures actual quarter's
+    # growth + FCF margin cleanly); falls back to financial-metric-derived
+    # score (growth_base + fcf_margin_base in percent).
+    if method_name in {"Rule of 40", "Rule-of-40"}:
+        _saas = most_recent.get("_saas_metrics") or {}
+        ro40_score = _saas.get("rule_of_40_score")
+        if ro40_score is None:
+            # Derive from engine inputs: growth_base + fcf_margin_base (decimals)
+            ro40_score = (growth_base + fcf_margin_base) * 100
+        # Tier multiplier on EV/Revenue base IV:
+        #   score >= 60 → 1.5x (best-in-class premium)
+        #   40 <= score < 60 → 1.0x (fair, no adjustment)
+        #   0 <= score < 40 → 0.7x (unprofitable growth penalty)
+        #   score < 0 → 0.5x (deteriorating)
+        if ro40_score >= 60:
+            tier_mult = 1.5
+        elif ro40_score >= 40:
+            tier_mult = 1.0
+        elif ro40_score >= 0:
+            tier_mult = 0.7
+        else:
+            tier_mult = 0.5
+        # Base EV/Revenue IV (tech sub-type aware)
+        if _is_tech_subtype(sector, profile_name):
+            base_mult = _tech_subtype_multiples(profile_name)["ev_revenue"]
+        else:
+            base_mult = peer.get("ev_revenue", 4.0)
+        # Use forward revenue when available, else TTM
+        fwd_rev = None
+        if forward_consensus is not None:
+            _rev_dict = forward_consensus.get("revenue") or {}
+            fwd_rev = _rev_dict.get(scenario)
+        if fwd_rev is None or fwd_rev <= 0:
+            fwd_rev = revenue_base * (1 + growth_base) if revenue_base else None
+        if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
+            return None
+        mult = base_mult * tier_mult * growth_premium
+        # SBC haircut for high-SBC tech
+        _sbc_v = most_recent.get("stock_based_compensation")
+        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+            if abs(_sbc_v) / revenue_base > 0.10:
+                mult *= 0.93
+        ev = fwd_rev * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # ── EV/Gross Profit — Payment Processors (Tier 2 Tech) ────────────────
+    # For net-vs-gross reporters (PYPL/ADYEN/SQ) EV/Revenue is incomparable
+    # because interchange flows through as revenue for gross reporters but
+    # not net reporters. EV/GP normalizes on the actual take-rate economics.
+    # Peer multiple: 18-22x for payment processors (tighter than EV/EBITDA).
+    if method_name in {"EV/Gross Profit", "EV/GP"}:
+        gross_profit = most_recent.get("gross_profit")
+        # Fallback: revenue − cost_of_revenue when gross_profit not reported
+        if gross_profit is None:
+            rev_v = most_recent.get("revenue")
+            cor_v = most_recent.get("cost_of_revenue")
+            if rev_v and cor_v:
+                gross_profit = rev_v - cor_v
+        if gross_profit is None or gross_profit <= 0 or shares <= 0:
+            return None
+        # 18x default; can be overridden by peer.get("ev_gp") if set later
+        gp_mult = peer.get("ev_gp", 18.0) * sm * growth_premium
+        ev = gross_profit * gp_mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # ── EV/Volume — Payment Processors (TPV × take rate × multiple) ────────
+    # For payment networks (V/MA) and processors (ADYEN/SQ) where TPV
+    # (Total Payment Volume) is the fundamental operational metric. Requires
+    # tpv + take_rate from deep research (stored on most_recent by the
+    # processor extractor). Falls back to None when data unavailable.
+    #
+    # Critical for Indian UPI ecosystem (Razorpay, Pine Labs, Paytm) where
+    # take rates are 10-20 bps vs US card rails' 200-300 bps — applying
+    # EV/Volume directly to bare TPV without take_rate adjustment would
+    # inflate IV 10-20x. Always use (tpv × take_rate) for normalized NII.
+    if method_name in {"EV/Volume", "EV/TPV"}:
+        tpv = most_recent.get("tpv")  # total payment volume (annual $)
+        take_rate = most_recent.get("take_rate_bps")  # basis points
+        if tpv is None or tpv <= 0 or take_rate is None or take_rate <= 0 or shares <= 0:
+            return None
+        # Normalized revenue = TPV × take_rate_bps / 10000
+        normalized_rev = tpv * take_rate / 10000.0
+        # Apply EV/Revenue multiple (payment networks 15x, processors 5-7x)
+        volume_mult = peer.get("ev_revenue", 6.0) * sm * growth_premium
+        ev = normalized_rev * volume_mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
     # ── Cash Runway (biotech-specific) ────────────────────────────────────
     if method_name == "Cash Runway":
         # Floor = cash / shares (net cash position)
@@ -2372,6 +2647,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     # Per-ticker bank metrics (CET1, target ROE, NIM, efficiency, NPL).
     # Produced by _extract_bank_metrics() in deep_research.py.
     bank_metrics_all       = state["data"].get("bank_metrics", {})
+    # Per-ticker SaaS metrics (NRR, Rule of 40, CAC payback, magic number).
+    # Produced by _extract_saas_metrics() in deep_research.py.
+    saas_metrics_all       = state["data"].get("saas_metrics", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -2432,7 +2710,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                  # Bank-specific (Tier 2)
                  "interest_income", "provision_for_loan_losses",
                  "goodwill", "intangible_assets", "total_liabilities",
-                 "operating_expense"],
+                 "operating_expense",
+                 # Tech/Payment-processor methods
+                 "gross_profit", "cost_of_revenue"],
                 end_date,
                 period="annual",
                 limit=7,
@@ -2775,6 +3055,31 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         "Bank research overrides: " + " | ".join(_or_parts)
                     )
 
+        # ── SaaS metrics attach (Tier 2 Tech) ──────────────────────────────
+        # For Tech sector tickers, attach research-sourced SaaS KPIs onto
+        # most_recent for consumption by Rule of 40 method + NRR confidence
+        # weighting in the blend. Absent metrics → methods fall back to
+        # financial-metric-derived values (Rule of 40 from growth + FCF margin).
+        if sector == "Tech":
+            _saas_override = (saas_metrics_all or {}).get(ticker) or {}
+            if _saas_override:
+                most_recent["_saas_metrics"] = _saas_override
+                _saas_parts = []
+                if "nrr_pct" in _saas_override:
+                    _saas_parts.append(f"NRR {_saas_override['nrr_pct']:.0%}")
+                if "rule_of_40_score" in _saas_override:
+                    _saas_parts.append(f"Rule of 40 {_saas_override['rule_of_40_score']:.0f}")
+                if "cac_payback_months" in _saas_override:
+                    _saas_parts.append(f"CAC payback {_saas_override['cac_payback_months']:.0f}mo")
+                if "magic_number" in _saas_override:
+                    _saas_parts.append(f"magic # {_saas_override['magic_number']:.2f}")
+                if "gross_retention_pct" in _saas_override:
+                    _saas_parts.append(f"gross retention {_saas_override['gross_retention_pct']:.0%}")
+                if _saas_parts:
+                    ticker_forward_flags.append(
+                        "SaaS research metrics: " + " | ".join(_saas_parts)
+                    )
+
         # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────
         # Reported FCF treats stock-based comp as non-cash (adds it back to
         # OCF). For valuation we prefer owner-earnings FCF = reported FCF −
@@ -2866,6 +3171,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "ebitda": {"bear": _fx(_safe(getattr(_fwd, "ebitda_low",  None))),
                            "base": _fx(_safe(getattr(_fwd, "ebitda_avg",  None))),
                            "bull": _fx(_safe(getattr(_fwd, "ebitda_high", None)))},
+                # Tier 2 Tech: forward revenue + forward EBIT. FMP already
+                # exposes these in the same /stable/analyst-estimates payload
+                # (revenueLow/Avg/High, ebitLow/Avg/High) and get_analyst_estimates
+                # maps them — we just weren't wiring them into the method dispatch.
+                "revenue": {"bear": _fx(_safe(getattr(_fwd, "revenue_low",  None))),
+                            "base": _fx(_safe(getattr(_fwd, "revenue_avg",  None))),
+                            "bull": _fx(_safe(getattr(_fwd, "revenue_high", None)))},
+                "ebit":   {"bear": _fx(_safe(getattr(_fwd, "ebit_low",  None))),
+                           "base": _fx(_safe(getattr(_fwd, "ebit_avg",  None))),
+                           "bull": _fx(_safe(getattr(_fwd, "ebit_high", None)))},
                 "analyst_count_eps":     getattr(_fwd, "analyst_count_eps",     None),
                 "analyst_count_revenue": getattr(_fwd, "analyst_count_revenue", None),
                 "period_end":            getattr(_fwd, "period_end",            ""),
