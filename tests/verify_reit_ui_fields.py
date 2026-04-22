@@ -122,7 +122,15 @@ def verify(ticker: str, end_date: str | None = None) -> int:
         close = None
 
     # -- REIT sub-type classification + peer multiples --
-    subtype = _classify_reit_subtype(ticker, "")
+    # Pull notes from TICKER_SECTOR_LOOKUP — matches what the live pipeline
+    # does in dcf_agent.py (uses notes as keyword source for sub-type).
+    try:
+        from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+        _lookup = TICKER_SECTOR_LOOKUP.get(ticker.upper())
+        _notes = _lookup[3] if (_lookup and len(_lookup) >= 4) else ""
+    except Exception:
+        _notes = ""
+    subtype = _classify_reit_subtype(ticker, _notes)
     mults   = _REIT_SUBTYPE_MULTIPLES.get(subtype, _REIT_SUBTYPE_MULTIPLES["default"])
 
     # -- Compute REIT metrics --

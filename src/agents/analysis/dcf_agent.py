@@ -844,6 +844,10 @@ _REIT_MAINT_CAPEX_PCT: dict[str, float] = {
     "data_center":    0.02,
     "lab":            0.025,
     "industrial":     0.03,
+    # Net-lease tenants absorb property opex, maintenance, insurance, taxes
+    # under triple-net structure — landlord's maintenance capex obligation
+    # is minimal (reserve fund for structural items only).
+    "net_lease":      0.01,
     "self_storage":   0.03,
     "residential":    0.04,
     "healthcare":     0.04,
@@ -868,6 +872,16 @@ _REIT_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
     "industrial":     {"cap_rate": 0.055, "p_ffo": 18.0, "p_affo": 20.0},
     "self_storage":   {"cap_rate": 0.052, "p_ffo": 19.0, "p_affo": 21.0},
     "residential":    {"cap_rate": 0.055, "p_ffo": 17.0, "p_affo": 19.0},
+    # Net-lease / single-tenant / triple-net REITs (O, ADC, NNN, WPC, SRC, GOOD).
+    # Traded as fixed-income proxies — long-duration contractual cash flows
+    # (10-20yr initial lease terms, escalators, credit-tenant covenants).
+    # Cap rate 5.0% reflects credit-tenant net-lease consensus (Green Street
+    # April 2026: 5.2% blue-chip, UBS: 5.4% O-specific). Lower than retail
+    # (6.8%) because tenant absorbs property opex/taxes/insurance, and
+    # lower than industrial (5.5%) because contract duration is longer with
+    # investment-grade counterparties. Multiples reflect yield-oriented
+    # investor base — premium for sustainable distribution coverage.
+    "net_lease":      {"cap_rate": 0.050, "p_ffo": 16.0, "p_affo": 18.0},
     "healthcare":     {"cap_rate": 0.060, "p_ffo": 15.0, "p_affo": 17.0},
     "retail":         {"cap_rate": 0.068, "p_ffo": 14.0, "p_affo": 15.0},
     "office":         {"cap_rate": 0.075, "p_ffo": 12.0, "p_affo": 13.0},
@@ -930,6 +944,17 @@ def _classify_reit_subtype(ticker: str, notes: str = "") -> str:
         ("healthcare",   ("healthcare", "health care", "senior housing",
                           "medical office", "vtr", "pea", "omega", "welltower",
                           "well ", "hcp", "doc", "healthpeak", "first reit")),
+        # Net-lease / triple-net / single-tenant — checked BEFORE retail because
+        # Realty Income, Agree Realty, and NNN often contain "realty" / "retail"
+        # tokens that would mis-match the retail bucket. Net-lease economics
+        # (5.0% cap, 16x FFO) are substantially different from traditional
+        # mall/strip retail (6.8% cap, 14x FFO) due to the triple-net structure.
+        ("net_lease",    ("net lease", "net-lease", "triple net", "triple-net",
+                          "nnn", "single tenant", "single-tenant",
+                          "realty income", "agree realty", "adc ",
+                          "spirit realty", "srch", "wpc", "w. p. carey",
+                          "w.p. carey", "broadstone", "bnl ", "nnn reit",
+                          "national retail properties")),
         ("retail",       ("retail", "mall", "shopping", "outlet", "spg", "simon",
                           "macerich", "mac", "reg", "kim", "kimco", "federal realty",
                           "frt", "china trust", "china reit", "capitaland china",
