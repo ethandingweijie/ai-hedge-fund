@@ -65,8 +65,8 @@ _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from src.memory.run_archive import DB_PATH                              # noqa: E402
-from src.tools.api import search_line_items                             # noqa: E402
+from src.memory.run_archive import DB_PATH, _get_conn as _get_archive_conn  # noqa: E402
+from src.tools.api import search_line_items                                 # noqa: E402
 from src.agents.analysis.dcf_agent import (                             # noqa: E402
     _REIT_SUBTYPE_MULTIPLES,
     _classify_reit_subtype,
@@ -237,15 +237,23 @@ def backfill(
         "details":             [],
     }
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    # Use _get_archive_conn() (not raw sqlite3.connect) so startup migrations
+    # fire first — legacy DBs may be missing the analysis_date column on the
+    # runs table (pre-2.0 schema). _get_conn runs the ALTER TABLE migrations
+    # idempotently before returning the connection.
+    conn = _get_archive_conn()
 
     # Find candidate rows. Join ticker_signals → runs so we get the sector and
     # analysis_date (= end_date used by the original pipeline run). Filter on
     # REIT/RealEstate.
+    # analysis_date may be NULL on legacy rows (column was added via migration
+    # but never populated retroactively). Fall back to the run_at date so the
+    # search_line_items call fetches year-appropriate annual data rather than
+    # today's TTM. run_at is ISO-8601, so take the first 10 chars (YYYY-MM-DD).
     query = """
         SELECT ts.id, ts.run_id, ts.ticker, ts.dcf_range_json,
-               r.sector, r.analysis_date
+               r.sector,
+               COALESCE(r.analysis_date, SUBSTR(r.run_at, 1, 10)) AS analysis_date
         FROM ticker_signals ts
         JOIN runs r ON r.run_id = ts.run_id
         WHERE (r.sector = 'RealEstate' OR r.sector = 'REIT')
