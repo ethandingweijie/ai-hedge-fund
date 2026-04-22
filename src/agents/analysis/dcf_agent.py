@@ -1781,17 +1781,92 @@ def _compute_method_value(
         return dist.get(pct_key)
 
     # ── EV/Revenue and variants ────────────────────────────────────────────
-    if method_name in {"EV/NTM Revenue", "EV/NTM Rev", "EV/Revenue", "EV/Fwd Rev"}:
+    # EV/NTM Revenue: forward-looking — uses analyst consensus revenue for the
+    # nearest forward fiscal year (bear=low, base=avg, bull=high from FMP's
+    # /stable/analyst-estimates). Fallback to TTM × (1 + analyst 1yr growth)
+    # when consensus has <3 analysts or is missing. Per Gemini critique:
+    # never fall back to 5-year CAGR for SaaS — deceleration curves are
+    # steep and historical CAGR systematically overshoots NTM for growth
+    # companies. growth_base passed by the engine already applies analyst-
+    # preferred waterfall, so the fallback uses growth_base directly.
+    #
+    # EV/Revenue (no NTM prefix) keeps legacy TTM behavior for non-growth
+    # sectors that don't benefit from forward-looking multiples.
+    if method_name in {"EV/NTM Revenue", "EV/NTM Rev", "EV/Fwd Rev"}:
+        # Prefer consensus revenue when ≥3 analysts
+        fwd_rev = None
+        if forward_consensus is not None:
+            _rev_dict = forward_consensus.get("revenue") or {}
+            _count = forward_consensus.get("analyst_count_revenue")
+            if _count and _count >= 3:
+                fwd_rev = _rev_dict.get(scenario)
+        # Fallback: TTM × (1 + NTM growth rate)
+        if fwd_rev is None and revenue_base and revenue_base > 0:
+            fwd_rev = revenue_base * (1 + growth_base)
+        if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
+            return None
+        # Forward method — sm NOT applied (scenario already mapped to
+        # analyst low/avg/high); growth_premium + SBC haircut still apply
+        mult = peer.get("ev_revenue", 4.0) * growth_premium
+        # SBC extension (Tier 2 Tech): tech companies with SBC > 10% of
+        # revenue get a multiple haircut because SBC is shareholder
+        # dilution disguised as non-cash expense. Resolves the "cheap on
+        # EBITDA, expensive on FCF" paradox for SNOW/PLTR/DDOG.
+        _sbc_v = most_recent.get("stock_based_compensation")
+        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+            _sbc_pct = abs(_sbc_v) / revenue_base
+            if _sbc_pct > 0.10:
+                mult *= 0.93   # 7% haircut on EV/Revenue
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = fwd_rev * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # EV/Revenue (trailing TTM) — legacy path for non-growth sectors
+    if method_name in {"EV/Revenue"}:
         mult = peer.get("ev_revenue", 4.0) * sm * growth_premium
-        # Change 7: apply Chinese ADR multiple haircut — CNY-reporting US-listed
-        # companies trade at a persistent discount to Western peers due to VIE risk,
-        # regulatory uncertainty and capital controls. Source: Damodaran 2025 ADR study.
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         if revenue_base > 0 and shares > 0:
             ev = revenue_base * mult
             return max((ev - (net_debt or 0.0)) / shares, 0.0)
         return None
+
+    # ── Forward P/S — forward Revenue / shares × peer P/S ─────────────────
+    # Similar to EV/NTM Revenue but uses direct P/S multiple (no net_debt
+    # subtraction). For early-stage SaaS where EV-net_debt produces noise.
+    if method_name in {"Forward P/S", "Fwd P/S", "NTM P/S"}:
+        if forward_consensus is None:
+            return None
+        _rev_dict = forward_consensus.get("revenue") or {}
+        fwd_rev = _rev_dict.get(scenario)
+        if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
+            return None
+        # P/S multiple derived from EV/Revenue × adj_factor (~0.90 typical
+        # since EV includes net debt)
+        ps_mult = peer.get("ev_revenue", 4.0) * 0.90 * growth_premium
+        if reported_currency == "CNY":
+            ps_mult *= peer.get("cn_adr_haircut", 1.0)
+        return (fwd_rev / shares) * ps_mult
+
+    # ── Forward EV/EBIT (consensus EBIT × peer EV/EBIT ≈ peer EV/EBITDA × 1.2) ─
+    # Uses analyst consensus EBIT (NEW — FMP exposes ebitLow/Avg/High in the
+    # same payload as EPS/Revenue/EBITDA; Tier 1 plumbing already fetched
+    # these fields but only EPS + EBITDA were wired). EV/EBIT is cleaner than
+    # EV/EBITDA for asset-heavy tech (semis) because it captures D&A burden.
+    if method_name in {"Forward EV/EBIT", "Fwd EV/EBIT", "NTM EV/EBIT"}:
+        if forward_consensus is None:
+            return None
+        _ebit_dict = forward_consensus.get("ebit") or {}
+        ebit_fwd = _ebit_dict.get(scenario)
+        if ebit_fwd is None or ebit_fwd <= 0 or shares <= 0:
+            return None
+        # EV/EBIT ≈ EV/EBITDA × 1.15-1.25 (EBIT < EBITDA by D&A)
+        mult = peer.get("ev_ebitda", 12.0) * 1.20 * growth_premium
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = ebit_fwd * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
 
     # ── P/E (TTM / operating) ─────────────────────────────────────────────
     # Uses trailing-12m net income. "P/E (ops)" and "P/E (Premium)" share
@@ -2866,6 +2941,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "ebitda": {"bear": _fx(_safe(getattr(_fwd, "ebitda_low",  None))),
                            "base": _fx(_safe(getattr(_fwd, "ebitda_avg",  None))),
                            "bull": _fx(_safe(getattr(_fwd, "ebitda_high", None)))},
+                # Tier 2 Tech: forward revenue + forward EBIT. FMP already
+                # exposes these in the same /stable/analyst-estimates payload
+                # (revenueLow/Avg/High, ebitLow/Avg/High) and get_analyst_estimates
+                # maps them — we just weren't wiring them into the method dispatch.
+                "revenue": {"bear": _fx(_safe(getattr(_fwd, "revenue_low",  None))),
+                            "base": _fx(_safe(getattr(_fwd, "revenue_avg",  None))),
+                            "bull": _fx(_safe(getattr(_fwd, "revenue_high", None)))},
+                "ebit":   {"bear": _fx(_safe(getattr(_fwd, "ebit_low",  None))),
+                           "base": _fx(_safe(getattr(_fwd, "ebit_avg",  None))),
+                           "bull": _fx(_safe(getattr(_fwd, "ebit_high", None)))},
                 "analyst_count_eps":     getattr(_fwd, "analyst_count_eps",     None),
                 "analyst_count_revenue": getattr(_fwd, "analyst_count_revenue", None),
                 "period_end":            getattr(_fwd, "period_end",            ""),
