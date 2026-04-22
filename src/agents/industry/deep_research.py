@@ -2868,50 +2868,64 @@ def _research_one_ticker(
         f"{len(_used_ids)} inline markers inserted"
     )
 
-    # ── DCF calibration signals from 2D + 2F ─────────────────────────────────
-    dcf_calibration = _extract_dcf_calibration(sdk_client, _synthesis_model, sections, ticker)
+    # ── Parallel extractor fan-out ───────────────────────────────────────────
+    # Five independent LLM passes over the finished report + sections (DCF
+    # calibration, segment scenarios, pipeline assets, REIT metrics, bank
+    # metrics). Each makes a single sdk_client.messages.create call — no
+    # shared state, no ordering dependency. Run in parallel to cut extractor
+    # latency from ~5 × 20-30s sequential (75-150s) down to ~30s wall time.
+    #
+    # Previously these ran sequentially and pushed JPM / bank deep-research
+    # past the 720s client timeout on Qwen — manifested as UI stuck on
+    # "deep research" for minutes after Qwen had actually finished synthesis.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    _extractor_tasks = {
+        "dcf_calibration": lambda: _extract_dcf_calibration(sdk_client, _synthesis_model, sections, ticker),
+        "segment_scenarios": lambda: _extract_segment_scenarios(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "pipeline_assets":  lambda: _extract_pipeline_assets(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "reit_metrics":     lambda: _extract_reit_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "bank_metrics":     lambda: _extract_bank_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+    }
+    _results: dict = {}
+    with ThreadPoolExecutor(max_workers=5) as _ex:
+        _futures = {_ex.submit(fn): name for name, fn in _extractor_tasks.items()}
+        for _fut in as_completed(_futures):
+            _name = _futures[_fut]
+            try:
+                _results[_name] = _fut.result()
+            except Exception as _exc:
+                progress.update_status(agent_id, ticker,
+                                       f"Extractor {_name} failed: {_exc}")
+                _results[_name] = {} if _name != "pipeline_assets" else []
+
+    dcf_calibration   = _results.get("dcf_calibration", {})
+    segment_scenarios = _results.get("segment_scenarios", {})
+    pipeline_assets   = _results.get("pipeline_assets", [])
+    reit_metrics      = _results.get("reit_metrics", {})
+    bank_metrics      = _results.get("bank_metrics", {})
+
     progress.update_status(
         agent_id, ticker,
         f"DCF calibration: growth_adj={dcf_calibration.get('growth_rate_adj')}, "
         f"margin={dcf_calibration.get('margin_direction')}, "
         f"risk={dcf_calibration.get('risk_flag')}"
     )
-
-    # ── Segment-scenario tree for probabilistic SOTP 12m ─────────────────────
-    segment_scenarios = _extract_segment_scenarios(
-        sdk_client, _synthesis_model, sections, final_report, ticker,
-    )
     if segment_scenarios:
         progress.update_status(
             agent_id, ticker,
-            f"Segment scenarios: {len(segment_scenarios)} segments with "
-            f"{sum(len(b['scenarios']) for b in segment_scenarios.values())} total scenarios"
+            f"Segment scenarios: {len(segment_scenarios)} segments"
         )
-
-    # ── Biopharma pipeline assets for rNPV ───────────────────────────────────
-    pipeline_assets = _extract_pipeline_assets(
-        sdk_client, _synthesis_model, sections, final_report, ticker,
-    )
     if pipeline_assets:
         progress.update_status(
             agent_id, ticker,
             f"Pipeline assets: {len(pipeline_assets)} extracted for rNPV"
         )
-
-    # ── REIT metrics (cap rate override, occupancy, DPU coverage) ────────────
-    reit_metrics = _extract_reit_metrics(
-        sdk_client, _synthesis_model, sections, final_report, ticker,
-    )
     if reit_metrics:
         progress.update_status(
             agent_id, ticker,
             f"REIT metrics: {sorted(reit_metrics.keys())}"
         )
-
-    # ── Bank metrics (CET1, target ROE, NIM, efficiency, NPL) ────────────────
-    bank_metrics = _extract_bank_metrics(
-        sdk_client, _synthesis_model, sections, final_report, ticker,
-    )
     if bank_metrics:
         progress.update_status(
             agent_id, ticker,
