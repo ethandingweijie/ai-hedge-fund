@@ -1036,19 +1036,23 @@ _TECH_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
         "ev_ebitda": 20.0, "ev_revenue": 7.5, "pe": 28.0, "p_s": 6.8, "ev_ebit": 24.0,
     },
     # Mature Platform / SaaS — Adobe, ServiceNow, Salesforce, Oracle
+    # Calibration 2026-04-22: ADBE/ORCL trading at 15-22x EV/EBITDA in 2025
+    # post-Figma + AI disruption concerns. Prior 30x was mid-2022 peak.
     "Mature Platform": {
-        "ev_ebitda": 22.0, "ev_revenue": 8.0, "pe": 30.0, "p_s": 7.2, "ev_ebit": 26.0,
+        "ev_ebitda": 18.0, "ev_revenue": 6.5, "pe": 24.0, "p_s": 5.8, "ev_ebit": 22.0,
     },
     "Mature SaaS": {
-        "ev_ebitda": 30.0, "ev_revenue": 14.0, "pe": 40.0, "p_s": 12.6, "ev_ebit": 36.0,
+        "ev_ebitda": 22.0, "ev_revenue": 10.0, "pe": 28.0, "p_s": 9.0, "ev_ebit": 26.0,
     },
     # Growth SaaS — Snowflake, Datadog, CrowdStrike, Cloudflare
     "Growth SaaS": {
         "ev_ebitda": 45.0, "ev_revenue": 22.0, "pe": 65.0, "p_s": 19.8, "ev_ebit": 54.0,
     },
     # Cybersecurity — Palo Alto, Fortinet, ZScaler, SentinelOne
+    # Calibration 2026-04-22: PANW 65-75x EBITDA, CRWD 80-90x EBITDA in 2025-26
+    # on mission-critical demand + AI-driven SOC expansion. Prior 40x was stale.
     "Cybersecurity / Mission-Critical SaaS": {
-        "ev_ebitda": 40.0, "ev_revenue": 18.0, "pe": 55.0, "p_s": 16.2, "ev_ebit": 48.0,
+        "ev_ebitda": 55.0, "ev_revenue": 22.0, "pe": 70.0, "p_s": 19.8, "ev_ebit": 66.0,
     },
     # Hyper-Growth Platform — Palantir, Cloudflare, Shopify, ServiceTitan
     "Hyper-Growth Platform": {
