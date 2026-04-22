@@ -65,7 +65,9 @@ def _get_key(api_key: str | None) -> str | None:
 _INCOME_MAP: dict[str, str] = {
     "revenue":                           "revenue",
     "grossProfit":                       "gross_profit",
+    "costOfRevenue":                     "cost_of_revenue",            # Tech/Payment: gross margin + EV/GP
     "operatingIncome":                   "operating_income",
+    "operatingExpenses":                 "operating_expense",          # Bank: efficiency ratio denominator
     "netIncome":                         "net_income",
     "ebitda":                            "ebitda",
     "ebit":                              "ebit",
@@ -109,6 +111,7 @@ _CASHFLOW_MAP: dict[str, str] = {
     "commonDividendsPaid":               "dividends_and_distributions",
     # Sector-specific additions
     "stockBasedCompensation":            "stock_based_compensation",   # Tech: dilution signal
+    "commonStockRepurchased":            "share_buyback",              # Bank: buyback-aware retention
 }
 
 # Ratios endpoint — annual fields (no suffix); TTM fields have 'TTM' suffix
@@ -130,6 +133,7 @@ _RATIOS_MAP: dict[str, str] = {
     "bookValuePerShare":                 "book_value_per_share",
     "freeCashFlowPerShare":              "free_cash_flow_per_share",
     "operatingCashFlowPerShare":         "operating_cash_flow_per_share",
+    "dividendPerShare":                  "dividends_per_share",        # Bank/REIT DDM input
     "receivablesTurnover":               "receivables_turnover",
     "inventoryTurnover":                 "inventory_turnover",
     "assetTurnover":                     "asset_turnover",
@@ -146,6 +150,7 @@ _KEY_METRICS_MAP: dict[str, str] = {
     "returnOnEquity":                    "return_on_equity",
     "returnOnAssets":                    "return_on_assets",
     "returnOnInvestedCapital":           "return_on_invested_capital",
+    "investedCapital":                   "invested_capital",   # ROIC vs WACC denominator
     "currentRatio":                      "current_ratio",
     "daysOfSalesOutstanding":            "days_sales_outstanding",
     "operatingCycle":                    "operating_cycle",
@@ -651,6 +656,19 @@ def search_line_items(
             cash = snake.get("cash_and_equivalents")
             if td is not None and cash is not None:
                 snake["net_debt"] = td - cash
+
+        # Derived: total_equity alias for shareholders_equity.
+        # CRITICAL — without this, _extract_annual_series in dcf_agent reads
+        # `total_equity` via getattr and gets None (FMP populates
+        # shareholders_equity only via _BALANCE_MAP). That silently broke the
+        # Tier 2 bank 2-stage Residual Income model (returns None when equity
+        # is None → blend empty → dcf_range empty → save_run skipped → JPM /
+        # any bank never persists → "portfolio manager did not print"
+        # symptom). Several legacy agents (Munger, Pabrai, Fisher, Druckenmiller)
+        # read shareholders_equity, so we keep that key AND propagate to
+        # total_equity for the bank/REIT paths.
+        if "shareholders_equity" in snake and "total_equity" not in snake:
+            snake["total_equity"] = snake["shareholders_equity"]
 
         # Derived: book_value_per_share from ratios if not present
         # (already handled by _RATIOS_MAP → "bookValuePerShare")
