@@ -103,6 +103,30 @@ def run_strategic_router(state: AgentState) -> AgentState:
             sectors[t] = t_sector
             progress.update_status(agent_id, t, f"Sector (lookup): {t_sector}")
         state["data"]["sectors"] = sectors
+
+        # Profile pre-classification on cache path (mirrors the no-cache path below)
+        try:
+            from src.data.sector_profiles import (
+                get_wacc_profile_for_ticker,
+                INDUSTRY_VALUATION_PROFILES,
+            )
+            profile_names: dict[str, str] = {}
+            for t in all_tickers:
+                _, _lookup_profile = get_wacc_profile_for_ticker(t)
+                if not _lookup_profile:
+                    continue
+                _sector_key = "RealEstate" if sectors.get(t) == "REIT" else sectors.get(t, "")
+                _profile_data = INDUSTRY_VALUATION_PROFILES.get(_sector_key, {}).get(_lookup_profile)
+                if _profile_data:
+                    profile_names[t] = _lookup_profile
+                    progress.update_status(agent_id, t, f"Profile (lookup): {_lookup_profile}")
+            if profile_names:
+                state["data"]["profile_names"] = profile_names
+                if ticker in profile_names:
+                    state["data"]["profile_name"] = profile_names[ticker]
+        except Exception as _exc:
+            _log.warning("[strategic_router cache-path] Profile pre-classification skipped: %s", _exc)
+
         return state
     # ── Cache miss — run full classification ──────────────────────────────────
 
@@ -261,5 +285,46 @@ def run_strategic_router(state: AgentState) -> AgentState:
         sectors[t] = t_sector
         progress.update_status(agent_id, t, f"Sector (lookup): {t_sector}")
     state["data"]["sectors"] = sectors
+
+    # ── Profile pre-classification (Tier 2 architecture refactor) ────────────
+    # Pre-populate profile_name from TICKER_SECTOR_LOOKUP when an explicit
+    # profile override is configured. Eliminates the downstream UnboundLocalError
+    # class of bugs where DCF code references profile_name before it's assigned
+    # and preserves a single source of truth for sub-profile classification.
+    #
+    # For tickers WITHOUT a lookup override, state["data"]["profile_names"][t]
+    # remains absent and run_dcf_agent falls back to classify_valuation_profile
+    # using computed financial metrics — preserving the existing routing for
+    # uncovered tickers.
+    try:
+        from src.data.sector_profiles import (
+            get_wacc_profile_for_ticker,
+            INDUSTRY_VALUATION_PROFILES,
+        )
+        profile_names: dict[str, str] = {}
+        for t in all_tickers:
+            _, _lookup_profile = get_wacc_profile_for_ticker(t)
+            if not _lookup_profile:
+                continue
+            # Verify the profile is actually defined in INDUSTRY_VALUATION_PROFILES
+            _sector_key = "RealEstate" if sectors.get(t) == "REIT" else sectors.get(t, "")
+            _profile_data = INDUSTRY_VALUATION_PROFILES.get(_sector_key, {}).get(_lookup_profile)
+            if _profile_data:
+                profile_names[t] = _lookup_profile
+                progress.update_status(
+                    agent_id, t,
+                    f"Profile (lookup): {_lookup_profile}"
+                )
+        if profile_names:
+            state["data"]["profile_names"] = profile_names
+            # Convenience: primary ticker's profile under singular key
+            if ticker in profile_names:
+                state["data"]["profile_name"] = profile_names[ticker]
+    except Exception as _exc:
+        # Never block strategic_router on profile pre-classification — DCF
+        # will classify in-situ as before if this fails.
+        _log.warning(
+            "[strategic_router] Profile pre-classification skipped: %s", _exc
+        )
 
     return state
