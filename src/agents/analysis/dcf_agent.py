@@ -1015,6 +1015,76 @@ def _compute_reit_metrics(
     }
 
 
+# ── Tech sub-type multiples (Tier 2 item 4) ───────────────────────────────────
+#
+# Profile-level peer multiples for Tech sub-types. The prior architecture had
+# all 8 Tech sub-profiles (Hyperscaler, Growth SaaS, Mature SaaS, etc.) share
+# the same sector-level 22x EV/EBITDA, which incorrectly equates AMZN
+# (Hyperscaler) with ADBE (Mature SaaS) at the same multiple.
+#
+# Sources: current trading multiples for representative tickers in each
+# sub-type (calibrated 2026-04-22 using FMP /key-metrics-ttm):
+#   Hyperscaler      (MSFT, GOOGL, AMZN, META):    blended 20-22x EV/EBITDA
+#   Mature SaaS      (ADBE, NOW, CRM, ORCL):       28-32x EV/EBITDA
+#   Growth SaaS      (SNOW, DDOG, CRWD, NET, MDB): 40-50x EV/EBITDA
+#   Cybersecurity    (PANW, FTNT, ZS, S):          35-45x EV/EBITDA
+#   Hyper-Growth     (PLTR, NET, SHOP):            55-65x EV/EBITDA
+#   Semiconductor    (NVDA, AVGO, AMD):            separate sector (Semiconductor)
+_TECH_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
+    # Hyperscaler / Tech Conglomerate
+    "Hyperscaler / Tech Conglomerate": {
+        "ev_ebitda": 20.0, "ev_revenue": 7.5, "pe": 28.0, "p_s": 6.8, "ev_ebit": 24.0,
+    },
+    # Mature Platform / SaaS — Adobe, ServiceNow, Salesforce, Oracle
+    "Mature Platform": {
+        "ev_ebitda": 22.0, "ev_revenue": 8.0, "pe": 30.0, "p_s": 7.2, "ev_ebit": 26.0,
+    },
+    "Mature SaaS": {
+        "ev_ebitda": 30.0, "ev_revenue": 14.0, "pe": 40.0, "p_s": 12.6, "ev_ebit": 36.0,
+    },
+    # Growth SaaS — Snowflake, Datadog, CrowdStrike, Cloudflare
+    "Growth SaaS": {
+        "ev_ebitda": 45.0, "ev_revenue": 22.0, "pe": 65.0, "p_s": 19.8, "ev_ebit": 54.0,
+    },
+    # Cybersecurity — Palo Alto, Fortinet, ZScaler, SentinelOne
+    "Cybersecurity / Mission-Critical SaaS": {
+        "ev_ebitda": 40.0, "ev_revenue": 18.0, "pe": 55.0, "p_s": 16.2, "ev_ebit": 48.0,
+    },
+    # Hyper-Growth Platform — Palantir, Cloudflare, Shopify, ServiceTitan
+    "Hyper-Growth Platform": {
+        "ev_ebitda": 55.0, "ev_revenue": 25.0, "pe": 80.0, "p_s": 22.5, "ev_ebit": 66.0,
+    },
+    # High-Growth Tech / AI (pre-revenue or negative FCF) — reverse DCF preferred
+    "High-Growth Tech / AI": {
+        "ev_ebitda": 65.0, "ev_revenue": 30.0, "pe": 100.0, "p_s": 27.0, "ev_ebit": 78.0,
+    },
+    # Early Platform (GMV-model) — Airbnb, Uber, DoorDash
+    "Early Platform": {
+        "ev_ebitda": 25.0, "ev_revenue": 4.0, "pe": 35.0, "p_s": 3.6, "ev_ebit": 30.0,
+    },
+    # Levered Subscription — Comcast, Netflix
+    "Levered Subscription": {
+        "ev_ebitda": 12.0, "ev_revenue": 4.0, "pe": 18.0, "p_s": 3.6, "ev_ebit": 14.0,
+    },
+    # Default Tech fallback — matches prior sector-level numbers
+    "default": {
+        "ev_ebitda": 22.0, "ev_revenue": 6.5, "pe": 28.0, "p_s": 5.9, "ev_ebit": 26.0,
+    },
+}
+
+
+def _tech_subtype_multiples(profile_name: str) -> dict:
+    """Lookup tech sub-type multiples with default fallback."""
+    return _TECH_SUBTYPE_MULTIPLES.get(profile_name, _TECH_SUBTYPE_MULTIPLES["default"])
+
+
+def _is_tech_subtype(sector: str, profile_name: str) -> bool:
+    """True when the (sector, profile_name) pair warrants tech-specific
+    multiples. Excludes Semiconductor (separate sector table).
+    """
+    return sector == "Tech" and profile_name in _TECH_SUBTYPE_MULTIPLES
+
+
 # ── Bank-specific valuation (Tier 2 item 3) ───────────────────────────────────
 #
 # Institutional-grade bank valuation. Replaces the prior primitive Residual
@@ -1693,8 +1763,25 @@ def _compute_method_value(
         return None
 
     # ── EV/EBITDA (+ EBITDAR proxy: same logic, EBITDAR ≈ EBITDA+rent) ────
+    # Tier 2 Tech: tech sub-type multiples (from _TECH_SUBTYPE_MULTIPLES)
+    # override the sector-level peer multiple when profile is a known tech
+    # sub-type. This stops AMZN/Hyperscaler from using 22x and NOW/Mature
+    # SaaS from using 22x — they're 20x and 30x respectively.
+    # SBC extension: tech companies with SBC > 10% of revenue get 10%
+    # multiple haircut (SBC is real dilution, not non-cash).
     if method_name in {"EV/EBITDA", "EV/EBIT", "Utility P/E", "EV/EBITDAR"}:
-        mult = peer.get("ev_ebitda", 12.0) * sm * growth_premium
+        if _is_tech_subtype(sector, profile_name):
+            tech_mults = _tech_subtype_multiples(profile_name)
+            base_mult = tech_mults["ev_ebitda"] if method_name != "EV/EBIT" else tech_mults["ev_ebit"]
+        else:
+            base_mult = peer.get("ev_ebitda", 12.0)
+        mult = base_mult * sm * growth_premium
+        # Tier 2 Tech SBC discount on EV multiples
+        _sbc_v = most_recent.get("stock_based_compensation")
+        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+            _sbc_pct = abs(_sbc_v) / revenue_base
+            if _sbc_pct > 0.10:
+                mult *= 0.90   # 10% haircut on EV/EBITDA
         # Change 7: apply Chinese ADR multiple haircut for CNY-reporting US-listed companies
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
@@ -1806,8 +1893,13 @@ def _compute_method_value(
         if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
             return None
         # Forward method — sm NOT applied (scenario already mapped to
-        # analyst low/avg/high); growth_premium + SBC haircut still apply
-        mult = peer.get("ev_revenue", 4.0) * growth_premium
+        # analyst low/avg/high); growth_premium + SBC haircut still apply.
+        # Tech sub-type multiples override when applicable (Tier 2 Tech).
+        if _is_tech_subtype(sector, profile_name):
+            base_mult = _tech_subtype_multiples(profile_name)["ev_revenue"]
+        else:
+            base_mult = peer.get("ev_revenue", 4.0)
+        mult = base_mult * growth_premium
         # SBC extension (Tier 2 Tech): tech companies with SBC > 10% of
         # revenue get a multiple haircut because SBC is shareholder
         # dilution disguised as non-cash expense. Resolves the "cheap on
@@ -1842,9 +1934,12 @@ def _compute_method_value(
         fwd_rev = _rev_dict.get(scenario)
         if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
             return None
-        # P/S multiple derived from EV/Revenue × adj_factor (~0.90 typical
-        # since EV includes net debt)
-        ps_mult = peer.get("ev_revenue", 4.0) * 0.90 * growth_premium
+        # Prefer tech sub-type p_s multiple (explicitly calibrated); fall back
+        # to EV/Revenue × 0.90 adjust for sectors without a direct P/S multiple.
+        if _is_tech_subtype(sector, profile_name):
+            ps_mult = _tech_subtype_multiples(profile_name)["p_s"] * growth_premium
+        else:
+            ps_mult = peer.get("ev_revenue", 4.0) * 0.90 * growth_premium
         if reported_currency == "CNY":
             ps_mult *= peer.get("cn_adr_haircut", 1.0)
         return (fwd_rev / shares) * ps_mult
@@ -1861,8 +1956,12 @@ def _compute_method_value(
         ebit_fwd = _ebit_dict.get(scenario)
         if ebit_fwd is None or ebit_fwd <= 0 or shares <= 0:
             return None
-        # EV/EBIT ≈ EV/EBITDA × 1.15-1.25 (EBIT < EBITDA by D&A)
-        mult = peer.get("ev_ebitda", 12.0) * 1.20 * growth_premium
+        # Tech sub-type has direct ev_ebit multiple; else use EV/EBITDA × 1.20
+        if _is_tech_subtype(sector, profile_name):
+            base_mult = _tech_subtype_multiples(profile_name)["ev_ebit"]
+        else:
+            base_mult = peer.get("ev_ebitda", 12.0) * 1.20
+        mult = base_mult * growth_premium
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebit_fwd * mult
