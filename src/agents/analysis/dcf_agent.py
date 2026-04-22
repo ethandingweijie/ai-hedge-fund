@@ -181,6 +181,14 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "intangible_assets":         _safe(getattr(li, "intangible_assets", None)),
             "total_liabilities":         _safe(getattr(li, "total_liabilities", None)),
             "operating_expense":         _safe(getattr(li, "operating_expense", None)),
+            "operating_income":          _safe(getattr(li, "operating_income", None)),
+            # Bank loan book + deposits (Tier 2 bank UI — loan growth history
+            # and LDR). FMP coverage is inconsistent; loans_receivable may be
+            # None for major US money-center banks. Downstream falls back to
+            # research-extracted loan_growth_yoy when None.
+            "loans_receivable":          _safe(getattr(li, "loans_receivable", None)),
+            "loans_held_for_investment": _safe(getattr(li, "loans_held_for_investment", None)),
+            "total_deposits":            _safe(getattr(li, "total_deposits", None)),
             # Buybacks for retention_rate (banks return large % of earnings via
             # repurchases alongside dividends — ignoring this inflates retention)
             "share_buyback":             _safe(getattr(li, "share_buyback", None)),
@@ -1167,6 +1175,56 @@ _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
 def _bank_profile_calibration(profile_name: str) -> dict:
     """Lookup bank calibration with default fallback."""
     return _BANK_PROFILE_CALIBRATION.get(profile_name, _BANK_PROFILE_CALIBRATION["default"])
+
+
+def _compute_ppop(row: dict) -> Optional[float]:
+    """
+    Pre-Provision Operating Profit for a single annual row. Preferred metric
+    for bank operating quality — strips out cyclical provisioning noise.
+
+    Computation priority (highest fidelity first):
+      1. operating_income + abs(provisions) — cleanest when both available
+         (US banks on FMP, before provisions are netted below the operating
+         line). Matches DBS Research's PPOP chart methodology.
+      2. NII + non_interest_income − operating_expense
+         (non_interest_income ≈ revenue − interest_income when revenue is
+         TOTAL bank revenue)
+      3. revenue − abs(interest_expense) − abs(operating_expense)
+         (US-FMP fallback — broken on yfinance-sourced SGX/HK banks where
+         revenue may already net interest_expense, producing negatives)
+
+    Returns None when none of the three paths have enough data.
+    """
+    op_income  = row.get("operating_income")
+    provisions = row.get("provision_for_loan_losses")
+    # Priority 1: operating_income + provisions add-back
+    if op_income is not None and provisions is not None:
+        return op_income + abs(provisions)
+
+    revenue    = row.get("revenue")
+    int_inc    = row.get("interest_income")
+    int_exp    = row.get("interest_expense")
+    op_exp     = row.get("operating_expense")
+
+    # Priority 2: NII + non-interest-income − opex (cleanest for banks with
+    # full income statement disclosure)
+    if int_inc is not None and int_exp is not None and revenue is not None and op_exp is not None:
+        nii = int_inc - abs(int_exp)
+        non_int_inc = revenue - int_inc   # derive non-interest income
+        # Sanity check: non-interest income should be non-negative (else the
+        # revenue field doesn't include interest income and we'd double-subtract)
+        if non_int_inc >= 0:
+            return nii + non_int_inc - abs(op_exp)
+
+    # Priority 3: revenue − interest_expense − opex (legacy US-FMP formula)
+    # Only use when op_income is absent AND we have all three inputs. Explicit
+    # positivity gate — negative values are almost always a sign that the data
+    # source (typically yfinance for SGX/HK) has non-standard revenue semantics.
+    if revenue is not None and int_exp is not None and op_exp is not None:
+        candidate = revenue - abs(int_exp) - abs(op_exp)
+        if candidate > 0:
+            return candidate
+    return None
 
 
 def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> dict:

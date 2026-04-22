@@ -743,13 +743,24 @@ def _extract_bank_metrics(
                 "  nim_pct:                 float (0.005-0.08, last-quarter NIM decimal)\n"
                 "  efficiency_ratio:        float (0.30-0.80, op_exp / total income)\n"
                 "  npl_ratio:               float (0.0-0.10, non-performing loan %)\n"
+                "  npl_coverage_ratio:      float (0.30-3.00, loan-loss reserves / NPLs;\n"
+                "                                  e.g. OCBC reports 150% → 1.50)\n"
                 "  net_charge_offs_pct:     float (0.0-0.05, annualized NCO / avg loans)\n"
                 "  management_target_roe:   float (0.05-0.25, through-cycle ROE/ROTCE\n"
                 "                                  target cited in earnings calls)\n"
                 "  loan_to_deposit_ratio:   float (0.40-1.20)\n"
                 "  dividend_payout_ratio:   float (0.10-0.90)\n"
-                "  loan_growth_yoy:         float (-0.10 to 0.30)\n"
+                "  loan_growth_yoy:         float (-0.10 to 0.30, most recent FY)\n"
                 "  deposit_growth_yoy:      float (-0.10 to 0.30)\n"
+                "  management_overlays_bn:  float (0-50, management overlay / general\n"
+                "                                  provisions in BILLIONS of reporting currency;\n"
+                "                                  e.g. OCBC 'S$700m in mgmt overlays' → 0.70)\n"
+                "  nim_rate_sensitivity_bps: float (0-30, bps NIM change per 1 bp rate\n"
+                "                                   change; e.g. DBS on OCBC '11 bps' → 11.0)\n"
+                "  forward_loan_growth_guidance: string ≤200 chars (mgmt forward guidance\n"
+                "                                   quote; e.g. 'mid-single digit for FY26F')\n"
+                "  forward_nim_guidance:    string ≤200 chars (mgmt forward NIM commentary;\n"
+                "                                   e.g. 'NIM pressure to continue into FY26F')\n"
                 "  evidence:                string ≤300 chars citing the source\n\n"
                 "Rules:\n"
                 "  * Return {} if the research doesn't discuss a bank / lender.\n"
@@ -760,6 +771,15 @@ def _extract_bank_metrics(
                 "    'through-the-cycle ROE target', 'aspires to Y% ROTCE'. Convert to\n"
                 "    decimal (17% → 0.17).\n"
                 "  * efficiency_ratio: lower is better; reported as decimal (55% → 0.55).\n"
+                "  * npl_coverage_ratio: reported as multiple/percentage of provisions to NPL.\n"
+                "    150% → 1.50. Above 1.0 = over-provisioned (conservative); below 1.0 =\n"
+                "    under-provisioned (aggressive).\n"
+                "  * management_overlays_bn: specific disclosed management overlay / general\n"
+                "    provision buffer. Report in billions (700m → 0.70; 2.3bn → 2.30).\n"
+                "  * nim_rate_sensitivity_bps: reported in analyst models / bank disclosures as\n"
+                "    'X bps NIM sensitivity per 1 bp rate change'. Report the X value directly.\n"
+                "  * forward_*_guidance: verbatim or near-verbatim management quote describing\n"
+                "    forward NIM / loan growth expectations. Keep ≤200 chars.\n"
             ),
             messages=[{
                 "role": "user",
@@ -779,24 +799,33 @@ def _extract_bank_metrics(
 
         out: dict = {}
         _clamps = {
-            "cet1_ratio":            (0.05, 0.25),
-            "nim_pct":               (0.005, 0.08),
-            "efficiency_ratio":      (0.30, 0.80),
-            "npl_ratio":             (0.0, 0.15),
-            "net_charge_offs_pct":   (0.0, 0.05),
-            "management_target_roe": (0.05, 0.25),
-            "loan_to_deposit_ratio": (0.40, 1.20),
-            "dividend_payout_ratio": (0.0, 1.0),
-            "loan_growth_yoy":       (-0.30, 0.40),
-            "deposit_growth_yoy":    (-0.30, 0.40),
+            "cet1_ratio":             (0.05, 0.25),
+            "nim_pct":                (0.005, 0.08),
+            "efficiency_ratio":       (0.30, 0.80),
+            "npl_ratio":              (0.0, 0.15),
+            "npl_coverage_ratio":     (0.30, 3.00),
+            "net_charge_offs_pct":    (0.0, 0.05),
+            "management_target_roe":  (0.05, 0.25),
+            "loan_to_deposit_ratio":  (0.40, 1.20),
+            "dividend_payout_ratio":  (0.0, 1.0),
+            "loan_growth_yoy":        (-0.30, 0.40),
+            "deposit_growth_yoy":     (-0.30, 0.40),
+            "management_overlays_bn": (0.0, 50.0),
+            "nim_rate_sensitivity_bps": (0.0, 30.0),
         }
         for k, (lo, hi) in _clamps.items():
             v = parsed.get(k)
             if isinstance(v, (int, float)) and lo <= v <= hi:
                 out[k] = float(v)
 
-        if "evidence" in parsed:
-            out["evidence"] = str(parsed["evidence"])[:300]
+        # String fields — truncate to bound
+        for k, max_len in (
+            ("evidence", 300),
+            ("forward_loan_growth_guidance", 200),
+            ("forward_nim_guidance", 200),
+        ):
+            if k in parsed and isinstance(parsed[k], str) and parsed[k].strip():
+                out[k] = str(parsed[k])[:max_len]
 
         return out
     except Exception:

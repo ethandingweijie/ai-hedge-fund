@@ -98,6 +98,18 @@ _BALANCE_MAP: dict[str, str] = {
     "deferredRevenue":                   "deferred_revenue",           # Tech: SaaS ARR proxy
     "goodwillAndIntangibleAssets":       "intangible_assets",          # Tech/Biopharma: IP moat
     "goodwill":                          "goodwill",                   # Biopharma: acquisition pipeline
+    # Bank-specific additions (Tier 2 bank UI) — loan book + deposit base.
+    # FMP coverage is inconsistent: some tickers populate these fields
+    # (regional banks, some foreign banks), major US money-center banks
+    # (JPM / BAC / C) return None. Non-bank tickers naturally return None.
+    # Downstream code falls back to research-extracted loan_growth_yoy when
+    # these remain None.
+    "netLoans":                          "loans_receivable",
+    "loansAndLeasesReceivables":         "loans_receivable",           # FMP alt name
+    "loansHeldForInvestment":            "loans_held_for_investment",
+    "totalDeposits":                     "total_deposits",
+    "customerDeposits":                  "total_deposits",             # FMP alt
+    "shortTermDeposits":                 "short_term_deposits",
     # Earnings quality additions
     "accountsPayables":                  "accounts_payable",           # EQ: DPO / cash conversion cycle
     "accountPayables":                   "accounts_payable",           # FMP alternate spelling
