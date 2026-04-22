@@ -55,7 +55,7 @@ const fmtMult = (v: number | null | undefined): string => {
 
 // Section heading — matches live UI "SCENARIO PROBABILITIES" style
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
+  'text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400';
 
 // Blue tints for pie slices — matches live app's scenario bar colors
 const PIE_COLORS_BLUE = ['#1e40af', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'];
@@ -71,9 +71,9 @@ function NAVHeroCard({ rb, price, sym }: {
   const shares = rb.shares;
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 text-center">
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 text-center">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>Net Asset Value / Share</p>
-      <p className="text-5xl font-bold tabular-nums text-foreground">
+      <p className="text-5xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
         {fmtMoney(navPs, sym)}
       </p>
       {upside != null && (
@@ -81,20 +81,20 @@ function NAVHeroCard({ rb, price, sym }: {
           {upside >= 0 ? '+' : ''}{(upside * 100).toFixed(1)}% vs price
         </p>
       )}
-      <p className="text-xs text-muted-foreground mt-0.5">
+      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
         {rb.subtype?.replace('_', ' ') ?? 'REIT'} · peer cap {fmtPct(rb.cap_rate_peer, 2)}
       </p>
 
       {/* Quad: NOI / GAV / Debt / Cash — mirrors Current/Long-term/Bull/Bear */}
       <div className="grid grid-cols-2 gap-3 mt-5 text-left">
-        <div className="rounded-xl border border-border bg-card p-3.5">
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
           <p className={`${SECTION_HEADING_CLS} mb-1`}>NOI (EBITDA)</p>
-          <p className="text-xl font-bold tabular-nums text-foreground">{fmtBn(rb.noi, sym)}</p>
+          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{fmtBn(rb.noi, sym)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-3.5">
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
           <p className={`${SECTION_HEADING_CLS} mb-1`}>Gross Asset Value</p>
-          <p className="text-xl font-bold tabular-nums text-foreground">{fmtBn(gav, sym)}</p>
-          <p className="text-xs text-muted-foreground mt-0.5 font-mono">
+          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">{fmtBn(gav, sym)}</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">
             NOI ÷ {fmtPct(rb.cap_rate_used, 2)}
           </p>
         </div>
@@ -114,7 +114,7 @@ function NAVHeroCard({ rb, price, sym }: {
 
       {/* Derivation formula footer */}
       {shares && shares > 0 && (
-        <p className="text-[11px] text-muted-foreground mt-4 font-mono">
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-4 font-mono">
           NAV = NOI / cap − debt + cash ÷ {(shares / 1e6).toFixed(1)}M sh
         </p>
       )}
@@ -153,10 +153,10 @@ function REITKeyStats({ rb, price, sym, ticker: _ticker }: {
   ];
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
       <div className="flex items-center justify-between mb-4">
         <p className={SECTION_HEADING_CLS}>REIT Key Stats</p>
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
           Peer cap {fmtPct(rb.cap_rate_peer, 2)}
         </span>
       </div>
@@ -164,10 +164,10 @@ function REITKeyStats({ rb, price, sym, ticker: _ticker }: {
         {stats.map(s => {
           const valCls =
             s.color === 'green' ? 'text-green-600' :
-            s.color === 'red'   ? 'text-red-500'   : 'text-foreground';
+            s.color === 'red'   ? 'text-red-500'   : 'text-zinc-900 dark:text-zinc-50';
           return (
             <div key={s.label} className="flex items-center justify-between">
-              <span className="text-muted-foreground">{s.label}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">{s.label}</span>
               <span className={`font-semibold tabular-nums ${valCls}`}>{s.value}</span>
             </div>
           );
@@ -214,11 +214,11 @@ function MethodBreakdown({ base, rb, sym, price }: {
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
       <div className="flex items-center justify-between mb-4">
         <p className={SECTION_HEADING_CLS}>REIT Method Breakdown</p>
         {totalWeight > 0 && (
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
             Σ = {(totalWeight * 100).toFixed(0)}%
           </span>
         )}
@@ -226,30 +226,30 @@ function MethodBreakdown({ base, rb, sym, price }: {
 
       <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-3 items-center text-sm">
         <div></div><div></div>
-        <span className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground text-right">
+        <span className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500 dark:text-zinc-400 text-right">
           IV / sh
         </span>
 
         {rowSource.map(r => (
           <div key={r.name} className="contents">
-            <span className="text-xs font-medium tabular-nums text-muted-foreground">
+            <span className="text-xs font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
               {r.weight != null ? `${(r.weight * 100).toFixed(0)}%` : '—'}
             </span>
             <div className="flex items-center gap-2 min-w-0">
-              <div className="h-2 rounded-full bg-muted flex-1 overflow-hidden">
+              <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 flex-1 overflow-hidden">
                 <div
                   className={`h-full ${barColor(r.weight)}`}
                   style={{ width: `${(r.weight ?? 0) * 100}%` }}
                 />
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="text-sm font-semibold text-foreground truncate">{r.name}</span>
-                <span className="text-[10px] text-muted-foreground font-mono truncate">
+                <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 truncate">{r.name}</span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono truncate">
                   {derivation(r.name)}
                 </span>
               </div>
             </div>
-            <span className="text-sm font-semibold tabular-nums text-foreground">
+            <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
               {fmtMoney(r.value, sym)}
             </span>
           </div>
@@ -257,10 +257,10 @@ function MethodBreakdown({ base, rb, sym, price }: {
       </div>
 
       {/* Blended footer */}
-      <div className="flex items-baseline justify-between mt-4 pt-4 border-t border-border">
-        <span className="text-sm font-semibold text-foreground">Blended IV</span>
+      <div className="flex items-baseline justify-between mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Blended IV</span>
         <div className="text-right">
-          <span className="text-xl font-bold tabular-nums text-foreground">
+          <span className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
             {fmtMoney(base?.intrinsic_value ?? blended, sym)}
           </span>
           {price && base?.intrinsic_value && (
@@ -292,12 +292,12 @@ function HistoryChart({ title, unit, data, color, caption }: {
   if (rows.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
       <div className="flex items-center justify-between mb-2">
         <p className={SECTION_HEADING_CLS}>{title}</p>
-        <span className="text-xs font-medium text-muted-foreground">{unit}</span>
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{unit}</span>
       </div>
-      {caption && <p className="text-xs text-muted-foreground mb-3">{caption}</p>}
+      {caption && <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">{caption}</p>}
       <div className="h-32 w-full">
         <ResponsiveContainer>
           <BarChart data={rows} margin={{ top: 18, right: 4, left: 4, bottom: 2 }}>
@@ -385,8 +385,8 @@ function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
               className="w-2.5 h-2.5 rounded-full shrink-0"
               style={{ background: PIE_COLORS_BLUE[i % PIE_COLORS_BLUE.length] }}
             />
-            <span className="text-muted-foreground flex-1 truncate">{d.name}</span>
-            <span className="font-semibold tabular-nums text-foreground">
+            <span className="text-zinc-500 dark:text-zinc-400 flex-1 truncate">{d.name}</span>
+            <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
               {d.value.toFixed(0)}%
             </span>
           </li>
@@ -396,22 +396,22 @@ function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
   );
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
       <p className={`${SECTION_HEADING_CLS} mb-4`}>Portfolio Composition</p>
       {hasSubtype && (
         <div className="mb-5">
-          <p className="text-xs font-medium text-muted-foreground mb-2">By asset class</p>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">By asset class</p>
           <PieRow data={toPieData(rb.subtype_mix!)} />
         </div>
       )}
       {hasGeo && (
-        <div className={hasSubtype ? 'pt-4 border-t border-border' : ''}>
-          <p className="text-xs font-medium text-muted-foreground mb-2">By geography</p>
+        <div className={hasSubtype ? 'pt-4 border-t border-zinc-200 dark:border-zinc-800' : ''}>
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">By geography</p>
           <PieRow data={toPieData(rb.geographic_mix!)} />
         </div>
       )}
       {rb.research_evidence && (
-        <p className="text-[11px] text-muted-foreground mt-4 italic">
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-4 italic">
           Source: {rb.research_evidence.slice(0, 200)}
         </p>
       )}
@@ -442,30 +442,30 @@ function CapRateScenarios({ rb, sym, price }: {
   const upsideColor = (pct: number) => {
     if (pct >  10) return 'text-green-600';
     if (pct < -10) return 'text-red-500';
-    return 'text-muted-foreground';
+    return 'text-zinc-500 dark:text-zinc-400';
   };
   const rowColor = (label: typeof noiLabels[number]) =>
     label === 'Bull' ? 'text-green-600' :
     label === 'Base' ? 'text-blue-500'  : 'text-red-500';
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
       <div className="flex items-center justify-between mb-1">
         <p className={SECTION_HEADING_CLS}>Cap-Rate Sensitivity</p>
-        <span className="text-xs font-medium text-muted-foreground">NAV/sh</span>
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">NAV/sh</span>
       </div>
-      <p className="text-xs text-muted-foreground mb-4">
+      <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
         Base NOI {fmtBn(rb.noi, sym)} · peer cap {fmtPct(baseCap, 2)} highlighted
       </p>
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground">
+          <tr className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500 dark:text-zinc-400">
             <th className="text-left py-2">NOI Δ</th>
             {capRates.map((c, i) => (
               <th key={i} className="text-right py-2 px-1.5">
                 {fmtPct(c, 1)}
                 {i === 1 && (
-                  <span className="block text-[9px] font-normal normal-case tracking-normal text-muted-foreground/70">
+                  <span className="block text-[9px] font-normal normal-case tracking-normal text-zinc-500 dark:text-zinc-400/70">
                     (peer)
                   </span>
                 )}
@@ -477,10 +477,10 @@ function CapRateScenarios({ rb, sym, price }: {
           {noiDeltas.map((d, rowIdx) => {
             const label = noiLabels[rowIdx];
             return (
-              <tr key={d} className="border-t border-border">
+              <tr key={d} className="border-t border-zinc-200 dark:border-zinc-800">
                 <td className={`py-3 pr-1.5 font-semibold ${rowColor(label)}`}>
                   {label}<br/>
-                  <span className="text-[10px] font-normal text-muted-foreground">
+                  <span className="text-[10px] font-normal text-zinc-500 dark:text-zinc-400">
                     {d === 0 ? 'flat' : `${d > 0 ? '+' : ''}${(d * 100).toFixed(0)}%`}
                   </span>
                 </td>
@@ -497,7 +497,7 @@ function CapRateScenarios({ rb, sym, price }: {
                       }`}
                     >
                       <div className={`font-${isBase ? 'bold' : 'semibold'} tabular-nums ${
-                        isBase ? 'text-blue-700 dark:text-blue-400' : 'text-foreground'
+                        isBase ? 'text-blue-700 dark:text-blue-400' : 'text-zinc-900 dark:text-zinc-50'
                       }`}>
                         {sym}{p.toFixed(0)}
                       </div>
@@ -514,7 +514,7 @@ function CapRateScenarios({ rb, sym, price }: {
           })}
         </tbody>
       </table>
-      <p className="text-[11px] text-muted-foreground mt-3 font-mono leading-tight">
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-3 font-mono leading-tight">
         NAV = NOI × (1+Δ) / cap − {fmtBn(debt, sym)} + {fmtBn(cash, sym)} ÷ {(shares / 1e6).toFixed(1)}M sh
       </p>
     </div>
