@@ -28,7 +28,7 @@
  */
 
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import type { DcfRange, ReitBreakdown, DcfCase } from '@/lib/reportTypes';
+import type { DcfRange, ReitBreakdown } from '@/lib/reportTypes';
 import { currencySymbol } from '@/lib/utils';
 
 // ── Formatters ─────────────────────────────────────────────────────────────
@@ -48,11 +48,6 @@ const fmtPct = (v: number | null | undefined, decimals = 1): string => {
   if (v == null || isNaN(v)) return '—';
   return `${(v * 100).toFixed(decimals)}%`;
 };
-const fmtMult = (v: number | null | undefined): string => {
-  if (v == null || isNaN(v)) return '—';
-  return `${v.toFixed(1)}x`;
-};
-
 // Section heading — matches live UI "SCENARIO PROBABILITIES" style
 const SECTION_HEADING_CLS =
   'text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400';
@@ -177,107 +172,18 @@ function REITKeyStats({ rb, price, sym, ticker: _ticker }: {
   );
 }
 
-// ── 3. Method Breakdown — mirrors "Scenario Probabilities" row pattern ──
-
-function MethodBreakdown({ base, rb, sym, price }: {
-  base: DcfCase | undefined; rb: ReitBreakdown; sym: string; price: number | undefined;
-}) {
-  const iv = base?.method_iv_table ?? {};
-  const weights = base?.profile_weights ?? [];
-  const rowSource = weights.length > 0
-    ? weights.map(w => ({ name: w.name, weight: w.weight, value: iv[w.name] ?? null }))
-    : Object.entries(iv).map(([k, v]) => ({ name: k, weight: null, value: v }));
-
-  const derivation = (name: string): string => {
-    if (name.includes('NAV')) return 'NOI/cap − debt + cash';
-    if (name === 'P/FFO')     return `FFO/sh × ${fmtMult(rb.p_ffo_peer)}`;
-    if (name === 'P/AFFO')    return `AFFO/sh × ${fmtMult(rb.p_affo_peer)}`;
-    if (name === 'DDM')       return 'DPS×(1+g)/(WACC−g)';
-    if (name === 'Residual Income') return 'BVPS + PV excess ROE';
-    if (name === 'DCF')       return 'PV(FCF) + PV(TV)';
-    return '';
-  };
-
-  const totalWeight = weights.reduce((s, w) => s + (w.weight || 0), 0);
-  const blended = rowSource.reduce((sum, r) => {
-    if (r.value == null || r.weight == null) return sum;
-    return sum + r.value * r.weight;
-  }, 0);
-
-  // Weight-bar color tints (blue shades, matching scenario probs)
-  const barColor = (w: number | null): string => {
-    if (w == null) return 'bg-neutral-300 dark:bg-neutral-600';
-    if (w >= 0.40) return 'bg-blue-500';
-    if (w >= 0.25) return 'bg-blue-400';
-    if (w >= 0.10) return 'bg-blue-300';
-    return 'bg-blue-200';
-  };
-
-  return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <p className={SECTION_HEADING_CLS}>REIT Method Breakdown</p>
-        {totalWeight > 0 && (
-          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-            Σ = {(totalWeight * 100).toFixed(0)}%
-          </span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-3 items-center text-sm">
-        <div></div><div></div>
-        <span className="text-[10px] font-semibold tracking-widest uppercase text-zinc-500 dark:text-zinc-400 text-right">
-          IV / sh
-        </span>
-
-        {rowSource.map(r => (
-          <div key={r.name} className="contents">
-            <span className="text-xs font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
-              {r.weight != null ? `${(r.weight * 100).toFixed(0)}%` : '—'}
-            </span>
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 flex-1 overflow-hidden">
-                <div
-                  className={`h-full ${barColor(r.weight)}`}
-                  style={{ width: `${(r.weight ?? 0) * 100}%` }}
-                />
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 truncate">{r.name}</span>
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono truncate">
-                  {derivation(r.name)}
-                </span>
-              </div>
-            </div>
-            <span className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-              {fmtMoney(r.value, sym)}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Blended footer */}
-      <div className="flex items-baseline justify-between mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Blended IV</span>
-        <div className="text-right">
-          <span className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
-            {fmtMoney(base?.intrinsic_value ?? blended, sym)}
-          </span>
-          {price && base?.intrinsic_value && (
-            <span className={`ml-2 text-xs font-semibold ${
-              base.intrinsic_value >= price ? 'text-green-600' : 'text-red-500'
-            }`}>
-              {base.intrinsic_value >= price ? '+' : ''}
-              {((base.intrinsic_value - price) / price * 100).toFixed(1)}%
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── 4. History bar chart — mirrors "Scenario Analysis" pattern ──────────
+// ── History bar chart — mirrors "Scenario Analysis" pattern ────────────
+//
+// Note: a "REIT Method Breakdown" panel previously lived here, showing the
+// per-method IV decomposition of the 10-year DCF blend (NAV / P-FFO / P-AFFO
+// / DDM with weights and IV/sh columns, matching the Scenario Probabilities
+// row pattern). It was removed because its information is already conveyed
+// by the Scenario Analysis bar chart (blended IV across scenarios) and the
+// audit trail in the PDF / raw data. Method-level IVs that reach the UI via
+// archived runs can also misleadingly appear inflated (e.g. DLR P/FFO
+// $501.12 from a pre-growth-cap run) — a clean UX win to drop it. The
+// component history is at git log for app/frontend/src/components/report/
+// reit/REITValuationPanel.tsx prior to this commit.
 
 function HistoryChart({ title, unit, data, color, caption }: {
   title: string;
@@ -337,14 +243,27 @@ function HistoryChart({ title, unit, data, color, caption }: {
 // ── 5. Portfolio Composition — 2 pies ──────────────────────────────────
 
 function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
+  // subtype_mix / geographic_mix are LLM-extracted during deep research.
+  // On archived runs or runs where extraction didn't find the data,
+  // they'll be null. Fall back to the classified sub-type as a single
+  // 100% slice so the card still renders — useful info for analysts
+  // at a glance, and avoids a missing-panel discoverability issue.
   const hasSubtype = rb.subtype_mix && Object.keys(rb.subtype_mix).length > 0;
   const hasGeo     = rb.geographic_mix && Object.keys(rb.geographic_mix).length > 0;
-  if (!hasSubtype && !hasGeo) return null;
 
   const toPieData = (obj: Record<string, number>) =>
     Object.entries(obj)
       .sort((a, b) => b[1] - a[1])
       .map(([name, value]) => ({ name, value: value * 100 }));
+
+  // Fallback for asset-class pie: single 100% slice of the classified sub-type.
+  // Shows something meaningful ("this REIT is classified as data_center") even
+  // without LLM extraction, with a subtitle indicating richer breakdown is
+  // available when deep-research runs fresh.
+  const subtypeLabel = (rb.subtype ?? 'REIT').replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const assetClassData = hasSubtype
+    ? toPieData(rb.subtype_mix!)
+    : [{ name: subtypeLabel, value: 100 }];
 
   const PieRow = ({ data }: { data: { name: string; value: number }[] }) => (
     <div className="flex items-center gap-4">
@@ -398,18 +317,35 @@ function PortfolioComposition({ rb }: { rb: ReitBreakdown }) {
   return (
     <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
       <p className={`${SECTION_HEADING_CLS} mb-4`}>Portfolio Composition</p>
-      {hasSubtype && (
-        <div className="mb-5">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">By asset class</p>
-          <PieRow data={toPieData(rb.subtype_mix!)} />
-        </div>
-      )}
-      {hasGeo && (
-        <div className={hasSubtype ? 'pt-4 border-t border-zinc-200 dark:border-zinc-800' : ''}>
+
+      {/* Asset-class pie — always shown. Uses research-extracted mix when
+          available, falls back to classified sub-type as a single slice. */}
+      <div className="mb-5">
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">By asset class</p>
+        <PieRow data={assetClassData} />
+        {!hasSubtype && (
+          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-2 italic">
+            Property-level breakdown requires a fresh deep-research pass.
+          </p>
+        )}
+      </div>
+
+      {/* Geography pie — only rendered when research surfaced a mix */}
+      {hasGeo ? (
+        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">By geography</p>
           <PieRow data={toPieData(rb.geographic_mix!)} />
         </div>
+      ) : (
+        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">By geography</p>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+            Geographic mix not yet extracted — available after a fresh
+            deep-research pipeline run.
+          </p>
+        </div>
       )}
+
       {rb.research_evidence && (
         <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-4 italic">
           Source: {rb.research_evidence.slice(0, 200)}
@@ -538,7 +474,6 @@ export function REITValuationPanel({ dcfRange, currentPrice, ticker }: REITValua
     <div className="flex flex-col gap-4">
       <NAVHeroCard rb={rb} price={currentPrice} sym={sym} />
       <REITKeyStats rb={rb} price={currentPrice} sym={sym} ticker={ticker} />
-      <MethodBreakdown base={dcfRange.base} rb={rb} sym={sym} price={currentPrice} />
       {rb.npi_history && rb.npi_history.length > 0 && (
         <HistoryChart
           title="Net Property Income"
@@ -557,7 +492,7 @@ export function REITValuationPanel({ dcfRange, currentPrice, ticker }: REITValua
           caption="AFFO-funded distribution trend"
         />
       )}
-      {(rb.subtype_mix || rb.geographic_mix) && <PortfolioComposition rb={rb} />}
+      <PortfolioComposition rb={rb} />
       <CapRateScenarios rb={rb} sym={sym} price={currentPrice} />
     </div>
   );
