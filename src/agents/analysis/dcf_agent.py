@@ -3077,12 +3077,35 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # ── Industry profile auto-classification (must precede WACC) ─────
         # Profile is needed to select the correct Energy sub-type WACC base.
+        # v1.5 refactor: prefer pre-classified profile_name from strategic_router
+        # (state["data"]["profile_names"][ticker]) to eliminate a class of bugs
+        # where downstream code references profile_name before classify_valuation_
+        # profile runs. Fall back to in-situ classification for tickers without
+        # lookup overrides.
         revenue_cagr = _historical_cagr(series) or growth_base
         is_pre_revenue = (revenue_base < 10_000_000)  # <$10M revenue → treat as pre-revenue
-        profile_name, profile_data = get_valuation_profile(
-            sector, revenue_cagr, fcf_margin_base, leverage, is_pre_revenue,
-            revenue_base=revenue_base,
-        )
+
+        _preclassified_profiles = state["data"].get("profile_names") or {}
+        _preclassified_name = _preclassified_profiles.get(ticker)
+        if _preclassified_name:
+            # Use the pre-classified profile_name from strategic_router
+            from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
+            _sector_lookup = "RealEstate" if sector == "REIT" else sector
+            profile_name = _preclassified_name
+            profile_data = INDUSTRY_VALUATION_PROFILES.get(_sector_lookup, {}).get(
+                _preclassified_name, {}
+            )
+            if not profile_data:
+                # Pre-classified name didn't resolve — fall through to in-situ
+                profile_name, profile_data = get_valuation_profile(
+                    sector, revenue_cagr, fcf_margin_base, leverage, is_pre_revenue,
+                    revenue_base=revenue_base,
+                )
+        else:
+            profile_name, profile_data = get_valuation_profile(
+                sector, revenue_cagr, fcf_margin_base, leverage, is_pre_revenue,
+                revenue_base=revenue_base,
+            )
 
         # ── Guardrail 4: ticker-level profile override ─────────────────────
         # TICKER_SECTOR_LOOKUP can specify a hard profile override (second field).
