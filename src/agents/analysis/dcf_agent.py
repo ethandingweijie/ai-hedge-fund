@@ -3510,7 +3510,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
                 if _sector_g_avg > 0.005:
                     _gp_raw = 1.0 + _GROWTH_SENSITIVITY * (g - _sector_g_avg) / _sector_g_avg
-                    growth_premium = max(0.60, min(2.50, _gp_raw))
+                    # REIT-specific tighter cap: REIT sub-type peer multiples
+                    # (_REIT_SUBTYPE_MULTIPLES) already embed growth expectations
+                    # — data_center at 22x P/FFO already reflects AI-driven premium.
+                    # Applying the standard 0.60-2.50 growth_premium band on top
+                    # of sub-type multiples double-counts growth and produces
+                    # aggressive IVs (DLR at $324 vs $201 market, 61% upside).
+                    # Tighter [0.85, 1.20] band preserves some differentiation
+                    # (DLR > O) while aligning blended IV with analyst PT range.
+                    _is_reit_profile = sector in {"RealEstate", "REIT"} or profile_name == "REIT"
+                    if _is_reit_profile:
+                        growth_premium = max(0.85, min(1.20, _gp_raw))
+                    else:
+                        growth_premium = max(0.60, min(2.50, _gp_raw))
                 else:
                     growth_premium = 1.0
 
