@@ -161,6 +161,23 @@ CREATE TABLE IF NOT EXISTS ticker_routing_cache (
 # inside a try/except so they are silently skipped if the column already exists.
 
 _MIGRATIONS = [
+    # v1 additions to runs (production DB pre-dates the CREATE TABLE
+    # having these columns — older Railway volumes still need the
+    # ALTER TABLE path. Without this, save_run hits:
+    #   "table runs has no column named analysis_date"
+    # and the archive write silently fails while web_runs persists.
+    # Symptom: run completes + frontend sees it, but /analysis/runs
+    # endpoint (which reads ticker_signals) shows stale totals.)
+    ("runs", "analysis_date",        "TEXT"),
+    ("runs", "sector",               "TEXT"),
+    ("runs", "regime_risk_appetite", "TEXT"),
+    ("runs", "regime_rate_direction","TEXT"),
+    ("runs", "regime_volatility",    "TEXT"),
+    ("runs", "regime_dollar",        "TEXT"),
+    ("runs", "tickers",              "TEXT"),
+    ("runs", "model_name",           "TEXT"),
+    ("runs", "pipeline_version",     "TEXT DEFAULT '2.0'"),
+
     # v2 additions to runs
     ("runs", "research_tier",        "TEXT"),
     ("runs", "industry_brief_text",  "TEXT"),
