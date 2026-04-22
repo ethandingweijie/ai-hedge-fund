@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en" class="dark">
+<!--
+  reit_ui_mockup.html
+  -------------------
+  Static preview of REITValuationPanel.tsx against real DLR data pulled
+  from the backend verification test. Open this file in any browser.
+
+  Data source: `python -m tests.verify_reit_ui_fields DLR`
+  Components : app/frontend/src/components/report/reit/REITValuationPanel.tsx
+
+  Research-sourced panels (subtype_mix, geographic_mix, occupancy, WALE)
+  show representative values — live values come from the deep-research
+  LLM extractor (_extract_reit_metrics in deep_research.py).
+-->
+<head>
+  <meta charset="utf-8" />
+  <title>REIT Valuation Panel — DLR mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --background:   240 10% 3.9%;
+      --foreground:   0 0% 98%;
+      --card:         240 10% 5.5%;
+      --muted:        240 5% 15%;
+      --muted-foreground: 240 5% 64.9%;
+      --border:       240 5% 18%;
+      --primary:      262 83% 58%;  /* #6F4BF5 */
+    }
+    body {
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .bg-card           { background: hsl(var(--card)); }
+    .bg-muted          { background: hsl(var(--muted)); }
+    .bg-muted\/60      { background: hsl(var(--muted) / 0.6); }
+    .bg-muted\/50      { background: hsl(var(--muted) / 0.5); }
+    .bg-muted\/30      { background: hsl(var(--muted) / 0.3); }
+    .bg-muted\/20      { background: hsl(var(--muted) / 0.2); }
+    .bg-muted\/10      { background: hsl(var(--muted) / 0.1); }
+    .bg-card\/50       { background: hsl(var(--card) / 0.5); }
+    .text-muted-foreground { color: hsl(var(--muted-foreground)); }
+    .text-muted-foreground\/70 { color: hsl(var(--muted-foreground) / 0.7); }
+    .border-border     { border-color: hsl(var(--border)); }
+    .border-border\/60 { border-color: hsl(var(--border) / 0.6); }
+    .border-border\/50 { border-color: hsl(var(--border) / 0.5); }
+    .border-border\/30 { border-color: hsl(var(--border) / 0.3); }
+    .tabular-nums      { font-variant-numeric: tabular-nums; }
+    .font-mono         { font-family: "JetBrains Mono", ui-monospace, "SF Mono", Monaco, monospace; }
+  </style>
+</head>
+<body class="min-h-screen p-6">
+<div class="max-w-6xl mx-auto flex flex-col gap-6">
+
+  <!-- Mockup heading (not part of the real panel) -->
+  <div class="flex items-baseline justify-between pb-4 border-b border-border">
+    <div>
+      <h1 class="text-xl font-semibold">REIT Valuation Panel — DLR (Digital Realty Trust)</h1>
+      <p class="text-xs text-muted-foreground mt-1">
+        Static mockup · Data pulled from <code class="font-mono">tests/verify_reit_ui_fields.py DLR</code> · 2026-04-22
+      </p>
+    </div>
+    <span class="text-[10px] font-mono bg-muted/60 text-muted-foreground px-2 py-1 rounded">
+      dcf_range.reit_breakdown
+    </span>
+  </div>
+
+  <!-- ── 1. REIT Header Card ────────────────────────────────────────── -->
+  <div class="rounded-xl border border-border bg-card shadow p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold">
+        REIT Snapshot — DLR
+        <span class="ml-2 text-[10px] font-mono bg-muted/60 px-2 py-0.5 rounded-full text-muted-foreground">
+          data center
+        </span>
+      </h3>
+      <div class="text-xs text-muted-foreground">
+        Peer cap rate 4.50% · P/FFO 22.0x · P/AFFO 25.0x
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+      <!-- Price -->
+      <div class="rounded-lg border border-border bg-card/50 p-3 flex flex-col gap-0.5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Price</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-lg font-semibold tabular-nums">$201.27</span>
+        </div>
+        <p class="text-[10px] text-muted-foreground">Live quote</p>
+      </div>
+      <!-- NAV / share -->
+      <div class="rounded-lg border border-border bg-card/50 p-3 flex flex-col gap-0.5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">NAV / share</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-lg font-semibold tabular-nums">$167.79</span>
+          <span class="text-xs font-medium text-red-500">−16.6%</span>
+        </div>
+        <p class="text-[10px] text-muted-foreground/70 font-mono leading-tight">= (NOI/cap − debt + cash) / shares</p>
+      </div>
+      <!-- Implied cap -->
+      <div class="rounded-lg border border-border bg-card/50 p-3 flex flex-col gap-0.5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Implied Cap</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-lg font-semibold tabular-nums">4.83%</span>
+          <span class="text-xs font-medium text-muted-foreground">peer 4.50%</span>
+        </div>
+        <p class="text-[10px] text-muted-foreground/70 font-mono leading-tight">= NOI / EV</p>
+      </div>
+      <!-- Dist. Yield -->
+      <div class="rounded-lg border border-border bg-card/50 p-3 flex flex-col gap-0.5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Dist. Yield</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-lg font-semibold tabular-nums">2.50%</span>
+        </div>
+        <p class="text-[10px] text-muted-foreground/70 font-mono leading-tight">= DPS / price</p>
+        <p class="text-[10px] text-muted-foreground">DPS $5.03</p>
+      </div>
+      <!-- AFFO coverage -->
+      <div class="rounded-lg border border-border bg-card/50 p-3 flex flex-col gap-0.5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">AFFO Coverage</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-lg font-semibold tabular-nums">55%</span>
+          <span class="text-xs font-medium text-green-500">sustainable</span>
+        </div>
+        <p class="text-[10px] text-muted-foreground/70 font-mono leading-tight">= DPS / AFFO/sh</p>
+      </div>
+      <!-- Leverage -->
+      <div class="rounded-lg border border-border bg-card/50 p-3 flex flex-col gap-0.5">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Leverage</p>
+        <div class="flex items-baseline gap-2">
+          <span class="text-lg font-semibold tabular-nums">27%</span>
+        </div>
+        <p class="text-[10px] text-muted-foreground/70 font-mono leading-tight">= debt / (mcap+debt−cash)</p>
+        <p class="text-[10px] text-muted-foreground">derived</p>
+      </div>
+    </div>
+    <div class="mt-3 flex gap-4 text-xs text-muted-foreground">
+      <span>Occupancy <span class="font-semibold text-white">88.4%</span></span>
+      <span>WALE <span class="font-semibold text-white">6.2y</span></span>
+    </div>
+  </div>
+
+  <!-- ── 2. NAV Bridge + 4. Distribution Quality (side by side) ──────── -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+    <!-- NAV Bridge -->
+    <div class="rounded-xl border border-border bg-card shadow p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold">NAV Bridge</h3>
+        <code class="text-[10px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
+          NAV = NOI / cap − debt + cash
+        </code>
+      </div>
+      <table class="w-full text-xs border-collapse">
+        <tbody>
+          <tr class="border-b border-border/30 text-muted-foreground">
+            <td class="py-1.5 pr-2 text-blue-500">NOI (EBITDA proxy)</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">$3.59B</td>
+          </tr>
+          <tr class="border-b border-border/30 text-muted-foreground">
+            <td class="py-1.5 pr-2 text-blue-500">÷ Cap rate</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">4.50%</td>
+          </tr>
+          <tr class="border-b border-border/30 bg-muted/20 font-medium">
+            <td class="py-1.5 pr-2">= Gross Asset Value</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">$79.72B</td>
+          </tr>
+          <tr class="border-b border-border/30">
+            <td class="py-1.5 pr-2 text-red-500">− Total debt</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">$24.18B</td>
+          </tr>
+          <tr class="border-b border-border/30">
+            <td class="py-1.5 pr-2 text-green-500">+ Cash</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">$3.45B</td>
+          </tr>
+          <tr class="border-t border-border font-semibold">
+            <td class="py-1.5 pr-2">= NAV</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">$58.99B</td>
+          </tr>
+          <tr class="border-b border-border/30 text-muted-foreground">
+            <td class="py-1.5 pr-2 text-blue-500">÷ Shares</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">351.6M</td>
+          </tr>
+          <tr class="border-t border-border font-semibold">
+            <td class="py-1.5 pr-2">= NAV / share</td>
+            <td class="py-1.5 text-right font-mono tabular-nums">$167.79</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Distribution Quality -->
+    <div class="rounded-xl border border-border bg-card shadow p-4">
+      <h3 class="text-sm font-semibold mb-3">Distribution Quality</h3>
+      <div class="flex flex-col gap-2">
+        <div class="flex items-baseline justify-between">
+          <span class="text-xs text-muted-foreground">AFFO Coverage</span>
+          <span class="text-lg font-semibold tabular-nums">55%</span>
+        </div>
+        <div class="relative w-full h-2 bg-muted rounded-full overflow-hidden">
+          <!-- 55% on a 150% scale = 36.7% -->
+          <div class="absolute top-0 left-0 h-full rounded-full bg-green-500" style="width: 36.7%;"></div>
+          <div class="absolute top-0 h-full w-px bg-white/40" style="left: 66.7%;"></div>
+        </div>
+        <p class="text-[10px] text-muted-foreground font-mono">
+          DPS $5.03 ÷ AFFO/sh $9.11
+        </p>
+
+        <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-border/50">
+          <div class="flex flex-col gap-0.5">
+            <span class="text-[10px] text-muted-foreground">FFO / sh</span>
+            <span class="text-sm font-semibold tabular-nums">$9.11</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-[10px] text-muted-foreground">AFFO / sh</span>
+            <span class="text-sm font-semibold tabular-nums">$9.11</span>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="text-[10px] text-muted-foreground">DPS</span>
+            <span class="text-sm font-semibold tabular-nums">$5.03</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 3. Method Breakdown ─────────────────────────────────────────── -->
+  <div class="rounded-xl border border-border bg-card shadow p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold">Method Breakdown — Base Case</h3>
+      <span class="text-[10px] text-muted-foreground">Σ weights = 100%</span>
+    </div>
+    <table class="w-full text-xs border-collapse">
+      <thead>
+        <tr class="border-b border-border/60 text-muted-foreground">
+          <th class="text-left py-1.5 pr-2 font-semibold">Method</th>
+          <th class="text-left py-1.5 pr-2 font-semibold">Derivation</th>
+          <th class="text-right py-1.5 pr-2 font-semibold w-20">IV / sh</th>
+          <th class="text-right py-1.5 pr-2 font-semibold w-16">Weight</th>
+          <th class="text-right py-1.5 font-semibold w-20">Contrib.</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="border-b border-border/30">
+          <td class="py-1.5 pr-2 font-semibold">NAV (Cap Rates)</td>
+          <td class="py-1.5 pr-2 font-mono text-[10px] text-muted-foreground">NOI / cap − debt + cash ÷ shares</td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">$167.79</td>
+          <td class="py-1.5 pr-2 text-right text-muted-foreground tabular-nums">50%</td>
+          <td class="py-1.5 text-right font-mono tabular-nums">$83.90</td>
+        </tr>
+        <tr class="border-b border-border/30">
+          <td class="py-1.5 pr-2 font-semibold">P/FFO</td>
+          <td class="py-1.5 pr-2 font-mono text-[10px] text-muted-foreground">FFO/sh × 22.0x</td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">$200.45</td>
+          <td class="py-1.5 pr-2 text-right text-muted-foreground tabular-nums">30%</td>
+          <td class="py-1.5 text-right font-mono tabular-nums">$60.14</td>
+        </tr>
+        <tr class="border-b border-border/30">
+          <td class="py-1.5 pr-2 font-semibold">P/AFFO</td>
+          <td class="py-1.5 pr-2 font-mono text-[10px] text-muted-foreground">AFFO/sh × 25.0x</td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">$227.78</td>
+          <td class="py-1.5 pr-2 text-right text-muted-foreground tabular-nums">15%</td>
+          <td class="py-1.5 text-right font-mono tabular-nums">$34.17</td>
+        </tr>
+        <tr class="border-b border-border/30">
+          <td class="py-1.5 pr-2 font-semibold">DDM</td>
+          <td class="py-1.5 pr-2 font-mono text-[10px] text-muted-foreground">DPS × (1+g) / (WACC − g), AFFO-gated</td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">$225.35</td>
+          <td class="py-1.5 pr-2 text-right text-muted-foreground tabular-nums">5%</td>
+          <td class="py-1.5 text-right font-mono tabular-nums">$11.27</td>
+        </tr>
+        <tr class="border-t-2 border-border font-semibold bg-muted/10">
+          <td class="py-2 pr-2">Blended IV</td>
+          <td class="py-2 pr-2 text-[10px] text-muted-foreground font-mono">Σ (weight × method IV)</td>
+          <td class="py-2 pr-2 text-right font-mono tabular-nums text-base">$201.43</td>
+          <td class="py-2 pr-2 text-right text-muted-foreground">100%</td>
+          <td class="py-2 text-right font-mono tabular-nums text-green-500">+0.1%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── 5. NPI History + 6. DPU History ─────────────────────────────── -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <!-- NPI history -->
+    <div class="rounded-xl border border-border bg-card shadow p-4">
+      <div class="flex items-baseline justify-between mb-2">
+        <h3 class="text-sm font-semibold">Net Property Income</h3>
+        <span class="text-[10px] text-muted-foreground">USD m</span>
+      </div>
+      <!-- bar chart: max = 3,600 -->
+      <svg viewBox="0 0 300 128" class="w-full h-32" preserveAspectRatio="none">
+        <!-- bars: values in millions: 3600, 2289, 3158, 2868, 3587 → scale / 3600 × 100 -->
+        <g fill="#6F4BF5">
+          <rect x="10"   y="26" width="44" height="90" rx="3"/>
+          <rect x="70"   y="70" width="44" height="46" rx="3"/>
+          <rect x="130"  y="37" width="44" height="79" rx="3"/>
+          <rect x="190"  y="44" width="44" height="72" rx="3"/>
+          <rect x="250"  y="26" width="44" height="90" rx="3"/>
+        </g>
+        <!-- axis labels -->
+        <g font-family="Inter" font-size="8" fill="hsl(240 5% 64.9%)" text-anchor="middle">
+          <text x="32"  y="126">2021</text>
+          <text x="92"  y="126">2022</text>
+          <text x="152" y="126">2023</text>
+          <text x="212" y="126">2024</text>
+          <text x="272" y="126">2025</text>
+        </g>
+        <!-- value labels above bars -->
+        <g font-family="Inter" font-size="8" font-weight="600" fill="hsl(0 0% 98%)" text-anchor="middle">
+          <text x="32"  y="22">3,601</text>
+          <text x="92"  y="66">2,289</text>
+          <text x="152" y="33">3,158</text>
+          <text x="212" y="40">2,868</text>
+          <text x="272" y="22">3,587</text>
+        </g>
+      </svg>
+      <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-[10px] font-mono text-muted-foreground">
+        <span>2021: <span class="text-white">$3,601M</span></span>
+        <span>2022: <span class="text-white">$2,289M</span></span>
+        <span>2023: <span class="text-white">$3,158M</span></span>
+        <span>2024: <span class="text-white">$2,868M</span></span>
+        <span>2025: <span class="text-white">$3,587M</span></span>
+      </div>
+    </div>
+
+    <!-- DPU history -->
+    <div class="rounded-xl border border-border bg-card shadow p-4">
+      <div class="flex items-baseline justify-between mb-2">
+        <h3 class="text-sm font-semibold">Distribution per share</h3>
+        <span class="text-[10px] text-muted-foreground">USD/sh</span>
+      </div>
+      <svg viewBox="0 0 300 128" class="w-full h-32" preserveAspectRatio="none">
+        <!-- values: 4.88, 5.07, 5.09, 5.05, 5.03 → scale (range 4.8-5.1, so amplify: (v-4.5)/0.7*90) -->
+        <g fill="#3b82f6">
+          <rect x="10"   y="68" width="44" height="48" rx="3"/>
+          <rect x="70"   y="43" width="44" height="73" rx="3"/>
+          <rect x="130"  y="40" width="44" height="76" rx="3"/>
+          <rect x="190"  y="45" width="44" height="71" rx="3"/>
+          <rect x="250"  y="48" width="44" height="68" rx="3"/>
+        </g>
+        <g font-family="Inter" font-size="8" fill="hsl(240 5% 64.9%)" text-anchor="middle">
+          <text x="32"  y="126">2021</text>
+          <text x="92"  y="126">2022</text>
+          <text x="152" y="126">2023</text>
+          <text x="212" y="126">2024</text>
+          <text x="272" y="126">2025</text>
+        </g>
+        <g font-family="Inter" font-size="8" font-weight="600" fill="hsl(0 0% 98%)" text-anchor="middle">
+          <text x="32"  y="64">$4.88</text>
+          <text x="92"  y="39">$5.07</text>
+          <text x="152" y="36">$5.09</text>
+          <text x="212" y="41">$5.05</text>
+          <text x="272" y="44">$5.03</text>
+        </g>
+      </svg>
+      <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-[10px] font-mono text-muted-foreground">
+        <span>2021: <span class="text-white">$4.88</span></span>
+        <span>2022: <span class="text-white">$5.07</span></span>
+        <span>2023: <span class="text-white">$5.09</span></span>
+        <span>2024: <span class="text-white">$5.05</span></span>
+        <span>2025: <span class="text-white">$5.03</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 7. Portfolio Composition — pies ─────────────────────────────── -->
+  <div class="rounded-xl border border-border bg-card shadow p-4">
+    <h3 class="text-sm font-semibold mb-3">Portfolio Composition</h3>
+    <div class="flex flex-col md:flex-row gap-4">
+
+      <!-- By asset class -->
+      <div class="flex-1 flex flex-col gap-2 min-w-0">
+        <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">By asset class</h4>
+        <div class="flex items-center gap-3">
+          <svg viewBox="0 0 100 100" class="w-24 h-24 shrink-0">
+            <!-- 81% DC, 12% interconnect, 7% other. -->
+            <circle r="15" cx="50" cy="50" fill="hsl(var(--card))"/>
+            <!-- data_center 81% -->
+            <circle r="23" cx="50" cy="50" fill="transparent" stroke="#3b82f6" stroke-width="23"
+                    stroke-dasharray="117 145" transform="rotate(-90 50 50)"/>
+            <!-- interconnection 12% -->
+            <circle r="23" cx="50" cy="50" fill="transparent" stroke="#60a5fa" stroke-width="23"
+                    stroke-dasharray="17.4 145" stroke-dashoffset="-117" transform="rotate(-90 50 50)"/>
+            <!-- other 7% -->
+            <circle r="23" cx="50" cy="50" fill="transparent" stroke="#93c5fd" stroke-width="23"
+                    stroke-dasharray="10.2 145" stroke-dashoffset="-134.4" transform="rotate(-90 50 50)"/>
+          </svg>
+          <ul class="flex flex-col gap-0.5 text-[11px] min-w-0 flex-1">
+            <li class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background: #3b82f6;"></span>
+              <span class="truncate">Data centers</span>
+              <span class="ml-auto font-mono tabular-nums text-muted-foreground">81%</span>
+            </li>
+            <li class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background: #60a5fa;"></span>
+              <span class="truncate">Interconnection</span>
+              <span class="ml-auto font-mono tabular-nums text-muted-foreground">12%</span>
+            </li>
+            <li class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background: #93c5fd;"></span>
+              <span class="truncate">Other</span>
+              <span class="ml-auto font-mono tabular-nums text-muted-foreground">7%</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- By geography -->
+      <div class="flex-1 flex flex-col gap-2 min-w-0">
+        <h4 class="text-xs font-semibold text-muted-foreground uppercase tracking-wide">By geography</h4>
+        <div class="flex items-center gap-3">
+          <svg viewBox="0 0 100 100" class="w-24 h-24 shrink-0">
+            <circle r="15" cx="50" cy="50" fill="hsl(var(--card))"/>
+            <!-- US West 42% -->
+            <circle r="23" cx="50" cy="50" fill="transparent" stroke="#3b82f6" stroke-width="23"
+                    stroke-dasharray="60.9 145" transform="rotate(-90 50 50)"/>
+            <!-- US East 28% -->
+            <circle r="23" cx="50" cy="50" fill="transparent" stroke="#60a5fa" stroke-width="23"
+                    stroke-dasharray="40.6 145" stroke-dashoffset="-60.9" transform="rotate(-90 50 50)"/>
+            <!-- EU 20% -->
+            <circle r="23" cx="50" cy="50" fill="transparent" stroke="#93c5fd" stroke-width="23"
+                    stroke-dasharray="29 145" stroke-dashoffset="-101.5" transform="rotate(-90 50 50)"/>
+            <!-- APAC 10% -->
+            <circle r="23" cx="50" cy="50" fill="transparent" stroke="#bfdbfe" stroke-width="23"
+                    stroke-dasharray="14.5 145" stroke-dashoffset="-130.5" transform="rotate(-90 50 50)"/>
+          </svg>
+          <ul class="flex flex-col gap-0.5 text-[11px] min-w-0 flex-1">
+            <li class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background: #3b82f6;"></span>
+              <span class="truncate">US West</span>
+              <span class="ml-auto font-mono tabular-nums text-muted-foreground">42%</span>
+            </li>
+            <li class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background: #60a5fa;"></span>
+              <span class="truncate">US East</span>
+              <span class="ml-auto font-mono tabular-nums text-muted-foreground">28%</span>
+            </li>
+            <li class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background: #93c5fd;"></span>
+              <span class="truncate">Europe</span>
+              <span class="ml-auto font-mono tabular-nums text-muted-foreground">20%</span>
+            </li>
+            <li class="flex items-center gap-1.5 truncate">
+              <span class="w-2 h-2 rounded-full shrink-0" style="background: #bfdbfe;"></span>
+              <span class="truncate">APAC</span>
+              <span class="ml-auto font-mono tabular-nums text-muted-foreground">10%</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <p class="text-[10px] text-muted-foreground mt-3 italic">
+      Source: 10-K Item 2 Property disclosure · portfolio WALE 6.2y, occupancy 88.4%
+    </p>
+  </div>
+
+  <!-- ── 8. Cap-Rate × NOI-Growth Sensitivity ────────────────────────── -->
+  <div class="rounded-xl border border-border bg-card shadow p-4">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold">Cap-Rate × NOI-Growth Sensitivity</h3>
+      <span class="text-[10px] text-muted-foreground font-mono">Base cap 4.50% · Base NOI $3.59B</span>
+    </div>
+    <table class="w-full text-xs border-collapse">
+      <thead>
+        <tr class="text-muted-foreground">
+          <th class="text-left py-1.5 pr-2 font-semibold">NOI</th>
+          <th class="text-right py-1.5 pr-2 font-semibold">cap 4.00%</th>
+          <th class="text-right py-1.5 pr-2 font-semibold">cap 4.50%
+            <span class="ml-1 text-[9px] text-muted-foreground/70">(peer)</span>
+          </th>
+          <th class="text-right py-1.5 pr-2 font-semibold">cap 5.00%</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- bear: NOI -5% → 3,408M; prices: /0.04-24.2+3.45=62.34B→$177; /0.045=51.52B→$147; /0.05=41.93B→$119 -->
+        <tr class="border-b border-border/30">
+          <td class="py-1.5 pr-2 font-semibold text-red-500">bear (−5%)</td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$183.30</div>
+            <div class="text-[10px] text-muted-foreground">−9%</div>
+          </td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$150.89</div>
+            <div class="text-[10px] text-red-500">−25%</div>
+          </td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$121.37</div>
+            <div class="text-[10px] text-red-500">−40%</div>
+          </td>
+        </tr>
+        <!-- base -->
+        <tr class="border-b border-border/30">
+          <td class="py-1.5 pr-2 font-semibold text-blue-500">base (flat)</td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$195.77</div>
+            <div class="text-[10px] text-muted-foreground">−3%</div>
+          </td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums bg-muted/30 font-semibold">
+            <div>$167.79</div>
+            <div class="text-[10px] text-red-500">−17%</div>
+          </td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$133.76</div>
+            <div class="text-[10px] text-red-500">−34%</div>
+          </td>
+        </tr>
+        <!-- bull -->
+        <tr class="border-b border-border/30">
+          <td class="py-1.5 pr-2 font-semibold text-green-500">bull (+5%)</td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$218.23</div>
+            <div class="text-[10px] text-green-500">+8%</div>
+          </td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$184.69</div>
+            <div class="text-[10px] text-muted-foreground">−8%</div>
+          </td>
+          <td class="py-1.5 pr-2 text-right font-mono tabular-nums">
+            <div>$146.15</div>
+            <div class="text-[10px] text-red-500">−27%</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-[10px] text-muted-foreground mt-2 font-mono">
+      Cell = (NOI × (1+Δ)) / cap − debt + cash ÷ shares
+    </p>
+  </div>
+
+  <!-- Footer -->
+  <div class="pt-4 border-t border-border text-[10px] text-muted-foreground flex justify-between">
+    <span>DLR sub-type: data_center · verified ready for frontend push</span>
+    <span>Mockup · REITValuationPanel.tsx</span>
+  </div>
+</div>
+</body>
+</html>

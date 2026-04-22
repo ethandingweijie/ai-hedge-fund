@@ -116,10 +116,61 @@ export interface DcfCase {
   margin_direction?: string;
   risk_flag?: string;
   terminal_value?: number;
+  // Per-scenario per-method IV table (key = method name, value = $ per share)
+  method_iv_table?: Record<string, number>;
+  // Profile weights list — [{name, weight}] for method-weight columns
+  profile_weights?: Array<{ name: string; weight: number }>;
+  methods_used?: string[];
+  forward_flags?: string[];
   // FX conversion metadata (populated when financials are not in USD)
   reported_currency?: string;
   fx_rate?: number;
   fx_note?: string;
+}
+
+// ── REIT-specific breakdown ────────────────────────────────────────────────
+// Emitted by dcf_agent.py (src/agents/analysis/dcf_agent.py) for tickers in
+// sector in {"RealEstate","REIT"} or profile_name contains "REIT".
+// Every field is either a real number or null/undefined — the UI hides the
+// sub-panel when the specific field is missing. Research-sourced fields
+// (occupancy, WALE, subtype_mix, geographic_mix) are optional; derivable
+// fields (nav_per_share, gross_asset_value) are always present when the
+// underlying ingredients are.
+export interface ReitBreakdown {
+  subtype?: string;                 // e.g. "data_center", "retail", "industrial"
+  // Absolute figures (for NAV Bridge + audit)
+  ffo?: number | null;
+  affo?: number | null;
+  noi?: number | null;
+  normalized_maintenance_capex?: number | null;
+  maint_capex_pct?: number | null;
+  total_debt?: number | null;
+  cash?: number | null;
+  shares?: number | null;
+  // Per-share figures
+  ffo_per_share?: number | null;
+  affo_per_share?: number | null;
+  dps?: number | null;
+  // Multiples used
+  cap_rate_used?: number | null;
+  cap_rate_peer?: number | null;
+  p_ffo_peer?: number | null;
+  p_affo_peer?: number | null;
+  // Research overrides (LLM-extracted from deep research)
+  occupancy_rate?: number | null;
+  wale_years?: number | null;
+  leverage_ratio_research?: number | null;
+  subtype_mix?: Record<string, number> | null;
+  geographic_mix?: Record<string, number> | null;
+  research_evidence?: string | null;
+  // Pre-computed NAV bridge components (verification / display convenience;
+  // the frontend also recomputes these from the raw inputs for transparency)
+  gross_asset_value?: number | null;
+  nav_total?: number | null;
+  nav_per_share?: number | null;
+  // Historical series for CLINT-style time-series bar charts
+  npi_history?: Array<{ period: string; value: number | null }>;
+  dpu_history?: Array<{ period: string; value: number | null }>;
 }
 
 export interface DcfRange {
@@ -135,6 +186,7 @@ export interface DcfRange {
   net_debt?: number;
   anchor_method?: string;
   profile?: string;
+  reit_breakdown?: ReitBreakdown | null;
 }
 
 export interface RoutingDecision {

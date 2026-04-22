@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<!--
+  reit_ui_mockup_mobile.html
+  --------------------------
+  REIT Valuation Panel — styled to match the live deployed UI at
+  https://ai-hedge-fund-ethandingweijies-projects.vercel.app/
+  Design DNA copied from screenshots of the DLR Valuation tab:
+    • Underline active tab (not pill)
+    • Uppercase tracking-widest section headings
+    • Big centered hero values (text-5xl)
+    • Bull/bear tiles with subtle green/red tints
+    • Scenario-probabilities row pattern: [weight %] [bar] [label] [values]
+    • Functional colors only — no purple accent
+    • Both light + dark modes
+
+  Data: real DLR numbers from tests/verify_reit_ui_fields.py.
+-->
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>REIT Valuation — DLR (matches live UI)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    /* Section heading — matches live UI "12-MONTH PRICE TARGET" style */
+    .section-heading {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgb(113 113 122);  /* zinc-500 */
+    }
+    .dark .section-heading { color: rgb(161 161 170); }  /* zinc-400 */
+  </style>
+</head>
+<body>
+
+<!-- Mode switcher -->
+<div class="fixed top-4 right-4 z-50 flex gap-2">
+  <button onclick="document.documentElement.classList.remove('dark')"
+          class="px-3 py-1.5 bg-white border rounded-lg text-xs font-medium shadow-sm hover:bg-neutral-50">Light</button>
+  <button onclick="document.documentElement.classList.add('dark')"
+          class="px-3 py-1.5 bg-neutral-900 text-white border border-neutral-700 rounded-lg text-xs font-medium shadow-sm hover:bg-neutral-800">Dark</button>
+</div>
+
+<!-- Page container — gray frame around the phone -->
+<div class="min-h-screen bg-neutral-200 dark:bg-neutral-950 py-8 px-2 transition-colors">
+
+  <!-- Phone frame — matches MobileLayout.tsx (430px max, rounded, shadow) -->
+  <div class="mx-auto max-w-[430px] bg-white dark:bg-zinc-950 shadow-2xl rounded-[28px] overflow-hidden border border-neutral-200 dark:border-neutral-800 transition-colors">
+
+    <!-- Ticker header — matches live DLR / Digital Realty Trust layout -->
+    <div class="px-5 pt-6 pb-3">
+      <div class="flex items-start justify-between">
+        <div class="min-w-0">
+          <div class="flex items-baseline gap-2">
+            <h1 class="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">DLR</h1>
+            <span class="text-sm text-neutral-500 dark:text-neutral-400 truncate">Digital Realty Trust, Inc.</span>
+          </div>
+          <div class="flex gap-1.5 mt-2">
+            <span class="text-[11px] px-2 py-0.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300">RealEstate</span>
+            <span class="text-[11px] px-2 py-0.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300">risk-on · medium vol</span>
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <p class="text-2xl font-bold tabular-nums text-neutral-900 dark:text-white">$201.27</p>
+          <p class="text-xs mt-0.5">
+            <span class="text-green-600 font-medium">↑ 32.8%</span>
+            <span class="text-neutral-400 ml-1">1Y</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab strip — underline active, horizontal scroll -->
+    <div class="border-b border-neutral-200 dark:border-neutral-800">
+      <div class="flex gap-6 px-5 overflow-x-auto no-scrollbar">
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Summary</button>
+        <button class="text-sm font-semibold text-neutral-900 dark:text-white py-3 whitespace-nowrap border-b-2 border-neutral-900 dark:border-white -mb-px">Valuation</button>
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Investors</button>
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Risk</button>
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Research</button>
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Financial</button>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="flex flex-col gap-4 p-4 pb-8 bg-neutral-50 dark:bg-zinc-950">
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!--   EXISTING PANELS (kept for REITs — already work great)          -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+
+      <!-- ── 12-month Price Target hero (existing) ──────────────────── -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5 text-center">
+        <p class="section-heading mb-3">12-Month Price Target</p>
+        <p class="text-5xl font-bold tabular-nums text-neutral-900 dark:text-white">$173.25</p>
+        <p class="text-base font-semibold text-red-500 mt-2">−13.9% upside</p>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">vs current $201.27</p>
+
+        <!-- Quad grid: Current / Long-term / Bull / Bear -->
+        <div class="grid grid-cols-2 gap-3 mt-5 text-left">
+          <div class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-3.5">
+            <p class="section-heading mb-1">Current Price</p>
+            <p class="text-xl font-bold tabular-nums text-neutral-900 dark:text-white">$201.27</p>
+          </div>
+          <div class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-3.5">
+            <p class="section-heading mb-1">Long-term Value</p>
+            <p class="text-xl font-bold tabular-nums text-neutral-900 dark:text-white">$324.44</p>
+            <p class="text-xs font-semibold text-green-600 mt-0.5">+61.2%</p>
+          </div>
+          <div class="rounded-xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-3.5">
+            <p class="section-heading mb-1" style="color: rgb(22 163 74);">Bull Case</p>
+            <p class="text-xl font-bold tabular-nums text-green-700 dark:text-green-400">$383.38</p>
+            <p class="text-xs font-semibold text-green-600 mt-0.5">+90.5%</p>
+          </div>
+          <div class="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-3.5">
+            <p class="section-heading mb-1" style="color: rgb(220 38 38);">Bear Case</p>
+            <p class="text-xl font-bold tabular-nums text-red-700 dark:text-red-400">$265.50</p>
+            <p class="text-xs font-semibold text-green-600 mt-0.5">+31.9%</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Scenario Probabilities (existing) ───────────────────────── -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <p class="section-heading">Scenario Probabilities</p>
+          <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400">WACC 5.3%</span>
+        </div>
+        <div class="grid grid-cols-[auto_1fr_auto_auto] gap-x-3 gap-y-3 items-center text-sm">
+          <div></div><div></div>
+          <span class="text-[10px] font-semibold tracking-widest uppercase text-neutral-500 dark:text-neutral-400">12M Target</span>
+          <span class="text-[10px] font-semibold tracking-widest uppercase text-neutral-500 dark:text-neutral-400">DCF IV</span>
+
+          <!-- bear -->
+          <span class="text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300">30%</span>
+          <div class="flex items-center gap-2">
+            <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 flex-1 overflow-hidden">
+              <div class="h-full bg-red-400 dark:bg-red-500" style="width: 30%;"></div>
+            </div>
+            <span class="text-sm font-semibold text-neutral-900 dark:text-white">Bear</span>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">$131.21</span>
+          <span class="text-sm tabular-nums text-neutral-500 dark:text-neutral-400">$265.50</span>
+
+          <!-- base -->
+          <span class="text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300">45%</span>
+          <div class="flex items-center gap-2">
+            <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 flex-1 overflow-hidden">
+              <div class="h-full bg-blue-500" style="width: 45%;"></div>
+            </div>
+            <span class="text-sm font-semibold text-neutral-900 dark:text-white">Base</span>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">$175.40</span>
+          <span class="text-sm tabular-nums text-neutral-500 dark:text-neutral-400">$324.44</span>
+
+          <!-- bull -->
+          <span class="text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300">25%</span>
+          <div class="flex items-center gap-2">
+            <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 flex-1 overflow-hidden">
+              <div class="h-full bg-green-500" style="width: 25%;"></div>
+            </div>
+            <span class="text-sm font-semibold text-neutral-900 dark:text-white">Bull</span>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">$219.81</span>
+          <span class="text-sm tabular-nums text-neutral-500 dark:text-neutral-400">$383.38</span>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!--   NEW REIT-SPECIFIC PANELS (inserted here)                       -->
+      <!--   Matching colors + section-heading style of the panels above    -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+
+      <!-- ── NAV per share hero (REIT equivalent of 12M target) ─────── -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5 text-center">
+        <p class="section-heading mb-3">Net Asset Value / Share</p>
+        <p class="text-5xl font-bold tabular-nums text-neutral-900 dark:text-white">$167.79</p>
+        <p class="text-base font-semibold text-red-500 mt-2">−16.6% vs price</p>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">data center · peer cap 4.50%</p>
+
+        <!-- Quad: NOI / GAV / Debt / Cash -->
+        <div class="grid grid-cols-2 gap-3 mt-5 text-left">
+          <div class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-3.5">
+            <p class="section-heading mb-1">NOI (EBITDA)</p>
+            <p class="text-xl font-bold tabular-nums text-neutral-900 dark:text-white">$3.59B</p>
+          </div>
+          <div class="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-3.5">
+            <p class="section-heading mb-1">Gross Asset Value</p>
+            <p class="text-xl font-bold tabular-nums text-neutral-900 dark:text-white">$79.72B</p>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 font-mono">NOI ÷ 4.50%</p>
+          </div>
+          <div class="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-3.5">
+            <p class="section-heading mb-1" style="color: rgb(220 38 38);">Total Debt</p>
+            <p class="text-xl font-bold tabular-nums text-red-700 dark:text-red-400">$24.18B</p>
+          </div>
+          <div class="rounded-xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-3.5">
+            <p class="section-heading mb-1" style="color: rgb(22 163 74);">Cash</p>
+            <p class="text-xl font-bold tabular-nums text-green-700 dark:text-green-400">$3.45B</p>
+          </div>
+        </div>
+
+        <!-- Formula footer -->
+        <p class="text-[11px] text-neutral-500 dark:text-neutral-400 mt-4 font-mono">
+          NAV = NOI / cap − debt + cash ÷ 351.6M sh
+        </p>
+      </div>
+
+      <!-- ── REIT KPI strip (AFFO cov / Dist. yield / Leverage / Occupancy) -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <p class="section-heading">REIT Key Stats</p>
+          <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400">Peer cap 4.50%</span>
+        </div>
+        <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Implied cap</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">4.83%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Dist. yield</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">2.50%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">AFFO coverage</span>
+            <span class="font-semibold tabular-nums text-green-600">55%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Leverage</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">27%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Occupancy</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">88.4%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">WALE</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">6.2y</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">FFO / sh</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">$9.11</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">AFFO / sh</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">$9.11</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Method Breakdown — uses same row pattern as Scenario Probabilities -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <p class="section-heading">REIT Method Breakdown</p>
+          <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400">Σ = 100%</span>
+        </div>
+        <div class="grid grid-cols-[auto_1fr_auto] gap-x-3 gap-y-3 items-center text-sm">
+          <div></div>
+          <div></div>
+          <span class="text-[10px] font-semibold tracking-widest uppercase text-neutral-500 dark:text-neutral-400 text-right">IV / sh</span>
+
+          <!-- NAV -->
+          <span class="text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300">50%</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 flex-1 overflow-hidden">
+              <div class="h-full bg-blue-500" style="width: 50%;"></div>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <span class="text-sm font-semibold text-neutral-900 dark:text-white">NAV</span>
+              <span class="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono truncate">NOI/cap − debt + cash</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">$167.79</span>
+
+          <!-- P/FFO -->
+          <span class="text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300">30%</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 flex-1 overflow-hidden">
+              <div class="h-full bg-blue-400" style="width: 30%;"></div>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <span class="text-sm font-semibold text-neutral-900 dark:text-white">P/FFO</span>
+              <span class="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono truncate">FFO/sh × 22.0x</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">$200.45</span>
+
+          <!-- P/AFFO -->
+          <span class="text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300">15%</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 flex-1 overflow-hidden">
+              <div class="h-full bg-blue-300" style="width: 15%;"></div>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <span class="text-sm font-semibold text-neutral-900 dark:text-white">P/AFFO</span>
+              <span class="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono truncate">AFFO/sh × 25.0x</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">$227.78</span>
+
+          <!-- DDM -->
+          <span class="text-xs font-medium tabular-nums text-neutral-600 dark:text-neutral-300">5%</span>
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="h-2 rounded-full bg-neutral-100 dark:bg-neutral-800 flex-1 overflow-hidden">
+              <div class="h-full bg-blue-200" style="width: 5%;"></div>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <span class="text-sm font-semibold text-neutral-900 dark:text-white">DDM</span>
+              <span class="text-[10px] text-neutral-500 dark:text-neutral-400 font-mono truncate">DPS×(1+g)/(WACC−g)</span>
+            </div>
+          </div>
+          <span class="text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">$225.35</span>
+        </div>
+        <!-- Blended footer row -->
+        <div class="flex items-baseline justify-between mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+          <span class="text-sm font-semibold text-neutral-900 dark:text-white">Blended IV</span>
+          <div class="text-right">
+            <span class="text-xl font-bold tabular-nums text-neutral-900 dark:text-white">$201.43</span>
+            <span class="ml-2 text-xs font-semibold text-green-600">+0.1%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Net Property Income history — styled like Scenario Analysis -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-2">
+          <p class="section-heading">Net Property Income</p>
+          <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400">USD m · 5Y</span>
+        </div>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+          FY25 $3.59B · +56% vs trough FY22, roughly flat vs FY21 peak
+        </p>
+        <svg viewBox="0 0 380 140" class="w-full h-32" preserveAspectRatio="none">
+          <g class="text-neutral-300 dark:text-neutral-700" stroke="currentColor" stroke-width="0.5" stroke-dasharray="2 2">
+            <line x1="0" y1="30" x2="380" y2="30"/>
+            <line x1="0" y1="60" x2="380" y2="60"/>
+            <line x1="0" y1="90" x2="380" y2="90"/>
+          </g>
+          <g>
+            <rect x="20"  y="18"  width="50" height="102" rx="3" fill="#3b82f6"/>
+            <rect x="92"  y="73"  width="50" height="47"  rx="3" fill="#3b82f6"/>
+            <rect x="164" y="33"  width="50" height="87"  rx="3" fill="#3b82f6"/>
+            <rect x="236" y="43"  width="50" height="77"  rx="3" fill="#3b82f6"/>
+            <rect x="308" y="18"  width="50" height="102" rx="3" fill="#3b82f6"/>
+          </g>
+          <g font-family="Inter" font-size="10" font-weight="600" text-anchor="middle" class="text-neutral-900 dark:text-white" fill="currentColor">
+            <text x="45"  y="12">$3,601</text>
+            <text x="117" y="67">$2,289</text>
+            <text x="189" y="27">$3,158</text>
+            <text x="261" y="37">$2,868</text>
+            <text x="333" y="12">$3,587</text>
+          </g>
+          <g font-family="Inter" font-size="10" text-anchor="middle" class="text-neutral-500 dark:text-neutral-400" fill="currentColor">
+            <text x="45"  y="135">2021</text>
+            <text x="117" y="135">2022</text>
+            <text x="189" y="135">2023</text>
+            <text x="261" y="135">2024</text>
+            <text x="333" y="135">2025</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- ── Distribution per Share history ──────────────────────────── -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-2">
+          <p class="section-heading">Distribution per Share</p>
+          <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400">USD · 5Y</span>
+        </div>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-3">
+          FY25 $5.03 · held flat since FY22; AFFO-funded at 55% coverage
+        </p>
+        <svg viewBox="0 0 380 140" class="w-full h-32" preserveAspectRatio="none">
+          <g class="text-neutral-300 dark:text-neutral-700" stroke="currentColor" stroke-width="0.5" stroke-dasharray="2 2">
+            <line x1="0" y1="30" x2="380" y2="30"/>
+            <line x1="0" y1="60" x2="380" y2="60"/>
+            <line x1="0" y1="90" x2="380" y2="90"/>
+          </g>
+          <g>
+            <rect x="20"  y="72" width="50" height="48" rx="3" fill="#22c55e" opacity="0.85"/>
+            <rect x="92"  y="40" width="50" height="80" rx="3" fill="#22c55e" opacity="0.85"/>
+            <rect x="164" y="36" width="50" height="84" rx="3" fill="#22c55e" opacity="0.85"/>
+            <rect x="236" y="43" width="50" height="77" rx="3" fill="#22c55e" opacity="0.85"/>
+            <rect x="308" y="46" width="50" height="74" rx="3" fill="#22c55e" opacity="0.85"/>
+          </g>
+          <g font-family="Inter" font-size="10" font-weight="600" text-anchor="middle" class="text-neutral-900 dark:text-white" fill="currentColor">
+            <text x="45"  y="66">$4.88</text>
+            <text x="117" y="34">$5.07</text>
+            <text x="189" y="30">$5.09</text>
+            <text x="261" y="37">$5.05</text>
+            <text x="333" y="40">$5.03</text>
+          </g>
+          <g font-family="Inter" font-size="10" text-anchor="middle" class="text-neutral-500 dark:text-neutral-400" fill="currentColor">
+            <text x="45"  y="135">2021</text>
+            <text x="117" y="135">2022</text>
+            <text x="189" y="135">2023</text>
+            <text x="261" y="135">2024</text>
+            <text x="333" y="135">2025</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- ── Portfolio Composition — two pies ────────────────────────── -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5">
+        <p class="section-heading mb-4">Portfolio Composition</p>
+
+        <!-- By asset class -->
+        <div class="mb-5">
+          <p class="text-xs font-medium text-neutral-600 dark:text-neutral-300 mb-2">By asset class</p>
+          <div class="flex items-center gap-4">
+            <svg viewBox="0 0 100 100" class="w-24 h-24 shrink-0">
+              <circle r="15" cx="50" cy="50" class="fill-white dark:fill-zinc-900"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#1e40af" stroke-width="23"
+                      stroke-dasharray="117 145" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#3b82f6" stroke-width="23"
+                      stroke-dasharray="17.4 145" stroke-dashoffset="-117" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#93c5fd" stroke-width="23"
+                      stroke-dasharray="10.2 145" stroke-dashoffset="-134.4" transform="rotate(-90 50 50)"/>
+            </svg>
+            <ul class="flex flex-col gap-1.5 text-sm flex-1 min-w-0">
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: #1e40af;"></span>
+                <span class="text-neutral-700 dark:text-neutral-200 flex-1">Data centers</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">81%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: #3b82f6;"></span>
+                <span class="text-neutral-700 dark:text-neutral-200 flex-1">Interconnection</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">12%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: #93c5fd;"></span>
+                <span class="text-neutral-700 dark:text-neutral-200 flex-1">Other</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">7%</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- By geography -->
+        <div class="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+          <p class="text-xs font-medium text-neutral-600 dark:text-neutral-300 mb-2">By geography</p>
+          <div class="flex items-center gap-4">
+            <svg viewBox="0 0 100 100" class="w-24 h-24 shrink-0">
+              <circle r="15" cx="50" cy="50" class="fill-white dark:fill-zinc-900"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#1e40af" stroke-width="23"
+                      stroke-dasharray="60.9 145" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#3b82f6" stroke-width="23"
+                      stroke-dasharray="40.6 145" stroke-dashoffset="-60.9" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#60a5fa" stroke-width="23"
+                      stroke-dasharray="29 145" stroke-dashoffset="-101.5" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#bfdbfe" stroke-width="23"
+                      stroke-dasharray="14.5 145" stroke-dashoffset="-130.5" transform="rotate(-90 50 50)"/>
+            </svg>
+            <ul class="flex flex-col gap-1.5 text-sm flex-1 min-w-0">
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: #1e40af;"></span>
+                <span class="text-neutral-700 dark:text-neutral-200 flex-1">US West</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">42%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: #3b82f6;"></span>
+                <span class="text-neutral-700 dark:text-neutral-200 flex-1">US East</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">28%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: #60a5fa;"></span>
+                <span class="text-neutral-700 dark:text-neutral-200 flex-1">Europe</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">20%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background: #bfdbfe;"></span>
+                <span class="text-neutral-700 dark:text-neutral-200 flex-1">APAC</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">10%</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Cap-Rate Sensitivity — pattern-matches Scenario Probs -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-1">
+          <p class="section-heading">Cap-Rate Sensitivity</p>
+          <span class="text-xs font-medium text-neutral-500 dark:text-neutral-400">NAV/sh</span>
+        </div>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mb-4">
+          Base NOI $3.59B · peer cap 4.50% highlighted
+        </p>
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="text-[10px] font-semibold tracking-widest uppercase text-neutral-500 dark:text-neutral-400">
+              <th class="text-left py-2">NOI Δ</th>
+              <th class="text-right py-2 px-1.5">4.0%</th>
+              <th class="text-right py-2 px-1.5">4.5% <span class="text-[9px] font-normal normal-case tracking-normal">(peer)</span></th>
+              <th class="text-right py-2 px-1.5">5.0%</th>
+            </tr>
+          </thead>
+          <tbody class="text-sm">
+            <!-- bear -->
+            <tr class="border-t border-neutral-200 dark:border-neutral-800">
+              <td class="py-3 pr-1.5 font-semibold text-red-500">
+                Bear<br/>
+                <span class="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">−5%</span>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$183</div>
+                <div class="text-[10px] text-neutral-500">−9%</div>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$151</div>
+                <div class="text-[10px] text-red-500">−25%</div>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$121</div>
+                <div class="text-[10px] text-red-500">−40%</div>
+              </td>
+            </tr>
+            <!-- base -->
+            <tr class="border-t border-neutral-200 dark:border-neutral-800">
+              <td class="py-3 pr-1.5 font-semibold text-blue-500">
+                Base<br/>
+                <span class="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">flat</span>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$196</div>
+                <div class="text-[10px] text-neutral-500">−3%</div>
+              </td>
+              <td class="py-3 px-1.5 text-right bg-blue-50 dark:bg-blue-950/30 rounded">
+                <div class="font-bold tabular-nums text-blue-700 dark:text-blue-400">$168</div>
+                <div class="text-[10px] text-red-500">−17%</div>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$134</div>
+                <div class="text-[10px] text-red-500">−34%</div>
+              </td>
+            </tr>
+            <!-- bull -->
+            <tr class="border-t border-neutral-200 dark:border-neutral-800">
+              <td class="py-3 pr-1.5 font-semibold text-green-500">
+                Bull<br/>
+                <span class="text-[10px] font-normal text-neutral-500 dark:text-neutral-400">+5%</span>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$218</div>
+                <div class="text-[10px] text-green-600">+8%</div>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$185</div>
+                <div class="text-[10px] text-neutral-500">−8%</div>
+              </td>
+              <td class="py-3 px-1.5 text-right">
+                <div class="font-semibold tabular-nums text-neutral-900 dark:text-white">$146</div>
+                <div class="text-[10px] text-red-500">−27%</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="text-[11px] text-neutral-500 dark:text-neutral-400 mt-3 font-mono leading-tight">
+          NAV = NOI × (1+Δ) / cap − $24.18B + $3.45B ÷ 351.6M sh
+        </p>
+      </div>
+
+    </div> <!-- content -->
+  </div> <!-- phone frame -->
+
+  <p class="text-center text-xs text-neutral-500 dark:text-neutral-400 mt-6">
+    Uses live site's actual design tokens — toggle Light / Dark above
+  </p>
+
+</div>
+
+<style>
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
+</body>
+</html>
