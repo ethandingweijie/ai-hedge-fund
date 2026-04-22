@@ -70,14 +70,23 @@ E. Internet platform (e.g. GOOGL, META): use DAU/MAU, ARPU by geography, ad reve
 
 THEN compute the metrics relevant to the identified sub-type only:
 
-FOR SUB-TYPES A & B (software/SaaS/cloud):
-- Net Revenue Retention (NRR) or Net Expansion Rate as reported
-  NOTE (consumption): do NOT back-calculate NRR from ARPU; note if model is consumption-based.
-- CAC Payback Period = CAC / (ARPU × Gross Margin) — sub-type A only
-  NOTE (consumption, sub-type B): write "CAC Payback: Not applicable — use RPO growth instead."
-- LTV:CAC ratio (target >3x) — sub-type A only; for B use cohort revenue expansion proxy if available
-- Ecosystem lock-in score: integrations, API dependencies, switching cost evidence
-- Key question: NRR>120% and CAC payback <24 months (A); RPO growth >30% (B)?
+FOR SUB-TYPES A & B (software/SaaS/cloud) — cite numbers directly for valuation engine:
+- **Net Revenue Retention (NRR)** as decimal (e.g. 1.25 for 125%). Cited directly from
+  the earnings call / supplemental deck. For consumption models (B), use Net Expansion
+  Rate and flag as such.
+- **Gross Retention Rate** as decimal (e.g. 0.95) — critical floor for NRR quality.
+- **CAC Payback Period** in months (sub-type A only).
+- **LTV:CAC ratio** (target >3x).
+- **Rule of 40 score**: revenue growth % + FCF margin %. E.g. 35% growth + 25% FCF margin
+  = Rule of 40 score 60. Cited for the most recent 4 quarters.
+- **Magic Number**: (new ARR this quarter) / (prior quarter S&M expense). Target >0.75.
+  Signals sales efficiency.
+- **RPO growth YoY** (sub-type B): remaining performance obligations — leading indicator
+  of consumption revenue recognition.
+- **Billings growth YoY**: leading indicator vs reported GAAP revenue.
+- Ecosystem lock-in score: integrations, API dependencies, switching cost evidence.
+- Key question: NRR>120% + Rule of 40 >40 + CAC payback <24 months (A);
+  RPO growth >30% + consumption expansion rate >115% (B)?
 
 FOR SUB-TYPE C (hardware/infrastructure/computers):
 - Segment margin split: report gross margin and operating margin separately for each major division

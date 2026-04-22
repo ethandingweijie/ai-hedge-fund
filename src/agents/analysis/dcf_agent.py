@@ -185,6 +185,9 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             # repurchases alongside dividends — ignoring this inflates retention)
             "share_buyback":             _safe(getattr(li, "share_buyback", None)),
             "common_stock_repurchased":  _safe(getattr(li, "common_stock_repurchased", None)),
+            # Tech/Payment-processor methods: EV/Gross Profit
+            "gross_profit":              _safe(getattr(li, "gross_profit", None)),
+            "cost_of_revenue":           _safe(getattr(li, "cost_of_revenue", None)),
         })
 
     # SBC-adjusted (owner-earnings) FCF: reported FCF treats SBC as non-cash and
@@ -2308,6 +2311,100 @@ def _compute_method_value(
             return max((ev - (net_debt or 0.0)) / shares, 0.0)
         return None
 
+    # ── Rule of 40 — SaaS quality governor (Tier 2 Tech) ─────────────────
+    # Growth% + FCF margin% — the industry-standard SaaS quality metric.
+    # <40 = low quality (unprofitable growth or slow decay); 40-60 = healthy;
+    # >60 = best-in-class. Applied as a tier multiplier on EV/Revenue-based
+    # valuation. Prevents the "50% growth at -40% FCF margin" trap where
+    # pure EV/Revenue would overvalue unprofitable growth.
+    #
+    # Prefers research-sourced Rule of 40 score (captures actual quarter's
+    # growth + FCF margin cleanly); falls back to financial-metric-derived
+    # score (growth_base + fcf_margin_base in percent).
+    if method_name in {"Rule of 40", "Rule-of-40"}:
+        _saas = most_recent.get("_saas_metrics") or {}
+        ro40_score = _saas.get("rule_of_40_score")
+        if ro40_score is None:
+            # Derive from engine inputs: growth_base + fcf_margin_base (decimals)
+            ro40_score = (growth_base + fcf_margin_base) * 100
+        # Tier multiplier on EV/Revenue base IV:
+        #   score >= 60 → 1.5x (best-in-class premium)
+        #   40 <= score < 60 → 1.0x (fair, no adjustment)
+        #   0 <= score < 40 → 0.7x (unprofitable growth penalty)
+        #   score < 0 → 0.5x (deteriorating)
+        if ro40_score >= 60:
+            tier_mult = 1.5
+        elif ro40_score >= 40:
+            tier_mult = 1.0
+        elif ro40_score >= 0:
+            tier_mult = 0.7
+        else:
+            tier_mult = 0.5
+        # Base EV/Revenue IV (tech sub-type aware)
+        if _is_tech_subtype(sector, profile_name):
+            base_mult = _tech_subtype_multiples(profile_name)["ev_revenue"]
+        else:
+            base_mult = peer.get("ev_revenue", 4.0)
+        # Use forward revenue when available, else TTM
+        fwd_rev = None
+        if forward_consensus is not None:
+            _rev_dict = forward_consensus.get("revenue") or {}
+            fwd_rev = _rev_dict.get(scenario)
+        if fwd_rev is None or fwd_rev <= 0:
+            fwd_rev = revenue_base * (1 + growth_base) if revenue_base else None
+        if fwd_rev is None or fwd_rev <= 0 or shares <= 0:
+            return None
+        mult = base_mult * tier_mult * growth_premium
+        # SBC haircut for high-SBC tech
+        _sbc_v = most_recent.get("stock_based_compensation")
+        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+            if abs(_sbc_v) / revenue_base > 0.10:
+                mult *= 0.93
+        ev = fwd_rev * mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # ── EV/Gross Profit — Payment Processors (Tier 2 Tech) ────────────────
+    # For net-vs-gross reporters (PYPL/ADYEN/SQ) EV/Revenue is incomparable
+    # because interchange flows through as revenue for gross reporters but
+    # not net reporters. EV/GP normalizes on the actual take-rate economics.
+    # Peer multiple: 18-22x for payment processors (tighter than EV/EBITDA).
+    if method_name in {"EV/Gross Profit", "EV/GP"}:
+        gross_profit = most_recent.get("gross_profit")
+        # Fallback: revenue − cost_of_revenue when gross_profit not reported
+        if gross_profit is None:
+            rev_v = most_recent.get("revenue")
+            cor_v = most_recent.get("cost_of_revenue")
+            if rev_v and cor_v:
+                gross_profit = rev_v - cor_v
+        if gross_profit is None or gross_profit <= 0 or shares <= 0:
+            return None
+        # 18x default; can be overridden by peer.get("ev_gp") if set later
+        gp_mult = peer.get("ev_gp", 18.0) * sm * growth_premium
+        ev = gross_profit * gp_mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
+    # ── EV/Volume — Payment Processors (TPV × take rate × multiple) ────────
+    # For payment networks (V/MA) and processors (ADYEN/SQ) where TPV
+    # (Total Payment Volume) is the fundamental operational metric. Requires
+    # tpv + take_rate from deep research (stored on most_recent by the
+    # processor extractor). Falls back to None when data unavailable.
+    #
+    # Critical for Indian UPI ecosystem (Razorpay, Pine Labs, Paytm) where
+    # take rates are 10-20 bps vs US card rails' 200-300 bps — applying
+    # EV/Volume directly to bare TPV without take_rate adjustment would
+    # inflate IV 10-20x. Always use (tpv × take_rate) for normalized NII.
+    if method_name in {"EV/Volume", "EV/TPV"}:
+        tpv = most_recent.get("tpv")  # total payment volume (annual $)
+        take_rate = most_recent.get("take_rate_bps")  # basis points
+        if tpv is None or tpv <= 0 or take_rate is None or take_rate <= 0 or shares <= 0:
+            return None
+        # Normalized revenue = TPV × take_rate_bps / 10000
+        normalized_rev = tpv * take_rate / 10000.0
+        # Apply EV/Revenue multiple (payment networks 15x, processors 5-7x)
+        volume_mult = peer.get("ev_revenue", 6.0) * sm * growth_premium
+        ev = normalized_rev * volume_mult
+        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+
     # ── Cash Runway (biotech-specific) ────────────────────────────────────
     if method_name == "Cash Runway":
         # Floor = cash / shares (net cash position)
@@ -2550,6 +2647,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     # Per-ticker bank metrics (CET1, target ROE, NIM, efficiency, NPL).
     # Produced by _extract_bank_metrics() in deep_research.py.
     bank_metrics_all       = state["data"].get("bank_metrics", {})
+    # Per-ticker SaaS metrics (NRR, Rule of 40, CAC payback, magic number).
+    # Produced by _extract_saas_metrics() in deep_research.py.
+    saas_metrics_all       = state["data"].get("saas_metrics", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -2610,7 +2710,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                  # Bank-specific (Tier 2)
                  "interest_income", "provision_for_loan_losses",
                  "goodwill", "intangible_assets", "total_liabilities",
-                 "operating_expense"],
+                 "operating_expense",
+                 # Tech/Payment-processor methods
+                 "gross_profit", "cost_of_revenue"],
                 end_date,
                 period="annual",
                 limit=7,
@@ -2951,6 +3053,31 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _or_parts:
                     ticker_forward_flags.append(
                         "Bank research overrides: " + " | ".join(_or_parts)
+                    )
+
+        # ── SaaS metrics attach (Tier 2 Tech) ──────────────────────────────
+        # For Tech sector tickers, attach research-sourced SaaS KPIs onto
+        # most_recent for consumption by Rule of 40 method + NRR confidence
+        # weighting in the blend. Absent metrics → methods fall back to
+        # financial-metric-derived values (Rule of 40 from growth + FCF margin).
+        if sector == "Tech":
+            _saas_override = (saas_metrics_all or {}).get(ticker) or {}
+            if _saas_override:
+                most_recent["_saas_metrics"] = _saas_override
+                _saas_parts = []
+                if "nrr_pct" in _saas_override:
+                    _saas_parts.append(f"NRR {_saas_override['nrr_pct']:.0%}")
+                if "rule_of_40_score" in _saas_override:
+                    _saas_parts.append(f"Rule of 40 {_saas_override['rule_of_40_score']:.0f}")
+                if "cac_payback_months" in _saas_override:
+                    _saas_parts.append(f"CAC payback {_saas_override['cac_payback_months']:.0f}mo")
+                if "magic_number" in _saas_override:
+                    _saas_parts.append(f"magic # {_saas_override['magic_number']:.2f}")
+                if "gross_retention_pct" in _saas_override:
+                    _saas_parts.append(f"gross retention {_saas_override['gross_retention_pct']:.0%}")
+                if _saas_parts:
+                    ticker_forward_flags.append(
+                        "SaaS research metrics: " + " | ".join(_saas_parts)
                     )
 
         # ── FCF margin (SBC-adjusted / owner-earnings) ──────────────────
