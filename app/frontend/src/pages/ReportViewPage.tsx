@@ -17,6 +17,7 @@ import { AgentSignalsPanel } from '@/components/report/AgentSignalsPanel';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
+import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { DebatePanel } from '@/components/report/DebatePanel';
 import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
@@ -204,10 +205,13 @@ export function ReportViewPage() {
         </div>
 
         {/* ── Valuation ──────────────────────────────────────────────────── */}
+        {/* REIT branch: when dcfRange.reit_breakdown is populated (backend    */}
+        {/* emits for RealEstate / REIT sectors), render REITValuationPanel    */}
+        {/* in place of the generic DCF ladder. Price Target + Scenario Chart */}
+        {/* work for REITs too, so they render unconditionally.                */}
         <SectionAnchor id="valuation" label="Valuation" />
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-start">
           <div className="flex flex-col gap-4">
-            <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={ticker} />
             <PriceTargetPanel
               dcfRange={dcfRange}
               scenario={scenarioAnalysis}
@@ -215,6 +219,15 @@ export function ReportViewPage() {
               ticker={ticker}
             />
             <ScenarioChart scenario={scenarioAnalysis} ticker={ticker} />
+            {dcfRange?.reit_breakdown ? (
+              <REITValuationPanel
+                dcfRange={dcfRange}
+                currentPrice={currentPrice}
+                ticker={ticker}
+              />
+            ) : (
+              <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={ticker} />
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />

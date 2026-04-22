@@ -35,6 +35,7 @@ import { FinancialsChart } from '@/components/report/FinancialsChart';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
 import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
+import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
@@ -592,9 +593,21 @@ function ValuationBody({
         <LoadingCard label="Scenario Analysis" minH={220} />
       )}
 
-      {/* ── DCF Valuation Ladder (v2 native) ────────────────────────── */}
+      {/* ── REIT branch OR DCF Valuation Ladder ──────────────────────────── */}
+      {/* When dcfRange.reit_breakdown is populated (backend emits it for     */}
+      {/* RealEstate / REIT sectors), render the full REIT-specific panel    */}
+      {/* stack (NAV hero, Method Breakdown, NPI/DPU history, Cap-Rate grid).*/}
+      {/* Otherwise fall through to the generic v2 DCF ladder.                */}
       {dcfRange ? (
-        <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} />
+        dcfRange.reit_breakdown ? (
+          <REITValuationPanel
+            dcfRange={dcfRange}
+            currentPrice={current ?? undefined}
+            ticker={ticker}
+          />
+        ) : (
+          <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} />
+        )
       ) : (
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       )}
