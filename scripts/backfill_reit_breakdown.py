@@ -191,17 +191,51 @@ def _build_reit_breakdown(
 
 # ── Main loop ──────────────────────────────────────────────────────────────
 
-def run(dry_run: bool, target_ticker: str | None, force: bool) -> int:
+def backfill(
+    dry_run: bool = True,
+    target_ticker: str | None = None,
+    force: bool = False,
+) -> dict:
+    """
+    Core backfill logic. Returns a dict with per-row results + summary counts.
+    Callable from the admin HTTP endpoint (app/backend/routes/admin.py) OR
+    from the CLI (``python -m scripts.backfill_reit_breakdown``).
+
+    Returns
+    -------
+    {
+      "db_path":        str,
+      "dry_run":        bool,
+      "target_ticker":  str | None,
+      "force":          bool,
+      "rows_examined":  int,
+      "patched":        int,
+      "skipped_has_field": int,
+      "skipped_fetch_fail": int,
+      "skipped_no_shares": int,
+      "details":        [{"ticker", "run_id", "analysis_date", "status",
+                          "subtype"?, "nav_per_share"?, "reason"?}, ...],
+    }
+    """
     api_key = os.environ.get("FMP_API_KEY") or os.environ.get("FINANCIAL_DATASETS_API_KEY")
     if not api_key:
-        _log(f"{_RED}FMP_API_KEY not set — aborting{_RESET}")
-        return 2
+        return {
+            "error": "FMP_API_KEY not set",
+            "db_path": DB_PATH,
+        }
 
-    _log(f"{_BOLD}REIT breakdown backfill{_RESET}  (db={DB_PATH})")
-    _log(f"  mode        : {'DRY RUN — no writes' if dry_run else 'LIVE — will UPDATE ticker_signals'}")
-    _log(f"  ticker      : {target_ticker or '(all REITs)'}")
-    _log(f"  force       : {'yes — re-derive even when field exists' if force else 'no — skip already-backfilled rows'}")
-    _log("")
+    result: dict = {
+        "db_path":             DB_PATH,
+        "dry_run":             dry_run,
+        "target_ticker":       target_ticker,
+        "force":               force,
+        "rows_examined":       0,
+        "patched":             0,
+        "skipped_has_field":   0,
+        "skipped_fetch_fail":  0,
+        "skipped_no_shares":   0,
+        "details":             [],
+    }
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -224,82 +258,124 @@ def run(dry_run: bool, target_ticker: str | None, force: bool) -> int:
     query += " ORDER BY r.run_at DESC"
 
     rows = list(conn.execute(query, params).fetchall())
-    _log(f"{_DIM}Found {len(rows)} candidate ticker_signals row(s){_RESET}")
+    result["rows_examined"] = len(rows)
     if not rows:
-        _log(f"{_YELLOW}Nothing to backfill.{_RESET}")
         conn.close()
-        return 0
-
-    patched = 0
-    skipped_has_field = 0
-    skipped_fetch_fail = 0
-    skipped_no_shares = 0
+        return result
 
     for row in rows:
         tkr = row["ticker"]
         run_id = row["run_id"]
         analysis_date = row["analysis_date"] or date.today().strftime("%Y-%m-%d")
-        tag = f"{tkr:6} @{analysis_date} run={run_id[:8]}"
+        detail: dict[str, Any] = {
+            "ticker": tkr,
+            "run_id": run_id,
+            "analysis_date": analysis_date,
+        }
 
         try:
             dcf_dict = json.loads(row["dcf_range_json"])
         except (TypeError, ValueError) as exc:
-            _log(f"  {_RED}[SKIP]{_RESET} {tag}  corrupt JSON: {exc}")
+            detail["status"] = "skip"
+            detail["reason"] = f"corrupt JSON: {exc}"
+            result["details"].append(detail)
             continue
 
         if not force and dcf_dict.get("reit_breakdown"):
-            skipped_has_field += 1
+            detail["status"] = "skip_has_field"
+            result["skipped_has_field"] += 1
+            result["details"].append(detail)
             continue
 
         # Pull shares from archived dcf_range (we need the same shares count
         # the original pipeline used to compute scenario_results).
         shares = dcf_dict.get("shares_outstanding")
         if not shares or shares <= 0:
-            # Fall back to whatever's in the bear/base/bull scenario blocks
             for scen_key in ("base", "bull", "bear"):
                 scen = dcf_dict.get(scen_key) or {}
                 if isinstance(scen, dict) and scen.get("shares_outstanding"):
                     shares = scen["shares_outstanding"]
                     break
         if not shares or shares <= 0:
-            _log(f"  {_YELLOW}[SKIP]{_RESET} {tag}  no shares_outstanding in archive")
-            skipped_no_shares += 1
+            detail["status"] = "skip_no_shares"
+            result["skipped_no_shares"] += 1
+            result["details"].append(detail)
             continue
 
         breakdown = _build_reit_breakdown(tkr, analysis_date, float(shares), api_key)
         if breakdown is None:
-            skipped_fetch_fail += 1
+            detail["status"] = "skip_fetch_fail"
+            result["skipped_fetch_fail"] += 1
+            result["details"].append(detail)
             continue
 
         dcf_dict["reit_breakdown"] = breakdown
         new_json = json.dumps(dcf_dict)
-        nav_ps = breakdown.get("nav_per_share")
-        subtype = breakdown.get("subtype")
+
+        detail["subtype"] = breakdown.get("subtype")
+        detail["nav_per_share"] = breakdown.get("nav_per_share")
 
         if dry_run:
-            _log(f"  {_DIM}[dry ]{_RESET} {tag}  would patch  "
-                 f"subtype={subtype:12}  NAV/sh={f'${nav_ps:.2f}' if nav_ps else 'n/a':>10}")
+            detail["status"] = "would_patch"
         else:
             conn.execute(
                 "UPDATE ticker_signals SET dcf_range_json = ? WHERE id = ?",
                 (new_json, row["id"]),
             )
-            _log(f"  {_GREEN}[ OK ]{_RESET} {tag}  patched      "
-                 f"subtype={subtype:12}  NAV/sh={f'${nav_ps:.2f}' if nav_ps else 'n/a':>10}")
-        patched += 1
+            detail["status"] = "patched"
+        result["patched"] += 1
+        result["details"].append(detail)
 
     if not dry_run:
         conn.commit()
     conn.close()
+    return result
+
+
+# ── CLI wrapper ────────────────────────────────────────────────────────────
+
+def _cli_print(result: dict) -> int:
+    """Pretty-print the backfill result for CLI consumers."""
+    if "error" in result:
+        _log(f"{_RED}{result['error']}{_RESET}")
+        return 2
+
+    _log(f"{_BOLD}REIT breakdown backfill{_RESET}  (db={result['db_path']})")
+    _log(f"  mode        : {'DRY RUN - no writes' if result['dry_run'] else 'LIVE - will UPDATE ticker_signals'}")
+    _log(f"  ticker      : {result['target_ticker'] or '(all REITs)'}")
+    _log(f"  force       : {'yes - re-derive even when field exists' if result['force'] else 'no - skip already-backfilled rows'}")
+    _log("")
+    _log(f"{_DIM}Found {result['rows_examined']} candidate ticker_signals row(s){_RESET}")
+    if result["rows_examined"] == 0:
+        _log(f"{_YELLOW}Nothing to backfill.{_RESET}")
+        return 0
+
+    for d in result["details"]:
+        tag = f"{d['ticker']:6} @{d['analysis_date']} run={d['run_id'][:8]}"
+        status = d["status"]
+        if status == "patched":
+            nav = f"${d['nav_per_share']:.2f}" if d.get('nav_per_share') else 'n/a'
+            _log(f"  {_GREEN}[ OK ]{_RESET} {tag}  patched      subtype={str(d.get('subtype','')):12}  NAV/sh={nav:>10}")
+        elif status == "would_patch":
+            nav = f"${d['nav_per_share']:.2f}" if d.get('nav_per_share') else 'n/a'
+            _log(f"  {_DIM}[dry ]{_RESET} {tag}  would patch  subtype={str(d.get('subtype','')):12}  NAV/sh={nav:>10}")
+        elif status == "skip_has_field":
+            pass   # quiet — already done
+        elif status == "skip_no_shares":
+            _log(f"  {_YELLOW}[SKIP]{_RESET} {tag}  no shares_outstanding in archive")
+        elif status == "skip_fetch_fail":
+            _log(f"  {_YELLOW}[SKIP]{_RESET} {tag}  line items fetch failed")
+        else:
+            _log(f"  {_RED}[SKIP]{_RESET} {tag}  {d.get('reason','')}")
 
     _log("")
     _log(f"{_BOLD}Summary{_RESET}")
-    _log(f"  {_GREEN}patched          {patched:4d}{_RESET}  "
-         f"{'(dry run — no DB changes)' if dry_run else ''}")
-    _log(f"  skipped (already had reit_breakdown)   {skipped_has_field:4d}")
-    _log(f"  skipped (line-item fetch failed)       {skipped_fetch_fail:4d}")
-    _log(f"  skipped (no shares_outstanding)        {skipped_no_shares:4d}")
-    return 0 if patched > 0 or skipped_has_field > 0 else 1
+    _log(f"  {_GREEN}patched          {result['patched']:4d}{_RESET}  "
+         f"{'(dry run - no DB changes)' if result['dry_run'] else ''}")
+    _log(f"  skipped (already had reit_breakdown)   {result['skipped_has_field']:4d}")
+    _log(f"  skipped (line-item fetch failed)       {result['skipped_fetch_fail']:4d}")
+    _log(f"  skipped (no shares_outstanding)        {result['skipped_no_shares']:4d}")
+    return 0 if result["patched"] > 0 or result["skipped_has_field"] > 0 else 1
 
 
 if __name__ == "__main__":
@@ -311,4 +387,5 @@ if __name__ == "__main__":
     p.add_argument("--force", action="store_true",
                    help="Re-derive reit_breakdown even when the field already exists")
     args = p.parse_args()
-    sys.exit(run(dry_run=args.dry_run, target_ticker=args.ticker, force=args.force))
+    result = backfill(dry_run=args.dry_run, target_ticker=args.ticker, force=args.force)
+    sys.exit(_cli_print(result))

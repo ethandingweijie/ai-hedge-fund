@@ -3,6 +3,7 @@ Admin dashboard — browse cloud database tables with HTML UI.
 Protected by DB_UPLOAD_SECRET env var.
 """
 import os
+import sys
 import sqlite3
 import json
 import logging
@@ -250,3 +251,62 @@ async def admin_dashboard(secret: str = "", db: str = "run_archive", table: str 
 </body></html>"""
 
     return HTMLResponse(content=html)
+
+
+# ── REIT breakdown backfill ────────────────────────────────────────────────
+# One-shot migration endpoint that re-derives dcf_range.reit_breakdown for
+# archived REIT runs created before commit 2d4843b (which first emitted the
+# field). Runs the same logic as scripts/backfill_reit_breakdown.py but
+# inside the already-running backend process, so it automatically targets
+# the correct database path (Railway persistent volume) and uses the env's
+# FMP_API_KEY. Remove once the backfill is complete.
+
+@router.post("/admin/backfill-reit-breakdown")
+async def backfill_reit_breakdown(
+    secret: str = "",
+    ticker: str = "",
+    dry_run: bool = True,
+    force: bool = False,
+):
+    """
+    Retroactively populate reit_breakdown on archived REIT ticker_signals rows.
+
+    Query params:
+      secret   — DB_UPLOAD_SECRET (required)
+      ticker   — optional, limit to one ticker (e.g. DLR)
+      dry_run  — true (default) shows what would change without writing
+      force    — true re-derives even when reit_breakdown already exists
+
+    Example:
+      curl -X POST 'https://BACKEND/admin/backfill-reit-breakdown?secret=XXX&ticker=DLR&dry_run=true'
+      curl -X POST 'https://BACKEND/admin/backfill-reit-breakdown?secret=XXX&ticker=DLR&dry_run=false'
+      curl -X POST 'https://BACKEND/admin/backfill-reit-breakdown?secret=XXX&dry_run=false'   # all REITs
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    # Ensure repo root is on sys.path so `scripts.backfill_reit_breakdown` resolves.
+    # When Railway runs the app with the repo root as WORKDIR this is a no-op;
+    # when uvicorn is started from app/backend it needs to be added.
+    _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+
+    try:
+        from scripts.backfill_reit_breakdown import backfill
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot import backfill module: {exc}")
+
+    try:
+        result = backfill(
+            dry_run=dry_run,
+            target_ticker=ticker.upper() if ticker else None,
+            force=force,
+        )
+    except Exception as exc:
+        logger.exception("backfill_reit_breakdown failed")
+        raise HTTPException(status_code=500, detail=f"Backfill failed: {exc}")
+
+    # Redact the DB path from response — it's an internal filesystem path
+    result.pop("db_path", None)
+    return result
