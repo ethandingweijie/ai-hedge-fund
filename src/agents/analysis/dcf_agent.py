@@ -3814,15 +3814,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _is_reit = sector in {"REIT", "RealEstate"} or profile_name == "REIT"
         # Banks/GSEs: EV-based methods produce nonsense because massive deposit
         # liabilities make (EV − net_debt) negative. Use P/E directly.
-        # REITs: EV/EBITDA also produces nonsense because REIT EBITDA is inflated
-        # by D&A add-back (real-estate depreciation is non-cash) and the high LTV
-        # (35-45%) makes EV-net_debt swings wild. Use P/FFO (represented via
-        # peer.pe for the 12m PT since FFO ≈ NI + D&A and peer.pe is REIT-calibrated
-        # to 14x which roughly equals P/FFO 15x × 0.93 payout quality factor).
+        # REITs: drop through to a dedicated P/FFO + P/AFFO branch (below) —
+        # EPS × P/E is conceptually wrong because REIT GAAP earnings are
+        # heavily depressed by non-cash real-estate D&A, while institutional
+        # REIT PTs price on FFO / AFFO per share × sub-type multiples.
         _use_pe_only = (
             profile_name in _BANK_PROFILES
             or sector == "Financials"
-            or _is_reit
         )
         # Growth premium for 12m PT: use base scenario growth rate
         _base_g = scenario_results.get("base", {}).get("growth_rate", growth_base)
@@ -3832,6 +3830,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _gp_pt = max(0.60, min(2.50, _gp_raw_pt))
         else:
             _gp_pt = 1.0
+        # REIT growth premium: reuse the cap applied elsewhere in the engine —
+        # REIT multiples already embed growth expectations, so we cap at 1.20x.
+        _gp_pt_reit = max(0.85, min(1.20, _gp_pt))
+
+        # REIT sub-type multiples (pre-computed once, used per scenario below)
+        _reit_sub = None
+        _reit_m = None
+        _reit_mults = None
+        if _is_reit:
+            _reit_sub = most_recent.get("_reit_subtype") or _classify_reit_subtype(
+                ticker, most_recent.get("_lookup_notes", "")
+            )
+            _reit_mults = _REIT_SUBTYPE_MULTIPLES.get(
+                _reit_sub, _REIT_SUBTYPE_MULTIPLES["default"]
+            )
+            _reit_m = _compute_reit_metrics(most_recent, subtype=_reit_sub)
+
         for scen_name, _smult in {"bear": 0.75, "base": 1.00, "bull": 1.25}.items():
             _yr1_rev  = scenario_results[scen_name].get("yr1_revenue")
             _yr1_ebit = scenario_results[scen_name].get("yr1_ebitda_est")
@@ -3840,7 +3855,47 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _pt: Optional[float] = None
             # Change 7: apply ADR haircut for CNY-reporting US-listed companies
             _adr_h = peer.get("cn_adr_haircut", 1.0) if reported_currency == "CNY" else 1.0
-            if _use_pe_only:
+            # ── REIT 12m PT: P/FFO primary, P/AFFO secondary (60/40 blend) ──
+            # Year-1 FFO/sh ≈ current FFO/sh × (1 + growth) since REIT earnings
+            # grow with NOI + D&A, tracking revenue growth closely. Same for AFFO.
+            # Use sub-type-specific P/FFO and P/AFFO multiples — a data-center
+            # REIT (22x/25x) prices differently from an office REIT (12x/13x).
+            #
+            # IMPORTANT: no growth_premium is applied on top of the multiple.
+            # The sub-type multiple already embeds growth expectations
+            # (data_center 22x reflects AI-driven demand; retail 14x reflects
+            # the secular decline). Stacking a growth_premium would double-count
+            # growth since (1+g) is ALREADY applied to FFO/sh below. The scenario
+            # multiplier (_smult: 0.75/1.00/1.25) is the sole dispersion mechanism
+            # — it flexes the target multiple across bear/base/bull.
+            if _is_reit and _reit_m and _reit_mults:
+                _ffo   = _reit_m.get("ffo")
+                _affo  = _reit_m.get("affo")
+                _ffo_ps_ttm  = (_ffo / shares) if (_ffo and shares and shares > 0) else None
+                _affo_ps_ttm = (_affo / shares) if (_affo and shares and shares > 0) else None
+                # Scenario growth on the per-share metric
+                _scen_g = scenario_results[scen_name].get("growth_rate", _base_g) or _base_g
+                _ffo_ps_fwd  = _ffo_ps_ttm * (1 + _scen_g)  if _ffo_ps_ttm  else None
+                _affo_ps_fwd = _affo_ps_ttm * (1 + _scen_g) if _affo_ps_ttm else None
+                # P/FFO × FFO/sh and P/AFFO × AFFO/sh — blended 60/40
+                _pt_ffo  = (_ffo_ps_fwd  * _reit_mults["p_ffo"]  * _smult * _adr_h
+                            if _ffo_ps_fwd  else None)
+                _pt_affo = (_affo_ps_fwd * _reit_mults["p_affo"] * _smult * _adr_h
+                            if _affo_ps_fwd else None)
+                if _pt_ffo is not None and _pt_affo is not None:
+                    _pt = 0.60 * _pt_ffo + 0.40 * _pt_affo
+                elif _pt_ffo is not None:
+                    _pt = _pt_ffo
+                elif _pt_affo is not None:
+                    _pt = _pt_affo
+                # Last-resort fallback: GAAP EPS × REIT peer PE. Only fires when
+                # we have no FFO data at all (e.g. thin filings). Preserves old
+                # behavior for tickers where _compute_reit_metrics returns empty.
+                elif _yr1_eps and _yr1_eps > 0:
+                    _pt = _yr1_eps * peer.get("pe", 35.0) * _smult * _adr_h * _gp_pt
+                if _pt is not None:
+                    _pt = round(max(_pt, 0.0), 2)
+            elif _use_pe_only:
                 # Bank/GSE forward multiple: P/E only — EV approaches don't apply
                 if _yr1_eps and _yr1_eps > 0:
                     _pt = _yr1_eps * peer.get("pe", 12.0) * _smult * _adr_h * _gp_pt
