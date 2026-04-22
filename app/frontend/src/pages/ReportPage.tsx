@@ -25,6 +25,7 @@ import { AgentSignalsPanel }   from '@/components/report/AgentSignalsPanel';
 import { IntelligenceGrid }    from '@/components/report/IntelligenceGrid';
 import { FinancialsChart }     from '@/components/report/FinancialsChart';
 import { ValuationLadder }     from '@/components/report/ValuationLadder';
+import { REITValuationPanel }  from '@/components/report/reit/REITValuationPanel';
 import { DebatePanel }         from '@/components/report/DebatePanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
@@ -1397,12 +1398,16 @@ export function ReportPage() {
         </div>
 
         {/* ── Valuation ───────────────────────────────────────────────────── */}
+        {/* Order: PriceTargetPanel (hero + quad + scenario probs) and         */}
+        {/* ScenarioChart are shown for every ticker — they work for REITs too.*/}
+        {/* For REITs, REITValuationPanel is inserted after and replaces the   */}
+        {/* generic DCF ladder with NAV hero, Method Breakdown, NPI/DPU        */}
+        {/* history, Portfolio Composition, Cap-Rate Sensitivity. Non-REITs    */}
+        {/* fall through to ValuationLadder. Gate is dcfRange.reit_breakdown,  */}
+        {/* which the DCF agent only emits for RealEstate / REIT profiles.     */}
         <SectionAnchor id="valuation" label="Valuation" />
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-start">
           <div className="flex flex-col gap-4">
-            {renderSection('valuation', 'Valuation', (
-              <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={liveTicker} />
-            ))}
             {renderSection('price_target', 'Price Target', (
               <PriceTargetPanel
                 dcfRange={dcfRange}
@@ -1414,6 +1419,19 @@ export function ReportPage() {
             {renderSection('scenario', 'Scenario Analysis', (
               <ScenarioChart scenario={scenarioAnalysis} ticker={liveTicker} />
             ))}
+            {dcfRange?.reit_breakdown ? (
+              renderSection('valuation', 'REIT Valuation', (
+                <REITValuationPanel
+                  dcfRange={dcfRange}
+                  currentPrice={currentPrice}
+                  ticker={liveTicker}
+                />
+              ))
+            ) : (
+              renderSection('valuation', 'Valuation', (
+                <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={liveTicker} />
+              ))
+            )}
           </div>
           <div className="flex flex-col gap-2">
             {renderSection('power_law', 'Power Law', (
