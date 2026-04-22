@@ -670,6 +670,18 @@ def search_line_items(
         if "shareholders_equity" in snake and "total_equity" not in snake:
             snake["total_equity"] = snake["shareholders_equity"]
 
+        # Derived: invested_capital = total_debt + total_equity − cash.
+        # FMP exposes this in /stable/key-metrics which search_line_items
+        # doesn't fetch (only 4 endpoints: income, balance, cashflow, ratios).
+        # Deriving here keeps ROIC vs WACC + LBO method branches working
+        # without an extra round trip.
+        if "invested_capital" not in snake:
+            td   = snake.get("total_debt")
+            eq   = snake.get("total_equity") or snake.get("shareholders_equity")
+            cash = snake.get("cash_and_equivalents") or 0
+            if td is not None and eq is not None:
+                snake["invested_capital"] = td + eq - cash
+
         # Derived: book_value_per_share from ratios if not present
         # (already handled by _RATIOS_MAP → "bookValuePerShare")
 
