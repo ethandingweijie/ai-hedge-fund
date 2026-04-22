@@ -36,6 +36,7 @@ import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
 import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
+import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
@@ -601,6 +602,12 @@ function ValuationBody({
       {dcfRange ? (
         dcfRange.reit_breakdown ? (
           <REITValuationPanel
+            dcfRange={dcfRange}
+            currentPrice={current ?? undefined}
+            ticker={ticker}
+          />
+        ) : dcfRange.bank_breakdown ? (
+          <BankValuationPanel
             dcfRange={dcfRange}
             currentPrice={current ?? undefined}
             ticker={ticker}

@@ -3604,9 +3604,9 @@ REIT_VGPM_WEIGHTS = {
 # Imported by screener_service and analysis routes for sector classification.
 SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     # Banks
-    "D05.SI":  ("Financials", "Money Center Bank", "Banks",           "DBS Group"),
-    "O39.SI":  ("Financials", "Banks",       "Banks",                  "OCBC Bank"),
-    "U11.SI":  ("Financials", "Banks",       "Banks",                  "UOB"),
+    "D05.SI":  ("Financials", "Money Center Bank", "Banks",           "DBS Group — SG money-center bank"),
+    "O39.SI":  ("Financials", "Money Center Bank", "Banks",           "OCBC Bank — SG money-center bank"),
+    "U11.SI":  ("Financials", "Money Center Bank", "Banks",           "UOB — SG money-center bank"),
     "S68.SI":  ("Financials", "Exchange",    "Capital Markets",        "Singapore Exchange"),
     "9CI.SI":  ("Financials", "AssetMgmt",   "Asset Management",       "CapitaLand Investment"),
     "U09.SI":  ("Financials", "Insurance",   "Insurance",              "United Overseas Insurance"),

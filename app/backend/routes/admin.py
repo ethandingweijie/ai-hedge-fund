@@ -310,3 +310,50 @@ async def backfill_reit_breakdown(
     # Redact the DB path from response — it's an internal filesystem path
     result.pop("db_path", None)
     return result
+
+
+# ── Bank breakdown backfill ────────────────────────────────────────────────
+# Mirror of the REIT backfill endpoint, targeting bank_breakdown. Uses the
+# same bank ticker whitelist (_BANK_PROFILE_CALIBRATION entries) as the
+# scripts/backfill_bank_breakdown.py CLI.
+
+@router.post("/admin/backfill-bank-breakdown")
+async def backfill_bank_breakdown(
+    secret: str = "",
+    ticker: str = "",
+    dry_run: bool = True,
+    force: bool = False,
+):
+    """
+    Retroactively populate bank_breakdown on archived bank runs.
+
+    Query params (same as /admin/backfill-reit-breakdown):
+      secret, ticker, dry_run, force
+
+    Example:
+      curl -X POST 'https://BACKEND/admin/backfill-bank-breakdown?secret=XXX&ticker=JPM&dry_run=true'
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+
+    try:
+        from scripts.backfill_bank_breakdown import backfill as _bank_backfill
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot import bank backfill: {exc}")
+
+    try:
+        result = _bank_backfill(
+            dry_run=dry_run,
+            target_ticker=ticker.upper() if ticker else None,
+            force=force,
+        )
+    except Exception as exc:
+        logger.exception("backfill_bank_breakdown failed")
+        raise HTTPException(status_code=500, detail=f"Backfill failed: {exc}")
+
+    result.pop("db_path", None)
+    return result

@@ -26,6 +26,7 @@ import { IntelligenceGrid }    from '@/components/report/IntelligenceGrid';
 import { FinancialsChart }     from '@/components/report/FinancialsChart';
 import { ValuationLadder }     from '@/components/report/ValuationLadder';
 import { REITValuationPanel }  from '@/components/report/reit/REITValuationPanel';
+import { BankValuationPanel }  from '@/components/report/bank/BankValuationPanel';
 import { DebatePanel }         from '@/components/report/DebatePanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
@@ -1422,6 +1423,14 @@ export function ReportPage() {
             {dcfRange?.reit_breakdown ? (
               renderSection('valuation', 'REIT Valuation', (
                 <REITValuationPanel
+                  dcfRange={dcfRange}
+                  currentPrice={currentPrice}
+                  ticker={liveTicker}
+                />
+              ))
+            ) : dcfRange?.bank_breakdown ? (
+              renderSection('valuation', 'Bank Valuation', (
+                <BankValuationPanel
                   dcfRange={dcfRange}
                   currentPrice={currentPrice}
                   ticker={liveTicker}

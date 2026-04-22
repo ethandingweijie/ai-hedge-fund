@@ -173,6 +173,65 @@ export interface ReitBreakdown {
   dpu_history?: Array<{ period: string; value: number | null }>;
 }
 
+// ── Bank-specific breakdown ────────────────────────────────────────────────
+// Emitted by dcf_agent.py for any ticker where sector == "Financials" AND
+// profile_name is in _BANK_PROFILE_CALIBRATION (Money Center Bank, Regional
+// Bank, Investment Bank, Asset Manager, Mortgage/GSE, Insurance, FinTech,
+// EM Bank, Money Center Bank (SG), etc.). Every field is either a real
+// number or null — the UI gates tile-by-tile to gracefully degrade when a
+// source is missing (FMP rolls bank line items into generic buckets;
+// yfinance SGX coverage misses interest_income on some years).
+export interface BankBreakdown {
+  profile?: string;                 // e.g. "Money Center Bank"
+  // Profile calibration constants (for threshold color-coding on the UI)
+  coe?: number | null;
+  target_roe?: number | null;
+  target_cet1?: number | null;
+  fade_years?: number | null;
+  // Core latest-year ratios
+  roe?: number | null;
+  roa?: number | null;
+  nim?: number | null;
+  efficiency_ratio?: number | null;   // Cost / Income Ratio
+  credit_cost_ratio?: number | null;
+  tbv_per_share?: number | null;
+  bvps?: number | null;
+  total_equity?: number | null;
+  total_assets?: number | null;
+  // P/TBV-based Fair Value (Gordon-growth identity)
+  fair_p_tbv?: number | null;
+  fair_value_per_share?: number | null;
+  // Capital adequacy
+  cet1_ratio?: number | null;
+  cet1_buffer_bps?: number | null;
+  cet1_surplus_usd?: number | null;
+  // Capital return
+  dividend_yield?: number | null;
+  buyback_yield?: number | null;
+  total_payout_ratio?: number | null;
+  dps?: number | null;
+  buybacks_usd?: number | null;
+  // Research-sourced (nullable — only present on fresh runs with deep research)
+  npl_ratio?: number | null;
+  npl_coverage_ratio?: number | null;
+  net_charge_offs_pct?: number | null;
+  management_overlays_bn?: number | null;
+  nim_rate_sensitivity_bps?: number | null;
+  loan_growth_yoy?: number | null;
+  deposit_growth_yoy?: number | null;
+  loan_to_deposit_ratio?: number | null;
+  forward_loan_growth_guidance?: string | null;
+  forward_nim_guidance?: string | null;
+  research_evidence?: string | null;
+  // 5y history arrays (CLINT-style bar charts)
+  roe_history?: Array<{ period: string; value: number | null }>;
+  nim_history?: Array<{ period: string; value: number | null }>;
+  bvps_history?: Array<{ period: string; value: number | null }>;
+  ppop_history?: Array<{ period: string; value: number | null }>;
+  cir_history?: Array<{ period: string; value: number | null }>;
+  loans_history?: Array<{ period: string; value: number | null }>;
+}
+
 export interface DcfRange {
   bull?: DcfCase;
   base?: DcfCase;
@@ -187,6 +246,7 @@ export interface DcfRange {
   anchor_method?: string;
   profile?: string;
   reit_breakdown?: ReitBreakdown | null;
+  bank_breakdown?: BankBreakdown | null;
 }
 
 export interface RoutingDecision {

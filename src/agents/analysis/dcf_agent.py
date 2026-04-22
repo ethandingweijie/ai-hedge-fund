@@ -4112,6 +4112,189 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             reit_breakdown["npi_history"] = _rb_npi_hist
             reit_breakdown["dpu_history"] = _rb_dpu_hist
 
+        # ── Bank breakdown — raw ingredients the Bank UI reconstructs KPIs from ──
+        # Emitted for any Financials-sector ticker OR any profile in
+        # _BANK_PROFILE_CALIBRATION (covers Money Center Bank, Regional Bank,
+        # Investment Bank, Asset Manager, EM Bank, Mortgage/GSE, Insurance,
+        # FinTech, Money Center Bank (SG), etc.). Graceful-degradation-first —
+        # every field explicitly None when unavailable so the frontend can
+        # gate tile-by-tile rather than hide the whole panel.
+        bank_breakdown: Optional[dict] = None
+        _is_bank_profile = (
+            (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION)
+            or "Bank" in (profile_name or "")
+            or profile_name == "Mortgage/GSE"
+        )
+        if _is_bank_profile:
+            _bb_m   = _compute_bank_metrics(most_recent, profile_name=profile_name)
+            _bb_cfg = _bank_profile_calibration(profile_name)
+            _bb_research = (bank_metrics_all or {}).get(ticker) or {}
+
+            _bb_ni       = most_recent.get("net_income")
+            _bb_equity   = most_recent.get("total_equity")
+            _bb_assets   = most_recent.get("total_assets")
+            _bb_bvps     = most_recent.get("book_value_per_share")
+            _bb_tbv_ps   = _bb_m.get("tbv_per_share")
+            _bb_roe      = _bb_m.get("roe")
+            _bb_coe      = _bb_cfg["coe"]
+            _bb_target_roe  = _bb_research.get("management_target_roe") or _bb_cfg["target_roe"]
+            _bb_target_cet1 = _bb_cfg["target_cet1"]
+            _bb_dps      = most_recent.get("dividends_per_share")
+            _bb_buybacks = most_recent.get("share_buyback") or most_recent.get("common_stock_repurchased")
+            _bb_buybacks = abs(_bb_buybacks) if _bb_buybacks else None
+
+            # Fair P/TBV via Gordon-growth identity: 1 + (ROE − CoE) / CoE
+            # Floor at 0.3x to prevent negative fair values when ROE << CoE
+            # (distressed banks). Institutional convention is to cap display
+            # at 3.0x — anything higher implies ROE > 3×CoE which usually
+            # reflects short-lived cycle peaks not sustainable long-term.
+            _bb_fair_ptbv = None
+            _bb_fair_value = None
+            if _bb_roe is not None and _bb_coe > 0:
+                _bb_fair_ptbv = max(0.3, min(3.0, 1.0 + (_bb_roe - _bb_coe) / _bb_coe))
+                if _bb_tbv_ps and _bb_tbv_ps > 0:
+                    _bb_fair_value = round(_bb_tbv_ps * _bb_fair_ptbv, 2)
+
+            # CET1 ratio — prefer research-sourced (directly reported by the
+            # bank), fall back to the RWA-based implied estimate
+            _bb_cet1 = _bb_research.get("cet1_ratio") or _bb_m.get("cet1_implied")
+            _bb_cet1_buffer_bps = None
+            _bb_cet1_surplus_usd = None
+            if _bb_cet1 is not None:
+                _bb_cet1_buffer_bps = round((_bb_cet1 - _bb_target_cet1) * 10000, 0)
+                _bb_rwa = _bb_m.get("rwa_estimate")
+                if _bb_rwa and _bb_rwa > 0:
+                    _bb_cet1_surplus_usd = round(max(0, _bb_cet1 - _bb_target_cet1) * _bb_rwa, 0)
+
+            # ROA — net income / total assets
+            _bb_roa = (_bb_ni / _bb_assets) if (_bb_ni and _bb_assets and _bb_assets > 0) else None
+
+            # Capital-return math: div yield + buyback yield vs latest market cap
+            _bb_mcap = (_bb_research.get("_live_market_cap")) or (
+                _market_cap if _market_cap else None
+            )
+            _bb_div_yield = None
+            _bb_buyback_yield = None
+            if _bb_mcap and _bb_mcap > 0:
+                if _bb_dps and shares and shares > 0:
+                    _bb_div_yield = (_bb_dps * shares) / _bb_mcap
+                if _bb_buybacks:
+                    _bb_buyback_yield = _bb_buybacks / _bb_mcap
+            _bb_payout_ratio = None
+            if _bb_ni and _bb_ni > 0:
+                _total_payout = 0.0
+                if _bb_dps and shares:
+                    _total_payout += _bb_dps * shares
+                if _bb_buybacks:
+                    _total_payout += _bb_buybacks
+                _bb_payout_ratio = _total_payout / _bb_ni
+
+            # ── 5y history arrays — each row is either a real number or None ──
+            # Frontend renders gaps as placeholder bars (not silently drops them)
+            _bb_roe_hist  = []
+            _bb_nim_hist  = []
+            _bb_bvps_hist = []
+            _bb_ppop_hist = []
+            _bb_cir_hist  = []
+            _bb_loans_hist = []
+            for _row in series:
+                _lbl = (_row.get("period") or "")[:4]
+                _ri_ni    = _row.get("net_income")
+                _ri_eq    = _row.get("total_equity")
+                _ri_at    = _row.get("total_assets")
+                _ri_rev   = _row.get("revenue")
+                _ri_bvps  = _row.get("book_value_per_share")
+                _ri_ii    = _row.get("interest_income")
+                _ri_ie    = _row.get("interest_expense")
+                _ri_oe    = _row.get("operating_expense")
+                _ri_loans = _row.get("loans_receivable") or _row.get("loans_held_for_investment")
+                # ROE
+                _bb_roe_hist.append({
+                    "period": _lbl,
+                    "value":  (_ri_ni / _ri_eq) if (_ri_ni and _ri_eq and _ri_eq > 0) else None,
+                })
+                # NIM
+                _nim_val = None
+                if _ri_ii is not None and _ri_ie is not None and _ri_at and _ri_at > 0:
+                    _nim_val = (_ri_ii - abs(_ri_ie)) / _ri_at
+                _bb_nim_hist.append({"period": _lbl, "value": _nim_val})
+                # BVPS (fall back to TBV equivalent when book_value_per_share missing)
+                _bvps_val = _ri_bvps
+                if _bvps_val is None and _ri_eq and shares and shares > 0:
+                    _bvps_val = _ri_eq / shares
+                _bb_bvps_hist.append({
+                    "period": _lbl,
+                    "value":  round(_bvps_val, 4) if _bvps_val else None,
+                })
+                # PPOP via shared helper (3-tier fallback)
+                _bb_ppop_hist.append({
+                    "period": _lbl,
+                    "value":  round(_compute_ppop(_row), 0) if _compute_ppop(_row) else None,
+                })
+                # Cost / Income ratio
+                _cir_val = (abs(_ri_oe) / _ri_rev) if (_ri_oe and _ri_rev and _ri_rev > 0) else None
+                _bb_cir_hist.append({
+                    "period": _lbl,
+                    "value":  round(_cir_val, 4) if _cir_val else None,
+                })
+                # Loans (from FMP when present; frontend degrades to single-year
+                # research-extracted loan_growth_yoy tile when absent)
+                _bb_loans_hist.append({
+                    "period": _lbl,
+                    "value":  round(_ri_loans, 0) if _ri_loans else None,
+                })
+
+            bank_breakdown = {
+                "profile":               profile_name,
+                # Profile calibration (for UI labels and color-coding thresholds)
+                "coe":                   _bb_coe,
+                "target_roe":            _bb_target_roe,
+                "target_cet1":           _bb_target_cet1,
+                "fade_years":            _bb_cfg.get("fade_years"),
+                # Core per-share / ratio metrics (latest year)
+                "roe":                   _bb_roe,
+                "roa":                   _bb_roa,
+                "nim":                   _bb_m.get("nim"),
+                "efficiency_ratio":      _bb_m.get("efficiency_ratio"),
+                "credit_cost_ratio":     _bb_m.get("credit_cost_ratio"),
+                "tbv_per_share":         _bb_tbv_ps,
+                "bvps":                  _bb_bvps,
+                "total_equity":          _bb_equity,
+                "total_assets":          _bb_assets,
+                # P/TBV Fair Value anchor
+                "fair_p_tbv":            round(_bb_fair_ptbv, 4) if _bb_fair_ptbv else None,
+                "fair_value_per_share":  _bb_fair_value,
+                # Capital adequacy
+                "cet1_ratio":            _bb_cet1,
+                "cet1_buffer_bps":       _bb_cet1_buffer_bps,
+                "cet1_surplus_usd":      _bb_cet1_surplus_usd,
+                # Capital return
+                "dividend_yield":        round(_bb_div_yield, 5) if _bb_div_yield else None,
+                "buyback_yield":         round(_bb_buyback_yield, 5) if _bb_buyback_yield else None,
+                "total_payout_ratio":    round(_bb_payout_ratio, 4) if _bb_payout_ratio else None,
+                "dps":                   _bb_dps,
+                "buybacks_usd":          _bb_buybacks,
+                # Research-sourced (nullable — only present when deep research extractor hit data)
+                "npl_ratio":             _bb_research.get("npl_ratio"),
+                "npl_coverage_ratio":    _bb_research.get("npl_coverage_ratio"),
+                "net_charge_offs_pct":   _bb_research.get("net_charge_offs_pct"),
+                "management_overlays_bn": _bb_research.get("management_overlays_bn"),
+                "nim_rate_sensitivity_bps": _bb_research.get("nim_rate_sensitivity_bps"),
+                "loan_growth_yoy":       _bb_research.get("loan_growth_yoy"),
+                "deposit_growth_yoy":    _bb_research.get("deposit_growth_yoy"),
+                "loan_to_deposit_ratio": _bb_research.get("loan_to_deposit_ratio"),
+                "forward_loan_growth_guidance": _bb_research.get("forward_loan_growth_guidance"),
+                "forward_nim_guidance":  _bb_research.get("forward_nim_guidance"),
+                "research_evidence":    _bb_research.get("evidence"),
+                # 5y history arrays (CLINT-style)
+                "roe_history":           _bb_roe_hist,
+                "nim_history":           _bb_nim_hist,
+                "bvps_history":          _bb_bvps_hist,
+                "ppop_history":          _bb_ppop_hist,
+                "cir_history":           _bb_cir_hist,
+                "loans_history":         _bb_loans_hist,
+            }
+
         dcf_range[ticker] = {
             **scenario_results,
             "wacc":               round(wacc, 4),
@@ -4151,6 +4334,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # REIT-specific breakdown — None for non-REITs so ReportPage can
             # feature-flag the REIT panels off cleanly.
             "reit_breakdown":     reit_breakdown,
+            # Bank-specific breakdown — None for non-banks. Same gating pattern
+            # as reit_breakdown; frontend checks `dcfRange?.bank_breakdown`.
+            "bank_breakdown":     bank_breakdown,
         }
 
         base_iv = scenario_results["base"]["intrinsic_value"]
