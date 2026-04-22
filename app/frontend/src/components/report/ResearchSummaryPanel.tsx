@@ -118,6 +118,10 @@ export function ResearchSummaryPanel({
   useEffect(() => {
     if (!industryBrief && !deepResearch) return;
     if (summary) return; // already fetched for this runId
+    // Mid-run streaming: runId is empty until event: complete. In that case
+    // still RENDER the research/brief accordion content (from props), but
+    // skip the AI summary fetch — it'll fire later when runId arrives.
+    if (!runId) return;
 
     // ── Cross-contamination guard (frontend-side) ─────────────────────
     // During navigation transitions, React may render with stale props
