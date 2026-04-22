@@ -238,34 +238,46 @@ def backfill(
     }
 
     # Use _get_archive_conn() (not raw sqlite3.connect) so startup migrations
-    # fire first — legacy DBs may be missing the analysis_date column on the
-    # runs table (pre-2.0 schema). _get_conn runs the ALTER TABLE migrations
-    # idempotently before returning the connection.
+    # fire first. _get_conn also creates the web_runs table if missing.
     conn = _get_archive_conn()
 
-    # Find candidate rows. Join ticker_signals → runs so we get the sector and
-    # analysis_date (= end_date used by the original pipeline run). Filter on
-    # REIT/RealEstate.
-    # analysis_date may be NULL on legacy rows (column was added via migration
-    # but never populated retroactively). Fall back to the run_at date so the
-    # search_line_items call fetches year-appropriate annual data rather than
-    # today's TTM. run_at is ISO-8601, so take the first 10 chars (YYYY-MM-DD).
-    query = """
-        SELECT ts.id, ts.run_id, ts.ticker, ts.dcf_range_json,
-               r.sector,
-               COALESCE(r.analysis_date, SUBSTR(r.run_at, 1, 10)) AS analysis_date
-        FROM ticker_signals ts
-        JOIN runs r ON r.run_id = ts.run_id
-        WHERE (r.sector = 'RealEstate' OR r.sector = 'REIT')
-          AND ts.dcf_range_json IS NOT NULL
+    # Target the web_runs table — this is what the deployed web app reads via
+    # /api/report/{run_id}. full_result_json is the entire pipeline state
+    # (including data.dcf_range[ticker]) serialised as JSON. The separate
+    # runs/ticker_signals tables are populated by the CLI pipeline and may be
+    # empty on cloud deploys.
+    #
+    # Sector filter: web_runs.sector may be NULL on legacy rows or mis-
+    # classified if the LLM got it wrong before TICKER_SECTOR_LOOKUP entries
+    # were added. So we use BOTH signals:
+    #   1. sector column matches RealEstate/REIT, OR
+    #   2. the ticker appears in the US-REIT whitelist (TICKER_SECTOR_LOOKUP
+    #      entries with sector='RealEstate')
+    # This catches runs that predate the deterministic routing.
+    from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+    reit_whitelist = [
+        t for t, info in TICKER_SECTOR_LOOKUP.items()
+        if isinstance(info, tuple) and len(info) >= 1 and info[0] == "RealEstate"
+    ]
+
+    # Build the query dynamically so we can bind the whitelist
+    base_query = """
+        SELECT run_id, ticker, run_at, sector, full_result_json
+        FROM web_runs
+        WHERE full_result_json IS NOT NULL
     """
     params: list[Any] = []
     if target_ticker:
-        query += " AND ts.ticker = ?"
+        base_query += " AND ticker = ?"
         params.append(target_ticker.upper())
-    query += " ORDER BY r.run_at DESC"
+    else:
+        # No target ticker → restrict to REIT tickers (by sector OR whitelist)
+        placeholders = ",".join("?" * len(reit_whitelist))
+        base_query += f" AND (sector IN ('RealEstate','REIT') OR ticker IN ({placeholders}))"
+        params.extend(reit_whitelist)
+    base_query += " ORDER BY run_at DESC"
 
-    rows = list(conn.execute(query, params).fetchall())
+    rows = list(conn.execute(base_query, params).fetchall())
     result["rows_examined"] = len(rows)
     if not rows:
         conn.close()
@@ -274,18 +286,39 @@ def backfill(
     for row in rows:
         tkr = row["ticker"]
         run_id = row["run_id"]
-        analysis_date = row["analysis_date"] or date.today().strftime("%Y-%m-%d")
+        analysis_date = (row["run_at"] or "")[:10] or date.today().strftime("%Y-%m-%d")
         detail: dict[str, Any] = {
             "ticker": tkr,
             "run_id": run_id,
             "analysis_date": analysis_date,
+            "archived_sector": row["sector"],
         }
 
+        # Parse the full result JSON and navigate to data.dcf_range[ticker]
         try:
-            dcf_dict = json.loads(row["dcf_range_json"])
+            full_result = json.loads(row["full_result_json"])
         except (TypeError, ValueError) as exc:
             detail["status"] = "skip"
             detail["reason"] = f"corrupt JSON: {exc}"
+            result["details"].append(detail)
+            continue
+
+        data = full_result.get("data") or {}
+        dcf_range = data.get("dcf_range") or {}
+        dcf_dict = dcf_range.get(tkr) or dcf_range.get(tkr.upper())
+        if not isinstance(dcf_dict, dict):
+            detail["status"] = "skip"
+            detail["reason"] = "no data.dcf_range[ticker] in full_result"
+            result["details"].append(detail)
+            continue
+
+        # Also verify this is actually a REIT via ticker whitelist — guards
+        # against patching a ticker that happens to share a symbol with a
+        # non-REIT (shouldn't happen in practice but cheap defense).
+        archived_sector = row["sector"] or ""
+        if archived_sector not in {"RealEstate", "REIT"} and tkr.upper() not in reit_whitelist:
+            detail["status"] = "skip"
+            detail["reason"] = f"not a REIT (archived_sector={archived_sector!r})"
             result["details"].append(detail)
             continue
 
@@ -295,8 +328,6 @@ def backfill(
             result["details"].append(detail)
             continue
 
-        # Pull shares from archived dcf_range (we need the same shares count
-        # the original pipeline used to compute scenario_results).
         shares = dcf_dict.get("shares_outstanding")
         if not shares or shares <= 0:
             for scen_key in ("base", "bull", "bear"):
@@ -317,8 +348,13 @@ def backfill(
             result["details"].append(detail)
             continue
 
+        # Inject the breakdown into the nested dcf_range[ticker] and
+        # reserialize the whole full_result_json
         dcf_dict["reit_breakdown"] = breakdown
-        new_json = json.dumps(dcf_dict)
+        dcf_range[tkr] = dcf_dict
+        data["dcf_range"] = dcf_range
+        full_result["data"] = data
+        new_json = json.dumps(full_result)
 
         detail["subtype"] = breakdown.get("subtype")
         detail["nav_per_share"] = breakdown.get("nav_per_share")
@@ -327,9 +363,17 @@ def backfill(
             detail["status"] = "would_patch"
         else:
             conn.execute(
-                "UPDATE ticker_signals SET dcf_range_json = ? WHERE id = ?",
-                (new_json, row["id"]),
+                "UPDATE web_runs SET full_result_json = ? WHERE run_id = ?",
+                (new_json, run_id),
             )
+            # Also update the sector column if it was wrong/NULL, so future
+            # backfills can find this row via the sector filter alone.
+            if archived_sector not in {"RealEstate", "REIT"}:
+                conn.execute(
+                    "UPDATE web_runs SET sector = 'RealEstate' WHERE run_id = ?",
+                    (run_id,),
+                )
+                detail["sector_updated"] = True
             detail["status"] = "patched"
         result["patched"] += 1
         result["details"].append(detail)
