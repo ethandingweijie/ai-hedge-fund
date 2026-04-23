@@ -93,6 +93,49 @@ export function isBiopharmaSector(sector: string | null | undefined): boolean {
   return s.includes('biopharm') || s.includes('biotech') || s.includes('pharmaceutical');
 }
 
+/**
+ * True if the given sector string denotes a tech / software company.
+ *
+ * Matches "Tech", "Technology", and any sector containing "software"
+ * case-insensitively. Mirror's isBiopharmaSector's loose-match convention.
+ *
+ * Used by the report pages to gate the Tech-specific valuation panel. Note
+ * that sector match alone is NOT enough — see classifyTechProfile below:
+ * we only render the Tech panel for profiles we can classify into a
+ * sub-type, otherwise we fall through to the generic ValuationLadder.
+ */
+export function isTechSector(sector: string | null | undefined): boolean {
+  if (!sector || typeof sector !== 'string') return false;
+  const s = sector.toLowerCase();
+  return s === 'tech' || s === 'technology' || s.includes('software');
+}
+
+/** Tech sub-type (one of three views the panel routes between, or null when
+ *  the profile string can't be classified). */
+export type TechSubtype = 'hyperscaler' | 'mature_saas' | 'growth_saas' | null;
+
+/**
+ * Classify a profile string into one of the Tech sub-type views, or null when
+ * no sub-type matches. Callers MUST treat `null` as "fall through to the
+ * generic ValuationLadder" — sub-type screens render ONLY for their
+ * sub-segment; we never show a generic Tech panel on an unknown sub-type.
+ *
+ * Patterns matched (case-insensitive substring):
+ *   - 'hyperscaler' / 'conglomerate'        → 'hyperscaler'
+ *   - 'mature saas' / 'mature'              → 'mature_saas'
+ *   - 'growth saas' / 'hyper-growth' / 'high-growth' / 'cybersecurity' /
+ *     'mission-critical'                    → 'growth_saas'
+ */
+export function classifyTechProfile(profile: string | null | undefined): TechSubtype {
+  if (!profile || typeof profile !== 'string') return null;
+  const p = profile.toLowerCase();
+  if (p.includes('hyperscaler') || p.includes('conglomerate')) return 'hyperscaler';
+  if (p.includes('mature saas') || p.includes('mature')) return 'mature_saas';
+  if (p.includes('growth saas') || p.includes('hyper-growth') || p.includes('high-growth')
+      || p.includes('cybersecurity') || p.includes('mission-critical')) return 'growth_saas';
+  return null;
+}
+
 // Provider color utility for consistent styling across components
 export function getProviderColor(provider: string): string {
   return 'bg-gray-600/20 text-primary border-gray-600/40';

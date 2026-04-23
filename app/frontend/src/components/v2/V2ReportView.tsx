@@ -24,13 +24,14 @@ import type {
   ProgressEvent,
   MacroRegime,
   BiopharmaPipelineAsset,
+  SaasMetrics,
 } from '@/lib/reportTypes';
 import {
   getStockData, getCompanyName,
   getRevenueProductSegmentation, getRevenueGeoSegmentation,
   type RevenueSegmentation,
 } from '@/lib/api';
-import { extractLatestFinancials, isBiopharmaSector } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechProfile } from '@/lib/utils';
 
 // Existing panel components (reused as-is)
 import { FinancialsChart } from '@/components/report/FinancialsChart';
@@ -40,6 +41,7 @@ import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
+import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
@@ -270,6 +272,11 @@ export function V2ReportView({
           pipelineAssets={(data.pipeline_assets as Record<string, BiopharmaPipelineAsset[]> | undefined)?.[ticker]}
           sections={data.deep_research_sections as Record<string, string> | undefined}
           rawFinancials={data.raw_financials as Record<string, unknown> | undefined}
+          profile={
+            (data.profile_names as Record<string, string> | undefined)?.[ticker]
+            ?? (data.profile_name as string | undefined)
+          }
+          saasMetrics={(data.saas_metrics as Record<string, SaasMetrics> | undefined)?.[ticker]}
         />}
         {tab === 'investors'  && <InvestorsBody  agentSignals={agentSignals} debateResult={debateResult} ticker={ticker} isRunning={isRunning} />}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
@@ -458,7 +465,7 @@ function SummaryBody({
 /* ───────── Valuation Tab ───────── */
 function ValuationBody({
   dcfRange, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
-  sector, pipelineAssets, sections, rawFinancials,
+  sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics,
 }: {
   dcfRange: DcfRange | undefined;
   scenarioAnalysis: ScenarioAnalysis | undefined;
@@ -466,7 +473,7 @@ function ValuationBody({
   ticker: string;
   currentPrice: number | null;
   isRunning: boolean;
-  /** Sector classification — gates Biopharma-specific panel. */
+  /** Sector classification — gates Biopharma / Tech-specific panels. */
   sector?: string;
   /** Pipeline assets for Biopharma tickers (extracted from deep research). */
   pipelineAssets?: BiopharmaPipelineAsset[];
@@ -474,6 +481,10 @@ function ValuationBody({
   sections?: Record<string, string>;
   /** FY-keyed raw financials dict — used to derive R&D / revenue / FCF. */
   rawFinancials?: Record<string, unknown>;
+  /** Profile name (e.g. "Hyperscaler / Tech Conglomerate") — Tech sub-type routing. */
+  profile?: string;
+  /** SaaS metrics extractor output — Tech sub-type NRR / Rule-of-40 / CAC tiles. */
+  saasMetrics?: SaasMetrics;
 }) {
   // Extract all the numbers we need from real data
   const target = (scenarioAnalysis?.['12m_price_target'] ?? decision?.price_target ?? null);
@@ -647,7 +658,21 @@ function ValuationBody({
               fcf={_fin.fcf}
             />
           );
-        })() : (
+        })()
+        /* Tech sub-type routing: Hyperscaler/Mature SaaS/Growth SaaS.        */
+        /* Falls through to ValuationLadder when profile can't be classified, */
+        /* so we don't show a Tech-specific panel on unknown sub-types.       */
+        : (isTechSector(sector) && classifyTechProfile(profile) !== null) ? (
+          <TechValuationPanel
+            dcfRange={dcfRange}
+            currentPrice={current ?? undefined}
+            ticker={ticker}
+            profile={profile}
+            sections={sections}
+            rawFinancials={rawFinancials}
+            saasMetrics={saasMetrics}
+          />
+        ) : (
           <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} />
         )
       ) : (

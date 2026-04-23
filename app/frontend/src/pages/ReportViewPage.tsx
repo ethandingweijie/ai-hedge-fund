@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { getRunResult } from '@/lib/api';
-import { extractLatestFinancials, isBiopharmaSector } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechProfile } from '@/lib/utils';
 import type { RunResult } from '@/lib/reportTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
@@ -20,6 +20,7 @@ import { ValuationLadder } from '@/components/report/ValuationLadder';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
+import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { DebatePanel } from '@/components/report/DebatePanel';
 import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
@@ -247,7 +248,29 @@ export function ReportViewPage() {
                   fcf={_fin.fcf}
                 />
               );
-            })() : (
+            })()
+            /* Tech sub-type routing: Hyperscaler/Mature SaaS/Growth SaaS.        */
+            /* Falls through to ValuationLadder when profile can't be classified, */
+            /* so we don't show a Tech-specific panel on unknown sub-types.       */
+            : (isTechSector(sector) && classifyTechProfile(
+                 (data.profile_names as Record<string, string> | undefined)?.[ticker]
+                 ?? (data.profile_name as string | undefined)
+               ) !== null) ? (
+              <TechValuationPanel
+                dcfRange={dcfRange}
+                currentPrice={currentPrice}
+                ticker={ticker}
+                profile={
+                  (data.profile_names as Record<string, string> | undefined)?.[ticker]
+                  ?? (data.profile_name as string | undefined)
+                }
+                sections={data.deep_research_sections as Record<string, string> | undefined}
+                rawFinancials={data.raw_financials as Record<string, unknown> | undefined}
+                saasMetrics={
+                  (data.saas_metrics as Record<string, import('@/lib/reportTypes').SaasMetrics> | undefined)?.[ticker]
+                }
+              />
+            ) : (
               <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={ticker} />
             )}
           </div>

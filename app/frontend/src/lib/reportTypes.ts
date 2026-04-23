@@ -246,6 +246,23 @@ export interface BiopharmaPipelineAsset {
   evidence?: string | null;          // ≤300 char source citation
 }
 
+// ── Tech / SaaS metrics extractor output ─────────────────────────────────────
+// Source: src/agents/industry/deep_research.py  `_extract_saas_metrics`
+// Propagated via state["data"]["saas_metrics"][ticker] → RunResult.data.saas_metrics
+// All fields are decimals (0.80-1.50 for NRR = 80%-150%) except months / raw
+// scores. Fields are individually optional — tiles gate on presence.
+export interface SaasMetrics {
+  nrr_pct?: number | null;                // 0.80–1.50 (e.g. 1.26 = 126% NRR)
+  gross_retention_pct?: number | null;    // 0.80–1.00
+  cac_payback_months?: number | null;
+  ltv_cac_ratio?: number | null;
+  rule_of_40_score?: number | null;       // numeric score (growth % + FCF margin %)
+  magic_number?: number | null;
+  rpo_growth_yoy?: number | null;         // −0.20 to 0.80
+  billings_growth_yoy?: number | null;
+  evidence?: string | null;
+}
+
 export interface DcfRange {
   bull?: DcfCase;
   base?: DcfCase;
