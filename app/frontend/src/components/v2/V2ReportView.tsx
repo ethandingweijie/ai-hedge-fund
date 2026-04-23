@@ -30,7 +30,7 @@ import {
   getRevenueProductSegmentation, getRevenueGeoSegmentation,
   type RevenueSegmentation,
 } from '@/lib/api';
-import { extractLatestFinancials } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector } from '@/lib/utils';
 
 // Existing panel components (reused as-is)
 import { FinancialsChart } from '@/components/report/FinancialsChart';
@@ -633,7 +633,7 @@ function ValuationBody({
             currentPrice={current ?? undefined}
             ticker={ticker}
           />
-        ) : sector === 'Biopharma' ? (() => {
+        ) : isBiopharmaSector(sector) ? (() => {
           const _fin = extractLatestFinancials(rawFinancials);
           return (
             <BiopharmaValuationPanel

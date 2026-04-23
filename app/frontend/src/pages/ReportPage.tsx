@@ -7,7 +7,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { getStockData, searchCompanies, getPopularTickers, type CompanySearchResult, type PopularTicker } from '@/lib/api';
-import { extractLatestFinancials } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector } from '@/lib/utils';
 // v2 imports
 import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
@@ -1346,7 +1346,7 @@ export function ReportPage() {
                   ticker={liveTicker}
                 />
               ))
-            ) : sector === 'Biopharma' ? (
+            ) : isBiopharmaSector(sector) ? (
               renderSection('valuation', 'Biopharma Valuation', (() => {
                 const _fin = extractLatestFinancials(data.raw_financials as Record<string, unknown> | undefined);
                 return (

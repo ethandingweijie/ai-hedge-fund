@@ -69,6 +69,30 @@ export function extractLatestFinancials(
   };
 }
 
+/**
+ * True if the given sector string denotes a biopharma / biotech company.
+ *
+ * Why this exists: the LLM-driven sector classifier can emit any of these
+ * strings for what's conceptually the same thing —
+ *   "Biopharma"  (internal canonical — validated via TICKER_SECTOR_LOOKUP)
+ *   "Biotechnology", "Biotech", "biotech"  (LLM-returned variants)
+ *   "Healthcare / Biotechnology", "Biopharma/Biotech"  (compound forms)
+ *   "Pharmaceuticals"  (sometimes emitted for big pharma)
+ *
+ * A strict `sector === 'Biopharma'` check misses all of these. This helper
+ * catches the common roots case-insensitively and tolerates compound strings.
+ *
+ * Trade-off: it may match some "healthcare" tickers that aren't drug companies
+ * (e.g. Teladoc, GoodRx). That's acceptable because the BiopharmaValuationPanel
+ * gracefully renders an empty pipeline message when `pipeline_assets` is
+ * missing — misrouting to it costs ~1 card of wasted space, NOT a crash.
+ */
+export function isBiopharmaSector(sector: string | null | undefined): boolean {
+  if (!sector || typeof sector !== 'string') return false;
+  const s = sector.toLowerCase();
+  return s.includes('biopharm') || s.includes('biotech') || s.includes('pharmaceutical');
+}
+
 // Provider color utility for consistent styling across components
 export function getProviderColor(provider: string): string {
   return 'bg-gray-600/20 text-primary border-gray-600/40';

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { getRunResult } from '@/lib/api';
-import { extractLatestFinancials } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector } from '@/lib/utils';
 import type { RunResult } from '@/lib/reportTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
@@ -233,7 +233,7 @@ export function ReportViewPage() {
                 currentPrice={currentPrice}
                 ticker={ticker}
               />
-            ) : sector === 'Biopharma' ? (() => {
+            ) : isBiopharmaSector(sector) ? (() => {
               const _fin = extractLatestFinancials(data.raw_financials as Record<string, unknown> | undefined);
               return (
                 <BiopharmaValuationPanel
