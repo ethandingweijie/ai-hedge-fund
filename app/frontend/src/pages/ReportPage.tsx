@@ -7,6 +7,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { getStockData, searchCompanies, getPopularTickers, type CompanySearchResult, type PopularTicker } from '@/lib/api';
+import { extractLatestFinancials } from '@/lib/utils';
 // v2 imports
 import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
@@ -27,6 +28,7 @@ import { FinancialsChart }     from '@/components/report/FinancialsChart';
 import { ValuationLadder }     from '@/components/report/ValuationLadder';
 import { REITValuationPanel }  from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel }  from '@/components/report/bank/BankValuationPanel';
+import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { DebatePanel }         from '@/components/report/DebatePanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
@@ -1436,6 +1438,25 @@ export function ReportPage() {
                   ticker={liveTicker}
                 />
               ))
+            ) : sector === 'Biopharma' ? (
+              renderSection('valuation', 'Biopharma Valuation', (() => {
+                const _fin = extractLatestFinancials(data.raw_financials as Record<string, unknown> | undefined);
+                return (
+                  <BiopharmaValuationPanel
+                    dcfRange={dcfRange}
+                    currentPrice={currentPrice}
+                    ticker={liveTicker}
+                    pipelineAssets={
+                      ((data.pipeline_assets as Record<string, import('@/lib/reportTypes').BiopharmaPipelineAsset[]> | undefined)?.[liveTicker])
+                      ?? ((data.pipeline_assets as Record<string, import('@/lib/reportTypes').BiopharmaPipelineAsset[]> | undefined)?.[liveTickerKey])
+                    }
+                    sections={data.deep_research_sections as Record<string, string> | undefined}
+                    rd_spend={_fin.rd_spend}
+                    revenue={_fin.revenue}
+                    fcf={_fin.fcf}
+                  />
+                );
+              })())
             ) : (
               renderSection('valuation', 'Valuation', (
                 <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={liveTicker} />

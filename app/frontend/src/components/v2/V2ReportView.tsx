@@ -23,12 +23,14 @@ import type {
   CitationRegistryEntry,
   ProgressEvent,
   MacroRegime,
+  BiopharmaPipelineAsset,
 } from '@/lib/reportTypes';
 import {
   getStockData, getCompanyName,
   getRevenueProductSegmentation, getRevenueGeoSegmentation,
   type RevenueSegmentation,
 } from '@/lib/api';
+import { extractLatestFinancials } from '@/lib/utils';
 
 // Existing panel components (reused as-is)
 import { FinancialsChart } from '@/components/report/FinancialsChart';
@@ -37,6 +39,7 @@ import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
 import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
+import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
@@ -258,7 +261,18 @@ export function V2ReportView({
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} />}
-        {tab === 'valuation'  && <ValuationBody  dcfRange={dcfRange} scenarioAnalysis={scenarioAnalysis} decision={decision} ticker={ticker} currentPrice={livePrice} isRunning={isRunning} />}
+        {tab === 'valuation'  && <ValuationBody
+          dcfRange={dcfRange}
+          scenarioAnalysis={scenarioAnalysis}
+          decision={decision}
+          ticker={ticker}
+          currentPrice={livePrice}
+          isRunning={isRunning}
+          sector={sector}
+          pipelineAssets={(data.pipeline_assets as Record<string, BiopharmaPipelineAsset[]> | undefined)?.[ticker]}
+          sections={data.deep_research_sections as Record<string, string> | undefined}
+          rawFinancials={data.raw_financials as Record<string, unknown> | undefined}
+        />}
         {tab === 'investors'  && <InvestorsBody  agentSignals={agentSignals} debateResult={debateResult} ticker={ticker} isRunning={isRunning} />}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
         {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} deepAnnotated={deepAnnotated} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
@@ -446,6 +460,7 @@ function SummaryBody({
 /* ───────── Valuation Tab ───────── */
 function ValuationBody({
   dcfRange, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
+  sector, pipelineAssets, sections, rawFinancials,
 }: {
   dcfRange: DcfRange | undefined;
   scenarioAnalysis: ScenarioAnalysis | undefined;
@@ -453,6 +468,14 @@ function ValuationBody({
   ticker: string;
   currentPrice: number | null;
   isRunning: boolean;
+  /** Sector classification — gates Biopharma-specific panel. */
+  sector?: string;
+  /** Pipeline assets for Biopharma tickers (extracted from deep research). */
+  pipelineAssets?: BiopharmaPipelineAsset[];
+  /** Deep research section 2 text blocks for narrative cards. */
+  sections?: Record<string, string>;
+  /** FY-keyed raw financials dict — used to derive R&D / revenue / FCF. */
+  rawFinancials?: Record<string, unknown>;
 }) {
   // Extract all the numbers we need from real data
   const target = (scenarioAnalysis?.['12m_price_target'] ?? decision?.price_target ?? null);
@@ -612,7 +635,21 @@ function ValuationBody({
             currentPrice={current ?? undefined}
             ticker={ticker}
           />
-        ) : (
+        ) : sector === 'Biopharma' ? (() => {
+          const _fin = extractLatestFinancials(rawFinancials);
+          return (
+            <BiopharmaValuationPanel
+              dcfRange={dcfRange}
+              currentPrice={current ?? undefined}
+              ticker={ticker}
+              pipelineAssets={pipelineAssets}
+              sections={sections}
+              rd_spend={_fin.rd_spend}
+              revenue={_fin.revenue}
+              fcf={_fin.fcf}
+            />
+          );
+        })() : (
           <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} />
         )
       ) : (

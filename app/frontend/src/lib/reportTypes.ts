@@ -232,6 +232,20 @@ export interface BankBreakdown {
   loans_history?: Array<{ period: string; value: number | null }>;
 }
 
+// ── Biopharma — pipeline asset schema (emitted today by _extract_pipeline_assets) ──
+// Source: src/agents/industry/deep_research.py  `_extract_pipeline_assets`
+// Propagated via state["data"]["pipeline_assets"][ticker] → RunResult.data.pipeline_assets
+export interface BiopharmaPipelineAsset {
+  name: string;
+  phase?: string;                    // "preclinical" | "Ph1" | "Ph2" | "Ph3" | "Filed" | "Approved"
+  peak_sales_bn?: number | null;     // $ billions
+  launch_year?: number | null;
+  indication?: string | null;
+  therapeutic_area?: string | null;  // oncology | cns | rare | metabolic | cv | immunology | infectious_disease | other
+  partner?: string | null;           // e.g. "MRK" for mRNA-4157
+  evidence?: string | null;          // ≤300 char source citation
+}
+
 export interface DcfRange {
   bull?: DcfCase;
   base?: DcfCase;
