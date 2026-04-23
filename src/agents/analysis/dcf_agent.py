@@ -841,21 +841,24 @@ def _project_dcf(
 #   Office                     6%    (TI-heavy, build-out)
 #   Hospitality                7-8%  (FF&E reserves)
 _REIT_MAINT_CAPEX_PCT: dict[str, float] = {
-    "data_center":    0.02,
-    "lab":            0.025,
-    "industrial":     0.03,
+    "data_center":         0.02,
+    # Interconnection-heavy DCs (EQIX): higher recurring maint for network
+    # fabric refresh + meet-me-room kit. Offset by higher revenue per sq ft.
+    "data_center_premium": 0.025,
+    "lab":                 0.025,
+    "industrial":          0.03,
     # Net-lease tenants absorb property opex, maintenance, insurance, taxes
     # under triple-net structure — landlord's maintenance capex obligation
     # is minimal (reserve fund for structural items only).
-    "net_lease":      0.01,
-    "self_storage":   0.03,
-    "residential":    0.04,
-    "healthcare":     0.04,
-    "retail":         0.055,
-    "office":         0.060,
-    "hospitality":    0.075,
-    "infrastructure": 0.085,   # infra concessions — heavy recurring maint reserves
-    "default":        0.045,
+    "net_lease":           0.01,
+    "self_storage":        0.03,
+    "residential":         0.04,
+    "healthcare":          0.04,
+    "retail":              0.055,
+    "office":              0.060,
+    "hospitality":         0.075,
+    "infrastructure":      0.085,   # infra concessions — heavy recurring maint reserves
+    "default":             0.045,
 }
 
 # Default cap rates and REIT multiples by sub-type — used for NAV (Cap Rates),
@@ -867,25 +870,40 @@ _REIT_MAINT_CAPEX_PCT: dict[str, float] = {
 # p_ffo / p_affo are REIT-specific distribution multiples (NOT P/E — these
 # apply to cash-adjusted metrics that REITs report in supplemental disclosures).
 _REIT_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
-    "data_center":    {"cap_rate": 0.045, "p_ffo": 22.0, "p_affo": 25.0},
-    "lab":            {"cap_rate": 0.050, "p_ffo": 20.0, "p_affo": 22.0},
-    "industrial":     {"cap_rate": 0.055, "p_ffo": 18.0, "p_affo": 20.0},
-    "self_storage":   {"cap_rate": 0.052, "p_ffo": 19.0, "p_affo": 21.0},
-    "residential":    {"cap_rate": 0.055, "p_ffo": 17.0, "p_affo": 19.0},
+    # Data center — default DLR-class calibration. Green Street April 2026:
+    # 5.0-5.3% implied cap for large DC REITs. Previous 4.5% was too tight;
+    # only EQIX (interconnection moat) earns a sub-5% cap, routed through
+    # the data_center_premium sub-type below.
+    "data_center":          {"cap_rate": 0.050, "p_ffo": 22.0, "p_affo": 25.0},
+    # Data center premium — interconnection moat (EQIX). Colocation +
+    # interconnection revenue commands tighter cap rate than pure wholesale
+    # (DLR). Preserved 4.5% Green Street high-end + 23x P/FFO growth premium.
+    "data_center_premium":  {"cap_rate": 0.045, "p_ffo": 23.0, "p_affo": 26.0},
+    "lab":                  {"cap_rate": 0.050, "p_ffo": 20.0, "p_affo": 22.0},
+    "industrial":           {"cap_rate": 0.055, "p_ffo": 18.0, "p_affo": 20.0},
+    # Self storage — Green Street April 2026 shows PSA / EXR ~5.5% (we were
+    # 5.2%, slightly tighter than consensus). Move to 5.5% to match sector.
+    "self_storage":         {"cap_rate": 0.055, "p_ffo": 19.0, "p_affo": 21.0},
+    "residential":          {"cap_rate": 0.055, "p_ffo": 17.0, "p_affo": 19.0},
     # Net-lease / single-tenant / triple-net REITs (O, ADC, NNN, WPC, SRC, GOOD).
     # Traded as fixed-income proxies — long-duration contractual cash flows
     # (10-20yr initial lease terms, escalators, credit-tenant covenants).
     # Cap rate 5.0% reflects credit-tenant net-lease consensus (Green Street
     # April 2026: 5.2% blue-chip, UBS: 5.4% O-specific). Lower than retail
-    # (6.8%) because tenant absorbs property opex/taxes/insurance, and
+    # (6.2%) because tenant absorbs property opex/taxes/insurance, and
     # lower than industrial (5.5%) because contract duration is longer with
-    # investment-grade counterparties. Multiples reflect yield-oriented
-    # investor base — premium for sustainable distribution coverage.
-    "net_lease":      {"cap_rate": 0.050, "p_ffo": 16.0, "p_affo": 18.0},
-    "healthcare":     {"cap_rate": 0.060, "p_ffo": 15.0, "p_affo": 17.0},
-    "retail":         {"cap_rate": 0.068, "p_ffo": 14.0, "p_affo": 15.0},
-    "office":         {"cap_rate": 0.075, "p_ffo": 12.0, "p_affo": 13.0},
-    "hospitality":    {"cap_rate": 0.080, "p_ffo": 11.0, "p_affo": 12.0},
+    # investment-grade counterparties.
+    "net_lease":            {"cap_rate": 0.050, "p_ffo": 16.0, "p_affo": 18.0},
+    "healthcare":           {"cap_rate": 0.060, "p_ffo": 15.0, "p_affo": 17.0},
+    # Retail — Class-A mall / grocery-anchored strip average. Green Street
+    # April 2026: SPG Class-A malls ~6.0%, strip retail 7.5%, outlets 7.0%.
+    # Previous 6.8% penalized Class-A mall operators (SPG, MAC); 6.2%
+    # blend better reflects diversified retail REIT quality.
+    # Distressed mall REITs (e.g. MAC legacy portfolio) should ideally
+    # route through a future 'retail_distressed' sub-type at 7.5%.
+    "retail":               {"cap_rate": 0.062, "p_ffo": 14.0, "p_affo": 15.0},
+    "office":               {"cap_rate": 0.075, "p_ffo": 12.0, "p_affo": 13.0},
+    "hospitality":          {"cap_rate": 0.080, "p_ffo": 11.0, "p_affo": 12.0},
     # Infrastructure trusts (Keppel Infrastructure, Asian Pay Television,
     # Hutchison Port Holdings) — SGX/HK business trust structures that own
     # long-term concession assets rather than fee-simple property. Cap rate
@@ -928,8 +946,14 @@ def _classify_reit_subtype(ticker: str, notes: str = "") -> str:
         ("infrastructure", ("infrastructure trust", "business trust",
                             "infra trust", "pay television", "port trust",
                             "shipping trust", "maritime trust")),
+        # Data center premium — interconnection / colocation moat. EQIX
+        # commands the tightest cap in the sector (Green Street 4.5%) due
+        # to network effects in meet-me rooms. Checked BEFORE data_center
+        # so pure interconnection plays don't get averaged into wholesale DC.
+        ("data_center_premium", ("equinix", "eqix", "interconnection",
+                                 "interxion", "meet-me room", "ix fabric")),
         ("data_center",  ("data center", "data centre", "data-center", "digital realty",
-                          "equinix", "dlr", "eqix", "gds", "keppel dc")),
+                          "dlr", "gds", "keppel dc")),
         ("lab",          ("lab ", "life science", "biotech rent", "alexandria",
                           " are ", "parkway life")),
         ("industrial",   ("industrial", "warehouse", "logistics", "prologis", "pld",
