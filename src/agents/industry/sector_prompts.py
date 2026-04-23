@@ -604,18 +604,41 @@ def needs_extractor(extractor: str, sector: str, profile_name: str = "") -> bool
       - dcf_calibration
       - segment_scenarios
     """
+    # Normalise inputs — the LLM-driven classifier emits the sector as a free
+    # string that may be the canonical form ("Biopharma", "Tech", "Financials",
+    # "RealEstate") OR a loose variant ("Biotechnology", "Biotech",
+    # "Pharmaceuticals", "Healthcare/Biotech", "Technology", "Software",
+    # "Banking", "Real Estate", "REIT", …). Using strict equality dropped
+    # extractor runs silently whenever the LLM preferred a variant — observed
+    # on MRNA where sector ended up normalised to "Biopharma" in stored data
+    # but the pre-storage classification had produced "Biotechnology", so the
+    # pipeline_assets extractor was skipped and the frontend rendered an empty
+    # Pipeline Assets table. Fix: match on a case-insensitive root-token set
+    # for each sector family. Belt-and-suspenders — TICKER_SECTOR_LOOKUP hits
+    # already return canonical strings, but unknown tickers fall through to
+    # LLM classification where variants are common.
+    _sec = (sector or "").lower()
+
     if extractor in {"dcf_calibration", "segment_scenarios"}:
         return True
     if extractor == "reit_metrics":
-        return sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or "")
+        return (
+            "realestate" in _sec.replace(" ", "") or "reit" in _sec
+            or "REIT" in (profile_name or "")
+        )
     if extractor == "bank_metrics":
-        return sector == "Financials" and (
+        return ("financial" in _sec or "bank" in _sec) and (
             "Bank" in (profile_name or "") or
             profile_name in {"Mortgage/GSE", "Brokerage"}
         )
     if extractor == "pipeline_assets":
-        return sector == "Biopharma"
+        return (
+            "biopharm" in _sec or "biotech" in _sec or "pharmaceutical" in _sec
+        )
     if extractor == "saas_metrics":
-        return sector == "Tech" and profile_name not in {"", "Levered Subscription"}
+        return (
+            (_sec == "tech" or _sec == "technology" or "software" in _sec)
+            and profile_name not in {"", "Levered Subscription"}
+        )
     # Unknown extractor — conservative default: run
     return True
