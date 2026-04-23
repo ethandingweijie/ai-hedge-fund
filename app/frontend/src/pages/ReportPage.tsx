@@ -13,8 +13,8 @@ import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Sta
 import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun } from '@/contexts/active-run-context';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { MobileReportView } from '@/components/mobile/MobileReportView';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
+// MobileReportView removed — replaced by V2ReportView (dead legacy mobile fallback gated on `if (false && ...)` removed 2026-04).
 import type { ProgressEvent } from '@/lib/reportTypes';
 
 // ── Report section components ────────────────────────────────────────────────
@@ -37,7 +37,6 @@ import { NewsPanel }           from '@/components/report/NewsPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel }  from '@/components/report/IndustryBriefPanel';
 import { DeepResearchPanel }   from '@/components/report/DeepResearchPanel';
-import { LiveSearchPanel }    from '@/components/report/LiveSearchPanel';
 import { SectionSkeleton }     from '@/components/report/SectionSkeleton';
 
 // ── Investor profiles ────────────────────────────────────────────────────────
@@ -782,8 +781,12 @@ export function ReportPage() {
   useEffect(() => {
     if (!isComplete || !liveMode) return;
 
-    // Final notification with decision
-    const decision = liveResult?.data?.decisions?.[liveTicker]?.action;
+    // Final notification with decision.
+    // NB: decisions lives at the top of RunResult (not under `data`); the old
+    // `data.decisions` path type-checked only because PipelineData has an
+    // unknown index signature — at runtime it always returned undefined, so
+    // the notification fell back to the generic "ready to view" message.
+    const decision = liveResult?.decisions?.[liveTicker]?.action;
     sendNotification(
       `${liveTicker} Analysis Complete`,
       decision ? `Decision: ${decision}. Tap to view full report.` : 'Your investment analysis is ready to view.'
@@ -843,102 +846,6 @@ export function ReportPage() {
         liveData={liveData}
         onCancel={handleReset}
       />
-    );
-  }
-
-  // ── Legacy mobile fallback (unused — kept for type compat) ───────────────
-  if (false && isMobile && liveMode) {
-    // Build a partial RunResult from streaming data so MobileReportView can render progressively
-    const partialResult: import('@/lib/reportTypes').RunResult = {
-      run_id: runId ?? '',
-      ticker: liveTicker || ticker,
-      run_at: runStartedAt.current || new Date().toISOString(),
-      model_name: model,
-      decisions: decision ? { [liveTicker || ticker]: decision } : {},
-      data: data,
-      vgpm: vgpm ? { [liveTicker || ticker]: vgpm } : undefined,
-    };
-
-    return (
-      <div className="min-h-screen bg-background pb-20">
-        {/* Progress bar at top while running — sits below hamburger/profile row */}
-        {isRunning && (
-          <div className="sticky top-0 z-50 bg-background/95 backdrop-blur border-b border-border">
-            {/* Spacer for hamburger + iOS safe area */}
-            <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 48px)' }} />
-            {/* Quip + percentage on same row */}
-            <div className="flex items-center gap-2 px-4">
-              <div className="flex-1 min-w-0">
-                {state === 'reconnecting'
-                  ? <span className="text-xs text-amber-400 animate-pulse">Pipeline running on server — waiting for result...</span>
-                  : <LiveResearchLabel pct={progressPct} phaseMap={phaseMap} />
-                }
-              </div>
-              <span className="text-sm font-bold tabular-nums text-primary shrink-0">{state === 'reconnecting' ? '...' : `${progressPct}%`}</span>
-              <Button variant="ghost" size="sm" className="text-[10px] h-5 px-1.5 text-muted-foreground/60" onClick={handleReset}>
-                Cancel
-              </Button>
-            </div>
-            {/* Segmented progress bar — blue done + shimmer in-progress + grey upcoming */}
-            <style>{`
-              @keyframes mobile-shimmer {
-                0%   { background-position:  200% 0; }
-                100% { background-position: -200% 0; }
-              }
-              .mobile-shimmer-seg {
-                background: linear-gradient(90deg,
-                  rgba(59,130,246,0.25) 25%,
-                  rgba(59,130,246,0.7)  50%,
-                  rgba(59,130,246,0.25) 75%
-                );
-                background-size: 200% 100%;
-                animation: mobile-shimmer 1.4s ease-in-out infinite;
-              }
-            `}</style>
-            <div className="w-full h-3 overflow-hidden flex bg-gray-200 dark:bg-gray-700 mt-2">
-              {/* Completed — solid blue */}
-              <div
-                className="h-full bg-blue-500 transition-all duration-500 flex-none"
-                style={{ width: `${progressPct}%` }}
-              />
-              {/* In-progress — shimmer blue */}
-              {progressPct < 100 && (
-                <div
-                  className="mobile-shimmer-seg h-full flex-none transition-all duration-500"
-                  style={{ width: '25%' }}
-                />
-              )}
-            </div>
-          </div>
-        )}
-        {/* Live thinking / web search panel */}
-        {isRunning && (
-          <LiveSearchPanel
-            streamEvents={events}
-            liveData={liveData}
-            thinking={(liveData.deep_research_thinking as string) || ''}
-            isResearchPhase={
-              Object.values(phaseMap).some(p =>
-                (p.phase === 'deep_research_agent' || p.phase === 'deep_research') && !p.status.includes('✓')
-              ) || events.some(e =>
-                (e.phase === 'deep_research_agent' || e.phase === 'deep_research') && !e.status.includes('✓')
-              )
-            }
-            isComplete={
-              !!(phaseMap['deep_research_agent']?.status?.toLowerCase().match(/done|✓|complete/)) ||
-              !!(phaseMap['deep_research']?.status?.toLowerCase().match(/done|✓|complete/))
-            }
-          />
-        )}
-        {isError && (
-          <div className="sticky top-0 z-50 bg-red-500/10 border-b border-red-500/30 px-4 py-2 flex items-center gap-2">
-            <span className="text-red-500 text-sm">{error ?? 'Pipeline error'}</span>
-            <Button variant="outline" size="sm" className="text-xs h-6 ml-auto" onClick={handleReset}>Retry</Button>
-          </div>
-        )}
-        {/* Render MobileReportView with partial streaming data */}
-        <MobileReportView result={partialResult} runId={runId ?? ''} />
-      </div>
     );
   }
 
