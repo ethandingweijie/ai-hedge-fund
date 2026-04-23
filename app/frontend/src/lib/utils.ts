@@ -96,8 +96,11 @@ export function isBiopharmaSector(sector: string | null | undefined): boolean {
 /**
  * True if the given sector string denotes a tech / software company.
  *
- * Matches "Tech", "Technology", and any sector containing "software"
- * case-insensitively. Mirror's isBiopharmaSector's loose-match convention.
+ * Matches "Tech", "Technology", any sector containing "software",
+ * "information technology", plain "it", or "it services" — case-insensitively.
+ * Mirrors the backend `is_tech_sector` helper in
+ * src/agents/industry/sector_prompts.py so frontend + backend gate identically
+ * on the same LLM-classifier sector variants.
  *
  * Used by the report pages to gate the Tech-specific valuation panel. Note
  * that sector match alone is NOT enough — see classifyTechProfile below:
@@ -107,7 +110,10 @@ export function isBiopharmaSector(sector: string | null | undefined): boolean {
 export function isTechSector(sector: string | null | undefined): boolean {
   if (!sector || typeof sector !== 'string') return false;
   const s = sector.toLowerCase();
-  return s === 'tech' || s === 'technology' || s.includes('software');
+  return (
+    s === 'tech' || s === 'technology' || s.includes('software')
+    || s.includes('information technology') || s === 'it' || s.includes('it services')
+  );
 }
 
 /** Tech sub-type (one of three views the panel routes between, or null when

@@ -592,6 +592,54 @@ def get_kpi_prompt(
     return _GENERIC_KPI_PROMPT
 
 
+# ── Public loose-match sector helpers ─────────────────────────────────────────
+#
+# The LLM-driven classifier emits sector as a free string. TICKER_SECTOR_LOOKUP
+# returns canonical forms ("Biopharma", "Tech", "Financials", "RealEstate"),
+# but unknown tickers fall through to LLM inference where variants are common
+# ("Biotechnology", "Pharmaceuticals", "Technology", "Software", "Information
+# Technology", "Banking", "Real Estate", "REIT", …). Strict equality gates
+# silently mis-route those — observed on MRNA: stored sector was "Biopharma"
+# on the frontend but the extractor gate ran BEFORE normalisation against the
+# LLM variant, so pipeline_assets was skipped and the panel was empty.
+#
+# These helpers mirror the frontend `isBiopharmaSector` / `isTechSector`
+# helpers in `app/frontend/src/lib/utils.ts` so backend and frontend gates
+# route identically. Callers that previously wrote `sector == "Biopharma"`
+# should switch to `is_biopharma_sector(sector)` to avoid silent drops.
+
+
+def is_biopharma_sector(sector: str) -> bool:
+    """Match 'Biopharma', 'Biotechnology', 'Biotech', 'Pharmaceuticals',
+    'Healthcare/Biotech', etc. — any string containing one of the root tokens."""
+    s = (sector or "").lower()
+    return "biopharm" in s or "biotech" in s or "pharmaceutical" in s
+
+
+def is_tech_sector(sector: str) -> bool:
+    """Match 'Tech', 'Technology', 'Software (...)', 'Information Technology',
+    'IT Services'. Canonical form 'Tech' matches too."""
+    s = (sector or "").lower()
+    return (
+        s == "tech" or s == "technology" or "software" in s
+        or "information technology" in s or s == "it" or "it services" in s
+    )
+
+
+def is_bank_sector(sector: str) -> bool:
+    """Match 'Financials', 'Financial Services', 'Banking', 'Banks'.
+    Note: also returns True for insurance/asset-management — callers that need
+    bank-only should additionally check profile_name for 'Bank'."""
+    s = (sector or "").lower()
+    return "financial" in s or "bank" in s
+
+
+def is_reit_sector(sector: str) -> bool:
+    """Match 'RealEstate', 'Real Estate', 'REIT', 'REITs', 'Property Trust'."""
+    s = (sector or "").lower()
+    return "realestate" in s.replace(" ", "") or "reit" in s or "property trust" in s
+
+
 def needs_extractor(extractor: str, sector: str, profile_name: str = "") -> bool:
     """
     Returns True if the given extractor should run for (sector, profile_name).
@@ -617,28 +665,18 @@ def needs_extractor(extractor: str, sector: str, profile_name: str = "") -> bool
     # for each sector family. Belt-and-suspenders — TICKER_SECTOR_LOOKUP hits
     # already return canonical strings, but unknown tickers fall through to
     # LLM classification where variants are common.
-    _sec = (sector or "").lower()
-
     if extractor in {"dcf_calibration", "segment_scenarios"}:
         return True
     if extractor == "reit_metrics":
-        return (
-            "realestate" in _sec.replace(" ", "") or "reit" in _sec
-            or "REIT" in (profile_name or "")
-        )
+        return is_reit_sector(sector) or "REIT" in (profile_name or "")
     if extractor == "bank_metrics":
-        return ("financial" in _sec or "bank" in _sec) and (
+        return is_bank_sector(sector) and (
             "Bank" in (profile_name or "") or
             profile_name in {"Mortgage/GSE", "Brokerage"}
         )
     if extractor == "pipeline_assets":
-        return (
-            "biopharm" in _sec or "biotech" in _sec or "pharmaceutical" in _sec
-        )
+        return is_biopharma_sector(sector)
     if extractor == "saas_metrics":
-        return (
-            (_sec == "tech" or _sec == "technology" or "software" in _sec)
-            and profile_name not in {"", "Levered Subscription"}
-        )
+        return is_tech_sector(sector) and profile_name not in {"", "Levered Subscription"}
     # Unknown extractor — conservative default: run
     return True

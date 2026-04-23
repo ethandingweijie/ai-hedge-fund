@@ -84,6 +84,9 @@ from src.data.sector_profiles import (
     PRE_APPROVAL_BIOTECH_WACC,
     LARGE_CAP_PHARMA_WACC,
 )
+from src.agents.industry.sector_prompts import (
+    is_biopharma_sector, is_tech_sector, is_bank_sector, is_reit_sector,
+)
 from src.tools.hk.ticker import is_hk_ticker as _is_hk_ticker
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
@@ -1150,7 +1153,7 @@ def _is_tech_subtype(sector: str, profile_name: str) -> bool:
     """True when the (sector, profile_name) pair warrants tech-specific
     multiples. Excludes Semiconductor (separate sector table).
     """
-    return sector == "Tech" and profile_name in _TECH_SUBTYPE_MULTIPLES
+    return is_tech_sector(sector) and profile_name in _TECH_SUBTYPE_MULTIPLES
 
 
 # ── Bank-specific valuation (Tier 2 item 3) ───────────────────────────────────
@@ -1909,7 +1912,7 @@ def _compute_method_value(
         mult = base_mult * sm * growth_premium
         # Tier 2 Tech SBC discount on EV multiples
         _sbc_v = most_recent.get("stock_based_compensation")
-        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+        if _sbc_v and revenue_base and revenue_base > 0 and is_tech_sector(sector):
             _sbc_pct = abs(_sbc_v) / revenue_base
             if _sbc_pct > 0.10:
                 mult *= 0.90   # 10% haircut on EV/EBITDA
@@ -2036,7 +2039,7 @@ def _compute_method_value(
         # dilution disguised as non-cash expense. Resolves the "cheap on
         # EBITDA, expensive on FCF" paradox for SNOW/PLTR/DDOG.
         _sbc_v = most_recent.get("stock_based_compensation")
-        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+        if _sbc_v and revenue_base and revenue_base > 0 and is_tech_sector(sector):
             _sbc_pct = abs(_sbc_v) / revenue_base
             if _sbc_pct > 0.10:
                 mult *= 0.93   # 7% haircut on EV/Revenue
@@ -2352,7 +2355,7 @@ def _compute_method_value(
     # profile default when deep research provides management guidance.
     if method_name == "Residual Income":
         # Bank path — profile-aware 2-stage model with CoE override
-        if (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
+        if (is_bank_sector(sector) and profile_name in _BANK_PROFILE_CALIBRATION) \
                 or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
             research_target_roe = most_recent.get("_bank_target_roe_research")
             iv = _compute_residual_income_2stage(
@@ -2481,7 +2484,7 @@ def _compute_method_value(
         mult = base_mult * tier_mult * growth_premium
         # SBC haircut for high-SBC tech
         _sbc_v = most_recent.get("stock_based_compensation")
-        if _sbc_v and revenue_base and revenue_base > 0 and sector == "Tech":
+        if _sbc_v and revenue_base and revenue_base > 0 and is_tech_sector(sector):
             if abs(_sbc_v) / revenue_base > 0.10:
                 mult *= 0.93
         ev = fwd_rev * mult
@@ -3327,7 +3330,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     ticker_forward_flags.append("REIT research metrics: " + " | ".join(_rm_parts))
 
         # ── Bank metrics attachment + audit (Tier 2 item 3) ─────────────────
-        if (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION) \
+        if (is_bank_sector(sector) and profile_name in _BANK_PROFILE_CALIBRATION) \
                 or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
             _bank_m = _compute_bank_metrics(most_recent, profile_name=profile_name)
             _bank_cfg = _bank_profile_calibration(profile_name)
@@ -3369,7 +3372,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     ticker_forward_flags.append("Bank research overrides: " + " | ".join(_or_parts))
 
         # ── SaaS metrics attach (Tier 2 Tech) ──────────────────────────────
-        if sector == "Tech":
+        if is_tech_sector(sector):
             _saas_override = (saas_metrics_all or {}).get(ticker) or {}
             if _saas_override:
                 most_recent["_saas_metrics"] = _saas_override
@@ -3644,7 +3647,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     # aggressive IVs (DLR at $324 vs $201 market, 61% upside).
                     # Tighter [0.85, 1.20] band preserves some differentiation
                     # (DLR > O) while aligning blended IV with analyst PT range.
-                    _is_reit_profile = sector in {"RealEstate", "REIT"} or profile_name == "REIT"
+                    _is_reit_profile = is_reit_sector(sector) or profile_name == "REIT"
                     if _is_reit_profile:
                         growth_premium = max(0.85, min(1.20, _gp_raw))
                     else:
@@ -4189,7 +4192,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # gate tile-by-tile rather than hide the whole panel.
         bank_breakdown: Optional[dict] = None
         _is_bank_profile = (
-            (sector == "Financials" and profile_name in _BANK_PROFILE_CALIBRATION)
+            (is_bank_sector(sector) and profile_name in _BANK_PROFILE_CALIBRATION)
             or "Bank" in (profile_name or "")
             or profile_name == "Mortgage/GSE"
         )

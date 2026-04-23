@@ -6,6 +6,9 @@ import json
 import numpy as np
 import pandas as pd
 from src.utils.api_key import get_api_key_from_state
+from src.agents.industry.sector_prompts import (
+    is_biopharma_sector, is_tech_sector, is_bank_sector, is_reit_sector,
+)
 
 ##### Risk Management Agent #####
 def risk_management_agent(state: AgentState, agent_id: str = "risk_management_agent"):
@@ -449,11 +452,11 @@ def run_advanced_risk_manager(state: AgentState) -> AgentState:
         approved_size_pct = max_single_position
         sector_flags: list[str] = []
 
-        if sector == "Biopharma":
+        if is_biopharma_sector(sector):
             approved_size_pct = min(approved_size_pct, 0.05)
             sector_flags.append("Biopharma: capped at 5% (FDA binary risk)")
 
-        elif sector == "Financials":
+        elif is_bank_sector(sector):
             rate_dir = macro_regime.get("rate_direction", "neutral")
             if rate_dir == "tightening":
                 approved_size_pct *= 0.7

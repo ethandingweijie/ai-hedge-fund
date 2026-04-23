@@ -2485,13 +2485,25 @@ def classify_valuation_profile(
     Returns the profile key string to look up in INDUSTRY_VALUATION_PROFILES.
     Falls back to the first (anchor) profile for that sector if no rule matches.
     """
+    # Loose-match helpers (local import to avoid any load-time cycles).
+    # These accept LLM classifier variants like "Technology", "Biotechnology",
+    # "Banking", "Real Estate" — preventing silent mis-routing to the wrong
+    # sector branch when the strict Title-Case sector string doesn't match.
+    from src.agents.industry.sector_prompts import (
+        is_biopharma_sector, is_tech_sector, is_bank_sector, is_reit_sector,
+    )
+    _is_tech = is_tech_sector(sector)
+    _is_biopharma = is_biopharma_sector(sector)
+    _is_bank = is_bank_sector(sector)
+    _is_reit = is_reit_sector(sector)
+
     # Normalize sector key: "REIT" (from SGX universe) maps to "RealEstate"
     sector_lookup = "RealEstate" if sector == "REIT" else sector
     profiles = INDUSTRY_VALUATION_PROFILES.get(sector_lookup, {})
     if not profiles:
         return ""
 
-    if sector == "Tech":
+    if _is_tech:
         if is_pre_revenue or (fcf_margin < -0.15 and revenue_cagr > 0.40):
             return "High-Growth Tech / AI"
         if revenue_cagr > 0.20 and fcf_margin < 0.05:
@@ -2527,7 +2539,7 @@ def classify_valuation_profile(
             return "Mature Platform"
         return "Mature SaaS"
 
-    if sector == "Biopharma":
+    if _is_biopharma:
         if is_pre_revenue or fcf_margin < -0.15:
             return "Pre-approval Biotech"
         if revenue_base and revenue_base > 30e9:
@@ -2538,7 +2550,7 @@ def classify_valuation_profile(
             return "MedTech / Devices"
         return "Large Cap Pharma"
 
-    if sector == "Financials":
+    if _is_bank:
         # Money Center Bank gate: revenue > $50B = diversified G-SIB bank.
         if revenue_base and revenue_base > 50e9:
             if debt_to_equity > 5.0:
@@ -2642,7 +2654,7 @@ def classify_valuation_profile(
     if sector == "Crypto":
         return "Pre-Revenue Tech"
 
-    if sector in ("RealEstate", "REIT"):
+    if _is_reit:
         return "REIT"
 
     if sector == "Transportation":
