@@ -538,6 +538,20 @@ async def get_popular_tickers(limit: int = Query(default=15, ge=1, le=50)):
         return []
 
     # ── 2. Fetch price change for each ticker in parallel ────────────────────
+    import math as _math
+    def _safe_round(v: float, d: int = 2) -> float | None:
+        """Round v to d decimals, returning None for NaN/Inf (not JSON-serialisable).
+        Without this guard, a NaN from yfinance's `history()` (occasional upstream
+        glitch) propagates through `float()` and `round()` and causes FastAPI's
+        JSON encoder to raise `ValueError: Out of range float values are not JSON
+        compliant`, 500'ing the whole endpoint."""
+        if v is None: return None
+        try:
+            if _math.isnan(v) or _math.isinf(v): return None
+            return round(v, d)
+        except (TypeError, ValueError):
+            return None
+
     def _price_change(ticker: str) -> dict:
         try:
             from src.tools.hk.ticker import is_hk_ticker as _is_hk, to_yfinance_code as _to_yf
@@ -546,13 +560,16 @@ async def get_popular_tickers(limit: int = Query(default=15, ge=1, le=50)):
             if len(hist) >= 2:
                 prev  = float(hist["Close"].iloc[-2])
                 curr  = float(hist["Close"].iloc[-1])
+                # Reject rows where yfinance returned NaN/Inf (~0.5% of fetches)
+                if _math.isnan(prev) or _math.isnan(curr) or _math.isinf(prev) or _math.isinf(curr):
+                    raise ValueError(f"yfinance returned non-finite close for {ticker}")
                 chg   = curr - prev
                 chg_pct = (chg / prev) * 100 if prev else 0.0
                 return {
                     "ticker":   ticker,
-                    "price":    round(curr, 2),
-                    "change":   round(chg, 2),
-                    "change_pct": round(chg_pct, 2),
+                    "price":    _safe_round(curr, 2),
+                    "change":   _safe_round(chg, 2),
+                    "change_pct": _safe_round(chg_pct, 2),
                 }
         except Exception:
             pass

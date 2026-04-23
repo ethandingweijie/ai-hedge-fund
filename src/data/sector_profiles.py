@@ -2941,7 +2941,14 @@ _TL = tuple[str, str, str, str]   # type alias for readability
 TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # ── Information Technology (Software / Platform / Hardware) ──────────────
-    "MSFT":  ("Tech", "",              "Software (System & Application)", ""),
+    # Profile overrides (2nd field) route to sector-specific KPI prompts in
+    # sector_prompts.py and sub-type valuation panels on the frontend:
+    #   "Hyperscaler / Tech Conglomerate" → cloud + AI capex lens
+    #   "Mature SaaS"                     → NRR + Rule of 40 + Post-SBC FCF lens
+    #   "Growth SaaS"                     → unit economics + collapse-risk lens
+    #   "Cybersecurity / Mission-Critical SaaS" → growth_saas variant with
+    #     platform-attach + renewals emphasis (already in place below)
+    "MSFT":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (System & Application)", "Azure + M365 + AI capex; hyperscaler profile"),
     "AAPL":  ("Tech", "",              "Computers/Peripherals",           "Hardware + services mix; Tech WACC applies"),
 
     # ── Semiconductor (separate sector from Tech) ─────────────────────────
@@ -2974,18 +2981,32 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # OSAT
     "ASX":   ("Semiconductor", "",     "Semiconductor",                   "OSAT — ASE ADR (reports TWD)"),
     "AMKR":  ("Semiconductor", "",     "Semiconductor",                   "OSAT — packaging"),
-    "CRM":   ("Tech", "",              "Software (System & Application)", ""),
-    "NOW":   ("Tech", "",              "Software (System & Application)", ""),
-    "SNOW":  ("Tech", "",              "Software (System & Application)", ""),
-    "PLTR":  ("Tech", "",              "Software (System & Application)", ""),
-    "ORCL":  ("Tech", "",              "Software (System & Application)", ""),
-    "SAP":   ("Tech", "",              "Software (System & Application)", "SAP SE ADR"),
+    "CRM":   ("Tech", "Mature SaaS",   "Software (System & Application)", "Salesforce — durable enterprise SaaS; NRR + Rule-of-40 lens"),
+    "NOW":   ("Tech", "Mature SaaS",   "Software (System & Application)", "ServiceNow — workflow platform; durable enterprise SaaS"),
+    "SNOW":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Snowflake — consumption model; growth SaaS profile"),
+    "PLTR":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Palantir — AIP inflection; growth SaaS profile"),
+    "ORCL":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (System & Application)", "Oracle — OCI + Fusion ERP/CRM migration; hyperscaler profile"),
+    "SAP":   ("Tech", "Mature SaaS",   "Software (System & Application)", "SAP SE ADR — durable enterprise ERP cloud migration"),
     "DELL":  ("Tech", "",              "Computers/Peripherals",           ""),
     "HPQ":   ("Tech", "",              "Computers/Peripherals",           ""),
-    # Enterprise SaaS
-    "ADBE":  ("Tech", "",              "Software (System & Application)", "Adobe — Enterprise SaaS"),
-    "WDAY":  ("Tech", "",              "Software (System & Application)", "Workday — Enterprise SaaS"),
-    "HUBS":  ("Tech", "",              "Software (System & Application)", "HubSpot — Enterprise SaaS"),
+    # Mature SaaS (durable profitable enterprise — NRR + R40 + Post-SBC FCF lens)
+    "ADBE":  ("Tech", "Mature SaaS",   "Software (System & Application)", "Adobe — Creative Cloud + Experience Cloud"),
+    "WDAY":  ("Tech", "Mature SaaS",   "Software (System & Application)", "Workday — HCM + Financials"),
+    "INTU":  ("Tech", "Mature SaaS",   "Software (System & Application)", "Intuit — TurboTax + QuickBooks"),
+    "VEEV":  ("Tech", "Mature SaaS",   "Software (System & Application)", "Veeva — life sciences vertical SaaS"),
+    # Growth SaaS (scaling with positive NRR, unit economics + collapse-risk lens)
+    "HUBS":  ("Tech", "Growth SaaS",   "Software (System & Application)", "HubSpot — mid-market CRM/marketing"),
+    "FRSH":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Freshworks — ITSM + customer engagement SMB"),
+    "DDOG":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Datadog — observability"),
+    "MDB":   ("Tech", "Growth SaaS",   "Software (System & Application)", "MongoDB — database as a service"),
+    "TEAM":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Atlassian — Jira/Confluence"),
+    "ZM":    ("Tech", "Growth SaaS",   "Software (System & Application)", "Zoom — video communications"),
+    "OKTA":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Okta — identity / access"),
+    "TWLO":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Twilio — CPaaS"),
+    "MNDY":  ("Tech", "Growth SaaS",   "Software (System & Application)", "Monday.com — work OS"),
+    "BILL":  ("Tech", "Growth SaaS",   "Software (System & Application)", "BILL Holdings — SMB finance SaaS"),
+    "GTLB":  ("Tech", "Growth SaaS",   "Software (System & Application)", "GitLab — DevSecOps platform"),
+    "S":     ("Tech", "Growth SaaS",   "Software (System & Application)", "SentinelOne — cybersecurity SaaS"),
     # Cybersecurity — profile override forces "Cybersecurity / Mission-Critical SaaS"
     "CRWD":  ("Tech", "Cybersecurity / Mission-Critical SaaS", "Software (System & Application)", "CrowdStrike — Cybersecurity"),
     "PANW":  ("Tech", "Cybersecurity / Mission-Critical SaaS", "Software (System & Application)", "Palo Alto Networks — Cybersecurity"),
@@ -3010,9 +3031,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "WIT":   ("ProfessionalServices", "", "Business & Consumer Services", "Wipro ADR — IT services"),
 
     # ── Communication Services → Tech (digital advertising / search platforms) ─
-    "GOOGL": ("Tech", "",              "Information Services",            "Alphabet: digital ad/search — Tech WACC"),
+    "GOOGL": ("Tech", "Hyperscaler / Tech Conglomerate", "Information Services", "Alphabet — Search + YouTube + GCP + AI capex"),
+    "GOOG":  ("Tech", "Hyperscaler / Tech Conglomerate", "Information Services", "Alphabet class C — same business as GOOGL"),
     "GOOG":  ("Tech", "",              "Information Services",            "Alphabet Class C"),
-    "META":  ("Tech", "",              "Software (Entertainment)",        "Social media platform — Tech profile"),
+    "META":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (Entertainment)", "Meta — Ads + AI capex + Reality Labs; hyperscaler-like capex lens"),
 
     # ── Communication Services → Telco ────────────────────────────────────────
     "T":     ("Telco", "",             "Telecom. Services",               "AT&T — high leverage; Telco WACC 5.5%"),
@@ -3030,7 +3052,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "OMC":   ("ProfessionalServices", "Ad / Consulting", "Advertising",  "Omnicom"),
 
     # ── Consumer Discretionary ────────────────────────────────────────────────
-    "AMZN":  ("Tech", "",              "Software (Internet)",             "Amazon: cloud+marketplace — Tech WACC applies; AWS > 60% of EBIT"),
+    "AMZN":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (Internet)", "Amazon — AWS + retail + ads + AI capex; AWS > 60% EBIT"),
     "BABA":  ("Tech", "",              "Software (Internet)",             "Alibaba ADR — cloud/e-commerce; misclassified as Consumer frequently"),
     "JD":    ("Consumer", "",          "Retail (General)",                "JD.com — pure-play retailer; Consumer"),
     # ── Travel & Dining (profile override) ────────────────────────────────

@@ -504,7 +504,14 @@ export function BiopharmaValuationPanel({
   sections, rd_spend, revenue, fcf,
 }: BiopharmaValuationPanelProps) {
   const sym = currencySymbol(ticker);
-  if (!dcfRange) return null;
+  // NB: do NOT early-return on missing dcfRange. Each sub-component handles
+  // null/missing data on its own (RNPVHeader hides if no IV; RDProductivity
+  // uses raw_financials directly; PipelineTable shows "no pipeline" message).
+  // Previously we returned null here — but the universal PriceTargetPanel +
+  // ScenarioChart render ABOVE this gate, so a null return made the page
+  // look like the old generic UI, not the new Biopharma panel. Always
+  // rendering ensures the reader sees SOMETHING Biopharma-specific (at
+  // minimum the pipeline table or narrative cards).
   const assets = pipelineAssets ?? [];
   // Section 2F is where Biopharma KPI framework lands. Normalize key case so
   // the frontend works regardless of whether backend parse produced "2f" or "2F".
@@ -512,18 +519,21 @@ export function BiopharmaValuationPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <RNPVHeader dcfRange={dcfRange} currentPrice={currentPrice} sym={sym} />
+      {dcfRange && <RNPVHeader dcfRange={dcfRange} currentPrice={currentPrice} sym={sym} />}
       <PipelineTable assets={assets} sym={sym} />
       <CatalystsTimeline assets={assets} sym={sym} />
 
-      {/* Panel 4 — R&D Productivity: FMP tiles + 2F.4 narrative companion */}
-      <RDProductivity
+      {/* Panel 4 — R&D Productivity: FMP tiles + 2F.4 narrative companion.
+          When dcfRange is missing, tiles that depend on WACC / net_debt / shares
+          simply render "—" and the card still shows revenue/R&D/FCF computed
+          straight from FMP line items. */}
+      {dcfRange && <RDProductivity
         dcfRange={dcfRange}
         rd_spend={rd_spend ?? null}
         revenue={revenue ?? null}
         fcf={fcf ?? null}
         sym={sym}
-      />
+      />}
       <ResearchNarrativeCard
         title="R&D Productivity commentary"
         sectionText={section2F}

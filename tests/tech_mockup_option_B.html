@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<!--
+  tech_mockup_option_B.html — HERO + STORY (NARRATIVE-DRIVEN)
+  Three stacked sub-type panels: Hyperscaler (MSFT), Mature SaaS (CRM), Growth SaaS (SNOW).
+  Each panel leads with ONE signature hero visual — a framed single-thesis metric that
+  tells the sub-type's story (Capex ROI ratio, Durability Gauge, Collapse-Risk Scorecard) —
+  then three supporting tiles, then two narrative cards.
+  Feels like a portfolio-manager one-pager — fewer numbers, sharper point-of-view.
+
+  Illustrative data only. Each tile's provenance listed in the collapsible
+  "Data sources / provenance" block near the top.
+-->
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Tech Option B — Hero + Story (MSFT / CRM / SNOW)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['JetBrains Mono', 'ui-monospace', 'monospace'] }
+    }}};
+  </script>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .section-heading { font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: rgb(113 113 122); }
+    .dark .section-heading { color: rgb(161 161 170); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .subtype-banner { font-size: 10px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+
+<div class="fixed top-4 right-4 z-50 flex gap-2">
+  <button onclick="document.documentElement.classList.remove('dark')" class="px-3 py-1.5 bg-white border rounded-lg text-xs font-medium shadow-sm">Light</button>
+  <button onclick="document.documentElement.classList.add('dark')" class="px-3 py-1.5 bg-zinc-900 text-white border rounded-lg text-xs font-medium shadow-sm">Dark</button>
+</div>
+
+<div class="min-h-screen bg-zinc-200 dark:bg-zinc-950 py-8 px-2 transition-colors">
+  <p class="text-center text-xs text-zinc-500 mb-2 dark:text-zinc-400">
+    <strong>Option B — Hero + Story</strong> · 430px mobile frame · MSFT / CRM / SNOW illustrative
+  </p>
+
+  <!-- ═══ DATA PROVENANCE (collapsed) ═══ -->
+  <div class="mx-auto max-w-[430px] mb-4">
+    <details class="rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 text-xs text-zinc-700 dark:text-zinc-300">
+      <summary class="cursor-pointer font-semibold text-zinc-900 dark:text-zinc-50">Data sources / provenance</summary>
+      <div class="mt-3 space-y-3 font-mono text-[11px] leading-relaxed">
+        <div>
+          <p class="font-semibold text-zinc-900 dark:text-zinc-50">Universal (all sub-types)</p>
+          <ul class="mt-1 space-y-0.5 text-zinc-600 dark:text-zinc-400">
+            <li>Scenario Fair Value (Bear / Base / Bull) — FROM: <code>dcfRange.bear.intrinsic_value</code>, <code>dcfRange.base.intrinsic_value</code>, <code>dcfRange.bull.intrinsic_value</code> (already on the wire; universal across all sector panels)</li>
+            <li>Current price — FROM: <code>scenarioAnalysis?.current_price</code> or live price fetch (<code>getStockData(ticker)</code>)</li>
+            <li>Deltas — COMPUTED: <code>(iv - current) / current * 100</code></li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold text-zinc-900 dark:text-zinc-50">Hyperscaler · MSFT</p>
+          <ul class="mt-1 space-y-0.5 text-zinc-600 dark:text-zinc-400">
+            <li>$0.75 Revenue per $1 capex — COMPUTED: (Δ cloud revenue FY25 / FY25 capex); inputs from 2F.1 and FMP capital_expenditure</li>
+            <li>$0.62 prior year — prior-period computation</li>
+            <li>Capex vs Cloud Revenue bars — FMP capital_expenditure + cloud segment revenue from 2F.1</li>
+            <li>FCF Margin — COMPUTED: FMP free_cash_flow / FMP revenue</li>
+            <li>Operating Margin — COMPUTED: FMP operating_income / FMP revenue</li>
+            <li>SBC % Revenue — COMPUTED: FMP stock_based_compensation / FMP revenue</li>
+            <li>AI Capex ROI Commentary — Deep research Section 2F.2 narrative</li>
+            <li>Regulatory Overhang — Deep research Section 2F.6 narrative</li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold text-zinc-900 dark:text-zinc-50">Mature SaaS · CRM</p>
+          <ul class="mt-1 space-y-0.5 text-zinc-600 dark:text-zinc-400">
+            <li>Durability Score 68/100 — COMPUTED: weighted composite (NRR 40% + Rule-of-40 40% + Post-SBC FCF 20%)</li>
+            <li>NRR 107% — saas_metrics.nrr_pct extractor</li>
+            <li>Rule of 40 = 52 — saas_metrics.rule_of_40_score</li>
+            <li>Post-SBC FCF 23% — COMPUTED: (FCF − SBC) / revenue (FMP)</li>
+            <li>ARR $38B — Deep research Section 2F.1</li>
+            <li>Gross Margin 77% — FMP gross_profit / revenue</li>
+            <li>SBC % 10.3% — FMP stock_based_compensation / revenue</li>
+            <li>NRR Trajectory — Deep research Section 2F.2 narrative</li>
+            <li>AI Monetization Strategy — Deep research Section 2F.7 narrative</li>
+            <li>(optional) M&amp;A — Deep research Section 2F.8</li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold text-zinc-900 dark:text-zinc-50">Growth SaaS · SNOW</p>
+          <ul class="mt-1 space-y-0.5 text-zinc-600 dark:text-zinc-400">
+            <li>NRR 126% — saas_metrics.nrr_pct (green ≥115)</li>
+            <li>CAC Payback 24mo — saas_metrics.cac_payback_months (amber 18–30)</li>
+            <li>Magic Number 1.1x — saas_metrics.magic_number (green ≥1.0)</li>
+            <li>Post-SBC FCF 8% — COMPUTED: (FCF − SBC) / revenue (FMP)</li>
+            <li>Cash Runway 5y+ — COMPUTED: FMP cash / (SBC-adj quarterly burn)</li>
+            <li>Overall Collapse Risk = LOW — rule: 0 red tiles, ≤2 amber</li>
+            <li>ARR Growth +22% — Deep research Section 2F.1</li>
+            <li>Rule of 40 = 48 — saas_metrics.rule_of_40_score</li>
+            <li>SBC 38% — FMP stock_based_compensation / revenue (amber &gt;20%)</li>
+            <li>Unit Economics Sustainability — Deep research Section 2F.4 narrative</li>
+            <li>Path to Profitability — Deep research Section 2F.6 narrative</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="mx-auto max-w-[430px] bg-white dark:bg-zinc-950 shadow-2xl rounded-[28px] overflow-hidden border border-zinc-200 dark:border-zinc-800">
+
+    <!-- Ticker header -->
+    <div class="px-5 pt-6 pb-3">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="flex items-baseline gap-2">
+            <h1 class="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Tech</h1>
+            <span class="text-sm text-zinc-500 dark:text-zinc-400 truncate">Sub-type showcase</span>
+          </div>
+          <div class="flex gap-1.5 mt-2">
+            <span class="text-[11px] px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">Information Technology</span>
+            <span class="text-[11px] px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300">3 sub-types</span>
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <p class="text-xs text-zinc-500 dark:text-zinc-400">MSFT · CRM · SNOW</p>
+          <p class="text-[10px] text-zinc-400 mt-0.5">illustrative</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab strip -->
+    <div class="border-b border-zinc-200 dark:border-zinc-800">
+      <div class="flex gap-6 px-5 overflow-x-auto no-scrollbar">
+        <button class="text-sm font-medium text-zinc-500 dark:text-zinc-400 py-3 whitespace-nowrap">Summary</button>
+        <button class="text-sm font-semibold text-zinc-900 dark:text-zinc-50 py-3 whitespace-nowrap border-b-2 border-zinc-900 dark:border-zinc-50 -mb-px">Valuation</button>
+        <button class="text-sm font-medium text-zinc-500 dark:text-zinc-400 py-3 whitespace-nowrap">Investors</button>
+        <button class="text-sm font-medium text-zinc-500 dark:text-zinc-400 py-3 whitespace-nowrap">Risk</button>
+        <button class="text-sm font-medium text-zinc-500 dark:text-zinc-400 py-3 whitespace-nowrap">Research</button>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-4 p-4 pb-8 bg-zinc-50 dark:bg-zinc-950">
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- ═══ SUB-TYPE 1 — HYPERSCALER (MSFT)                          ═══ -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- ═══ SCENARIO STRIP — bear / base / bull intrinsic values from dcfRange.{bear|base|bull}.intrinsic_value ═══ -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <p class="section-heading">Scenario Fair Value</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">current $440.00</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <!-- BEAR -->
+          <div class="text-center">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-rose-500 dark:text-rose-400">Bear</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$392</p>
+            <p class="text-[11px] font-semibold tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">-10.9%</p>
+          </div>
+          <!-- BASE -->
+          <div class="text-center border-x border-zinc-200 dark:border-zinc-800">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">Base</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$455</p>
+            <p class="text-[11px] font-semibold tabular-nums text-blue-600 dark:text-blue-400 mt-0.5">+3.4%</p>
+          </div>
+          <!-- BULL -->
+          <div class="text-center">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Bull</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$518</p>
+            <p class="text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">+17.7%</p>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-xl bg-gradient-to-r from-indigo-100 to-indigo-50 dark:from-indigo-950/60 dark:to-indigo-950/20 border border-indigo-200 dark:border-indigo-900 px-4 py-2.5">
+        <p class="subtype-banner text-indigo-700 dark:text-indigo-300">Hyperscaler · AI Bet ROI</p>
+        <p class="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mt-0.5">MSFT — Microsoft Corp.</p>
+      </div>
+
+      <!-- HERO — AI Capex Gambit -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 text-center">
+        <p class="section-heading mb-1">AI Capex Gambit</p>
+        <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-3">Revenue per $1 of AI capex</p>
+        <p class="text-5xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">$0.75</p>
+        <p class="text-sm text-green-600 font-semibold mt-2">↑ from $0.62 LY · capex productivity improving</p>
+
+        <!-- Mini bar chart: capex vs cloud revenue, FY23/24/25 -->
+        <div class="mt-5 text-left">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">Capex vs Cloud Revenue (FY, $B)</p>
+          <div class="flex items-end gap-3 h-28">
+            <!-- FY23 -->
+            <div class="flex-1 flex items-end gap-1 h-full">
+              <div class="flex-1 flex items-end gap-0.5 h-full">
+                <div class="flex-1 bg-amber-400 rounded-t" style="height:42%" title="Capex $28B"></div>
+                <div class="flex-1 bg-blue-600 rounded-t" style="height:65%" title="Cloud $60B"></div>
+              </div>
+            </div>
+            <!-- FY24 -->
+            <div class="flex-1 flex items-end gap-1 h-full">
+              <div class="flex-1 flex items-end gap-0.5 h-full">
+                <div class="flex-1 bg-amber-400 rounded-t" style="height:65%" title="Capex $44B"></div>
+                <div class="flex-1 bg-blue-600 rounded-t" style="height:85%" title="Cloud $87B"></div>
+              </div>
+            </div>
+            <!-- FY25 -->
+            <div class="flex-1 flex items-end gap-1 h-full">
+              <div class="flex-1 flex items-end gap-0.5 h-full">
+                <div class="flex-1 bg-amber-400 rounded-t" style="height:90%" title="Capex $62B"></div>
+                <div class="flex-1 bg-blue-600 rounded-t" style="height:100%" title="Cloud $115B"></div>
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-1 text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
+            <span class="flex-1 text-center">FY23</span>
+            <span class="flex-1 text-center">FY24</span>
+            <span class="flex-1 text-center">FY25</span>
+          </div>
+          <div class="flex gap-4 mt-3 text-xs">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-amber-400"></span><span class="text-zinc-700 dark:text-zinc-300">Capex</span></span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-blue-600"></span><span class="text-zinc-700 dark:text-zinc-300">Cloud Revenue</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 supporting tiles -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">FCF Margin</p>
+          <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">22%</p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Op Margin</p>
+          <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">44%</p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">SBC %</p>
+          <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">5.8%</p>
+        </div>
+      </div>
+
+      <!-- Narrative: AI Capex ROI -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <p class="section-heading">AI Capex ROI Commentary</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Deep research · 2F.2</span>
+        </div>
+        <p class="text-sm italic text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          Revenue per $1 of capex improved to $0.75 from $0.62 YoY as Azure AI services reached
+          scale inflection. OpenAI inference workloads are contributing ~$3B of incremental Azure
+          ARR and mgmt guided capex intensity peaks in FY26 before tapering. Copilot attach rate
+          across Office 365 Enterprise is &gt;20% — the fastest SKU ramp in company history.
+        </p>
+      </div>
+
+      <!-- Narrative: Regulatory overhang -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <p class="section-heading">Regulatory Overhang</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Deep research · 2F.6</span>
+        </div>
+        <p class="text-sm italic text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          FTC proceedings on cloud bundling practices remain open with a ruling expected in mid-2026;
+          consent decree rather than divestiture is the base case. EU DMA gatekeeper designation
+          forces Teams unbundling in the EEA — est. &lt;1% revenue drag. Activision integration clearance
+          was a tail-risk bullet dodged and reduces antitrust political pressure near-term.
+        </p>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- ═══ SUB-TYPE 2 — MATURE SAAS (CRM)                           ═══ -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- ═══ SCENARIO STRIP — bear / base / bull intrinsic values from dcfRange.{bear|base|bull}.intrinsic_value ═══ -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 mt-2">
+        <div class="flex items-center justify-between mb-3">
+          <p class="section-heading">Scenario Fair Value</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">current $250.00</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <!-- BEAR -->
+          <div class="text-center">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-rose-500 dark:text-rose-400">Bear</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$220</p>
+            <p class="text-[11px] font-semibold tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">-12.0%</p>
+          </div>
+          <!-- BASE -->
+          <div class="text-center border-x border-zinc-200 dark:border-zinc-800">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">Base</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$260</p>
+            <p class="text-[11px] font-semibold tabular-nums text-blue-600 dark:text-blue-400 mt-0.5">+4.0%</p>
+          </div>
+          <!-- BULL -->
+          <div class="text-center">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Bull</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$305</p>
+            <p class="text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">+22.0%</p>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-xl bg-gradient-to-r from-sky-100 to-sky-50 dark:from-sky-950/60 dark:to-sky-950/20 border border-sky-200 dark:border-sky-900 px-4 py-2.5 mt-2">
+        <p class="subtype-banner text-sky-700 dark:text-sky-300">Mature SaaS · Durability</p>
+        <p class="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mt-0.5">CRM — Salesforce Inc.</p>
+      </div>
+
+      <!-- HERO — Durability Score gauge -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <p class="section-heading text-center mb-3">Durability Score</p>
+        <div class="flex justify-center">
+          <svg viewBox="0 0 200 120" class="w-56 h-36">
+            <defs>
+              <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#ef4444"/>
+                <stop offset="50%" stop-color="#f59e0b"/>
+                <stop offset="100%" stop-color="#22c55e"/>
+              </linearGradient>
+            </defs>
+            <!-- Background arc -->
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="14" stroke-linecap="round" class="dark:stroke-zinc-800"/>
+            <!-- Filled arc (68% of 180 degrees) -->
+            <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="171 500" stroke-dashoffset="0" pathLength="251"/>
+            <!-- Needle -->
+            <line x1="100" y1="100" x2="150" y2="48" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" class="text-zinc-900 dark:text-zinc-50"/>
+            <circle cx="100" cy="100" r="5" class="fill-zinc-900 dark:fill-zinc-50"/>
+            <!-- Score text -->
+            <text x="100" y="92" text-anchor="middle" class="fill-zinc-900 dark:fill-zinc-50" style="font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums;">68</text>
+            <text x="100" y="108" text-anchor="middle" class="fill-zinc-500 dark:fill-zinc-400" style="font-size: 9px; letter-spacing: 1px;">/ 100</text>
+          </svg>
+        </div>
+        <p class="text-center text-sm font-semibold text-green-600 mt-1">Healthy · durable profitable compounder</p>
+
+        <!-- Component bars -->
+        <div class="mt-5 space-y-2.5">
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-zinc-700 dark:text-zinc-300">NRR <span class="text-zinc-400 font-mono">(weight 40%)</span></span>
+              <span class="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">107%</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+              <div class="h-full bg-green-500 rounded-full" style="width:72%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-zinc-700 dark:text-zinc-300">Rule of 40 <span class="text-zinc-400 font-mono">(weight 40%)</span></span>
+              <span class="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">52</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+              <div class="h-full bg-green-500 rounded-full" style="width:65%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="text-zinc-700 dark:text-zinc-300">Post-SBC FCF <span class="text-zinc-400 font-mono">(weight 20%)</span></span>
+              <span class="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">23%</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+              <div class="h-full bg-green-500 rounded-full" style="width:58%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3 supporting tiles -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">ARR</p>
+          <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">$38B</p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Gross M.</p>
+          <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">77%</p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">SBC %</p>
+          <p class="text-xl font-bold tabular-nums text-amber-600 mt-1">10.3%</p>
+        </div>
+      </div>
+
+      <!-- Narrative: NRR trajectory -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <p class="section-heading">NRR Trajectory</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Deep research · 2F.2</span>
+        </div>
+        <p class="text-sm italic text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          NRR has compressed from 120%+ in FY22 to 107% in FY25 as enterprise SMB churn rose and
+          seat growth slowed in mid-market. Cohort expansion in Data Cloud &amp; Industries is offsetting
+          mature Sales Cloud churn, but the ratio is structurally closer to mid-teens than peak.
+          Trough hypothesis: 105% floor as AI-attach cohorts begin materially up-tiering in FY26.
+        </p>
+      </div>
+
+      <!-- Narrative: AI monetization -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <p class="section-heading">AI Monetization Strategy</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Deep research · 2F.7</span>
+        </div>
+        <p class="text-sm italic text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          Einstein Copilot priced at $30/user/month with Data Cloud as the consumption-based backplane.
+          AI-attached ARR reached ~4% of total ARR in Q3, with mgmt targeting &gt;10% by FY27. Agentforce
+          launch in late 2025 is the call-option — per-action outcome pricing could re-rate the NRR
+          ceiling if enterprise adoption mirrors early POCs.
+        </p>
+      </div>
+
+      <!-- Narrative: M&A (optional) -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <p class="section-heading">M&amp;A Capital Allocation</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Deep research · 2F.8</span>
+        </div>
+        <p class="text-sm italic text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          Post-Slack integration learnings have shifted capital allocation toward buybacks over large
+          deals; mgmt signaled tuck-ins only. Informatica dialogue paused at ~$30B price tag — discipline
+          is a positive signal after activist pressure but caps the TAM-expansion growth narrative.
+        </p>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- ═══ SUB-TYPE 3 — GROWTH SAAS (SNOW)                          ═══ -->
+      <!-- ═══════════════════════════════════════════════════════════════ -->
+      <!-- ═══ SCENARIO STRIP — bear / base / bull intrinsic values from dcfRange.{bear|base|bull}.intrinsic_value ═══ -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 mt-2">
+        <div class="flex items-center justify-between mb-3">
+          <p class="section-heading">Scenario Fair Value</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">current $150.00</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <!-- BEAR -->
+          <div class="text-center">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-rose-500 dark:text-rose-400">Bear</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$110</p>
+            <p class="text-[11px] font-semibold tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">-26.7%</p>
+          </div>
+          <!-- BASE -->
+          <div class="text-center border-x border-zinc-200 dark:border-zinc-800">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">Base</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$160</p>
+            <p class="text-[11px] font-semibold tabular-nums text-blue-600 dark:text-blue-400 mt-0.5">+6.7%</p>
+          </div>
+          <!-- BULL -->
+          <div class="text-center">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-emerald-500 dark:text-emerald-400">Bull</p>
+            <p class="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">$220</p>
+            <p class="text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">+46.7%</p>
+          </div>
+        </div>
+      </div>
+      <div class="rounded-xl bg-gradient-to-r from-emerald-100 to-emerald-50 dark:from-emerald-950/60 dark:to-emerald-950/20 border border-emerald-200 dark:border-emerald-900 px-4 py-2.5 mt-2">
+        <p class="subtype-banner text-emerald-700 dark:text-emerald-300">Growth SaaS · Collapse Risk</p>
+        <p class="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mt-0.5">SNOW — Snowflake Inc.</p>
+      </div>
+
+      <!-- HERO — Collapse Risk Scorecard -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <p class="section-heading mb-1">Valuation Collapse Risk Scorecard</p>
+        <p class="text-xs text-zinc-500 dark:text-zinc-400 mb-4">Five unit-economics gates that foreshadow multiple compression</p>
+
+        <div class="grid grid-cols-5 gap-1.5">
+          <!-- NRR -->
+          <div class="rounded-lg border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-2 text-center">
+            <p class="text-[9px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider leading-tight">NRR</p>
+            <p class="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">126%</p>
+            <div class="w-full h-1 rounded-full bg-green-500 mt-1.5"></div>
+          </div>
+          <!-- CAC Payback -->
+          <div class="rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-2 text-center">
+            <p class="text-[9px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider leading-tight">CAC Pay</p>
+            <p class="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">24mo</p>
+            <div class="w-full h-1 rounded-full bg-amber-500 mt-1.5"></div>
+          </div>
+          <!-- Magic Number -->
+          <div class="rounded-lg border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-2 text-center">
+            <p class="text-[9px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider leading-tight">Magic</p>
+            <p class="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">1.1x</p>
+            <div class="w-full h-1 rounded-full bg-green-500 mt-1.5"></div>
+          </div>
+          <!-- Post-SBC FCF -->
+          <div class="rounded-lg border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-2 text-center">
+            <p class="text-[9px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider leading-tight">P-SBC FCF</p>
+            <p class="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">8%</p>
+            <div class="w-full h-1 rounded-full bg-green-500 mt-1.5"></div>
+          </div>
+          <!-- Cash Runway -->
+          <div class="rounded-lg border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-2 text-center">
+            <p class="text-[9px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider leading-tight">Runway</p>
+            <p class="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">5y+</p>
+            <div class="w-full h-1 rounded-full bg-green-500 mt-1.5"></div>
+          </div>
+        </div>
+
+        <!-- Overall risk pill -->
+        <div class="flex items-center justify-center mt-5">
+          <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 dark:bg-green-950/60 border border-green-300 dark:border-green-800">
+            <span class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+            <span class="text-sm font-bold text-green-700 dark:text-green-400 tracking-wider">LOW RISK</span>
+          </span>
+        </div>
+        <p class="text-[10px] text-zinc-500 dark:text-zinc-400 mt-3 text-center font-mono">
+          4 green · 1 amber · 0 red → durable unit economics despite premium multiple
+        </p>
+      </div>
+
+      <!-- 3 supporting tiles -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">ARR Growth</p>
+          <p class="text-xl font-bold tabular-nums text-green-600 mt-1">+22%</p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Rule 40</p>
+          <p class="text-xl font-bold tabular-nums text-green-600 mt-1">48</p>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3">
+          <p class="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">SBC %</p>
+          <p class="text-xl font-bold tabular-nums text-red-500 mt-1">38%</p>
+        </div>
+      </div>
+
+      <!-- Narrative: Unit economics sustainability -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <p class="section-heading">Unit Economics Sustainability</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Deep research · 2F.4</span>
+        </div>
+        <p class="text-sm italic text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          Blended CAC/LTV is ~4.8x and has held steady despite sales re-org in 1H25. NRR re-accelerated
+          two quarters after the 2024 pricing-efficiency reset, validating that consumption was elastic
+          rather than structurally compressed. Cortex AI workloads are driving net-new incremental
+          consumption — early signal that AI extends the land-and-expand motion rather than cannibalizing it.
+        </p>
+      </div>
+
+      <!-- Narrative: Path to profitability -->
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div class="flex items-baseline justify-between mb-2">
+          <p class="section-heading">Path to Profitability</p>
+          <span class="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">Deep research · 2F.6</span>
+        </div>
+        <p class="text-sm italic text-zinc-700 dark:text-zinc-300 leading-relaxed">
+          Mgmt guided non-GAAP product gross margin inflection at 75–76% exit-FY26 (vs 72% LY) as
+          committed-capacity reservations improve cloud host economics. Headcount growth capped at
+          mid-single digits vs 20%+ ARR growth — the operating-leverage vector. SBC at 38% of revenue
+          remains the overhang; buybacks offset &lt;40% of gross issuance so dilution continues to compound.
+        </p>
+      </div>
+
+      <p class="text-center text-[9px] text-zinc-500 dark:text-zinc-400 pt-3">
+        Tech · Hyperscaler / Mature SaaS / Growth SaaS · TechValuationPanel · Option B
+      </p>
+    </div>
+  </div>
+
+  <p class="text-center text-xs text-zinc-500 dark:text-zinc-400 mt-4">
+    Every value sourced from <code class="font-mono">saas_metrics</code> extractor, FMP fundamentals, or Deep Research 2F
+  </p>
+</div>
+
+</body>
+</html>
