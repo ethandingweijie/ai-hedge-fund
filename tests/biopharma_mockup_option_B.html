@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<!--
+  biopharma_mockup_option_B.html — NPV PORTFOLIO (DECOMPOSITION VIEW)
+  Treats the pipeline like a risk-adjusted portfolio: large centered rNPV/sh
+  hero, decomposition quad (pipeline / legacy / cash / debt), phase distribution
+  gauge, TA + geographic pies, compact top-5 assets table, catalyst cards.
+  Visual DNA matches REIT + Bank panels — scroll and discover.
+
+  Data: Moderna (MRNA) illustrative pipeline — values reflect institutional
+  analyst framework (see _compute_rnpv + _extract_pipeline_assets).
+-->
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Biopharma Option B — NPV Portfolio (MRNA)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class', theme: { extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['JetBrains Mono', 'ui-monospace', 'monospace'] }
+    }}};
+  </script>
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; }
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+    .section-heading { font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: rgb(113 113 122); }
+    .dark .section-heading { color: rgb(161 161 170); }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body>
+
+<div class="fixed top-4 right-4 z-50 flex gap-2">
+  <button onclick="document.documentElement.classList.remove('dark')" class="px-3 py-1.5 bg-white border rounded-lg text-xs font-medium shadow-sm">Light</button>
+  <button onclick="document.documentElement.classList.add('dark')" class="px-3 py-1.5 bg-neutral-900 text-white border rounded-lg text-xs font-medium shadow-sm">Dark</button>
+</div>
+
+<div class="min-h-screen bg-neutral-200 dark:bg-neutral-950 py-8 px-2 transition-colors">
+  <p class="text-center text-xs text-neutral-500 mb-2 dark:text-neutral-400">
+    <strong>Option B — NPV Portfolio</strong> · 430px mobile frame · MRNA illustrative data
+  </p>
+
+  <div class="mx-auto max-w-[430px] bg-white dark:bg-zinc-950 shadow-2xl rounded-[28px] overflow-hidden border border-neutral-200 dark:border-neutral-800">
+
+    <!-- Ticker header -->
+    <div class="px-5 pt-6 pb-3">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="flex items-baseline gap-2">
+            <h1 class="text-2xl font-bold text-neutral-900 dark:text-white">MRNA</h1>
+            <span class="text-sm text-neutral-500 dark:text-neutral-400 truncate">Moderna Inc.</span>
+          </div>
+          <div class="flex gap-1.5 mt-2">
+            <span class="text-[11px] px-2 py-0.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300">Biopharma</span>
+            <span class="text-[11px] px-2 py-0.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300">Biotechnology</span>
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <p class="text-2xl font-bold tabular-nums text-neutral-900 dark:text-white">$32.15</p>
+          <p class="text-xs mt-0.5"><span class="text-red-500 font-medium">↓ 18.4%</span><span class="text-neutral-400 ml-1">1Y</span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab strip -->
+    <div class="border-b border-neutral-200 dark:border-neutral-800">
+      <div class="flex gap-6 px-5 overflow-x-auto no-scrollbar">
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Summary</button>
+        <button class="text-sm font-semibold text-neutral-900 dark:text-white py-3 whitespace-nowrap border-b-2 border-neutral-900 dark:border-white -mb-px">Valuation</button>
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Investors</button>
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Risk</button>
+        <button class="text-sm font-medium text-neutral-500 dark:text-neutral-400 py-3 whitespace-nowrap">Research</button>
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-4 p-4 pb-8 bg-neutral-50 dark:bg-zinc-950">
+
+      <!-- ═══ BIG rNPV HERO (mirrors REIT NAV hero) ═══ -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 text-center">
+        <p class="section-heading mb-3">Risk-Adjusted NPV / Share</p>
+        <p class="text-5xl font-bold tabular-nums text-neutral-900 dark:text-white">$39.47</p>
+        <p class="text-base font-semibold text-green-600 mt-2">+22.8% vs price</p>
+        <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">Biotechnology · 8 assets · weighted PoS 47%</p>
+
+        <!-- Quad: Pipeline / Legacy / Cash / Debt -->
+        <div class="grid grid-cols-2 gap-3 mt-5 text-left">
+          <div class="rounded-xl border border-neutral-200 dark:border-zinc-800 p-3.5">
+            <p class="section-heading mb-1">Pipeline rNPV</p>
+            <p class="text-xl font-bold tabular-nums text-neutral-900 dark:text-white">$6.04B</p>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 font-mono">Σ peak × PoS × margin × pv</p>
+          </div>
+          <div class="rounded-xl border border-neutral-200 dark:border-zinc-800 p-3.5">
+            <p class="section-heading mb-1">Legacy Revenue</p>
+            <p class="text-xl font-bold tabular-nums text-neutral-900 dark:text-white">$1.82B</p>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 font-mono">Approved products PV</p>
+          </div>
+          <div class="rounded-xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-3.5">
+            <p class="section-heading mb-1" style="color: rgb(22 163 74);">Net Cash</p>
+            <p class="text-xl font-bold tabular-nums text-green-700 dark:text-green-400">+$9.12B</p>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 font-mono">$9.3B cash − $0.2B debt</p>
+          </div>
+          <div class="rounded-xl border border-neutral-200 dark:border-zinc-800 p-3.5">
+            <p class="section-heading mb-1">Future R&D PV</p>
+            <p class="text-xl font-bold tabular-nums text-red-700 dark:text-red-400">−$1.99B</p>
+            <p class="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 font-mono">Burn through next 3y</p>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-neutral-500 dark:text-neutral-400 mt-4 font-mono">
+          Equity = $6.04B + $1.82B + $9.12B − $1.99B = $14.99B ÷ 380M sh
+        </p>
+      </div>
+
+      <!-- ═══ PHASE DISTRIBUTION GAUGE ═══ -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="section-heading">Phase Distribution (of rNPV)</p>
+          <span class="text-xs text-neutral-500 dark:text-neutral-400">$6.04B total</span>
+        </div>
+        <!-- Stacked horizontal bar by phase -->
+        <div class="w-full h-6 rounded-lg overflow-hidden flex">
+          <div class="bg-green-500" style="width: 29.8%" title="Approved 29.8%"></div>
+          <div class="bg-blue-500" style="width: 25.0%" title="Filed 25.0%"></div>
+          <div class="bg-purple-500" style="width: 34.9%" title="Ph3 34.9%"></div>
+          <div class="bg-amber-500" style="width: 5.5%" title="Ph2 5.5%"></div>
+          <div class="bg-red-500" style="width: 4.8%" title="Ph1 4.8%"></div>
+        </div>
+        <ul class="grid grid-cols-2 gap-x-4 gap-y-1 mt-3 text-xs">
+          <li class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+            <span class="text-neutral-700 dark:text-neutral-300 flex-1">Approved</span>
+            <span class="tabular-nums font-semibold text-neutral-900 dark:text-white">$1.80B · 30%</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+            <span class="text-neutral-700 dark:text-neutral-300 flex-1">Filed</span>
+            <span class="tabular-nums font-semibold text-neutral-900 dark:text-white">$1.51B · 25%</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+            <span class="text-neutral-700 dark:text-neutral-300 flex-1">Ph3</span>
+            <span class="tabular-nums font-semibold text-neutral-900 dark:text-white">$2.11B · 35%</span>
+          </li>
+          <li class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+            <span class="text-neutral-700 dark:text-neutral-300 flex-1">Ph2</span>
+            <span class="tabular-nums font-semibold text-neutral-900 dark:text-white">$0.33B · 6%</span>
+          </li>
+          <li class="flex items-center gap-2 col-span-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+            <span class="text-neutral-700 dark:text-neutral-300 flex-1">Ph1</span>
+            <span class="tabular-nums font-semibold text-neutral-900 dark:text-white">$0.29B · 5%</span>
+          </li>
+        </ul>
+        <p class="text-[11px] text-neutral-500 dark:text-neutral-400 mt-3 font-mono">
+          55% of rNPV in Approved + Filed = de-risked · 35% Ph3 = near-term catalyst
+        </p>
+      </div>
+
+      <!-- ═══ THERAPEUTIC AREA + GEOGRAPHY PIES ═══ -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <p class="section-heading mb-4">Pipeline Composition</p>
+
+        <!-- By Therapeutic Area -->
+        <div class="mb-5">
+          <p class="text-xs font-medium text-neutral-600 dark:text-neutral-300 mb-2">By therapeutic area</p>
+          <div class="flex items-center gap-4">
+            <svg viewBox="0 0 100 100" class="w-24 h-24 shrink-0">
+              <circle r="15" cx="50" cy="50" class="fill-white dark:fill-zinc-900"/>
+              <!-- Infectious disease 58% -->
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#1e40af" stroke-width="23"
+                      stroke-dasharray="83.9 144.5" transform="rotate(-90 50 50)"/>
+              <!-- Oncology 28% -->
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#a855f7" stroke-width="23"
+                      stroke-dasharray="40.5 144.5" stroke-dashoffset="-83.9" transform="rotate(-90 50 50)"/>
+              <!-- Rare 14% -->
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#f59e0b" stroke-width="23"
+                      stroke-dasharray="20.2 144.5" stroke-dashoffset="-124.4" transform="rotate(-90 50 50)"/>
+            </svg>
+            <ul class="flex flex-col gap-1.5 text-sm flex-1">
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#1e40af]"></span>
+                <span class="text-neutral-700 dark:text-neutral-300 flex-1">Infectious disease</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">58%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#a855f7]"></span>
+                <span class="text-neutral-700 dark:text-neutral-300 flex-1">Oncology</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">28%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span>
+                <span class="text-neutral-700 dark:text-neutral-300 flex-1">Rare disease</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">14%</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- By Geography -->
+        <div class="pt-4 border-t border-neutral-200 dark:border-zinc-800">
+          <p class="text-xs font-medium text-neutral-600 dark:text-neutral-300 mb-2">By geography (revenue)</p>
+          <div class="flex items-center gap-4">
+            <svg viewBox="0 0 100 100" class="w-24 h-24 shrink-0">
+              <circle r="15" cx="50" cy="50" class="fill-white dark:fill-zinc-900"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#1e40af" stroke-width="23"
+                      stroke-dasharray="60.7 144.5" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#3b82f6" stroke-width="23"
+                      stroke-dasharray="34.7 144.5" stroke-dashoffset="-60.7" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#93c5fd" stroke-width="23"
+                      stroke-dasharray="28.9 144.5" stroke-dashoffset="-95.4" transform="rotate(-90 50 50)"/>
+              <circle r="23" cx="50" cy="50" fill="transparent" stroke="#bfdbfe" stroke-width="23"
+                      stroke-dasharray="20.2 144.5" stroke-dashoffset="-124.4" transform="rotate(-90 50 50)"/>
+            </svg>
+            <ul class="flex flex-col gap-1.5 text-sm flex-1">
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#1e40af]"></span>
+                <span class="text-neutral-700 dark:text-neutral-300 flex-1">US</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">42%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></span>
+                <span class="text-neutral-700 dark:text-neutral-300 flex-1">EU / UK</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">24%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#93c5fd]"></span>
+                <span class="text-neutral-700 dark:text-neutral-300 flex-1">Japan / APAC</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">20%</span>
+              </li>
+              <li class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-[#bfdbfe]"></span>
+                <span class="text-neutral-700 dark:text-neutral-300 flex-1">Rest of World</span>
+                <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">14%</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ TOP 5 ASSETS (compact; full pipeline expandable) ═══ -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="section-heading">Top 5 Assets (by rNPV)</p>
+          <button class="text-[11px] text-blue-600 dark:text-blue-400 font-medium">View all 8 →</button>
+        </div>
+        <ul class="flex flex-col gap-2">
+          <li class="flex items-center gap-3">
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400 shrink-0">Filed</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-neutral-900 dark:text-white truncate">mRNA-1083 Flu+COVID</p>
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-400">ID · Peak $3.0B · PoS 85%</p>
+            </div>
+            <span class="text-sm font-mono tabular-nums text-neutral-900 dark:text-white shrink-0">$1.51B</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400 shrink-0">Ph3</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-neutral-900 dark:text-white truncate">mRNA-4157 INT melanoma</p>
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-400">Oncology · Peak $8.0B · PoS 27%</p>
+            </div>
+            <span class="text-sm font-mono tabular-nums text-neutral-900 dark:text-white shrink-0">$1.42B</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400 shrink-0">Approved</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-neutral-900 dark:text-white truncate">mRESVIA (RSV)</p>
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-400">ID · Peak $1.2B · De-risked</p>
+            </div>
+            <span class="text-sm font-mono tabular-nums text-neutral-900 dark:text-white shrink-0">$0.92B</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400 shrink-0">Approved</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-neutral-900 dark:text-white truncate">Spikevax (COVID)</p>
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-400">ID · Peak $2.4B · Legacy decline</p>
+            </div>
+            <span class="text-sm font-mono tabular-nums text-neutral-900 dark:text-white shrink-0">$0.88B</span>
+          </li>
+          <li class="flex items-center gap-3">
+            <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400 shrink-0">Ph3</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-semibold text-neutral-900 dark:text-white truncate">mRNA-1010 Flu</p>
+              <p class="text-[10px] text-neutral-500 dark:text-neutral-400">ID · Peak $2.0B · PoS 49%</p>
+            </div>
+            <span class="text-sm font-mono tabular-nums text-neutral-900 dark:text-white shrink-0">$0.69B</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- ═══ LOE EXPOSURE GAUGE ═══ -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="section-heading">Patent Cliff / Legacy Decline</p>
+          <span class="text-xs font-semibold text-amber-500">FY26 risk: ~38% of legacy rev</span>
+        </div>
+        <div class="relative w-full h-2.5 bg-neutral-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+          <div class="absolute top-0 left-0 h-full bg-amber-500" style="width: 38%;"></div>
+          <div class="absolute top-0 h-full w-px bg-red-500" style="left: 60%;" title="Red line 60%"></div>
+        </div>
+        <p class="text-[11px] text-neutral-500 dark:text-neutral-400 mt-2 font-mono leading-relaxed">
+          COVID revenue normalising to endemic demand. mRNA-1083 combo approval
+          (Q2'26 PDUFA) critical to defend Spikevax franchise against Pfizer/BNTX.
+        </p>
+      </div>
+
+      <!-- ═══ UPCOMING CATALYSTS — CARD GRID ═══ -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <p class="section-heading mb-4">Upcoming Catalysts (12mo)</p>
+        <div class="grid grid-cols-1 gap-2">
+          <div class="rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-3">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-semibold text-blue-700 dark:text-blue-400">Q2 2026 · PDUFA</span>
+              <span class="text-[10px] text-neutral-500">driving $1.51B rNPV</span>
+            </div>
+            <p class="text-sm font-medium text-neutral-900 dark:text-white mt-1">mRNA-1083 — FDA approval decision</p>
+          </div>
+          <div class="rounded-xl border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/30 p-3">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-semibold text-purple-700 dark:text-purple-400">Q3 2026 · Ph3</span>
+              <span class="text-[10px] text-neutral-500">$8B peak</span>
+            </div>
+            <p class="text-sm font-medium text-neutral-900 dark:text-white mt-1">mRNA-4157 INT — OS/DFS interim</p>
+          </div>
+          <div class="rounded-xl border border-purple-200 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/30 p-3">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-semibold text-purple-700 dark:text-purple-400">Q4 2026 · Ph3</span>
+              <span class="text-[10px] text-neutral-500">$2B peak</span>
+            </div>
+            <p class="text-sm font-medium text-neutral-900 dark:text-white mt-1">mRNA-1010 Flu — topline efficacy</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ R&D + NET CASH MINI STATS ═══ -->
+      <div class="rounded-2xl border border-neutral-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+        <p class="section-heading mb-3">Capital & Productivity</p>
+        <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">R&D / Revenue</span>
+            <span class="font-semibold tabular-nums text-red-500">141%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">R&D spend</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">$4.5B</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Net cash</span>
+            <span class="font-semibold tabular-nums text-green-600">$9.1B</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Runway</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">~2.3 yrs</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Cost / NME</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">$2.1B</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-neutral-500 dark:text-neutral-400">Weighted PoS</span>
+            <span class="font-semibold tabular-nums text-neutral-900 dark:text-white">47%</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-center text-[9px] text-neutral-500 dark:text-neutral-400 pt-3">
+        MRNA · Biotechnology · BiopharmaValuationPanel · Option B
+      </p>
+    </div>
+  </div>
+
+  <p class="text-center text-xs text-neutral-500 dark:text-neutral-400 mt-4">
+    Every value sourced from <code class="font-mono">_compute_rnpv</code> or <code class="font-mono">_extract_pipeline_assets</code>
+  </p>
+</div>
+
+</body>
+</html>

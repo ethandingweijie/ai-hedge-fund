@@ -2305,6 +2305,39 @@ def _research_one_ticker(
     _research_system = _build_research_system(
         year, sector=sector, profile_name=profile_name, reit_subtype=_reit_subtype_for_prompt,
     )
+    # Log which sector-aware 2F block was selected. Visible in Railway logs so
+    # operators can verify the (sector, profile_name, reit_subtype) routing
+    # fires correctly for each ticker. The KPI block length gives a quick
+    # signal for whether a specialized template (longer) or the generic
+    # fallback (shorter) was used.
+    try:
+        from src.agents.industry.sector_prompts import get_kpi_prompt
+        _kpi_block = get_kpi_prompt(sector, profile_name, _reit_subtype_for_prompt)
+        _kpi_len = len(_kpi_block)
+        # Signature detection: look for a distinctive token in the selected block
+        _kpi_signature = (
+            "biopharma_pipeline"       if "PIPELINE (MANDATORY" in _kpi_block else
+            "bank_golden_ratio"         if "GOLDEN RATIO" in _kpi_block else
+            "hyperscaler_ai_capex"      if "CLOUD REVENUE CAPTURE" in _kpi_block else
+            "growth_saas_ltvcac"        if "LTV/CAC ratio — calculated as" in _kpi_block else
+            "mature_saas_postsbc"       if "POST-SBC FCF" in _kpi_block else
+            "reit_net_lease"            if "TENANT INDUSTRY" in _kpi_block.upper() else
+            "reit_data_center"          if "Capacity mix: MW" in _kpi_block else
+            "reit_generic"              if "PORTFOLIO COMPOSITION (MANDATORY" in _kpi_block else
+            "asset_manager"             if "FRE vs CARRY" in _kpi_block else
+            "insurance"                 if "P/BV and BV/sh growth for P&C" in _kpi_block else
+            "payment_networks"          if "cross-border volume" in _kpi_block.lower() else
+            "tech_generic"              if "R&D % of revenue" in _kpi_block and "Gross margin" in _kpi_block else
+            "generic"
+        )
+        progress.update_status(
+            agent_id, ticker,
+            f"Deep research KPI block: {_kpi_signature} "
+            f"(sector={sector}, profile={profile_name or '(none)'}, "
+            f"reit_sub={_reit_subtype_for_prompt or '(n/a)'}, len={_kpi_len})"
+        )
+    except Exception:
+        pass   # logging only — must not block pipeline
 
     human_msg = (
         _base_context
