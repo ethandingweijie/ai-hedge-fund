@@ -40,8 +40,6 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
   const displaySector    = formatSector(sector    || profile?.sector   || null);
   const displaySubSector = formatSector(subSector || profile?.industry || null);
 
-  const hasMetrics = decision?.position_size_pct != null || decision?.price_target != null || currentPrice != null;
-
   return (
     <Card className="p-6 flex flex-col">
 

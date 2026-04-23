@@ -68,9 +68,8 @@ function makeFmtAxis(sym: string) {
   };
 }
 
-// Module-level defaults — overridden inside the component
+// Module-level default (used by the tooltip formatter outside component scope)
 function fmtFull(v: number | null | undefined): string { return makeFmtFull('$')(v); }
-function fmtAxis(v: number): string { return makeFmtAxis('$')(v); }
 
 // ── Change calculation ────────────────────────────────────────────────────────
 

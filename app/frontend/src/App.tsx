@@ -1,5 +1,5 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from './components/ui/sonner';
+import { Toaster } from 'sonner';
 import { ReportPage } from './pages/ReportPage';
 import { ReportViewPage } from './pages/ReportViewPage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -26,6 +26,11 @@ export default function App() {
     <AuthProvider>
     <ActiveRunProvider>
     <HashRouter>
+      {/* Global toast mount point — one per app, so toast.success()/.error()
+          from any page (Screener, History, Report, etc.) renders consistently.
+          Previously only ReportPage mounted a Toaster, so toasts from other
+          pages silently no-oped. */}
+      <Toaster position="top-right" richColors closeButton expand visibleToasts={6} />
       <MobileLayout>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/contexts/theme-context';
-import { toast, Toaster } from 'sonner';
+import { toast } from 'sonner';   // Toaster now mounted in App.tsx (global)
 import { ResearchNav } from '@/components/layout/ResearchNav';
 import { getActiveTier, STARTER_ALLOWED_AGENTS } from '@/lib/tier';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -1161,9 +1161,10 @@ export function ReportPage() {
 
 
   // ── Live report view ─────────────────────────────────────────────────────────
+  // Toaster is now mounted once at App.tsx root so toasts from every page
+  // (Screener, History, Report, etc.) render consistently.
   return (
     <div className="min-h-screen bg-background">
-      <Toaster position="top-right" richColors closeButton expand visibleToasts={6} />
       <ResearchNav />
 
       {/* ── Top running bar ─────────────────────────────────────────────────── */}

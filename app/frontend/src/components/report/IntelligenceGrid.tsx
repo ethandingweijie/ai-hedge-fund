@@ -13,7 +13,6 @@
 
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { currencySymbol } from '@/lib/utils';
 import type { AgentSignals } from '@/lib/reportTypes';
 import { getIntelligence, type IntelligenceData } from '@/lib/api';
 
@@ -220,7 +219,11 @@ function resolve(
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export function IntelligenceGrid({ agentSignals, pipelineData, ticker }: IntelligenceGridProps) {
-  const fmtMoney = makeFmtMoney(currencySymbol(ticker));
+  // NB: the module-level `fmtMoney` (line 70, hard-coded '$') is what the Row
+  // helper components consume. A component-scoped `fmtMoney` using
+  // `currencySymbol(ticker)` was previously declared here but never referenced
+  // — removed to silence TS6133 and avoid misleading future readers into
+  // thinking the grid is currency-aware when it isn't.
   const [liveData, setLiveData] = useState<IntelligenceData | null>(null);
   const [fetching, setFetching] = useState(true);
 

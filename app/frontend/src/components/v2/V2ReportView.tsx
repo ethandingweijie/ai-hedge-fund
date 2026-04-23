@@ -92,7 +92,6 @@ export function V2ReportView({
   const [priceChangePct, setPriceChangePct] = useState<number | null>(null);
   const [stockMetrics, setStockMetrics] = useState<Record<string, number | undefined> | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
-  const [companyExchange, setCompanyExchange] = useState<string>('');
 
   const ticker = result?.ticker ?? '';
   const data = result?.data ?? {};
@@ -122,7 +121,6 @@ export function V2ReportView({
     getCompanyName(ticker)
       .then((d) => {
         setCompanyName(d?.name || '');
-        // Derive exchange chip from industry/sector if present — best effort
       })
       .catch(() => { /* ignore */ });
   }, [ticker]);
