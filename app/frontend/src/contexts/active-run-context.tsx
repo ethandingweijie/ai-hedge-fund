@@ -598,8 +598,13 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               if (cachedRunId) {
                 setStreamRunId(cachedRunId);
                 setStreamState('complete');
-                setActiveRun(null);
-                sessionStorage.removeItem('activeRun');
+                setActiveRuns(prev => {
+                  const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+                  next.length > 0
+                    ? sessionStorage.setItem('activeRuns', JSON.stringify(next))
+                    : sessionStorage.removeItem('activeRuns');
+                  return next;
+                });
                 setRecentlyCompleted({
                   ticker: ticker.toUpperCase(),
                   runId: cachedRunId,
@@ -614,8 +619,13 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               setStreamRunId(completedRunId);
               setStreamState('complete');
               if (completedRunId) {
-                setActiveRun(null);
-                sessionStorage.removeItem('activeRun');
+                setActiveRuns(prev => {
+                  const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+                  next.length > 0
+                    ? sessionStorage.setItem('activeRuns', JSON.stringify(next))
+                    : sessionStorage.removeItem('activeRuns');
+                  return next;
+                });
                 setRecentlyCompleted({
                   ticker: ticker.toUpperCase(),
                   runId: completedRunId,
