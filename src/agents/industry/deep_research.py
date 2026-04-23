@@ -900,11 +900,24 @@ def _extract_reit_metrics(
                 "  cap_rate_market:    float (0.03-0.12, portfolio weighted-avg cap rate)\n"
                 "  occupancy_rate:     float (0.5-1.0, portfolio-weighted occupancy)\n"
                 "  wale_years:         float (1-15, weighted-avg lease expiry in years)\n"
-                "  subtype_mix:        object mapping sub-type to fraction (sums to ~1.0).\n"
-                "                      Keys: office, retail, industrial, data_center, lab,\n"
-                "                      healthcare, residential, hospitality, self_storage,\n"
-                "                      infrastructure\n"
-                "  geographic_mix:     object mapping country/region to fraction\n"
+                "  subtype_mix:        object mapping ASSET CLASS to fraction of portfolio\n"
+                "                      (NOI- or GAV-weighted; sum ≈ 1.0). Extract at the\n"
+                "                      FINEST granularity the research discloses — do NOT\n"
+                "                      force-collapse disclosed sub-categories into broad\n"
+                "                      buckets. Use any snake_case key that reflects the\n"
+                "                      research's wording verbatim. Examples:\n"
+                "                        office, retail, industrial, logistics, warehouse,\n"
+                "                        data_center, interconnection, colocation, lab,\n"
+                "                        healthcare, medical_office, senior_housing,\n"
+                "                        skilled_nursing, residential, student_housing,\n"
+                "                        co_living, hospitality, lodging, self_storage,\n"
+                "                        infrastructure, business_park, it_park, flex_office,\n"
+                "                        co_working, net_lease, single_tenant, triple_net,\n"
+                "                        ground_lease, farmland, timberland, cell_tower,\n"
+                "                        mixed_use, other\n"
+                "  geographic_mix:     object mapping country/region/city to fraction\n"
+                "                      (revenue-weighted OR GAV-weighted). Sub-regions OK\n"
+                "                      (e.g. 'us_west', 'bangalore', 'india', 'emea').\n"
                 "  dpu_cents:          float (distribution per unit, LOCAL cents/pennies)\n"
                 "  affo_per_unit_cents: float (AFFO per unit, same unit as dpu_cents)\n"
                 "  leverage_ratio:     float (debt/NAV or aggregate leverage, 0-0.60)\n"
@@ -920,6 +933,17 @@ def _extract_reit_metrics(
                 "    valuation table with per-property cap rates — report the weighted avg.\n"
                 "  * dpu_cents and affo_per_unit_cents must be in the SAME LOCAL UNIT (both\n"
                 "    Singapore cents, or both Hong Kong cents, or both US pennies).\n"
+                "  * subtype_mix examples:\n"
+                "    - Research: 'CapitaLand India Trust: 61% IT parks, 11% industrial &\n"
+                "      logistics, 8% data centers, 20% other'\n"
+                "      → {\"it_park\": 0.61, \"industrial\": 0.11, \"data_center\": 0.08,\n"
+                "         \"other\": 0.20}\n"
+                "    - Research: 'Realty Income: 100%% single-tenant net-lease retail'\n"
+                "      → {\"net_lease\": 1.0}\n"
+                "    - Research: 'DLR: 95%% wholesale data center, 5%% interconnection'\n"
+                "      → {\"data_center\": 0.95, \"interconnection\": 0.05}\n"
+                "    Do NOT force 'IT parks' → 'office' or 'net-lease' → 'retail'. Preserve\n"
+                "    the disclosed category taxonomy.\n"
             ),
             messages=[{
                 "role": "user",
@@ -1303,16 +1327,37 @@ def _build_news_supplement(
 
 # ── System prompt ───────────────────────────────────────────────────────────────
 
-def _build_research_system(year: str) -> str:
+def _build_research_system(
+    year: str,
+    sector: str = "",
+    profile_name: str = "",
+    reit_subtype: str | None = None,
+) -> str:
     """Return the deep research system prompt with dynamic year references.
 
-    year — 4-digit string, e.g. "2026".  Computes ym1 (year-1) and y1 (year+1)
-    for the search sequence so all queries target the correct calendar window.
-    The search sequence is pre-notified about FMP pre-loaded data so the LLM
-    does not waste search slots on revenue/insider data already in state.
+    Args:
+        year: 4-digit string, e.g. "2026". Computes ym1 (year-1) and y1 (year+1)
+            for the search sequence so all queries target the correct calendar
+            window.
+        sector: strategic router classification (e.g. "RealEstate", "Financials",
+            "Tech", "Biopharma"). Drives section 2F template selection. Empty
+            string defaults to generic 2F.
+        profile_name: sub-profile from strategic router (e.g. "Money Center Bank",
+            "R.E.I.T.", "Hyperscaler / Tech Conglomerate"). Allows finer routing
+            within a sector (e.g. Money Center Bank KPIs vs Payment Network KPIs
+            within Financials).
+        reit_subtype: REIT classifier output (e.g. "net_lease", "data_center").
+            Only applies when sector is RealEstate/REIT; enables finest
+            specialization for the 2F block.
+
+    Sector-aware 2F selection lives in src/agents/industry/sector_prompts.py.
+    Callers that don't supply sector/profile get the generic 2F block (backward-
+    compatible).
     """
+    from src.agents.industry.sector_prompts import get_kpi_prompt
     ym1 = str(int(year) - 1)   # e.g. "2025" when year="2026"
     y1  = str(int(year) + 1)   # e.g. "2027" when year="2026"
+    kpi_framework_block = get_kpi_prompt(sector, profile_name, reit_subtype)
     return f"""
 TOOL ENVIRONMENT (read first — non-negotiable):
 - You have exactly ONE tool: web_search. That is the only tool in this context.
@@ -1571,46 +1616,7 @@ or looser regulation? Different dominant cost structure?
 For each: the single evidence point supporting your view AND the single data
 point that would change your mind.
 
-──────────────────────────────────────────
-2F. INDUSTRY-SPECIFIC KPI FRAMEWORK
-──────────────────────────────────────────
-Purpose: Every industry has 3–5 metrics that actually predict forward
-performance. Generic financial metrics miss what matters.
-
-2F.1 The anchor KPI — the single number that best predicts this company's
-revenue 12 months forward (e.g. Bookings / Backlog / GMV / AUM / MWh
-contracted / NRR / ARR / same-store-sales / pipeline $).
-Trend over last 6 quarters. Consensus expectation vs your expectation.
-Why they differ.
-
-2F.2 The leading indicator — the metric that predicts the anchor KPI
-2–3 quarters in advance (e.g. web traffic, trial signups, pilot contract
-count, permit filings, IEA demand data). Current reading and implication.
-
-2F.3 The margin indicator — the metric that best predicts EBITDA margin
-12 months forward (e.g. mix shift %, utilisation rate, headcount per $M
-revenue, gross retention, take rate, MLR, hedge ratio).
-
-2F.4 The risk indicator — the early warning signal for competitive
-deterioration (e.g. NRR below 100%, churn acceleration, win rate vs key
-competitor, DSO expanding, guidance cuts). Current reading and threshold
-that would trigger re-evaluation.
-
-2F.5 Industry data sources — the 3–5 best external data sources specific
-to this industry (not just company filings): government/regulatory data,
-industry association data, third-party trackers, supply chain / alternative
-data.
-
-2F.6 Management Guidance & Forward Estimates — CRITICAL for downstream DCF.
-Extract the most recent quantitative forward guidance from earnings calls,
-investor presentations, or press releases. Report as exact dollar figures:
-  • FY revenue guidance: $XX.XB – $XX.XB (midpoint $XX.XB)
-  • FY EBITDA guidance: $XX.XB – $XX.XB (midpoint $XX.XB)
-  • Capex guidance: $XX.XB
-  • Margin targets: XX% – XX%
-  • Any one-time items excluded from guidance (M&A, restructuring, etc.)
-If no explicit guidance is available, state "No quantitative guidance found"
-and note the date of the most recent earnings call.
+{kpi_framework_block}
 
 ════════════════════════════════════════════
 OUTPUT FORMAT & CITATION REQUIREMENTS
@@ -1900,6 +1906,7 @@ def _research_one_ticker(
     news_sentiment_data: dict | None = None,
     base_url: str | None = None,
     synthesis_model: str | None = None,
+    profile_name: str = "",
 ) -> dict:
     """
     Run the full archive-gate + three-tier research pipeline for a single ticker.
@@ -2279,7 +2286,25 @@ def _research_one_ticker(
             + _fmp_block + "\n"
         )
 
-    _research_system = _build_research_system(year)
+    # Pre-compute REIT sub-type for finer-grained Section 2F prompt selection.
+    # For non-REIT tickers this is None and the sector/profile_name routing alone
+    # is used. For REITs the sub-type (net_lease, data_center, data_center_premium)
+    # drives a specialization layer on top of (sector, profile_name).
+    _reit_subtype_for_prompt = None
+    if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
+        try:
+            from src.agents.analysis.dcf_agent import _classify_reit_subtype
+            from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as _TSL
+            from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP as _SGX_TSL
+            _lookup = _TSL.get(ticker.upper()) or _SGX_TSL.get(ticker.upper())
+            _notes = _lookup[3] if (_lookup and len(_lookup) >= 4) else ""
+            _reit_subtype_for_prompt = _classify_reit_subtype(ticker, _notes)
+        except Exception:
+            _reit_subtype_for_prompt = None
+
+    _research_system = _build_research_system(
+        year, sector=sector, profile_name=profile_name, reit_subtype=_reit_subtype_for_prompt,
+    )
 
     human_msg = (
         _base_context
@@ -3005,14 +3030,23 @@ def _research_one_ticker(
     # past the 720s client timeout on Qwen — manifested as UI stuck on
     # "deep research" for minutes after Qwen had actually finished synthesis.
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from src.agents.industry.sector_prompts import needs_extractor
 
-    _extractor_tasks = {
+    # Sector-aware extractor gating — skips extractors that would almost
+    # certainly return {} for the given (sector, profile_name). Saves
+    # ~800 tokens × skipped extractor. A tech ticker runs 3 extractors
+    # (dcf_calibration, segment_scenarios, saas_metrics) instead of 6.
+    _all_extractors: dict[str, callable] = {
         "dcf_calibration":   lambda: _extract_dcf_calibration(sdk_client, _synthesis_model, sections, ticker),
         "segment_scenarios": lambda: _extract_segment_scenarios(sdk_client, _synthesis_model, sections, final_report, ticker),
         "pipeline_assets":   lambda: _extract_pipeline_assets(sdk_client, _synthesis_model, sections, final_report, ticker),
         "reit_metrics":      lambda: _extract_reit_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
         "bank_metrics":      lambda: _extract_bank_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
         "saas_metrics":      lambda: _extract_saas_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+    }
+    _extractor_tasks = {
+        name: fn for name, fn in _all_extractors.items()
+        if needs_extractor(name, sector, profile_name)
     }
     _results: dict = {}
     with ThreadPoolExecutor(max_workers=6) as _ex:
@@ -3152,9 +3186,12 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     edgar_refs_map     = state["data"].get("edgar_filing_refs") or {}
     news_sentiment_map = state["data"].get("news_sentiment") or {}
 
+    profile_names_map = state["data"].get("profile_names", {}) or {}
+
     def _task(t: str) -> tuple[str, dict]:
         from src.tools.hk.ticker import is_hk_ticker
         _sector    = sectors_map.get(t, primary_sector)
+        _profile   = profile_names_map.get(t, "")
         _raw_fin   = primary_raw_fin if t == primary_ticker else {}
         _insider   = primary_insider if t == primary_ticker else ""
         _edgar_ref = edgar_refs_map.get(t) or {}
@@ -3181,6 +3218,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         result = _research_one_ticker(
             ticker=t,
             sector=_sector,
+            profile_name=_profile,
             end_date=end_date,
             anthropic_key=_key,
             model_name=_model,

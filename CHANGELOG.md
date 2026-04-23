@@ -1,5 +1,102 @@
 # Equitable — Changelog
 
+## v1.9.2 — 2026-04-24 (Sector-Aware Deep-Research Prompt Architecture)
+
+### Architecture shift — (sector, profile_name) drives the Section 2F prompt
+Previously deep research sent ONE generic 2,000-word Section 2 prompt on every
+ticker. 2F asked "the anchor KPI" regardless of sector. This missed critical
+sector disclosures (REIT portfolio mix, Bank NPL coverage, Biopharma pipeline)
+and caused downstream extractors (`_extract_reit_metrics`, `_extract_bank_metrics`)
+to return `{}` because the upstream research didn't contain the data they needed.
+
+New `src/agents/industry/sector_prompts.py` routes to a matched 2F block using
+`(sector, profile_name)` from the strategic router + REIT sub-type from the
+classifier. 11 sector-specific prompt blocks:
+
+- **REIT generic** — portfolio composition at finest granularity, cap rate,
+  WALE, occupancy, AFFO coverage, **cost of debt + hedging ratio + ICR** for
+  SGX / HK business trusts subject to MAS 45-50% aggregate leverage caps
+- **REIT net-lease** — tenant industry diversification top-10, investment-grade
+  %, **rent escalator structure** (fixed / CPI-linked / CPI+floor-cap / market
+  review), weighted-avg escalator rate
+- **REIT data center** — MW capacity mix, colocation vs wholesale vs
+  interconnection, hyperscaler concentration, AI demand commitments in GW/MW
+- **Bank** — CET1, **P/TBV Golden Ratio** with explicit ROE−CoE spread
+  identity, NIM rate sensitivity per 100 bps, NPL coverage, management
+  overlays, capital return yield decomposition
+- **Asset Manager** — **FRE vs Carry/Performance Fee split** (markets pay
+  20-30x for FRE vs 5-10x for carry), fee rate by product (passive 5-10bps /
+  active 40-70bps / alts 80-150bps)
+- **Insurance** — split P&C (P/BV anchor, combined ratio) vs Life (Embedded
+  Value, VNB margin) vs Health (MLR) valuation frameworks
+- **Payment Networks** — GPV, cross-border volume growth, take rate, VAS mix
+- **Biopharma** — pipeline enumeration (name, phase, TA, peak sales, launch
+  year, competitors), upcoming PDUFA/readouts, LOE exposure next 5 years
+- **Tech Hyperscaler** — cloud revenue growth, **AI Capex vs Cloud Revenue
+  Capture ratio** (revenue-per-dollar-of-capex), GPU capacity, FCF absorption
+- **Mature SaaS** — ARR, NRR, Rule of 40, **Post-SBC FCF** (reported FCF
+  minus SBC, shareholder-economic FCF), dilution rate
+- **Growth SaaS** — LTV/CAC with **churn context** (inputs: ACV, gross
+  margin, annual churn, CAC; red-flag signal when high Magic Number masks
+  high churn), NRR vs Gross Retention split
+
+### Extractor gating — `needs_extractor(extractor, sector, profile_name)`
+Previously all 6 extractors ran unconditionally on every ticker (~4,800 output
+tokens per run). Now sector-aware:
+
+- `dcf_calibration` + `segment_scenarios` run universally (2 extractors × N tickers)
+- `reit_metrics` runs only for RealEstate / REIT sector
+- `bank_metrics` runs only for Financials + bank-family profile_name
+- `pipeline_assets` runs only for Biopharma
+- `saas_metrics` runs only for Tech + SaaS-family profile_name
+
+Per-ticker token savings:
+- Tech ticker: 6 → 3 extractors (−50%)
+- Energy ticker: 6 → 2 extractors (−67%)
+- REIT ticker: 6 → 3 extractors (−50%)
+
+### Backward compatibility
+- `_build_research_system(year)` without sector/profile args still returns
+  the generic 2F block. Existing callers unaffected.
+- Ran forward-compat test on 14 diverse tickers (O, DLR, EQIX, SPG, JPM, GS,
+  BLK, V, MRNA, MSFT, ADBE, SNOW, AAPL, XOM). All routed to the correct
+  sector-specific prompt; AAPL (unspecified Tech profile) correctly falls to
+  generic Tech block.
+
+### Gemini review refinements — applied to prompts
+- Bank: added **P/TBV Golden Ratio** valuation identity (Fair P/TBV ≈ (ROE−g)/(CoE−g))
+- Asset Manager: **FRE vs performance fee split** — markets pay dramatically
+  different multiples
+- Insurance: separated **P/BV anchor (P&C)** from **Embedded Value (Life)**
+- REIT / net-lease: **rent escalator structure** — critical in higher-for-
+  longer rate environments; **hedging ratio on floating debt**
+- Tech / Hyperscaler: **cloud revenue capture per $ of capex** — the core
+  market debate on H100 ROI
+- Mature SaaS: **Post-SBC FCF** — shareholder-economic FCF after dilution
+- Growth SaaS: **LTV/CAC with churn inputs** — catches the "high magic
+  number masks high churn" valuation trap
+
+### Files changed
+- `src/agents/industry/sector_prompts.py` (new, 455 lines)
+- `src/agents/industry/deep_research.py` — `_build_research_system` signature,
+  `_research_one_ticker` propagates `profile_name`, REIT sub-type pre-classified,
+  extractor tasks filtered via `needs_extractor()`
+
+---
+
+## v1.9.1 — 2026-04-23 (REIT sub-type calibration refinement)
+- `data_center` cap 4.5% → 5.0% (Green Street Apr 2026 consensus; 4.5% was
+  EQIX-tier only)
+- New `data_center_premium` sub-type (4.5% cap, 23x P/FFO, 26x P/AFFO) for
+  interconnection-moat REITs (EQIX, Interxion)
+- `self_storage` cap 5.2% → 5.5% (matches PSA / EXR consensus)
+- `retail` cap 6.8% → 6.2% (Class-A mall / grocery-anchored strip blend;
+  previous penalized SPG-quality operators)
+- Verified NAV impact: DLR $168 → $145 (more conservative), EQIX now $708
+  (premium tier), PSA $254 → $279, SPG $267 → $302
+
+---
+
 ## v1.9 — 2026-04-22 (Sector-Specific Valuation UI + TBV/NAV Calibration)
 
 ### REIT Valuation Panel (frontend)
