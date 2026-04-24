@@ -660,6 +660,35 @@ def run_advanced_pipeline(
             "industry_footnotes": state["data"].get("industry_footnotes", []),
             # VGPM scorecard — computed after Phase 7, before Phase 7.5+
             "vgpm":               state["data"].get("vgpm", {}),
+            # ── Phase 3 extractor outputs ──────────────────────────────────────
+            # CRITICAL: these must be included or they're lost between pipeline
+            # return and web_runs persistence, which blanks the Valuation /
+            # Commentary / KPI panels on the frontend. Bug discovered 2026-04-25
+            # when NET's stored full_result_json had no saas_metrics despite
+            # Railway logs clearly showing 8/8 fields extracted. Root cause:
+            # this return dict is the serialization contract — state["data"]
+            # values not listed here don't make it to the DB.
+            "saas_metrics":           state["data"].get("saas_metrics", {}),
+            "bank_metrics":           state["data"].get("bank_metrics", {}),
+            "reit_metrics":           state["data"].get("reit_metrics", {}),
+            "pipeline_assets":        state["data"].get("pipeline_assets", {}),
+            "dcf_calibration":        state["data"].get("dcf_calibration", {}),
+            "segment_scenarios":      state["data"].get("segment_scenarios", {}),
+            # ── Phase 2 routing + sector/profile classification ─────────────
+            # Similarly needed: without these, admin panels can't filter/group
+            # runs by profile, and the frontend's TechValuationPanel routing
+            # falls back to the classifyTechSubtype ticker-table (works for
+            # known tickers but breaks for uncovered ones).
+            "profile_name":           state["data"].get("profile_name", ""),
+            "profile_names":          state["data"].get("profile_names", {}),
+            "sectors":                state["data"].get("sectors", {}),
+            # ── Phase 3 deep research artifacts ─────────────────────────────
+            # deep_research_sections is the parsed Section 2A-2F dict that
+            # feeds the frontend commentary cards (NRR Trajectory, Path to
+            # Profitability, AI Capex ROI, etc.). Without it, commentary
+            # cards silently hide even when Qwen produced rich 2F content.
+            "deep_research_sections": state["data"].get("deep_research_sections", {}),
+            "research_tier":          state["data"].get("research_tier"),
             # Internal — lets analysis_service link web_runs to the archive row
             # without calling save_run() a second time (which would create a duplicate).
             "_archive_run_id":    _archive_run_id,
