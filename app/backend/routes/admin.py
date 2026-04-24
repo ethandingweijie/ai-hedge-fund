@@ -440,6 +440,7 @@ async def reextract_metrics(
     run_id: str = "",
     limit: int = 1,
     dry_run: bool = True,
+    verbose: bool = False,
 ):
     """
     Re-run LLM extractors against stored deep research for one or more runs.
@@ -484,15 +485,15 @@ async def reextract_metrics(
 
     try:
         if run_id:
-            results = [reextract_for_run(run_id, dry_run=dry_run)]
+            results = [reextract_for_run(run_id, dry_run=dry_run, verbose=verbose)]
         elif ticker:
-            results = reextract_by_ticker(ticker, dry_run=dry_run, limit=limit)
+            results = reextract_by_ticker(ticker, dry_run=dry_run, limit=limit, verbose=verbose)
         else:
             # tickers: comma-separated
             _list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
             results = []
             for t in _list:
-                results.extend(reextract_by_ticker(t, dry_run=dry_run, limit=limit))
+                results.extend(reextract_by_ticker(t, dry_run=dry_run, limit=limit, verbose=verbose))
     except Exception as exc:
         logger.exception("reextract_metrics failed")
         raise HTTPException(status_code=500, detail=f"Re-extract failed: {exc}")

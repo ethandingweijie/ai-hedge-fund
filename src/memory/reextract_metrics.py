@@ -237,10 +237,145 @@ def _run_extractors(
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
+def _diagnose_saas_extractor(
+    sdk_client,
+    model_name: str,
+    sections: dict,
+    deep_research: str,
+    raw_financials: dict,
+    ticker: str,
+) -> dict:
+    """Run the saas_metrics extractor with full diagnostic visibility.
+
+    Unlike _extract_saas_metrics which returns only the validated dict,
+    this returns the RAW Qwen response + parsed output + clamp decisions
+    so the caller can see exactly why fields did/didn't populate.
+
+    Structure:
+      {
+        "input_chars": 5366,
+        "combined_preview": "2A. ... 2F. ...",  # first 500 chars
+        "raw_response": "<full LLM output>",
+        "raw_len": 350,
+        "parsed_type": "dict",
+        "parsed_keys": ["nrr_pct", ...],
+        "parsed_sample": {...},             # safe-truncated parsed dict
+        "validated_fields": ["rule_of_40_score"],
+        "clamp_rejections": ["nrr_pct=120(range 0.8-1.5)", ...],
+        "error": None | "<ErrorType: msg>",
+      }
+
+    Runs the same API call as _extract_saas_metrics but replicates the
+    validation logic inline so we can surface every intermediate state.
+    """
+    import re as _re_diag
+
+    # Mirror the input construction from _extract_saas_metrics
+    s2a = sections.get("2a") or sections.get("2A") or ""
+    s2d = sections.get("2d") or sections.get("2D") or ""
+    s2f = sections.get("2f") or sections.get("2F") or ""
+    combined = (s2a + "\n\n" + s2d + "\n\n" + s2f).strip()
+    if not combined or len(combined) < 500:
+        combined = (deep_research or "")[:8000]
+
+    result: dict[str, Any] = {
+        "input_chars": len(combined),
+        "combined_preview": combined[:500],
+        "raw_response": "",
+        "raw_len": 0,
+        "parsed_type": None,
+        "parsed_keys": [],
+        "parsed_sample": {},
+        "validated_fields": [],
+        "clamp_rejections": [],
+        "error": None,
+    }
+
+    if not combined:
+        result["error"] = "Empty input (no sections + no deep_research)"
+        return result
+
+    # Replicate the extractor system prompt (from _extract_saas_metrics)
+    _system = (
+        "You are a SaaS / tech-company analyst. Extract structured KPIs "
+        "from the research and return ONLY valid JSON (no markdown fences, "
+        "no commentary).\n\n"
+        "Schema (all fields OPTIONAL — omit if not substantiated):\n"
+        "  nrr_pct: float (0.80-1.50)\n"
+        "  gross_retention_pct: float (0.80-1.00)\n"
+        "  cac_payback_months: float (3-60)\n"
+        "  ltv_cac_ratio: float (1-15)\n"
+        "  rule_of_40_score: float (-30 to 120)\n"
+        "  magic_number: float (0.1-3.0)\n"
+        "  rpo_growth_yoy: float (-0.20 to 0.80)\n"
+        "  billings_growth_yoy: float (-0.20 to 0.80)\n"
+        "  evidence: string ≤300 chars\n\n"
+        "Rules: Return {} if not SaaS. Convert percentages to decimals "
+        "(120% NRR → 1.20; 40 score of rule of 40 → 40)."
+    )
+
+    try:
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=500,
+            system=_system,
+            messages=[{
+                "role": "user",
+                "content": f"Ticker: {ticker}\n\nResearch excerpts:\n{combined[:8000]}",
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        result["raw_response"] = raw
+        result["raw_len"] = len(raw)
+
+        parsed = _parse_llm_json_local(raw)
+        if parsed is None:
+            result["parsed_type"] = "None (parse failed)"
+            return result
+        result["parsed_type"] = type(parsed).__name__
+        if isinstance(parsed, dict):
+            result["parsed_keys"] = sorted(parsed.keys())
+            # Truncate any long string values for sample
+            result["parsed_sample"] = {
+                k: (str(v)[:150] if isinstance(v, str) else v)
+                for k, v in parsed.items()
+            }
+
+            clamps = {
+                "nrr_pct":             (0.80, 1.50),
+                "gross_retention_pct": (0.80, 1.00),
+                "cac_payback_months":  (3, 60),
+                "ltv_cac_ratio":       (1, 15),
+                "rule_of_40_score":    (-30, 120),
+                "magic_number":        (0.1, 3.0),
+                "rpo_growth_yoy":      (-0.20, 0.80),
+                "billings_growth_yoy": (-0.20, 0.80),
+            }
+            for k, (lo, hi) in clamps.items():
+                v = parsed.get(k)
+                if v is None:
+                    continue
+                if isinstance(v, (int, float)) and lo <= v <= hi:
+                    result["validated_fields"].append(k)
+                else:
+                    result["clamp_rejections"].append(f"{k}={v!r}(range {lo}-{hi})")
+    except Exception as exc:
+        result["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+
+    return result
+
+
+def _parse_llm_json_local(raw: str):
+    """Local copy of _parse_llm_json for diagnostic use (avoids import cycle)."""
+    from src.agents.industry.deep_research import _parse_llm_json as _p
+    return _p(raw, extractor_name="saas_metrics_diagnostic")
+
+
 def reextract_for_run(
     run_id: str,
     dry_run: bool = True,
     db_path: Optional[str] = None,
+    verbose: bool = False,
 ) -> dict[str, Any]:
     """Re-run extractors against one stored run and optionally patch the DB.
 
@@ -375,6 +510,14 @@ def reextract_for_run(
             "dry_run": dry_run,
         }
 
+        # Verbose mode — surface the raw Qwen response + parse/clamp state
+        # for the saas_metrics extractor specifically. Used for diagnosing
+        # "extractor ran but fields empty" failures without dashboard access.
+        if verbose and _decide_sector_extractor(sector, effective_profile, ticker=ticker)[0] == "saas_metrics":
+            result["diagnostic_saas"] = _diagnose_saas_extractor(
+                sdk_client, model_name, sections, deep_research, raw_fin, ticker
+            )
+
         if dry_run:
             result["would_update"] = gained_any
             return result
@@ -416,6 +559,7 @@ def reextract_by_ticker(
     dry_run: bool = True,
     limit: int = 1,
     db_path: Optional[str] = None,
+    verbose: bool = False,
 ) -> list[dict[str, Any]]:
     """Re-run extractors for the last N non-checkpoint runs for one ticker.
 
@@ -442,6 +586,6 @@ def reextract_by_ticker(
         return [{"ok": False, "error": f"No runs found for ticker {ticker}"}]
 
     return [
-        reextract_for_run(r["run_id"], dry_run=dry_run, db_path=db_path)
+        reextract_for_run(r["run_id"], dry_run=dry_run, db_path=db_path, verbose=verbose)
         for r in rows
     ]
