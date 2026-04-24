@@ -1461,13 +1461,24 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Tech": {
         "Growth SaaS": {
             "methods": [
-                {"name": "EV/NTM Revenue",  "weight": 0.50, "anchor": True,  "implementable": True},
-                {"name": "NRR-adj DCF",     "weight": 0.30, "anchor": False, "implementable": True,  "note": "proxied by DCF"},
-                {"name": "Rev DCF (ARR)",   "weight": 0.15, "anchor": False, "implementable": True},
+                # Rebalanced 2026-04-25: EV/NTM Revenue previously anchored at
+                # 50% which effectively anchored intrinsic valuation to the
+                # very market multiple we should be diverging from (reflexivity
+                # risk). Observed on MNDY: 60.2% historical CAGR × aggressive
+                # NTM multiple × growth_premium produced $475 IV on $65 spot.
+                # New weights shift anchor to DCF-based methods (NRR-adj DCF,
+                # Rev DCF, traditional FCF DCF together = 80%), relegate
+                # EV/NTM Revenue to a 15% sanity check rather than the driver.
+                # This trades some upside capture for valuation discipline —
+                # appropriate for 'intrinsic' not 'momentum' valuation.
+                {"name": "NRR-adj DCF",     "weight": 0.35, "anchor": True,  "implementable": True,  "note": "DCF with NRR-weighted cohort revenue"},
+                {"name": "DCF",             "weight": 0.25, "anchor": False, "implementable": True,  "note": "traditional FCF DCF"},
+                {"name": "Rev DCF (ARR)",   "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/NTM Revenue",  "weight": 0.15, "anchor": False, "implementable": True,  "note": "sanity check — market-anchor, demoted from 50% due to reflexivity risk"},
                 {"name": "TAM Pen",         "weight": 0.05, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
             ],
             "excluded": [],
-            "rationale": "Market prioritizes scale and market share capture over current GAAP profitability.",
+            "rationale": "Intrinsic valuation anchored to DCF-family methods (80%) with EV/NTM Revenue as a 15% sanity check. Prioritizes fundamentals over market-multiple reflexivity.",
         },
         # ── Hyperscaler / Tech Conglomerate profile ──────────────────────
         # For mega-cap multi-segment tech companies (AMZN, GOOGL, MSFT, META)

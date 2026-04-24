@@ -3741,17 +3741,38 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
             tgr = tgr_table.get(scenario, _DEFAULT_TGR[scenario])
 
-            # ── Forward Gate B: ROIC < WACC → TGR = 0 ────────────────────
+            # ── Forward Gate B: ROIC < WACC → TGR compression ────────────
+            # Scenario-gated 2026-04-25: binary TGR=0 was too aggressive for
+            # growth co's still in scaling phase (NET Forward ROIC -1.6%
+            # wiped terminal entirely, produced $40 IV on $205 spot). The
+            # binary rule conflates "path to spread" (growth co not yet at
+            # positive ROIC but improving) with "true value destruction"
+            # (mature co with declining ROIC). Scenario gating lets bear
+            # case assume worst (TGR=0 when ROIC<WACC) while base/bull
+            # relax the threshold.
+            #
+            #   bear: full Gate B — TGR=0 if forward_roic < wacc
+            #   base: relaxed — TGR=0 only if forward_roic < 0.5 × wacc
+            #         (roughly: scaling co's with ROIC in the 4-8% range
+            #          when WACC is 10% get partial credit)
+            #   bull: Gate B never triggers — upside case assumes ROIC
+            #         exceeds WACC by year 10
             forward_flags: list[str] = list(ticker_forward_flags)
             ebit_val = most_recent.get("ebit")
             ic_val = most_recent.get("invested_capital")
             if ebit_val and ic_val and ic_val > 0:
                 nopat = ebit_val * (1 - _EFFECTIVE_TAX_RATE)
                 forward_roic = nopat / ic_val
-                if forward_roic < wacc:
+                _gate_b_threshold = {
+                    "bear": wacc,              # full gate — TGR=0 when ROIC<WACC
+                    "base": wacc * 0.5,        # relaxed — TGR=0 only when ROIC<½WACC
+                    "bull": float("-inf"),     # never triggers in bull
+                }[scenario]
+                if forward_roic < _gate_b_threshold:
                     tgr = 0.0
                     forward_flags.append(
-                        f"Gate B: Forward ROIC ({forward_roic:.1%}) < WACC ({wacc:.1%}) → TGR set to 0"
+                        f"Gate B ({scenario}): Forward ROIC ({forward_roic:.1%}) < threshold "
+                        f"({_gate_b_threshold:.1%}) → TGR set to 0"
                     )
 
             # Safety: WACC must exceed TGR
