@@ -3620,24 +3620,23 @@ def _research_one_ticker(
         f"{len(_used_ids)} inline markers inserted"
     )
 
-    # ── Sequential extractor fan-out ─────────────────────────────────────────
-    # Reverted 2026-04-25 from parallel ThreadPoolExecutor back to sequential
-    # after observing that parallel execution produced unreliable saas_metrics
-    # on fresh CRWD live runs despite retry-on-empty and simplified prompts
-    # being deployed. Matches the sequential design the re-extract path
-    # (src/memory/reextract_metrics.py:_run_extractors) uses successfully.
+    # ── Parallel extractor fan-out ───────────────────────────────────────────
+    # Restored 2026-04-25 after persistence bug fix (commit 1ac5490).
+    # Earlier sequential revert was misdiagnosis — the "unreliable saas_metrics"
+    # symptom was caused by run_advanced_pipeline() dropping extractor outputs
+    # from its return dict, NOT by parallel execution. Extractors always worked;
+    # data just never reached full_result_json.
     #
-    # Hypothesis for parallel failure (not definitively proven):
-    #   * anthropic SDK HTTP connection pool contention across threads
-    #   * Per-second rate-limit cliff even when RPM is healthy (5 concurrent
-    #     requests for Tech with all gates passing = 5 RPS burst)
-    #   * Exception swallowing in as_completed() obscuring real errors
+    # With 1ac5490 fix (saas_metrics et al. now in return dict), parallel is
+    # safe and ~3× faster. Typical extractor runtime drops from ~30s sequential
+    # (dcf_calibration + segment_scenarios + saas_metrics) to ~10s parallel
+    # (slowest-wins). For a 4-6 min pipeline this saves ~20s per ticker.
     #
-    # Sequential trade-off: ~30-60s extra wall time per ticker (depends on
-    # how many extractors fire). For a 4-6 min pipeline this is <10% slower.
-    # Reliability matters more than that marginal speedup — an empty
-    # saas_metrics writes a broken report that requires re-extract recovery,
-    # which is a worse user experience than a slower but reliable run.
+    # Thread safety: each extractor holds its own Qwen request lifecycle via
+    # sdk_client.messages.create(). anthropic SDK is designed to handle
+    # concurrent requests from the same client instance. I/O-bound workload
+    # means GIL isn't a concern.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from src.agents.industry.sector_prompts import needs_extractor
 
     # Sector-aware extractor gating — skips extractors that would almost
@@ -3663,38 +3662,41 @@ def _research_one_ticker(
     print(
         f"  Extractors fan-out ({ticker} · sector={sector!r} · "
         f"profile={profile_name!r}): running {sorted(_extractor_tasks)} | "
-        f"skipped {sorted(_skipped)} | mode=SEQUENTIAL"
+        f"skipped {sorted(_skipped)} | mode=PARALLEL"
     )
 
     _results: dict = {}
-    for _name, _fn in _extractor_tasks.items():
-        try:
-            _out = _fn()
-            _results[_name] = _out
-            # Per-extractor result summary — visible in Railway stdout so
-            # user can see which extractors returned data vs empty.
-            if isinstance(_out, list):
-                _summary = f"list[{len(_out)}]"
-            elif isinstance(_out, dict):
-                _populated = {k: v for k, v in _out.items() if v not in (None, "", [], {})}
-                _summary = (
-                    f"{len(_populated)}/{len(_out)} fields populated: "
-                    f"{sorted(_populated)}" if _populated
-                    else f"EMPTY dict ({len(_out)} null fields)"
-                )
-            else:
-                _summary = f"{type(_out).__name__}"
-            _status_icon = "✓" if _out else "⚠ EMPTY"
-            print(f"  Extractor [{_name}] {_status_icon} → {_summary}")
-        except Exception as _exc:
-            progress.update_status(agent_id, ticker,
-                                   f"Extractor {_name} failed: {_exc}")
-            _results[_name] = {} if _name != "pipeline_assets" else []
-            # Traceback to stdout so the real error is visible, not just
-            # the "failed: X" summary.
-            print(f"  Extractor [{_name}] ✗ FAILED: {type(_exc).__name__}: {_exc}")
-            import traceback as _tb
-            _tb.print_exc()
+    with ThreadPoolExecutor(max_workers=6) as _ex:
+        _futures = {_ex.submit(fn): name for name, fn in _extractor_tasks.items()}
+        for _fut in as_completed(_futures):
+            _name = _futures[_fut]
+            try:
+                _out = _fut.result()
+                _results[_name] = _out
+                # Per-extractor result summary — visible in Railway stdout so
+                # user can see which extractors returned data vs empty.
+                if isinstance(_out, list):
+                    _summary = f"list[{len(_out)}]"
+                elif isinstance(_out, dict):
+                    _populated = {k: v for k, v in _out.items() if v not in (None, "", [], {})}
+                    _summary = (
+                        f"{len(_populated)}/{len(_out)} fields populated: "
+                        f"{sorted(_populated)}" if _populated
+                        else f"EMPTY dict ({len(_out)} null fields)"
+                    )
+                else:
+                    _summary = f"{type(_out).__name__}"
+                _status_icon = "✓" if _out else "⚠ EMPTY"
+                print(f"  Extractor [{_name}] {_status_icon} → {_summary}")
+            except Exception as _exc:
+                progress.update_status(agent_id, ticker,
+                                       f"Extractor {_name} failed: {_exc}")
+                _results[_name] = {} if _name != "pipeline_assets" else []
+                # Traceback to stdout so the real error is visible, not just
+                # the "failed: X" summary.
+                print(f"  Extractor [{_name}] ✗ FAILED: {type(_exc).__name__}: {_exc}")
+                import traceback as _tb
+                _tb.print_exc()
 
     dcf_calibration   = _results.get("dcf_calibration", {})
     segment_scenarios = _results.get("segment_scenarios", {})
