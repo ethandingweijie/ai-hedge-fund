@@ -3818,8 +3818,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     # Tighter [0.85, 1.20] band preserves some differentiation
                     # (DLR > O) while aligning blended IV with analyst PT range.
                     _is_reit_profile = is_reit_sector(sector) or profile_name == "REIT"
+                    # High-multiple Tech profiles: same double-count issue as REIT.
+                    # _TECH_SUBTYPE_MULTIPLES already embed growth expectations
+                    # — Growth SaaS EV/Rev 22x / Cybersecurity 22x / Hyper-Growth
+                    # 25x / AI 30x each sit well above mature-tech (6-10x) precisely
+                    # because they reflect forward-growth premium baked into street
+                    # multiples. Applying the generic 0.60-2.50 growth_premium band
+                    # on top produces absurd IVs (DDOG base $665 vs $128 market on
+                    # 28% growth × 22x × 1.75 premium × yr1 revenue projection).
+                    # Tighter [0.85, 1.30] band preserves growth differentiation
+                    # without double-counting growth into the peer multiple.
+                    _is_high_mult_tech = profile_name in {
+                        "Growth SaaS",
+                        "Cybersecurity / Mission-Critical SaaS",
+                        "Hyper-Growth Platform",
+                        "High-Growth Tech / AI",
+                    }
                     if _is_reit_profile:
                         growth_premium = max(0.85, min(1.20, _gp_raw))
+                    elif _is_high_mult_tech:
+                        growth_premium = max(0.85, min(1.30, _gp_raw))
                     else:
                         growth_premium = max(0.60, min(2.50, _gp_raw))
                 else:
