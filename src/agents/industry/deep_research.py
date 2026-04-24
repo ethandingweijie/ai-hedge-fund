@@ -2861,11 +2861,86 @@ def _research_one_ticker(
 
         text = text.strip()
 
+        # ─── Qwen empty-content retry (parallel-load mitigation) ───────────────
+        # Observed failure: Qwen's enable_search+stream=True path can emit many
+        # reasoning_content chunks but zero content chunks (the final-answer
+        # phase never starts), leaving `text=""` while `reasoning` holds the
+        # full deliberation. Manifests under concurrent pipeline runs —
+        # DashScope's streaming layer drops the content phase silently. The
+        # Anthropic tool-use path (line 2656+) has a "synthesis nudge" that
+        # recovers; the Qwen path lacked an equivalent until now.
+        #
+        # Recovery strategy: send the captured reasoning back as an assistant
+        # turn, ask for the final Section 2 report, with search disabled and
+        # streaming off for deterministic output. Roughly mirrors the
+        # Anthropic nudge pattern but adapted to OpenAI-compat chat format.
+        if not text and reasoning.strip():
+            progress.update_status(
+                agent_id, ticker,
+                f"⚠ Qwen stream emitted {len(reasoning):,} reasoning chars but 0 content. "
+                "Retrying synthesis (non-streaming, no search)..."
+            )
+            # Small backoff in case a transient DashScope streaming glitch
+            # caused the drop — cheap insurance, avoids retry storm.
+            import time as _retry_time
+            _retry_time.sleep(0.5)
+            try:
+                safe_reasoning = reasoning[:28_000]  # guard against context overflow
+                retry_resp = _qwen_search_client.chat.completions.create(
+                    model=model_name,
+                    messages=[
+                        {"role": "system",    "content": _research_system},
+                        {"role": "user",      "content": human_msg_qwen},
+                        {"role": "assistant", "content": safe_reasoning},
+                        {"role": "user", "content": (
+                            "Your reasoning above is excellent. Now write the complete "
+                            "Section 2 report — all sub-sections 2A through 2F fully "
+                            "populated. Do not perform additional searches. Output "
+                            "only the final report content (no meta-commentary)."
+                        )},
+                    ],
+                    extra_body={"enable_search": False},  # prevent recursive search loops
+                    stream=False,                          # deterministic fallback
+                    temperature=0.3,                       # low variance on retry
+                    max_tokens=8192,                       # explicit content-phase budget
+                )
+                text = (retry_resp.choices[0].message.content or "").strip()
+                if text:
+                    progress.update_status(
+                        agent_id, ticker,
+                        f"✓ Qwen synthesis retry succeeded ({len(text):,} content chars)"
+                    )
+                else:
+                    progress.update_status(
+                        agent_id, ticker,
+                        f"⚠ Qwen retry also returned empty — falling through to Tier 2"
+                    )
+            except Exception as _retry_err:
+                progress.update_status(
+                    agent_id, ticker,
+                    f"✗ Qwen retry failed: {type(_retry_err).__name__}: "
+                    f"{str(_retry_err)[:100]} — falling through to Tier 2"
+                )
+                logger.warning(
+                    "[deep_research qwen retry] %s for ticker=%s: %s",
+                    type(_retry_err).__name__, ticker, _retry_err
+                )
+
         if reasoning:
             progress.update_status(
                 agent_id, ticker,
                 f"Deep research complete: {len(reasoning):,} chars thinking + {len(text):,} chars report"
             )
+
+        # Observability: log prompt + output budget so ops can spot token
+        # pressure (per Qwen review recommendation). If system+user exceeds
+        # ~12k tokens consistently, consider splitting 2F into a follow-up call.
+        logger.info(
+            "[deep_research qwen] ticker=%s prompt_system=%d prompt_user=%d "
+            "reasoning=%d content=%d",
+            ticker, len(_research_system), len(human_msg_qwen),
+            len(reasoning), len(text)
+        )
 
         # Search count not available in streaming mode — use proxy of 1
         return text, 1, []   # citations not available from OpenAI-compat streaming
