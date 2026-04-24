@@ -36,6 +36,29 @@ import type { DcfRange, SaasMetrics } from '@/lib/reportTypes';
 import { classifyTechSubtype, currencySymbol, type TechSubtype } from '@/lib/utils';
 import { ResearchNarrativeCard } from '@/components/report/shared/ResearchNarrativeCard';
 
+/**
+ * Probe whether a subsection paragraph (e.g. "2F.2") can be extracted from
+ * a Section 2X text block. Mirrors the regex in ResearchNarrativeCard so
+ * caller can decide between targeted subsection cards vs a full-section
+ * fallback without duplicating extraction logic.
+ */
+function hasSubsection(sectionText: string | null, subsection: string): boolean {
+  if (!sectionText || !subsection) return false;
+  const match = subsection.match(/^(\d+)?([A-Z])\.?(\d+)$/i);
+  if (!match) return false;
+  const letter = match[2].toUpperCase();
+  const num = parseInt(match[3], 10);
+  const startPattern = new RegExp(
+    `(?:^|\\n)[\\s*#_]*(?:2?)${letter}\\.${num}(?![0-9])[\\s\\.:*_\\-]*`,
+    'i'
+  );
+  const startMatch = sectionText.match(startPattern);
+  if (!startMatch) return false;
+  // Require at least 80 chars of body after the heading (same min as card)
+  const startIdx = startMatch.index! + startMatch[0].length;
+  return (sectionText.length - startIdx) >= 80;
+}
+
 const SECTION_HEADING_CLS =
   'text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400';
 
@@ -407,18 +430,32 @@ function HyperscalerView({
         </div>
       )}
 
-      <ResearchNarrativeCard
-        title="AI Capex ROI Commentary"
-        sectionText={section2F}
-        subsection="2F.2"
-        sourceLabel="Deep research · Section 2F.2"
-      />
-      <ResearchNarrativeCard
-        title="Regulatory Overhang"
-        sectionText={section2F}
-        subsection="2F.6"
-        sourceLabel="Deep research · Section 2F.6"
-      />
+      {(hasSubsection(section2F, "2F.2") || hasSubsection(section2F, "2F.6")) ? (
+        <>
+          <ResearchNarrativeCard
+            title="AI Capex ROI Commentary"
+            sectionText={section2F}
+            subsection="2F.2"
+            sourceLabel="Deep research · Section 2F.2"
+          />
+          <ResearchNarrativeCard
+            title="Regulatory Overhang"
+            sectionText={section2F}
+            subsection="2F.6"
+            sourceLabel="Deep research · Section 2F.6"
+          />
+        </>
+      ) : (
+        // Fallback: research produced Section 2F but without the targeted
+        // 2F.2 / 2F.6 subsections. Rather than hide all commentary, surface
+        // the whole Section 2F as a single qualitative card so the user
+        // still sees LLM-derived narrative context.
+        <ResearchNarrativeCard
+          title="Qualitative Commentary"
+          sectionText={section2F}
+          sourceLabel="Deep research · Section 2F"
+        />
+      )}
     </>
   );
 }
@@ -468,7 +505,22 @@ function MatureSaasView({
     : null;
 
   const nrr = saasMetrics?.nrr_pct ?? null;
-  const ruleOf40 = saasMetrics?.rule_of_40_score ?? null;
+  // Rule of 40: prefer backend extractor (with FMP self-compute fallback) but
+  // ALSO derive from raw financials on the frontend when still null. This
+  // matches the Decomposition panel's logic below so the KPI tile and the
+  // decomposition stay consistent even when the backend extractor is absent
+  // (e.g. DCF crashed after checkpoint, extractor gated out, or LLM returned
+  // empty). Formula: revenue growth % + FCF margin % across latest 2 FYs.
+  const _rof40FromFMP: number | null = (() => {
+    if (latest?.revenue == null || prev?.revenue == null || prev.revenue <= 0) return null;
+    if (latest.free_cash_flow == null || latest.revenue <= 0) return null;
+    const growthPct = ((latest.revenue / prev.revenue) - 1) * 100;
+    const fcfMarginPct = (latest.free_cash_flow / latest.revenue) * 100;
+    const score = growthPct + fcfMarginPct;
+    if (score < -30 || score > 120) return null;
+    return score;
+  })();
+  const ruleOf40 = saasMetrics?.rule_of_40_score ?? _rof40FromFMP;
 
   // Tones
   const nrrTone: 'green' | 'amber' | 'red' | 'neutral' = nrr == null ? 'neutral'
@@ -588,18 +640,29 @@ function MatureSaasView({
         </div>
       )}
 
-      <ResearchNarrativeCard
-        title="NRR Trajectory"
-        sectionText={section2F}
-        subsection="2F.2"
-        sourceLabel="Deep research · Section 2F.2"
-      />
-      <ResearchNarrativeCard
-        title="AI Monetization Strategy"
-        sectionText={section2F}
-        subsection="2F.7"
-        sourceLabel="Deep research · Section 2F.7"
-      />
+      {(hasSubsection(section2F, "2F.2") || hasSubsection(section2F, "2F.7")) ? (
+        <>
+          <ResearchNarrativeCard
+            title="NRR Trajectory"
+            sectionText={section2F}
+            subsection="2F.2"
+            sourceLabel="Deep research · Section 2F.2"
+          />
+          <ResearchNarrativeCard
+            title="AI Monetization Strategy"
+            sectionText={section2F}
+            subsection="2F.7"
+            sourceLabel="Deep research · Section 2F.7"
+          />
+        </>
+      ) : (
+        // Fallback to whole Section 2F when 2F.2 / 2F.7 extraction misses.
+        <ResearchNarrativeCard
+          title="Qualitative Commentary"
+          sectionText={section2F}
+          sourceLabel="Deep research · Section 2F"
+        />
+      )}
     </>
   );
 }
@@ -630,7 +693,19 @@ function GrowthSaasView({
   const gr  = saasMetrics?.gross_retention_pct ?? null;
   const cac = saasMetrics?.cac_payback_months ?? null;
   const magic = saasMetrics?.magic_number ?? null;
-  const ruleOf40 = saasMetrics?.rule_of_40_score ?? null;
+  // Rule of 40: prefer backend extractor but fall back to FMP computation
+  // (rev growth % + FCF margin %) so the tile populates even when the
+  // extractor is absent / returned empty. Same logic as MatureSaasView.
+  const _rof40FromFMP: number | null = (() => {
+    if (latest?.revenue == null || prev?.revenue == null || prev.revenue <= 0) return null;
+    if (latest.free_cash_flow == null || latest.revenue <= 0) return null;
+    const growthPct = ((latest.revenue / prev.revenue) - 1) * 100;
+    const fcfMarginPct = (latest.free_cash_flow / latest.revenue) * 100;
+    const score = growthPct + fcfMarginPct;
+    if (score < -30 || score > 120) return null;
+    return score;
+  })();
+  const ruleOf40 = saasMetrics?.rule_of_40_score ?? _rof40FromFMP;
 
   // Post-SBC FCF % — used only in traffic-light table
   const postSbcFcfPct = (
@@ -797,18 +872,29 @@ function GrowthSaasView({
         </div>
       )}
 
-      <ResearchNarrativeCard
-        title="Unit Economics Sustainability"
-        sectionText={section2F}
-        subsection="2F.4"
-        sourceLabel="Deep research · Section 2F.4"
-      />
-      <ResearchNarrativeCard
-        title="Path to Profitability"
-        sectionText={section2F}
-        subsection="2F.6"
-        sourceLabel="Deep research · Section 2F.6"
-      />
+      {(hasSubsection(section2F, "2F.4") || hasSubsection(section2F, "2F.6")) ? (
+        <>
+          <ResearchNarrativeCard
+            title="Unit Economics Sustainability"
+            sectionText={section2F}
+            subsection="2F.4"
+            sourceLabel="Deep research · Section 2F.4"
+          />
+          <ResearchNarrativeCard
+            title="Path to Profitability"
+            sectionText={section2F}
+            subsection="2F.6"
+            sourceLabel="Deep research · Section 2F.6"
+          />
+        </>
+      ) : (
+        // Fallback to whole Section 2F when 2F.4 / 2F.6 extraction misses.
+        <ResearchNarrativeCard
+          title="Qualitative Commentary"
+          sectionText={section2F}
+          sourceLabel="Deep research · Section 2F"
+        />
+      )}
     </>
   );
 }
