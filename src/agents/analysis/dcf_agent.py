@@ -4027,7 +4027,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "intrinsic_value":   round(final_iv, 2),
                 "growth_rate":       round(g, 4),
                 "fcf_margin_start":  round(fcf_margin_base, 4),
-                "margin_delta_per_year": round(md, 4),
+                "margin_delta_per_year": round(md_abs, 4),
                 "tgr":               round(tgr, 4),
                 "tv_pct":            round(tv_fraction, 4),
                 "methods_used":      methods_used,
