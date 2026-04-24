@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTheme } from '@/contexts/theme-context';
-import { toast } from 'sonner';   // Toaster now mounted in App.tsx (global)
+// `toast` / `Toaster` imports removed — section-completion toasts were
+// removed, so ReportPage doesn't fire toasts directly. Global <Toaster>
+// mount is in App.tsx; other pages (Screener, History) still use toast
+// from 'sonner' as needed.
 import { ResearchNav } from '@/components/layout/ResearchNav';
 import { getActiveTier, STARTER_ALLOWED_AGENTS } from '@/lib/tier';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -551,29 +554,13 @@ export function ReportPage() {
     }
   }
 
-  // ── Section completion toasts — fire once per section when it becomes ready ──
-  const toastedSections = useRef(new Set<SectionId>());
-  useEffect(() => {
-    if (!isRunning) return;
-    SECTIONS.forEach(({ id, label }) => {
-      if (sectionReady(id) && !toastedSections.current.has(id)) {
-        toastedSections.current.add(id);
-        toast.success(`Yay! ${label} completed`, {
-          description: 'Ready to view below',
-          duration: 10000,
-          action: {
-            label: 'Jump ↓',
-            onClick: () => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-          },
-        });
-      }
-    });
-  }); // no deps — runs every render, but Set prevents duplicate toasts
-
-  // ── Dismiss all toasts when analysis completes ───────────────────────────────
-  useEffect(() => {
-    if (isComplete) toast.dismiss();
-  }, [isComplete]);
+  // Section-completion toasts removed 2026-04 — they stacked on mobile during
+  // the pipeline run and obscured the page content. Native push notifications
+  // (see `sendNotification` below) cover the "your analysis is ready" UX on
+  // both web and mobile without occupying screen space.
+  // The `toast.dismiss()` on isComplete was also removed since no toasts are
+  // fired from this page anymore — `toast` import kept for sonner global mount
+  // at App.tsx, but no direct use here.
 
   // ── Section reveal helper ────────────────────────────────────────────────────
   function renderSection(sectionId: string, label: string, content: React.ReactNode): React.ReactNode {
