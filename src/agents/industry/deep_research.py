@@ -874,49 +874,28 @@ def _extract_saas_metrics(
             model=model_name,
             max_tokens=500,
             system=(
+                # Simplified 2026-04-24: the previous 40-line prompt with
+                # derivation hints ("compute ONLY when 4 inputs explicitly
+                # cited") made Qwen overly cautious — it returned {} on DDOG
+                # despite NRR 120%, Rule of 40 57.2, Magic Number 0.61 all
+                # present in 2F. The diagnostic path with this shorter prompt
+                # returned 7 validated KPIs from the same input. Matching the
+                # diagnostic's prompt structure for the real extractor too.
                 "You are a SaaS / tech-company analyst. Extract structured KPIs "
                 "from the research and return ONLY valid JSON (no markdown fences, "
                 "no commentary).\n\n"
-                "Schema (all fields OPTIONAL — omit if not substantiated by research):\n"
-                "  nrr_pct:              float (0.80-1.50, net revenue retention decimal)\n"
-                "  gross_retention_pct:  float (0.80-1.00, gross retention decimal)\n"
-                "  cac_payback_months:   float (3-60, CAC payback in months)\n"
-                "  ltv_cac_ratio:        float (1-15, LTV:CAC ratio)\n"
-                "  rule_of_40_score:     float (-30 to 120, growth% + FCF margin%)\n"
-                "  magic_number:         float (0.1-3.0, new ARR / prior-qtr S&M)\n"
-                "  rpo_growth_yoy:       float (-0.20 to 0.80, remaining perf obligation growth)\n"
-                "  billings_growth_yoy:  float (-0.20 to 0.80)\n"
-                "  evidence:             string ≤300 chars citing research source\n\n"
-                "Rules:\n"
-                "  * Return {} if the company isn't a SaaS / subscription business.\n"
-                "  * Convert percentages to decimals (120% NRR → 1.20; 40 Rule of 40 score → 40).\n"
-                "  * NRR: look for phrases like 'NRR', 'net retention', 'net dollar retention',\n"
-                "    '$NRR', 'net expansion' — cited directly from earnings call.\n"
-                "  * Rule of 40: sum of revenue growth % + FCF margin %. E.g. 35% growth + 25%\n"
-                "    FCF margin = 60.\n"
-                "Extraction / derivation hints when numbers aren't directly stated:\n"
-                "  * NRR: look for phrases like 'NRR', 'net retention', 'net dollar retention',\n"
-                "    '$NRR', 'net expansion', 'dollar-based net retention'. Usually cited\n"
-                "    on earnings calls as a single number (e.g. '126%').\n"
-                "  * Gross Retention: sometimes disclosed as 'gross retention' or 'gross\n"
-                "    dollar retention'. If NRR is stated but gross retention isn't, check\n"
-                "    for explicit expansion rate disclosure: GR = NRR - expansion_pct.\n"
-                "    Only derive if both inputs cited in the research text.\n"
-                "  * CAC Payback: if disclosed, report directly. If not, derive from\n"
-                "    S&M spend + net new ARR + gross margin using formula:\n"
-                "    (S&M_annual × 12) / (net_new_ARR_annual × gross_margin). Require all\n"
-                "    three inputs to be cited.\n"
-                "  * LTV/CAC: compute ONLY when the 4 inputs are all explicitly in the\n"
-                "    research: ACV, gross_margin, annual_churn (or gross_retention), CAC.\n"
-                "    Formula: (ACV × gross_margin / annual_churn) / CAC. Never derive\n"
-                "    without all 4 inputs present.\n"
-                "  * Magic Number: if disclosed (phrases: 'sales efficiency', 'magic number',\n"
-                "    'new ARR per $ S&M'), report directly. Otherwise derive from:\n"
-                "    net_new_ARR_quarter / S&M_prior_quarter.\n"
-                "  * When deriving, cite BOTH the formula AND the input values in the\n"
-                "    'evidence' field so the audit trail is traceable.\n"
-                "  * Prefer a derived value WITH clear input citations over null when the\n"
-                "    inputs are clearly present.\n"
+                "Schema (all fields OPTIONAL — omit if not substantiated):\n"
+                "  nrr_pct: float (0.80-1.50, net revenue retention as decimal)\n"
+                "  gross_retention_pct: float (0.80-1.00)\n"
+                "  cac_payback_months: float (3-60)\n"
+                "  ltv_cac_ratio: float (1-15)\n"
+                "  rule_of_40_score: float (-30 to 120, growth% + FCF margin%)\n"
+                "  magic_number: float (0.1-3.0)\n"
+                "  rpo_growth_yoy: float (-0.20 to 0.80)\n"
+                "  billings_growth_yoy: float (-0.20 to 0.80)\n"
+                "  evidence: string ≤300 chars\n\n"
+                "Rules: Return {} if not SaaS. Convert percentages to decimals "
+                "(120% NRR → 1.20; 57 Rule of 40 score → 57)."
             ),
             messages=[{
                 "role": "user",
