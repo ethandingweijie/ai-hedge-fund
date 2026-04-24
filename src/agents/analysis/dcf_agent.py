@@ -119,13 +119,16 @@ _MARGIN_DELTA_MULT = {"bear": 0.80, "base": 1.00, "bull": 1.20}
 # Calibrated so Y10 growth lands in the 4-7% mature-SaaS range from a
 # 20-30%+ Y1 starting point. Profiles not listed here get no decay (constant
 # growth — preserves existing behavior for non-Tech paths).
+# Scope: growth archetypes ONLY — profiles where the current growth rate is
+# materially above the long-run mean and will empirically decay. Mature SaaS
+# (CRM, NOW, ADBE, WDAY, VEEV) and Hyperscaler / Tech Conglomerate (MSFT,
+# GOOGL, AMZN, META, ORCL) are intentionally EXCLUDED — their growth is
+# already near steady-state, so constant-rate projection remains correct.
 _GROWTH_DECAY_DELTA: dict[str, float] = {
     "Growth SaaS":                              0.17,  # 28% → ~5% by Y10
     "Hyper-Growth Platform":                    0.15,  # slower decay (network effects)
     "High-Growth Tech / AI":                    0.12,  # longest S-curve
     "Cybersecurity / Mission-Critical SaaS":    0.15,
-    "Mature SaaS":                              0.20,  # already low; fast convergence
-    "Hyperscaler / Tech Conglomerate":          0.10,  # deep moat, slow decay
 }
 
 # Option III Spec 2 — terminal-multiple convergence map. Growth-phase Tech
