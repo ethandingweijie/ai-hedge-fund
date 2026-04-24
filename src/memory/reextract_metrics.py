@@ -104,12 +104,19 @@ class _MessagesShim:
         for m in (messages or []):
             oai_messages.append({"role": m["role"], "content": m["content"]})
 
+        # temperature=0.1 — extractors want deterministic JSON output. The
+        # original anthropic-side extractors didn't set temperature (default
+        # ~0.7 for Claude), which is fine for prose but sub-optimal for
+        # structured KPI extraction. 0.1 mirrors what sector_prompts
+        # documentation suggests for JSON-returning prompts.
+        #
         # Forward to openai — raises openai.RateLimitError on 429,
         # openai.PermissionDeniedError on 403, openai.APITimeoutError on timeout.
         # _call_llm_with_rate_retry catches all of these by message-string match.
         resp = self._client.chat.completions.create(
             model=model,
             max_tokens=max_tokens,
+            temperature=0.1,
             messages=oai_messages,
         )
         # Extract content and wrap in anthropic-shaped response
@@ -155,15 +162,14 @@ def _resolve_extractor_client(
     # Model resolution (first non-empty wins):
     #   1. DEEP_RESEARCH_SYNTHESIS_MODEL — explicit extractor model override
     #   2. DEEP_RESEARCH_MODEL           — user's working search model
-    #      (reusing ensures re-extract hits an endpoint known to work)
-    #   3. qwen-plus                     — broadly-available Qwen 2.5 fallback
-    # Previous default "qwen3-max" 404'd on user's regional DashScope endpoint.
-    # Falling back to the search model keeps re-extract working regardless of
-    # which Qwen tier is available.
+    #   3. "qwen3.6-plus"                — confirmed working on user's endpoint
+    # User confirmed qwen3.6-plus is their provisioned model on the
+    # International DashScope deployment (30K RPM / 5M TPM). qwen3-max was the
+    # old default but returned NotFoundError 404 on user's regional endpoint.
     dashscope_model = (
         os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL")
         or os.environ.get("DEEP_RESEARCH_MODEL")
-        or "qwen-plus"
+        or "qwen3.6-plus"
     )
     anthropic_key      = os.environ.get("ANTHROPIC_API_KEY")
 
