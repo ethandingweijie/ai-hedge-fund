@@ -41,6 +41,96 @@ from src.utils.company_name import fetch_company_name as _fetch_company_name
 logger = logging.getLogger(__name__)
 
 
+def _parse_llm_json(raw: str, extractor_name: str = "") -> dict | list | None:
+    """Robust JSON parser for LLM extractor responses.
+
+    The previous approach was `json.loads(raw.strip())` with only ```-fence
+    stripping. This broke silently when Qwen / Claude added any of:
+
+    1. Preamble text  : "Here's the extraction:\n{...}"
+    2. Postamble text : "{...}\n\nNote: all figures approximate."
+    3. Mixed fences   : "Some text\n```json\n{...}\n```\nExplanation..."
+    4. Trailing junk  : "{...}\n<end_of_turn>"
+
+    All of these raised JSONDecodeError → caught by `except Exception: return {}`
+    in each extractor → user saw empty KPI tiles + empty commentary cards
+    despite Qwen having produced well-formed data in Section 2F.
+
+    Observed on DDOG (Growth SaaS, Qwen 3.6-plus via DashScope): full 2F with
+    NRR 120%, Rule of 40 57%, Magic Number 0.61, CAC Payback 14-16mo all
+    present in text but saas_metrics came back as {} because Qwen added
+    a 3-line preamble before the JSON.
+
+    Strategy (most-specific → most-permissive):
+      1. Try raw as-is after trimming whitespace.
+      2. Strip surrounding ```fences``` (any language tag).
+      3. Find first { ... last } (for objects) or first [ ... last ] (for arrays)
+         and parse that substring.
+      4. Return None on all failures — caller decides whether to return empty
+         dict / empty list / default.
+
+    Returns dict or list on success, None on failure. Logs a truncated preview
+    to stdout so Railway shows which extractors are losing data and why.
+    """
+    if not raw or not isinstance(raw, str):
+        return None
+    text = raw.strip()
+
+    # Strategy 1 — try as-is (fast path for compliant responses)
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # Strategy 2 — strip triple-backtick fences
+    stripped = text
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```[a-zA-Z]*\n?", "", stripped)
+    if stripped.endswith("```"):
+        stripped = re.sub(r"\n?```$", "", stripped)
+    stripped = stripped.strip()
+    if stripped != text:
+        try:
+            return json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Strategy 3a — substring between first { and last } (object case)
+    first_brace = text.find("{")
+    last_brace  = text.rfind("}")
+    if first_brace != -1 and last_brace > first_brace:
+        candidate = text[first_brace : last_brace + 1]
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Strategy 3b — substring between first [ and last ] (array case)
+    first_brack = text.find("[")
+    last_brack  = text.rfind("]")
+    if first_brack != -1 and last_brack > first_brack:
+        # Only prefer array when brackets come before any braces (else it's a
+        # nested array inside an object that failed 3a already).
+        if first_brace == -1 or first_brack < first_brace:
+            candidate = text[first_brack : last_brack + 1]
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+    # All strategies failed — log truncated preview for ops visibility
+    _preview = text[:300].replace("\n", " ⏎ ")
+    print(
+        f"  [llm_json_parse] ⚠ {extractor_name or 'extractor'} failed to parse "
+        f"(len={len(text)}): {_preview}..."
+    )
+    return None
+
+
 MAX_SEARCHES     = 10     # searches for both Tier 1 (max_uses) and Tier 2 (loop cap)
 MAX_RESULTS      = 5      # Tavily results per query
 # max_tokens controls OUTPUT tokens (the generated response), not the context window.
@@ -464,12 +554,11 @@ def _extract_dcf_calibration(
                 ),
             }],
         )
-        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        parsed = _parse_llm_json(raw, extractor_name="dcf_calibration")
+        if parsed is None or not isinstance(parsed, dict):
+            return {"growth_rate_adj": None, "margin_direction": "stable",
+                    "risk_flag": "MEDIUM", "notes": "Extraction failed: unparseable JSON"}
         return {
             "growth_rate_adj":  parsed.get("growth_rate_adj"),
             "margin_direction": parsed.get("margin_direction", "stable"),
@@ -574,13 +663,9 @@ def _extract_segment_scenarios(
                 ),
             }],
         )
-        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
-        if not isinstance(parsed, dict):
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        parsed = _parse_llm_json(raw, extractor_name="segment_scenarios")
+        if parsed is None or not isinstance(parsed, dict):
             return {}
 
         # Validate each segment block — invalid blocks dropped silently
@@ -712,12 +797,9 @@ def _extract_saas_metrics(
                 ),
             }],
         )
-        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
-        if not isinstance(parsed, dict):
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        parsed = _parse_llm_json(raw, extractor_name="saas_metrics")
+        if parsed is None or not isinstance(parsed, dict):
             return {}
 
         out: dict = {}
@@ -949,12 +1031,9 @@ def _extract_bank_metrics(
                 ),
             }],
         )
-        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
-        if not isinstance(parsed, dict):
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        parsed = _parse_llm_json(raw, extractor_name="bank_metrics")
+        if parsed is None or not isinstance(parsed, dict):
             return {}
 
         out: dict = {}
@@ -1113,12 +1192,9 @@ def _extract_reit_metrics(
                 ),
             }],
         )
-        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
-        if not isinstance(parsed, dict):
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        parsed = _parse_llm_json(raw, extractor_name="reit_metrics")
+        if parsed is None or not isinstance(parsed, dict):
             return {}
 
         # Validate + clamp numeric fields into safe ranges (prevent LLM
@@ -1273,13 +1349,9 @@ def _extract_pipeline_assets(
                 ),
             }],
         )
-        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        # Strip markdown code fences if present
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
-        if not isinstance(parsed, list):
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
+        parsed = _parse_llm_json(raw, extractor_name="pipeline_assets")
+        if parsed is None or not isinstance(parsed, list):
             return []
 
         out: list[dict] = []
