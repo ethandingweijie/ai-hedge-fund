@@ -305,6 +305,10 @@ def run_strategic_router(state: AgentState) -> AgentState:
         for t in all_tickers:
             _, _lookup_profile = get_wacc_profile_for_ticker(t)
             if not _lookup_profile:
+                # Diagnostic: when a ticker's lookup returns no profile, the DCF
+                # agent will classify in-situ. Log this so user can spot
+                # unresolved tickers that should be added to TICKER_SECTOR_LOOKUP.
+                print(f"  Profile ({t}): (no lookup override) — will classify in DCF")
                 continue
             # Verify the profile is actually defined in INDUSTRY_VALUATION_PROFILES
             _sector_key = "RealEstate" if sectors.get(t) == "REIT" else sectors.get(t, "")
@@ -315,11 +319,29 @@ def run_strategic_router(state: AgentState) -> AgentState:
                     agent_id, t,
                     f"Profile (lookup): {_lookup_profile}"
                 )
+                # Visible in Railway stdout (progress.update_status only goes
+                # to SSE for the frontend). Prefix with 2 spaces to match the
+                # rest of the router's print output style.
+                print(f"  Profile ({t}): {_lookup_profile} [lookup, verified]")
+            else:
+                # Profile key found in lookup but missing from INDUSTRY_VALUATION_PROFILES —
+                # mismatch between TICKER_SECTOR_LOOKUP and the valuation-profile table.
+                print(
+                    f"  Profile ({t}): ⚠ lookup returned '{_lookup_profile}' but not in "
+                    f"INDUSTRY_VALUATION_PROFILES[{_sector_key!r}] — SKIPPED"
+                )
         if profile_names:
             state["data"]["profile_names"] = profile_names
             # Convenience: primary ticker's profile under singular key
             if ticker in profile_names:
                 state["data"]["profile_name"] = profile_names[ticker]
+                print(f"  → state.profile_name = '{profile_names[ticker]}' (primary={ticker})")
+            else:
+                print(f"  → state.profile_names populated for {len(profile_names)} ticker(s), "
+                      f"but primary {ticker!r} has no entry")
+        else:
+            print(f"  → No profile_names written to state "
+                  f"(none of the {len(all_tickers)} tickers had lookup+valuation match)")
     except Exception as _exc:
         # Never block strategic_router on profile pre-classification — DCF
         # will classify in-situ as before if this fails.

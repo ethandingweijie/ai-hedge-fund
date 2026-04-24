@@ -3319,17 +3319,48 @@ def _research_one_ticker(
         name: fn for name, fn in _all_extractors.items()
         if needs_extractor(name, sector, profile_name, ticker=ticker)
     }
+    # Railway stdout visibility: which extractors will fire for this run.
+    # Gated extractors (e.g. saas_metrics skipped for Bank tickers) are
+    # listed so user can spot unexpectedly missing extractions.
+    _skipped = [n for n in _all_extractors if n not in _extractor_tasks]
+    print(
+        f"  Extractors fan-out ({ticker} · sector={sector!r} · "
+        f"profile={profile_name!r}): running {sorted(_extractor_tasks)} | "
+        f"skipped {sorted(_skipped)}"
+    )
+
     _results: dict = {}
     with ThreadPoolExecutor(max_workers=6) as _ex:
         _futures = {_ex.submit(fn): name for name, fn in _extractor_tasks.items()}
         for _fut in as_completed(_futures):
             _name = _futures[_fut]
             try:
-                _results[_name] = _fut.result()
+                _out = _fut.result()
+                _results[_name] = _out
+                # Per-extractor result summary — visible in Railway stdout so
+                # user can see which extractors returned data vs empty.
+                if isinstance(_out, list):
+                    _summary = f"list[{len(_out)}]"
+                elif isinstance(_out, dict):
+                    _populated = {k: v for k, v in _out.items() if v not in (None, "", [], {})}
+                    _summary = (
+                        f"{len(_populated)}/{len(_out)} fields populated: "
+                        f"{sorted(_populated)}" if _populated
+                        else f"EMPTY dict ({len(_out)} null fields)"
+                    )
+                else:
+                    _summary = f"{type(_out).__name__}"
+                _status_icon = "✓" if _out else "⚠ EMPTY"
+                print(f"  Extractor [{_name}] {_status_icon} → {_summary}")
             except Exception as _exc:
                 progress.update_status(agent_id, ticker,
                                        f"Extractor {_name} failed: {_exc}")
                 _results[_name] = {} if _name != "pipeline_assets" else []
+                # Traceback to stdout so the real error is visible, not just
+                # the "failed: X" summary.
+                print(f"  Extractor [{_name}] ✗ FAILED: {type(_exc).__name__}: {_exc}")
+                import traceback as _tb
+                _tb.print_exc()
 
     dcf_calibration   = _results.get("dcf_calibration", {})
     segment_scenarios = _results.get("segment_scenarios", {})
@@ -3342,7 +3373,18 @@ def _research_one_ticker(
     # raw financials (Rule of 40, Magic Number, CAC Payback, Billings Growth).
     # LLM-extracted values are preserved; only nulls get filled. Source-level
     # write so downstream consumers see the enriched dict in the returned state.
+    _saas_before_fallback = dict(saas_metrics) if isinstance(saas_metrics, dict) else {}
     saas_metrics = _compute_saas_metrics_fallback(raw_financials, saas_metrics)
+    # Show which fields the FMP fallback filled (vs what the LLM extracted)
+    if isinstance(saas_metrics, dict):
+        _llm_fields = {k for k, v in _saas_before_fallback.items() if v not in (None, "", [], {})}
+        _final_fields = {k for k, v in saas_metrics.items() if v not in (None, "", [], {})}
+        _filled_by_fallback = sorted(_final_fields - _llm_fields)
+        print(
+            f"  SaaS metrics ({ticker}): LLM={sorted(_llm_fields)} | "
+            f"FMP-fallback added={_filled_by_fallback} | "
+            f"final={sorted(_final_fields)}"
+        )
 
     progress.update_status(
         agent_id, ticker,
@@ -3375,6 +3417,21 @@ def _research_one_ticker(
             agent_id, ticker,
             f"SaaS metrics: {sorted(saas_metrics.keys())}"
         )
+
+    # ── Pipeline summary (stdout, visible in Railway logs) ────────────────────
+    # One-shot overview so ops can grep a single line to see whether the
+    # research pipeline succeeded end-to-end for each ticker.
+    _sec_keys = sorted(sections.keys()) if isinstance(sections, dict) else []
+    _report_len = len(final_report) if final_report else 0
+    _status = "✓ OK" if _report_len > 1000 and _sec_keys else (
+        "⚠ EMPTY report" if _report_len == 0 else
+        "⚠ sections missing" if not _sec_keys else "⚠ short"
+    )
+    print(
+        f"  Research summary ({ticker}): {_status} | "
+        f"tier={research_tier!r} | report={_report_len:,} chars | "
+        f"sections={_sec_keys} | citations={len(citation_registry)}"
+    )
 
     return {
         "deep_research":            final_report,
