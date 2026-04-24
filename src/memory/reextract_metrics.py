@@ -48,6 +48,7 @@ from typing import Any, Optional
 import anthropic
 
 from src.agents.industry.deep_research import (
+    _call_llm_with_rate_retry,
     _extract_bank_metrics,
     _extract_dcf_calibration,
     _extract_pipeline_assets,
@@ -315,7 +316,10 @@ def _diagnose_saas_extractor(
     )
 
     try:
-        resp = sdk_client.messages.create(
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="saas_metrics_diagnostic",
+            ticker=ticker,
             model=model_name,
             max_tokens=500,
             system=_system,

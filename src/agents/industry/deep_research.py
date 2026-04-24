@@ -41,6 +41,76 @@ from src.utils.company_name import fetch_company_name as _fetch_company_name
 logger = logging.getLogger(__name__)
 
 
+def _call_llm_with_rate_retry(
+    sdk_client,
+    *,
+    extractor_name: str,
+    ticker: str = "",
+    max_retries: int = 4,
+    base_backoff: float = 2.0,
+    **create_kwargs,
+):
+    """Wrapper around sdk_client.messages.create() with DashScope rate-limit retry.
+
+    Qwen via DashScope returns HTTP 403 with message "Rate limit exceeded"
+    when the account hits its TPM/RPM ceiling — instead of the standard
+    HTTP 429. The Anthropic SDK's built-in max_retries only retries on
+    408/409/429/500+ so 403 RateLimit errors fall through silently, the
+    extractor's except-catch returns {}, and the user sees empty KPIs.
+
+    This wrapper catches PermissionDeniedError with "rate limit" in the
+    message body and retries with exponential backoff (2s, 4s, 8s, 16s).
+    Observed from DDOG re-extract diagnostic at 2026-04-24: DashScope
+    returned 403 code AccessDenied message "Rate limit exceeded. Please
+    wait and try again, or upgrade your API plan."
+
+    All other PermissionDeniedError types (auth failures, real permission
+    issues) propagate immediately. Non-PermissionDenied errors propagate
+    too — the underlying SDK handles those.
+
+    Usage: drop-in replacement for sdk_client.messages.create(**kwargs).
+    Same return type (anthropic.types.Message).
+    """
+    import time as _time
+
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return sdk_client.messages.create(**create_kwargs)
+        except Exception as exc:
+            msg = str(exc).lower()
+            is_rate_limit = (
+                "rate limit" in msg
+                or "ratelimit" in msg
+                or "rate_limit" in msg
+                or "quota" in msg
+                or "throttl" in msg
+            )
+            if not is_rate_limit:
+                # Not a rate limit — propagate (auth errors, bad request,
+                # server errors handled by SDK retry)
+                raise
+            last_exc = exc
+            if attempt == max_retries:
+                # Exhausted retries — propagate
+                print(
+                    f"  [llm_rate_retry] {extractor_name}{' ' + ticker if ticker else ''} "
+                    f"exhausted {max_retries} retries: {type(exc).__name__}"
+                )
+                raise
+            wait = base_backoff * (2 ** attempt)
+            print(
+                f"  [llm_rate_retry] {extractor_name}{' ' + ticker if ticker else ''} "
+                f"rate-limited (attempt {attempt + 1}/{max_retries + 1}), "
+                f"sleeping {wait:.0f}s..."
+            )
+            _time.sleep(wait)
+    # Should never reach here, but mypy comfort
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("Unreachable: exited retry loop without result or exception")
+
+
 def _parse_llm_json(raw: str, extractor_name: str = "") -> dict | list | None:
     """Robust JSON parser for LLM extractor responses.
 
@@ -522,7 +592,10 @@ def _extract_dcf_calibration(
                 "risk_flag": "MEDIUM", "notes": "No deep research sections available."}
 
     try:
-        resp = sdk_client.messages.create(
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="dcf_calibration",
+            ticker=ticker,
             model=model_name,
             max_tokens=400,
             system=(
@@ -621,7 +694,10 @@ def _extract_segment_scenarios(
         return {}
 
     try:
-        resp = sdk_client.messages.create(
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="segment_scenarios",
+            ticker=ticker,
             model=model_name,
             max_tokens=1500,
             system=(
@@ -741,7 +817,10 @@ def _extract_saas_metrics(
         return {}
 
     try:
-        resp = sdk_client.messages.create(
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="saas_metrics",
+            ticker=ticker,
             model=model_name,
             max_tokens=500,
             system=(
@@ -1001,7 +1080,10 @@ def _extract_bank_metrics(
         return {}
 
     try:
-        resp = sdk_client.messages.create(
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="bank_metrics",
+            ticker=ticker,
             model=model_name,
             max_tokens=600,
             system=(
@@ -1156,7 +1238,10 @@ def _extract_reit_metrics(
         return {}
 
     try:
-        resp = sdk_client.messages.create(
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="reit_metrics",
+            ticker=ticker,
             model=model_name,
             max_tokens=800,
             system=(
@@ -1335,7 +1420,10 @@ def _extract_pipeline_assets(
         return []
 
     try:
-        resp = sdk_client.messages.create(
+        resp = _call_llm_with_rate_retry(
+            sdk_client,
+            extractor_name="pipeline_assets",
+            ticker=ticker,
             model=model_name,
             max_tokens=2000,
             system=(
