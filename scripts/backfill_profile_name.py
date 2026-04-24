@@ -55,6 +55,7 @@ if _REPO_ROOT not in sys.path:
 
 from app.backend.services.analysis_service import (       # noqa: E402
     _get_db_path,
+    _ensure_web_runs_table,
     _extract_web_run_summary,
 )
 
@@ -111,6 +112,12 @@ def backfill(
       force         — also re-derive rows where profile_name is already set
       db_path       — optional DB path override
     """
+    # Ensure the profile_name column exists before querying / writing — the
+    # ALTER TABLE migration may not have run yet on a freshly-deployed cloud
+    # DB because _ensure_web_runs_table() is only called from _save_web_run.
+    # Explicit call here is idempotent (ALTER is gated on PRAGMA table_info).
+    _ensure_web_runs_table()
+
     path = db_path or _get_db_path()
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
