@@ -174,26 +174,23 @@ def _resolve_extractor_client(
     # "auto" means try Qwen first, fall back to Anthropic
 
     if not want_anthropic and dashscope_key and dashscope_base_url:
-        # Use openai SDK natively — DashScope is OpenAI-compatible and this
-        # avoids the HTTP-error mis-mapping that happens when anthropic SDK
-        # wraps a non-Anthropic endpoint (403 AccessDenied → PermissionDenied
-        # instead of proper RateLimitError). The adapter re-exposes the
-        # anthropic-style .messages.create() surface so the 6 extractor
-        # functions work unchanged.
-        try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise RuntimeError(
-                "openai SDK not installed — required for Qwen re-extract. "
-                "Run: pip install openai"
-            ) from exc
-        openai_client = OpenAI(
+        # Use anthropic SDK — DashScope exposes TWO compatibility endpoints:
+        #   /compatible-mode/v1  → OpenAI-compat (needs openai SDK)
+        #   /apps/anthropic      → Anthropic-compat (needs anthropic SDK)
+        # User's DEEP_RESEARCH_BASE_URL is the Anthropic-compat endpoint
+        # (/apps/anthropic), so anthropic SDK is the correct client. Routing
+        # openai SDK here returns 404 because /apps/anthropic has no
+        # /chat/completions path.
+        # Rate-limit handling is delegated to _call_llm_with_rate_retry which
+        # string-matches Anthropic SDK's PermissionDeniedError messages
+        # ("rate limit" / "AccessDenied") and retries with exponential
+        # backoff + Retry-After header respect.
+        client = anthropic.Anthropic(
             api_key=dashscope_key,
             base_url=dashscope_base_url,
             timeout=60.0,
-            max_retries=0,  # we handle retries in _call_llm_with_rate_retry
+            max_retries=0,  # handled by _call_llm_with_rate_retry
         )
-        client = _OpenAIAsAnthropicAdapter(openai_client)
         return client, dashscope_model, "qwen"
 
     if not want_qwen and anthropic_key:
