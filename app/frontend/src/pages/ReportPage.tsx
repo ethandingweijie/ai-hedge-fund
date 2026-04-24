@@ -107,6 +107,26 @@ function getEventsForSection(sectionId: SectionId, phaseMap: Record<string, Prog
     .map(([, ev]) => ev);
 }
 
+/**
+ * sectionCompleted — true when every phase whose name matches this
+ * section's keyword set has reached a terminal status. Used to render
+ * the green tick next to SectionAnchor labels independently of whether
+ * the content-panel data has arrived yet (those are independent signals
+ * and decoupling them makes completion legible to the user even when a
+ * panel is still waiting on partial_data).
+ */
+function sectionCompleted(
+  sectionId: SectionId,
+  phaseMap: Record<string, ProgressEvent>,
+): boolean {
+  const keywords = SECTION_PHASES[sectionId] ?? [];
+  const matching = Object.entries(phaseMap).filter(([phase]) =>
+    keywords.some(kw => phase.toLowerCase().includes(kw)),
+  );
+  if (matching.length === 0) return false;
+  return matching.every(([, ev]) => /done|complete|✓/i.test(ev.status ?? ''));
+}
+
 // ── Phase-to-label map: chain of thought ────────────────────────────────────
 const PHASE_LABELS: Record<string, { running: string; done: string }> = {
   macro_regime_classifier:  { running: 'Reading the macro environment',        done: 'Macro environment assessed' },
@@ -291,6 +311,25 @@ function SectionAnchor({ id, label, badge }: { id: string; label: string; badge?
         <div className="h-px flex-1 bg-border" />
       </div>
     </div>
+  );
+}
+
+/**
+ * Small green-check badge shown on a SectionAnchor once every phase that
+ * matches the section's keyword set reports a terminal status. Signals
+ * phase-completion to the user independently of the panel body arriving.
+ */
+function SectionCompleteBadge() {
+  return (
+    <span
+      className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-600 dark:text-green-400"
+      title="Section phase complete"
+      aria-label="section phase complete"
+    >
+      <svg viewBox="0 0 16 16" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5}>
+        <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
   );
 }
 
@@ -1322,7 +1361,11 @@ export function ReportPage() {
         {/* history, Portfolio Composition, Cap-Rate Sensitivity. Non-REITs    */}
         {/* fall through to ValuationLadder. Gate is dcfRange.reit_breakdown,  */}
         {/* which the DCF agent only emits for RealEstate / REIT profiles.     */}
-        <SectionAnchor id="valuation" label="Valuation" />
+        <SectionAnchor
+          id="valuation"
+          label="Valuation"
+          badge={sectionCompleted('valuation', phaseMap) ? <SectionCompleteBadge /> : null}
+        />
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-start">
           <div className="flex flex-col gap-4">
             {renderSection('price_target', 'Price Target', (
@@ -1425,7 +1468,11 @@ export function ReportPage() {
         {/* Renders as soon as partial_data.industry_brief OR .deep_research */}
         {/* arrives via SSE (mid-run streaming). runId is only populated on */}
         {/* event: complete — previously gating here blocked mid-run display. */}
-        <SectionAnchor id="analysis" label="Analysis" />
+        <SectionAnchor
+          id="analysis"
+          label="Analysis"
+          badge={sectionCompleted('analysis', phaseMap) ? <SectionCompleteBadge /> : null}
+        />
         {(industryBrief || deepResearch) ? (
           <ResearchSummaryPanel
             runId={runId ?? ''}
@@ -1459,7 +1506,11 @@ export function ReportPage() {
         ))}
 
         {/* ── Financials ──────────────────────────────────────────────────── */}
-        <SectionAnchor id="financials" label="Financials" />
+        <SectionAnchor
+          id="financials"
+          label="Financials"
+          badge={sectionCompleted('financials', phaseMap) ? <SectionCompleteBadge /> : null}
+        />
         {renderSection('financials', 'Financial Statements', (
           <FinancialsChart ticker={liveTicker} />
         ))}
