@@ -53,6 +53,7 @@ from src.agents.industry.deep_research import (
     _extract_pipeline_assets,
     _extract_reit_metrics,
     _extract_saas_metrics,
+    _extract_sections,
     _extract_segment_scenarios,
     _compute_saas_metrics_fallback,
 )
@@ -269,16 +270,40 @@ def reextract_for_run(
         profile_name  = data.get("profile_name") or (
             data.get("profile_names", {}) or {}
         ).get(ticker, "")
-        sections      = data.get("deep_research_sections", {}) or {}
-        deep_research = data.get("deep_research", "") or ""
-        raw_fin       = data.get("raw_financials", {}) or {}
+        stored_sections = data.get("deep_research_sections", {}) or {}
+        deep_research   = data.get("deep_research", "") or ""
+        raw_fin         = data.get("raw_financials", {}) or {}
 
-        if not sections and not deep_research:
+        if not stored_sections and not deep_research:
             return {
                 "ok": False,
                 "error": "No deep_research content in stored run",
                 "run_id": run_id, "ticker": ticker,
             }
+
+        # Re-parse sections from stored deep_research using the CURRENT
+        # widened regex (commit d8706df). Historic runs archived before
+        # that fix have a partial sections dict where 2F is often missing
+        # (old parser dropped headings with list markers / prose "Section
+        # 2F:" / divider bars / etc.). Re-parsing recovers 2F so the
+        # saas_metrics extractor gets the KPI text it needs. Falls back
+        # to stored_sections when deep_research is empty (edge case).
+        if deep_research:
+            reparsed_sections = _extract_sections(deep_research)
+            # Prefer reparsed when it yielded more section keys OR recovered
+            # "2f" that the stored dict was missing. Keeps stored dict as
+            # fallback when re-parse degrades (shouldn't happen but defensive).
+            stored_has_2f  = bool(stored_sections.get("2f") or stored_sections.get("2F"))
+            reparsed_has_2f = bool(reparsed_sections.get("2f") or reparsed_sections.get("2F"))
+            if reparsed_has_2f or len(reparsed_sections) >= len(stored_sections):
+                sections = reparsed_sections
+                sections_source = f"reparsed (stored_had_2f={stored_has_2f}, now={reparsed_has_2f})"
+            else:
+                sections = stored_sections
+                sections_source = "stored (reparse was worse)"
+        else:
+            sections = stored_sections
+            sections_source = "stored (no deep_research text)"
 
         # Snapshot BEFORE extractor output (for diff)
         before = {
@@ -340,6 +365,9 @@ def reextract_for_run(
             "ticker": ticker,
             "sector": sector,
             "profile_name": profile_name,
+            "sections_source": sections_source,
+            "sections_keys": sorted(sections.keys()) if isinstance(sections, dict) else [],
+            "section_2f_len": len(sections.get("2f", "") or sections.get("2F", "") or ""),
             "extractors_run": sorted(extracted.keys()),
             "before": before,
             "after":  after,
