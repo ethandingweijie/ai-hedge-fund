@@ -159,18 +159,14 @@ def _resolve_extractor_client(
     """
     dashscope_key      = os.environ.get("DEEP_RESEARCH_API_KEY")
     dashscope_base_url = os.environ.get("DEEP_RESEARCH_BASE_URL")
-    # Model resolution (first non-empty wins):
-    #   1. DEEP_RESEARCH_SYNTHESIS_MODEL — explicit extractor model override
-    #   2. DEEP_RESEARCH_MODEL           — user's working search model
-    #   3. "qwen3.6-plus"                — confirmed working on user's endpoint
-    # User confirmed qwen3.6-plus is their provisioned model on the
-    # International DashScope deployment (30K RPM / 5M TPM). qwen3-max was the
-    # old default but returned NotFoundError 404 on user's regional endpoint.
-    dashscope_model = (
-        os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL")
-        or os.environ.get("DEEP_RESEARCH_MODEL")
-        or "qwen3.6-plus"
-    )
+    # Hard-coded to qwen3.6-plus — user's confirmed provisioned model on the
+    # DashScope International deployment (30K RPM / 5M TPM). Intentionally
+    # ignores DEEP_RESEARCH_SYNTHESIS_MODEL env var to prevent accidental
+    # fallthrough to qwen3-max (documented globally but NotFoundError 404
+    # on user's regional endpoint). If the model needs to change later,
+    # edit this constant — this is admin tooling, not a configurable
+    # production path.
+    dashscope_model    = "qwen3.6-plus"
     anthropic_key      = os.environ.get("ANTHROPIC_API_KEY")
 
     want_anthropic = provider == "anthropic"
