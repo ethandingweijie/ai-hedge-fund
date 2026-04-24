@@ -3823,12 +3823,19 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
         _insider   = primary_insider if t == primary_ticker else ""
         _edgar_ref = edgar_refs_map.get(t) or {}
         _ns_data   = news_sentiment_map.get(t) or {}
-        # Route: HK → Qwen (web search) + qwen3-max (synthesis), US → Anthropic
+        # Route: HK → Qwen (web search) + Qwen (synthesis/extractors), US → Anthropic
+        # Synthesis default is qwen3.6-plus — confirmed working on /apps/anthropic
+        # endpoint (user's setup). qwen3-max was the old default but 404s on
+        # Anthropic-compat regional endpoints, causing every extractor call
+        # (saas_metrics, bank_metrics, reit_metrics, pipeline_assets,
+        # dcf_calibration, segment_scenarios) to fail silently and return {}.
+        # This was the hidden bug behind empty saas_metrics on DDOG/CRM/SNOW
+        # live runs — extractors were 404-ing in production, not rate-limited.
         if is_hk_ticker(t):
             _key              = _hk_key
             _base_url         = _hk_base_url
             _model            = _hk_model or "qwen3.6-plus"   # OpenAI-compat web search
-            _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3-max"  # Anthropic-compat synthesis
+            _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3.6-plus"  # Anthropic-compat synthesis
         else:
             # When user selects a Qwen model for US tickers, use the DashScope
             # key and base URL (same as HK path) instead of the Anthropic key.
@@ -3836,7 +3843,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
                 _key              = _hk_key
                 _base_url         = _hk_base_url
                 _model            = _us_model
-                _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3-max"
+                _synthesis_model  = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3.6-plus"
             else:
                 _key              = _us_key or anthropic_key
                 _base_url         = None
