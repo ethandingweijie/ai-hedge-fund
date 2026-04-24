@@ -3702,6 +3702,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _base_pv_fcf_per_share: float = 0.0
         _base_pv_tv_per_share: float = 0.0
 
+        # Validate analyst bands — if bear/base/bull dispersion is implausibly
+        # tight (<0.5%), analyst data is suspect (observed on NET 2026-04-25:
+        # bear=1.00 / base=1.00 / bull=1.00, all identical). Fall back to
+        # CAGR-based growth which handles the ticker normally.
+        if _analyst_bands is not None:
+            _band_values = list(_analyst_bands.values())
+            _dispersion = max(_band_values) - min(_band_values)
+            if _dispersion < 0.005:
+                print(
+                    f"  [dcf] Analyst bands suspect for {ticker} "
+                    f"(dispersion={_dispersion:.4f}, values={_band_values}) "
+                    f"— falling back to CAGR-based growth"
+                )
+                _analyst_bands = None
+
         for scenario in ("bear", "base", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -3710,7 +3725,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 g = _analyst_bands[scenario]
             else:
                 g = growth_base * _GROWTH_MULT[scenario]
-            g = max(min(g, 1.0), -0.30)
+            # Clamp growth rate: [-30%, +40%]. Upper cap reduced from 100% to
+            # 40% on 2026-04-25 after observing MNDY base IV = $475 on $65
+            # spot driven by 60.2% 5yr CAGR being used as forward forecast.
+            # 40% is already best-in-class enterprise SaaS (NET 29%, SNOW 30%,
+            # DDOG 28%). Caps don't affect typical growth rates.
+            g = max(min(g, 0.40), -0.30)
 
             # Fix B — multiplicative margin variance: bear compresses base
             # margin 20%, bull expands 20%. Replaces the legacy ±0.2pp/yr drift
