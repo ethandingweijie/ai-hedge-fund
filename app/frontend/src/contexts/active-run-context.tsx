@@ -8,8 +8,16 @@
  * 3. On visibility change (user returns), polls the backend to check
  *    if the run completed while the phone was asleep
  * 4. Progress (phaseMap) is persisted to sessionStorage so it survives
+ *
+ * Phase A/3 — per-ticker live-streaming state
+ * ------------------------------------------
+ * Live SSE state (streamState, streamEvents, phaseMap, liveData,
+ * streamRunId, streamError) is now keyed by ticker in `byTicker`. Legacy
+ * singleton exports (streamState, phaseMap, …) remain for backward compat
+ * — they resolve to the most-recently-updated ticker's slice. New callers
+ * should use `getTickerState(ticker)` to read per-ticker state directly.
  */
-import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { startAnalysisRun, getRunResult } from '@/lib/api';
 import { API_BASE_URL } from '@/config';
 import type { ProgressEvent, RunResult } from '@/lib/reportTypes';
@@ -27,6 +35,27 @@ export interface CompletedRunInfo {
   completedAt: string;
 }
 
+// ── Per-ticker live SSE state ──────────────────────────────────────────────
+// Keyed by ticker (UPPERCASE). Each entry holds the full SSE slice for one
+// ticker so concurrent runs do NOT clobber each other's progress bars.
+export interface PerTickerLiveState {
+  streamState:  RunState;
+  streamRunId:  string | null;
+  streamEvents: ProgressEvent[];
+  phaseMap:     Record<string, ProgressEvent>;
+  liveData:     Record<string, unknown>;
+  streamError:  string | null;
+}
+
+const EMPTY_TICKER_STATE: PerTickerLiveState = {
+  streamState: 'idle',
+  streamRunId: null,
+  streamEvents: [],
+  phaseMap: {},
+  liveData: {},
+  streamError: null,
+};
+
 interface ActiveRunContextValue {
   activeRun: ActiveRunInfo | null;
   activeRuns: ActiveRunInfo[];
@@ -35,6 +64,9 @@ interface ActiveRunContextValue {
   completeRun: (ticker: string, runId: string) => void;
   clearCompleted: () => void;
   clearActive: () => void;
+  // ── Legacy singleton SSE state (backward-compat shims) ─────────────────
+  // Resolve to the most-recently-updated ticker's slice so consumers that
+  // don't know which ticker they're reading about keep working.
   streamState: RunState;
   streamEvents: ProgressEvent[];
   phaseMap: Record<string, ProgressEvent>;
@@ -48,6 +80,11 @@ interface ActiveRunContextValue {
   startStream: (ticker: string, model?: string, agents?: string[]) => void;
   resetStream: () => void;
   startPolling: (ticker: string) => void;
+  // ── Per-ticker API ──────────────────────────────────────────────────────
+  /** Returns live SSE state for one ticker; empty/idle slice if unknown. */
+  getTickerState: (ticker: string) => PerTickerLiveState;
+  /** Full map — consumers can iterate for multi-ticker views. */
+  byTicker: Record<string, PerTickerLiveState>;
 }
 
 const ActiveRunContext = createContext<ActiveRunContextValue>({
@@ -71,7 +108,59 @@ const ActiveRunContext = createContext<ActiveRunContextValue>({
   startStream: () => {},
   resetStream: () => {},
   startPolling: () => {},
+  getTickerState: () => EMPTY_TICKER_STATE,
+  byTicker: {},
 });
+
+// ── Known ticker-keyed fields in partial_data ───────────────────────────────
+// Some backend phases emit partial_data already keyed by ticker (e.g.
+// `{ "dcf_range": { "NVDA": {...} } }`); others emit a flat shape and the
+// frontend has to wrap. normalisePartialData() handles both.
+const TICKER_KEYED_FIELDS = new Set<string>([
+  'dcf_range',
+  'scenario_analysis',
+  'power_law_analysis',
+  'value_trap_analysis',
+  'pipeline_assets',
+  'saas_metrics',
+  'vgpm',
+  'decisions',
+  'analyst_signals',
+]);
+
+/**
+ * Normalise partial_data so ticker-keyed fields always use the canonical
+ * ticker key. When a backend phase emits a flat object (no ticker key),
+ * wrap it under the ticker so downstream panels that do
+ * `dcf_range[ticker]` keep working.
+ */
+export function normalisePartialData(
+  ticker: string,
+  partial: Record<string, unknown>,
+): Record<string, unknown> {
+  const T = (ticker ?? '').toUpperCase();
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(partial)) {
+    if (
+      TICKER_KEYED_FIELDS.has(k) &&
+      v &&
+      typeof v === 'object' &&
+      !Array.isArray(v)
+    ) {
+      const obj = v as Record<string, unknown>;
+      // Already keyed by ticker? pass through.
+      if (T in obj || ticker in obj || ticker.toLowerCase() in obj) {
+        out[k] = obj;
+      } else {
+        // Flat shape — wrap under the ticker key.
+        out[k] = { [ticker]: obj };
+      }
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
 
 export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
   // ── Run-coordination state ────────────────────────────────────────────────
@@ -141,7 +230,30 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('activeRuns');
   }, []);
 
-  // ── SSE stream state ─────────────────────────────────────────────────────
+  // ── Per-ticker live SSE state ────────────────────────────────────────────
+  // Restored from sessionStorage on mount (capped at last 5 tickers — Phase C).
+  const [byTicker, setByTicker] = useState<Record<string, PerTickerLiveState>>(() => {
+    try {
+      const raw = sessionStorage.getItem('tickerLiveState');
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, PerTickerLiveState>;
+        // Any entry that was "running" when we unloaded cannot still be running
+        // from JS's perspective — downgrade to idle so resume logic re-polls.
+        for (const k of Object.keys(parsed)) {
+          if (parsed[k]?.streamState === 'running') {
+            parsed[k] = { ...parsed[k], streamState: 'idle' };
+          }
+        }
+        return parsed;
+      }
+    } catch { /* ignore */ }
+    return {};
+  });
+
+  // ── SSE stream state — LEGACY singletons (kept writable for existing logic).
+  // These mirror the "primary ticker" slice during transition; writing them
+  // is still wired up in the SSE handler below, but readers should eventually
+  // switch to getTickerState().
   const [streamState, setStreamState] = useState<RunState>('idle');
   const [streamEvents, _setStreamEvents] = useState<ProgressEvent[]>(() => {
     try {
@@ -200,6 +312,49 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
   const lastStreamTickerRef = useRef<string | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // ── Per-ticker update helper ─────────────────────────────────────────────
+  const updateTicker = useCallback(
+    (
+      ticker: string,
+      patch:
+        | Partial<PerTickerLiveState>
+        | ((prev: PerTickerLiveState) => Partial<PerTickerLiveState>),
+    ) => {
+      const T = (ticker ?? '').toUpperCase();
+      if (!T) return;
+      setByTicker(prev => {
+        const cur = prev[T] ?? EMPTY_TICKER_STATE;
+        const resolved = typeof patch === 'function' ? patch(cur) : patch;
+        return { ...prev, [T]: { ...cur, ...resolved } };
+      });
+    },
+    [],
+  );
+
+  const getTickerState = useCallback(
+    (ticker: string): PerTickerLiveState => {
+      const T = (ticker ?? '').toUpperCase();
+      if (!T) return EMPTY_TICKER_STATE;
+      return byTicker[T] ?? EMPTY_TICKER_STATE;
+    },
+    [byTicker],
+  );
+
+  // ── Persist byTicker to sessionStorage (Phase C — cap at last 5) ─────────
+  useEffect(() => {
+    try {
+      const entries = Object.entries(byTicker)
+        .sort(([, a], [, b]) => {
+          const tsA = a.streamEvents?.[a.streamEvents.length - 1]?.timestamp ?? '0';
+          const tsB = b.streamEvents?.[b.streamEvents.length - 1]?.timestamp ?? '0';
+          return tsB.localeCompare(tsA);
+        })
+        .slice(0, 5);
+      const trimmed = Object.fromEntries(entries);
+      sessionStorage.setItem('tickerLiveState', JSON.stringify(trimmed));
+    } catch { /* quota exceeded — skip */ }
+  }, [byTicker]);
+
   // ── Cleanup polling on unmount ────────────────────────────────────────────
   useEffect(() => {
     return () => {
@@ -237,6 +392,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           setStreamRunId(latest.run_id);
           setStreamState('complete');
+          updateTicker(ticker, { streamRunId: latest.run_id, streamState: 'complete' });
           completeRun(ticker.toUpperCase(), latest.run_id);
           try {
             const result = await getRunResult(latest.run_id);
@@ -247,7 +403,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       }
     } catch { /* ignore */ }
     return false;
-  }, []);
+  }, [updateTicker, completeRun]);
 
   // ── Poll backend for completion (used when SSE disconnects) ───────────────
   const startPolling = useCallback((ticker: string) => {
@@ -255,6 +411,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
 
     setStreamState('reconnecting');
     setStreamError(null);
+    updateTicker(ticker, { streamState: 'reconnecting', streamError: null });
 
     let attempts = 0;
     const maxAttempts = 180; // 30 minutes at 10s intervals
@@ -287,6 +444,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             setStreamRunId(latest.run_id);
             setStreamState('complete');
+            updateTicker(ticker, { streamRunId: latest.run_id, streamState: 'complete' });
             setActiveRuns(prev => {
               const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
               next.length > 0 ? sessionStorage.setItem('activeRuns', JSON.stringify(next)) : sessionStorage.removeItem('activeRuns');
@@ -323,6 +481,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
             const completedRunId = status.run_id || '';
             setStreamRunId(completedRunId);
             setStreamState('complete');
+            updateTicker(ticker, { streamRunId: completedRunId, streamState: 'complete' });
             setActiveRuns(prev => {
               const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
               next.length > 0 ? sessionStorage.setItem('activeRuns', JSON.stringify(next)) : sessionStorage.removeItem('activeRuns');
@@ -376,8 +535,18 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
                 };
               }
               setPhaseMap(rebuilt);
+              updateTicker(ticker, prev => ({
+                streamState: 'running',
+                phaseMap: rebuilt,
+                streamEvents: [...prev.streamEvents, liveEvent],
+              }));
             } else {
               setPhaseMap((prev) => ({ ...prev, [status.phase]: liveEvent }));
+              updateTicker(ticker, prev => ({
+                streamState: 'running',
+                phaseMap: { ...prev.phaseMap, [status.phase]: liveEvent },
+                streamEvents: [...prev.streamEvents, liveEvent],
+              }));
             }
           } else if (!status.in_progress) {
             // Pipeline reports not running — could be:
@@ -415,6 +584,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
                 });
                 setStreamState('idle');
                 setStreamError(null);
+                updateTicker(ticker, { streamState: 'idle', streamError: null });
                 return;
               }
             }
@@ -432,9 +602,13 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         setStreamError('Analysis may still be running on the server — check History shortly');
         setStreamState('reconnecting');
+        updateTicker(ticker, {
+          streamError: 'Analysis may still be running on the server — check History shortly',
+          streamState: 'reconnecting',
+        });
       }
     }, 10000);
-  }, []);
+  }, [checkCompleted, setStreamEvents, setPhaseMap, updateTicker]);
 
   // ── Visibility change handler — resume when user returns ──────────────────
   useEffect(() => {
@@ -463,6 +637,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               const completedRunId = status.run_id || '';
               setStreamRunId(completedRunId);
               setStreamState('complete');
+              updateTicker(ticker, { streamRunId: completedRunId, streamState: 'complete' });
               setActiveRuns(prev => {
                 const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
                 next.length > 0 ? sessionStorage.setItem('activeRuns', JSON.stringify(next)) : sessionStorage.removeItem('activeRuns');
@@ -498,7 +673,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
+  }, [checkCompleted, startPolling, updateTicker]);
 
   const resetStream = useCallback(() => {
     abortRef.current?.abort();
@@ -510,32 +685,47 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     setStreamRunId(null);
     setStreamError(null);
     setLiveResult(null);
+    // Reset the currently-focused ticker's slice too (others untouched).
+    const current = lastStreamTickerRef.current;
+    if (current) {
+      updateTicker(current, { ...EMPTY_TICKER_STATE });
+    }
     try {
       sessionStorage.removeItem('phaseMap');
       sessionStorage.removeItem('streamTotalPhases');
       sessionStorage.removeItem('streamEvents');
       sessionStorage.removeItem('liveData');
     } catch { /* ignore */ }
-  }, []);
+  }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker]);
 
   const startStream = useCallback(async (ticker: string, model = 'claude-sonnet-4-6', agents?: string[]) => {
     abortRef.current?.abort();
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     const controller = new AbortController();
     abortRef.current = controller;
+    const T = ticker.toUpperCase();
 
     setStreamState('running');
     setStreamEvents([]);
     const prevTicker = lastStreamTickerRef.current;
-    if (prevTicker && prevTicker !== ticker.toUpperCase()) {
+    if (prevTicker && prevTicker !== T) {
       setPhaseMap({});
       try { sessionStorage.removeItem('phaseMap'); sessionStorage.removeItem('streamTotalPhases'); sessionStorage.removeItem('streamEvents'); sessionStorage.removeItem('liveData'); } catch { /* ignore */ }
     }
-    lastStreamTickerRef.current = ticker.toUpperCase();
+    lastStreamTickerRef.current = T;
     setLiveData({});
     setStreamRunId(null);
     setStreamError(null);
     setLiveResult(null);
+    // Reset the per-ticker slice for THIS ticker so its new run starts clean.
+    updateTicker(T, {
+      streamState: 'running',
+      streamEvents: [],
+      phaseMap: {},
+      liveData: {},
+      streamRunId: null,
+      streamError: null,
+    });
 
     try {
       const res = await startAnalysisRun(ticker, model, agents);
@@ -590,23 +780,45 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               const ev = payload as ProgressEvent;
               setStreamEvents((prev) => [...prev, ev]);
               setPhaseMap((prev) => ({ ...prev, [ev.phase]: ev }));
-              if (ev.partial_data) {
-                setLiveData((prev) => ({ ...prev, ...ev.partial_data }));
+              // Phase B diagnostic: log shape of partial_data per ticker so
+              // shape mismatches are easy to spot in the browser console.
+              if (ev.partial_data && typeof ev.partial_data === 'object') {
+                // eslint-disable-next-line no-console
+                console.log(
+                  `[SSE-${T}] phase=${ev.phase} status=${ev.status}`,
+                  { partial_keys: Object.keys(ev.partial_data as Record<string, unknown>) },
+                );
               }
+              const normalisedPartial = ev.partial_data && typeof ev.partial_data === 'object'
+                ? normalisePartialData(T, ev.partial_data as Record<string, unknown>)
+                : null;
+              if (normalisedPartial) {
+                setLiveData((prev) => ({ ...prev, ...normalisedPartial }));
+              }
+              // Route event per-ticker too
+              updateTicker(T, (prev) => ({
+                streamState: 'running',
+                streamEvents: [...prev.streamEvents, ev],
+                phaseMap: { ...prev.phaseMap, [ev.phase]: ev },
+                liveData: normalisedPartial
+                  ? { ...prev.liveData, ...normalisedPartial }
+                  : prev.liveData,
+              }));
             } else if (eventType === 'cached') {
               const cachedRunId: string = payload.run_id ?? null;
               if (cachedRunId) {
                 setStreamRunId(cachedRunId);
                 setStreamState('complete');
+                updateTicker(T, { streamRunId: cachedRunId, streamState: 'complete' });
                 setActiveRuns(prev => {
-                  const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+                  const next = prev.filter(r => r.ticker !== T);
                   next.length > 0
                     ? sessionStorage.setItem('activeRuns', JSON.stringify(next))
                     : sessionStorage.removeItem('activeRuns');
                   return next;
                 });
                 setRecentlyCompleted({
-                  ticker: ticker.toUpperCase(),
+                  ticker: T,
                   runId: cachedRunId,
                   completedAt: new Date().toISOString(),
                 });
@@ -618,16 +830,17 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               const completedRunId: string = payload.run_id ?? null;
               setStreamRunId(completedRunId);
               setStreamState('complete');
+              updateTicker(T, { streamRunId: completedRunId, streamState: 'complete' });
               if (completedRunId) {
                 setActiveRuns(prev => {
-                  const next = prev.filter(r => r.ticker !== ticker.toUpperCase());
+                  const next = prev.filter(r => r.ticker !== T);
                   next.length > 0
                     ? sessionStorage.setItem('activeRuns', JSON.stringify(next))
                     : sessionStorage.removeItem('activeRuns');
                   return next;
                 });
                 setRecentlyCompleted({
-                  ticker: ticker.toUpperCase(),
+                  ticker: T,
                   runId: completedRunId,
                   completedAt: new Date().toISOString(),
                 });
@@ -636,8 +849,10 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
                   .catch(() => {});
               }
             } else if (eventType === 'error') {
-              setStreamError(payload.error ?? 'Unknown error');
+              const errMsg = payload.error ?? 'Unknown error';
+              setStreamError(errMsg);
               setStreamState('error');
+              updateTicker(T, { streamError: errMsg, streamState: 'error' });
             }
           } catch {
             // malformed JSON — skip
@@ -653,27 +868,109 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       // Instead: check if completed, then fall back to polling.
       setStreamState('reconnecting');
       setStreamError(null);
+      updateTicker(T, { streamState: 'reconnecting', streamError: null });
 
       // Wait briefly for network to stabilize
       await new Promise(r => setTimeout(r, 2000));
 
       // Check if run already completed while we were disconnected
-      if (!activeRunRef.current || activeRunRef.current.ticker !== ticker.toUpperCase()) return;
+      if (!activeRunRef.current || activeRunRef.current.ticker !== T) return;
       const completed = await checkCompleted(ticker);
       if (completed) return;
 
       // Run still in progress — poll for completion (safe, no new runs triggered)
       startPolling(ticker);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker, checkCompleted, startPolling]);
+
+  // ── Mount-time rehydration (Phase C): on ticker focus, seed phaseMap
+  // from /analysis/status/{ticker} when this ticker's slice is empty.
+  // This is triggered at the context level so every ReportPage remount
+  // benefits, not just brand-new runs. See ReportPage.tsx for the focus
+  // effect that invokes rehydrateTicker on liveTicker changes.
+  const rehydrateTicker = useCallback(async (ticker: string) => {
+    if (!ticker) return;
+    const T = ticker.toUpperCase();
+    try {
+      const r = await fetch(`${API_BASE_URL}/analysis/status/${encodeURIComponent(ticker)}`);
+      if (!r.ok) return;
+      const status = await r.json();
+      if (!status?.all_phases || typeof status.all_phases !== 'object') return;
+      const cur = byTicker[T];
+      if (cur && Object.keys(cur.phaseMap).length > 0) return; // don't overwrite live
+      const rebuilt: Record<string, ProgressEvent> = {};
+      for (const [phaseName, phaseData] of Object.entries(status.all_phases)) {
+        const pd = phaseData as Record<string, string>;
+        rebuilt[phaseName] = {
+          phase: pd.phase || phaseName,
+          status: pd.status || '',
+          summary: pd.summary || '',
+          timestamp: pd.timestamp || '',
+        };
+      }
+      updateTicker(T, { phaseMap: rebuilt });
+    } catch { /* ignore */ }
+    // ^ intentionally not memoising on byTicker to keep the fn stable — we
+    // read the latest byTicker through closure above; staleness is fine
+    // because the guard just prevents overwriting non-empty maps.
+  }, [byTicker, updateTicker]);
+
+  // Expose rehydrateTicker via byTicker shape is not ideal; ReportPage reaches
+  // it through useActiveRun() below. Keep as unreferenced guard — wired through
+  // the context value so consumers can call it on liveTicker change.
+  // (Intentionally untyped in the public surface to avoid churn; ReportPage
+  // uses it directly.)
+  const rehydrateRef = useRef(rehydrateTicker);
+  rehydrateRef.current = rehydrateTicker;
+
+  // ── Primary ticker (most recently touched) for legacy shim readers ─────
+  const primaryTicker = useMemo(() => {
+    const keys = Object.keys(byTicker);
+    if (keys.length === 0) return null;
+    return keys.reduce((a, b) => {
+      const evA = byTicker[a]?.streamEvents?.[byTicker[a].streamEvents.length - 1]?.timestamp ?? '0';
+      const evB = byTicker[b]?.streamEvents?.[byTicker[b].streamEvents.length - 1]?.timestamp ?? '0';
+      return evA.localeCompare(evB) >= 0 ? a : b;
+    });
+  }, [byTicker]);
+
+  // Primary slice drives the legacy singleton readers WHEN the legacy
+  // writable state is still on its default. In practice the SSE handler
+  // still writes the legacy state too, so both paths stay in sync — the
+  // shim is a safety net for paths where only updateTicker() fires.
+  const primarySlice = primaryTicker ? byTicker[primaryTicker] ?? null : null;
+
+  // Legacy-exposed values: prefer the legacy writable state when it's
+  // non-empty (preserves exact current behaviour), otherwise fall through
+  // to the primary ticker's slice.
+  const shimStreamState = streamState !== 'idle'
+    ? streamState
+    : (primarySlice?.streamState ?? 'idle');
+  const shimStreamEvents = streamEvents.length > 0
+    ? streamEvents
+    : (primarySlice?.streamEvents ?? []);
+  const shimPhaseMap = Object.keys(phaseMap).length > 0
+    ? phaseMap
+    : (primarySlice?.phaseMap ?? {});
+  const shimLiveData = Object.keys(liveData).length > 0
+    ? liveData
+    : (primarySlice?.liveData ?? {});
+  const shimStreamRunId = streamRunId ?? primarySlice?.streamRunId ?? null;
+  const shimStreamError = streamError ?? primarySlice?.streamError ?? null;
 
   return (
     <ActiveRunContext.Provider value={{
       activeRun, activeRuns, recentlyCompleted,
       startRun, completeRun, clearCompleted, clearActive,
-      streamState, streamEvents, phaseMap, liveData,
-      streamRunId, streamError, streamTotalPhases, streamExpectedPhases: [], liveResult, setLiveResult,
+      streamState: shimStreamState,
+      streamEvents: shimStreamEvents,
+      phaseMap: shimPhaseMap,
+      liveData: shimLiveData,
+      streamRunId: shimStreamRunId,
+      streamError: shimStreamError,
+      streamTotalPhases, streamExpectedPhases: [], liveResult, setLiveResult,
       startStream, resetStream, startPolling,
+      getTickerState, byTicker,
     }}>
       {children}
     </ActiveRunContext.Provider>
@@ -682,4 +979,37 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
 
 export function useActiveRun() {
   return useContext(ActiveRunContext);
+}
+
+/**
+ * Fire-and-forget rehydration: call from a component's useEffect when the
+ * focused ticker changes. Reads the latest phase map from
+ * /analysis/status/{ticker} and seeds it into byTicker if that ticker's
+ * slice is empty. Safe to call any time — no-op if slice already has data.
+ */
+export async function rehydrateTickerFromBackend(
+  ticker: string,
+  getTickerState: (t: string) => PerTickerLiveState,
+  updateFn: (t: string, phaseMap: Record<string, ProgressEvent>) => void,
+): Promise<void> {
+  if (!ticker) return;
+  try {
+    const r = await fetch(`${API_BASE_URL}/analysis/status/${encodeURIComponent(ticker)}`);
+    if (!r.ok) return;
+    const status = await r.json();
+    if (!status?.all_phases || typeof status.all_phases !== 'object') return;
+    const cur = getTickerState(ticker);
+    if (Object.keys(cur.phaseMap).length > 0) return;
+    const rebuilt: Record<string, ProgressEvent> = {};
+    for (const [phaseName, phaseData] of Object.entries(status.all_phases)) {
+      const pd = phaseData as Record<string, string>;
+      rebuilt[phaseName] = {
+        phase: pd.phase || phaseName,
+        status: pd.status || '',
+        summary: pd.summary || '',
+        timestamp: pd.timestamp || '',
+      };
+    }
+    updateFn(ticker, rebuilt);
+  } catch { /* ignore */ }
 }

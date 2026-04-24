@@ -309,21 +309,27 @@ export function ReportPage() {
 
   // ── Stream state — lifted into ActiveRunContext so it survives navigation ────
   // Read context first so we can initialise local state from it below.
+  // Phase A/3: legacy singleton exports (state/events/phaseMap/liveData) are
+  // still destructured for the non-ticker-aware bits (form init, navigation
+  // flags) and are shimmed from the primary ticker inside the context. The
+  // ticker-aware render below reads PER-ticker state via getTickerState().
   const {
     activeRun,
-    streamState: state,
-    streamEvents: events,
-    phaseMap,
-    liveData,
+    streamState: legacyState,
+    streamEvents: legacyEvents,
+    phaseMap: legacyPhaseMap,
+    liveData: legacyLiveData,
     streamTotalPhases,
-    streamRunId: runId,
-    streamError: error,
+    streamRunId: legacyRunId,
+    streamError: legacyError,
     liveResult, setLiveResult,
     startStream: start,
     resetStream: reset,
     startPolling: poll,
     startRun: markRunStarted,
     clearActive: markRunCleared,
+    getTickerState,
+    recentlyCompleted,
   } = useActiveRun();
 
   // ── Form state ───────────────────────────────────────────────────────────────
@@ -366,12 +372,24 @@ export function ReportPage() {
   // liveMode = true when there is an active/completed stream (survives navigation)
   // fresh → force false (show form). resume → force true (show ongoing research).
   const [liveMode, setLiveMode]           = useState(
-    isFreshRequest ? false : (isResumeRequest ? state !== 'idle' : state !== 'idle')
+    isFreshRequest ? false : (isResumeRequest ? legacyState !== 'idle' : legacyState !== 'idle')
   );
   const [livePrice, setLivePrice]         = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string>('valuation');
   const runStartedAt                      = useRef<string>('');
   const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // ── Preliminary per-ticker state lookup (for this ticker we're focused on).
+  // The form's `ticker` state is the authoritative "currently focused ticker",
+  // so we read its per-ticker slice. When ticker is empty (fresh landing),
+  // we fall back to the legacy shim values which mirror the primary slice.
+  const _tickerStateEarly = getTickerState(ticker || activeRun?.ticker || '');
+  const state    = _tickerStateEarly.streamState !== 'idle' ? _tickerStateEarly.streamState : legacyState;
+  const events   = _tickerStateEarly.streamEvents.length  > 0 ? _tickerStateEarly.streamEvents  : legacyEvents;
+  const phaseMap = Object.keys(_tickerStateEarly.phaseMap).length > 0 ? _tickerStateEarly.phaseMap : legacyPhaseMap;
+  const liveData = Object.keys(_tickerStateEarly.liveData).length > 0 ? _tickerStateEarly.liveData : legacyLiveData;
+  const runId    = _tickerStateEarly.streamRunId ?? legacyRunId;
+  const error    = _tickerStateEarly.streamError ?? legacyError;
 
   const isRunning  = state === 'running' || state === 'reconnecting';
   const isComplete = state === 'complete';
