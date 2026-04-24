@@ -102,8 +102,78 @@ _DEFAULT_TGR = {"bear": 0.015, "base": 0.025, "bull": 0.035}
 # Scenario growth multipliers applied to the derived base growth rate
 _GROWTH_MULT = {"bear": 0.55, "base": 1.00, "bull": 1.50}
 
-# Per-year FCF margin delta for each scenario
+# Per-year FCF margin delta for each scenario (legacy additive form, kept for
+# back-compat with non-Tech paths that still inspect this dict).
 _MARGIN_DELTA_PER_YEAR = {"bear": -0.002, "base": 0.0, "bull": 0.002}
+
+# Fix B — multiplicative margin variance across scenarios. Bear compresses the
+# base margin by 20%, bull expands by 20%. Applied as:
+#   md = fcf_margin_base * (_MARGIN_DELTA_MULT[scenario] - 1.0)
+# so that margin_t = fcf_margin_base + md is a widened bear/bull band vs the
+# previous ±0.2pp/yr drift (which barely differentiated scenarios for mid-margin
+# tech names).
+_MARGIN_DELTA_MULT = {"bear": 0.80, "base": 1.00, "bull": 1.20}
+
+# Option III Spec 1 — exponential growth-decay δ by Tech sub-profile.
+#   growth_t = growth_{t-1} * (1 - δ)
+# Calibrated so Y10 growth lands in the 4-7% mature-SaaS range from a
+# 20-30%+ Y1 starting point. Profiles not listed here get no decay (constant
+# growth — preserves existing behavior for non-Tech paths).
+_GROWTH_DECAY_DELTA: dict[str, float] = {
+    "Growth SaaS":                              0.17,  # 28% → ~5% by Y10
+    "Hyper-Growth Platform":                    0.15,  # slower decay (network effects)
+    "High-Growth Tech / AI":                    0.12,  # longest S-curve
+    "Cybersecurity / Mission-Critical SaaS":    0.15,
+    "Mature SaaS":                              0.20,  # already low; fast convergence
+    "Hyperscaler / Tech Conglomerate":          0.10,  # deep moat, slow decay
+}
+
+# Option III Spec 2 — terminal-multiple convergence map. Growth-phase Tech
+# profiles converge to their mature equivalent at Y10+ so the terminal value
+# does not perpetuate a 22× EV/Rev on a 5% grower. Mature-stage profiles
+# resolve to themselves.
+_TERMINAL_MULTIPLE_CONVERGENCE: dict[str, str] = {
+    "Growth SaaS":                              "Mature SaaS",
+    "Hyper-Growth Platform":                    "Mature SaaS",
+    "High-Growth Tech / AI":                    "Mature SaaS",
+    "Cybersecurity / Mission-Critical SaaS":    "Mature SaaS",
+    "Mature SaaS":                              "Mature SaaS",
+    "Mature Platform":                          "Mature Platform",
+    "Hyperscaler / Tech Conglomerate":          "Hyperscaler / Tech Conglomerate",
+    "Early Platform":                           "default",
+    "Levered Subscription":                     "Levered Subscription",
+}
+
+# Option III Spec 3 — two-stage WACC fade. Apply +250 bps to first 3 years for
+# FCF-negative / high-dilution / early-stage Tech profiles, then revert to the
+# base WACC. Reflects empirically observed risk premium for pre-scale SaaS.
+_EARLY_STAGE_WACC_PREMIUM = 0.025
+_EARLY_STAGE_WACC_YEARS   = 3
+_EARLY_STAGE_PROFILES: set[str] = {
+    "Growth SaaS",
+    "Hyper-Growth Platform",
+    "High-Growth Tech / AI",
+    "Cybersecurity / Mission-Critical SaaS",
+}
+
+
+def _staged_wacc_for_year(base_wacc: float, profile_name: str, year: int) -> float:
+    """Apply early-stage risk premium to first 3 years for high-dilution Tech profiles.
+    Year is 1-indexed. Non-early-stage profiles return base_wacc unchanged."""
+    if profile_name in _EARLY_STAGE_PROFILES and year <= _EARLY_STAGE_WACC_YEARS:
+        return base_wacc + _EARLY_STAGE_WACC_PREMIUM
+    return base_wacc
+
+
+def _decayed_growth_schedule(base_growth: float, profile_name: str, years: int = 10) -> list[float]:
+    """Return per-year growth rate list with exponential decay for growth-phase profiles.
+    Non-decay profiles (default) return a constant schedule — preserves existing behavior
+    for Bank/REIT/Biopharma/non-Tech paths."""
+    delta = _GROWTH_DECAY_DELTA.get(profile_name, 0.0)
+    if delta == 0.0:
+        return [base_growth] * years
+    return [base_growth * (1 - delta) ** t for t in range(years)]
+
 
 # Guidance-based margin adjustment
 _GUIDANCE_MARGIN_DELTA = {
@@ -783,6 +853,9 @@ def _project_dcf(
     net_debt: float,
     shares: float,
     years: int = _PROJECTION_YEARS,
+    growth_schedule: Optional[list[float]] = None,
+    wacc_schedule: Optional[list[float]] = None,
+    margin_delta_absolute: Optional[float] = None,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -791,37 +864,74 @@ def _project_dcf(
     annual_rows is a list of dicts, one per projection year:
       { year_label, revenue, growth_pct, fcf_margin, fcf, discount_factor, pv_fcf }
     All monetary values are absolute (not per-share).
+
+    Option III extensions (all optional, default preserves legacy behavior):
+      growth_schedule: per-year growth list (len == years). Overrides
+        growth_rate when provided; enables exponential decay for Tech.
+      wacc_schedule: per-year discount rate list (len == years). Overrides
+        wacc when provided; enables two-stage WACC fade for early-stage Tech.
+      margin_delta_absolute: one-shot absolute delta applied to every year
+        (not scaled by t). Used by the multiplicative margin-variance form
+        (_MARGIN_DELTA_MULT). When None, falls back to legacy
+        margin_delta_per_year drift.
     """
     if shares is None or shares <= 0:
         return 0.0, 0.0, 0.0, []
 
+    # Resolve per-year schedules. growth/wacc schedules are 0-indexed lists of
+    # length `years`; for year t (1-indexed), use index t-1.
+    if growth_schedule is not None and len(growth_schedule) >= years:
+        _g_by_year = growth_schedule
+    else:
+        _g_by_year = [growth_rate] * years
+
+    if wacc_schedule is not None and len(wacc_schedule) >= years:
+        _w_by_year = wacc_schedule
+    else:
+        _w_by_year = [wacc] * years
+
     annual_rows = []
     pv_sum = 0.0
+    rev_t = revenue_base
+    disc_cum = 1.0
     for t in range(1, years + 1):
-        rev_t    = revenue_base * (1 + growth_rate) ** t
-        margin_t = max(fcf_margin_base + margin_delta_per_year * t, fcf_floor)
+        g_t   = _g_by_year[t - 1]
+        w_t   = _w_by_year[t - 1]
+        rev_t = rev_t * (1 + g_t)
+        if margin_delta_absolute is not None:
+            margin_t = max(fcf_margin_base + margin_delta_absolute, fcf_floor)
+        else:
+            margin_t = max(fcf_margin_base + margin_delta_per_year * t, fcf_floor)
         margin_t = min(margin_t, 0.60)
         fcf_t    = rev_t * margin_t
-        disc_t   = 1 / (1 + wacc) ** t
-        pv_fcf_t = fcf_t * disc_t
+        # Compound discount factor using per-year WACC (staged fade).
+        disc_cum = disc_cum / (1 + w_t)
+        pv_fcf_t = fcf_t * disc_cum
         pv_sum  += pv_fcf_t
         annual_rows.append({
             "year_label":      f"Yr {t}",
             "revenue":         rev_t,
-            "growth_pct":      growth_rate,
+            "growth_pct":      g_t,
             "fcf_margin":      margin_t,
+            "wacc":            w_t,
             "fcf":             fcf_t,
-            "discount_factor": disc_t,
+            "discount_factor": disc_cum,
             "pv_fcf":          pv_fcf_t,
         })
 
-    rev_T = revenue_base * (1 + growth_rate) ** years
-    margin_T = max(fcf_margin_base + margin_delta_per_year * years, fcf_floor)
-    margin_T = min(margin_T, 0.60)
-    fcf_T = rev_T * margin_T
+    # Terminal value — use the last year's revenue/margin/WACC so growth-decay
+    # and staged-WACC both flow into the TV calculation naturally. WACC fades
+    # back to base by Y4+, so the terminal WACC is effectively base_wacc for
+    # early-stage profiles (the premium only applies to Y1-3).
+    rev_T    = rev_t
+    fcf_T    = rev_T * margin_t
+    wacc_T   = _w_by_year[years - 1]
+    # Safety: terminal WACC must exceed TGR by a margin
+    if wacc_T <= tgr:
+        wacc_T = tgr + 0.005
     fcf_terminal = fcf_T * (1 + tgr)
-    tv = fcf_terminal / (wacc - tgr)
-    pv_tv = tv / (1 + wacc) ** years
+    tv           = fcf_terminal / (wacc_T - tgr)
+    pv_tv        = tv * disc_cum
 
     equity_value = pv_sum + pv_tv - (net_debt or 0.0)
     iv = equity_value / shares
@@ -1147,6 +1257,24 @@ _TECH_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
 def _tech_subtype_multiples(profile_name: str) -> dict:
     """Lookup tech sub-type multiples with default fallback."""
     return _TECH_SUBTYPE_MULTIPLES.get(profile_name, _TECH_SUBTYPE_MULTIPLES["default"])
+
+
+def _terminal_multiple_ev_revenue(profile_name: str, scenario: str = "base") -> float:
+    """Terminal EV/Revenue multiple with mature-profile convergence (Option III Spec 2).
+
+    Growth-phase profiles converge to their mature equivalent at Y10+ so the
+    terminal multiple reflects the profile the company will have matured into,
+    not the hyper-growth multiple it trades on today. Bear = 0.80× base,
+    bull = 1.20× base (±20% scenario band at terminal).
+    """
+    convergence = _TERMINAL_MULTIPLE_CONVERGENCE.get(profile_name, profile_name)
+    mature_mults = _TECH_SUBTYPE_MULTIPLES.get(convergence, _TECH_SUBTYPE_MULTIPLES["default"])
+    base = mature_mults["ev_revenue"]
+    if scenario == "bear":
+        return base * 0.80
+    elif scenario == "bull":
+        return base * 1.20
+    return base
 
 
 def _is_tech_subtype(sector: str, profile_name: str) -> bool:
@@ -2029,8 +2157,11 @@ def _compute_method_value(
         # Forward method — sm NOT applied (scenario already mapped to
         # analyst low/avg/high); growth_premium + SBC haircut still apply.
         # Tech sub-type multiples override when applicable (Tier 2 Tech).
+        # Option III Spec 2: growth-phase Tech profiles converge to mature
+        # equivalent at terminal (Mature SaaS 10x for Growth SaaS, etc.) with
+        # bear/bull ±20% band applied inside the helper.
         if _is_tech_subtype(sector, profile_name):
-            base_mult = _tech_subtype_multiples(profile_name)["ev_revenue"]
+            base_mult = _terminal_multiple_ev_revenue(profile_name, scenario)
         else:
             base_mult = peer.get("ev_revenue", 4.0)
         mult = base_mult * growth_premium
@@ -2467,9 +2598,11 @@ def _compute_method_value(
             tier_mult = 0.7
         else:
             tier_mult = 0.5
-        # Base EV/Revenue IV (tech sub-type aware)
+        # Base EV/Revenue IV (tech sub-type aware).
+        # Option III Spec 2: use convergence-aware terminal EV/Rev so Growth SaaS
+        # anchors to Mature SaaS 10x, not 22x perpetuated to terminal.
         if _is_tech_subtype(sector, profile_name):
-            base_mult = _tech_subtype_multiples(profile_name)["ev_revenue"]
+            base_mult = _terminal_multiple_ev_revenue(profile_name, scenario)
         else:
             base_mult = peer.get("ev_revenue", 4.0)
         # Use forward revenue when available, else TTM
@@ -3576,9 +3709,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 g = growth_base * _GROWTH_MULT[scenario]
             g = max(min(g, 1.0), -0.30)
 
-            md = _MARGIN_DELTA_PER_YEAR[scenario]
+            # Fix B — multiplicative margin variance: bear compresses base
+            # margin 20%, bull expands 20%. Replaces the legacy ±0.2pp/yr drift
+            # which barely moved the needle for mid-margin Tech names.
+            md_abs = fcf_margin_base * (_MARGIN_DELTA_MULT[scenario] - 1.0)
             if scenario != "bear":
-                md += guidance_margin_adj
+                md_abs += guidance_margin_adj
 
             tgr = tgr_table.get(scenario, _DEFAULT_TGR[scenario])
 
@@ -3599,17 +3735,48 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if wacc <= tgr:
                 tgr = wacc - 0.005
 
+            # ── Option III: Tech sub-type schedules ──────────────────────
+            # Growth SaaS / Hyper-Growth / AI / Cybersecurity get:
+            #   - Exponential growth decay (Spec 1)
+            #   - Two-stage WACC fade (+250 bps Y1-3) for early-stage profiles (Spec 3)
+            # Non-Tech (Bank / REIT / Biopharma / default) profiles fall through
+            # with None schedules → legacy constant-growth / constant-WACC behavior
+            # is preserved exactly.
+            _growth_schedule: Optional[list[float]] = None
+            _wacc_schedule:   Optional[list[float]] = None
+            if profile_name in _GROWTH_DECAY_DELTA:
+                _growth_schedule = _decayed_growth_schedule(g, profile_name, years=_PROJECTION_YEARS)
+            if profile_name in _EARLY_STAGE_PROFILES:
+                _wacc_schedule = [
+                    _staged_wacc_for_year(wacc, profile_name, y)
+                    for y in range(1, _PROJECTION_YEARS + 1)
+                ]
+
+            # DEBUG-level log for terminal-multiple diagnostics (Option III Spec 2).
+            # Only emitted for Tech sub-types so Bank/REIT paths stay quiet.
+            if profile_name in _TERMINAL_MULTIPLE_CONVERGENCE:
+                _log.debug(
+                    "[dcf_terminal] profile=%s → terminal_mult_base=%.2fx scenario=%s mult_used=%.2fx",
+                    profile_name,
+                    _terminal_multiple_ev_revenue(profile_name, "base"),
+                    scenario,
+                    _terminal_multiple_ev_revenue(profile_name, scenario),
+                )
+
             # ── Core DCF projection ───────────────────────────────────────
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
                 revenue_base=revenue_base,
                 fcf_margin_base=fcf_margin_base,
                 growth_rate=g,
-                margin_delta_per_year=md,
+                margin_delta_per_year=0.0,              # superseded by md_abs
                 wacc=wacc,
                 tgr=tgr,
                 fcf_floor=fcf_floor,
                 net_debt=net_debt,
                 shares=shares,
+                growth_schedule=_growth_schedule,
+                wacc_schedule=_wacc_schedule,
+                margin_delta_absolute=md_abs,
             )
             if scenario == "base":
                 _base_proj_rows = _proj_rows
