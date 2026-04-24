@@ -1536,7 +1536,7 @@ def _extract_pipeline_assets(
                 "role": "user",
                 "content": (
                     f"Ticker: {ticker}\n\n"
-                    f"Research excerpts (moat + cycle + KPI sections):\n{combined[:10000]}"
+                    f"Research excerpts (Section 2F — KPI framework):\n{combined[:20000]}"
                 ),
             }],
         )
