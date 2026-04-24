@@ -441,6 +441,7 @@ async def reextract_metrics(
     limit: int = 1,
     dry_run: bool = True,
     verbose: bool = False,
+    provider: str = "auto",
 ):
     """
     Re-run LLM extractors against stored deep research for one or more runs.
@@ -483,17 +484,28 @@ async def reextract_metrics(
     except ImportError as exc:
         raise HTTPException(status_code=500, detail=f"Cannot import reextract module: {exc}")
 
+    # Validate provider
+    if provider not in {"auto", "qwen", "anthropic"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f"provider must be one of 'auto', 'qwen', 'anthropic' (got {provider!r})",
+        )
+
     try:
         if run_id:
-            results = [reextract_for_run(run_id, dry_run=dry_run, verbose=verbose)]
+            results = [reextract_for_run(run_id, dry_run=dry_run, verbose=verbose, provider=provider)]
         elif ticker:
-            results = reextract_by_ticker(ticker, dry_run=dry_run, limit=limit, verbose=verbose)
+            results = reextract_by_ticker(ticker, dry_run=dry_run, limit=limit,
+                                           verbose=verbose, provider=provider)
         else:
             # tickers: comma-separated
             _list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
             results = []
             for t in _list:
-                results.extend(reextract_by_ticker(t, dry_run=dry_run, limit=limit, verbose=verbose))
+                results.extend(reextract_by_ticker(
+                    t, dry_run=dry_run, limit=limit,
+                    verbose=verbose, provider=provider,
+                ))
     except Exception as exc:
         logger.exception("reextract_metrics failed")
         raise HTTPException(status_code=500, detail=f"Re-extract failed: {exc}")

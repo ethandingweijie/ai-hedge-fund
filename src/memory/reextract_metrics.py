@@ -68,35 +68,59 @@ from src.agents.industry.sector_prompts import (
 
 # ── Env var resolution (mirrors deep_research.py _task lines 3578-3645) ─────
 
-def _resolve_extractor_client() -> tuple[anthropic.Anthropic, str]:
+def _resolve_extractor_client(
+    provider: str = "auto",
+) -> tuple[anthropic.Anthropic, str, str]:
     """Build the sdk_client + pick the extractor model from env vars.
 
-    Matches the production setup: Qwen via DashScope is preferred (what DDOG /
-    SNOW used on their original runs), with fallback to Anthropic Claude.
-    Returns (client, model_name) or raises ValueError when no key is set.
+    Args:
+      provider: "auto" | "qwen" | "anthropic"
+        - "auto"      — prefer Qwen if available, fall back to Anthropic
+        - "qwen"      — force DashScope/Qwen; fails if credentials missing
+        - "anthropic" — force Anthropic Claude; fails if ANTHROPIC_API_KEY missing
+
+    Returns (client, model_name, actual_provider). The third element is
+    surfaced in re-extract responses so the user can see which provider
+    ran against their data (important when quota-switching between them).
     """
     dashscope_key      = os.environ.get("DEEP_RESEARCH_API_KEY")
     dashscope_base_url = os.environ.get("DEEP_RESEARCH_BASE_URL")
     dashscope_model    = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3-max"
     anthropic_key      = os.environ.get("ANTHROPIC_API_KEY")
 
-    if dashscope_key and dashscope_base_url:
+    want_anthropic = provider == "anthropic"
+    want_qwen      = provider == "qwen"
+    # "auto" means try Qwen first, fall back to Anthropic
+
+    if not want_anthropic and dashscope_key and dashscope_base_url:
         client = anthropic.Anthropic(
             api_key=dashscope_key,
             base_url=dashscope_base_url,
             timeout=60.0,
             max_retries=2,
         )
-        return client, dashscope_model
+        return client, dashscope_model, "qwen"
 
-    if anthropic_key:
+    if not want_qwen and anthropic_key:
         client = anthropic.Anthropic(
             api_key=anthropic_key,
             timeout=60.0,
             max_retries=2,
         )
-        return client, "claude-sonnet-4-6"
+        return client, "claude-sonnet-4-6", "anthropic"
 
+    # Explicit provider request failed — give the user a clear error
+    if want_qwen:
+        raise ValueError(
+            "provider='qwen' requested but DEEP_RESEARCH_API_KEY + "
+            "DEEP_RESEARCH_BASE_URL are not set. Use provider='anthropic' "
+            "or provider='auto' instead."
+        )
+    if want_anthropic:
+        raise ValueError(
+            "provider='anthropic' requested but ANTHROPIC_API_KEY is not "
+            "set. Use provider='qwen' or provider='auto' instead."
+        )
     raise ValueError(
         "No LLM credentials available. Set DEEP_RESEARCH_API_KEY + "
         "DEEP_RESEARCH_BASE_URL (Qwen via DashScope) or ANTHROPIC_API_KEY."
@@ -380,6 +404,7 @@ def reextract_for_run(
     dry_run: bool = True,
     db_path: Optional[str] = None,
     verbose: bool = False,
+    provider: str = "auto",
 ) -> dict[str, Any]:
     """Re-run extractors against one stored run and optionally patch the DB.
 
@@ -463,8 +488,11 @@ def reextract_for_run(
         # result so callers can see what the lookup recovered.
         _, effective_profile = _decide_sector_extractor(sector, profile_name, ticker=ticker)
 
-        # Build client + run extractors
-        sdk_client, model_name = _resolve_extractor_client()
+        # Build client + run extractors. provider="auto" tries Qwen first
+        # and falls back to Anthropic if DashScope creds missing; explicit
+        # "qwen" / "anthropic" pin to one provider (useful when DashScope
+        # quota is exhausted and user wants to force Claude).
+        sdk_client, model_name, actual_provider = _resolve_extractor_client(provider=provider)
         extracted = _run_extractors(
             sdk_client, model_name, ticker, sector, effective_profile,
             sections, deep_research, raw_fin,
@@ -504,6 +532,8 @@ def reextract_for_run(
             "ticker": ticker,
             "sector": sector,
             "profile_name": profile_name,
+            "provider": actual_provider,
+            "model_name": model_name,
             "sections_source": sections_source,
             "sections_keys": sorted(sections.keys()) if isinstance(sections, dict) else [],
             "section_2f_len": len(sections.get("2f", "") or sections.get("2F", "") or ""),
@@ -564,6 +594,7 @@ def reextract_by_ticker(
     limit: int = 1,
     db_path: Optional[str] = None,
     verbose: bool = False,
+    provider: str = "auto",
 ) -> list[dict[str, Any]]:
     """Re-run extractors for the last N non-checkpoint runs for one ticker.
 
@@ -590,6 +621,7 @@ def reextract_by_ticker(
         return [{"ok": False, "error": f"No runs found for ticker {ticker}"}]
 
     return [
-        reextract_for_run(r["run_id"], dry_run=dry_run, db_path=db_path, verbose=verbose)
+        reextract_for_run(r["run_id"], dry_run=dry_run, db_path=db_path,
+                           verbose=verbose, provider=provider)
         for r in rows
     ]
