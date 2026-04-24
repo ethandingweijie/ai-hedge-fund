@@ -117,23 +117,65 @@ def _connect(db_path: str) -> sqlite3.Connection:
 
 # ── Extractor dispatch ──────────────────────────────────────────────────────
 
-def _decide_sector_extractor(sector: str, profile_name: str) -> Optional[str]:
-    """Return the name of the sector-specific extractor to run, or None.
+def _decide_sector_extractor(
+    sector: str, profile_name: str, ticker: str = ""
+) -> tuple[Optional[str], str]:
+    """Return (extractor_name, effective_profile_name).
 
-    Matches the needs_extractor() logic in sector_prompts.py.
+    Matches the needs_extractor() logic in sector_prompts.py including the
+    TICKER_SECTOR_LOOKUP fallback for runs with empty profile_name. The
+    fallback is critical for retro-extracting historic DDOG/SNOW runs
+    archived before the strategic_router profile pre-classification was
+    added in commit fe6f1ec — those runs have profile_name="" in stored
+    JSON even though the ticker is canonically Growth SaaS.
+
+    Returns the effective profile_name too so callers can pass it into
+    the saas_metrics extractor (which uses it for prompt signature
+    selection in get_kpi_prompt).
     """
-    if is_tech_sector(sector) and profile_name not in {"", "Levered Subscription"}:
-        return "saas_metrics"
-    if is_bank_sector(sector) and (
-        "Bank" in (profile_name or "")
-        or profile_name in {"Mortgage/GSE", "Brokerage"}
-    ):
-        return "bank_metrics"
-    if is_reit_sector(sector) or "REIT" in (profile_name or ""):
-        return "reit_metrics"
+    effective_profile = profile_name or ""
+
+    if is_tech_sector(sector):
+        _is_saas = effective_profile not in {"", "Levered Subscription"}
+        if not _is_saas and ticker:
+            try:
+                from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+                _entry = TICKER_SECTOR_LOOKUP.get(ticker.upper())
+                if _entry and _entry[1] in {
+                    "Hyperscaler / Tech Conglomerate", "Mature SaaS", "Growth SaaS",
+                    "Cybersecurity / Mission-Critical SaaS",
+                }:
+                    _is_saas = True
+                    effective_profile = _entry[1]
+            except Exception:
+                pass
+        if _is_saas:
+            return ("saas_metrics", effective_profile)
+
+    if is_bank_sector(sector):
+        _is_bank = (
+            "Bank" in (effective_profile or "")
+            or effective_profile in {"Mortgage/GSE", "Brokerage"}
+        )
+        if not _is_bank and ticker:
+            try:
+                from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+                _entry = TICKER_SECTOR_LOOKUP.get(ticker.upper())
+                if _entry and is_bank_sector(_entry[0]):
+                    _is_bank = True
+                    effective_profile = _entry[1] or effective_profile
+            except Exception:
+                pass
+        if _is_bank:
+            return ("bank_metrics", effective_profile)
+
+    if is_reit_sector(sector) or "REIT" in (effective_profile or ""):
+        return ("reit_metrics", effective_profile)
+
     if is_biopharma_sector(sector):
-        return "pipeline_assets"
-    return None
+        return ("pipeline_assets", effective_profile)
+
+    return (None, effective_profile)
 
 
 def _run_extractors(
@@ -164,8 +206,12 @@ def _run_extractors(
         sdk_client, model_name, sections, deep_research, ticker
     )
 
-    # Sector-specific
-    sector_extractor = _decide_sector_extractor(sector, profile_name)
+    # Sector-specific — includes TICKER_SECTOR_LOOKUP fallback when the
+    # stored profile_name is empty (historic runs archived before the
+    # strategic_router pre-classification was added)
+    sector_extractor, _effective_profile = _decide_sector_extractor(
+        sector, profile_name, ticker=ticker
+    )
     if sector_extractor == "saas_metrics":
         raw = _extract_saas_metrics(
             sdk_client, model_name, sections, deep_research, ticker
@@ -247,10 +293,16 @@ def reextract_for_run(
             "dcf_calibration":   sorted((data.get("dcf_calibration") or {}).keys()),
         }
 
+        # Resolve the effective profile_name — falls back to TICKER_SECTOR_LOOKUP
+        # when stored profile_name is empty (historic DDOG/SNOW runs archived
+        # before strategic_router pre-classification landed). Surfaced in the
+        # result so callers can see what the lookup recovered.
+        _, effective_profile = _decide_sector_extractor(sector, profile_name, ticker=ticker)
+
         # Build client + run extractors
         sdk_client, model_name = _resolve_extractor_client()
         extracted = _run_extractors(
-            sdk_client, model_name, ticker, sector, profile_name,
+            sdk_client, model_name, ticker, sector, effective_profile,
             sections, deep_research, raw_fin,
         )
 
