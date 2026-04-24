@@ -3741,38 +3741,76 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
             tgr = tgr_table.get(scenario, _DEFAULT_TGR[scenario])
 
-            # ── Forward Gate B: ROIC < WACC → TGR compression ────────────
-            # Scenario-gated 2026-04-25: binary TGR=0 was too aggressive for
-            # growth co's still in scaling phase (NET Forward ROIC -1.6%
-            # wiped terminal entirely, produced $40 IV on $205 spot). The
-            # binary rule conflates "path to spread" (growth co not yet at
-            # positive ROIC but improving) with "true value destruction"
-            # (mature co with declining ROIC). Scenario gating lets bear
-            # case assume worst (TGR=0 when ROIC<WACC) while base/bull
-            # relax the threshold.
+            # ── Forward Gate B: ROIC compression (Y10 projection) ──────────
+            # Previously 'Forward ROIC' used TRAILING ebit/invested_capital
+            # from most_recent. For scaling co's (NET: op_income -$203M,
+            # trailing ROIC -1.6%), this triggered Gate B and zeroed
+            # terminal value despite the company genuinely being on a path
+            # to positive ROIC. Gemini review flagged this as the "Capex
+            # vs OpEx trap" — infrastructure-SaaS hybrids (NET with POPs,
+            # SNOW with compute) appear to destroy value by GAAP while
+            # actually growing into operating leverage.
             #
-            #   bear: full Gate B — TGR=0 if forward_roic < wacc
-            #   base: relaxed — TGR=0 only if forward_roic < 0.5 × wacc
-            #         (roughly: scaling co's with ROIC in the 4-8% range
-            #          when WACC is 10% get partial credit)
-            #   bull: Gate B never triggers — upside case assumes ROIC
-            #         exceeds WACC by year 10
+            # Tier 2a fix (2026-04-25):
+            #   Compute PROJECTED Y10 ROIC using terminal fcf_margin_base
+            #   × (1 + margin_delta_per_year × 10) × yr_10_revenue /
+            #   scaled invested capital — captures the "forward" aspect
+            #   instead of trailing. Falls back to trailing if projection
+            #   data missing. Scenario-gated thresholds (bear full gate,
+            #   base half-WACC, bull never triggers) preserved from Tier 1.
             forward_flags: list[str] = list(ticker_forward_flags)
+
+            # Projected Y10 ROIC — scales current invested capital with
+            # projected revenue growth × asset turnover ratio, computes
+            # NOPAT from terminal margin × terminal revenue.
+            _forward_roic_proj = None
             ebit_val = most_recent.get("ebit")
             ic_val = most_recent.get("invested_capital")
-            if ebit_val and ic_val and ic_val > 0:
+            rev_base = most_recent.get("revenue")
+            if ic_val and ic_val > 0 and rev_base and rev_base > 0:
+                # Y10 revenue estimate (apply decayed growth schedule or
+                # symmetric multiplier × 10 years compound)
+                _decay = _GROWTH_DECAY_DELTA.get(profile_name, 0.0)
+                if _decay > 0.0:
+                    _y10_rev_mult = 1.0
+                    for _t in range(10):
+                        _y10_rev_mult *= (1 + g * (1 - _decay) ** _t)
+                else:
+                    _y10_rev_mult = (1 + g) ** 10
+                _y10_rev = rev_base * _y10_rev_mult
+                # Y10 FCF margin: base + md_abs × 10 years
+                _y10_fcf_margin = fcf_margin_base + md_abs * 10
+                _y10_fcf = _y10_rev * _y10_fcf_margin
+                # Scale invested capital proportionally with revenue
+                _y10_ic = ic_val * _y10_rev_mult
+                if _y10_ic > 0:
+                    _y10_nopat = _y10_fcf * (1 - _EFFECTIVE_TAX_RATE)
+                    _forward_roic_proj = _y10_nopat / _y10_ic
+
+            # Use projected ROIC when available, else fall back to trailing
+            if _forward_roic_proj is not None:
+                forward_roic = _forward_roic_proj
+                roic_source = "Y10 projected"
+            elif ebit_val and ic_val and ic_val > 0:
                 nopat = ebit_val * (1 - _EFFECTIVE_TAX_RATE)
                 forward_roic = nopat / ic_val
+                roic_source = "trailing (fallback)"
+            else:
+                forward_roic = None
+                roic_source = "n/a"
+
+            if forward_roic is not None:
                 _gate_b_threshold = {
                     "bear": wacc,              # full gate — TGR=0 when ROIC<WACC
-                    "base": wacc * 0.5,        # relaxed — TGR=0 only when ROIC<½WACC
+                    "base": wacc * 0.5,        # relaxed
                     "bull": float("-inf"),     # never triggers in bull
                 }[scenario]
+
                 if forward_roic < _gate_b_threshold:
                     tgr = 0.0
                     forward_flags.append(
-                        f"Gate B ({scenario}): Forward ROIC ({forward_roic:.1%}) < threshold "
-                        f"({_gate_b_threshold:.1%}) → TGR set to 0"
+                        f"Gate B ({scenario}): Forward ROIC ({forward_roic:.1%} [{roic_source}]) "
+                        f"< threshold ({_gate_b_threshold:.1%}) → TGR set to 0"
                     )
 
             # Safety: WACC must exceed TGR

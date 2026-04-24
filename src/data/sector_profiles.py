@@ -1516,17 +1516,29 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # CRWD, PANW, ZS, FTNT, NET.
         "Cybersecurity / Mission-Critical SaaS": {
             "methods": [
-                {"name": "EV/Revenue",   "weight": 0.35, "anchor": True,  "implementable": True},
-                {"name": "DCF (FCF+)",   "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "P/E",          "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",    "weight": 0.15, "anchor": False, "implementable": True},
+                # Rebalanced 2026-04-25 (Gemini review): EV/Revenue at 35% is
+                # still market-anchored. Shifted weight to DCF-family for
+                # "hard-math" IV anchoring. NET at $205 spot with stored IV
+                # $40 partly reflected EV/Revenue method at $45 with 35%
+                # weight contributing while DCF method sat at near-zero due
+                # to Gate B + negative trailing FCF margin. Rebalancing
+                # doesn't rescue NET alone (Gate B forward-ROIC fix in
+                # dcf_agent.py does that), but reduces reflexivity exposure
+                # symmetric to Growth SaaS change.
+                {"name": "DCF (FCF+)",   "weight": 0.30, "anchor": True,  "implementable": True,  "note": "DCF anchor with forward Y10 ROIC projection"},
+                {"name": "NRR-adj DCF",  "weight": 0.25, "anchor": False, "implementable": True,  "note": "cohort-weighted revenue DCF"},
+                {"name": "EV/Revenue",   "weight": 0.20, "anchor": False, "implementable": True,  "note": "demoted from 35% — market-anchor, reflexivity risk"},
+                {"name": "P/E",          "weight": 0.15, "anchor": False, "implementable": True,  "note": "SBC-discounted for high-dilution profiles"},
+                {"name": "EV/EBITDA",    "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": ["EPV"],  # many are GAAP-negative; EPV produces near-zero
             "rationale": (
                 "Cybersecurity companies have mission-critical demand with 120%+ NRR "
-                "and 'Zero Trust' secular tailwind. EV/Revenue anchors because many are "
-                "GAAP-negative despite strong FCF. EPV excluded — GAAP losses make it "
-                "meaningless. Higher TGR (+1.5% vs standard SaaS) reflects secular demand."
+                "and 'Zero Trust' secular tailwind. DCF-family anchors (55%) provide "
+                "fundamentals-based IV; EV/Revenue at 20% is a sanity check (demoted "
+                "from 35% due to reflexivity risk). EPV excluded — GAAP losses make "
+                "it meaningless. Higher TGR (+1.5% vs standard SaaS) reflects secular "
+                "demand. Gate B uses forward Y10 ROIC projection to avoid the 'Capex vs OpEx trap' on scaling infra-SaaS."
             ),
         },
         "Mature SaaS": {
