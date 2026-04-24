@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS web_runs (
     final_action     TEXT,
     regime           TEXT,
     sector           TEXT,
+    profile_name     TEXT,
     is_checkpoint    INTEGER DEFAULT 0
 )
 """
@@ -90,6 +91,10 @@ _WEB_RUNS_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_web_runs_run_at ON web_runs(run_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_web_runs_action ON web_runs(final_action)",
     "CREATE INDEX IF NOT EXISTS idx_web_runs_sector ON web_runs(sector)",
+    # Composite index supports "all Growth SaaS runs" / "all Mature SaaS"
+    # queries without a table scan. Ordered (sector, profile_name) so a
+    # sector-only filter can also use it (left-prefix match).
+    "CREATE INDEX IF NOT EXISTS idx_web_runs_sector_profile ON web_runs(sector, profile_name)",
     "CREATE INDEX IF NOT EXISTS idx_web_runs_user_id ON web_runs(user_id)",
 ]
 
@@ -127,6 +132,10 @@ def _migrate_web_runs_columns(conn: sqlite3.Connection) -> None:
         ("final_action",  "ALTER TABLE web_runs ADD COLUMN final_action  TEXT"),
         ("regime",        "ALTER TABLE web_runs ADD COLUMN regime         TEXT"),
         ("sector",        "ALTER TABLE web_runs ADD COLUMN sector         TEXT"),
+        # v2.0.2 — profile_name as first-class column enables admin queries
+        # like "all Growth SaaS runs" without a table scan over
+        # full_result_json and gives the admin UI a visible sub-sector column.
+        ("profile_name",  "ALTER TABLE web_runs ADD COLUMN profile_name  TEXT"),
         ("is_checkpoint", "ALTER TABLE web_runs ADD COLUMN is_checkpoint  INTEGER DEFAULT 0"),
         ("user_id",       "ALTER TABLE web_runs ADD COLUMN user_id        INTEGER"),
     ]
@@ -158,8 +167,17 @@ def _ensure_web_runs_table():
         conn.close()
 
 
-def _extract_web_run_summary(result: dict, ticker: str) -> tuple[str, str, str]:
-    """Extract (final_action, regime, sector) from a completed pipeline result dict."""
+def _extract_web_run_summary(result: dict, ticker: str) -> tuple[str, str, str, str]:
+    """Extract (final_action, regime, sector, profile_name) from a pipeline result.
+
+    profile_name resolution tree (first non-empty wins):
+      1. state.data.profile_name                        — primary ticker
+      2. state.data.profile_names[<primary_ticker>]     — multi-ticker map
+      3. state.data.profile_names[<ticker>]             — argument ticker
+      4. TICKER_SECTOR_LOOKUP[ticker] → second element  — deterministic fallback
+    Returns "" when nothing resolves (ticker not in lookup AND state has no
+    profile — rare, only for unknown foreign tickers).
+    """
     try:
         data = result.get("data", {})
         tickers_list = data.get("tickers", [ticker])
@@ -180,9 +198,28 @@ def _extract_web_run_summary(result: dict, ticker: str) -> tuple[str, str, str]:
             td = decisions.get(t, {})
             final_action = td.get("action", "") or ""
 
-        return final_action, regime, sector
+        # profile_name resolution with TICKER_SECTOR_LOOKUP fallback
+        profile_name = (data.get("profile_name") or "").strip()
+        if not profile_name:
+            profile_names_map = data.get("profile_names") or {}
+            if isinstance(profile_names_map, dict):
+                profile_name = (profile_names_map.get(t) or profile_names_map.get(ticker) or "").strip()
+        if not profile_name:
+            # Final fallback — canonical ticker lookup. Covers historic runs
+            # archived before the strategic_router pre-classification feature
+            # (v2.0) landed. Matches the same lookup logic needs_extractor()
+            # uses for extractor gating.
+            try:
+                from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+                entry = TICKER_SECTOR_LOOKUP.get((ticker or t).upper())
+                if entry and len(entry) >= 2:
+                    profile_name = (entry[1] or "").strip()
+            except Exception:
+                pass
+
+        return final_action, regime, sector, profile_name
     except Exception:
-        return "", "", ""
+        return "", "", "", ""
 
 
 def _save_partial_web_run(
@@ -290,14 +327,14 @@ def _save_web_run(
 ):
     _ensure_web_runs_table()
     db_path = _get_db_path()
-    final_action, regime, sector = _extract_web_run_summary(result, ticker)
+    final_action, regime, sector, profile_name = _extract_web_run_summary(result, ticker)
     conn = _connect(db_path)
     try:
         conn.execute(
             "INSERT OR REPLACE INTO web_runs "
             "(run_id, run_at, ticker, model_name, archive_run_id, full_result_json, "
-            " final_action, regime, sector, is_checkpoint, user_id) "
-            "VALUES (?,?,?,?,?,?,?,?,?,0,?)",
+            " final_action, regime, sector, profile_name, is_checkpoint, user_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,0,?)",
             (
                 run_id,
                 # Store as plain ISO without tz suffix so string sort is consistent
@@ -310,6 +347,7 @@ def _save_web_run(
                 final_action or None,
                 regime or None,
                 sector or None,
+                profile_name or None,
                 user_id,
             ),
         )

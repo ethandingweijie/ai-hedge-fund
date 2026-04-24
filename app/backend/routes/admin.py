@@ -359,6 +359,71 @@ async def backfill_bank_breakdown(
     return result
 
 
+# ── Backfill profile_name (v2.0.2 sub-sector column) ─────────────────────────
+# Populates the new profile_name column (and inner full_result_json.data.
+# profile_name field) on historic web_runs rows. Runs before /admin/reextract-
+# metrics so the sector-extractor gate can fire correctly on pre-v2.0 runs.
+
+@router.post("/admin/backfill-profile-name")
+async def backfill_profile_name(
+    secret: str = "",
+    ticker: str = "",
+    dry_run: bool = True,
+    force: bool = False,
+):
+    """
+    Backfill profile_name column + inner full_result_json.data.profile_name
+    on historic web_runs rows archived before the strategic_router profile
+    pre-classification feature (v2.0) landed.
+
+    Query params:
+      secret   — DB_UPLOAD_SECRET (required)
+      ticker   — optional: limit to one ticker
+      dry_run  — true (default) shows what would change without writing
+      force    — true re-derives even when profile_name is already set
+
+    Resolution tree (first non-empty wins):
+      1. state.data.profile_name
+      2. state.data.profile_names[ticker]
+      3. TICKER_SECTOR_LOOKUP[ticker] — canonical fallback
+
+    Examples:
+      POST /admin/backfill-profile-name?secret=X&dry_run=true
+      POST /admin/backfill-profile-name?secret=X&ticker=DDOG&dry_run=false
+      POST /admin/backfill-profile-name?secret=X&force=true&dry_run=false
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+
+    try:
+        from scripts.backfill_profile_name import backfill
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot import backfill: {exc}")
+
+    try:
+        result = backfill(
+            dry_run=dry_run,
+            target_ticker=ticker.upper() if ticker else None,
+            force=force,
+        )
+    except Exception as exc:
+        logger.exception("backfill_profile_name failed")
+        raise HTTPException(status_code=500, detail=f"Backfill failed: {exc}")
+
+    # Strip per-row detail from the summary response when there are many
+    # rows — keeps response payload reasonable. Caller can still see
+    # aggregates (by_profile, by_source, updated count).
+    if len(result.get("rows", [])) > 50:
+        result["rows"] = result["rows"][:50]
+        result["rows_truncated"] = True
+
+    return result
+
+
 # ── Re-extract metrics (v2.0.1 _parse_llm_json recovery) ──────────────────────
 # Re-runs the LLM extractor chain against EXISTING stored deep research in
 # web_runs.full_result_json without triggering a fresh pipeline run. Use
