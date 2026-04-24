@@ -799,6 +799,22 @@ def _extract_saas_metrics(
         )
         raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
         parsed = _parse_llm_json(raw, extractor_name="saas_metrics")
+
+        # Diagnostic: shows raw response length + parsed state so ops can
+        # distinguish (a) Qwen returned unparseable text (b) Qwen returned
+        # valid JSON with no KPIs (c) KPIs came back but failed clamp
+        # validation. Helps triage "saas_metrics empty" reports without
+        # re-running the full pipeline.
+        _raw_preview = (raw or "")[:200].replace("\n", " ⏎ ")
+        _parsed_keys = sorted(parsed.keys()) if isinstance(parsed, dict) else []
+        print(
+            f"  [saas_metrics {ticker}] input={len(combined)} chars · "
+            f"raw_response={len(raw or '')} chars · "
+            f"parsed_type={type(parsed).__name__} · "
+            f"parsed_keys={_parsed_keys} · "
+            f"preview={_raw_preview!r}"
+        )
+
         if parsed is None or not isinstance(parsed, dict):
             return {}
 
@@ -813,14 +829,26 @@ def _extract_saas_metrics(
             "rpo_growth_yoy":       (-0.20, 0.80),
             "billings_growth_yoy":  (-0.20, 0.80),
         }
+        # Track clamp rejections so ops can see when the LLM returned the
+        # right key but out-of-range value (e.g. "120" instead of 1.20 for NRR).
+        _dropped = []
         for k, (lo, hi) in _clamps.items():
             v = parsed.get(k)
+            if v is None:
+                continue
             if isinstance(v, (int, float)) and lo <= v <= hi:
                 out[k] = float(v)
+            else:
+                _dropped.append(f"{k}={v!r}(range {lo}-{hi})")
+        if _dropped:
+            print(f"  [saas_metrics {ticker}] dropped (out-of-range or wrong type): {_dropped}")
         if "evidence" in parsed:
             out["evidence"] = str(parsed["evidence"])[:300]
         return out
-    except Exception:
+    except Exception as _exc:
+        # Surface the real error — previously silent "return {}" hid Qwen
+        # rate limits, auth errors, and API timeouts.
+        print(f"  [saas_metrics {ticker}] ⚠ extractor FAILED: {type(_exc).__name__}: {_exc}")
         return {}
 
 
