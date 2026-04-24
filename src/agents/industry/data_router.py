@@ -29,6 +29,8 @@ SECTOR_LINE_ITEM_OVERLAYS: dict[str, list[str]] = {
         "deferred_revenue",           # SaaS ARR proxy; growth = bookings health
         "intangible_assets",          # Platform/data moat; IP capitalisation
         "stock_based_compensation",   # Dilution risk in high-growth tech
+        "gross_profit",               # Powers Gross Margin tile (Mature SaaS view)
+        "operating_income",           # Powers Operating Margin tile (Hyperscaler + Mature SaaS views)
     ],
     "Biopharma": [
         "research_and_development",
