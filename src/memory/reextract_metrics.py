@@ -152,7 +152,19 @@ def _resolve_extractor_client(
     """
     dashscope_key      = os.environ.get("DEEP_RESEARCH_API_KEY")
     dashscope_base_url = os.environ.get("DEEP_RESEARCH_BASE_URL")
-    dashscope_model    = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") or "qwen3-max"
+    # Model resolution (first non-empty wins):
+    #   1. DEEP_RESEARCH_SYNTHESIS_MODEL — explicit extractor model override
+    #   2. DEEP_RESEARCH_MODEL           — user's working search model
+    #      (reusing ensures re-extract hits an endpoint known to work)
+    #   3. qwen-plus                     — broadly-available Qwen 2.5 fallback
+    # Previous default "qwen3-max" 404'd on user's regional DashScope endpoint.
+    # Falling back to the search model keeps re-extract working regardless of
+    # which Qwen tier is available.
+    dashscope_model = (
+        os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL")
+        or os.environ.get("DEEP_RESEARCH_MODEL")
+        or "qwen-plus"
+    )
     anthropic_key      = os.environ.get("ANTHROPIC_API_KEY")
 
     want_anthropic = provider == "anthropic"
