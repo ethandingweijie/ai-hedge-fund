@@ -377,8 +377,16 @@ _TECH_MATURE_SAAS_KPI_PROMPT = _SECTION_2F_HEADER + """
 Organic ARR growth separated from acquired.
 
 2F.2 NET REVENUE RETENTION (NRR) — most recent disclosed quarter.
-Benchmark vs 110-120% healthy, <105% deterioration signal.
-Gross retention (separate).
+Look for phrases: "NRR", "net dollar retention", "dollar-based net retention",
+"$NRR", "net expansion rate", "ACV retention rate" (Salesforce uses this),
+"customer retention revenue", "recurring revenue retention". If the company
+reports under a non-standard name, map it to NRR. Benchmark vs 110-120%
+healthy, <105% deterioration signal. If not directly disclosed: derive from
+management cohort commentary on expansion vs churn.
+
+Gross retention separately: look for "gross retention", "gross dollar
+retention", "logo retention", or compute as NRR − expansion% when both
+are cited. Mature SaaS gross retention typically 90-95% (vs Growth SaaS 95%+).
 
 2F.3 RULE OF 40: Revenue Growth % + FCF Margin % = Rule of 40 score.
 >60 = best-in-class, 40-60 = healthy, <40 = value question.
