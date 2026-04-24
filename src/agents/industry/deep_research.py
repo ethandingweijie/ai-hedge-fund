@@ -225,8 +225,17 @@ def _extract_sections(report_text: str) -> dict[str, str]:
     # (scenario_agent, power_law_agent, investor agents) never saw the
     # per-section breakdown → `deep_research_sections` ended up empty in
     # stored state.
+    #
+    # Further broadened 2026-04: DDOG (and likely other Qwen runs) emit 2F with
+    # prefixes the old char-class `[ \t#─>*]` didn't cover — specifically list
+    # markers (`-`, `•`), divider bars (`═`, `─`, `=`), or `Section 2F:` prose
+    # form. The old regex silently dropped these, producing a dict with only
+    # 2A-2E and missing 2F → frontend commentary card hid entirely even though
+    # Qwen had written the 2F content. Fix: (a) permit any non-word, non-newline
+    # prefix chars (catches list markers, dividers, bullets, ascii-art); (b)
+    # accept "Section" / "Part" prose prefix before the 2X token.
     boundary = re.compile(
-        r"(?:^|\n)[ \t#─>*]*\*{0,2}\b(2[A-F])[\.\:—\-\)\s]",
+        r"(?:^|\n)[^\w\n]*\*{0,2}(?:section\s+|part\s+)?\b(2[A-F])\b[\.\:—\-\)\*\s]",
         re.IGNORECASE | re.MULTILINE,
     )
     positions: list[tuple[str, int]] = []
@@ -3432,6 +3441,27 @@ def _research_one_ticker(
         f"tier={research_tier!r} | report={_report_len:,} chars | "
         f"sections={_sec_keys} | citations={len(citation_registry)}"
     )
+
+    # Per-section length breakdown + 2F preview — helps diagnose commentary
+    # card failures on the frontend. If sections["2f"] is short or malformed,
+    # the ResearchNarrativeCard subsection extraction (2F.N regex) or the
+    # full-section fallback (min 80 chars) can both hide silently.
+    if isinstance(sections, dict):
+        _sec_lengths = {k: len(v) if isinstance(v, str) else 0 for k, v in sections.items()}
+        print(f"  Section lengths ({ticker}): {_sec_lengths}")
+        _s2f = sections.get("2f") or sections.get("2F") or ""
+        if _s2f:
+            # Preview: first 400 chars + any subsection headings found
+            import re as _re_diag
+            _subs = _re_diag.findall(r"(?:^|\n)\s*(?:\*{0,2})(2?[A-F]\.\d+)", _s2f, _re_diag.IGNORECASE)
+            _subs_unique = sorted(set(s.upper() for s in _subs))
+            _preview = _s2f[:400].replace("\n", " ⏎ ")
+            print(
+                f"  Section 2F preview ({ticker}, {len(_s2f)} chars, "
+                f"subsections={_subs_unique}): {_preview}..."
+            )
+        else:
+            print(f"  Section 2F MISSING ({ticker}) — no '2f' or '2F' key in sections dict")
 
     return {
         "deep_research":            final_report,
