@@ -31,6 +31,7 @@ SECTOR_LINE_ITEM_OVERLAYS: dict[str, list[str]] = {
         "stock_based_compensation",   # Dilution risk in high-growth tech
         "gross_profit",               # Powers Gross Margin tile (Mature SaaS view)
         "operating_income",           # Powers Operating Margin tile (Hyperscaler + Mature SaaS views)
+        "selling_and_marketing_expense",  # Powers Magic Number + CAC Payback self-compute in _compute_saas_metrics_fallback
     ],
     "Biopharma": [
         "research_and_development",

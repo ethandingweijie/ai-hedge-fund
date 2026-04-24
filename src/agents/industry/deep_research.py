@@ -671,6 +671,29 @@ def _extract_saas_metrics(
                 "    '$NRR', 'net expansion' — cited directly from earnings call.\n"
                 "  * Rule of 40: sum of revenue growth % + FCF margin %. E.g. 35% growth + 25%\n"
                 "    FCF margin = 60.\n"
+                "Extraction / derivation hints when numbers aren't directly stated:\n"
+                "  * NRR: look for phrases like 'NRR', 'net retention', 'net dollar retention',\n"
+                "    '$NRR', 'net expansion', 'dollar-based net retention'. Usually cited\n"
+                "    on earnings calls as a single number (e.g. '126%').\n"
+                "  * Gross Retention: sometimes disclosed as 'gross retention' or 'gross\n"
+                "    dollar retention'. If NRR is stated but gross retention isn't, check\n"
+                "    for explicit expansion rate disclosure: GR = NRR - expansion_pct.\n"
+                "    Only derive if both inputs cited in the research text.\n"
+                "  * CAC Payback: if disclosed, report directly. If not, derive from\n"
+                "    S&M spend + net new ARR + gross margin using formula:\n"
+                "    (S&M_annual × 12) / (net_new_ARR_annual × gross_margin). Require all\n"
+                "    three inputs to be cited.\n"
+                "  * LTV/CAC: compute ONLY when the 4 inputs are all explicitly in the\n"
+                "    research: ACV, gross_margin, annual_churn (or gross_retention), CAC.\n"
+                "    Formula: (ACV × gross_margin / annual_churn) / CAC. Never derive\n"
+                "    without all 4 inputs present.\n"
+                "  * Magic Number: if disclosed (phrases: 'sales efficiency', 'magic number',\n"
+                "    'new ARR per $ S&M'), report directly. Otherwise derive from:\n"
+                "    net_new_ARR_quarter / S&M_prior_quarter.\n"
+                "  * When deriving, cite BOTH the formula AND the input values in the\n"
+                "    'evidence' field so the audit trail is traceable.\n"
+                "  * Prefer a derived value WITH clear input citations over null when the\n"
+                "    inputs are clearly present.\n"
             ),
             messages=[{
                 "role": "user",
@@ -708,6 +731,121 @@ def _extract_saas_metrics(
         return out
     except Exception:
         return {}
+
+
+def _compute_saas_metrics_fallback(
+    raw_financials: dict | None,
+    existing_saas_metrics: dict | None,
+) -> dict:
+    """
+    Fill null saas_metrics fields with FMP-computed values where possible.
+
+    LLM extraction (from research text) runs first via _extract_saas_metrics;
+    this function runs AFTER and only populates fields that came back empty.
+    LLM-extracted values always take precedence — we never overwrite them.
+
+    Self-computable metrics (require only FMP line items):
+      - rule_of_40_score     → revenue_growth_% + FCF_margin_%
+      - magic_number         → (revenue YoY $) / selling_and_marketing_expense
+      - cac_payback_months   → S&M × 12 / (revenue_growth × gross_margin)
+      - billings_growth_yoy  → Δ (revenue + deferred_revenue) YoY
+
+    Research-only metrics (not computable without cohort / customer data):
+      - nrr_pct
+      - gross_retention_pct
+      - ltv_cac_ratio
+      - rpo_growth_yoy  (unless FMP exposes RPO; currently skipped)
+
+    Returns a new dict — does not mutate `existing_saas_metrics`.
+    """
+    out: dict = dict(existing_saas_metrics or {})
+
+    if not raw_financials or not isinstance(raw_financials, dict):
+        return out
+
+    # Latest and prior-year FY rows
+    fy_keys = sorted(
+        k for k in raw_financials
+        if isinstance(raw_financials.get(k), dict)
+    )
+    if len(fy_keys) < 2:
+        return out
+
+    latest = raw_financials[fy_keys[-1]]
+    prev = raw_financials[fy_keys[-2]]
+
+    def _num(d: dict, key: str) -> float | None:
+        v = d.get(key)
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    revenue = _num(latest, "revenue")
+    prev_revenue = _num(prev, "revenue")
+    fcf = _num(latest, "free_cash_flow")
+    sm_spend = _num(latest, "selling_and_marketing_expense")
+    gross_profit = _num(latest, "gross_profit")
+    deferred_rev = _num(latest, "deferred_revenue")
+    prev_deferred_rev = _num(prev, "deferred_revenue")
+
+    # ── Rule of 40 ────────────────────────────────────────────────────────────
+    # Always computable when revenue + FCF available across 2 FYs
+    if out.get("rule_of_40_score") is None and all(
+        v is not None and v > 0 for v in [revenue, prev_revenue]
+    ) and fcf is not None:
+        rev_growth_pct = (revenue / prev_revenue - 1) * 100
+        fcf_margin_pct = (fcf / revenue) * 100
+        score = rev_growth_pct + fcf_margin_pct
+        # Apply same clamp range the extractor uses
+        if -30 <= score <= 120:
+            out["rule_of_40_score"] = round(score, 1)
+
+    # ── Magic Number ──────────────────────────────────────────────────────────
+    # (Revenue YoY $ change) / S&M spend. Approximates net_new_ARR / S&M.
+    if out.get("magic_number") is None and all(
+        v is not None for v in [revenue, prev_revenue, sm_spend]
+    ) and sm_spend and abs(sm_spend) > 0:
+        net_new_ar = revenue - prev_revenue
+        mn = net_new_ar / abs(sm_spend)
+        if 0.1 <= mn <= 3.0:
+            out["magic_number"] = round(mn, 2)
+
+    # ── CAC Payback ───────────────────────────────────────────────────────────
+    # S&M × 12 / (revenue_growth × gross_margin). Months.
+    if out.get("cac_payback_months") is None and all(
+        v is not None for v in [revenue, prev_revenue, sm_spend, gross_profit]
+    ):
+        net_new_ar = revenue - prev_revenue
+        gross_margin_ratio = gross_profit / revenue if revenue > 0 else 0
+        if net_new_ar > 0 and gross_margin_ratio > 0 and sm_spend:
+            cac_payback = (abs(sm_spend) * 12) / (net_new_ar * gross_margin_ratio)
+            if 3 <= cac_payback <= 60:
+                out["cac_payback_months"] = round(cac_payback, 1)
+
+    # ── Billings Growth YoY ──────────────────────────────────────────────────
+    # Δ (revenue + deferred_revenue) YoY. Leading indicator for ARR growth.
+    if out.get("billings_growth_yoy") is None and all(
+        v is not None for v in [revenue, prev_revenue, deferred_rev, prev_deferred_rev]
+    ) and prev_revenue > 0:
+        billings_latest = revenue + deferred_rev
+        billings_prev = prev_revenue + prev_deferred_rev
+        if billings_prev > 0:
+            growth = (billings_latest / billings_prev) - 1
+            if -0.20 <= growth <= 0.80:
+                out["billings_growth_yoy"] = round(growth, 3)
+
+    # Evidence field — note computed fallback for audit trail
+    if out.get("evidence"):
+        existing_ev = out["evidence"]
+        if "computed" not in existing_ev.lower():
+            out["evidence"] = f"{existing_ev}  [+FMP fallback: filled missing fields from raw_financials]"
+    elif len(out) > 0 and "rule_of_40_score" in out:
+        out["evidence"] = "FMP fallback: Rule of 40 / Magic Number / CAC Payback / Billings computed from revenue, FCF, S&M, deferred_revenue across FYs"
+
+    return out
 
 
 # ── Bank metrics extractor (RI target ROE + CET1 override) ───────────────────
@@ -3124,6 +3262,12 @@ def _research_one_ticker(
     reit_metrics      = _results.get("reit_metrics", {})
     bank_metrics      = _results.get("bank_metrics", {})
     saas_metrics      = _results.get("saas_metrics", {})
+
+    # Apply FMP self-compute fallback to fill null SaaS metric fields from
+    # raw financials (Rule of 40, Magic Number, CAC Payback, Billings Growth).
+    # LLM-extracted values are preserved; only nulls get filled. Source-level
+    # write so downstream consumers see the enriched dict in the returned state.
+    saas_metrics = _compute_saas_metrics_fallback(raw_financials, saas_metrics)
 
     progress.update_status(
         agent_id, ticker,
