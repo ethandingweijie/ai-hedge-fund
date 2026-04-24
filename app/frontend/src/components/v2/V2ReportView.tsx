@@ -153,6 +153,59 @@ export function V2ReportView({
     [phaseMap]
   );
 
+  // ── Progress-header derivations ────────────────────────────────────────
+  // Split the single stringy `currentPhaseLabel` prop (which previously
+  // carried the raw "Thinking: ..." message and got truncated to one line)
+  // into two semantically-distinct pieces:
+  //   • phaseLabel      — short human-readable phase name ("Deep Research")
+  //   • thinkingDetail  — full streaming status detail, flows into the
+  //                       subtitle slot where "Hold tight …" used to be,
+  //                       wrapping across up to 3 lines so the reader
+  //                       actually gets to see what's happening.
+  //
+  // Both derive from phaseMap (already passed as prop). No new state.
+  const progressDerived = useMemo(() => {
+    // Short display names for the 15 backend phase keys. Mirrors the
+    // PHASE_LABELS.running map in ReportPage.tsx but uses shorter labels
+    // so Row 1 stays comfortably on a single line alongside % / Cancel.
+    const PHASE_SHORT: Record<string, string> = {
+      macro_regime_classifier: 'Macro Regime',
+      strategic_router:        'Sector Routing',
+      intelligence_agents:     'Intelligence',
+      data_router:             'Data Router',
+      deep_research_agent:     'Deep Research',
+      deep_research:           'Deep Research',
+      industry_specialist:     'Industry Brief',
+      dcf_engine:              'DCF Engine',
+      investor_agents:         'Investor Agents',
+      debate_round:            'Agent Debate',
+      power_law_agent:         'Power Law',
+      value_trap_agent:        'Value Trap',
+      phase7_complete:         'Wrapping Up',
+      advanced_risk_manager:   'Risk Manager',
+      portfolio_manager:       'Portfolio Decision',
+      pipeline_queued:         'Queued',
+    };
+
+    const events = Object.values(phaseMap);
+    if (events.length === 0) return { phaseLabel: undefined, thinkingDetail: undefined };
+
+    // Latest non-done event (still running) → primary; else last completed.
+    const running = events.filter(p => !/done|complete|✓/i.test(p.status ?? ''));
+    const activePhase = running.length > 0 ? running[running.length - 1] : events[events.length - 1];
+    const phaseKey = activePhase.phase;
+
+    const phaseLabel = PHASE_SHORT[phaseKey] ?? phaseKey.replace(/_/g, ' ');
+
+    // Detail text: prefer summary (longer, richer), then status. Skip if
+    // it matches phase label (avoids redundant echo).
+    const raw = (activePhase.summary || activePhase.status || '').trim();
+    const thinkingDetail = raw && raw.toLowerCase() !== phaseLabel.toLowerCase()
+      ? raw : undefined;
+
+    return { phaseLabel, thinkingDetail };
+  }, [phaseMap]);
+
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
@@ -237,7 +290,8 @@ export function V2ReportView({
         <div className="px-4 pt-3">
           <ProgressHeader
             progressPct={progressPct}
-            currentPhaseLabel={currentPhaseLabel}
+            currentPhaseLabel={progressDerived.phaseLabel ?? currentPhaseLabel}
+            thinkingDetail={progressDerived.thinkingDetail}
             onCancel={onCancel}
           />
         </div>
@@ -287,25 +341,38 @@ export function V2ReportView({
   );
 }
 
-/* ───────── Progress Header ───────── */
+/* ───────── Progress Header ─────────
+ *
+ * Prior layout truncated the "Thinking: ..." message to one line (dropping
+ * the middle/end of each update) AND wasted a second line on a static
+ * "Hold tight — research streams in over 4-6 minutes" that never changed
+ * across the run.
+ *
+ * New layout keeps two rows, just better used:
+ *   Row 1: Phase label (short human-readable, e.g. "Deep Research") · % · Cancel
+ *   Row 2: Thinking / status detail — full width, wraps up to 3 lines
+ *          (replaces the static "Hold tight" — live detail flows into that
+ *          space so the user can actually read what's happening)
+ *   Row 3: Progress bar
+ */
 function ProgressHeader({
   progressPct,
   currentPhaseLabel,
+  thinkingDetail,
   onCancel,
 }: {
   progressPct: number;
   currentPhaseLabel?: string;
+  thinkingDetail?: string;
   onCancel?: () => void;
 }) {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
-      <div className="px-4 pt-3 pb-3 flex items-center gap-3">
+      {/* Row 1 — phase label + % + Cancel (single line, tight) */}
+      <div className="px-4 pt-3 pb-1 flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-[13.5px] font-semibold text-zinc-900 dark:text-zinc-50 truncate tracking-tight">
             {currentPhaseLabel ?? 'Running analysis…'}
-          </div>
-          <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            Hold tight — research streams in over 4–6 minutes.
           </div>
         </div>
         <div className="shrink-0 flex items-center gap-2">
@@ -321,6 +388,12 @@ function ProgressHeader({
             </button>
           )}
         </div>
+      </div>
+      {/* Row 2 — live thinking/status detail flows into the full width.
+          Wraps up to 3 lines so the reader actually gets to see what's
+          happening (previously truncated mid-sentence with "..."). */}
+      <div className="px-4 pb-2.5 text-[11.5px] text-zinc-500 dark:text-zinc-400 leading-snug line-clamp-3 break-words min-h-[1.35em]">
+        {thinkingDetail ?? 'Running analysis — research streams in over 4–6 minutes.'}
       </div>
       <div className="h-1 bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
         <div
