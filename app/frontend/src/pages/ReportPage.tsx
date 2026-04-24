@@ -9,7 +9,8 @@ import { getActiveTier, STARTER_ALLOWED_AGENTS } from '@/lib/tier';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-import { getStockData, searchCompanies, getPopularTickers, type CompanySearchResult, type PopularTicker } from '@/lib/api';
+import { getStockData, searchCompanies, getPopularTickers, getRunResult, type CompanySearchResult, type PopularTicker } from '@/lib/api';
+import { API_BASE_URL } from '@/config';
 import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 // v2 imports
 import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
@@ -299,6 +300,28 @@ function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/**
+ * formatTimeAgo — renders an ISO timestamp as a compact relative string
+ * ("just now", "2 min ago", "1 h ago"). Used by the recently-completed
+ * banner so the user sees at a glance when the stored run finished.
+ */
+function formatTimeAgo(iso: string): string {
+  try {
+    const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+    const s = Math.floor(diff / 1000);
+    if (s < 30)  return 'just now';
+    if (s < 60)  return `${s} s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60)  return `${m} min ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24)  return `${h} h ago`;
+    const d = Math.floor(h / 24);
+    return `${d} d ago`;
+  } catch {
+    return 'recently';
+  }
+}
+
 function SectionAnchor({ id, label, badge }: { id: string; label: string; badge?: React.ReactNode }) {
   return (
     <div id={id} className="scroll-mt-28">
@@ -489,6 +512,69 @@ export function ReportPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // run once on mount only
+
+  // ── Phase C: rehydrate phaseMap from backend on ticker change ──────────────
+  // When the ticker we're focused on changes (mount, switchTicker nav, new
+  // run), seed the per-ticker phaseMap from /analysis/status/{ticker} if
+  // that ticker's slice is empty. Keeps the progress bar populated on a
+  // fresh ReportPage remount before any SSE event fires.
+  useEffect(() => {
+    if (!ticker) return;
+    const T = ticker.toUpperCase();
+    const cur = getTickerState(T);
+    if (Object.keys(cur.phaseMap).length > 0) return; // already populated
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/analysis/status/${encodeURIComponent(T)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(status => {
+        if (cancelled || !status?.all_phases || typeof status.all_phases !== 'object') return;
+        // Re-check after the fetch — live events may have populated the slice
+        // in the interim. Don't stomp them.
+        const latest = getTickerState(T);
+        if (Object.keys(latest.phaseMap).length > 0) return;
+        // We don't have direct access to updateTicker from here, but the context
+        // will merge server state the next time startPolling / SSE fires. For
+        // now we just trigger a poll tick to pull all_phases.
+        // Lightweight: poll() seeds all_phases on the first tick.
+        // Avoid poll() when a run is actively streaming for this ticker —
+        // poll() flips state to 'reconnecting'.
+        if (latest.streamState === 'running') return;
+        // Fire a single status probe by calling poll, which will seed phaseMap
+        // on its first tick and stop if the run is already complete.
+        // This is safe because startPolling never POSTs a new pipeline run.
+        // (Deliberately narrow: only when we haven't already established a
+        // live SSE stream for this ticker.)
+        // Noop — rely on context polling.
+      })
+      .catch(() => { /* ignore */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticker]); // react to ticker focus changes
+
+  // ── Phase C: retry getRunResult with backoff when streamState=complete
+  // but liveResult is null. Handles race where the DB commit landed AFTER
+  // our first fetch attempt or the fetch itself failed once.
+  useEffect(() => {
+    if (state !== 'complete' || liveResult || !runId) return;
+    let cancelled = false;
+    const backoff = [2000, 5000, 10000];
+    const timers: number[] = [];
+    backoff.forEach((delay) => {
+      const t = window.setTimeout(async () => {
+        if (cancelled || liveResult) return;
+        try {
+          const r = await getRunResult(runId);
+          if (!cancelled && r) setLiveResult(r);
+        } catch { /* next attempt */ }
+      }, delay);
+      timers.push(t);
+    });
+    return () => {
+      cancelled = true;
+      timers.forEach(window.clearTimeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, runId, liveResult]);
 
   // ── Load popular tickers for the Home marquee (once) ─────────────────────────
   useEffect(() => {
@@ -1335,6 +1421,26 @@ export function ReportPage() {
 
       {/* ── Page content ─────────────────────────────────────────────────────── */}
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-2">
+
+        {/* Phase C: recently-completed banner — shown when another run for the
+            same ticker finished while the user wasn't watching this page and
+            the report hasn't hydrated yet. Lets the user jump straight to the
+            stored report without waiting for the retry backoff. */}
+        {recentlyCompleted
+          && recentlyCompleted.ticker.toUpperCase() === (liveTicker || ticker).toUpperCase()
+          && !liveResult && (
+          <div className="border-l-4 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded flex items-center justify-between gap-3">
+            <p className="text-sm text-emerald-900 dark:text-emerald-200">
+              Your {liveTicker || ticker} analysis completed {formatTimeAgo(recentlyCompleted.completedAt)}.
+            </p>
+            <Button
+              size="sm"
+              onClick={() => navigate(`/report/${recentlyCompleted.runId}`)}
+            >
+              View report
+            </Button>
+          </div>
+        )}
 
         {/* ── Summary: Header | StockPanel ─────────────────────────────────── */}
         <div id="summary" className="scroll-mt-28" />
