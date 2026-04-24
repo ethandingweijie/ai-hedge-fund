@@ -307,47 +307,98 @@ def _run_extractors(
     deep_research: str,
     raw_financials: dict,
 ) -> dict[str, Any]:
-    """Run the 2 universal extractors + 1 sector-specific extractor.
+    """Run the 2 universal extractors + 1 sector-specific extractor IN PARALLEL.
 
     Returns a dict of {extractor_name: output}. Values mirror what
     state["data"][<name>] would hold after a live pipeline run:
       dcf_calibration, segment_scenarios: dict
       saas_metrics / bank_metrics / reit_metrics: dict
       pipeline_assets: list
+
+    Parallelization rationale:
+    LLM API calls are I/O-bound (network wait, not CPU). ThreadPoolExecutor
+    lets the 3 Qwen calls fire concurrently instead of serially — wall time
+    drops from ~30s (3 × ~10s sequential) to ~10s (slowest-wins parallel).
+    Mirrors the live pipeline's extractor fan-out at deep_research.py
+    line 3581. max_workers=len(tasks) ensures one worker per task — zero
+    queuing delay.
+
+    FMP fallback (_compute_saas_metrics_fallback) runs AFTER the thread pool
+    completes because it's pure-Python / non-I/O and depends on the LLM's
+    raw result. Running it in-thread would add no speedup.
     """
-    out: dict[str, Any] = {}
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    # Always run the two universal extractors
-    out["dcf_calibration"] = _extract_dcf_calibration(
-        sdk_client, model_name, sections, ticker
-    )
-    out["segment_scenarios"] = _extract_segment_scenarios(
-        sdk_client, model_name, sections, deep_research, ticker
-    )
-
-    # Sector-specific — includes TICKER_SECTOR_LOOKUP fallback when the
-    # stored profile_name is empty (historic runs archived before the
-    # strategic_router pre-classification was added)
+    # Decide which sector extractor applies (TICKER_SECTOR_LOOKUP fallback
+    # for runs with empty stored profile_name)
     sector_extractor, _effective_profile = _decide_sector_extractor(
         sector, profile_name, ticker=ticker
     )
+
+    # Build task map — callables to submit to the thread pool. Universal
+    # extractors always fire; sector-specific is added based on dispatch.
+    tasks: dict[str, Any] = {
+        "dcf_calibration": lambda: _extract_dcf_calibration(
+            sdk_client, model_name, sections, ticker
+        ),
+        "segment_scenarios": lambda: _extract_segment_scenarios(
+            sdk_client, model_name, sections, deep_research, ticker
+        ),
+    }
     if sector_extractor == "saas_metrics":
-        raw = _extract_saas_metrics(
+        tasks["saas_metrics"] = lambda: _extract_saas_metrics(
             sdk_client, model_name, sections, deep_research, ticker
         )
-        # Apply FMP fallback after LLM pass — mirrors deep_research.py line 3377
-        out["saas_metrics"] = _compute_saas_metrics_fallback(raw_financials, raw)
     elif sector_extractor == "bank_metrics":
-        out["bank_metrics"] = _extract_bank_metrics(
+        tasks["bank_metrics"] = lambda: _extract_bank_metrics(
             sdk_client, model_name, sections, deep_research, ticker
         )
     elif sector_extractor == "reit_metrics":
-        out["reit_metrics"] = _extract_reit_metrics(
+        tasks["reit_metrics"] = lambda: _extract_reit_metrics(
             sdk_client, model_name, sections, deep_research, ticker
         )
     elif sector_extractor == "pipeline_assets":
-        out["pipeline_assets"] = _extract_pipeline_assets(
+        tasks["pipeline_assets"] = lambda: _extract_pipeline_assets(
             sdk_client, model_name, sections, deep_research, ticker
+        )
+
+    # Fan out all LLM calls concurrently. Each extractor uses its own Qwen
+    # request so they don't contend for the same HTTP connection — but they
+    # DO share the same DashScope account rate limit, which the
+    # _call_llm_with_rate_retry wrapper handles per-extractor with backoff.
+    out: dict[str, Any] = {}
+    errors: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        future_to_name = {executor.submit(fn): name for name, fn in tasks.items()}
+        for future in as_completed(future_to_name):
+            name = future_to_name[future]
+            try:
+                out[name] = future.result()
+            except Exception as exc:
+                # Extractor-level failure — log, record, and fall through with
+                # empty result. The main reextract_for_run loop treats missing
+                # extractors as "no new data" (would_update=False).
+                err_msg = f"{type(exc).__name__}: {str(exc)[:200]}"
+                print(f"  [run_extractors {ticker}] {name} failed: {err_msg}")
+                errors[name] = err_msg
+                # Record appropriate empty default so the output shape is stable
+                if name == "pipeline_assets":
+                    out[name] = []
+                elif name == "dcf_calibration":
+                    out[name] = {
+                        "growth_rate_adj": None, "margin_direction": "stable",
+                        "risk_flag": "MEDIUM", "notes": f"Extraction failed: {err_msg}",
+                    }
+                else:
+                    out[name] = {}
+
+    # FMP fallback for saas_metrics — runs AFTER the thread pool completes,
+    # merging LLM-extracted KPIs with FMP-computable ones (Rule of 40 from
+    # revenue+FCF, Magic Number from revenue+S&M, etc.). Pure-Python, no I/O,
+    # so parallelizing it would add nothing.
+    if "saas_metrics" in out and isinstance(out["saas_metrics"], dict):
+        out["saas_metrics"] = _compute_saas_metrics_fallback(
+            raw_financials, out["saas_metrics"]
         )
 
     return out
