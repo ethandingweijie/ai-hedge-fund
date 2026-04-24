@@ -247,10 +247,40 @@ def run_advanced_pipeline(
         print("[3/10] Deep Research (Claude+Tavily) & Data Router")
         print('='*60)
         state = run_data_router(state)
+        # Emit comprehensive partial_data so the frontend populates Valuation
+        # Key Metrics + Commentary cards mid-run (2026-04-25).
+        # Previous emit only surfaced the raw deep_research text + citations,
+        # leaving saas_metrics / bank_metrics / reit_metrics / pipeline_assets /
+        # deep_research_sections / dcf_calibration / segment_scenarios stuck
+        # on "Computing..." skeletons until pipeline fully completed AND
+        # liveResult loaded. User feedback: "want content populated when the
+        # corresponding phase completes". Extractors all finish inside Phase 3,
+        # so emit them together here.
         progress.update_status("deep_research_agent", primary_ticker, "✓ Research complete",
-                               partial_data={"deep_research":           state["data"].get("deep_research"),
-                                             "deep_research_annotated": state["data"].get("deep_research_annotated"),
-                                             "citation_registry":       state["data"].get("citation_registry", [])})
+                               partial_data={
+                                   # Core research output
+                                   "deep_research":           state["data"].get("deep_research"),
+                                   "deep_research_annotated": state["data"].get("deep_research_annotated"),
+                                   "deep_research_sections":  state["data"].get("deep_research_sections", {}),
+                                   "citation_registry":       state["data"].get("citation_registry", []),
+                                   "research_tier":           state["data"].get("research_tier"),
+                                   # Sector extractor outputs — populate Key Metrics / Traffic Light /
+                                   # Commentary cards progressively instead of post-completion only
+                                   "saas_metrics":            state["data"].get("saas_metrics", {}),
+                                   "bank_metrics":            state["data"].get("bank_metrics", {}),
+                                   "reit_metrics":            state["data"].get("reit_metrics", {}),
+                                   "pipeline_assets":         state["data"].get("pipeline_assets", {}),
+                                   # DCF signal inputs (used internally by Phase 4.5 DCF but also
+                                   # useful for progressive UI reveal of research confidence)
+                                   "dcf_calibration":         state["data"].get("dcf_calibration", {}),
+                                   "segment_scenarios":       state["data"].get("segment_scenarios", {}),
+                                   # Classification — frontend routes Tech Valuation Panel variants
+                                   # (Growth SaaS / Mature SaaS / Hyperscaler) via profile_name;
+                                   # also surfaces in admin DB viewer sub-sector column.
+                                   "profile_name":            state["data"].get("profile_name", ""),
+                                   "profile_names":           state["data"].get("profile_names", {}),
+                                   "sectors":                 state["data"].get("sectors", {}),
+                               })
 
         # ── Checkpoint 1 — deep research complete ─────────────────────────────
         if on_checkpoint:
