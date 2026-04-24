@@ -950,15 +950,38 @@ export function ReportPage() {
 
   // ── Mobile layout: reimagined V2ReportView with 6 tabs ───────────────────
   if (isMobile && liveMode) {
-    // Always hand V2ReportView a result object (real or partial)
-    const displayResult: import('@/lib/reportTypes').RunResult = liveResult ?? {
-      run_id: runId ?? '',
-      ticker: liveTicker || ticker,
-      run_at: runStartedAt.current || new Date().toISOString(),
-      model_name: model,
-      decisions: decision ? { [liveTicker || ticker]: decision } : {},
-      data: data,
-      vgpm: vgpm ? { [liveTicker || ticker]: vgpm } : undefined,
+    // CRITICAL: always MERGE liveData (SSE partial_data) with liveResult.data
+    // (getRunResult fetch). Previous logic `displayResult = liveResult ?? {...}`
+    // discarded liveData entirely once liveResult arrived — if stored run was
+    // missing keys (pre-1ac5490 runs had no saas_metrics/dcf_range/sections),
+    // tiles that had been populated from liveData suddenly showed "Computing..."
+    // after pipeline completed.
+    //
+    // Symptom: Valuation tab shows "Computing..." skeletons even though
+    // phases that emit partial_data (macro_regime, dcf_range, scenario_analysis,
+    // decisions, etc.) clearly completed in Railway logs. User reported:
+    // "All ongoing ticker research shows this state. Even when pipeline
+    // completes, frontend stays like this."
+    //
+    // Fix: merge both sources, with liveResult.data taking precedence where
+    // keys overlap (final result > partial_data snapshot) but PRESERVING
+    // liveData keys that liveResult doesn't cover.
+    const ticker_key = liveTicker || ticker;
+    const mergedData = { ...liveData, ...(liveResult?.data ?? {}) };
+    const mergedDecisions = {
+      ...(liveResult?.decisions ?? {}),
+      ...(decision ? { [ticker_key]: decision } : {}),
+    };
+    const mergedVgpm = liveResult?.vgpm
+      ?? (vgpm ? { [ticker_key]: vgpm } : undefined);
+    const displayResult: import('@/lib/reportTypes').RunResult = {
+      run_id:     runId ?? liveResult?.run_id ?? '',
+      ticker:     ticker_key,
+      run_at:     liveResult?.run_at ?? runStartedAt.current ?? new Date().toISOString(),
+      model_name: liveResult?.model_name ?? model,
+      decisions:  mergedDecisions,
+      data:       mergedData,
+      vgpm:       mergedVgpm,
     };
     const currentPhaseKey = Object.keys(phaseMap).pop();
     const currentPhaseEvent = currentPhaseKey ? phaseMap[currentPhaseKey] : null;
