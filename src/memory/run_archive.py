@@ -189,6 +189,7 @@ _MIGRATIONS = [
     ("ticker_signals", "entry_range_high",          "REAL"),
     ("ticker_signals", "time_horizon",              "TEXT"),
     ("ticker_signals", "pm_rationale",              "TEXT"),
+    ("ticker_signals", "price_at_run",              "REAL"),   # last close at run time — DDL has it; migration missing on Railway volume
     ("ticker_signals", "dcf_base_iv",               "REAL"),
     ("ticker_signals", "dcf_bear_iv",               "REAL"),
     ("ticker_signals", "dcf_bull_iv",               "REAL"),
