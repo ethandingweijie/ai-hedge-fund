@@ -25,6 +25,7 @@ Fallback chain:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -35,6 +36,9 @@ import anthropic
 from src.graph.state import AgentState
 from src.utils.progress import progress
 from src.utils.company_name import fetch_company_name as _fetch_company_name
+
+
+logger = logging.getLogger(__name__)
 
 
 MAX_SEARCHES     = 10     # searches for both Tier 1 (max_uses) and Tier 2 (loop cap)
@@ -213,8 +217,17 @@ def _extract_sections(report_text: str) -> dict[str, str]:
       2f → investor agents    (KPI framework → anchor KPI monitoring)
     """
     ids = ["2F", "2E", "2D", "2C", "2B", "2A"]  # kept for reference
+    # Widened to tolerate LLM formatting variants: `2A.`, `2A:`, `2A—`, `2A-`,
+    # `2A)`, `2A ` — with optional markdown markers (`##`, `###`, `**`, `*`,
+    # `>`) prefixing. The `2[A-F]` anchor remains to avoid over-matching
+    # arbitrary numbers. Without this, runs where the LLM emitted `**2A:**`
+    # or `### 2A —` fell through to `{"full": text}` and downstream consumers
+    # (scenario_agent, power_law_agent, investor agents) never saw the
+    # per-section breakdown → `deep_research_sections` ended up empty in
+    # stored state.
     boundary = re.compile(
-        r"(?:^|\n)[ \t#─]*\b(2[A-F])[\.\s]", re.IGNORECASE
+        r"(?:^|\n)[ \t#─>*]*\*{0,2}\b(2[A-F])[\.\:—\-\)\s]",
+        re.IGNORECASE | re.MULTILINE,
     )
     positions: list[tuple[str, int]] = []
     for m in boundary.finditer(report_text):
@@ -2983,6 +2996,18 @@ def _research_one_ticker(
 
     sections = _extract_sections(final_report)
 
+    # Trace silent parser failures so future regressions are visible. The
+    # widened regex above tolerates most LLM variants, but if a model emits
+    # a wholly non-canonical format (e.g. "Section 2A" spelled out) the parser
+    # drops to {"full": text} and downstream consumers (scenario_agent,
+    # power_law_agent, investor agents) never see per-section data.
+    if (not sections or set(sections.keys()) == {"full"}) and final_report.strip():
+        logger.info(
+            "[deep_research] Section parser matched NO 2A-2F headers for %s — "
+            "LLM output may use a non-canonical header format. First 200 chars: %s",
+            ticker, final_report[:200].replace(chr(10), ' | '),
+        )
+
     # ── Citation Registry extraction ──────────────────────────────────────────
     progress.update_status(agent_id, ticker, "Extracting citation registry from report...")
 
@@ -3079,7 +3104,7 @@ def _research_one_ticker(
     }
     _extractor_tasks = {
         name: fn for name, fn in _all_extractors.items()
-        if needs_extractor(name, sector, profile_name)
+        if needs_extractor(name, sector, profile_name, ticker=ticker)
     }
     _results: dict = {}
     with ThreadPoolExecutor(max_workers=6) as _ex:

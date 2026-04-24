@@ -216,10 +216,31 @@ def _save_partial_web_run(
             "raw_financials":              data.get("raw_financials"),
             "routing_decision":            data.get("routing_decision"),
             "research_tier":               data.get("research_tier"),
+            # Sector classification fields — set by strategic_router BEFORE any
+            # checkpoint fires. Missing them from the subset caused the frontend
+            # to render blank sector panels for runs that were still mid-pipeline
+            # (checkpoint rows live in the same table as final saves and get
+            # returned when users click a run before _save_web_run() replaces
+            # the row with full JSON). CRM / SNOW observed without these.
+            "sector":                      data.get("sector"),
+            "sectors":                     data.get("sectors"),
+            "profile_name":                data.get("profile_name"),
+            "profile_names":               data.get("profile_names"),
             # ── checkpoint: deep_research ────────────────────────────────
             "deep_research":               data.get("deep_research"),
             "deep_research_annotated":     data.get("deep_research_annotated"),
+            "deep_research_sections":      data.get("deep_research_sections"),
             "citation_registry":           data.get("citation_registry", []),
+            # Sector-specific extractor outputs — populated by deep_research.py's
+            # parallel extractor fan-out. Omitting these from the subset caused
+            # saas_metrics / pipeline_assets / bank_metrics / reit_metrics panels
+            # to render empty on any run observed pre-final-save.
+            "saas_metrics":                data.get("saas_metrics"),
+            "pipeline_assets":             data.get("pipeline_assets"),
+            "bank_metrics":                data.get("bank_metrics"),
+            "reit_metrics":                data.get("reit_metrics"),
+            "dcf_calibration":             data.get("dcf_calibration"),
+            "segment_scenarios":           data.get("segment_scenarios"),
             # ── checkpoint: industry_brief ───────────────────────────────
             "industry_brief":              data.get("industry_brief"),
             # ── checkpoint: investor_signals ─────────────────────────────

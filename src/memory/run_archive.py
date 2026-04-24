@@ -1002,7 +1002,12 @@ def _parse_sections_inline(text: str) -> dict[str, str]:
     section headers are found.
     """
     import re
-    boundary = re.compile(r"(?:^|\n)[ \t#─]*\b(2[A-F])[\.\s]", re.IGNORECASE)
+    # Widened to tolerate LLM formatting variants — kept in lock-step with
+    # deep_research._extract_sections(). See that function's docstring.
+    boundary = re.compile(
+        r"(?:^|\n)[ \t#─>*]*\*{0,2}\b(2[A-F])[\.\:—\-\)\s]",
+        re.IGNORECASE | re.MULTILINE,
+    )
     positions: list[tuple[str, int]] = []
     for m in boundary.finditer(text):
         key = m.group(1).lower()

@@ -640,7 +640,12 @@ def is_reit_sector(sector: str) -> bool:
     return "realestate" in s.replace(" ", "") or "reit" in s or "property trust" in s
 
 
-def needs_extractor(extractor: str, sector: str, profile_name: str = "") -> bool:
+def needs_extractor(
+    extractor: str,
+    sector: str,
+    profile_name: str = "",
+    ticker: str = "",
+) -> bool:
     """
     Returns True if the given extractor should run for (sector, profile_name).
 
@@ -651,6 +656,13 @@ def needs_extractor(extractor: str, sector: str, profile_name: str = "") -> bool
     Universal extractors (always run):
       - dcf_calibration
       - segment_scenarios
+
+    The ticker parameter (optional) provides a last-resort fallback for the
+    saas_metrics gate: if profile_name is empty (because strategic_router's
+    profile pre-classification block failed silently), we consult
+    TICKER_SECTOR_LOOKUP directly. Without this, Tech extractors silently
+    skip whenever profile_name doesn't populate — producing empty panels on
+    the UI.
     """
     # Normalise inputs — the LLM-driven classifier emits the sector as a free
     # string that may be the canonical form ("Biopharma", "Tech", "Financials",
@@ -670,13 +682,31 @@ def needs_extractor(extractor: str, sector: str, profile_name: str = "") -> bool
     if extractor == "reit_metrics":
         return is_reit_sector(sector) or "REIT" in (profile_name or "")
     if extractor == "bank_metrics":
+        # bank_metrics already gates on sector only (profile_name is a
+        # tightening filter, not required) — leave as-is.
         return is_bank_sector(sector) and (
             "Bank" in (profile_name or "") or
             profile_name in {"Mortgage/GSE", "Brokerage"}
         )
     if extractor == "pipeline_assets":
+        # pipeline_assets gates on sector only — leave as-is.
         return is_biopharma_sector(sector)
     if extractor == "saas_metrics":
-        return is_tech_sector(sector) and profile_name not in {"", "Levered Subscription"}
+        _is_saas_profile = is_tech_sector(sector) and profile_name not in {"", "Levered Subscription"}
+        if not _is_saas_profile and ticker:
+            # Last-resort fallback when strategic_router's profile
+            # pre-classification failed silently: consult the canonical
+            # ticker→sector→profile lookup directly.
+            try:
+                from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+                _entry = TICKER_SECTOR_LOOKUP.get(ticker.upper())
+                if _entry and is_tech_sector(_entry[0]) and _entry[1] in {
+                    "Hyperscaler / Tech Conglomerate", "Mature SaaS", "Growth SaaS",
+                    "Cybersecurity / Mission-Critical SaaS",
+                }:
+                    _is_saas_profile = True
+            except Exception:
+                pass
+        return _is_saas_profile
     # Unknown extractor — conservative default: run
     return True

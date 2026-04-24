@@ -323,7 +323,14 @@ def run_strategic_router(state: AgentState) -> AgentState:
     except Exception as _exc:
         # Never block strategic_router on profile pre-classification — DCF
         # will classify in-situ as before if this fails.
-        _log.warning(
+        # Use logger.exception so the full traceback is recorded — a silent
+        # failure here strips profile_name / profile_names from state["data"],
+        # which cascades into (a) empty sector panels on the frontend,
+        # (b) saas_metrics extractor being gated off (see sector_prompts.py),
+        # and (c) DCF valuation fallback paths. Previously this used
+        # _log.warning which hid the stacktrace — making it impossible to
+        # diagnose why CRM / Tech runs had no profile classification.
+        _log.exception(
             "[strategic_router] Profile pre-classification skipped: %s", _exc
         )
 

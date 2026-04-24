@@ -177,9 +177,35 @@ def run_data_router(state: AgentState) -> AgentState:
     market_cap = get_market_cap(ticker, end_date, api_key=api_key)
     prices = get_prices(ticker, start_date, end_date, api_key=api_key)
 
-    # Sector-aware overlay: add sector-specific fields to every agent's fetch
+    # Sector-aware overlay: add sector-specific fields to every agent's fetch.
+    # The LLM classifier may emit the sector as the canonical key ("Tech",
+    # "Biopharma", "Financials", "RealEstate") OR a loose variant
+    # ("Technology", "Biotechnology", "Banking", "Real Estate", …). Strict
+    # equality silently dropped the overlay whenever a variant was stored —
+    # observed on CRM where sector was "Technology" and stock_based_compensation
+    # / R&D / gross_margin / operating_income were missing from raw_financials
+    # despite being wired into SECTOR_LINE_ITEM_OVERLAYS["Tech"]. Use the
+    # shared is_*_sector() helpers to route variants to the canonical key.
+    from src.agents.industry.sector_prompts import (
+        is_biopharma_sector, is_tech_sector, is_bank_sector, is_reit_sector,
+    )
     sector = state["data"].get("sector", "")
-    sector_extras: set[str] = set(SECTOR_LINE_ITEM_OVERLAYS.get(sector, []))
+    _overlay_key = None
+    if is_biopharma_sector(sector):
+        _overlay_key = "Biopharma"
+    elif is_tech_sector(sector):
+        _overlay_key = "Tech"
+    elif is_bank_sector(sector):
+        _overlay_key = "Financials"
+    elif is_reit_sector(sector):
+        _overlay_key = "RealEstate"
+    else:
+        # Exact-match fallback for sectors that don't have loose-match helpers
+        # (Energy, Industrials, Consumer, Telco, Crypto, HealthcareServices, …)
+        _overlay_key = sector if sector in SECTOR_LINE_ITEM_OVERLAYS else None
+    sector_extras: set[str] = (
+        set(SECTOR_LINE_ITEM_OVERLAYS.get(_overlay_key, [])) if _overlay_key else set()
+    )
 
     # Deduplicate line item requests across all agents (+ sector overlays)
     all_fields: set[str] = set()
@@ -208,6 +234,35 @@ def run_data_router(state: AgentState) -> AgentState:
                     "period": item.report_period,
                     "value": val,
                 })
+
+    # Merge sector-overlay line items into raw_financials so downstream agents
+    # and the LLM context injection see the complete per-FY row. Without this,
+    # Tech tickers are missing stock_based_compensation / R&D / gross_margin /
+    # operating_income despite the overlay being fetched. Same applies for
+    # Biopharma (R&D / intangibles), Bank (non-interest income), REIT (FFO/NOI).
+    _raw_fin = state["data"].get("raw_financials")
+    if isinstance(_raw_fin, dict):
+        # Index line items by FY key (same format raw_financials uses: "FY2024" etc.)
+        # line_item_by_field is keyed by field → [{period: "2024-01-31", value: ...}, ...]
+        # Build FY → field → value map by extracting FY from the period string
+        import re as _re
+        _period_to_fy: dict[str, dict[str, object]] = {}
+        for _field, _entries in line_item_by_field.items():
+            for _entry in _entries:
+                _period = _entry.get("period", "")
+                _year_match = _re.search(r"(\d{4})", _period)
+                if not _year_match:
+                    continue
+                _fy = f"FY{_year_match.group(1)}"
+                _period_to_fy.setdefault(_fy, {})[_field] = _entry.get("value")
+        # Augment each FY row with any overlay fields it lacks
+        for _fy, _fy_dict in _raw_fin.items():
+            if not isinstance(_fy_dict, dict):
+                continue
+            _overlay_row = _period_to_fy.get(_fy, {})
+            for _field, _val in _overlay_row.items():
+                if _field not in _fy_dict and _val is not None:
+                    _fy_dict[_field] = _val
 
     # Build per-agent data bundles (agent-specific fields + sector overlays)
     routed_data: dict[str, dict] = {}
