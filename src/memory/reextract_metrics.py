@@ -387,13 +387,14 @@ def _diagnose_saas_extractor(
     """
     import re as _re_diag
 
-    # Mirror the input construction from _extract_saas_metrics
+    # Mirror the input construction from _extract_saas_metrics.
+    # 2F first — that's where NRR/CAC/Rule of 40/Magic Number live.
     s2a = sections.get("2a") or sections.get("2A") or ""
     s2d = sections.get("2d") or sections.get("2D") or ""
     s2f = sections.get("2f") or sections.get("2F") or ""
-    combined = (s2a + "\n\n" + s2d + "\n\n" + s2f).strip()
+    combined = (s2f + "\n\n" + s2a + "\n\n" + s2d).strip()
     if not combined or len(combined) < 500:
-        combined = (deep_research or "")[:8000]
+        combined = (deep_research or "")[:20000]
 
     result: dict[str, Any] = {
         "input_chars": len(combined),
@@ -441,7 +442,7 @@ def _diagnose_saas_extractor(
             system=_system,
             messages=[{
                 "role": "user",
-                "content": f"Ticker: {ticker}\n\nResearch excerpts:\n{combined[:8000]}",
+                "content": f"Ticker: {ticker}\n\nResearch excerpts:\n{combined[:20000]}",
             }],
         )
         raw = "".join(b.text for b in resp.content if hasattr(b, "text"))

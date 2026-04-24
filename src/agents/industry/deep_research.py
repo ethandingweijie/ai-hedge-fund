@@ -774,7 +774,7 @@ def _extract_segment_scenarios(
                 "role": "user",
                 "content": (
                     f"Ticker: {ticker}\n\n"
-                    f"Research excerpts (cycle + risk + KPI sections):\n{combined[:8000]}"
+                    f"Research excerpts (cycle + risk + KPI sections):\n{combined[:20000]}"
                 ),
             }],
         )
@@ -849,9 +849,15 @@ def _extract_saas_metrics(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
+    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
+    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
+    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
+    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
+    # were invisible). Put 2F first so it's guaranteed in the char window.
+    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
     if not combined or len(combined) < 500:
-        combined = (deep_research or "")[:8000]
+        combined = (deep_research or "")[:20000]
     if not combined:
         return {}
 
@@ -911,7 +917,7 @@ def _extract_saas_metrics(
                 "role": "user",
                 "content": (
                     f"Ticker: {ticker}\n\n"
-                    f"Research excerpts:\n{combined[:8000]}"
+                    f"Research excerpts:\n{combined[:20000]}"
                 ),
             }],
         )
@@ -1112,9 +1118,15 @@ def _extract_bank_metrics(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
+    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
+    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
+    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
+    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
+    # were invisible). Put 2F first so it's guaranteed in the char window.
+    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
     if not combined or len(combined) < 500:
-        combined = (deep_research or "")[:8000]
+        combined = (deep_research or "")[:20000]
     if not combined:
         return {}
 
@@ -1176,7 +1188,7 @@ def _extract_bank_metrics(
                 "role": "user",
                 "content": (
                     f"Ticker: {ticker}\n\n"
-                    f"Research excerpts:\n{combined[:8000]}"
+                    f"Research excerpts:\n{combined[:20000]}"
                 ),
             }],
         )
@@ -1270,9 +1282,15 @@ def _extract_reit_metrics(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
+    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
+    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
+    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
+    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
+    # were invisible). Put 2F first so it's guaranteed in the char window.
+    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
     if not combined or len(combined) < 500:
-        combined = (deep_research or "")[:8000]
+        combined = (deep_research or "")[:20000]
     if not combined:
         return {}
 
@@ -1340,7 +1358,7 @@ def _extract_reit_metrics(
                 "role": "user",
                 "content": (
                     f"Ticker: {ticker}\n\n"
-                    f"Research excerpts (moat + cycle + KPI sections):\n{combined[:8000]}"
+                    f"Research excerpts (moat + cycle + KPI sections):\n{combined[:20000]}"
                 ),
             }],
         )
@@ -1452,9 +1470,15 @@ def _extract_pipeline_assets(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
+    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
+    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
+    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
+    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
+    # were invisible). Put 2F first so it's guaranteed in the char window.
+    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
     if not combined or len(combined) < 500:
-        combined = (deep_research or "")[:8000]
+        combined = (deep_research or "")[:20000]
     if not combined:
         return []
 
