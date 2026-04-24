@@ -879,47 +879,112 @@ def _extract_saas_metrics(
     if not combined:
         return {}
 
+    # System prompt shared between first attempt and retry
+    _system_prompt = (
+        # Simplified 2026-04-24: the previous 40-line prompt with
+        # derivation hints ("compute ONLY when 4 inputs explicitly
+        # cited") made Qwen overly cautious — it returned {} on DDOG
+        # despite NRR 120%, Rule of 40 57.2, Magic Number 0.61 all
+        # present in 2F. The diagnostic path with this shorter prompt
+        # returned 7 validated KPIs from the same input. Matching the
+        # diagnostic's prompt structure for the real extractor too.
+        "You are a SaaS / tech-company analyst. Extract structured KPIs "
+        "from the research and return ONLY valid JSON (no markdown fences, "
+        "no commentary).\n\n"
+        "Schema (all fields OPTIONAL — omit if not substantiated):\n"
+        "  nrr_pct: float (0.80-1.50, net revenue retention as decimal)\n"
+        "  gross_retention_pct: float (0.80-1.00)\n"
+        "  cac_payback_months: float (3-60)\n"
+        "  ltv_cac_ratio: float (1-15)\n"
+        "  rule_of_40_score: float (-30 to 120, growth% + FCF margin%)\n"
+        "  magic_number: float (0.1-3.0)\n"
+        "  rpo_growth_yoy: float (-0.20 to 0.80)\n"
+        "  billings_growth_yoy: float (-0.20 to 0.80)\n"
+        "  evidence: string ≤300 chars\n\n"
+        "Rules: Return {} if not SaaS. Convert percentages to decimals "
+        "(120% NRR → 1.20; 57 Rule of 40 score → 57)."
+    )
+    _user_content = (
+        f"Ticker: {ticker}\n\n"
+        f"Research excerpts:\n{combined[:20000]}"
+    )
+    # Stricter prompt variant for retry — emphasizes "extract aggressively"
+    # to push Qwen out of the conservative "omit anything unclear" sampling
+    # path that sometimes produces {} on the first call.
+    _retry_system_prompt = _system_prompt + (
+        "\n\nIMPORTANT: If the research mentions ANY of these metrics — even "
+        "approximately (e.g. '~125% NRR', 'about 0.7 Magic Number') — EXTRACT "
+        "them. Return {} ONLY if the company is not a SaaS / subscription "
+        "business. Do not omit fields that have any supporting mention in the "
+        "research."
+    )
+
+    # Numeric KPI field names — used to detect empty-response for retry-on-empty.
+    # Hoisted above the try block so retry logic can reference it before
+    # the main _clamps dict is constructed below.
+    _numeric_kpi_keys = {
+        "nrr_pct", "gross_retention_pct", "cac_payback_months",
+        "ltv_cac_ratio", "rule_of_40_score", "magic_number",
+        "rpo_growth_yoy", "billings_growth_yoy",
+    }
+
+    def _numeric_kpi_count(parsed_dict) -> int:
+        """Count fields in parsed dict that are extractable numeric KPIs
+        (excludes evidence string). Determines whether Qwen returned real
+        data vs a mostly-empty response."""
+        if not isinstance(parsed_dict, dict):
+            return 0
+        return sum(
+            1 for k, v in parsed_dict.items()
+            if k in _numeric_kpi_keys and isinstance(v, (int, float))
+        )
+
     try:
+        # ── First call ────────────────────────────────────────────────────
         resp = _call_llm_with_rate_retry(
             sdk_client,
             extractor_name="saas_metrics",
             ticker=ticker,
             model=model_name,
             max_tokens=500,
-            system=(
-                # Simplified 2026-04-24: the previous 40-line prompt with
-                # derivation hints ("compute ONLY when 4 inputs explicitly
-                # cited") made Qwen overly cautious — it returned {} on DDOG
-                # despite NRR 120%, Rule of 40 57.2, Magic Number 0.61 all
-                # present in 2F. The diagnostic path with this shorter prompt
-                # returned 7 validated KPIs from the same input. Matching the
-                # diagnostic's prompt structure for the real extractor too.
-                "You are a SaaS / tech-company analyst. Extract structured KPIs "
-                "from the research and return ONLY valid JSON (no markdown fences, "
-                "no commentary).\n\n"
-                "Schema (all fields OPTIONAL — omit if not substantiated):\n"
-                "  nrr_pct: float (0.80-1.50, net revenue retention as decimal)\n"
-                "  gross_retention_pct: float (0.80-1.00)\n"
-                "  cac_payback_months: float (3-60)\n"
-                "  ltv_cac_ratio: float (1-15)\n"
-                "  rule_of_40_score: float (-30 to 120, growth% + FCF margin%)\n"
-                "  magic_number: float (0.1-3.0)\n"
-                "  rpo_growth_yoy: float (-0.20 to 0.80)\n"
-                "  billings_growth_yoy: float (-0.20 to 0.80)\n"
-                "  evidence: string ≤300 chars\n\n"
-                "Rules: Return {} if not SaaS. Convert percentages to decimals "
-                "(120% NRR → 1.20; 57 Rule of 40 score → 57)."
-            ),
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Ticker: {ticker}\n\n"
-                    f"Research excerpts:\n{combined[:20000]}"
-                ),
-            }],
+            system=_system_prompt,
+            messages=[{"role": "user", "content": _user_content}],
         )
         raw = "".join(b.text for b in resp.content if hasattr(b, "text"))
         parsed = _parse_llm_json(raw, extractor_name="saas_metrics")
+
+        # ── Retry-on-empty: if first call returned no numeric KPIs, try ────
+        # ── once more with a sharper prompt. Addresses Qwen's non-deterministic
+        # ── tendency to return {} or {"evidence": ...} on ~20% of first calls
+        # ── despite the 2F content clearly containing NRR / Magic Number /
+        # ── Rule of 40 etc. Observed on SNOW 2026-04-24: first call {} →
+        # ── re-extract second call returned 5 KPIs from same input.
+        _first_numeric_count = _numeric_kpi_count(parsed) if isinstance(parsed, dict) else 0
+        _retried = False
+        if isinstance(parsed, dict) and _first_numeric_count == 0 and combined and len(combined) >= 500:
+            print(
+                f"  [saas_metrics {ticker}] first call returned 0 numeric KPIs "
+                f"(parsed_keys={sorted(parsed.keys())}), retrying with sharper prompt..."
+            )
+            try:
+                resp2 = _call_llm_with_rate_retry(
+                    sdk_client,
+                    extractor_name="saas_metrics_retry",
+                    ticker=ticker,
+                    model=model_name,
+                    max_tokens=500,
+                    system=_retry_system_prompt,
+                    messages=[{"role": "user", "content": _user_content}],
+                )
+                raw2 = "".join(b.text for b in resp2.content if hasattr(b, "text"))
+                parsed2 = _parse_llm_json(raw2, extractor_name="saas_metrics_retry")
+                if isinstance(parsed2, dict) and _numeric_kpi_count(parsed2) > 0:
+                    # Retry won — use its result
+                    raw = raw2
+                    parsed = parsed2
+                    _retried = True
+            except Exception as _retry_exc:
+                print(f"  [saas_metrics {ticker}] retry failed: {type(_retry_exc).__name__}: {_retry_exc}")
 
         # Diagnostic: shows raw response length + parsed state so ops can
         # distinguish (a) Qwen returned unparseable text (b) Qwen returned
@@ -928,8 +993,9 @@ def _extract_saas_metrics(
         # re-running the full pipeline.
         _raw_preview = (raw or "")[:200].replace("\n", " ⏎ ")
         _parsed_keys = sorted(parsed.keys()) if isinstance(parsed, dict) else []
+        _retry_tag = " [after retry]" if _retried else ""
         print(
-            f"  [saas_metrics {ticker}] input={len(combined)} chars · "
+            f"  [saas_metrics {ticker}]{_retry_tag} input={len(combined)} chars · "
             f"raw_response={len(raw or '')} chars · "
             f"parsed_type={type(parsed).__name__} · "
             f"parsed_keys={_parsed_keys} · "
