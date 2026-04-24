@@ -178,17 +178,18 @@ def _resolve_extractor_client(
         #   /compatible-mode/v1  → OpenAI-compat (needs openai SDK)
         #   /apps/anthropic      → Anthropic-compat (needs anthropic SDK)
         # User's DEEP_RESEARCH_BASE_URL is the Anthropic-compat endpoint
-        # (/apps/anthropic), so anthropic SDK is the correct client. Routing
-        # openai SDK here returns 404 because /apps/anthropic has no
-        # /chat/completions path.
-        # Rate-limit handling is delegated to _call_llm_with_rate_retry which
-        # string-matches Anthropic SDK's PermissionDeniedError messages
-        # ("rate limit" / "AccessDenied") and retries with exponential
-        # backoff + Retry-After header respect.
+        # (/apps/anthropic), so anthropic SDK is the correct client.
+        #
+        # timeout=180.0 (3 min) — DDOG re-extract hit APITimeoutError at
+        # 60s on 2026-04-24. Qwen can be slow to start generation under
+        # rate-limit pressure or when the model is warming up; 60s was
+        # too tight. 3 min matches the long-tail latency observed in
+        # production without masking genuine hangs.
+        # Rate-limit handling is delegated to _call_llm_with_rate_retry.
         client = anthropic.Anthropic(
             api_key=dashscope_key,
             base_url=dashscope_base_url,
-            timeout=60.0,
+            timeout=180.0,
             max_retries=0,  # handled by _call_llm_with_rate_retry
         )
         return client, dashscope_model, "qwen"

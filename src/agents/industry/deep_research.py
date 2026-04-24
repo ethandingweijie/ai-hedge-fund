@@ -88,6 +88,7 @@ def _call_llm_with_rate_retry(
             return sdk_client.messages.create(**create_kwargs)
         except Exception as exc:
             msg = str(exc).lower()
+            exc_name = type(exc).__name__.lower()
             is_rate_limit = (
                 "rate limit" in msg
                 or "ratelimit" in msg
@@ -97,9 +98,20 @@ def _call_llm_with_rate_retry(
                 or "accessdenied" in msg
                 or "access_denied" in msg
             )
-            if not is_rate_limit:
-                # Not a rate limit — propagate (auth errors, bad request,
-                # server errors handled by SDK retry)
+            # APITimeoutError / connection drops from Qwen — treat as retryable
+            # transient failures (same category as rate limits operationally).
+            # Observed on DDOG 2026-04-24: Qwen hung beyond 60s client timeout
+            # → APITimeoutError → extractor returned {} silently. Retry gives
+            # Qwen a second chance with fresh connection.
+            is_timeout = (
+                "timeout" in msg
+                or "timed out" in msg
+                or "connection" in msg
+                or "apitimeouterror" in exc_name
+                or "apiconnectionerror" in exc_name
+            )
+            if not is_rate_limit and not is_timeout:
+                # Not retryable — propagate (auth errors, bad request, etc.)
                 raise
             last_exc = exc
             if attempt == max_retries:
@@ -138,9 +150,10 @@ def _call_llm_with_rate_retry(
                 wait = computed_wait
                 wait_source = "exponential"
 
+            failure_kind = "timeout" if is_timeout and not is_rate_limit else "rate-limited"
             print(
                 f"  [llm_rate_retry] {extractor_name}{' ' + ticker if ticker else ''} "
-                f"rate-limited (attempt {attempt + 1}/{max_retries + 1}), "
+                f"{failure_kind} (attempt {attempt + 1}/{max_retries + 1}), "
                 f"sleeping {wait:.0f}s [{wait_source}]..."
             )
             _time.sleep(wait)
