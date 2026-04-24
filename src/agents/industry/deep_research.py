@@ -46,8 +46,9 @@ def _call_llm_with_rate_retry(
     *,
     extractor_name: str,
     ticker: str = "",
-    max_retries: int = 4,
-    base_backoff: float = 2.0,
+    max_retries: int = 5,
+    base_backoff: float = 3.0,
+    max_wait: float = 60.0,
     **create_kwargs,
 ):
     """Wrapper around sdk_client.messages.create() with DashScope rate-limit retry.
@@ -58,18 +59,26 @@ def _call_llm_with_rate_retry(
     408/409/429/500+ so 403 RateLimit errors fall through silently, the
     extractor's except-catch returns {}, and the user sees empty KPIs.
 
-    This wrapper catches PermissionDeniedError with "rate limit" in the
-    message body and retries with exponential backoff (2s, 4s, 8s, 16s).
-    Observed from DDOG re-extract diagnostic at 2026-04-24: DashScope
-    returned 403 code AccessDenied message "Rate limit exceeded. Please
-    wait and try again, or upgrade your API plan."
+    Defaults (v2 — 2026-04-24):
+      max_retries=5, base_backoff=3.0, max_wait=60.0
+      Budget (worst case): 3 + 6 + 12 + 24 + 48 = 93s
+      Cap per wait: 60s (so 48s → 48s, no cap yet)
 
-    All other PermissionDeniedError types (auth failures, real permission
-    issues) propagate immediately. Non-PermissionDenied errors propagate
-    too — the underlying SDK handles those.
+    Features:
+      * Catches any exception whose message matches rate-limit / quota /
+        throttle — covers both anthropic SDK (PermissionDeniedError) and
+        openai SDK (RateLimitError, PermissionDeniedError) errors.
+      * Respects HTTP Retry-After header when the exception carries an
+        upstream response object. Respects server's guidance OR uses
+        our computed backoff — whichever is larger (so we don't hammer
+        sooner than the server requested).
+      * Exponential backoff: 3s → 6s → 12s → 24s → 48s (capped at max_wait).
+
+    All other exceptions propagate immediately — auth errors, bad request,
+    server errors handled by SDK's own retry mechanism.
 
     Usage: drop-in replacement for sdk_client.messages.create(**kwargs).
-    Same return type (anthropic.types.Message).
+    Same return type.
     """
     import time as _time
 
@@ -85,6 +94,8 @@ def _call_llm_with_rate_retry(
                 or "rate_limit" in msg
                 or "quota" in msg
                 or "throttl" in msg
+                or "accessdenied" in msg
+                or "access_denied" in msg
             )
             if not is_rate_limit:
                 # Not a rate limit — propagate (auth errors, bad request,
@@ -95,14 +106,42 @@ def _call_llm_with_rate_retry(
                 # Exhausted retries — propagate
                 print(
                     f"  [llm_rate_retry] {extractor_name}{' ' + ticker if ticker else ''} "
-                    f"exhausted {max_retries} retries: {type(exc).__name__}"
+                    f"exhausted {max_retries} retries: {type(exc).__name__}: {str(exc)[:200]}"
                 )
                 raise
-            wait = base_backoff * (2 ** attempt)
+
+            # Exponential backoff
+            computed_wait = min(base_backoff * (2 ** attempt), max_wait)
+
+            # Respect server's Retry-After if present (openai SDK exposes
+            # this on APIStatusError.response.headers; anthropic SDK has
+            # it on BadRequestError.response too but naming varies)
+            retry_after_seconds: float | None = None
+            try:
+                response = getattr(exc, "response", None)
+                if response is not None:
+                    headers = getattr(response, "headers", None)
+                    if headers is not None:
+                        ra = headers.get("Retry-After") or headers.get("retry-after")
+                        if ra:
+                            retry_after_seconds = float(ra)
+            except (ValueError, TypeError, AttributeError):
+                retry_after_seconds = None
+
+            if retry_after_seconds is not None:
+                # Take the larger of (server guidance, our backoff) — we
+                # never hammer sooner than the server requested, but we
+                # also never wait less than our minimum backoff.
+                wait = max(retry_after_seconds, computed_wait)
+                wait_source = f"Retry-After={retry_after_seconds:.0f}s"
+            else:
+                wait = computed_wait
+                wait_source = "exponential"
+
             print(
                 f"  [llm_rate_retry] {extractor_name}{' ' + ticker if ticker else ''} "
                 f"rate-limited (attempt {attempt + 1}/{max_retries + 1}), "
-                f"sleeping {wait:.0f}s..."
+                f"sleeping {wait:.0f}s [{wait_source}]..."
             )
             _time.sleep(wait)
     # Should never reach here, but mypy comfort

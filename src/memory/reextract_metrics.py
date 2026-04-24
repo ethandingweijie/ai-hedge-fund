@@ -58,6 +58,73 @@ from src.agents.industry.deep_research import (
     _extract_segment_scenarios,
     _compute_saas_metrics_fallback,
 )
+
+
+# ── OpenAI SDK → Anthropic-style adapter ────────────────────────────────────
+# DashScope's Qwen endpoint is natively OpenAI-compatible. The existing
+# production code path goes through the Anthropic SDK which works but leaks
+# HTTP semantics through an Anthropic abstraction layer — 403 Rate Limit
+# surfaces as PermissionDeniedError, Retry-After headers aren't exposed,
+# and response-body error messages have to be string-matched. The openai
+# SDK handles DashScope natively: maps 429 / 403 correctly, exposes response
+# headers cleanly, supports Retry-After.
+#
+# Problem: all 6 extractor functions expect anthropic-style client with
+# client.messages.create(model=, max_tokens=, system=, messages=) and response
+# with .content[0].text. Swapping every extractor to openai would be a 13-site
+# refactor touching the live pipeline.
+#
+# Solution: thin adapter that exposes the Anthropic surface but delegates
+# to openai.chat.completions under the hood. Isolated to re-extract path —
+# live pipeline continues using the real anthropic SDK untouched.
+
+class _TextBlockShim:
+    """Mimic anthropic's text block — has a .text attribute."""
+    def __init__(self, text: str):
+        self.text = text
+
+
+class _MessageShim:
+    """Mimic anthropic's Message — has .content list of text blocks."""
+    def __init__(self, text: str):
+        self.content = [_TextBlockShim(text)]
+
+
+class _MessagesShim:
+    """Exposes .create(model=, max_tokens=, system=, messages=) — the
+    anthropic client.messages surface that all 6 extractors call."""
+    def __init__(self, openai_client):
+        self._client = openai_client
+
+    def create(self, *, model, max_tokens, system=None, messages=None, **kwargs):
+        # Translate anthropic-shaped call → openai-shaped call
+        oai_messages: list[dict] = []
+        if system:
+            oai_messages.append({"role": "system", "content": system})
+        for m in (messages or []):
+            oai_messages.append({"role": m["role"], "content": m["content"]})
+
+        # Forward to openai — raises openai.RateLimitError on 429,
+        # openai.PermissionDeniedError on 403, openai.APITimeoutError on timeout.
+        # _call_llm_with_rate_retry catches all of these by message-string match.
+        resp = self._client.chat.completions.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=oai_messages,
+        )
+        # Extract content and wrap in anthropic-shaped response
+        text = (resp.choices[0].message.content or "") if resp.choices else ""
+        return _MessageShim(text)
+
+
+class _OpenAIAsAnthropicAdapter:
+    """Drop-in replacement for anthropic.Anthropic that routes through
+    openai SDK. Exposes only .messages.create — enough for all 6 extractors.
+    Errors are NOT translated (same openai exception types bubble up) so
+    _call_llm_with_rate_retry can match them by message content as before.
+    """
+    def __init__(self, openai_client):
+        self.messages = _MessagesShim(openai_client)
 from src.agents.industry.sector_prompts import (
     is_bank_sector,
     is_biopharma_sector,
@@ -93,12 +160,26 @@ def _resolve_extractor_client(
     # "auto" means try Qwen first, fall back to Anthropic
 
     if not want_anthropic and dashscope_key and dashscope_base_url:
-        client = anthropic.Anthropic(
+        # Use openai SDK natively — DashScope is OpenAI-compatible and this
+        # avoids the HTTP-error mis-mapping that happens when anthropic SDK
+        # wraps a non-Anthropic endpoint (403 AccessDenied → PermissionDenied
+        # instead of proper RateLimitError). The adapter re-exposes the
+        # anthropic-style .messages.create() surface so the 6 extractor
+        # functions work unchanged.
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError(
+                "openai SDK not installed — required for Qwen re-extract. "
+                "Run: pip install openai"
+            ) from exc
+        openai_client = OpenAI(
             api_key=dashscope_key,
             base_url=dashscope_base_url,
             timeout=60.0,
-            max_retries=2,
+            max_retries=0,  # we handle retries in _call_llm_with_rate_retry
         )
+        client = _OpenAIAsAnthropicAdapter(openai_client)
         return client, dashscope_model, "qwen"
 
     if not want_qwen and anthropic_key:
