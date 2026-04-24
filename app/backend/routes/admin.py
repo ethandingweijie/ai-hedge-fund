@@ -357,3 +357,91 @@ async def backfill_bank_breakdown(
 
     result.pop("db_path", None)
     return result
+
+
+# ── Re-extract metrics (v2.0.1 _parse_llm_json recovery) ──────────────────────
+# Re-runs the LLM extractor chain against EXISTING stored deep research in
+# web_runs.full_result_json without triggering a fresh pipeline run. Use
+# case: the v2.0.1 parser fix (commit 60489d1) recovers Qwen preamble-
+# wrapped extractor responses the old parser silently dropped — this
+# endpoint retrofits historic runs so the frontend sees the new fields
+# without re-running the expensive research pipeline.
+
+@router.post("/admin/reextract-metrics")
+async def reextract_metrics(
+    secret: str = "",
+    ticker: str = "",
+    tickers: str = "",
+    run_id: str = "",
+    limit: int = 1,
+    dry_run: bool = True,
+):
+    """
+    Re-run LLM extractors against stored deep research for one or more runs.
+
+    Query params:
+      secret   — DB_UPLOAD_SECRET (required)
+      run_id   — target a specific web_runs.run_id UUID
+      ticker   — process last N runs for one ticker (e.g. DDOG)
+      tickers  — comma-separated tickers (e.g. DDOG,SNOW)
+      limit    — per-ticker run count when using ticker/tickers (default 1)
+      dry_run  — true (default) shows diff without writing; false writes
+
+    Exactly one of {run_id, ticker, tickers} must be provided.
+
+    Examples:
+      POST /admin/reextract-metrics?secret=XXX&ticker=DDOG&dry_run=true
+      POST /admin/reextract-metrics?secret=XXX&tickers=DDOG,SNOW&dry_run=false
+      POST /admin/reextract-metrics?secret=XXX&run_id=abc-123&dry_run=false
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    # Mutual exclusion
+    specified = sum(1 for x in (run_id, ticker, tickers) if x)
+    if specified != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Exactly one of run_id, ticker, tickers must be provided",
+        )
+
+    _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    if _REPO_ROOT not in sys.path:
+        sys.path.insert(0, _REPO_ROOT)
+
+    try:
+        from src.memory.reextract_metrics import (
+            reextract_by_ticker,
+            reextract_for_run,
+        )
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail=f"Cannot import reextract module: {exc}")
+
+    try:
+        if run_id:
+            results = [reextract_for_run(run_id, dry_run=dry_run)]
+        elif ticker:
+            results = reextract_by_ticker(ticker, dry_run=dry_run, limit=limit)
+        else:
+            # tickers: comma-separated
+            _list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+            results = []
+            for t in _list:
+                results.extend(reextract_by_ticker(t, dry_run=dry_run, limit=limit))
+    except Exception as exc:
+        logger.exception("reextract_metrics failed")
+        raise HTTPException(status_code=500, detail=f"Re-extract failed: {exc}")
+
+    # Summary
+    ok       = sum(1 for r in results if r.get("ok"))
+    updated  = sum(1 for r in results if r.get("updated"))
+    would_up = sum(1 for r in results if r.get("would_update"))
+
+    return {
+        "dry_run": dry_run,
+        "count": len(results),
+        "succeeded": ok,
+        "updated": updated,
+        "would_update": would_up,
+        "results": results,
+    }
