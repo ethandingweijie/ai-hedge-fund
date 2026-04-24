@@ -33,7 +33,7 @@
  */
 
 import type { DcfRange, SaasMetrics } from '@/lib/reportTypes';
-import { classifyTechProfile, currencySymbol, type TechSubtype } from '@/lib/utils';
+import { classifyTechSubtype, currencySymbol, type TechSubtype } from '@/lib/utils';
 import { ResearchNarrativeCard } from '@/components/report/shared/ResearchNarrativeCard';
 
 const SECTION_HEADING_CLS =
@@ -837,11 +837,13 @@ export function TechValuationPanel({
   // Step 1: dcfRange is mandatory
   if (!dcfRange) return null;
 
-  // Step 2: classify the profile string. If we can't match a known sub-type,
+  // Step 2: classify the sub-type. classifyTechSubtype uses profile FIRST,
+  // then falls back to a ticker-table lookup for historical runs that don't
+  // have profile_name in stored data. If we can't match a known sub-type,
   // return null — the caller falls through to the generic ValuationLadder.
   // This enforces the contract that sub-type screens render ONLY for their
   // sub-segment; unknown tech profiles don't get a generic Tech panel.
-  const subtype = classifyTechProfile(profile);
+  const subtype = classifyTechSubtype(profile, ticker);
   if (subtype === null) return null;
 
   const sym = currencySymbol(ticker);

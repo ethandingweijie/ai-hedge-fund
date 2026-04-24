@@ -142,6 +142,56 @@ export function classifyTechProfile(profile: string | null | undefined): TechSub
   return null;
 }
 
+/**
+ * Ticker → TechSubtype lookup. Mirrors the `profile_name` overrides in the
+ * backend's TICKER_SECTOR_LOOKUP for common Tech tickers. Used as a FALLBACK
+ * when a historical run's stored data is missing `profile_name` (old runs
+ * made before the backend started emitting profile_names to state).
+ *
+ * WHY this exists: the Tech gate is strict — `isTechSector(sector) &&
+ * classifyTechProfile(profile)` — so historical runs with just `sector="Tech"`
+ * but no profile fall through to the generic ValuationLadder even though we
+ * know from the ticker which sub-type panel SHOULD render. This map closes
+ * that gap for the ~30 most-analysed Tech tickers.
+ *
+ * New/unknown tickers fall through to the generic panel (same as before) —
+ * no silent mis-routing.
+ */
+const TECH_TICKER_PROFILES: Record<string, TechSubtype> = {
+  // Hyperscalers
+  MSFT: 'hyperscaler', AMZN: 'hyperscaler', GOOGL: 'hyperscaler', GOOG: 'hyperscaler',
+  META: 'hyperscaler', ORCL: 'hyperscaler',
+  // Mature SaaS
+  CRM: 'mature_saas', NOW: 'mature_saas', ADBE: 'mature_saas', WDAY: 'mature_saas',
+  SAP: 'mature_saas', INTU: 'mature_saas', VEEV: 'mature_saas',
+  // Growth SaaS
+  SNOW: 'growth_saas', PLTR: 'growth_saas', HUBS: 'growth_saas', FRSH: 'growth_saas',
+  DDOG: 'growth_saas', MDB: 'growth_saas', TEAM: 'growth_saas', ZM: 'growth_saas',
+  OKTA: 'growth_saas', TWLO: 'growth_saas', MNDY: 'growth_saas', BILL: 'growth_saas',
+  GTLB: 'growth_saas', S: 'growth_saas',
+  // Cybersecurity (classified as growth_saas on frontend — backend marks profile
+  // explicitly "Cybersecurity / Mission-Critical SaaS" which matches growth_saas
+  // in classifyTechProfile, so fresh runs route correctly; these entries cover
+  // historical runs)
+  CRWD: 'growth_saas', PANW: 'growth_saas', ZS: 'growth_saas', FTNT: 'growth_saas',
+  NET: 'growth_saas',
+};
+
+/**
+ * Resolve the Tech sub-type using the profile string FIRST, then falling back
+ * to a ticker lookup for historical runs that don't have profile stored.
+ * Returns null when neither path yields a match (→ generic ladder renders).
+ */
+export function classifyTechSubtype(
+  profile: string | null | undefined,
+  ticker: string | null | undefined,
+): TechSubtype {
+  const fromProfile = classifyTechProfile(profile);
+  if (fromProfile) return fromProfile;
+  if (!ticker) return null;
+  return TECH_TICKER_PROFILES[ticker.toUpperCase()] ?? null;
+}
+
 // Provider color utility for consistent styling across components
 export function getProviderColor(provider: string): string {
   return 'bg-gray-600/20 text-primary border-gray-600/40';

@@ -31,7 +31,7 @@ import {
   getRevenueProductSegmentation, getRevenueGeoSegmentation,
   type RevenueSegmentation,
 } from '@/lib/api';
-import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechProfile } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 
 // Existing panel components (reused as-is)
 import { FinancialsChart } from '@/components/report/FinancialsChart';
@@ -659,10 +659,10 @@ function ValuationBody({
             />
           );
         })()
-        /* Tech sub-type routing: Hyperscaler/Mature SaaS/Growth SaaS.        */
-        /* Falls through to ValuationLadder when profile can't be classified, */
-        /* so we don't show a Tech-specific panel on unknown sub-types.       */
-        : (isTechSector(sector) && classifyTechProfile(profile) !== null) ? (
+        /* Tech sub-type routing — classifyTechSubtype tries profile_name,    */
+        /* then a ticker-table fallback (SNOW→growth_saas etc.) so historical  */
+        /* runs missing profile_name still render the correct panel.          */
+        : (isTechSector(sector) && classifyTechSubtype(profile, ticker) !== null) ? (
           <TechValuationPanel
             dcfRange={dcfRange}
             currentPrice={current ?? undefined}

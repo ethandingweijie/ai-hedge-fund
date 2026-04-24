@@ -10,7 +10,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { getStockData, searchCompanies, getPopularTickers, type CompanySearchResult, type PopularTicker } from '@/lib/api';
-import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechProfile } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 // v2 imports
 import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
@@ -1354,12 +1354,15 @@ export function ReportPage() {
                 );
               })())
             /* Tech sub-type routing: Hyperscaler/Mature SaaS/Growth SaaS.        */
-            /* Falls through to ValuationLadder when profile can't be classified, */
-            /* so we don't show a Tech-specific panel on unknown sub-types.       */
-            ) : (isTechSector(sector) && classifyTechProfile(
+            /* Falls through to ValuationLadder when sub-type can't be resolved.  */
+            /* classifyTechSubtype tries profile_name first, then a ticker table  */
+            /* fallback (e.g. SNOW→growth_saas) so historical runs missing        */
+            /* profile_name in stored data still render the correct panel.        */
+            ) : (isTechSector(sector) && classifyTechSubtype(
                  (data.profile_names as Record<string, string> | undefined)?.[liveTicker]
                  ?? (data.profile_names as Record<string, string> | undefined)?.[liveTickerKey]
-                 ?? (data.profile_name as string | undefined)
+                 ?? (data.profile_name as string | undefined),
+                 liveTicker
                ) !== null) ? (
               renderSection('valuation', 'Tech Valuation', (
                 <TechValuationPanel

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { getRunResult } from '@/lib/api';
-import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechProfile } from '@/lib/utils';
+import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 import type { RunResult } from '@/lib/reportTypes';
 import { useIsMobile } from '@/hooks/use-mobile';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
@@ -249,12 +249,13 @@ export function ReportViewPage() {
                 />
               );
             })()
-            /* Tech sub-type routing: Hyperscaler/Mature SaaS/Growth SaaS.        */
-            /* Falls through to ValuationLadder when profile can't be classified, */
-            /* so we don't show a Tech-specific panel on unknown sub-types.       */
-            : (isTechSector(sector) && classifyTechProfile(
+            /* Tech sub-type routing — uses classifyTechSubtype so historical    */
+            /* runs missing profile_name in stored data still render the correct */
+            /* panel via a ticker-table fallback (e.g. SNOW → growth_saas).      */
+            : (isTechSector(sector) && classifyTechSubtype(
                  (data.profile_names as Record<string, string> | undefined)?.[ticker]
-                 ?? (data.profile_name as string | undefined)
+                 ?? (data.profile_name as string | undefined),
+                 ticker
                ) !== null) ? (
               <TechValuationPanel
                 dcfRange={dcfRange}
