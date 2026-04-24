@@ -388,11 +388,15 @@ def _diagnose_saas_extractor(
     import re as _re_diag
 
     # Mirror the input construction from _extract_saas_metrics.
-    # 2F first — that's where NRR/CAC/Rule of 40/Magic Number live.
+    # 2F ONLY — all SaaS KPIs (NRR, CAC, Rule of 40, Magic Number, Gross
+    # Retention, LTV/CAC) live in 2F. 2A (profit pool) and 2D (cycle) are
+    # context that dilutes LLM attention without contributing KPIs.
     s2a = sections.get("2a") or sections.get("2A") or ""
     s2d = sections.get("2d") or sections.get("2D") or ""
     s2f = sections.get("2f") or sections.get("2F") or ""
-    combined = (s2f + "\n\n" + s2a + "\n\n" + s2d).strip()
+    combined = s2f.strip()
+    if len(combined) < 500:
+        combined = (s2a + "\n\n" + s2d + "\n\n" + s2f).strip()
     if not combined or len(combined) < 500:
         combined = (deep_research or "")[:20000]
 

@@ -849,13 +849,18 @@ def _extract_saas_metrics(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
-    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
-    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
-    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
-    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
-    # were invisible). Put 2F first so it's guaranteed in the char window.
-    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
+    # Focus on 2F — the sector-specific KPI framework is where NRR / CAC /
+    # Rule of 40 / Magic Number / Capital ratios / Pipeline assets / REIT
+    # metrics / Bank metrics all live. 2A (profit pool) and 2D (cycle) are
+    # context but don't contain the structured KPIs the extractor needs;
+    # including them diluted the LLM's attention and hit the truncation
+    # ceiling on rich reports (DDOG 2A+2D = 7800 chars → 2F starved to 200
+    # chars → only RPO extracted from 2A preload data, missing NRR/CAC/
+    # Magic/R40 that sit in 2F). Use 2F only. Falls back to full deep
+    # research text when 2F is missing or too short.
+    combined = section_2f.strip()
+    if len(combined) < 500:
+        combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
     if not combined or len(combined) < 500:
         combined = (deep_research or "")[:20000]
     if not combined:
@@ -1118,13 +1123,18 @@ def _extract_bank_metrics(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
-    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
-    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
-    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
-    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
-    # were invisible). Put 2F first so it's guaranteed in the char window.
-    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
+    # Focus on 2F — the sector-specific KPI framework is where NRR / CAC /
+    # Rule of 40 / Magic Number / Capital ratios / Pipeline assets / REIT
+    # metrics / Bank metrics all live. 2A (profit pool) and 2D (cycle) are
+    # context but don't contain the structured KPIs the extractor needs;
+    # including them diluted the LLM's attention and hit the truncation
+    # ceiling on rich reports (DDOG 2A+2D = 7800 chars → 2F starved to 200
+    # chars → only RPO extracted from 2A preload data, missing NRR/CAC/
+    # Magic/R40 that sit in 2F). Use 2F only. Falls back to full deep
+    # research text when 2F is missing or too short.
+    combined = section_2f.strip()
+    if len(combined) < 500:
+        combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
     if not combined or len(combined) < 500:
         combined = (deep_research or "")[:20000]
     if not combined:
@@ -1282,13 +1292,18 @@ def _extract_reit_metrics(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
-    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
-    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
-    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
-    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
-    # were invisible). Put 2F first so it's guaranteed in the char window.
-    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
+    # Focus on 2F — the sector-specific KPI framework is where NRR / CAC /
+    # Rule of 40 / Magic Number / Capital ratios / Pipeline assets / REIT
+    # metrics / Bank metrics all live. 2A (profit pool) and 2D (cycle) are
+    # context but don't contain the structured KPIs the extractor needs;
+    # including them diluted the LLM's attention and hit the truncation
+    # ceiling on rich reports (DDOG 2A+2D = 7800 chars → 2F starved to 200
+    # chars → only RPO extracted from 2A preload data, missing NRR/CAC/
+    # Magic/R40 that sit in 2F). Use 2F only. Falls back to full deep
+    # research text when 2F is missing or too short.
+    combined = section_2f.strip()
+    if len(combined) < 500:
+        combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
     if not combined or len(combined) < 500:
         combined = (deep_research or "")[:20000]
     if not combined:
@@ -1470,13 +1485,18 @@ def _extract_pipeline_assets(
     section_2a = sections.get("2a") or sections.get("2A") or ""
     section_2d = sections.get("2d") or sections.get("2D") or ""
     section_2f = sections.get("2f") or sections.get("2F") or ""
-    # Order matters — 2F holds the KPI framework where NRR / CAC / Rule of 40
-    # / Magic Number / Capital ratios / Pipeline assets live. Previous ordering
-    # (2A + 2D + 2F) put 2F LAST, and the 8000-char truncation below cut 2F
-    # almost entirely on rich sections (e.g. DDOG: 2A+2D = 7800 chars, 2F
-    # = 5366 chars → only 200 chars of 2F reached the LLM, so NRR/CAC/etc.
-    # were invisible). Put 2F first so it's guaranteed in the char window.
-    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
+    # Focus on 2F — the sector-specific KPI framework is where NRR / CAC /
+    # Rule of 40 / Magic Number / Capital ratios / Pipeline assets / REIT
+    # metrics / Bank metrics all live. 2A (profit pool) and 2D (cycle) are
+    # context but don't contain the structured KPIs the extractor needs;
+    # including them diluted the LLM's attention and hit the truncation
+    # ceiling on rich reports (DDOG 2A+2D = 7800 chars → 2F starved to 200
+    # chars → only RPO extracted from 2A preload data, missing NRR/CAC/
+    # Magic/R40 that sit in 2F). Use 2F only. Falls back to full deep
+    # research text when 2F is missing or too short.
+    combined = section_2f.strip()
+    if len(combined) < 500:
+        combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
     if not combined or len(combined) < 500:
         combined = (deep_research or "")[:20000]
     if not combined:
