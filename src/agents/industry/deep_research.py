@@ -2078,22 +2078,14 @@ def _extract_citation_registry(
         )
         text = "".join(
             block.text for block in response.content if hasattr(block, "text")
-        ).strip()
+        )
 
-        # ── Robust JSON array extraction ──────────────────────────────────────
-        # The LLM may wrap output in markdown code fences (```json\n...\n```).
-        # Strip them first, then locate the outermost [ ... ] array.
-        # Use rfind("]") so we get the closing bracket of the full array even
-        # if nested objects contain their own brackets.
-        _clean = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
-        start = _clean.find("[")
-        end   = _clean.rfind("]") + 1
-        if start < 0 or end <= start:
-            print(f"  [citation_registry] No JSON array found for {ticker} — LLM response: {_clean[:200]}")
-            return []
-
-        raw: list = json.loads(_clean[start:end])
-        if not isinstance(raw, list):
+        # Use the shared _parse_llm_json helper for consistency with the 6
+        # sector extractors — same preamble / postamble / fence / reasoning-
+        # trace resilience. The helper tries raw → fence-stripped → substring
+        # between brackets and returns None on total failure.
+        raw = _parse_llm_json(text, extractor_name="citation_registry")
+        if raw is None or not isinstance(raw, list):
             return []
 
         registry: list[dict] = []
