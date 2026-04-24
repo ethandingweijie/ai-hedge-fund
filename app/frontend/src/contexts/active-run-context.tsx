@@ -312,7 +312,12 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     return 12;
   });
   const [liveResult, setLiveResult] = useState<RunResult | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  // Per-ticker AbortController map (2026-04-25) so parallel tickers don't
+  // abort each other's SSE streams. Previously a single AbortController meant
+  // starting ticker B killed ticker A's stream. Map lets each ticker maintain
+  // independent lifecycle — triggering a new run only aborts THAT ticker's
+  // previous stream (if any), others continue uninterrupted.
+  const abortRefs = useRef<Map<string, AbortController>>(new Map());
   const lastStreamTickerRef = useRef<string | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -680,7 +685,12 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
   }, [checkCompleted, startPolling, updateTicker]);
 
   const resetStream = useCallback(() => {
-    abortRef.current?.abort();
+    // Abort ALL in-flight streams — resetStream is a full-system reset.
+    // Individual per-ticker aborts happen in startStream for new runs.
+    for (const ctrl of abortRefs.current.values()) {
+      try { ctrl.abort(); } catch { /* ignore */ }
+    }
+    abortRefs.current.clear();
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     setStreamState('idle');
     setStreamEvents([]);
@@ -703,25 +713,46 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
   }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker]);
 
   const startStream = useCallback(async (ticker: string, model = 'claude-sonnet-4-6', agents?: string[]) => {
-    abortRef.current?.abort();
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    const controller = new AbortController();
-    abortRef.current = controller;
     const T = ticker.toUpperCase();
-
-    setStreamState('running');
-    setStreamEvents([]);
-    const prevTicker = lastStreamTickerRef.current;
-    if (prevTicker && prevTicker !== T) {
-      setPhaseMap({});
-      try { sessionStorage.removeItem('phaseMap'); sessionStorage.removeItem('streamTotalPhases'); sessionStorage.removeItem('streamEvents'); sessionStorage.removeItem('liveData'); } catch { /* ignore */ }
+    // Per-ticker abort: only kill THIS ticker's previous stream (if any).
+    // Other tickers' streams continue uninterrupted. Before 2026-04-25 this
+    // used a single abortRef that aborted whatever was running, breaking
+    // parallel multi-ticker runs.
+    const existingCtrl = abortRefs.current.get(T);
+    if (existingCtrl) {
+      try { existingCtrl.abort(); } catch { /* ignore */ }
     }
+    const controller = new AbortController();
+    abortRefs.current.set(T, controller);
+
+    // NOTE: legacy singleton resets intentionally gated — only reset globals
+    // when switching to a NEW focus ticker, otherwise they clobber other
+    // active tickers' state (e.g. starting ticker B while ticker A runs
+    // shouldn't wipe A's liveData singleton which is fallback for A's report).
+    const prevTicker = lastStreamTickerRef.current;
+    const isFocusChange = prevTicker !== T;
+
+    if (isFocusChange) {
+      // User switched focus to a new ticker — safe to reset legacy singletons.
+      setStreamState('running');
+      setStreamEvents([]);
+      setPhaseMap({});
+      setLiveData({});
+      setStreamRunId(null);
+      setStreamError(null);
+      setLiveResult(null);
+      try {
+        sessionStorage.removeItem('phaseMap');
+        sessionStorage.removeItem('streamTotalPhases');
+        sessionStorage.removeItem('streamEvents');
+        sessionStorage.removeItem('liveData');
+      } catch { /* ignore */ }
+    }
+    // Always update focused ticker pointer
     lastStreamTickerRef.current = T;
-    setLiveData({});
-    setStreamRunId(null);
-    setStreamError(null);
-    setLiveResult(null);
-    // Reset the per-ticker slice for THIS ticker so its new run starts clean.
+
+    // Reset the per-ticker slice for THIS ticker — its new run starts clean.
+    // Other tickers' slices untouched → parallel runs isolated.
     updateTicker(T, {
       streamState: 'running',
       streamEvents: [],
