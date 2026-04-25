@@ -62,6 +62,7 @@ from src.tools.api import (
     get_prices,
     get_fx_rate,
     get_revenue_product_segmentation,
+    get_price_target_consensus,
 )
 from src.data.sector_profiles import (
     get_wacc,
@@ -3097,6 +3098,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             except Exception:
                 pass
 
+        # ── Wall Street consensus 12m PT (FMP /stable/price-target-consensus) ─
+        # Surfaces analyst consensus alongside our model PT so the frontend can
+        # display "model $289 vs consensus $413 (-30%)" as a sanity flag without
+        # LLM extraction from research text. None for HK/SG tickers (FMP n/a).
+        _consensus_pt: dict | None = None
+        try:
+            _consensus_pt = get_price_target_consensus(ticker, api_key=api_key)
+        except Exception:
+            _consensus_pt = None
+
         # ── Historical EOD (always fires) — _trailing_pe + fallbacks ──────
         # _trailing_pe anchors to end_date (financials snapshot date), so it
         # always uses the historical-price-eod path with a 7-day fallback
@@ -3341,9 +3352,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # for scenario construction even when guidance or historical drives the
         # point estimate. Feeds both growth_base (analyst revenue_avg) AND the
         # bear/base/bull band scenarios + Forward P/E / Forward EV/EBITDA methods.
+        # FMP returns analyst-estimates sorted DESCENDING by date and `limit`
+        # truncates from the top. With limit=3 we got the FURTHEST 3 future
+        # years (e.g. MDB: FY2029/30/31) and never saw the nearest forward
+        # year (FY2027) which is what NTM growth/consensus actually needs.
+        # Bumping to limit=10 captures the full annual horizon; the downstream
+        # filter (period_end > end_date) + sort ASC in get_analyst_estimates
+        # then makes estimates[0] the nearest forward year. Bug fixed 2026-04-25.
         try:
             estimates = get_analyst_estimates(
-                ticker, end_date, period="annual", limit=3, api_key=api_key
+                ticker, end_date, period="annual", limit=10, api_key=api_key
             )
         except Exception:
             estimates = []
@@ -4876,6 +4894,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "pv_tv_base":         _base_pv_tv_per_share,
             # §7 of valuation framework: 12m forward-multiple price targets
             "12m_targets":        _12m_targets,
+            # Wall Street consensus 12m PT — for "model vs consensus" sanity
+            # display on the frontend. None for HK/SG or when FMP returns no
+            # data. Shape: {high, low, consensus, median} or None.
+            "consensus_pt":       _consensus_pt,
             # FX metadata — populated when financials are not in USD
             # _output_currency = "HKD" for HK tickers (IV/PT converted USD→HKD);
             # reported_currency remains the original financial statement currency.

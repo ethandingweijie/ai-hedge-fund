@@ -1262,6 +1262,46 @@ def get_analyst_estimates(
     return estimates
 
 
+# ── 8a. Price Target Consensus (analyst Wall Street consensus) ───────────────
+
+def get_price_target_consensus(
+    ticker: str,
+    api_key: str = None,
+) -> Optional[dict]:
+    """
+    Wall Street consensus 12-month price target from FMP /stable/price-target-consensus.
+
+    Returns dict {"high": float, "low": float, "consensus": float, "median": float}
+    or None on missing data / non-US ticker / API failure.
+
+    Used by dcf_agent to surface a `vs_consensus_pct` field in dcf_range so the
+    frontend can show "model PT $289 vs consensus $413 (-30%)" without LLM
+    extraction from research text.
+
+    FMP plan: free tier exposes consensus PT (verified 2026-04-25).
+    HK/SG tickers: not available — returns None.
+    """
+    if is_hk_ticker(ticker) or is_sg_ticker(ticker):
+        return None
+    data = _fmp_get(
+        f"{_STABLE}/price-target-consensus",
+        {"symbol": ticker},
+        api_key,
+    )
+    if not data or not isinstance(data, list) or not data:
+        return None
+    row = data[0]
+    try:
+        return {
+            "high":      _safe_float(row.get("targetHigh")),
+            "low":       _safe_float(row.get("targetLow")),
+            "consensus": _safe_float(row.get("targetConsensus")),
+            "median":    _safe_float(row.get("targetMedian")),
+        }
+    except Exception:
+        return None
+
+
 # ── 9. Revenue Segmentation (product + geographic) ───────────────────────────
 
 def _fetch_revenue_segmentation(
