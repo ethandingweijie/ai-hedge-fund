@@ -3051,14 +3051,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         net_debt     = most_recent["net_debt"] or 0.0
 
         # ── Fetch latest price for trailing P/E (Deep Value Recovery) ────
-        # Also captures market_cap for the WACC credit-spread overlay.
+        # Also captures market_cap for the WACC credit-spread overlay AND
+        # _spot_price for the Convergence Velocity cap (state["current_prices"]
+        # is only populated by portfolio_manager which runs LATER — DCF can't
+        # rely on it).
         _trailing_pe: float | None = None
-        _market_cap: float | None = None
+        _market_cap:  float | None = None
+        _spot_price:  float | None = None
         try:
             _latest_prices = get_prices(ticker, end_date, end_date, api_key=api_key)
             if _latest_prices:
                 _p = _latest_prices[-1]
                 _close = float(_p.close) if hasattr(_p, "close") else float(_p.get("close", 0))
+                if _close > 0:
+                    _spot_price = _close
                 _ni = most_recent.get("net_income")
                 if _close > 0 and shares and shares > 0:
                     _market_cap = _close * shares
@@ -4384,10 +4390,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         #     (cash flow already arriving; multiple already compressed; these
         #      earn into IV faster than aspirational growth names)
         # Re-acceleration trigger: forward growth_base > trailing CAGR × 1.10.
-        try:
-            _spot_for_cap = state["data"].get("current_prices", {}).get(ticker)
-        except Exception:
-            _spot_for_cap = None
+        #
+        # Source for spot price: _spot_price captured from FMP get_prices() at
+        # the top of this ticker iteration. State["current_prices"] is NOT
+        # available here — portfolio_manager populates it after the DCF agent
+        # completes, so reading it would always return None and the cap would
+        # silently no-op. INTU 2026-04-25: bear/base/bull 12m PT ran to $804/
+        # $1076/$1349 on $396 spot because cap never fired. Fix: use
+        # _spot_price which IS in scope.
+        _spot_for_cap = _spot_price
         if _spot_for_cap and float(_spot_for_cap) > 0:
             _spot_for_cap = float(_spot_for_cap)
             _trail_cagr = _historical_cagr(series, revenue_base) or growth_base
