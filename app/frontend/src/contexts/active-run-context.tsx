@@ -166,6 +166,52 @@ export function normalisePartialData(
   return out;
 }
 
+/**
+ * mergeDataPreserve — shallow merge that does NOT overwrite populated values
+ * with empty / nullish ones from the source. Per-key rules:
+ *
+ *   1. If source value is `null` or `undefined`, keep target value.
+ *   2. If both are plain objects, do a shallow inner-merge (so per-ticker
+ *      dicts like `dcf_range: {INTU: {...}}` accumulate instead of being
+ *      replaced when one side has additional ticker keys).
+ *   3. Otherwise, source wins (non-empty newer data overrides older).
+ *
+ * Why this exists (2026-04-25 root-cause fix):
+ * The old logic `{...liveData, ...liveResult.data}` would clobber a
+ * populated `liveData.dcf_range = {INTU: {...}}` when `liveResult.data`
+ * happened to carry `dcf_range: {}` or `dcf_range: undefined`. This
+ * produced the long-standing "Computing…" stuck-loading bug after pipeline
+ * complete: SSE events had populated the per-ticker dcf_range, but the
+ * post-complete getRunResult() merge wiped it. Same issue at the SSE
+ * level when a later partial_data event emitted an empty inner dict.
+ */
+export function mergeDataPreserve<T extends Record<string, unknown>>(
+  target: T,
+  src: Partial<T> | null | undefined,
+): T {
+  if (!src) return target;
+  const out: Record<string, unknown> = { ...target };
+  for (const k of Object.keys(src)) {
+    const newV = (src as Record<string, unknown>)[k];
+    if (newV === null || newV === undefined) continue;
+    const oldV = out[k];
+    // Both shallow-mergeable plain objects → inner merge (per-ticker dicts)
+    if (
+      oldV &&
+      typeof oldV === 'object' &&
+      !Array.isArray(oldV) &&
+      newV &&
+      typeof newV === 'object' &&
+      !Array.isArray(newV)
+    ) {
+      out[k] = { ...(oldV as object), ...(newV as object) };
+    } else {
+      out[k] = newV;
+    }
+  }
+  return out as T;
+}
+
 export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
   // ── Run-coordination state ────────────────────────────────────────────────
   // ── Multiple concurrent runs support ──────────────────────────────────────
@@ -904,7 +950,11 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
                 ? normalisePartialData(T, ev.partial_data as Record<string, unknown>)
                 : null;
               if (normalisedPartial) {
-                setLiveData((prev) => ({ ...prev, ...normalisedPartial }));
+                // Use mergeDataPreserve so a later phase emitting
+                // {dcf_range: {}} doesn't clobber an earlier-populated
+                // {dcf_range: {INTU: {...}}}. Same protection at per-ticker
+                // level just below.
+                setLiveData((prev) => mergeDataPreserve(prev, normalisedPartial));
               }
               // Route event per-ticker too
               updateTicker(T, (prev) => ({
@@ -912,7 +962,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
                 streamEvents: [...prev.streamEvents, ev],
                 phaseMap: { ...prev.phaseMap, [ev.phase]: ev },
                 liveData: normalisedPartial
-                  ? { ...prev.liveData, ...normalisedPartial }
+                  ? mergeDataPreserve(prev.liveData, normalisedPartial)
                   : prev.liveData,
               }));
             } else if (eventType === 'cached') {

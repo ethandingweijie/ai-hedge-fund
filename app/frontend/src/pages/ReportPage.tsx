@@ -15,7 +15,7 @@ import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechS
 // v2 imports
 import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
-import { useActiveRun } from '@/contexts/active-run-context';
+import { useActiveRun, mergeDataPreserve } from '@/contexts/active-run-context';
 import { useIsMobile } from '@/hooks/use-mobile';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
 // MobileReportView removed — replaced by V2ReportView (dead legacy mobile fallback gated on `if (false && ...)` removed 2026-04).
@@ -752,7 +752,11 @@ export function ReportPage() {
     return map[liveTicker] ?? map[liveTickerKey];
   }
 
-  const data          = { ...liveData, ...(liveResult?.data ?? {}) };
+  // mergeDataPreserve (not spread) so that a sparse liveResult.data —
+  // e.g. one missing dcf_range or scenario_analysis because web_runs
+  // hasn't fully landed — does NOT wipe SSE-streamed liveData. Long-
+  // standing "Computing…" stuck-loading bug after pipeline complete.
+  const data          = mergeDataPreserve(liveData, liveResult?.data as Record<string, unknown> | undefined);
   // decisions are emitted as partial_data["decisions"] after Phase 9; also in liveResult top-level
   const decisions     = (data.decisions as Record<string, import('@/lib/reportTypes').PortfolioDecision> | undefined)
                         ?? liveResult?.decisions
@@ -967,7 +971,12 @@ export function ReportPage() {
     // keys overlap (final result > partial_data snapshot) but PRESERVING
     // liveData keys that liveResult doesn't cover.
     const ticker_key = liveTicker || ticker;
-    const mergedData = { ...liveData, ...(liveResult?.data ?? {}) };
+    // mergeDataPreserve to avoid clobbering populated liveData with sparse
+    // liveResult.data (see /contexts/active-run-context.tsx for full rationale).
+    const mergedData = mergeDataPreserve(
+      liveData,
+      liveResult?.data as Record<string, unknown> | undefined,
+    );
     const mergedDecisions = {
       ...(liveResult?.decisions ?? {}),
       ...(decision ? { [ticker_key]: decision } : {}),
