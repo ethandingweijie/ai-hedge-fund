@@ -95,7 +95,7 @@ function daysAgo(iso: string): string {
 
 export function HistoryPage() {
   const navigate = useNavigate();
-  const { activeRuns, recentlyCompleted, clearCompleted } = useActiveRun();
+  const { activeRuns, recentlyCompleted, clearCompleted, byTicker } = useActiveRun();
 
   const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -110,17 +110,39 @@ export function HistoryPage() {
   const deleteGuard = useRef<Set<string>>(new Set());
 
   // Fallback: read activeRuns from sessionStorage if context lost them (iOS Safari)
-  const effectiveActiveRuns: Array<{ ticker: string; startedAt: string }> = activeRuns.length > 0
-    ? activeRuns
-    : (() => {
-        try {
-          const stored = sessionStorage.getItem('activeRuns') || sessionStorage.getItem('activeRun');
-          if (!stored) return [];
-          const parsed = JSON.parse(stored);
-          const arr = Array.isArray(parsed) ? parsed : [parsed];
-          return arr.filter((r: any) => Date.now() - new Date(r.startedAt).getTime() < 45 * 60 * 1000);
-        } catch { return []; }
-      })();
+  const sessionStorageActiveRuns: Array<{ ticker: string; startedAt: string }> = (() => {
+    try {
+      const stored = sessionStorage.getItem('activeRuns') || sessionStorage.getItem('activeRun');
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      return arr.filter((r: any) => Date.now() - new Date(r.startedAt).getTime() < 45 * 60 * 1000);
+    } catch { return []; }
+  })();
+  // UI-side safety net (2026-04-25 fix): also derive ongoing tickers from
+  // byTicker entries with streamState='running' or 'reconnecting'. Catches
+  // the regression where the SSE stream populated the per-ticker slice but
+  // markRunStarted was missed (e.g. switchTicker from History → poll() path
+  // never wrote to activeRuns), or when sessionStorage was wiped mid-run.
+  const byTickerOngoing: Array<{ ticker: string; startedAt: string }> = Object.entries(byTicker)
+    .filter(([, slice]) => slice.streamState === 'running' || slice.streamState === 'reconnecting')
+    .map(([t]) => ({
+      // No real startedAt available from byTicker — use first event timestamp
+      // if any, otherwise now. Display only.
+      ticker: t,
+      startedAt: byTicker[t]?.streamEvents?.[0]?.timestamp || new Date().toISOString(),
+    }));
+  // Merge (dedupe by ticker) with priority: context activeRuns > sessionStorage > byTicker
+  const _seen = new Set<string>();
+  const effectiveActiveRuns: Array<{ ticker: string; startedAt: string }> = [];
+  for (const src of [activeRuns, sessionStorageActiveRuns, byTickerOngoing]) {
+    for (const r of src) {
+      const T = r.ticker.toUpperCase();
+      if (_seen.has(T)) continue;
+      _seen.add(T);
+      effectiveActiveRuns.push({ ...r, ticker: T });
+    }
+  }
 
   // ── Fetch history ─────────────────────────────────────────────────────────
   const load = useCallback(async (p: number = page) => {

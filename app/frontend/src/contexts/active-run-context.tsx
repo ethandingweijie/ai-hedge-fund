@@ -236,18 +236,25 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
 
   // ── Per-ticker live SSE state ────────────────────────────────────────────
   // Restored from sessionStorage on mount (capped at last 5 tickers — Phase C).
+  // Tickers that were 'running' when the page unloaded are downgraded to
+  // 'idle' here AND captured in `downgradedOnMountRef` so the mount effect
+  // below can poll the backend to verify and restore proper state. Without
+  // that re-poll the user sees stale 'idle' progress UI on reload — the
+  // 2026-04-25 regression where ongoing research vanished after refresh.
+  const downgradedOnMountRef = useRef<string[]>([]);
   const [byTicker, setByTicker] = useState<Record<string, PerTickerLiveState>>(() => {
     try {
       const raw = sessionStorage.getItem('tickerLiveState');
       if (raw) {
         const parsed = JSON.parse(raw) as Record<string, PerTickerLiveState>;
-        // Any entry that was "running" when we unloaded cannot still be running
-        // from JS's perspective — downgrade to idle so resume logic re-polls.
+        const downgraded: string[] = [];
         for (const k of Object.keys(parsed)) {
           if (parsed[k]?.streamState === 'running') {
             parsed[k] = { ...parsed[k], streamState: 'idle' };
+            downgraded.push(k);
           }
         }
+        downgradedOnMountRef.current = downgraded;
         return parsed;
       }
     } catch { /* ignore */ }
@@ -339,6 +346,27 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     },
     [],
   );
+
+  // ── Self-healing activeRuns: ensure a ticker that's currently streaming
+  //    or polling is reflected in activeRuns. Two paths populate byTicker
+  //    (SSE progress events + status polling) but only `markRunStarted` /
+  //    `startRun` populates activeRuns. When users click an ongoing ticker
+  //    in History (which calls `poll()` not `start()`), or when
+  //    sessionStorage is cleared mid-run on iOS, activeRuns can lose its
+  //    entry — and HistoryPage gates the ongoing card on activeRuns. Auto-
+  //    syncing here is idempotent (filter+append) and prevents the symptom
+  //    where the run is alive on the server but invisible in the UI.
+  const ensureInActiveRuns = useCallback((ticker: string) => {
+    const T = (ticker ?? '').toUpperCase();
+    if (!T) return;
+    setActiveRuns(prev => {
+      if (prev.some(r => r.ticker === T)) return prev;  // already there — no-op
+      const run: ActiveRunInfo = { ticker: T, startedAt: new Date().toISOString() };
+      const next = [...prev, run];
+      try { sessionStorage.setItem('activeRuns', JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  }, []);
 
   const getTickerState = useCallback(
     (ticker: string): PerTickerLiveState => {
@@ -522,6 +550,11 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
           if (status.in_progress && status.phase) {
             // Pipeline still running — update phaseMap with ALL phases from server
             consecutiveNotRunning = 0; // reset crash counter
+            // Self-heal: backend confirms this ticker is in flight, so it
+            // belongs in activeRuns regardless of how we reached the polling
+            // state (mount-time poll, switchTicker from History, iOS resume,
+            // etc.). Idempotent — filtered out if already present.
+            ensureInActiveRuns(ticker);
             setStreamState('running');
             const liveEvent: ProgressEvent = {
               phase: status.phase,
@@ -617,7 +650,45 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
         });
       }
     }, 10000);
-  }, [checkCompleted, setStreamEvents, setPhaseMap, updateTicker]);
+  }, [checkCompleted, setStreamEvents, setPhaseMap, updateTicker, ensureInActiveRuns]);
+
+  // ── Mount-time resume for tickers that were running when the page unloaded.
+  //    The byTicker initializer downgraded them to 'idle' (JS can't carry an
+  //    SSE connection across reloads), but the backend pipeline may still be
+  //    in flight. Poll one of them — if backend says in_progress, startPolling
+  //    will restore streamState='running' AND ensureInActiveRuns will repair
+  //    the activeRuns array (so HistoryPage shows the ongoing card again).
+  //    If backend says completed, checkCompleted picks up the final result.
+  //
+  //    For multiple downgraded tickers (parallel runs), we also issue a
+  //    one-shot status fetch per ticker — that single fetch is enough for
+  //    ensureInActiveRuns to repair activeRuns. Continuous polling stays on
+  //    the primary ticker only because pollIntervalRef is single-ticker.
+  useEffect(() => {
+    const downgraded = downgradedOnMountRef.current;
+    if (!downgraded || downgraded.length === 0) return;
+    // Continuous poll on the first (most recent) downgraded ticker.
+    const primary = downgraded[0];
+    try { startPolling(primary); } catch { /* best-effort */ }
+    // One-shot status check for the rest — enough to repair activeRuns
+    // and seed phaseMap so HistoryPage renders all ongoing cards.
+    for (const t of downgraded.slice(1)) {
+      const T = t.toUpperCase();
+      fetch(`${API_BASE_URL}/analysis/status/${encodeURIComponent(T)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(status => {
+          if (!status) return;
+          if (status.in_progress || status.phase === 'pipeline_complete') {
+            ensureInActiveRuns(T);
+          }
+          if (status.in_progress) {
+            updateTicker(T, { streamState: 'running' });
+          }
+        })
+        .catch(() => { /* ignore */ });
+    }
+    downgradedOnMountRef.current = []; // run-once
+  }, [startPolling, ensureInActiveRuns, updateTicker]);
 
   // ── Visibility change handler — resume when user returns ──────────────────
   useEffect(() => {
@@ -813,6 +884,11 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
               }
             } else if (eventType === 'progress') {
               const ev = payload as ProgressEvent;
+              // Self-heal: ensure activeRuns reflects this running ticker
+              // (no-op if already there). Closes a race where the SSE
+              // started but activeRuns lost its entry (sessionStorage
+              // cleared, parallel-ticker context migration, etc.)
+              ensureInActiveRuns(T);
               setStreamEvents((prev) => [...prev, ev]);
               setPhaseMap((prev) => ({ ...prev, [ev.phase]: ev }));
               // Phase B diagnostic: log shape of partial_data per ticker so
@@ -916,7 +992,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       // Run still in progress — poll for completion (safe, no new runs triggered)
       startPolling(ticker);
     }
-  }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker, checkCompleted, startPolling]);
+  }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker, checkCompleted, startPolling, ensureInActiveRuns]);
 
   // ── Mount-time rehydration (Phase C): on ticker focus, seed phaseMap
   // from /analysis/status/{ticker} when this ticker's slice is empty.
