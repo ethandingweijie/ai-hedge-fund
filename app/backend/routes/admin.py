@@ -23,6 +23,238 @@ def _get_db_paths() -> dict[str, str]:
     }
 
 
+@router.post("/admin/backfill-convergence-cap")
+async def backfill_convergence_cap(
+    secret: str = "",
+    ticker: str = "",
+    tickers: str = "",
+    dry_run: bool = True,
+):
+    """Apply Convergence Velocity cap + bear floor to historical web_runs rows
+    without re-running the full pipeline.
+
+    Mirrors the live cap logic in src/agents/analysis/dcf_agent.py:
+      - 12m_targets[scen] capped at spot + max_capture × (scen_iv − spot)
+      - Bear floor: 12m_targets[bear] ≤ spot × 0.85 for high-SBC profiles
+      - Updates dcf_range[ticker]['12m_targets'] AND
+        scenario_analysis[ticker]['12m_targets_by_scenario'] AND
+        re-blends scenario_analysis[ticker]['12m_price_target']
+        (probability-weighted)
+
+    Query params:
+      secret    — DB_UPLOAD_SECRET (required)
+      ticker    — single ticker filter (e.g. 'MDB')
+      tickers   — CSV list (e.g. 'MDB,MNDY,NET') — overrides `ticker` if both given
+      dry_run   — default True. When True, returns proposed changes without
+                  writing. Pass dry_run=false to actually persist.
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    paths = _get_db_paths()
+    db_path = paths.get("run_archive")
+    if not db_path or not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="run_archive DB not found")
+
+    fmp_key = (os.environ.get("FMP_API_KEY") or "").strip()
+    if not fmp_key:
+        raise HTTPException(status_code=400, detail="FMP_API_KEY not configured on server")
+
+    # Mirror of _HIGH_SBC_PROFILES in src/agents/analysis/dcf_agent.py.
+    # Kept inline to avoid heavy import path; update both if either changes.
+    HIGH_SBC = {
+        "Growth SaaS",
+        "Hyper-Growth Platform",
+        "High-Growth Tech / AI",
+        "Cybersecurity / Mission-Critical SaaS",
+    }
+
+    # Resolve filter set
+    target_tickers: list[str] = []
+    if tickers:
+        target_tickers = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    elif ticker:
+        target_tickers = [ticker.strip().upper()]
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    if target_tickers:
+        placeholders = ",".join("?" * len(target_tickers))
+        rows = conn.execute(
+            f"SELECT run_id, run_at, ticker, full_result_json FROM web_runs "
+            f"WHERE ticker IN ({placeholders}) "
+            f"AND full_result_json IS NOT NULL "
+            f"AND json_extract(full_result_json, '$.checkpoint') IS NULL "
+            f"ORDER BY run_at DESC",
+            target_tickers,
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT run_id, run_at, ticker, full_result_json FROM web_runs "
+            "WHERE full_result_json IS NOT NULL "
+            "AND json_extract(full_result_json, '$.checkpoint') IS NULL "
+            "ORDER BY run_at DESC"
+        ).fetchall()
+
+    summary = {
+        "dry_run": dry_run,
+        "tickers_filter": target_tickers or "all",
+        "rows_processed": 0,
+        "rows_updated": 0,
+        "rows_skipped_no_dcf": 0,
+        "rows_skipped_spot_failed": 0,
+        "rows_skipped_no_change": 0,
+        "changes": [],
+    }
+
+    import requests
+    # Cache spot prices per ticker so a single backfill run doesn't fan out
+    # one FMP call per row when the same ticker has many runs.
+    spot_cache: dict[str, float | None] = {}
+
+    def _get_spot(t: str) -> float | None:
+        if t in spot_cache:
+            return spot_cache[t]
+        try:
+            r = requests.get(
+                "https://financialmodelingprep.com/stable/quote",
+                params={"symbol": t, "apikey": fmp_key},
+                timeout=10,
+            )
+            if r.status_code != 200:
+                spot_cache[t] = None
+                return None
+            data = r.json()
+            if data and isinstance(data, list) and data:
+                p = float(data[0].get("price") or 0)
+                spot_cache[t] = p if p > 0 else None
+                return spot_cache[t]
+        except Exception:
+            pass
+        spot_cache[t] = None
+        return None
+
+    for row in rows:
+        summary["rows_processed"] += 1
+        run_id = row["run_id"]
+        t = row["ticker"]
+
+        try:
+            full = json.loads(row["full_result_json"])
+        except Exception:
+            continue
+
+        data = full.get("data", {}) or {}
+        dcf_range_map = data.get("dcf_range", {}) or {}
+        dcf_t = dcf_range_map.get(t) or {}
+        if not dcf_t:
+            summary["rows_skipped_no_dcf"] += 1
+            continue
+
+        bear_iv = (dcf_t.get("bear") or {}).get("intrinsic_value")
+        base_iv = (dcf_t.get("base") or {}).get("intrinsic_value")
+        bull_iv = (dcf_t.get("bull") or {}).get("intrinsic_value")
+        twelve = dcf_t.get("12m_targets") or {}
+        bear_pt = twelve.get("bear")
+        base_pt = twelve.get("base")
+        bull_pt = twelve.get("bull")
+
+        if not all(isinstance(v, (int, float)) and v > 0 for v in
+                   (bear_iv, base_iv, bull_iv, bear_pt, base_pt, bull_pt)):
+            summary["rows_skipped_no_dcf"] += 1
+            continue
+
+        spot = _get_spot(t)
+        if spot is None or spot <= 0:
+            summary["rows_skipped_spot_failed"] += 1
+            continue
+
+        profile_name = (data.get("profile_names") or {}).get(t) or data.get("profile_name") or ""
+        is_high_sbc = profile_name in HIGH_SBC
+        max_capture = 0.20 if is_high_sbc else 0.35
+
+        new_targets: dict[str, float] = {}
+        any_changed = False
+        for scen, scen_iv, scen_pt in [
+            ("bear", bear_iv, bear_pt),
+            ("base", base_iv, base_pt),
+            ("bull", bull_iv, bull_pt),
+        ]:
+            new_pt = float(scen_pt)
+            # Convergence Velocity cap (only when IV is above spot — gap exists)
+            if scen_iv > spot and scen_pt > spot:
+                gap = scen_iv - spot
+                cap = spot + max_capture * gap
+                if scen_pt > cap:
+                    new_pt = round(cap, 2)
+            # Bear floor for high-SBC names
+            if scen == "bear" and is_high_sbc:
+                bear_floor = spot * 0.85
+                if new_pt > bear_floor:
+                    new_pt = round(bear_floor, 2)
+            if new_pt != scen_pt:
+                any_changed = True
+            new_targets[scen] = new_pt
+
+        if not any_changed:
+            summary["rows_skipped_no_change"] += 1
+            continue
+
+        # Re-blend probability-weighted 12m PT (same formula as scenario_agent.py:243)
+        scen_map = (data.get("scenario_analysis") or {}).get(t) or {}
+        bull_p = (scen_map.get("bull") or {}).get("probability") or 0.25
+        base_p = (scen_map.get("base") or {}).get("probability") or 0.50
+        bear_p = (scen_map.get("bear") or {}).get("probability") or 0.25
+        new_blended_pt = round(
+            new_targets["bull"] * bull_p
+            + new_targets["base"] * base_p
+            + new_targets["bear"] * bear_p,
+            2,
+        )
+
+        # Update structures in place
+        dcf_t["12m_targets"] = new_targets
+        dcf_range_map[t] = dcf_t
+        data["dcf_range"] = dcf_range_map
+        if scen_map:
+            scen_map["12m_targets_by_scenario"] = new_targets
+            scen_map["12m_price_target"] = new_blended_pt
+            sa_map = data.get("scenario_analysis", {}) or {}
+            sa_map[t] = scen_map
+            data["scenario_analysis"] = sa_map
+        full["data"] = data
+
+        if not dry_run:
+            conn.execute(
+                "UPDATE web_runs SET full_result_json = ? WHERE run_id = ?",
+                (json.dumps(full), run_id),
+            )
+
+        summary["rows_updated"] += 1
+        summary["changes"].append({
+            "run_id": run_id,
+            "run_at": row["run_at"],
+            "ticker": t,
+            "spot": spot,
+            "profile": profile_name,
+            "high_sbc": is_high_sbc,
+            "max_capture": max_capture,
+            "12m_pt": {
+                "bear": {"old": bear_pt, "new": new_targets["bear"]},
+                "base": {"old": base_pt, "new": new_targets["base"]},
+                "bull": {"old": bull_pt, "new": new_targets["bull"]},
+                "blended_old": scen_map.get("12m_price_target") if scen_map else None,
+                "blended_new": new_blended_pt,
+            },
+        })
+
+    if not dry_run:
+        conn.commit()
+    conn.close()
+    return summary
+
+
 @router.delete("/admin/row")
 async def delete_row(secret: str = "", db: str = "run_archive", table: str = "", key_col: str = "", key_val: str = ""):
     """Delete a single row by primary key."""
