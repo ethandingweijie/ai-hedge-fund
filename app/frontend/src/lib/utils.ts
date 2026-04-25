@@ -5,6 +5,24 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// ── Timestamp parsing ──────────────────────────────────────────────────────
+// Backend (analysis_service.py + run_archive.py) stores timestamps as naive
+// ISO strings: "2026-04-25T05:34:07.901316" — no timezone marker. The Railway
+// container runs in UTC, so the wall-clock value IS UTC, but JavaScript's
+// `new Date(iso)` parses naive strings as LOCAL browser time. For a Singapore
+// browser (UTC+8) reading a UTC-naive timestamp, this misreports "8h ago" as
+// "16h ago" and breaks the auto-reconnect completion-detection comparison
+// against `new Date().toISOString()` which DOES have a Z suffix.
+//
+// Fix: append 'Z' (or accept any explicit tz suffix) so JS parses as UTC.
+// Backend changes weren't needed because it's a frontend interpretation bug.
+export function parseBackendIso(iso: string | null | undefined): Date {
+  if (!iso) return new Date(NaN);
+  // Already has tz suffix? leave it.
+  const hasTz = /[zZ]|[+-]\d\d:?\d\d$/.test(iso);
+  return new Date(hasTz ? iso : iso + 'Z');
+}
+
 // Platform detection utility
 export function isMac(): boolean {
   return typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;

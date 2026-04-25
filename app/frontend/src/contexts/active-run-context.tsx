@@ -20,6 +20,7 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { startAnalysisRun, getRunResult } from '@/lib/api';
 import { API_BASE_URL } from '@/config';
+import { parseBackendIso } from '@/lib/utils';
 import type { ProgressEvent, RunResult } from '@/lib/reportTypes';
 
 export type RunState = 'idle' | 'running' | 'reconnecting' | 'complete' | 'error';
@@ -488,7 +489,11 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
       const runs = data.items || data.runs || [];
       if (runs.length > 0) {
         const latest = runs[0];
-        const runTime = new Date(latest.run_at).getTime();
+        // parseBackendIso: backend run_at is naive ISO (UTC server) but JS
+        // would parse it as local browser time → mixing with the UTC-Z
+        // startedAt produced false-positive completion detections in
+        // non-UTC browsers (Singapore: 8h skew). Treating as UTC fixes it.
+        const runTime = parseBackendIso(latest.run_at).getTime();
         // If we have a startedAt reference, check timing. Otherwise accept any
         // recent run (within 60 min) — handles case where activeRun was cleaned up.
         // Relaxed to 5-min window tolerance (was 60s) to handle DB write lag.
@@ -549,7 +554,8 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
 
         if (runs.length > 0) {
           const latest = runs[0];
-          const runTime = new Date(latest.run_at).getTime();
+          // Same UTC-vs-local mismatch fix as in checkCompleted above
+          const runTime = parseBackendIso(latest.run_at).getTime();
           const startTime = new Date(currentRun.startedAt).getTime();
 
           // Run completed after we started — success

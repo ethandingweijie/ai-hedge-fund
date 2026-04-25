@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { getHistory, getCompanyNames, deleteRun } from '@/lib/api';
 import type { HistoryResponse, RunSummary } from '@/lib/reportTypes';
 import { useActiveRun } from '@/contexts/active-run-context';
+import { parseBackendIso } from '@/lib/utils';
 import {
   Search,
   X,
@@ -81,7 +82,7 @@ function timeCutoff(opt: TimeOption): Date {
 }
 
 function daysAgo(iso: string): string {
-  const d = new Date(iso);
+  const d = parseBackendIso(iso);
   const ms = Date.now() - d.getTime();
   const days = Math.floor(ms / (1000 * 60 * 60 * 24));
   if (days === 0) {
@@ -202,7 +203,7 @@ export function HistoryPage() {
         return false;
       }
       // Time window — compare run_at to cutoff; Yesterday is a single day window
-      const runDate = new Date(r.run_at);
+      const runDate = parseBackendIso(r.run_at);
       if (timeFilter === 'Yesterday') {
         const end = new Date(cutoff); end.setDate(end.getDate() + 1);
         if (runDate < cutoff || runDate >= end) return false;

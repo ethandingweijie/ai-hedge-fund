@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type Theme } from '@/contexts/theme-context';
 import { getHistory } from '@/lib/api';
+import { parseBackendIso } from '@/lib/utils';
 import type { RunSummary } from '@/lib/reportTypes';
 
 const ACTION_COLORS: Record<string, string> = {
@@ -132,7 +133,7 @@ export function MobileTopBar() {
                               </span>
                             )}
                             <span className="ml-auto text-[9px] text-muted-foreground/50 font-mono">
-                              {new Date(run.run_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                              {parseBackendIso(run.run_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           </button>
                         ))}
