@@ -152,6 +152,14 @@ export function normalisePartialData(
       !Array.isArray(v)
     ) {
       const obj = v as Record<string, unknown>;
+      // Empty object → pass through as-is. Wrapping `{}` under `{[ticker]: {}}`
+      // would actively clobber populated inner data via mergeDataPreserve's
+      // inner merge. Keeping it as bare `{}` lets the outer mergeDataPreserve
+      // skip it via its empty-clobber guard. Bug fixed 2026-04-25.
+      if (Object.keys(obj).length === 0) {
+        out[k] = obj;
+        continue;
+      }
       // Already keyed by ticker? pass through.
       if (T in obj || ticker in obj || ticker.toLowerCase() in obj) {
         out[k] = obj;
@@ -167,24 +175,29 @@ export function normalisePartialData(
 }
 
 /**
- * mergeDataPreserve — shallow merge that does NOT overwrite populated values
+ * mergeDataPreserve — deep merge that does NOT overwrite populated values
  * with empty / nullish ones from the source. Per-key rules:
  *
  *   1. If source value is `null` or `undefined`, keep target value.
- *   2. If both are plain objects, do a shallow inner-merge (so per-ticker
- *      dicts like `dcf_range: {INTU: {...}}` accumulate instead of being
- *      replaced when one side has additional ticker keys).
- *   3. Otherwise, source wins (non-empty newer data overrides older).
+ *   2. If both are plain objects, recurse one level so per-ticker inner
+ *      dicts (e.g. `dcf_range[INTU] = {bear: ..., base: ...}`) are NOT
+ *      clobbered by a later emit carrying `dcf_range[INTU] = {}` (which
+ *      happens when normalisePartialData wraps an empty outer object).
+ *   3. At any depth: an EMPTY object { } in source never overwrites a
+ *      POPULATED object in target — but a populated source DOES win.
+ *   4. Otherwise (primitives, arrays, type mismatches), source wins.
  *
- * Why this exists (2026-04-25 root-cause fix):
- * The old logic `{...liveData, ...liveResult.data}` would clobber a
- * populated `liveData.dcf_range = {INTU: {...}}` when `liveResult.data`
- * happened to carry `dcf_range: {}` or `dcf_range: undefined`. This
- * produced the long-standing "Computing…" stuck-loading bug after pipeline
- * complete: SSE events had populated the per-ticker dcf_range, but the
- * post-complete getRunResult() merge wiped it. Same issue at the SSE
- * level when a later partial_data event emitted an empty inner dict.
+ * Bug fixed 2026-04-25 (rev 2):
+ * The shallow-merge version still got clobbered when a later SSE partial_data
+ * emit carried `dcf_range: {}`. normalisePartialData wraps that as
+ * `{INTU: {}}`, which the shallow merge then merged `{...{INTU: populated},
+ *  ...{INTU: {}}}` = `{INTU: {}}` — the populated inner dict was overwritten
+ * by the empty one. Now we recurse one level and skip empty-overrides.
  */
+function _isPlainObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
 export function mergeDataPreserve<T extends Record<string, unknown>>(
   target: T,
   src: Partial<T> | null | undefined,
@@ -195,16 +208,33 @@ export function mergeDataPreserve<T extends Record<string, unknown>>(
     const newV = (src as Record<string, unknown>)[k];
     if (newV === null || newV === undefined) continue;
     const oldV = out[k];
-    // Both shallow-mergeable plain objects → inner merge (per-ticker dicts)
-    if (
-      oldV &&
-      typeof oldV === 'object' &&
-      !Array.isArray(oldV) &&
-      newV &&
-      typeof newV === 'object' &&
-      !Array.isArray(newV)
-    ) {
-      out[k] = { ...(oldV as object), ...(newV as object) };
+
+    if (_isPlainObject(oldV) && _isPlainObject(newV)) {
+      // Empty source object would clobber populated target — skip
+      if (Object.keys(newV).length === 0 && Object.keys(oldV).length > 0) {
+        continue;  // keep oldV intact
+      }
+      // Inner-merge one level deeper: per-ticker dicts inside per-key dicts.
+      // Without this, oldV.INTU = {populated} merged with newV.INTU = {} would
+      // wipe INTU's data because the OUTER spread treats them as objects to
+      // shallow-merge but the INNER value is the one that needs preservation.
+      const merged: Record<string, unknown> = { ...oldV };
+      for (const innerK of Object.keys(newV)) {
+        const innerNewV = newV[innerK];
+        if (innerNewV === null || innerNewV === undefined) continue;
+        const innerOldV = merged[innerK];
+        // Empty inner object would clobber populated inner — skip
+        if (
+          _isPlainObject(innerNewV) &&
+          Object.keys(innerNewV).length === 0 &&
+          _isPlainObject(innerOldV) &&
+          Object.keys(innerOldV).length > 0
+        ) {
+          continue;
+        }
+        merged[innerK] = innerNewV;
+      }
+      out[k] = merged;
     } else {
       out[k] = newV;
     }
