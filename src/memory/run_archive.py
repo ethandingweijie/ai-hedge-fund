@@ -216,6 +216,35 @@ _MIGRATIONS = [
 
     # v3.2 — full value_trap_analysis[ticker] dict for cache reuse
     ("ticker_signals", "value_trap_json",     "TEXT"),  # full value_trap_analysis[ticker] dict
+
+    # v4 — Phase 2.5 intelligence signals + Phase 7 analysis columns
+    # These were added to the DDL but never propagated to _MIGRATIONS, so
+    # production DBs (Railway volume) created before the DDL update never
+    # received them. Symptom on save_run:
+    #   "table ticker_signals has no column named si_signal"
+    # → archive write silently fails, watchlist + backtest scoring miss
+    # the run, [archive] 0 run(s) stored | 0 scored | 0 pending.
+    ("ticker_signals", "si_signal",            "TEXT"),
+    ("ticker_signals", "si_short_float_pct",   "REAL"),
+    ("ticker_signals", "si_squeeze_risk",      "INTEGER"),
+    ("ticker_signals", "si_crowded_trade",     "INTEGER"),
+    ("ticker_signals", "insider_signal",       "TEXT"),
+    ("ticker_signals", "revision_direction",   "TEXT"),
+    ("ticker_signals", "news_signal",          "TEXT"),
+    ("ticker_signals", "eq_quality_verdict",   "TEXT"),
+    ("ticker_signals", "eq_quality_score",     "REAL"),
+    ("ticker_signals", "value_trap_verdict",   "TEXT"),
+    ("ticker_signals", "ev_upside_pct",        "REAL"),
+    ("ticker_signals", "power_law_score",      "REAL"),
+
+    # v4 — outcome-scoring columns (filled by update_outcomes job)
+    ("ticker_signals", "review_date",          "TEXT"),
+    ("ticker_signals", "price_at_review",      "REAL"),
+    ("ticker_signals", "pct_change",           "REAL"),
+    ("ticker_signals", "outcome",              "TEXT DEFAULT 'PENDING'"),
+
+    # v4 — agent_signals outcome (parity with ticker_signals.outcome)
+    ("agent_signals",  "outcome",              "TEXT DEFAULT 'PENDING'"),
 ]
 
 
