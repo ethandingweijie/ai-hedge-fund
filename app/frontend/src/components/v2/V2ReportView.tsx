@@ -632,7 +632,7 @@ function ValuationBody({
           {/* 2×2 metric grid */}
           <div className="grid grid-cols-2 gap-2 mt-5">
             <MetricBox label="Current price"   value={current != null ? `$${current.toFixed(2)}` : '—'} tone="neutral" />
-            <MetricBox label="Long-term value" value={longTerm != null ? `$${longTerm.toFixed(2)}` : '—'} delta={longTermDelta ?? undefined} tone="neutral" />
+            <MetricBox label="Long-term value (Base)" value={longTerm != null ? `$${longTerm.toFixed(2)}` : '—'} delta={longTermDelta ?? undefined} tone="neutral" />
             <MetricBox label="Bull case"       value={bull12m  != null ? `$${bull12m.toFixed(2)}`  : '—'} delta={bull12mDelta ?? undefined} tone="bull" />
             <MetricBox label="Bear case"       value={bear12m  != null ? `$${bear12m.toFixed(2)}`  : '—'} delta={bear12mDelta ?? undefined} tone="bear" />
           </div>

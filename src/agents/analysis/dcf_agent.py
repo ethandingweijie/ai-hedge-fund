@@ -4335,17 +4335,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             profile_name in _BANK_PROFILES
             or sector == "Financials"
         )
-        # Growth premium for 12m PT: use base scenario growth rate
-        _base_g = scenario_results.get("base", {}).get("growth_rate", growth_base)
+        # Sector growth average — used per-scenario in the loop below.
+        # Pre-fix this block also computed _gp_pt and _gp_pt_reit ONCE from
+        # base growth and applied uniformly to bear/base/bull. That caused
+        # the bear case to receive a base-case growth premium even while
+        # modelling failure — Gemini's "growth premium leak" critique.
+        # Now growth_premium is computed PER SCENARIO inside the loop using
+        # the scenario's own growth rate, so a bear scenario with growth
+        # below sector average correctly receives a DISCOUNT (gp < 1.0).
         _sector_g_avg_pt = peer.get("growth_avg", 0.08)
-        if _sector_g_avg_pt > 0.005:
-            _gp_raw_pt = 1.0 + 0.30 * (_base_g - _sector_g_avg_pt) / _sector_g_avg_pt
-            _gp_pt = max(0.60, min(2.50, _gp_raw_pt))
-        else:
-            _gp_pt = 1.0
-        # REIT growth premium: reuse the cap applied elsewhere in the engine —
-        # REIT multiples already embed growth expectations, so we cap at 1.20x.
-        _gp_pt_reit = max(0.85, min(1.20, _gp_pt))
 
         # REIT sub-type multiples (pre-computed once, used per scenario below)
         _reit_sub = None
@@ -4368,6 +4366,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _pt: Optional[float] = None
             # Change 7: apply ADR haircut for CNY-reporting US-listed companies
             _adr_h = peer.get("cn_adr_haircut", 1.0) if reported_currency == "CNY" else 1.0
+            # ── Scenario-specific growth premium (Discrepancy C fix) ──────
+            # Use this scenario's growth rate (not base_g) so the premium
+            # reflects the scenario's business performance. Bear with
+            # growth < sector_avg now produces a DISCOUNT (gp < 1.0).
+            _scen_g = scenario_results.get(scen_name, {}).get("growth_rate", growth_base)
+            if _sector_g_avg_pt > 0.005:
+                _gp_raw_scen = 1.0 + 0.30 * (_scen_g - _sector_g_avg_pt) / _sector_g_avg_pt
+                _gp_pt = max(0.60, min(2.50, _gp_raw_scen))
+            else:
+                _gp_pt = 1.0
+            # REIT-specific tighter cap: REIT multiples already embed growth
+            # expectations, so we cap the multiplier band more aggressively.
+            _gp_pt_reit = max(0.85, min(1.20, _gp_pt))
             # ── REIT 12m PT: P/FFO primary, P/AFFO secondary (60/40 blend) ──
             # Year-1 FFO/sh ≈ current FFO/sh × (1 + growth) since REIT earnings
             # grow with NOI + D&A, tracking revenue growth closely. Same for AFFO.
