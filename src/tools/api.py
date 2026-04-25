@@ -1267,7 +1267,7 @@ def get_analyst_estimates(
 def get_price_target_consensus(
     ticker: str,
     api_key: str = None,
-) -> Optional[dict]:
+) -> "dict | None":
     """
     Wall Street consensus 12-month price target from FMP /stable/price-target-consensus.
 
