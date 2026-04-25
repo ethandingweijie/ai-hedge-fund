@@ -170,7 +170,21 @@ async def backfill_convergence_cap(
             summary["rows_skipped_spot_failed"] += 1
             continue
 
+        # Profile resolution waterfall:
+        #   1. data.profile_names[ticker]   — per-ticker map
+        #   2. data.profile_name            — singular, primary ticker
+        #   3. TICKER_SECTOR_LOOKUP[ticker] — fallback for older runs that
+        #      predate profile_name persistence (e.g. yesterday's MNDY run
+        #      stored '' even though MNDY is configured as Growth SaaS)
         profile_name = (data.get("profile_names") or {}).get(t) or data.get("profile_name") or ""
+        if not profile_name:
+            try:
+                from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+                _entry = TICKER_SECTOR_LOOKUP.get(t.upper())
+                if _entry and len(_entry) >= 2:
+                    profile_name = _entry[1] or ""
+            except Exception:
+                pass
         is_high_sbc = profile_name in HIGH_SBC
         max_capture = 0.20 if is_high_sbc else 0.35
 
@@ -206,6 +220,9 @@ async def backfill_convergence_cap(
         bull_p = (scen_map.get("bull") or {}).get("probability") or 0.25
         base_p = (scen_map.get("base") or {}).get("probability") or 0.50
         bear_p = (scen_map.get("bear") or {}).get("probability") or 0.25
+        # Snapshot OLD blended BEFORE we overwrite scen_map (was showing identical
+        # old/new in dry-run output otherwise)
+        old_blended_pt = scen_map.get("12m_price_target")
         new_blended_pt = round(
             new_targets["bull"] * bull_p
             + new_targets["base"] * base_p
