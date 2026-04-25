@@ -3054,22 +3054,39 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         leverage     = most_recent["debt_to_equity"] or 0.0
         net_debt     = most_recent["net_debt"] or 0.0
 
-        # ── Fetch latest price for trailing P/E (Deep Value Recovery) ────
-        # Also captures market_cap for the WACC credit-spread overlay AND
-        # _spot_price for the Convergence Velocity cap (state["current_prices"]
-        # is only populated by portfolio_manager which runs LATER — DCF can't
-        # rely on it).
-        #
-        # Fallback widening (2026-04-25): single-day fetch can return empty on
-        # weekends/holidays/post-close gaps. Retry with a 7-day window so the
-        # cap doesn't silently no-op when the only failure is calendar boundaries.
+        # ── Spot price for Convergence Cap (PRIMARY) — quote-short ───────
+        # FMP /stable/quote-short returns ONE row: {symbol, price, change,
+        # volume}. Calendar-safe — returns last-trade price even on
+        # weekends/holidays/post-close. Verified 2026-04-25 with live key:
+        #   GET .../stable/quote-short?symbol=MDB → [{..., "price": 253.59, ...}]
+        #   GET .../historical-price-eod/light?symbol=MDB&from=...&to=... → []
+        # The historical endpoint returns empty for non-trading-day single-day
+        # queries; quote-short doesn't have that gap. Fired FIRST so it's the
+        # primary spot source.
+        _spot_price:  float | None = None
+        if not (is_hk_ticker(ticker) or is_sg_ticker(ticker)):
+            try:
+                from src.tools.api import _fmp_get as _fmp_get_quote, _STABLE as _FMP_STABLE
+                _quote = _fmp_get_quote(
+                    f"{_FMP_STABLE}/quote-short", {"symbol": ticker}, api_key,
+                )
+                if _quote and isinstance(_quote, list) and _quote:
+                    _qp = float(_quote[0].get("price") or 0)
+                    if _qp > 0:
+                        _spot_price = _qp
+            except Exception:
+                pass
+
+        # ── Historical EOD (always fires) — _market_cap + _trailing_pe ────
+        # These derivations anchor to end_date (financials snapshot), so they
+        # use the historical-price-eod path with a 7-day fallback window for
+        # non-trading-day end_date. Doubles as FALLBACK for _spot_price when
+        # quote-short was skipped (HK/SG) or returned no data (rate limit).
         _trailing_pe: float | None = None
         _market_cap:  float | None = None
-        _spot_price:  float | None = None
         try:
             _latest_prices = get_prices(ticker, end_date, end_date, api_key=api_key)
             if not _latest_prices:
-                # Weekend/holiday — widen lookback to last 7 calendar days
                 from datetime import datetime as _dt, timedelta as _td
                 try:
                     _w_start = (_dt.strptime(end_date, "%Y-%m-%d") - _td(days=7)).strftime("%Y-%m-%d")
@@ -3079,14 +3096,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if _latest_prices:
                 _p = _latest_prices[-1]
                 _close = float(_p.close) if hasattr(_p, "close") else float(_p.get("close", 0))
-                if _close > 0:
-                    _spot_price = _close
                 _ni = most_recent.get("net_income")
                 if _close > 0 and shares and shares > 0:
                     _market_cap = _close * shares
                 if _close > 0 and _ni and shares and shares > 0 and _ni > 0:
                     _trailing_pe = _close / (_ni / shares)
                     most_recent["price_to_earnings_ratio"] = _trailing_pe
+                # Fallback for spot if quote-short didn't fire above
+                if _spot_price is None and _close > 0:
+                    _spot_price = _close
         except Exception:
             pass
 
