@@ -273,6 +273,15 @@ export interface DcfRange {
   fcf_margin_base?: number;
   // 12m forward-multiple targets per scenario (from DCF agent)
   '12m_targets'?: { bear?: number | null; base?: number | null; bull?: number | null };
+  // Wall Street analyst consensus 12m PT (FMP /stable/price-target-consensus).
+  // null when ticker is HK/SG (FMP n/a) or when fetch fails. Used by V2 hero
+  // card to render "vs Wall St $XXX" sanity line below the model PT.
+  consensus_pt?: {
+    high?:      number | null;
+    low?:       number | null;
+    consensus?: number | null;
+    median?:    number | null;
+  } | null;
   net_debt?: number;
   anchor_method?: string;
   profile?: string;

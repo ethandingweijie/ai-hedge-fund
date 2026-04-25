@@ -588,6 +588,14 @@ function ValuationBody({
   // showed uncapped IV $691). Fixed 2026-04-25.
   const bull12mDelta = (bull12m != null && current != null && current > 0) ? ((bull12m - current) / current) * 100 : null;
   const bear12mDelta = (bear12m != null && current != null && current > 0) ? ((bear12m - current) / current) * 100 : null;
+  // Wall Street analyst consensus PT (from FMP /price-target-consensus, persisted
+  // in dcf_range.consensus_pt by dcf_agent). Frontend renders as a small
+  // sanity-check line under the headline 12m PT so users see model vs market.
+  // null for HK/SG tickers (FMP n/a) or when fetch failed.
+  const consensusPt = (dcfRange?.consensus_pt?.consensus ?? null) as number | null;
+  const consensusDelta = (consensusPt != null && target != null && target > 0)
+    ? ((consensusPt - target) / target) * 100
+    : null;
   const probBull = scenarioAnalysis?.bull?.probability ?? 0.25;
   const probBase = scenarioAnalysis?.base?.probability ?? 0.50;
   const probBear = scenarioAnalysis?.bear?.probability ?? 0.25;
@@ -625,6 +633,25 @@ function ValuationBody({
             {current != null && (
               <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 vs current ${current.toFixed(2)}
+              </div>
+            )}
+            {consensusPt != null && (
+              <div className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                Wall St. consensus{' '}
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums">
+                  ${consensusPt.toFixed(2)}
+                </span>
+                {consensusDelta != null && (
+                  <span className={`ml-1 tabular-nums ${
+                    Math.abs(consensusDelta) < 5
+                      ? 'text-zinc-400 dark:text-zinc-500'
+                      : consensusDelta > 0
+                        ? 'text-[#2e7d32] dark:text-[#4ea354]'
+                        : 'text-rose-600 dark:text-rose-400'
+                  }`}>
+                    ({consensusDelta >= 0 ? '+' : ''}{consensusDelta.toFixed(1)}% vs model)
+                  </span>
+                )}
               </div>
             )}
           </div>
