@@ -159,6 +159,39 @@ _EARLY_STAGE_PROFILES: set[str] = {
     "Cybersecurity / Mission-Critical SaaS",
 }
 
+# ── High-SBC scenario tightening (2026-04-25, Gemini review) ─────────────────
+# Profiles where SBC/Revenue typically exceeds 15% — these names face genuine
+# scenario risk (multiple compression, growth deceleration, dilution drag) that
+# the legacy ±0.55/1.50 growth band and ±0.80/1.20 margin band do not capture.
+# Mature SaaS (CRM, ADBE) is intentionally EXCLUDED — SBC ~8-10%, multiples
+# already compressed, growth steady — legacy bands stay calibrated for them.
+# Hyperscaler / Tech Conglomerate also EXCLUDED — mega-cap dispersion is
+# narrower (institutional ownership dampens both upside and downside).
+_HIGH_SBC_PROFILES: set[str] = {
+    "Growth SaaS",
+    "Hyper-Growth Platform",
+    "High-Growth Tech / AI",
+    "Cybersecurity / Mission-Critical SaaS",
+}
+
+# Tightened scenario bands for high-SBC profiles. Calibrated to produce a
+# "real" bear case (40% growth → 16%, not 22%) and a disciplined bull case
+# (no return to ZIRP-era multiples). Symptom on MDB pre-fix: bear IV $423 on
+# spot $253 (i.e. bear is +67% upside — definitionally not a bear).
+_GROWTH_MULT_HIGH_SBC       = {"bear": 0.40, "base": 1.00, "bull": 1.30}
+_MARGIN_DELTA_MULT_HIGH_SBC = {"bear": 0.65, "base": 1.00, "bull": 1.15}
+
+
+def _scenario_mults_for_profile(profile_name: str) -> tuple[dict, dict]:
+    """Return (growth_mult, margin_delta_mult) tuned to the profile.
+    High-SBC profiles get tighter dispersion to model genuine scenario risk;
+    everything else uses the legacy bands which are well-calibrated for
+    cash-generative / mature-multiple businesses (Banks, REITs, Mature SaaS,
+    Consumer staples)."""
+    if profile_name in _HIGH_SBC_PROFILES:
+        return _GROWTH_MULT_HIGH_SBC, _MARGIN_DELTA_MULT_HIGH_SBC
+    return _GROWTH_MULT, _MARGIN_DELTA_MULT
+
 
 def _staged_wacc_for_year(base_wacc: float, profile_name: str, year: int) -> float:
     """Apply early-stage risk premium to first 3 years for high-dilution Tech profiles.
@@ -1267,12 +1300,27 @@ def _terminal_multiple_ev_revenue(profile_name: str, scenario: str = "base") -> 
 
     Growth-phase profiles converge to their mature equivalent at Y10+ so the
     terminal multiple reflects the profile the company will have matured into,
-    not the hyper-growth multiple it trades on today. Bear = 0.80× base,
-    bull = 1.20× base (±20% scenario band at terminal).
+    not the hyper-growth multiple it trades on today.
+
+    Scenario band:
+      - High-SBC profiles (Growth SaaS, Cybersecurity, Hyper-Growth, AI):
+        bear 0.70×, bull 1.30×. These names face genuine multiple compression
+        in bear regimes — Mature SaaS in 2022 traded at 5-6x, not 8x.
+      - Stable profiles (Banks, REITs, Consumer, Mature SaaS, Hyperscaler):
+        legacy bear 0.80× / bull 1.20×. ±20% is the right severity for
+        cash-generative profiles where dispersion is structurally narrower.
     """
     convergence = _TERMINAL_MULTIPLE_CONVERGENCE.get(profile_name, profile_name)
     mature_mults = _TECH_SUBTYPE_MULTIPLES.get(convergence, _TECH_SUBTYPE_MULTIPLES["default"])
     base = mature_mults["ev_revenue"]
+    # Asymmetric band for high-SBC tech profiles
+    if profile_name in _HIGH_SBC_PROFILES:
+        if scenario == "bear":
+            return base * 0.70
+        elif scenario == "bull":
+            return base * 1.30
+        return base
+    # Legacy ±20% band for stable profiles
     if scenario == "bear":
         return base * 0.80
     elif scenario == "bull":
@@ -3717,6 +3765,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
                 _analyst_bands = None
 
+        # Per-profile scenario dispersion (Tier 2 reality-tightening, Gemini review):
+        # High-SBC tech profiles (Growth SaaS, Cybersecurity, Hyper-Growth) get
+        # tighter bands to model genuine scenario risk; Banks/REITs/Mature SaaS
+        # keep legacy bands that are calibrated for cash-generative profiles.
+        _g_mult, _m_mult = _scenario_mults_for_profile(profile_name)
+
         for scenario in ("bear", "base", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -3724,7 +3778,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if _analyst_bands is not None:
                 g = _analyst_bands[scenario]
             else:
-                g = growth_base * _GROWTH_MULT[scenario]
+                g = growth_base * _g_mult[scenario]
             # Clamp growth rate: [-30%, +40%]. Upper cap reduced from 100% to
             # 40% on 2026-04-25 after observing MNDY base IV = $475 on $65
             # spot driven by 60.2% 5yr CAGR being used as forward forecast.
@@ -3733,9 +3787,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             g = max(min(g, 0.40), -0.30)
 
             # Fix B — multiplicative margin variance: bear compresses base
-            # margin 20%, bull expands 20%. Replaces the legacy ±0.2pp/yr drift
-            # which barely moved the needle for mid-margin Tech names.
-            md_abs = fcf_margin_base * (_MARGIN_DELTA_MULT[scenario] - 1.0)
+            # margin (20% legacy / 35% high-SBC), bull expands (20% / 15%).
+            # Replaces the legacy ±0.2pp/yr drift which barely moved the
+            # needle for mid-margin Tech names.
+            md_abs = fcf_margin_base * (_m_mult[scenario] - 1.0)
             if scenario != "bear":
                 md_abs += guidance_margin_adj
 
@@ -4313,6 +4368,52 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 elif _yr1_eps and _yr1_eps > 0:
                     _pt = _yr1_eps * peer.get("pe", 20.0) * _smult * _adr_h * _gp_pt
             _12m_targets[scen_name] = round(_pt, 2) if _pt else None
+
+        # ── Convergence Velocity cap (Tier 2 reality-tightening) ─────────────
+        # The 12m PT engine is forward-multiple-driven, decoupled from IV. On
+        # high-multiple names the result is that 12m PT runs to ~90% of DCF IV
+        # (MDB pre-fix: PT $493 / IV $533 = 92%) which implicitly says the
+        # market should re-rate from "efficiency-watch SaaS" to "ZIRP-era
+        # growth darling" inside 12 months. Industry research norm is closer
+        # to 20-35% of the gap per year.
+        #
+        # Cap policy:
+        #   high-SBC profile, no re-acceleration   → 20% of (IV - spot) per year
+        #   high-SBC profile, growth re-accelerating → 30% (looser — execution earns)
+        #   stable profiles (Banks, REITs, Mature SaaS, Hyperscaler) → 35%
+        #     (cash flow already arriving; multiple already compressed; these
+        #      earn into IV faster than aspirational growth names)
+        # Re-acceleration trigger: forward growth_base > trailing CAGR × 1.10.
+        try:
+            _spot_for_cap = state["data"].get("current_prices", {}).get(ticker)
+        except Exception:
+            _spot_for_cap = None
+        if _spot_for_cap and float(_spot_for_cap) > 0:
+            _spot_for_cap = float(_spot_for_cap)
+            _trail_cagr = _historical_cagr(series, revenue_base) or growth_base
+            _is_reaccel = bool(growth_base and _trail_cagr and growth_base > _trail_cagr * 1.10)
+            _high_sbc = profile_name in _HIGH_SBC_PROFILES
+            if _is_reaccel and _high_sbc:
+                _max_capture = 0.30
+            elif _high_sbc:
+                _max_capture = 0.20
+            else:
+                _max_capture = 0.35
+            _capped_any = False
+            for _sn in ("bear", "base", "bull"):
+                _scen_iv = scenario_results.get(_sn, {}).get("intrinsic_value")
+                _pt = _12m_targets.get(_sn)
+                if _scen_iv and _pt and _scen_iv > _spot_for_cap and _pt > _spot_for_cap:
+                    _gap = _scen_iv - _spot_for_cap
+                    _cap = _spot_for_cap + _max_capture * _gap
+                    if _pt > _cap:
+                        _12m_targets[_sn] = round(_cap, 2)
+                        _capped_any = True
+            if _capped_any:
+                ticker_forward_flags.append(
+                    f"Convergence cap: 12m PT capped at {_max_capture:.0%} of "
+                    f"(IV − spot) gap ({'reaccel' if _is_reaccel else 'high-SBC' if _high_sbc else 'stable'})"
+                )
 
         # ── 12m PT vs DCF IV divergence guard ────────────────────────────────
         # If the base 12m PT diverges > 100% from the base DCF IV, the forward-
