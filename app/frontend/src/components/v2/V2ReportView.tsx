@@ -580,6 +580,14 @@ function ValuationBody({
   const bull12m = has12mTargets.bull ?? bullIV;
   const base12m = has12mTargets.base ?? target ?? baseIV;
   const bear12m = has12mTargets.bear ?? bearIV;
+  // Deltas for the 12m-PT-based hero tiles (Bull case / Bear case sub-cards).
+  // These hero cards live UNDER the "12-Month Price Target" header, so they
+  // must reflect the 12m PTs (capped by Convergence Cap + bear floor), NOT
+  // the raw DCF IVs. Pre-fix used bullIV/bearIV which produced numbers that
+  // disagreed with the headline (e.g. MDB headline $289 but Bull-case tile
+  // showed uncapped IV $691). Fixed 2026-04-25.
+  const bull12mDelta = (bull12m != null && current != null && current > 0) ? ((bull12m - current) / current) * 100 : null;
+  const bear12mDelta = (bear12m != null && current != null && current > 0) ? ((bear12m - current) / current) * 100 : null;
   const probBull = scenarioAnalysis?.bull?.probability ?? 0.25;
   const probBase = scenarioAnalysis?.base?.probability ?? 0.50;
   const probBear = scenarioAnalysis?.bear?.probability ?? 0.25;
@@ -625,8 +633,8 @@ function ValuationBody({
           <div className="grid grid-cols-2 gap-2 mt-5">
             <MetricBox label="Current price"   value={current != null ? `$${current.toFixed(2)}` : '—'} tone="neutral" />
             <MetricBox label="Long-term value" value={longTerm != null ? `$${longTerm.toFixed(2)}` : '—'} delta={longTermDelta ?? undefined} tone="neutral" />
-            <MetricBox label="Bull case"       value={bullIV   != null ? `$${bullIV.toFixed(2)}`   : '—'} delta={bullDelta ?? undefined} tone="bull" />
-            <MetricBox label="Bear case"       value={bearIV   != null ? `$${bearIV.toFixed(2)}`   : '—'} delta={bearDelta ?? undefined} tone="bear" />
+            <MetricBox label="Bull case"       value={bull12m  != null ? `$${bull12m.toFixed(2)}`  : '—'} delta={bull12mDelta ?? undefined} tone="bull" />
+            <MetricBox label="Bear case"       value={bear12m  != null ? `$${bear12m.toFixed(2)}`  : '—'} delta={bear12mDelta ?? undefined} tone="bear" />
           </div>
         </div>
       ) : (
