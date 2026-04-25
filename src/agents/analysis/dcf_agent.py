@@ -1313,14 +1313,18 @@ def _terminal_multiple_ev_revenue(profile_name: str, scenario: str = "base") -> 
     convergence = _TERMINAL_MULTIPLE_CONVERGENCE.get(profile_name, profile_name)
     mature_mults = _TECH_SUBTYPE_MULTIPLES.get(convergence, _TECH_SUBTYPE_MULTIPLES["default"])
     base = mature_mults["ev_revenue"]
-    # Asymmetric band for high-SBC tech profiles
+    # Asymmetric tightening for high-SBC tech profiles: bear penalised
+    # harder (-30%) AND bull tightened (-5%, going from legacy 1.20→1.15).
+    # Earlier rev had bull at 1.30 which LOOSENED bull case vs legacy and
+    # produced an MDB regression (bull IV $645→$691 on the user's screen).
+    # Both bands now strictly tighter than legacy on both sides.
     if profile_name in _HIGH_SBC_PROFILES:
         if scenario == "bear":
             return base * 0.70
         elif scenario == "bull":
-            return base * 1.30
+            return base * 1.15   # was 1.30 — fixed bull regression 2026-04-25
         return base
-    # Legacy ±20% band for stable profiles
+    # Legacy ±20% band for stable profiles (Banks, REITs, Mature SaaS, Hyperscaler)
     if scenario == "bear":
         return base * 0.80
     elif scenario == "bull":
@@ -3055,11 +3059,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # _spot_price for the Convergence Velocity cap (state["current_prices"]
         # is only populated by portfolio_manager which runs LATER — DCF can't
         # rely on it).
+        #
+        # Fallback widening (2026-04-25): single-day fetch can return empty on
+        # weekends/holidays/post-close gaps. Retry with a 7-day window so the
+        # cap doesn't silently no-op when the only failure is calendar boundaries.
         _trailing_pe: float | None = None
         _market_cap:  float | None = None
         _spot_price:  float | None = None
         try:
             _latest_prices = get_prices(ticker, end_date, end_date, api_key=api_key)
+            if not _latest_prices:
+                # Weekend/holiday — widen lookback to last 7 calendar days
+                from datetime import datetime as _dt, timedelta as _td
+                try:
+                    _w_start = (_dt.strptime(end_date, "%Y-%m-%d") - _td(days=7)).strftime("%Y-%m-%d")
+                    _latest_prices = get_prices(ticker, _w_start, end_date, api_key=api_key)
+                except Exception:
+                    pass
             if _latest_prices:
                 _p = _latest_prices[-1]
                 _close = float(_p.close) if hasattr(_p, "close") else float(_p.get("close", 0))
@@ -4399,6 +4415,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # $1076/$1349 on $396 spot because cap never fired. Fix: use
         # _spot_price which IS in scope.
         _spot_for_cap = _spot_price
+        # Diagnostic: emit cap state to stdout regardless of outcome so Railway
+        # logs show exactly why the cap fires/doesn't (was MDB silent no-op).
+        if not _spot_for_cap or float(_spot_for_cap) <= 0:
+            print(
+                f"  [convergence-cap] {ticker}: SKIPPED — spot price unavailable "
+                f"(_spot_price={_spot_price!r})"
+            )
         if _spot_for_cap and float(_spot_for_cap) > 0:
             _spot_for_cap = float(_spot_for_cap)
             _trail_cagr = _historical_cagr(series, revenue_base) or growth_base
@@ -4411,19 +4434,54 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             else:
                 _max_capture = 0.35
             _capped_any = False
+            _cap_diagnostics: list[str] = []
             for _sn in ("bear", "base", "bull"):
                 _scen_iv = scenario_results.get(_sn, {}).get("intrinsic_value")
                 _pt = _12m_targets.get(_sn)
-                if _scen_iv and _pt and _scen_iv > _spot_for_cap and _pt > _spot_for_cap:
+                if not _scen_iv or not _pt:
+                    _cap_diagnostics.append(f"{_sn}: no scen_iv/pt")
+                    continue
+                # ── Convergence Velocity cap (IV-gap based) ──────────────
+                if _scen_iv > _spot_for_cap and _pt > _spot_for_cap:
                     _gap = _scen_iv - _spot_for_cap
-                    _cap = _spot_for_cap + _max_capture * _gap
-                    if _pt > _cap:
-                        _12m_targets[_sn] = round(_cap, 2)
+                    _conv_cap = _spot_for_cap + _max_capture * _gap
+                    if _pt > _conv_cap:
+                        _12m_targets[_sn] = round(_conv_cap, 2)
+                        _pt = _12m_targets[_sn]
                         _capped_any = True
+                        _cap_diagnostics.append(
+                            f"{_sn}: pt→${_conv_cap:.0f} (conv cap {_max_capture:.0%} of "
+                            f"IV-spot gap)"
+                        )
+                # ── Bear floor for high-SBC names (Gemini Fix 2) ─────────
+                # Even with Convergence Cap, a bear 12m PT above spot is
+                # contradictory: a 'bear' should price multiple compression.
+                # Force bear PT ≤ spot × 0.85 (=15% drawdown) for high-SBC.
+                # Stable profiles are exempt — KO's bear case shouldn't be
+                # forced to -15% since its volatility regime is different.
+                if _sn == "bear" and _high_sbc:
+                    _bear_floor = _spot_for_cap * 0.85
+                    if _pt > _bear_floor:
+                        _12m_targets[_sn] = round(_bear_floor, 2)
+                        _capped_any = True
+                        _cap_diagnostics.append(
+                            f"{_sn}: pt→${_bear_floor:.0f} (high-SBC bear floor: "
+                            f"spot×0.85)"
+                        )
+            # Always log the cap state so it's visible in Railway logs
+            print(
+                f"  [convergence-cap] {ticker}: profile={profile_name!r} "
+                f"high_sbc={_high_sbc} reaccel={_is_reaccel} "
+                f"max_capture={_max_capture:.0%} spot=${_spot_for_cap:.2f}"
+            )
+            if _cap_diagnostics:
+                for _d in _cap_diagnostics:
+                    print(f"    • {_d}")
             if _capped_any:
                 ticker_forward_flags.append(
                     f"Convergence cap: 12m PT capped at {_max_capture:.0%} of "
                     f"(IV − spot) gap ({'reaccel' if _is_reaccel else 'high-SBC' if _high_sbc else 'stable'})"
+                    + (" + bear floor" if _high_sbc else "")
                 )
 
         # ── 12m PT vs DCF IV divergence guard ────────────────────────────────
