@@ -374,6 +374,68 @@ def _save_web_run(
 
 # ── Cache helper ──────────────────────────────────────────────────────────────
 
+# ── Agent-name canonicalization for cache key matching ──────────────────────
+# The frontend sends short names ('graham', 'buffett', 'burry', etc.) but the
+# backend stores agent_id keys in analyst_signals using FULL names like
+# 'ben_graham_agent', 'warren_buffett_agent', 'michael_burry_agent'. Naive
+# normalization `f"{name}_agent"` produces 'graham_agent' which never matches
+# 'ben_graham_agent' → cache miss on every Deep-Value / Quality-Growth /
+# partial-profile run. Hardcode the short→full mapping here.
+#
+# Source of truth: src/utils/analysts.py ANALYST_CONFIG keys, which get
+# suffixed with '_agent' to form the agent_id by get_analyst_nodes().
+_FRONTEND_SHORT_TO_AGENT_ID = {
+    "damodaran":      "aswath_damodaran_agent",
+    "graham":         "ben_graham_agent",
+    "ackman":         "bill_ackman_agent",
+    "cathie_wood":    "cathie_wood_agent",
+    "munger":         "charlie_munger_agent",
+    "burry":          "michael_burry_agent",
+    "pabrai":         "mohnish_pabrai_agent",
+    "lynch":          "peter_lynch_agent",
+    "fisher":         "phil_fisher_agent",
+    "jhunjhunwala":   "rakesh_jhunjhunwala_agent",
+    "druckenmiller":  "stanley_druckenmiller_agent",
+    "buffett":        "warren_buffett_agent",
+}
+
+# Agents that ALWAYS run and appear in analyst_signals but are NOT
+# user-selectable (and therefore excluded from the cache-comparison set).
+# Includes:
+#   - System: risk_management, advanced_risk_manager, portfolio_manager
+#     (note: portfolio_manager has NO _agent suffix per portfolio_manager.py)
+#   - Always-on data analysts: sentiment, technical, valuation, growth,
+#     fundamentals, news_sentiment
+_CACHE_SYSTEM_AGENTS = {
+    "risk_management_agent",
+    "advanced_risk_manager",
+    "portfolio_manager",
+    "advanced_portfolio_manager",
+    "sentiment_analyst_agent",
+    "technical_analyst_agent",
+    "valuation_analyst_agent",
+    "growth_analyst_agent",
+    "fundamentals_analyst_agent",
+    "news_sentiment_agent",
+}
+
+
+def _canonicalize_requested_agents(agents: list[str]) -> list[str]:
+    """Translate frontend short names to backend agent_id format.
+    'graham' → 'ben_graham_agent'. Already-suffixed names pass through.
+    Unknown names get the legacy `f"{name}_agent"` fallback so older
+    profile configs still work."""
+    out: list[str] = []
+    for a in agents:
+        if a.endswith("_agent"):
+            out.append(a)
+        elif a in _FRONTEND_SHORT_TO_AGENT_ID:
+            out.append(_FRONTEND_SHORT_TO_AGENT_ID[a])
+        else:
+            out.append(f"{a}_agent")
+    return out
+
+
 def get_cached_run(
     ticker: str,
     within_minutes: int = 30,
@@ -421,22 +483,23 @@ def get_cached_run(
         }
 
         # ── Agent-set validation ───────────────────────────────────────────
-        # If specific agents were requested, verify the cached run used the
-        # same set. System agents (risk, portfolio) are always present and
-        # excluded from the comparison.
+        # Verify the cached run used the same investor-agent set as requested.
+        # Two layers of normalisation needed (bug fixed 2026-04-25):
+        #   1. Frontend short names → backend agent_id via _FRONTEND_SHORT_TO_AGENT_ID
+        #      ('graham' → 'ben_graham_agent', not 'graham_agent')
+        #   2. Strip always-on system + data analysts from the cached set
+        #      (sentiment, technical, valuation, growth, fundamentals,
+        #       news_sentiment, plus risk + portfolio managers)
+        # Pre-fix: every Deep-Value / partial-profile run cache-missed because
+        # short-name normalisation produced 'graham_agent' which never matched
+        # the cached 'ben_graham_agent'.
         if agents:
-            _SYSTEM = {"risk_management_agent", "advanced_risk_manager", "portfolio_manager_agent"}
             cached_data    = result["full_result_json"].get("data", {})
             cached_signals = cached_data.get("analyst_signals", {})
-            # Keys in analyst_signals are like "graham_agent", "burry_agent"
             cached_investor_agents = sorted(
-                k for k in cached_signals if k not in _SYSTEM
+                k for k in cached_signals if k not in _CACHE_SYSTEM_AGENTS
             )
-            # Normalise requested list: "graham" → "graham_agent"
-            requested_normalised = sorted(
-                a if a.endswith("_agent") else f"{a}_agent"
-                for a in agents
-            )
+            requested_normalised = sorted(_canonicalize_requested_agents(agents))
             if cached_investor_agents != requested_normalised:
                 return None   # different agent selection — force fresh run
 
