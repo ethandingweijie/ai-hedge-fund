@@ -501,6 +501,52 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     "Growth SaaS": {
         "sector":         "Tech",
         "anchor_methods": ["NRR-adj DCF", "EV/NTM Revenue", "Rule of 40"],
+        # V3 quality: NRR primary (the platform-stickiness moat) +
+        # Rule of 40 kicker (path-to-profitability). Both at full magnitude
+        # in separate correlation groups so they multiply (capped 0.70-1.50).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "nrr_pct", "direction": "higher_better",
+                 "correlation_group": "growth_saas_q_primary",
+                 "bands": [
+                     {"min": 1.30, "mult": 1.30, "label": "elite-DDOG"},
+                     {"min": 1.15, "mult": 1.15, "label": "strong"},
+                     {"min": 1.00, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "contraction"},
+                 ]},
+                {"kpi": "rule_of_40_score", "direction": "higher_better",
+                 "correlation_group": "growth_saas_q_kicker",
+                 "bands": [
+                     {"min": 60, "mult": 1.30, "label": "elite-R40"},
+                     {"min": 40, "mult": 1.15, "label": "strong-R40"},
+                     {"min": 25, "mult": 1.00, "label": "in-band"},
+                     {"min": -99, "mult": 0.85, "label": "weak"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+            # quality cap_when: magic_number < 0.4 caps composite quality at
+            # 1.00x (the "burn-and-pray" override). Even elite NRR + Rule of 40
+            # can't compensate for sales-efficiency breakdown.
+            "cap_when": {
+                "kpi":      "magic_number",
+                "lt":       0.40,
+                "max_mult": 1.00,
+                "note":     "magic_number cap: <0.4 = burn-and-pray, sales efficiency broken",
+            },
+        },
+        # V3 risk: magic_number (sales efficiency = the leverage proxy for SaaS;
+        # most SaaS firms have zero debt + large cash so net_debt_to_ebitda is
+        # not meaningful). Has fallback: burn_rate_monthly_usd if magic_number
+        # missing.
+        "risk_adjustment": {
+            "kpi": "magic_number", "direction": "higher_better",
+            "bands": [
+                {"min": 1.0, "mult": 1.10, "label": "fortress-DDOG"},
+                {"min": 0.7, "mult": 1.05, "label": "strong"},
+                {"min": 0.4, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0, "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             "nrr_pct",
@@ -548,10 +594,10 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             },
             {
                 "key":             "magic_number",
-                "mandatory":       False,
-                "search_phrases":  ["magic number", "new ARR / S&M"],
-                "compute_hint":    "New ARR / prior-quarter S&M (target >0.75)",
-                "clamp":           (0.1, 3.0),
+                "mandatory":       True,
+                "search_phrases":  ["magic number", "new ARR / S&M", "sales efficiency"],
+                "compute_hint":    "New ARR / prior-quarter S&M (Growth SaaS V3 risk lever; <0.4 caps quality at 1.00x)",
+                "clamp":           (0.0, 3.0),
                 "extractor_only":  True,
             },
             {
@@ -582,13 +628,52 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
     "Mature SaaS": {
         "sector":         "Tech",
-        "anchor_methods": ["DCF", "EV/EBITDA", "P/E (ops)"],
+        "anchor_methods": ["DCF (FCF)", "EV/EBITDA", "P/E (ops)"],
+        # V3 quality: NRR (primary — even Mature SaaS lives or dies on
+        # retention) + fcf_margin_pct (kicker — the "we are now a real
+        # business" signal). Separate groups MULTIPLY.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "nrr_pct", "direction": "higher_better",
+                 "correlation_group": "mature_saas_q_primary",
+                 "bands": [
+                     {"min": 1.15, "mult": 1.25, "label": "elite"},
+                     {"min": 1.08, "mult": 1.10, "label": "strong"},
+                     {"min": 1.00, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "contraction"},
+                 ]},
+                {"kpi": "fcf_margin_pct", "direction": "higher_better",
+                 "correlation_group": "mature_saas_q_kicker",
+                 "bands": [
+                     {"min": 0.35, "mult": 1.10, "label": "elite-FCF"},
+                     {"min": 0.25, "mult": 1.05, "label": "strong-FCF"},
+                     {"min": 0.15, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.92, "label": "soft"},
+                     {"min": -99,  "mult": 0.85, "label": "weak"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: net_debt_to_ebitda — Mature SaaS often M&A-heavy (CRM
+        # Slack acquisition, NOW M&A). Penalises debt-funded growth that
+        # erodes balance-sheet quality.
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 0.0,  "mult": 1.10, "label": "fortress-net-cash"},
+                {"max": 1.5,  "mult": 1.05, "label": "strong"},
+                {"max": 3.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 99,   "mult": 0.85, "label": "weak-MA-heavy"},
+            ],
+        },
         "kpis": [
             # Same KPI schema as Growth SaaS, but for Mature SaaS only NRR is
             # mandatory (Rule of 40 less critical at scale; FCF margin already
             # FMP-derivable). Keeps clamp-equivalence test simple by sharing
             # the legacy SaaS extractor schema.
             {"key": "nrr_pct",              "mandatory": True,  "search_phrases": ["NRR", "net retention"], "clamp": (0.80, 1.50), "extractor_only": True, "decimal_format": True},
+            {"key": "fcf_margin_pct",       "mandatory": True,  "search_phrases": ["FCF margin", "free cash flow margin"], "compute_hint": "TTM FCF / TTM revenue (decimal — FMP-augmented)", "clamp": (-0.20, 0.55), "source": "F", "extractor_only": False, "decimal_format": True},
+            {"key": "net_debt_to_ebitda",   "mandatory": True,  "search_phrases": ["net debt to EBITDA", "leverage ratio"], "compute_hint": "(total_debt - cash) / TTM EBITDA — FMP-augmented", "clamp": (-3.0, 8.0), "source": "F", "extractor_only": False, "fmp_field": "netDebtToEBITDATTM"},
             {"key": "rule_of_40_score",     "mandatory": False, "search_phrases": ["Rule of 40"],          "clamp": (-30, 120),    "extractor_only": True},
             {"key": "gross_retention_pct",  "mandatory": False, "search_phrases": ["gross retention"],     "clamp": (0.80, 1.00), "extractor_only": True, "decimal_format": True},
             {"key": "cac_payback_months",   "mandatory": False, "search_phrases": ["CAC payback"],          "clamp": (3, 60),       "extractor_only": True},
@@ -2438,6 +2523,8 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'interest_earning_assets_usd',
                 "mandatory":       True,
                 "search_phrases":  ['total interest-earning assets', 'IEA', 'AUM', 'total client assets'],
+                "compute_hint":    'Total client AUM in USD (denominator of NNA Capture derived KPI)',
+                "clamp":           (1e10, 1e13),
                 "source":          'W',
                 "extractor_only":  True,
             },
@@ -2832,7 +2919,9 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'cash_and_equivalents_usd',
                 "mandatory":       True,
-                "search_phrases":  ['total cash and short-term investments'],
+                "search_phrases":  ['total cash and short-term investments', 'cash position'],
+                "compute_hint":    'Total cash + short-term investments USD (numerator of cash_to_nav_pct derived KPI)',
+                "clamp":           (1e8, 5e11),
                 "source":          'F',
                 "extractor_only":  False,
             },
@@ -3058,7 +3147,9 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'cost_of_risk_bps',
                 "mandatory":       True,
-                "search_phrases":  ['impairment charge basis points', 'cost of risk'],
+                "search_phrases":  ['impairment charge basis points', 'cost of risk', 'CoR bps'],
+                "compute_hint":    'Loan loss provisions / avg loans (basis points — EU bank typical 25-100 bps)',
+                "clamp":           (0, 500),
                 "source":          'W',
                 "extractor_only":  True,
             },
@@ -3154,7 +3245,9 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'g_fee_rate_bps',
                 "mandatory":       True,
-                "search_phrases":  ['guarantee fee rate', 'G-fee yields'],
+                "search_phrases":  ['guarantee fee rate', 'G-fee yields', 'guaranty fee'],
+                "compute_hint":    'Guarantee fee rate (basis points — GSE typical 50-65 bps)',
+                "clamp":           (10, 200),
                 "source":          'W',
                 "extractor_only":  True,
             },
@@ -3424,9 +3517,12 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'loan_to_deposit_ratio',
                 "mandatory":       True,
-                "search_phrases":  ['LDR', 'Loan-to-Deposit ratio'],
+                "search_phrases":  ['LDR', 'Loan-to-Deposit ratio', 'loans / deposits'],
+                "compute_hint":    'Total loans / total deposits (decimal — Goldilocks: 80-100%)',
+                "clamp":           (0.30, 1.50),
                 "source":          'H',
                 "extractor_only":  True,
+                "decimal_format":  True,
             },
             {
                 "key":             'tier_1_capital_ratio',
@@ -3507,9 +3603,12 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'efficiency_ratio',
                 "mandatory":       True,
-                "search_phrases":  ['cost-to-income', 'non-interest expense % of revenue'],
+                "search_phrases":  ['cost-to-income', 'non-interest expense % of revenue', 'efficiency ratio'],
+                "compute_hint":    'Operating expenses / total revenue (decimal)',
+                "clamp":           (0.30, 1.00),
                 "source":          'H',
                 "extractor_only":  True,
+                "decimal_format":  True,
             },
             {
                 "key":             'net_charge_offs_pct',
@@ -3914,19 +4013,78 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     'Early Platform': {
         "sector":         'Tech',
         "anchor_methods": ['GMV-TAM Penetration', 'DCF', 'EV/NTM Revenue'],
+        # V3 quality: gmv_growth_yoy = primary anchor (the velocity metric);
+        # unit_economics_ratio (LTV/CAC) = independent kicker. Separate
+        # correlation groups so they MULTIPLY (primary + kicker semantics
+        # honoring 0.7 / 0.3 weighting per user spec).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "gmv_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "early_q_primary",
+                 "bands": [
+                     {"min": 0.30, "mult": 1.30, "label": "elite"},
+                     {"min": 0.20, "mult": 1.15, "label": "strong"},
+                     {"min": 0.12, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.10, "mult": 0.90, "label": "weak"},
+                     {"min": -99,  "mult": 0.80, "label": "decel"},
+                 ]},
+                {"kpi": "unit_economics_ratio", "direction": "higher_better",
+                 "correlation_group": "early_q_kicker",
+                 "bands": [
+                     {"min": 5.0, "mult": 1.10, "label": "elite-LTV"},
+                     {"min": 3.5, "mult": 1.05, "label": "healthy"},
+                     {"min": 2.0, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0, "mult": 0.85, "label": "burn-and-pray"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: gross_margin_pct (the path-to-profitability gate).
+        # ABNB asset-light → fortress; DASH/MELI logistics-hybrid → in-band.
+        "risk_adjustment": {
+            "kpi": "gross_margin_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.75, "mult": 1.10, "label": "fortress"},
+                {"min": 0.60, "mult": 1.05, "label": "strong"},
+                {"min": 0.45, "mult": 1.00, "label": "in-band"},
+                {"min": 0.40, "mult": 0.92, "label": "soft"},
+                {"min": 0.0,  "mult": 0.80, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'gmv_growth_yoy',
                 "mandatory":       True,
                 "search_phrases":  ['Gross Merchandise Value growth', 'total platform volume growth', 'GMV YOY'],
-                "clamp":           (0.1, 10.0),
+                "clamp":           (-0.20, 10.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
             {
-                "key":             'customer_acquisition_cost_usd',
+                "key":             'unit_economics_ratio',
                 "mandatory":       True,
+                "search_phrases":  ['LTV to CAC ratio', 'lifetime value over acquisition cost',
+                                    'unit economics multiple'],
+                "compute_hint":    'Customer LTV / CAC — Elite >5x, In-band 2-3.4x, Burn-and-pray <2x',
+                "clamp":           (0.1, 30.0),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'gross_margin_pct',
+                "mandatory":       True,
+                "search_phrases":  ['gross margin', 'gross profit margin', 'GAAP gross margin'],
+                "compute_hint":    '(Revenue - COGS) / Revenue (decimal — ABNB ~83%, MELI ~50%, DASH ~50%)',
+                "clamp":           (0.0, 1.00),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'grossProfitMarginTTM',
+                "decimal_format":  True,
+            },
+            {
+                "key":             'customer_acquisition_cost_usd',
+                "mandatory":       False,
                 "search_phrases":  ['CAC', 'blended acquisition cost'],
                 "source":          'W',
                 "extractor_only":  True,
@@ -3939,18 +4097,65 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['GMV / take-rate expansion bps', 'Rule of 40 score logs', 'Monthly burn rate'],
+        "source_priority": ['GMV growth disclosures', 'LTV / CAC ratio (investor day decks)', 'Gross margin trend'],
     },
 
     'High-Growth Tech / AI': {
         "sector":         'Tech',
         "anchor_methods": ['Reverse DCF', 'TAM Penetration', 'EV/NTM Revenue'],
+        # V3 quality: rpo_growth_yoy = primary anchor (forward AI bookings
+        # visibility — generational spend signal); net_retention_pct =
+        # independent kicker. Separate correlation groups so they MULTIPLY
+        # (primary + kicker per user's 0.7 / 0.3 weight intent).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "rpo_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "ai_q_primary",
+                 "bands": [
+                     {"min": 0.60, "mult": 1.35, "label": "elite"},
+                     {"min": 0.40, "mult": 1.15, "label": "strong"},
+                     {"min": 0.20, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,  "mult": 0.80, "label": "decel"},
+                 ]},
+                {"kpi": "net_retention_pct", "direction": "higher_better",
+                 "correlation_group": "ai_q_kicker",
+                 "bands": [
+                     {"min": 1.30, "mult": 1.10, "label": "elite-NRR"},
+                     {"min": 1.15, "mult": 1.05, "label": "strong-NRR"},
+                     {"min": 1.00, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.92, "label": "contraction"},
+                 ]},
+            ],
+            "cap": [0.75, 1.55],
+        },
+        # V3 risk: gross_margin_pct (Universal AI bands per user's Refined
+        # Option A — auto-discriminates SW moat (PLTR 88%, NVDA 75% both
+        # fortress) from commodity HW (SMCI 15% weak) without needing
+        # sub-profile classification). Plus customer_concentration_pct as
+        # a cap_when gate — heavy concentration overrides any fortress
+        # GM signal (the "AI Commodity Filter" per user spec).
+        "risk_adjustment": {
+            "kpi": "gross_margin_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.70, "mult": 1.10, "label": "fortress"},
+                {"min": 0.45, "mult": 1.05, "label": "strong"},
+                {"min": 0.20, "mult": 1.00, "label": "in-band"},
+                {"min": 0.15, "mult": 0.90, "label": "soft"},
+                {"min": 0.0,  "mult": 0.80, "label": "weak"},
+            ],
+            "cap_when": {
+                "kpi":      "customer_concentration_pct",
+                "gt":       0.40,
+                "max_mult": 1.00,
+                "note":     "AI Commodity Filter: top-3 customer concentration >40% caps fortress signal",
+            },
+        },
         "kpis": [
             {
                 "key":             'rpo_growth_yoy',
                 "mandatory":       True,
                 "search_phrases":  ['Remaining Performance Obligations growth', 'RPO YOY', 'backlog expansion'],
-                "clamp":           (0.0, 1.0),
+                "clamp":           (-0.20, 2.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -3959,7 +4164,29 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'net_retention_pct',
                 "mandatory":       True,
                 "search_phrases":  ['Net Revenue Retention', 'NRR', 'net dollar retention'],
-                "clamp":           (0.8, 1.6),
+                "clamp":           (0.7, 1.8),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'gross_margin_pct',
+                "mandatory":       True,
+                "search_phrases":  ['gross margin', 'gross profit margin'],
+                "compute_hint":    'GAAP gross margin (decimal — NVDA 75% / PLTR 88% fortress; SMCI 15% commodity weak)',
+                "clamp":           (0.0, 1.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'grossProfitMarginTTM',
+                "decimal_format":  True,
+            },
+            {
+                "key":             'customer_concentration_pct',
+                "mandatory":       True,
+                "search_phrases":  ['top-3 customer concentration', 'top-10 customer revenue %',
+                                    'largest customer revenue percentage'],
+                "compute_hint":    'Top-3 customer revenue / total revenue (decimal — >40% triggers AI Commodity cap)',
+                "clamp":           (0.0, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -3972,18 +4199,55 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Data center revenue mix', 'Lead-time (weeks) logs', 'Design-win pipeline quantity'],
+        "source_priority": ['RPO disclosures (10-Q)', 'Gross margin trend (segment if disclosed)', 'Customer concentration footnotes'],
     },
 
     'Hyper-Growth Platform': {
         "sector":         'Tech',
         "anchor_methods": ['GMV-TAM Penetration', 'DCF', 'EV/NTM Revenue'],
+        # V3 quality: take_rate_expansion_bps = primary anchor (pricing power
+        # on existing GMV — the platform-monetisation moat); rule_of_40_score
+        # = independent kicker (path-to-profitability). Both at FULL magnitude
+        # in separate correlation groups so they MULTIPLY (capped at 1.50).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "take_rate_expansion_bps", "direction": "higher_better",
+                 "correlation_group": "hgp_q_primary",
+                 "bands": [
+                     {"min":  50, "mult": 1.30, "label": "elite"},
+                     {"min":  20, "mult": 1.15, "label": "strong"},
+                     {"min":   0, "mult": 1.00, "label": "in-band"},
+                     {"min": -999, "mult": 0.80, "label": "compression"},
+                 ]},
+                {"kpi": "rule_of_40_score", "direction": "higher_better",
+                 "correlation_group": "hgp_q_kicker",
+                 "bands": [
+                     {"min": 50, "mult": 1.30, "label": "elite"},
+                     {"min": 40, "mult": 1.15, "label": "strong"},
+                     {"min": 25, "mult": 1.00, "label": "in-band"},
+                     {"min": -99, "mult": 0.80, "label": "weak"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: contribution_margin_pct (the platform unit-economics gate).
+        # ABNB pure software → fortress; UBER logistics-hybrid → in-band.
+        "risk_adjustment": {
+            "kpi": "contribution_margin_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.70, "mult": 1.10, "label": "fortress"},
+                {"min": 0.50, "mult": 1.05, "label": "strong"},
+                {"min": 0.30, "mult": 1.00, "label": "in-band"},
+                {"min": 0.25, "mult": 0.92, "label": "soft"},
+                {"min": 0.0,  "mult": 0.80, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'take_rate_expansion_bps',
                 "mandatory":       True,
                 "search_phrases":  ['take rate expansion basis points', 'platform fee increase', 'monetization rate delta'],
-                "compute_hint":    'current_take_rate_bps - prior_take_rate_bps',
+                "compute_hint":    'current_take_rate_bps - prior_take_rate_bps (positive = expansion, negative = compression)',
                 "clamp":           (-100, 500),
                 "source":          'W',
                 "extractor_only":  True,
@@ -3992,34 +4256,99 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'rule_of_40_score',
                 "mandatory":       True,
                 "search_phrases":  ['Rule of 40 score', 'revenue growth plus FCF margin'],
-                "compute_hint":    'revenue_growth_pct + fcf_margin_pct',
+                "compute_hint":    'revenue_growth_pct (in %) + fcf_margin_pct (in %) — e.g. 30% growth + 15% FCF margin = 45',
                 "clamp":           (-20, 120),
                 "source":          'H',
                 "extractor_only":  True,
             },
             {
                 "key":             'contribution_margin_pct',
-                "mandatory":       False,
-                "search_phrases":  ['unit contribution margin', 'variable margin per order'],
+                "mandatory":       True,
+                "search_phrases":  ['unit contribution margin', 'variable margin per order',
+                                    'contribution profit %', 'segment contribution margin'],
+                "compute_hint":    '(Revenue per unit - variable cost per unit) / Revenue per unit (decimal)',
+                "clamp":           (-0.50, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
             },
         ],
-        "source_priority": ['GMV / take-rate expansion bps', 'Rule of 40 score logs', 'Monthly burn rate'],
+        "source_priority": ['Take-rate expansion (bps) disclosures', 'Rule of 40 score (investor day)', 'Contribution margin per segment'],
     },
 
     'Levered Subscription': {
         "sector":         'Tech',
-        "anchor_methods": ['DCF', 'EV/EBITDA', 'LBO Analysis'],
+        "anchor_methods": ['DCF (Levered)', 'EV/EBITDA', 'LBO Analysis', 'Credit Metrics'],
+        # V3 quality: arpu_monthly_usd_growth = primary anchor (pricing
+        # power on the existing subscriber base — the "Growth-to-Value"
+        # pivot moat); subscriber_growth_yoy = independent kicker. Separate
+        # correlation groups so they MULTIPLY (per user's 0.6 / 0.4 weights).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "arpu_monthly_usd_growth", "direction": "higher_better",
+                 "correlation_group": "levered_q_primary",
+                 "bands": [
+                     {"min":  0.08, "mult": 1.20, "label": "elite-pricing"},
+                     {"min":  0.04, "mult": 1.10, "label": "strong"},
+                     {"min":  0.01, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "price-cuts"},
+                 ]},
+                {"kpi": "subscriber_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "levered_q_kicker",
+                 "bands": [
+                     {"min": 0.10, "mult": 1.10, "label": "elite-NFLX-style"},
+                     {"min": 0.06, "mult": 1.05, "label": "strong-DIS-style"},
+                     {"min": 0.02, "mult": 1.00, "label": "in-band-saturated"},
+                     {"min": -99,  "mult": 0.92, "label": "shrinking-DISH-style"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: net_debt_to_ebitda — TIGHTER bands per user's "higher-
+        # for-longer 2026" thesis. 5.5× leverage on subscription business
+        # is a ticking clock. NFLX (<2×) is the new gold standard.
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 2.0,  "mult": 1.15, "label": "fortress-NFLX"},
+                {"max": 3.5,  "mult": 1.05, "label": "strong"},
+                {"max": 4.5,  "mult": 1.00, "label": "in-band"},
+                {"max": 5.5,  "mult": 0.90, "label": "stretched-SIRI"},
+                {"max": 99,   "mult": 0.70, "label": "weak-DISH"},
+            ],
+        },
         "kpis": [
+            {
+                "key":             'arpu_monthly_usd_growth',
+                "mandatory":       True,
+                "search_phrases":  ['ARPU growth YoY', 'monthly ARPU growth',
+                                    'average revenue per user growth', 'ARPU trend'],
+                "compute_hint":    'Annualised growth in monthly ARPU (decimal — NFLX 2024 ~10% from price hikes + ad tier)',
+                "clamp":           (-0.30, 0.50),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'subscriber_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['paid subscriber growth', 'net subscriber additions YoY',
+                                    'global subscriber base growth'],
+                "compute_hint":    'YoY growth in paid subscribers (decimal — NFLX 2024 ~14%, DISH/SIRI negative)',
+                "clamp":           (-0.30, 0.50),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
             {
                 "key":             'net_debt_to_ebitda',
                 "mandatory":       True,
                 "search_phrases":  ['net leverage ratio', 'Net Debt / Adjusted EBITDA', 'leverage covenant'],
-                "compute_hint":    '(total_debt - cash) / LTM_EBITDA',
+                "compute_hint":    '(total_debt - cash) / LTM_EBITDA — NFLX <2x fortress, DISH >5.5x distressed',
                 "clamp":           (-1.0, 12.0),
                 "source":          'F',
                 "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'fcf_debt_service_coverage',
@@ -4036,19 +4365,57 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  False,
             },
         ],
-        "source_priority": ['Net debt-to-EBITDA (leverage covenants)', 'FCF / buyback yield', 'Debt service coverage ratios'],
+        "source_priority": ['ARPU + subscriber count disclosures (10-Q)', 'Net debt-to-EBITDA (leverage covenants)', 'Debt service coverage ratios'],
     },
 
     'Mature Platform': {
         "sector":         'Tech',
-        "anchor_methods": ['DCF', 'EV/EBITDA', 'LBO Analysis'],
+        "anchor_methods": ['DCF (FCF)', 'EV/EBITDA', 'P/E (ops)', 'LBO Analysis'],
+        # V3 quality: fcf_yield_pct = primary anchor (the cash-machine moat
+        # for mature tech); buyback_yield_pct = independent kicker (capital
+        # return discipline). Separate correlation groups so they MULTIPLY
+        # per user's 0.8 / 0.2 weighting intent.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "fcf_yield_pct", "direction": "higher_better",
+                 "correlation_group": "mature_q_primary",
+                 "bands": [
+                     {"min": 0.07,  "mult": 1.25, "label": "elite-cash-machine"},
+                     {"min": 0.05,  "mult": 1.10, "label": "strong"},
+                     {"min": 0.03,  "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.80, "label": "yield-trap"},
+                 ]},
+                {"kpi": "buyback_yield_pct", "direction": "higher_better",
+                 "correlation_group": "mature_q_kicker",
+                 "bands": [
+                     {"min": 0.05,  "mult": 1.10, "label": "elite-buyback"},
+                     {"min": 0.03,  "mult": 1.05, "label": "strong-return"},
+                     {"min": 0.015, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.95, "label": "no-return"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        # V3 risk: r_and_d_intensity_pct as the "Stagnation Gauge" — for
+        # Mature Platforms the risk isn't leverage, it's BECOMING THE NEXT
+        # SUN MICROSYSTEMS. Higher R&D = staying alive. Lower R&D = harvest
+        # mode that kills terminal-value moat.
+        "risk_adjustment": {
+            "kpi": "r_and_d_intensity_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.18, "mult": 1.10, "label": "fortress-reinvest"},
+                {"min": 0.13, "mult": 1.00, "label": "in-band"},
+                {"min": 0.12, "mult": 0.92, "label": "thin"},
+                {"min": 0.0,  "mult": 0.85, "label": "stagnation-warning"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'fcf_yield_pct',
                 "mandatory":       True,
                 "search_phrases":  ['Free Cash Flow yield', 'FCF as percentage of market cap'],
-                "compute_hint":    'LTM_FCF / market_cap',
-                "clamp":           (0.01, 0.15),
+                "compute_hint":    'LTM_FCF / market_cap (decimal — Mature: ORCL ~6%, CSCO ~5%)',
+                "clamp":           (0.0, 0.20),
                 "source":          'F',
                 "extractor_only":  False,
                 "decimal_format":  True,
@@ -4056,9 +4423,24 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'buyback_yield_pct',
                 "mandatory":       True,
-                "search_phrases":  ['share repurchase yield', 'buyback as % of market cap'],
+                "search_phrases":  ['share repurchase yield', 'buyback as % of market cap',
+                                    'net buyback yield'],
+                "compute_hint":    'TTM net buybacks / market cap (decimal — META FY24 ~5%, AAPL ~3%)',
+                "clamp":           (0.0, 0.15),
                 "source":          'F',
                 "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'r_and_d_intensity_pct',
+                "mandatory":       True,
+                "search_phrases":  ['R&D intensity', 'research and development as % of revenue',
+                                    'R&D / revenue', 'R&D spend ratio'],
+                "compute_hint":    'TTM R&D expense / TTM revenue (decimal — Mature elite >18%, stagnation <12%)',
+                "clamp":           (0.0, 0.50),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
             },
             {
                 "key":             'dividend_payout_ratio',
@@ -4068,7 +4450,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  False,
             },
         ],
-        "source_priority": ['Net debt-to-EBITDA (leverage covenants)', 'FCF / buyback yield', 'Debt service coverage ratios'],
+        "source_priority": ['FCF + buyback yield disclosures', 'R&D intensity trend (10-K opex breakdown)', 'Capital allocation policy'],
     },
 
 # ── Transportation ──────────────────────────────────────────────────
@@ -4268,7 +4650,14 @@ def render_search_overlay(
     spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or SECTOR_KPI_FRAMEWORK.get(sector)
     if not spec:
         return ""
-    web_kpis = [k for k in spec["kpis"] if k.get("extractor_only")]
+    # v3.4: include ALL KPIs (not just extractor_only). The original filter
+    # excluded FMP-derivable KPIs from the 2F overlay on the rationale that
+    # FMP fetches them anyway — but in the V3 tier architecture, FMP-derived
+    # KPIs (e.g. fcf_yield_pct, r_and_d_intensity_pct) ARE quality/risk
+    # tier drivers, so they MUST appear in 2F so the LLM cites them in the
+    # narrative report. The narrative citation also serves as a cross-check
+    # against the FMP-derived value (catches FMP staleness / wrong taxonomy).
+    web_kpis = list(spec["kpis"])
     if sub_sub:
         web_kpis = [
             k for k in web_kpis
@@ -4336,7 +4725,11 @@ def build_extractor_schema(profile_name: str) -> dict:
     if not spec:
         return {"system_prompt": "", "clamps": {}, "kpi_keys": [], "mandatory": []}
 
-    web_kpis = [k for k in spec["kpis"] if k.get("extractor_only")]
+    # v3.4: include ALL KPIs (see render_search_overlay docstring for rationale).
+    # FMP-derivable KPIs that drive V3 quality/risk tiers MUST be in the
+    # extractor schema so the LLM extracts them as a fallback when FMP misses
+    # the value AND so the LLM cross-checks FMP against the narrative.
+    web_kpis = list(spec["kpis"])
     clamps = {k["key"]: tuple(k["clamp"]) for k in web_kpis if "clamp" in k}
     mandatory = [k["key"] for k in web_kpis if k.get("mandatory")]
     sector = spec.get("sector", "")
@@ -4888,7 +5281,11 @@ def _quality_multiplier(profile_name: str, sector: str, metrics: dict | None) ->
             notes.append(f"{tag}{best[1]}")
         cap = qt.get("cap", [0.70, 1.50])
         composite = max(cap[0], min(cap[1], composite))
-        return (round(composite, 3), " * ".join(notes))
+        # v3.4: cap_when on quality_tiers — symmetric to risk_adjustment.cap_when.
+        # Used by Growth SaaS (magic_number < 0.4 caps quality at 1.00x —
+        # the "burn-and-pray" override even when NRR / Rule of 40 are elite).
+        composite, q_note = _apply_risk_cap_when(qt, m, composite, " * ".join(notes))
+        return (round(composite, 3), q_note)
 
     # ── Legacy hardcoded fallback (preserves existing tests) ────────────────
     m = metrics or {}
@@ -5167,6 +5564,11 @@ def _fmp_risk_kpis(ticker: str) -> dict:
         if cps is not None and rps is not None and float(rps) > 0:
             out["capex_intensity_pct"] = round(abs(float(cps) / float(rps)), 4)
 
+        # v3.4: gross_margin_pct (used by Early Platform + High-Growth Tech / AI)
+        gm = ratios.get("grossProfitMarginTTM")
+        if gm is not None:
+            out["gross_margin_pct"] = round(float(gm), 4)
+
         # FCF margin — derive from FCF-per-share / revenue-per-share if needed
         fcf_ps = ratios.get("freeCashFlowPerShareTTM")
         if fcf_ps is not None and rps is not None and float(rps) > 0:
@@ -5280,6 +5682,10 @@ _PROFILE_WEIGHTS: dict[str, tuple[float, float, float]] = {
     "Hyper-Growth Platform":          (0.70, 0.30, 0.00),
     "Mature Platform":                (0.55, 0.40, 0.05),
     "Early Platform":                 (0.55, 0.45, 0.00),
+    # v3.4: Growth SaaS + Mature SaaS migrated from legacy. SaaS-pure economics
+    # → quality-dominant; risk lever is sales efficiency / leverage, not commodity.
+    "Growth SaaS":                    (0.65, 0.35, 0.00),  # quality-heavy (NRR + R40 drive)
+    "Mature SaaS":                    (0.55, 0.45, 0.00),  # more balanced (FCF + leverage matter)
     # AAPL/MSFT/AMZN/GOOGL/META — quality-dominant (cloud growth + margin) but
     # risk weight elevated vs pure SaaS because AI capex digestion is real.
     "Hyperscaler / Tech Conglomerate": (0.60, 0.35, 0.05),
@@ -5423,8 +5829,11 @@ def composite_adjustment(profile_name: str, sector: str, metrics: dict | None) -
 # in the existing frontend). Do NOT generate a generic sector_card for these
 # — the existing UI is purpose-built and the user has explicitly held them.
 _LEGACY_PROFILES: frozenset[str] = frozenset({
-    "Growth SaaS",
-    "Mature SaaS",
+    # v3.4 — Growth SaaS + Mature SaaS migrated off legacy:
+    # they now have V3 quality_tiers + risk_adjustment + V4 weights and use
+    # the generic SectorValuationCard. The bespoke TechValuationPanel can
+    # coexist as a richer alternate UI for SaaS — no removal, just no longer
+    # the only path.
     "Hyperscaler",
     "REIT",
     "Pipeline (Pre-revenue Biotech)",

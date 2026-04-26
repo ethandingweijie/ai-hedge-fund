@@ -301,8 +301,6 @@ def test_framework_clamps_match_legacy_bank_extractor():
 
 
 @pytest.mark.parametrize("saas_profile", [
-    "Growth SaaS",
-    "Mature SaaS",
     "Cybersecurity / Mission-Critical SaaS",
 ])
 def test_framework_clamps_match_legacy_saas_extractor(saas_profile):
@@ -542,12 +540,17 @@ _LEGACY_PROFILES_FOR_TESTS = {
 
 
 def test_is_legacy_profile_recognises_known_legacy():
-    for p in ("Growth SaaS", "Mature SaaS", "Hyperscaler", "REIT"):
+    # v3.4: Growth SaaS + Mature SaaS migrated off legacy. Remaining legacy
+    # set: Hyperscaler / REIT / Pre-approval Biotech variants.
+    for p in ("Hyperscaler", "REIT", "Pre-approval Biotech"):
         assert is_legacy_profile(p), f"{p} should be legacy"
 
 
 def test_is_legacy_profile_returns_false_for_non_legacy():
-    for p in ("Insurance", "Money Center Bank", "Mining (Major)", "Fabless"):
+    for p in (
+        "Insurance", "Money Center Bank", "Mining (Major)", "Fabless",
+        "Growth SaaS", "Mature SaaS",  # v3.4 — migrated off legacy
+    ):
         assert not is_legacy_profile(p), f"{p} should NOT be legacy"
     assert not is_legacy_profile("")
     assert not is_legacy_profile(None)
@@ -555,8 +558,8 @@ def test_is_legacy_profile_returns_false_for_non_legacy():
 
 def test_render_card_payload_returns_none_for_legacy_profile():
     """Legacy profiles must return None — frontend renders bespoke card."""
-    assert render_card_payload("Growth SaaS", {}, "CRWD") is None
     assert render_card_payload("REIT", {}, "DLR") is None
+    assert render_card_payload("Pre-approval Biotech", {}, "MRNA") is None
 
 
 def test_render_card_payload_returns_none_for_unknown_profile():
@@ -641,21 +644,24 @@ def test_render_card_payload_missing_metric_state_renders_card_with_none_values(
 
 
 def test_render_card_payloads_for_run_excludes_legacy_tickers():
-    """The multi-ticker convenience must skip legacy profile tickers."""
+    """The multi-ticker convenience must skip remaining-legacy profile
+    tickers (Hyperscaler / REIT / Pre-approval Biotech). v3.4: Growth SaaS
+    + Mature SaaS no longer legacy — they DO get included.
+    """
     state = {
         "data": {
-            "tickers": ["PGR", "NEM", "CRWD"],
+            "tickers": ["PGR", "NEM", "DLR"],
             "profile_names": {
                 "PGR": "Insurance",
                 "NEM": "Mining (Major)",
-                "CRWD": "Growth SaaS",
+                "DLR": "REIT",  # legacy — bespoke REIT panel renders
             },
             "insurance_metrics_all": {"PGR": {"combined_ratio": 0.88}},
             "framework_metrics_all": {"NEM": {"aisc_per_oz": 1428}},
         },
     }
     out = render_card_payloads_for_run(state)
-    assert "CRWD" not in out, "Legacy SaaS must be excluded"
+    assert "DLR" not in out, "Legacy REIT must be excluded"
     assert "PGR" in out and "NEM" in out
 
 

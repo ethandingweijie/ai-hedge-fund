@@ -687,6 +687,45 @@ def run_advanced_pipeline(
             print(f"  [fmp_risk_augment] failed: {_e!r} — Risk/Commodity multiplier will be 1.0x")
 
         # ----------------------------------------------------------------
+        # v3.4 — SEC EDGAR fallback for cet1_ratio (Banks).
+        # FMP's /stable/key-metrics-ttm doesn't expose risk-weighted-assets
+        # so CET1 can't be derived from balance-sheet alone. Banks ALWAYS
+        # report it explicitly in 10-Q "Capital Ratios" sections — fetch it
+        # directly from SEC EDGAR as a fallback when LLM extraction missed it.
+        #
+        # Runs only for bank profiles where cet1_ratio is missing or None.
+        # Caches by ticker so re-runs in same session don't re-hit SEC.
+        # ----------------------------------------------------------------
+        try:
+            from src.data.sec_edgar import cet1_for_ticker
+            _BANK_PROFILES = {
+                "Money Center Bank", "Money Center Bank (EU)",
+                "Regional Bank", "Super-Regional Bank",
+                "EM Bank", "EM Bank (Premium)",
+                "Bank / Lending Institution",
+                "Investment Bank", "Mortgage/GSE",
+            }
+            _profile_names_sec = state["data"].get("profile_names", {})
+            _tickers_sec = state["data"].get("tickers", []) or list(_profile_names_sec.keys())
+            for _t in _tickers_sec:
+                _profile = _profile_names_sec.get(_t) or state["data"].get("profile_name") or ""
+                if _profile not in _BANK_PROFILES:
+                    continue
+                for _state_key in ("framework_metrics_all", "bank_metrics_all"):
+                    _bucket = state["data"].get(_state_key) or {}
+                    if _t not in _bucket or not isinstance(_bucket[_t], dict):
+                        continue
+                    if _bucket[_t].get("cet1_ratio") is not None:
+                        continue  # LLM/FMP already provided it
+                    _sec = cet1_for_ticker(_t)
+                    if _sec and _sec.get("cet1_ratio"):
+                        _bucket[_t]["cet1_ratio"] = _sec["cet1_ratio"]
+                        print(f"  [sec_edgar] {_t} CET1={_sec['cet1_ratio']*100:.2f}% "
+                              f"from {_sec.get('filing_date','?')} 10-Q")
+        except Exception as _e:
+            print(f"  [sec_edgar_fallback] failed: {_e!r} — banks without LLM CET1 will use band default 1.0x")
+
+        # ----------------------------------------------------------------
         # V4-β — Z-Score Engine: augment per-ticker metrics dicts with
         # peer-cohort z-scores. Runs AFTER FMP augmentation (so z-scores
         # cover augmented KPIs too) and BEFORE render_card_payloads_for_run
