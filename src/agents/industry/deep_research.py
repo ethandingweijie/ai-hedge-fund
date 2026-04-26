@@ -286,6 +286,30 @@ _DELTA_MAX_SEARCHES  = 4    # searches in delta pass (vs 12 full)
 #              + Phase 2.5 news_sentiment injected as "recent_news" section via LLM synthesis
 # Age > 14d → full fresh search (12 searches)
 
+# ── Section 2F sector-specific prompt overlays ────────────────────────────────
+# Append-only mechanism: the overlay text is INSERTED INSIDE Section 2F (between
+# sub-points 2F.5 "data sources" and 2F.6 "management guidance") so the generic
+# anchor / leading / margin / risk / sources / guidance scaffold still applies.
+# Sub-profile keys win over sector keys; missing keys → "" → no append → exact
+# legacy behavior. Populated incrementally as we ship sector extractors that
+# need hard-to-surface metrics that the generic 2F won't reliably produce.
+#
+# Resolution order in _build_research_system:
+#   1. _SECTION_2F_SECTOR_OVERLAYS[profile_name]   (e.g. "Insurance", "Money Center Bank")
+#   2. _SECTION_2F_SECTOR_OVERLAYS[sector]         (e.g. "Financials", "Tech")
+#   3. ""                                           (no append — legacy generic 2F)
+_SECTION_2F_SECTOR_OVERLAYS: dict[str, str] = {
+    # ── Migration to SECTOR_KPI_FRAMEWORK (PR #1) ─────────────────────────
+    # The dict-based overlay mechanism is preserved as a per-sub-profile
+    # FALLBACK / OVERRIDE channel for sub-profiles that need handcrafted
+    # prompt text. Sub-profiles in src/data/sector_kpi_framework.py take
+    # precedence (looked up first by _build_research_system) and have their
+    # overlay text auto-rendered from the structured KPI spec.
+    #
+    # Add an entry here only if you have a one-off prompt block that doesn't
+    # fit the structured schema.
+}
+
 # web_search_20260209 — generally available (no beta header required).
 # Adds dynamic filtering on Opus 4.6 / Sonnet 4.6: Claude writes and executes
 # code to filter search result HTML before loading into context, keeping only
@@ -650,6 +674,7 @@ def _extract_dcf_calibration(
             ticker=ticker,
             model=model_name,
             max_tokens=400,
+            temperature=0.1,
             system=(
                 "You are a financial analyst assistant. Read the provided research excerpts "
                 "and extract structured signals for a DCF model. Respond ONLY with valid JSON, "
@@ -752,6 +777,7 @@ def _extract_segment_scenarios(
             ticker=ticker,
             model=model_name,
             max_tokens=1500,
+            temperature=0.1,
             system=(
                 "You are a sector research analyst producing probabilistic 12-month "
                 "growth scenarios for each major revenue segment. Read the provided "
@@ -947,6 +973,7 @@ def _extract_saas_metrics(
             ticker=ticker,
             model=model_name,
             max_tokens=500,
+            temperature=0.1,
             system=_system_prompt,
             messages=[{"role": "user", "content": _user_content}],
         )
@@ -1205,6 +1232,7 @@ def _extract_bank_metrics(
             ticker=ticker,
             model=model_name,
             max_tokens=600,
+            temperature=0.1,
             system=(
                 "You are a bank / financial institution analyst. Extract structured "
                 "metrics from the research and return ONLY valid JSON (no markdown "
@@ -1302,6 +1330,154 @@ def _extract_bank_metrics(
 
 # ── REIT metrics extractor (NAV cap-rate override) ───────────────────────────
 
+def _extract_insurance_metrics(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    deep_research: str,
+    ticker: str,
+) -> dict:
+    """
+    Insurance KPIs extractor. As of PR #1 (sector_kpi_framework), this
+    delegates to the generic framework extractor — the schema, clamps, and
+    completeness scoring all come from SECTOR_KPI_FRAMEWORK["Insurance"].
+
+    Kept as a named entry point so the ThreadPoolExecutor task map and any
+    external callers continue to work unchanged. The hand-written body below
+    is the legacy implementation and is unreachable as long as the framework
+    entry exists; left in place as a fallback if the framework lookup fails.
+
+    Consumed by:
+      * Combined-ratio gate in _compute_method_value (P&C: combined > 1.00 → P/BV haircut)
+      * VNB-margin / Embedded Value methods for Life insurers
+      * Solvency II SCR ratio gate (capital adequacy — analogue to bank CET1)
+      * Reserve-release quality flag (favourable PYD inflates near-term ROE)
+
+    Returns {} when ticker isn't an insurer or research too thin.
+    Numeric fields validated with clamps.
+
+    Note on FMP overlap: book_yield (investment_income / invested_assets) and
+    dividend_payout_ratio are computed deterministically from FMP in the
+    consumer block and are intentionally NOT in this schema — having the LLM
+    extract them would double-count and risk silent disagreement with the books.
+    """
+    # ── Framework path (PR #1) ─────────────────────────────────────────────
+    # Delegate to the generic framework extractor when SECTOR_KPI_FRAMEWORK
+    # has an "Insurance" entry. Returns {} if framework lookup fails, in
+    # which case we fall through to the legacy hand-written body below.
+    try:
+        from src.data.sector_kpi_framework import (
+            SECTOR_KPI_FRAMEWORK,
+            extract_via_framework,
+        )
+        if "Insurance" in SECTOR_KPI_FRAMEWORK:
+            return extract_via_framework(
+                sdk_client, model_name, sections, deep_research, ticker,
+                profile_name="Insurance",
+            )
+    except Exception:
+        pass   # fall through to legacy body
+
+    if not deep_research and not sections:
+        return {}
+
+    section_2a = sections.get("2a") or sections.get("2A") or ""
+    section_2d = sections.get("2d") or sections.get("2D") or ""
+    section_2f = sections.get("2f") or sections.get("2F") or ""
+    combined = (section_2a + "\n\n" + section_2d + "\n\n" + section_2f).strip()
+    if not combined or len(combined) < 500:
+        combined = (deep_research or "")[:8000]
+    if not combined:
+        return {}
+
+    try:
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=600,
+            temperature=0.1,
+            system=(
+                "You are an insurance-sector analyst (P&C / Life / Health / Reinsurance). "
+                "Extract structured KPIs from the research and return ONLY valid JSON "
+                "(no markdown fences, no commentary).\n\n"
+                "Schema (all fields OPTIONAL — omit if not substantiated by research):\n"
+                "  combined_ratio:           float (0.70-1.20, P&C: losses+LAE+expenses / NEP)\n"
+                "  loss_ratio:               float (0.40-0.85, losses+LAE / NEP, before reserves)\n"
+                "  expense_ratio:            float (0.15-0.40, acquisition+admin / NEP)\n"
+                "  vnb_margin:               float (0.05-0.40, Life: VNB / APE)\n"
+                "  embedded_value_per_share: float (>0, Life: EV per share, USD or local ccy)\n"
+                "  solvency_ratio_scr:       float (1.0-3.0, Solvency II SCR coverage)\n"
+                "  reserve_release_pct:      float (-0.05-0.15, PYD / earned premium)\n"
+                "  catastrophe_losses_pct:   float (0-0.20, cat losses / NEP, latest qtr)\n"
+                "  new_money_yield:          float (0.02-0.10, forward investment yield)\n"
+                "  evidence:                 string ≤300 chars citing research source\n\n"
+                "Rules:\n"
+                "  * Return {} if the company isn't an insurer / reinsurer.\n"
+                "  * Convert all percentages to decimals (95.3% → 0.953; 18% VNB → 0.18).\n"
+                "  * combined_ratio: look for 'combined ratio of X%', '100.X CR', '95.4 CR'.\n"
+                "    P&C only — Life insurers don't report this; omit field for Life-only names.\n"
+                "  * loss_ratio + expense_ratio should sum approximately to combined_ratio\n"
+                "    (within ±2 pts) — if they don't, prefer combined_ratio and omit components.\n"
+                "  * vnb_margin / embedded_value_per_share: Life-insurer non-GAAP metrics from\n"
+                "    IR decks ('VNB margin of 22%', 'EV per share $X.XX'). Omit for pure P&C.\n"
+                "  * solvency_ratio_scr: Solvency II / RBC ratio (1.0 = at requirement, 1.8 =\n"
+                "    180% coverage). Look for 'SCR ratio', 'Solvency II coverage', 'RBC ratio'.\n"
+                "  * reserve_release_pct: 'favourable prior-year development', 'PYD', 'reserve\n"
+                "    releases of $XB' divided by NEP. Negative if adverse development.\n"
+                "  * catastrophe_losses_pct: 'cat losses of $X B', 'X.X pts of CR from cats',\n"
+                "    expressed as decimal of NEP for the period.\n"
+                "  * new_money_yield: forward yield on newly invested money — distinct from\n"
+                "    book yield (which is FMP-derivable). Look for 'reinvestment yield of X%',\n"
+                "    'new money yield', 'portfolio yield rolling toward X%'.\n"
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Research excerpts:\n{combined[:8000]}"
+                ),
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return {}
+
+        out: dict = {}
+        _clamps = {
+            "combined_ratio":           (0.70, 1.20),
+            "loss_ratio":               (0.40, 0.85),
+            "expense_ratio":            (0.15, 0.40),
+            "vnb_margin":               (0.05, 0.40),
+            "embedded_value_per_share": (0.0, 1_000_000.0),  # wide — local-ccy units vary
+            "solvency_ratio_scr":       (1.0, 3.0),
+            "reserve_release_pct":      (-0.05, 0.15),
+            "catastrophe_losses_pct":   (0.0, 0.20),
+            "new_money_yield":          (0.02, 0.10),
+        }
+        for k, (lo, hi) in _clamps.items():
+            v = parsed.get(k)
+            if isinstance(v, (int, float)) and lo <= v <= hi:
+                out[k] = float(v)
+
+        # Cross-check: if loss + expense don't reconcile to combined, drop the
+        # weaker pair and keep combined as the source of truth.
+        if all(k in out for k in ("combined_ratio", "loss_ratio", "expense_ratio")):
+            implied = out["loss_ratio"] + out["expense_ratio"]
+            if abs(implied - out["combined_ratio"]) > 0.02:
+                out.pop("loss_ratio", None)
+                out.pop("expense_ratio", None)
+
+        if "evidence" in parsed:
+            out["evidence"] = str(parsed["evidence"])[:300]
+
+        return out
+    except Exception:
+        return {}
+
+
 def _extract_reit_metrics(
     sdk_client,
     model_name: str,
@@ -1374,6 +1550,7 @@ def _extract_reit_metrics(
             ticker=ticker,
             model=model_name,
             max_tokens=800,
+            temperature=0.1,
             system=(
                 "You are a REIT / real estate analyst. Extract structured metrics from the "
                 "provided research excerpts and return ONLY valid JSON (no markdown fences, "
@@ -1567,6 +1744,7 @@ def _extract_pipeline_assets(
             ticker=ticker,
             model=model_name,
             max_tokens=2000,
+            temperature=0.1,
             system=(
                 "You are a biopharma pipeline analyst. Read the provided deep research "
                 "excerpts and extract the company's drug/therapy/device pipeline as "
@@ -2328,6 +2506,7 @@ def _extract_citation_registry(
         response = sdk_client.messages.create(
             model=model_name,
             max_tokens=8000,
+            temperature=0.1,
             messages=[{
                 "role": "user",
                 "content": _prompt + "\n\n" + report_text[:20000],
@@ -3639,6 +3818,58 @@ def _research_one_ticker(
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from src.agents.industry.sector_prompts import needs_extractor
 
+    # ── Sub-profile dispatch (PR #6) ───────────────────────────────────────
+    # The generic `framework_metrics` task fires for any ticker whose
+    # profile_name is registered in SECTOR_KPI_FRAMEWORK BUT NOT covered
+    # by a dedicated legacy extractor below. This handles all PR #6 new
+    # sub-profiles (Regulated Utility, Upstream O&G, Semi sub-types, Telco,
+    # Mining, Auto/EV, Managed Care) without needing a per-sub-profile task.
+    #
+    # Exclusion set: profiles handled by dedicated _extract_X_metrics
+    # functions to avoid double-extracting identical content.
+    _LEGACY_COVERED_PROFILES = {
+        # Insurance — _extract_insurance_metrics (delegates to framework, but
+        # has dedicated task slot so output also lives in insurance_metrics)
+        "Insurance",
+        # Bank profiles — _extract_bank_metrics
+        "Money Center Bank", "Money Center Bank (EU)", "Regional Bank",
+        "Super-Regional Bank", "EM Bank", "EM Bank (Premium)",
+        "Investment Bank", "Bank / Lending Institution",
+        # SaaS family — _extract_saas_metrics (sector-gated, fires for any Tech)
+        "Growth SaaS", "Mature SaaS", "Cybersecurity / Mission-Critical SaaS",
+        "Hyperscaler / Tech Conglomerate", "High-Growth Tech / AI",
+        "Hyper-Growth Platform", "Mature Platform", "Early Platform",
+        "Levered Subscription",
+        # REIT — _extract_reit_metrics
+        "REIT",
+        # Biopharma drug developers — _extract_pipeline_assets
+        "Pre-approval Biotech", "Large Cap Pharma",
+    }
+
+    def _framework_metrics_dispatch():
+        """Generic framework extractor — fires only for new sub-profiles.
+
+        Returns {} when:
+          - profile_name is not registered in SECTOR_KPI_FRAMEWORK, OR
+          - profile_name IS covered by a legacy dedicated extractor (avoid
+            double-extracting; legacy extractor is the canonical output).
+        """
+        if not profile_name or profile_name in _LEGACY_COVERED_PROFILES:
+            return {}
+        try:
+            from src.data.sector_kpi_framework import (
+                SECTOR_KPI_FRAMEWORK,
+                extract_via_framework,
+            )
+            if profile_name not in SECTOR_KPI_FRAMEWORK:
+                return {}
+            return extract_via_framework(
+                sdk_client, _synthesis_model, sections, final_report, ticker,
+                profile_name=profile_name,
+            )
+        except Exception:
+            return {}
+
     # Sector-aware extractor gating — skips extractors that would almost
     # certainly return {} for the given (sector, profile_name). Saves
     # ~800 tokens × skipped extractor. A tech ticker runs 3 extractors
@@ -3650,6 +3881,8 @@ def _research_one_ticker(
         "reit_metrics":      lambda: _extract_reit_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
         "bank_metrics":      lambda: _extract_bank_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
         "saas_metrics":      lambda: _extract_saas_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "insurance_metrics": lambda: _extract_insurance_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
+        "framework_metrics": _framework_metrics_dispatch,
     }
     _extractor_tasks = {
         name: fn for name, fn in _all_extractors.items()
@@ -3704,6 +3937,8 @@ def _research_one_ticker(
     reit_metrics      = _results.get("reit_metrics", {})
     bank_metrics      = _results.get("bank_metrics", {})
     saas_metrics      = _results.get("saas_metrics", {})
+    insurance_metrics = _results.get("insurance_metrics", {})
+    framework_metrics = _results.get("framework_metrics", {})
 
     # Apply FMP self-compute fallback to fill null SaaS metric fields from
     # raw financials (Rule of 40, Magic Number, CAC Payback, Billings Growth).
@@ -3752,6 +3987,21 @@ def _research_one_ticker(
         progress.update_status(
             agent_id, ticker,
             f"SaaS metrics: {sorted(saas_metrics.keys())}"
+        )
+    if insurance_metrics:
+        progress.update_status(
+            agent_id, ticker,
+            f"Insurance metrics: {sorted(insurance_metrics.keys())}"
+        )
+    if framework_metrics:
+        # Strip framework metadata keys from log to keep status compact
+        _kpi_keys = sorted(
+            k for k in framework_metrics.keys() if not k.startswith("_")
+        )
+        progress.update_status(
+            agent_id, ticker,
+            f"Framework metrics ({profile_name}): {_kpi_keys} "
+            f"[completeness={framework_metrics.get('_completeness_score', 'n/a')}]"
         )
 
     # ── Pipeline summary (stdout, visible in Railway logs) ────────────────────
@@ -3806,6 +4056,8 @@ def _research_one_ticker(
         "reit_metrics":           reit_metrics,
         "bank_metrics":           bank_metrics,
         "saas_metrics":           saas_metrics,
+        "insurance_metrics":      insurance_metrics,
+        "framework_metrics":      framework_metrics,
     }
 
 
@@ -3876,6 +4128,10 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     primary_insider    = state["data"].get("insider_summary") or ""
     edgar_refs_map     = state["data"].get("edgar_filing_refs") or {}
     news_sentiment_map = state["data"].get("news_sentiment") or {}
+    # Sub-profile classification from strategic_router (commit 07d5f2d).
+    # Used to look up _SECTION_2F_SECTOR_OVERLAYS so the deep research prompt
+    # asks for sub-profile-specific KPIs (e.g. combined ratio for Insurance).
+    profile_names_map  = state["data"].get("profile_names") or {}
 
     profile_names_map = state["data"].get("profile_names", {}) or {}
 

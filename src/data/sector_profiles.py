@@ -1334,13 +1334,25 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Insurance": {
             "methods": [
-                {"name": "Embedded Value",  "weight": 0.50, "anchor": True,  "implementable": False, "proxy": "P/BV"},
-                {"name": "P/BV",            "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "P/E (ops)",       "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "DDM",             "weight": 0.05, "anchor": False, "implementable": True},
+                # PR #1 — Embedded Value is now implementable for Life insurers
+                # via SECTOR_KPI_FRAMEWORK extracted vnb_margin and
+                # embedded_value_per_share. Falls back to P/BV proxy if KPIs
+                # missing (handled inside _compute_method_value branch).
+                {"name": "Embedded Value",      "weight": 0.35, "anchor": True,  "implementable": True, "proxy": "P/BV"},
+                # PR #1 — Combined Ratio Gate uses extracted combined_ratio
+                # to apply a P/BV multiplier reflecting underwriting quality.
+                # Replaces a piece of the legacy P/BV weight; only contributes
+                # to blend when combined_ratio is present (P&C / Reinsurance).
+                {"name": "Combined Ratio Gate", "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "P/BV",                "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/E (ops)",           "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "DDM",                 "weight": 0.05, "anchor": False, "implementable": True},
             ],
             "excluded": ["DCF"],
-            "rationale": "EV accounts for the present value of future profits from existing policies.",
+            "rationale": (
+                "EV (Life) and Combined Ratio Gate (P&C) capture sub-sub-profile-specific "
+                "value drivers. P/BV remains the regulatory-capital anchor for blended IV."
+            ),
         },
         "Alt Asset Manager": {
             "methods": [
@@ -2988,16 +3000,16 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # ── Semiconductor (separate sector from Tech) ─────────────────────────
     # Fabless
-    "NVDA":  ("Semiconductor", "",     "Semiconductor",                   "Fabless — AI GPU"),
-    "AVGO":  ("Semiconductor", "",     "Semiconductor",                   "Fabless — custom ASIC + networking"),
-    "QCOM":  ("Semiconductor", "",     "Semiconductor",                   "Fabless — mobile/edge AI"),
-    "AMD":   ("Semiconductor", "",     "Semiconductor",                   "Fabless — CPU/GPU"),
-    "MRVL":  ("Semiconductor", "",     "Semiconductor",                   "Fabless — networking/storage"),
+    "NVDA":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — AI GPU"),
+    "AVGO":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — custom ASIC + networking"),
+    "QCOM":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — mobile/edge AI"),
+    "AMD":   ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — CPU/GPU"),
+    "MRVL":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — networking/storage"),
     "ARM":   ("Semiconductor", "",     "Semiconductor",                   "Fabless — IP licensing/royalties"),
     # IDM / Foundry
     "MU":    ("Semiconductor", "",     "Semiconductor",                   "IDM — DRAM/NAND/HBM fabs"),
-    "INTC":  ("Semiconductor", "",     "Semiconductor",                   "IDM + Foundry — x86/fabs"),
-    "TSM":   ("Semiconductor", "",     "Semiconductor",                   "Foundry — TSMC ADR (reports TWD)"),
+    "INTC":  ("Semiconductor", "IDM / Foundry",     "Semiconductor",                   "IDM + Foundry — x86/fabs"),
+    "TSM":   ("Semiconductor", "IDM / Foundry",     "Semiconductor",                   "Foundry — TSMC ADR (reports TWD)"),
     "TXN":   ("Semiconductor", "",     "Semiconductor",                   "IDM — analog fabs"),
     "GFS":   ("Semiconductor", "",     "Semiconductor",                   "Foundry — specialty nodes"),
     "UMC":   ("Semiconductor", "",     "Semiconductor",                   "Foundry — UMC ADR (reports TWD)"),
@@ -3006,8 +3018,8 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "ON":    ("Semiconductor", "",     "Semiconductor",                   "IDM — power semiconductors"),
     "NXPI":  ("Semiconductor", "",     "Semiconductor",                   "IDM — automotive semi"),
     # Equipment / EDA
-    "ASML":  ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — EUV lithography monopoly"),
-    "AMAT":  ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — deposition/etch"),
+    "ASML":  ("Semiconductor", "Equipment / EDA",     "Semiconductor Equip",             "Equipment — EUV lithography monopoly"),
+    "AMAT":  ("Semiconductor", "Equipment / EDA",     "Semiconductor Equip",             "Equipment — deposition/etch"),
     "LRCX":  ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — etch/deposition"),
     "KLAC":  ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — process control"),
     "TER":   ("Semiconductor", "",     "Semiconductor Equip",             "Equipment — automated test"),
@@ -3212,7 +3224,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "AMGN":  ("Biopharma", "",  "Drugs (Biotechnology)",     "Amgen"),
     "GILD":  ("Biopharma", "",  "Drugs (Biotechnology)",     "Gilead Sciences"),
     "ABBV":  ("Biopharma", "",  "Drugs (Pharmaceutical)",    "AbbVie"),
-    "LLY":   ("Biopharma", "",  "Drugs (Pharmaceutical)",    "Eli Lilly"),
+    "LLY":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Eli Lilly"),
     "JNJ":   ("Biopharma", "",  "Drugs (Pharmaceutical)",    "Johnson & Johnson (post-Kenvue spin-off)"),
     "MDT":   ("Biopharma", "",               "Healthcare Products",    "Medtronic — MedTech devices"),
     "ISRG":  ("Biopharma", "",               "Healthcare Products",    "Intuitive Surgical"),
@@ -3261,6 +3273,9 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "COP":   ("Resources", "",              "Oil/Gas (Production and Exploration)", "ConocoPhillips"),
     "VST":   ("Energy",    "Merchant Power", "Power",                    "Vistra Energy — competitive power gen; NOT regulated utility"),
     "NEE":   ("Energy",    "Regulated Utility", "Utility (General)",     "NextEra Energy"),
+    "DUK":   ("Energy",    "Regulated Utility", "Utility (General)",     "Duke Energy"),
+    "SO":    ("Energy",    "Regulated Utility", "Utility (General)",     "Southern Company"),
+    "XEL":   ("Energy",    "Regulated Utility", "Utility (General)",     "Xcel Energy"),
     "AWK":   ("Energy",    "Regulated Utility", "Utility (Water)",       "American Water Works"),
     "PCG":   ("Energy",    "Regulated Utility", "Utility (General)",     "PG&E"),
     "ENPH":  ("Energy",    "IPP",            "Green & Renewable Energy", "Enphase Energy — solar microinverters"),
@@ -3268,12 +3283,12 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "BE":    ("Energy",    "IPP",            "Green & Renewable Energy", "Bloom Energy — fuel cell power generation (hydrogen/natural gas)"),
 
     # ── Industrials ───────────────────────────────────────────────────────────
-    "LMT":   ("Industrials", "",  "Aerospace/Defense",  "Lockheed Martin"),
-    "RTX":   ("Industrials", "",  "Aerospace/Defense",  "RTX Corp (Raytheon)"),
-    "BA":    ("Industrials", "",  "Aerospace/Defense",  "Boeing"),
+    "LMT":   ("Industrials", "Aerospace & Defense",  "Aerospace/Defense",  "Lockheed Martin"),
+    "RTX":   ("Industrials", "Aerospace & Defense",  "Aerospace/Defense",  "RTX Corp (Raytheon)"),
+    "BA":    ("Industrials", "Aerospace & Defense",  "Aerospace/Defense",  "Boeing"),
     "CAT":   ("Industrials", "",  "Machinery",          "Caterpillar"),
     "DE":    ("Industrials", "",  "Machinery",          "Deere & Company"),
-    "GE":    ("Industrials", "",  "Electrical Equipment", "GE Aerospace (post-Vernova spin-off)"),
+    "GE":    ("Industrials", "Aerospace & Defense",  "Electrical Equipment", "GE Aerospace (post-Vernova spin-off)"),
     "GEV":   ("Industrials", "",  "Electrical Equipment", "GE Vernova — wind/gas turbine OEM + grid electrification; book-to-bill driven"),
     "HON":   ("Industrials", "",  "Electrical Equipment", "Honeywell"),
     "UPS":   ("Transportation", "", "Transportation",   "United Parcel Service"),
@@ -3284,8 +3299,12 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # ── Materials / Resources ─────────────────────────────────────────────────
     "LIN":   ("Materials",  "",  "Chemical (Specialty)",  "Linde plc"),
     "NUE":   ("Materials",  "",  "Steel",                 "Nucor — steel mini-mills"),
-    "FCX":   ("Resources",  "",  "Metals & Mining",       "Freeport-McMoRan — copper/gold"),
-    "NEM":   ("Resources",  "",  "Precious Metals",       "Newmont Mining"),
+    "FCX":   ("Resources",  "Mining (Major)",      "Metals & Mining",       "Freeport-McMoRan — copper/gold"),
+    "NEM":   ("Resources",  "Mining (Major)",      "Precious Metals",       "Newmont Mining"),
+    "XOM":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (Integrated)",  "ExxonMobil — integrated O&G → Resources"),
+    "CVX":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (Integrated)",  "Chevron — integrated"),
+    "COP":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "ConocoPhillips — pure-play E&P"),
+    "EOG":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "EOG Resources"),
     "LEU":   ("Resources",  "",  "Uranium",               "Centrus Energy — uranium enrichment (SWU contracts); NOT power generation"),
 
     # ── Crypto ────────────────────────────────────────────────────────────────
