@@ -224,10 +224,11 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 {"kpi": "efficiency_ratio", "direction": "lower_better",
                  "correlation_group": "bank_op_quality",
                  "bands": [
-                     {"max": 0.50, "mult": 1.30, "label": "top-decile"},
-                     {"max": 0.55, "mult": 1.18, "label": "strong"},
-                     {"max": 0.65, "mult": 1.00, "label": "in-band"},
-                     {"max": 99.0, "mult": 0.92, "label": "bloated"},
+                     # v3.3 US-Stringent bands (per user calibration)
+                     {"max": 0.50, "mult": 1.30, "label": "elite"},
+                     {"max": 0.58, "mult": 1.15, "label": "strong"},
+                     {"max": 0.68, "mult": 1.00, "label": "in-band"},
+                     {"max": 99.0, "mult": 0.85, "label": "bloated"},
                  ]},
                 {"kpi": "management_target_roe", "direction": "higher_better",
                  "correlation_group": "bank_op_quality",
@@ -239,12 +240,17 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             ],
             "cap": [0.70, 1.50],
         },
+        # v3.3 — recalibrated to "scale-adjusted CET1" thresholds. G-SIBs face
+        # higher regulatory surcharges than Regionals but the market also
+        # demands a buffer above the minimum; these tighter bands reflect what
+        # actually distinguishes "fortress" from "in-band" for Money Centers.
+        # JPM at ~15.0% CET1 → fortress (1.10×). Was 1.15× under prior bands.
         "risk_adjustment": {
             "kpi": "cet1_ratio", "direction": "higher_better",
             "bands": [
-                {"min": 0.14,  "mult": 1.15, "label": "fortress"},
-                {"min": 0.12,  "mult": 1.10, "label": "strong"},
-                {"min": 0.085, "mult": 1.00, "label": "in-band"},
+                {"min": 0.145, "mult": 1.10, "label": "fortress"},
+                {"min": 0.130, "mult": 1.05, "label": "strong"},
+                {"min": 0.115, "mult": 1.00, "label": "in-band"},
                 {"min": 0.0,   "mult": 0.85, "label": "weak"},
             ],
         },
@@ -2206,13 +2212,61 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── Financials ──────────────────────────────────────────────────
     'Alt Asset Manager': {
         "sector":         'Financials',
-        "anchor_methods": ['SOTP'],
+        "anchor_methods": ['SOTP', 'P/FRE', 'P/E'],
+        # V3 quality: FRE margin = primary anchor (the "Blackstone Standard"
+        # — fee-related earnings margin is the moat); FPAUM growth =
+        # tie-breaker. They share a correlation group so max-pick — the
+        # better of the two drives the lift.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "fre_margin_pct", "direction": "higher_better",
+                 "correlation_group": "alt_am_q",
+                 "bands": [
+                     {"min": 0.60, "mult": 1.30, "label": "elite"},
+                     {"min": 0.52, "mult": 1.15, "label": "strong"},
+                     {"min": 0.45, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.80, "label": "weak"},
+                 ]},
+                {"kpi": "fpaum_growth_pct", "direction": "higher_better",
+                 "correlation_group": "alt_am_q",
+                 "bands": [
+                     {"min": 0.20, "mult": 1.20, "label": "elite-flows"},
+                     {"min": 0.10, "mult": 1.10, "label": "strong-flows"},
+                     {"min": 0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,  "mult": 0.90, "label": "outflows"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: Net Debt / FRE EBITDA — leverage relative to recurring
+        # cash flow. Alt-AMs run lighter than banks but must be measured
+        # against their FEE income (not total income, which is volatile
+        # carry).
+        "risk_adjustment": {
+            "kpi": "net_debt_to_fre_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5, "mult": 1.10, "label": "fortress"},
+                {"max": 3.0, "mult": 1.00, "label": "in-band"},
+                {"max": 4.5, "mult": 0.92, "label": "stretched"},
+                {"max": 99,  "mult": 0.80, "label": "over-levered"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'fre_margin_pct',
                 "mandatory":       True,
                 "search_phrases":  ['fee-related earnings margin', 'FRE margin'],
-                "clamp":           (0.2, 0.6),
+                "clamp":           (0.2, 0.7),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'fpaum_growth_pct',
+                "mandatory":       True,
+                "search_phrases":  ['fee-paying AUM growth', 'FPAUM growth', 'fee-paying assets'],
+                "compute_hint":    'YoY growth in fee-paying AUM (decimal — distinct from total AUM)',
+                "clamp":           (-0.20, 0.50),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -2227,6 +2281,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  True,
             },
             {
+                "key":             'net_debt_to_fre_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to FRE EBITDA', 'leverage to fee-related earnings'],
+                "compute_hint":    'Net debt / TTM FRE EBITDA — leverage measured vs RECURRING fee earnings (not carry)',
+                "clamp":           (-2.0, 10.0),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
                 "key":             'dry_powder_usd',
                 "mandatory":       False,
                 "search_phrases":  ['uncalled capital', 'dry powder'],
@@ -2234,12 +2297,45 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Quarterly Non-GAAP Supplements'],
+        "source_priority": ['Quarterly Non-GAAP Supplements (FRE margin + FPAUM)', 'Net debt / FRE EBITDA disclosures', 'Investor presentations'],
     },
 
     'Bank / Lending Institution': {
         "sector":         'Financials',
         "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        # V3 quality: NIM (developed bands) + efficiency_ratio (US-Stringent
+        # bands), correlated.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "nim_pct", "direction": "higher_better",
+                 "correlation_group": "lending_q",
+                 "bands": [
+                     {"min": 0.032, "mult": 1.30, "label": "elite"},
+                     {"min": 0.026, "mult": 1.15, "label": "strong"},
+                     {"min": 0.020, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "efficiency_ratio", "direction": "lower_better",
+                 "correlation_group": "lending_q",
+                 "bands": [
+                     {"max": 0.50, "mult": 1.30, "label": "elite"},
+                     {"max": 0.58, "mult": 1.15, "label": "strong"},
+                     {"max": 0.68, "mult": 1.00, "label": "in-band"},
+                     {"max": 99.0, "mult": 0.85, "label": "bloated"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: CET1, Money Center bands.
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.145, "mult": 1.10, "label": "fortress"},
+                {"min": 0.130, "mult": 1.05, "label": "strong"},
+                {"min": 0.115, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'nim_pct',
@@ -2261,10 +2357,22 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             },
             {
                 "key":             'efficiency_ratio',
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ['cost-to-income ratio', 'Efficiency Ratio'],
+                "compute_hint":    'Operating expenses / total revenue (decimal)',
+                "clamp":           (0.30, 1.00),
                 "source":          'H',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cet1_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['CET1 ratio', 'Common Equity Tier 1', 'CET-1'],
+                "clamp":           (0.05, 0.25),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
             },
         ],
         "source_priority": ['Statutory filings (NSE/BSE, SGX, 10-K)', 'NIM/NPL ratio disclosures', 'CASA (Current and Savings Account) mix reports'],
@@ -2272,7 +2380,50 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
     'Brokerage': {
         "sector":         'Financials',
-        "anchor_methods": ['P/E'],
+        "anchor_methods": ['P/E', 'P/AUM', 'DCF (FCF)'],
+        # V3 quality: NNA Capture (NNA / AUM) is the platform-gravity moat;
+        # cash_as_pct_of_client_assets is the monetisation tie-breaker (the
+        # "Schwab Model" — high cash% = hidden NIM in high-rate regime).
+        # NNA Capture computed via derived_kpis below from the existing
+        # net_new_assets_usd + interest_earning_assets_usd dollar values.
+        "derived_kpis": [
+            {"key":         "nna_capture_pct",
+             "numerator":   "net_new_assets_usd",
+             "denominator": "interest_earning_assets_usd"},
+        ],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "nna_capture_pct", "direction": "higher_better",
+                 "correlation_group": "brokerage_q_primary",
+                 "bands": [
+                     {"min": 0.10, "mult": 1.30, "label": "elite"},
+                     {"min": 0.07, "mult": 1.15, "label": "strong"},
+                     {"min": 0.04, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "weak"},
+                 ]},
+                # Cash% as monetisation tie-breaker — separate group so it
+                # MULTIPLIES with the NNA Capture pick.
+                {"kpi": "cash_as_pct_of_client_assets", "direction": "higher_better",
+                 "correlation_group": "brokerage_q_kicker",
+                 "bands": [
+                     {"min": 0.15, "mult": 1.10, "label": "high-cash-monetisation"},
+                     {"min": 0.08, "mult": 1.05, "label": "above-avg-cash"},
+                     {"min": 0.0,  "mult": 1.00, "label": "in-band"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: equity_to_assets_pct as the universal capital-cushion proxy
+        # (Net Capital Rule excess is rarely disclosed cleanly in earnings).
+        "risk_adjustment": {
+            "kpi": "equity_to_assets_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.20, "mult": 1.15, "label": "fortress"},
+                {"min": 0.12, "mult": 1.05, "label": "strong"},
+                {"min": 0.08, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,  "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'net_new_assets_usd',
@@ -2286,16 +2437,30 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'interest_earning_assets_usd',
                 "mandatory":       True,
-                "search_phrases":  ['total interest-earning assets', 'IEA'],
+                "search_phrases":  ['total interest-earning assets', 'IEA', 'AUM', 'total client assets'],
                 "source":          'W',
                 "extractor_only":  True,
             },
             {
                 "key":             'cash_as_pct_of_client_assets',
-                "mandatory":       False,
-                "search_phrases":  ['cash as % of total client assets'],
+                "mandatory":       True,
+                "search_phrases":  ['cash as % of total client assets', 'sweep balances'],
+                "compute_hint":    'Client cash + money market / total client assets (decimal)',
+                "clamp":           (0.0, 0.50),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'equity_to_assets_pct',
+                "mandatory":       True,
+                "search_phrases":  ['shareholders equity / total assets', 'capital ratio',
+                                    'tangible common equity ratio'],
+                "compute_hint":    'Shareholders equity / total assets (decimal — universal capital cushion proxy)',
+                "clamp":           (0.0, 0.50),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
             },
             {
                 "key":             'recurring_data_rev_pct',
@@ -2307,12 +2472,59 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  True,
             },
         ],
-        "source_priority": ['SEC 10-K/Q', 'Supplemental Earnings Data', 'Management Commentary'],
+        "source_priority": ['SEC 10-K/Q', 'Supplemental Earnings Data (NNA / cash sweep balances)', 'Management Commentary'],
     },
 
     'EM Bank': {
         "sector":         'Financials',
-        "anchor_methods": ['Residual Income / P/TBV'],
+        "anchor_methods": ['Residual Income', 'P/TBV'],
+        # V3 quality: NIM (EM bands — structurally higher than developed) +
+        # CASA ratio (correlated as the income engine). Plus an INDEPENDENT
+        # CASA "funding moat" kicker — when CASA >45%, add 1.05x as a
+        # separate group so it MULTIPLIES with the main quality pick.
+        # Two band entries for casa_ratio_pct: one in correlation_group
+        # `em_bank_q` (max-pick alongside NIM), one in `em_bank_funding_moat`
+        # (independent kicker, multiplies). Same KPI evaluated twice — by
+        # design.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "nim_pct", "direction": "higher_better",
+                 "correlation_group": "em_bank_q",
+                 "bands": [
+                     {"min": 0.055, "mult": 1.30, "label": "elite"},
+                     {"min": 0.045, "mult": 1.15, "label": "strong"},
+                     {"min": 0.035, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "casa_ratio_pct", "direction": "higher_better",
+                 "correlation_group": "em_bank_q",
+                 "bands": [
+                     {"min": 0.40, "mult": 1.15, "label": "strong"},
+                     {"min": 0.25, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "weak"},
+                 ]},
+                # Independent funding-moat kicker — multiplies on top of the
+                # max-pick from em_bank_q. Only fires when CASA >45%.
+                {"kpi": "casa_ratio_pct", "direction": "higher_better",
+                 "correlation_group": "em_bank_funding_moat",
+                 "bands": [
+                     {"min": 0.45, "mult": 1.05, "label": "funding-moat"},
+                     {"min": 0.0,  "mult": 1.00, "label": "no-moat"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: CET1 with EM-bumped bands (12% in EM ≠ 12% in developed
+        # — currency volatility erodes capital faster).
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.150, "mult": 1.10, "label": "fortress"},
+                {"min": 0.135, "mult": 1.05, "label": "strong"},
+                {"min": 0.120, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'casa_ratio_pct',
@@ -2334,18 +2546,71 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             },
             {
                 "key":             'nim_pct',
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ['net interest margin'],
+                "compute_hint":    'NIM as decimal (0.045 = 4.5%, EM banks structurally higher than developed)',
+                "clamp":           (0.01, 0.10),
                 "source":          'H',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cet1_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['CET1 ratio', 'Common Equity Tier 1', 'CET-1'],
+                "compute_hint":    'CET1 / RWA decimal — EM regulator usually requires 9-10% min',
+                "clamp":           (0.05, 0.25),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
             },
         ],
-        "source_priority": ['Statutory Filings (NSE/BSE/SGX)'],
+        "source_priority": ['Statutory Filings (NSE/BSE/SGX)', 'CET1 ratio + CASA disclosures'],
     },
 
     'EM Bank (Premium)': {
         "sector":         'Financials',
-        "anchor_methods": ['Residual Income / P/TBV'],
+        "anchor_methods": ['Residual Income', 'P/TBV'],
+        # V3 quality: ROA (the "alpha" metric — premium EM banks generate
+        # >2% ROA in growth markets) + CASA ratio (correlated). Plus
+        # independent CASA funding-moat kicker — same pattern as EM Bank.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "roa_pct", "direction": "higher_better",
+                 "correlation_group": "em_premium_q",
+                 "bands": [
+                     {"min": 0.020, "mult": 1.30, "label": "elite"},
+                     {"min": 0.015, "mult": 1.15, "label": "strong"},
+                     {"min": 0.010, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "casa_ratio_pct", "direction": "higher_better",
+                 "correlation_group": "em_premium_q",
+                 "bands": [
+                     {"min": 0.40, "mult": 1.15, "label": "strong"},
+                     {"min": 0.25, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "weak"},
+                 ]},
+                # Independent CASA funding-moat kicker (multiplies)
+                {"kpi": "casa_ratio_pct", "direction": "higher_better",
+                 "correlation_group": "em_premium_funding_moat",
+                 "bands": [
+                     {"min": 0.45, "mult": 1.05, "label": "funding-moat"},
+                     {"min": 0.0,  "mult": 1.00, "label": "no-moat"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: CET1, EM bands.
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.150, "mult": 1.10, "label": "fortress"},
+                {"min": 0.135, "mult": 1.05, "label": "strong"},
+                {"min": 0.120, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'casa_ratio_pct',
@@ -2359,9 +2624,21 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'roa_pct',
                 "mandatory":       True,
-                "search_phrases":  ['Return on Assets'],
+                "search_phrases":  ['Return on Assets', 'ROA'],
+                "compute_hint":    'Net income / total assets (decimal — 0.02 = 2.0%; premium EM banks generate >2%)',
+                "clamp":           (0.0, 0.05),
                 "source":          'H',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cet1_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['CET1 ratio', 'Common Equity Tier 1'],
+                "clamp":           (0.05, 0.25),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
             },
             {
                 "key":             'provision_coverage_ratio',
@@ -2380,18 +2657,54 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  True,
             },
         ],
-        "source_priority": ['Statutory Filings (NSE/BSE/SGX)'],
+        "source_priority": ['Statutory Filings (NSE/BSE/SGX)', 'CET1 + ROA disclosures'],
     },
 
     'FinTech': {
         "sector":         'Financials',
-        "anchor_methods": ['EV/NTM Revenue'],
+        "anchor_methods": ['EV/NTM Revenue', 'P/E (ops)', 'DCF (FCF)'],
+        # V3 quality: TPV growth (volume) + take_rate_stability (pricing
+        # power, lower delta = better). Correlated as the "platform vitality"
+        # signal.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "tpv_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "fintech_q",
+                 "bands": [
+                     {"min": 0.30, "mult": 1.30, "label": "elite"},
+                     {"min": 0.18, "mult": 1.15, "label": "strong"},
+                     {"min": 0.10, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "decel"},
+                     {"min": -99,  "mult": 0.80, "label": "shrinking"},
+                 ]},
+                {"kpi": "take_rate_stability_bps", "direction": "lower_better",
+                 "correlation_group": "fintech_q",
+                 "bands": [
+                     {"max":  3, "mult": 1.10, "label": "stable-pricing"},
+                     {"max":  8, "mult": 1.00, "label": "in-band"},
+                     {"max": 99, "mult": 0.90, "label": "compression"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: incentive_ratio_pct (client incentives / gross revenue).
+        # Heavy incentives signal pricing power loss — banks demanding
+        # discounts to keep volume on the network.
+        "risk_adjustment": {
+            "kpi": "incentive_ratio_pct", "direction": "lower_better",
+            "bands": [
+                {"max": 0.22, "mult": 1.10, "label": "fortress"},
+                {"max": 0.28, "mult": 1.00, "label": "in-band"},
+                {"max": 0.32, "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'tpv_growth_yoy',
                 "mandatory":       True,
                 "search_phrases":  ['Total Payment Volume growth', 'processed volume'],
-                "clamp":           (0.05, 1.0),
+                "clamp":           (-0.20, 1.50),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -2400,7 +2713,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'tpv_growth_pct',
                 "mandatory":       True,
                 "search_phrases":  ['Total Payment Volume growth', 'TPV YOY', 'processed volume expansion'],
-                "clamp":           (-0.1, 1.5),
+                "clamp":           (-0.20, 1.50),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -2415,6 +2728,25 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  False,
             },
             {
+                "key":             'take_rate_stability_bps',
+                "mandatory":       True,
+                "search_phrases":  ['take rate change YoY in bps', 'pricing stability', 'take rate compression'],
+                "compute_hint":    'Absolute change in take_rate_bps YoY (lower = stable pricing power)',
+                "clamp":           (0, 50),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'incentive_ratio_pct',
+                "mandatory":       True,
+                "search_phrases":  ['client incentives', 'rebates and incentives % of revenue', 'incentive ratio'],
+                "compute_hint":    'Client incentives / gross revenue (decimal — V/MA fortress < 22%)',
+                "clamp":           (0.0, 0.50),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
                 "key":             'ltv_cac_ratio',
                 "mandatory":       False,
                 "search_phrases":  ['lifetime value to acquisition cost'],
@@ -2422,12 +2754,53 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Take-rate (bps) trends', 'TPV (Total Payment Volume) growth logs'],
+        "source_priority": ['Take-rate (bps) trends', 'TPV growth logs', 'Incentive ratio disclosures (V/MA 10-K)'],
     },
 
     'Holding Company': {
         "sector":         'Financials',
-        "anchor_methods": ['SOTP / Net Asset Value', 'NAV Discount', 'DDM'],
+        "anchor_methods": ['SOTP / Net Asset Value', 'P/Book', 'DDM'],
+        # V3 quality: Look-Through Earnings Growth (primary moat) +
+        # cash-as-%-of-NAV (war-chest tie-breaker). Cash% is computed via
+        # derived_kpis from existing dollar fields if not directly extracted.
+        "derived_kpis": [
+            {"key":         "cash_to_nav_pct",
+             "numerator":   "cash_and_equivalents_usd",
+             "denominator": "sotp_nav_per_share"},
+        ],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "look_through_earnings_growth_pct", "direction": "higher_better",
+                 "correlation_group": "holdco_q",
+                 "bands": [
+                     {"min": 0.15, "mult": 1.30, "label": "elite"},
+                     {"min": 0.08, "mult": 1.15, "label": "strong"},
+                     {"min": 0.03, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,  "mult": 0.85, "label": "weak"},
+                 ]},
+                # War-chest kicker — high cash % of NAV signals optionality
+                # to deploy during market dislocations (Buffett standard).
+                {"kpi": "cash_to_nav_pct", "direction": "higher_better",
+                 "correlation_group": "holdco_q_kicker",
+                 "bands": [
+                     {"min": 0.15, "mult": 1.10, "label": "war-chest"},
+                     {"min": 0.07, "mult": 1.05, "label": "ample-cash"},
+                     {"min": 0.0,  "mult": 1.00, "label": "in-band"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: Holdco-level Debt / Total NAV. >15% is the red-flag
+        # threshold for a diversified holdco (per user spec).
+        "risk_adjustment": {
+            "kpi": "debt_to_nav_pct", "direction": "lower_better",
+            "bands": [
+                {"max": 0.05, "mult": 1.10, "label": "fortress"},
+                {"max": 0.10, "mult": 1.00, "label": "in-band"},
+                {"max": 0.15, "mult": 0.95, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "red-flag"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'sotp_nav_per_share',
@@ -2446,19 +2819,79 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
             {
+                "key":             'look_through_earnings_growth_pct',
+                "mandatory":       True,
+                "search_phrases":  ['look-through earnings growth', 'pro-rata investee earnings growth',
+                                    'subsidiary earnings + investee share growth'],
+                "compute_hint":    'YoY growth of (subsidiary earnings + pro-rata share of investee earnings), decimal',
+                "clamp":           (-0.30, 0.50),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
                 "key":             'cash_and_equivalents_usd',
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ['total cash and short-term investments'],
                 "source":          'F',
                 "extractor_only":  False,
             },
+            {
+                "key":             'debt_to_nav_pct',
+                "mandatory":       True,
+                "search_phrases":  ['holding company debt to NAV', 'parent-level debt / total NAV',
+                                    'debt to net asset value'],
+                "compute_hint":    'Holdco-level debt / total NAV (decimal — >15% red flag for diversified holdco)',
+                "clamp":           (0.0, 0.50),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
         ],
-        "source_priority": ['Intrinsic value / NAV per share disclosures', 'Look-through earnings tables', 'Cash / investment schedules'],
+        "source_priority": ['Intrinsic value / NAV per share disclosures', 'Look-through earnings tables', 'Holdco-level debt schedule'],
     },
 
     'Investment Bank': {
         "sector":         'Financials',
         "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        # V3 quality: comp_ratio = primary anchor (the controllable cost
+        # discipline lever); advisory_backlog_growth = momentum kicker. They
+        # live in SEPARATE correlation groups so they MULTIPLY (primary +
+        # kicker semantics rather than max-pick), giving comp_ratio the
+        # heavier swing per user's 0.7/0.3 weighting intent.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "compensation_ratio", "direction": "lower_better",
+                 "correlation_group": "ib_q_primary",
+                 "bands": [
+                     {"max": 0.35, "mult": 1.30, "label": "elite"},
+                     {"max": 0.42, "mult": 1.15, "label": "strong"},
+                     {"max": 0.50, "mult": 1.00, "label": "in-band"},
+                     {"max": 99.0, "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "advisory_backlog_growth", "direction": "higher_better",
+                 "correlation_group": "ib_q_kicker",
+                 "bands": [
+                     {"min":  0.20, "mult": 1.10, "label": "elite-pipeline"},
+                     {"min":  0.10, "mult": 1.05, "label": "strong-pipeline"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99.0, "mult": 0.95, "label": "shrinking"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: Liquidity Coverage Ratio (LCR) — IBs face Basel III LCR
+        # requirements (≥100% min). Above 130% = fortress, below 100% =
+        # severe regulatory failure (rare but catastrophic).
+        "risk_adjustment": {
+            "kpi": "liquidity_coverage_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 1.30, "mult": 1.10, "label": "fortress"},
+                {"min": 1.10, "mult": 1.05, "label": "strong"},
+                {"min": 1.00, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,  "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'advisory_backlog_growth',
@@ -2473,9 +2906,19 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'compensation_ratio',
                 "mandatory":       True,
                 "search_phrases":  ['compensation and benefits as % of revenue', 'bonus pool ratio', 'staff cost ratio'],
-                "compute_hint":    'total_comp_expense / total_net_revenue',
-                "clamp":           (0.3, 0.55),
+                "compute_hint":    'total_comp_expense / total_net_revenue (decimal)',
+                "clamp":           (0.30, 0.65),
                 "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'liquidity_coverage_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['LCR', 'Liquidity Coverage Ratio', 'HQLA over net cash outflows'],
+                "compute_hint":    'High-quality liquid assets / 30-day net cash outflows (decimal — 1.30 = 130%)',
+                "clamp":           (0.50, 3.00),
+                "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
@@ -2487,18 +2930,46 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Advisory / M&A backlog pipeline growth', 'Compensation-to-revenue ratio', 'Assets under custody (AUC)'],
+        "source_priority": ['Basel III LCR disclosures', 'Advisory / M&A backlog pipeline growth', 'Compensation-to-revenue ratio'],
     },
 
     'Market Infrastructure': {
         "sector":         'Financials',
-        "anchor_methods": ['P/E'],
+        "anchor_methods": ['P/E (ops)', 'EV/EBITDA', 'DCF (FCF)'],
+        # V3 quality: Recurring Data Revenue % (the LSEG/Nasdaq moat —
+        # subscription data is utility-style stable revenue vs transaction
+        # revenue which is cyclical).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "recurring_data_rev_pct", "direction": "higher_better",
+                 "bands": [
+                     {"min": 0.50, "mult": 1.25, "label": "elite"},
+                     {"min": 0.35, "mult": 1.10, "label": "strong"},
+                     {"min": 0.25, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "transaction-heavy"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: Net Debt / EBITDA — these firms are M&A machines (ICE,
+        # LSEG) carrying tech-style debt on utility-style cash flows.
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5, "mult": 1.10, "label": "fortress"},
+                {"max": 3.0, "mult": 1.00, "label": "in-band"},
+                {"max": 4.5, "mult": 0.92, "label": "stretched"},
+                {"max": 99,  "mult": 0.80, "label": "over-levered"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'recurring_data_rev_pct',
                 "mandatory":       True,
-                "search_phrases":  ['recurring data revenue', 'information services mix'],
-                "clamp":           (0.1, 0.7),
+                "search_phrases":  ['recurring data revenue', 'information services mix',
+                                    'data and analytics revenue share', 'subscription data revenue'],
+                "compute_hint":    'Recurring (subscription) data revenue / total revenue (decimal)',
+                "clamp":           (0.0, 0.80),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -2512,11 +2983,14 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
             {
-                "key":             'recurring_data_revenue_pct',
+                "key":             'net_debt_to_ebitda',
                 "mandatory":       True,
-                "search_phrases":  ['data and analytics revenue share', 'non-transactional revenue %'],
-                "source":          'W',
-                "extractor_only":  True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "compute_hint":    '(Total debt - cash) / TTM EBITDA — FMP-augmented',
+                "clamp":           (-2.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'clearing_fee_per_contract',
@@ -2526,12 +3000,51 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['SEC 10-K/Q', 'Exchange ADV Reports', 'Supplemental Segment Data'],
+        "source_priority": ['SEC 10-K/Q (recurring vs transactional revenue split)', 'Exchange ADV reports', 'Supplemental segment data'],
     },
 
     'Money Center Bank (EU)': {
         "sector":         'Financials',
         "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        # V3 quality: cost_of_risk + efficiency_ratio (correlated). EU banks
+        # often have low credit risk but bloated cost bases — both must hold
+        # for "elite". Efficiency bands are RELAXED vs US to reflect EU
+        # structural cost levels (labour rules, branch density).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "cost_of_risk_bps", "direction": "lower_better",
+                 "correlation_group": "eu_bank_q",
+                 "bands": [
+                     {"max": 30,  "mult": 1.30, "label": "elite"},
+                     {"max": 50,  "mult": 1.15, "label": "strong"},
+                     {"max": 80,  "mult": 1.00, "label": "in-band"},
+                     {"max": 999, "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "efficiency_ratio", "direction": "lower_better",
+                 "correlation_group": "eu_bank_q",
+                 "bands": [
+                     # v3.3 EU-Relaxed bands (vs US-Stringent in Money Center).
+                     # EU banks structurally carry higher cost-to-income due to
+                     # labour rules and branch density.
+                     {"max": 0.55, "mult": 1.30, "label": "elite"},
+                     {"max": 0.62, "mult": 1.15, "label": "strong"},
+                     {"max": 0.72, "mult": 1.00, "label": "in-band"},
+                     {"max": 99.0, "mult": 0.85, "label": "bloated"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: CET1, Money Center bands (G-SIB scale). EU G-SIBs have
+        # similar regulatory surcharges to US.
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.145, "mult": 1.10, "label": "fortress"},
+                {"min": 0.130, "mult": 1.05, "label": "strong"},
+                {"min": 0.115, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'cet1_ratio',
@@ -2550,6 +3063,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
             {
+                "key":             'efficiency_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['cost-to-income ratio', 'efficiency ratio', 'cost income ratio'],
+                "compute_hint":    'Operating expenses / total revenue (decimal — 0.55 = 55%)',
+                "clamp":           (0.30, 1.00),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
                 "key":             'leverage_ratio_delegated',
                 "mandatory":       False,
                 "search_phrases":  ['EU leverage ratio', 'Tier 1 leverage'],
@@ -2562,7 +3085,44 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
     'Mortgage/GSE': {
         "sector":         'Financials',
-        "anchor_methods": ['None'],
+        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E (ops)', 'Excess Capital'],
+        # V3 quality: G-Fee rate (the pricing-power moat — government-set
+        # but Enterprise pricing power emerges in conservatorship exit).
+        # delinquency_rate_90plus as a quality drag (correlated max-pick —
+        # if delinquency spikes, the G-fee elite tier gets overridden).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "g_fee_rate_bps", "direction": "higher_better",
+                 "correlation_group": "gse_q",
+                 "bands": [
+                     {"min": 62, "mult": 1.25, "label": "elite"},
+                     {"min": 58, "mult": 1.10, "label": "strong"},
+                     {"min": 50, "mult": 1.00, "label": "in-band"},
+                     {"min":  0, "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "delinquency_rate_90plus", "direction": "lower_better",
+                 "correlation_group": "gse_q",
+                 "bands": [
+                     {"max": 0.005, "mult": 1.10, "label": "low-default"},
+                     {"max": 0.015, "mult": 1.00, "label": "in-band"},
+                     {"max": 0.030, "mult": 0.92, "label": "stressed"},
+                     {"max": 99,    "mult": 0.80, "label": "high-default"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: CET1, GSE-specific bands. For FNMA/FMCC modelling
+        # exit-from-conservatorship: use REGULATORY CET1 excluding the
+        # liquidation preference (per user spec).
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.150, "mult": 1.10, "label": "fortress"},
+                {"min": 0.120, "mult": 1.05, "label": "strong"},
+                {"min": 0.080, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.70, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'net_charge_off_pct',
@@ -2612,37 +3172,141 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     'Neo/Challenger': {
         "sector":         'Financials',
         "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        # V3 quality: unit_econ_ratio = ARPU / cost-to-serve. Explicit KPI so
+        # the LLM extracts the ratio directly (more robust than computing —
+        # gives the LLM a chance to reason about which ARPU/CTS pair to use
+        # if multiple are disclosed).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "unit_econ_ratio", "direction": "higher_better",
+                 "bands": [
+                     {"min": 10.0, "mult": 1.30, "label": "elite"},
+                     {"min":  6.0, "mult": 1.15, "label": "strong"},
+                     {"min":  3.0, "mult": 1.00, "label": "in-band"},
+                     {"min":  0.0, "mult": 0.85, "label": "weak"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: equity_to_assets_pct (CET1 proxy — many neobanks lack
+        # full banking licenses and don't disclose CET1). With cash-burn
+        # cap: if net_income_pct < 0, risk multiplier capped at 1.00× (you
+        # can't be a "fortress" with a hole in the bucket).
+        "risk_adjustment": {
+            "kpi": "equity_to_assets_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.20, "mult": 1.15, "label": "fortress"},
+                {"min": 0.12, "mult": 1.05, "label": "strong"},
+                {"min": 0.08, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,  "mult": 0.80, "label": "weak"},
+            ],
+            "cap_when": {
+                "kpi":      "net_income_pct",
+                "lt":       0.0,
+                "max_mult": 1.00,
+                "note":     "cash-burn cap (negative NI -> can't be fortress)",
+            },
+        },
         "kpis": [
             {
                 "key":             'cost_to_serve_per_user',
                 "mandatory":       True,
                 "search_phrases":  ['operating cost per active user', 'service cost per head', 'opex per customer'],
-                "compute_hint":    'total_operating_expenses / total_active_users',
+                "compute_hint":    'total_operating_expenses / total_active_users (USD)',
                 "clamp":           (1.0, 100.0),
                 "source":          'W',
                 "extractor_only":  True,
             },
             {
-                "key":             'deposit_beta_pct',
+                "key":             'arpu_monthly_usd',
                 "mandatory":       True,
-                "search_phrases":  ['rate pass-through to depositors', 'deposit beta'],
+                "search_phrases":  ['average revenue per active user', 'monthly ARPU'],
+                "compute_hint":    'Monthly ARPU in USD (annualised /12)',
+                "clamp":           (1.0, 500.0),
                 "source":          'W',
                 "extractor_only":  True,
             },
             {
-                "key":             'arpu_monthly_usd',
+                "key":             'unit_econ_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['ARPU to cost-to-serve ratio', 'unit economics multiple',
+                                    'revenue per user vs cost per user'],
+                "compute_hint":    'arpu_monthly_usd / cost_to_serve_per_user — Elite (>10x): NuBank standard',
+                "clamp":           (0.1, 50.0),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'equity_to_assets_pct',
+                "mandatory":       True,
+                "search_phrases":  ['shareholders equity / total assets', 'tangible common equity ratio',
+                                    'capital ratio'],
+                "compute_hint":    'CET1 proxy when neobank lacks full banking license (decimal)',
+                "clamp":           (0.0, 0.50),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'net_income_pct',
+                "mandatory":       True,
+                "search_phrases":  ['net income margin', 'GAAP net margin', 'cash burn rate',
+                                    'profitable / unprofitable status'],
+                "compute_hint":    'Net income / total revenue (decimal — negative if burning cash)',
+                "clamp":           (-1.00, 0.50),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'deposit_beta_pct',
                 "mandatory":       False,
-                "search_phrases":  ['average revenue per active user', 'monthly ARPU'],
+                "search_phrases":  ['rate pass-through to depositors', 'deposit beta'],
                 "source":          'W',
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Cost-to-serve per user', 'Deposit beta (rate pass-through) logs', 'Monthly ARPU'],
+        "source_priority": ['Cost-to-serve per user', 'Monthly ARPU', 'Equity / total assets (capital cushion)', 'Net income margin (cash-burn signal)'],
     },
 
     'Payment Networks': {
         "sector":         'Financials',
-        "anchor_methods": ['EV/NTM Revenue'],
+        "anchor_methods": ['EV/NTM Revenue', 'P/E (ops)', 'DCF (FCF)'],
+        # V3 quality: TPV growth + take_rate_stability — same pattern as
+        # FinTech (V/MA/PYPL/SQ all share platform-vitality KPIs).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "tpv_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "paynet_q",
+                 "bands": [
+                     {"min": 0.18, "mult": 1.30, "label": "elite"},
+                     {"min": 0.12, "mult": 1.15, "label": "strong"},
+                     {"min": 0.07, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "decel"},
+                     {"min": -99,  "mult": 0.80, "label": "shrinking"},
+                 ]},
+                {"kpi": "take_rate_stability_bps", "direction": "lower_better",
+                 "correlation_group": "paynet_q",
+                 "bands": [
+                     {"max":  3, "mult": 1.10, "label": "stable-pricing"},
+                     {"max":  8, "mult": 1.00, "label": "in-band"},
+                     {"max": 99, "mult": 0.90, "label": "compression"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: rebates_and_incentives_pct_rev IS the incentive ratio for
+        # Payment Networks (same metric as FinTech's incentive_ratio_pct, just
+        # under the existing schema's name).
+        "risk_adjustment": {
+            "kpi": "rebates_and_incentives_pct_rev", "direction": "lower_better",
+            "bands": [
+                {"max": 0.22, "mult": 1.10, "label": "fortress"},
+                {"max": 0.28, "mult": 1.00, "label": "in-band"},
+                {"max": 0.32, "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'take_rate_bps',
@@ -2654,10 +3318,19 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  False,
             },
             {
+                "key":             'take_rate_stability_bps',
+                "mandatory":       True,
+                "search_phrases":  ['take rate change YoY in bps', 'pricing stability'],
+                "compute_hint":    'Absolute change in take_rate_bps YoY (lower = stable pricing power)',
+                "clamp":           (0, 50),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
                 "key":             'tpv_growth_yoy',
                 "mandatory":       True,
                 "search_phrases":  ['Total Payment Volume growth', 'processed volume'],
-                "clamp":           (0.05, 1.0),
+                "clamp":           (-0.20, 1.50),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -2672,9 +3345,12 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'rebates_and_incentives_pct_rev',
                 "mandatory":       True,
-                "search_phrases":  ['client incentives as % of gross revenue'],
+                "search_phrases":  ['client incentives as % of gross revenue', 'rebates and incentives'],
+                "compute_hint":    'Client incentives / gross revenue (decimal — V/MA fortress < 22%)',
+                "clamp":           (0.0, 0.50),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
             },
             {
                 "key":             'processed_transactions_yoy',
@@ -2684,12 +3360,48 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['SEC 10-K/Q', 'Quarterly Operating Statistics', 'Earnings Presentations'],
+        "source_priority": ['SEC 10-K/Q', 'Quarterly Operating Statistics', 'Incentive ratio disclosures'],
     },
 
     'Regional Bank': {
         "sector":         'Financials',
         "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        # V3 quality: NIM (developed bands) + LDR Goldilocks (correlated). The
+        # LDR bands use higher_better with descending mins so the iteration
+        # picks the right tier — >100% triggers the liquidity-risk penalty
+        # FIRST (most-restrictive band wins), 80-100% the sweet-spot lift,
+        # <80% the lazy-balance-sheet drag.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "nim_pct", "direction": "higher_better",
+                 "correlation_group": "regional_q",
+                 "bands": [
+                     {"min": 0.032, "mult": 1.30, "label": "elite"},
+                     {"min": 0.026, "mult": 1.15, "label": "strong"},
+                     {"min": 0.020, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "loan_to_deposit_ratio", "direction": "higher_better",
+                 "correlation_group": "regional_q",
+                 "bands": [
+                     {"min": 1.00, "mult": 0.85, "label": "liquidity-risk"},
+                     {"min": 0.80, "mult": 1.15, "label": "sweet-spot"},
+                     {"min": 0.0,  "mult": 0.95, "label": "lazy"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: CET1, Regional bands (lower buffer than Money Centers
+        # because they lack TBTF implicit backing — but market accepts thinner).
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.130, "mult": 1.10, "label": "fortress"},
+                {"min": 0.115, "mult": 1.05, "label": "strong"},
+                {"min": 0.095, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'nim_pct',
@@ -2723,6 +3435,18 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "source":          'W',
                 "extractor_only":  True,
             },
+            # v3.3 — added explicit cet1_ratio (vs the broader tier_1) for
+            # consistency with the V3 risk schema.
+            {
+                "key":             'cet1_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['CET1 ratio', 'Common Equity Tier 1', 'CET-1'],
+                "compute_hint":    'CET1 / risk-weighted assets (decimal — 0.12 = 12%)',
+                "clamp":           (0.05, 0.25),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
             {
                 "key":             'yield_on_advances_pct',
                 "mandatory":       False,
@@ -2736,7 +3460,31 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
     'Super-Regional Bank': {
         "sector":         'Financials',
-        "anchor_methods": ['None'],
+        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E (ops)', 'Excess Capital'],
+        # V3 quality: efficiency_ratio (single, US-Stringent bands).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "efficiency_ratio", "direction": "lower_better",
+                 "bands": [
+                     {"max": 0.50, "mult": 1.30, "label": "elite"},
+                     {"max": 0.58, "mult": 1.15, "label": "strong"},
+                     {"max": 0.68, "mult": 1.00, "label": "in-band"},
+                     {"max": 99.0, "mult": 0.85, "label": "bloated"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: CET1 with Money Center bands. Super-Regionals (USB, PNC,
+        # TFC) sit at scale just below G-SIBs; market expects similar buffer.
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.145, "mult": 1.10, "label": "fortress"},
+                {"min": 0.130, "mult": 1.05, "label": "strong"},
+                {"min": 0.115, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'net_charge_off_pct',
@@ -3990,6 +4738,102 @@ def _evaluate_band(kpi_value: float | None, cfg: dict) -> tuple[float, str] | No
     return None
 
 
+def _compute_derived_kpis(profile_name: str, metrics: dict | None) -> dict:
+    """Compute schema-defined derived KPIs (e.g. NNA Capture = NNA/AUM).
+
+    Walks SECTOR_KPI_FRAMEWORK[profile_name].derived_kpis and writes each
+    computed value into the metrics dict. Returns the (in-place mutated)
+    metrics dict for chaining. No-op when no derived_kpis defined or when
+    numerator/denominator missing/non-numeric/zero.
+
+    Schema format:
+        "derived_kpis": [
+            {"key": "<output_kpi_name>",
+             "numerator": "<existing_kpi_name>",
+             "denominator": "<existing_kpi_name>"},
+        ],
+    """
+    if metrics is None:
+        return {}
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or {}
+    derived = spec.get("derived_kpis") or []
+    for cfg in derived:
+        out_key = cfg.get("key")
+        num_key = cfg.get("numerator")
+        den_key = cfg.get("denominator")
+        if not out_key or not num_key or not den_key:
+            continue
+        if out_key in metrics and metrics[out_key] is not None:
+            continue  # respect explicit value if already populated
+        num = metrics.get(num_key)
+        den = metrics.get(den_key)
+        try:
+            if num is None or den is None:
+                continue
+            num_f = float(num)
+            den_f = float(den)
+            if den_f == 0:
+                continue
+            metrics[out_key] = round(num_f / den_f, 6)
+        except (TypeError, ValueError):
+            continue
+    return metrics
+
+
+def _apply_risk_cap_when(ra: dict, metrics: dict, mult: float, note: str) -> tuple[float, str]:
+    """Apply optional `cap_when` clause on a risk_adjustment block.
+
+    Schema format:
+        "cap_when": {
+            "kpi":      "<gate_kpi>",
+            "lt":       <threshold>,    # also supports "gt", "le", "ge"
+            "max_mult": <ceiling>,
+            "note":     "<reason>",
+        },
+
+    Returns (possibly capped multiplier, possibly augmented note). Used by
+    Neo/Challenger to enforce "if net_income < 0 → risk capped at 1.00x"
+    (the "you can't be a fortress with a hole in the bucket" rule).
+    """
+    cap = ra.get("cap_when")
+    if not isinstance(cap, dict):
+        return mult, note
+    gate_kpi = cap.get("kpi")
+    if not gate_kpi:
+        return mult, note
+    gate_value = metrics.get(gate_kpi) if isinstance(metrics, dict) else None
+    if gate_value is None:
+        return mult, note
+    try:
+        gv = float(gate_value)
+    except (TypeError, ValueError):
+        return mult, note
+    triggered = False
+    for op, label in (("lt", "<"), ("le", "<="), ("gt", ">"), ("ge", ">=")):
+        if op in cap:
+            try:
+                threshold = float(cap[op])
+            except (TypeError, ValueError):
+                continue
+            if op == "lt" and gv <  threshold: triggered = True
+            if op == "le" and gv <= threshold: triggered = True
+            if op == "gt" and gv >  threshold: triggered = True
+            if op == "ge" and gv >= threshold: triggered = True
+            if triggered:
+                op_label = label
+                break
+    if not triggered:
+        return mult, note
+    max_mult = float(cap.get("max_mult", 1.0))
+    if mult <= max_mult:
+        return mult, note
+    cap_reason = cap.get("note", "cap_when triggered")
+    return (
+        max_mult,
+        f"{note} | CAPPED to {max_mult:.2f}x ({gate_kpi}={gv} {op_label} {threshold}: {cap_reason})",
+    )
+
+
 def _quality_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tuple[float, str]:
     """Operational excellence — best-in-class margins/growth/retention.
 
@@ -4133,11 +4977,14 @@ def _risk_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tu
                 f"{kpi_name}={kpi_value} z={z_entry['z']:+.2f} "
                 f"(n={z_entry.get('cohort_size', 0)}, {label}) {mult:.2f}x"
             )
+            mult, note = _apply_risk_cap_when(ra, m, mult, note)
             return (round(mult, 3), note)
         result = _evaluate_band(kpi_value, ra)
         if result is not None:
             mult = max(0.70, min(1.20, result[0]))
-            return (round(mult, 3), result[1])
+            note = result[1]
+            mult, note = _apply_risk_cap_when(ra, m, mult, note)
+            return (round(mult, 3), note)
         return (1.0, f"{ra['kpi']} not extracted")
     # ── Legacy hardcoded fallback ────────────────────────────────────────────
     if "Insurance" in profile_name:
@@ -4526,6 +5373,10 @@ def composite_adjustment(profile_name: str, sector: str, metrics: dict | None) -
 
     Returns (final_multiplier, bridge_dict).
     """
+    # v3.3: pre-compute derived KPIs (e.g. NNA Capture = NNA/AUM for Brokerage)
+    # so band evaluation sees them. Idempotent — won't overwrite if already set.
+    if metrics is not None:
+        _compute_derived_kpis(profile_name, metrics)
     q, q_note = _quality_multiplier(profile_name, sector, metrics)
     r, r_note = _risk_multiplier(profile_name, sector, metrics)
     c, c_note = _commodity_multiplier(profile_name, sector, metrics)
