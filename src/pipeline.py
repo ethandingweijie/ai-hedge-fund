@@ -848,6 +848,25 @@ def run_advanced_pipeline(
             "pipeline_assets":        state["data"].get("pipeline_assets", {}),
             "dcf_calibration":        state["data"].get("dcf_calibration", {}),
             "segment_scenarios":      state["data"].get("segment_scenarios", {}),
+            # ── v3.5: Raw V3 framework metric DICTS — persistence fix ──────────
+            # These are the per-ticker structured KPI dicts (e.g.
+            # framework_metrics_all["AAPL"] = {"revenue_growth_pct": 0.064,
+            # "operating_margin_pct": 0.324, ...}). The RENDERED `sector_card`
+            # above already has the multipliers computed, BUT:
+            #   - Z-engine `fetch_peer_cohort` reads framework_metrics_all from
+            #     past web_runs to build peer cohorts. Without persistence the
+            #     cohort is always empty → z-tier kickers never fire across runs.
+            #   - Admin re-render after schema fix needs raw KPIs to recompute.
+            #   - Replay path (analysis_service.reconstruct) needs these to
+            #     rebuild the audit_bridge with current code.
+            # Bug discovered 2026-04-26: these dicts existed in state but were
+            # never persisted to web_runs.full_result_json.
+            "framework_metrics_all":  state["data"].get("framework_metrics_all", {}),
+            "insurance_metrics_all":  state["data"].get("insurance_metrics_all", {}),
+            "bank_metrics_all":       state["data"].get("bank_metrics_all", {}),
+            "saas_metrics_all":       state["data"].get("saas_metrics_all", {}),
+            "reit_metrics_all":       state["data"].get("reit_metrics_all", {}),
+            "pipeline_assets_all":    state["data"].get("pipeline_assets_all", {}),
             # ── Phase 2 routing + sector/profile classification ─────────────
             # Similarly needed: without these, admin panels can't filter/group
             # runs by profile, and the frontend's TechValuationPanel routing
