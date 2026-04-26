@@ -245,6 +245,12 @@ _MIGRATIONS = [
 
     # v4 — agent_signals outcome (parity with ticker_signals.outcome)
     ("agent_signals",  "outcome",              "TEXT DEFAULT 'PENDING'"),
+
+    # v3.3 — sector-specific valuation card payload (Option B render).
+    # Built by src.data.sector_kpi_framework.render_card_payload. Persisting
+    # the rendered JSON (not just the raw metric values) means historical
+    # runs continue to render correctly even if the framework spec changes.
+    ("ticker_signals", "sector_card_json",    "TEXT"),  # full sector_card[ticker] dict
 ]
 
 
@@ -405,6 +411,12 @@ def save_run(state: dict, decisions: dict) -> str:
                 dcf_rng_json = _safe_json(dcf)  if dcf  is not None else None  # v3.1
                 vt_json      = _safe_json(trap) if trap is not None else None  # v3.2
 
+                # v3.3 — sector_card payload (Option B render). Persisted as
+                # JSON so historical runs continue to render even if the
+                # framework spec changes structure later.
+                sector_card_t = (data.get("sector_card") or {}).get(ticker)
+                sc_json = _safe_json(sector_card_t) if sector_card_t is not None else None
+
                 # raw_financials lives at state["data"]["raw_financials"] (LLM-formatted,
                 # keyed by FY year) — store as-is so FinancialsTable can render it
                 raw_fin = data.get("raw_financials") or {}
@@ -449,8 +461,9 @@ def save_run(state: dict, decisions: dict) -> str:
                         eq_quality_verdict, eq_quality_score,
                         value_trap_verdict, ev_upside_pct, power_law_score,
                         power_law_json, scenario_json, raw_financials_json,
-                        citation_audit_json, vgpm_json, dcf_range_json, value_trap_json
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        citation_audit_json, vgpm_json, dcf_range_json, value_trap_json,
+                        sector_card_json
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         run_id, ticker,
@@ -489,6 +502,7 @@ def save_run(state: dict, decisions: dict) -> str:
                         vgpm_json,
                         dcf_rng_json,
                         vt_json,
+                        sc_json,
                     ),
                 )
 

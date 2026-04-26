@@ -2366,6 +2366,69 @@ def _compute_method_value(
         return max((ev - (net_debt or 0.0)) / shares, 0.0)
 
     # ── P/BV ──────────────────────────────────────────────────────────────
+    # ── Embedded Value (Insurance — Life sub-sub-profile) ────────────────
+    # The INDUSTRY_VALUATION_PROFILES["Financials"]["Insurance"] entry lists
+    # Embedded Value as the anchor with weight=0.50 but implementable=False
+    # (proxies to P/BV in the legacy path). PR #1 makes it implementable
+    # using the framework-extracted vnb_margin and embedded_value_per_share
+    # KPIs sourced via _extract_insurance_metrics → SECTOR_KPI_FRAMEWORK.
+    #
+    # Method preference for Life insurers:
+    #   1. Disclosed embedded_value_per_share (cleanest — direct IR figure)
+    #   2. P/BV × VNB-margin uplift  (uses extracted vnb_margin to size premium)
+    #   3. Fall back to None → blend redistributes weight to remaining methods
+    if method_name in {"Embedded Value", "EV", "EV per Share"}:
+        ev_ps = most_recent.get("embedded_value_per_share")
+        if ev_ps and ev_ps > 0:
+            # Apply scenario multiplier (bear/base/bull symmetric ±10%)
+            return ev_ps * sm
+        # VNB-margin uplift on P/BV (proxy when EV/share not disclosed)
+        vnb = most_recent.get("vnb_margin")
+        if vnb and vnb > 0 and bvps and bvps > 0:
+            # VNB margin > 0.20 = high-quality Life writer → P/BV × 1.5
+            # VNB margin 0.10-0.20 = average → P/BV × 1.2
+            # VNB margin < 0.10 = weak → P/BV × 0.9
+            if vnb >= 0.20:
+                vnb_mult = 1.5
+            elif vnb >= 0.10:
+                vnb_mult = 1.2
+            else:
+                vnb_mult = 0.9
+            return bvps * peer.get("pb", 1.5) * vnb_mult * sm
+        return None
+
+    # ── Combined Ratio Gate (Insurance — P&C sub-sub-profile) ────────────
+    # P&C insurer profitability is governed by combined ratio: <1.00 means
+    # underwriting profit, >1.00 means underwriting loss subsidised by
+    # investment income. The Combined Ratio Gate is a P/BV multiplier:
+    #   CR ≤ 0.92 → 1.30× P/BV (best-in-class underwriting)
+    #   CR 0.93-0.97 → 1.10× P/BV (solid underwriter)
+    #   CR 0.98-1.02 → 1.00× P/BV (at break-even)
+    #   CR 1.03-1.06 → 0.85× P/BV (mild underwriting loss)
+    #   CR > 1.06   → 0.70× P/BV (sustained underwriting loss)
+    #
+    # Adjustment-stack-aware: combines with SCR sanity haircut
+    # (SCR < 1.5 → additional 0.95× discount for thin capital).
+    if method_name in {"Combined Ratio Gate", "CR Gate"}:
+        cr = most_recent.get("combined_ratio")
+        if cr is None or not (bvps and bvps > 0):
+            return None
+        if cr <= 0.92:
+            cr_mult = 1.30
+        elif cr <= 0.97:
+            cr_mult = 1.10
+        elif cr <= 1.02:
+            cr_mult = 1.00
+        elif cr <= 1.06:
+            cr_mult = 0.85
+        else:
+            cr_mult = 0.70
+        # SCR adequacy haircut (applies to all insurers, P&C and Life)
+        scr = most_recent.get("solvency_ratio_scr")
+        if scr is not None and scr < 1.5:
+            cr_mult *= 0.95
+        return bvps * peer.get("pb", 1.5) * cr_mult * sm * growth_premium
+
     if method_name in {"P/BV", "P/Rate Base", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
         mult = peer.get("pb", 2.0) * sm * growth_premium
@@ -2966,6 +3029,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     # Per-ticker SaaS metrics (NRR, Rule of 40, CAC payback, magic number).
     # Produced by _extract_saas_metrics() in deep_research.py.
     saas_metrics_all       = state["data"].get("saas_metrics", {})
+    # Per-ticker framework-extracted KPIs for sub-profiles new to PR #6
+    # (Regulated Utility, Upstream O&G, Semi Fabless, Semi IDM/Foundry,
+    # Telco, Mining (Major), Automotive & EV, Managed Care). Produced by
+    # the generic framework_metrics task in deep_research.py — fires only
+    # when ticker's profile_name is in SECTOR_KPI_FRAMEWORK and NOT in
+    # _LEGACY_COVERED_PROFILES (avoids double-extraction of Insurance/Bank/SaaS/REIT).
+    framework_metrics_all  = state["data"].get("framework_metrics", {})
     # Per-ticker signals from deep research sections 2D (cycle) + 2F (KPI framework).
     # Produced by _extract_dcf_calibration() in deep_research.py.
     dcf_calibration_all  = state["data"].get("dcf_calibration_signals", {})
@@ -3653,6 +3723,33 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _saas_parts.append(f"gross retention {_saas_override['gross_retention_pct']:.0%}")
                 if _saas_parts:
                     ticker_forward_flags.append("SaaS research metrics: " + " | ".join(_saas_parts))
+
+        # ── Framework metrics attach (PR #6 — generic for new sub-profiles) ─
+        # Handles Regulated Utility, Upstream O&G, Semi Fabless / IDM/Foundry,
+        # Telco, Mining (Major), Automotive & EV, Managed Care — any ticker
+        # whose profile_name is registered in SECTOR_KPI_FRAMEWORK but NOT
+        # covered by a legacy dedicated extractor. Generic loop: each KPI
+        # in the framework spec is attached to most_recent under its key,
+        # and _<profile>_completeness / _<profile>_missing metadata is set
+        # for the downstream UI badge.
+        _fm_override = (framework_metrics_all or {}).get(ticker) or {}
+        if _fm_override and profile_name:
+            try:
+                from src.data.sector_kpi_framework import attach_overrides
+                _audit_lines = attach_overrides(profile_name, _fm_override, most_recent)
+                if _audit_lines:
+                    _completeness = _fm_override.get("_completeness_score", "n/a")
+                    ticker_forward_flags.append(
+                        f"Framework metrics ({profile_name}, "
+                        f"completeness={_completeness}): "
+                        + " | ".join(_audit_lines)
+                    )
+            except Exception as _exc:
+                # Framework attach is fail-safe — never crash the pipeline.
+                # Audit trail captures the failure for debug.
+                ticker_forward_flags.append(
+                    f"Framework attach skipped ({type(_exc).__name__}: {str(_exc)[:80]})"
+                )
 
         # ── WACC (hybrid: Damodaran sector base + live credit overlay) ───
         # The sector base WACC preserves all existing calibration (Damodaran

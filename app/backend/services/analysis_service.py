@@ -291,6 +291,11 @@ def _save_partial_web_run(
             "value_trap_analysis":         data.get("value_trap_analysis"),
             "vgpm":                        data.get("vgpm"),
             "decisions":                   data.get("decisions"),
+            # ── sector_card (Option B render) ───────────────────────────
+            # Included in partial save so the SSE progressive UI shows the
+            # card mid-run as soon as DCF + framework metrics are ready.
+            # See src/data/sector_kpi_framework.render_card_payloads_for_run.
+            "sector_card":                 data.get("sector_card"),
         },
     }
     conn = _connect(db_path)
@@ -716,6 +721,15 @@ def get_run_result(run_id: str) -> Optional[dict]:
         if ts and ts["value_trap_verdict"]:
             value_trap_analysis[ticker] = {"overall_verdict": ts["value_trap_verdict"]}
 
+        # Sector card (Option B render — v3.3). When the column is missing
+        # (very old runs predating the v3.3 migration) sqlite3.Row raises
+        # IndexError on string lookup, hence the .keys() guard.
+        sector_card: dict = {}
+        if ts and "sector_card_json" in ts.keys():
+            sc_full = _load_json_col("sector_card_json")
+            if sc_full:
+                sector_card[ticker] = sc_full
+
         # Macro regime
         macro_regime: dict = {
             "risk_appetite":     run_row["regime_risk_appetite"],
@@ -746,6 +760,8 @@ def get_run_result(run_id: str) -> Optional[dict]:
                 "deep_research":           run_row["deep_research_text"] or "",
                 "deep_research_annotated": run_row["deep_research_text"] or "",
                 "deep_research_sections":  {},
+                # v3.3 — sector valuation card (Option B render).
+                "sector_card":             sector_card,
             },
             "decisions": decisions,
             "vgpm":      vgpm,

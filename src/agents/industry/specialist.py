@@ -951,6 +951,23 @@ def run_industry_specialist(state: AgentState) -> AgentState:
         "sector. Classify manually and re-run for full brief.\""
     )
     sector_block = SECTOR_BLOCKS.get(sector, _UNKNOWN_SECTOR_BLOCK)
+
+    # ── Append SECTOR_KPI_FRAMEWORK addendum (per sub-profile) ────────────
+    # Adds a "## Key Sector Metrics" markdown table instruction to the prompt
+    # so the LLM produces a structured KPI table at the top of the brief.
+    # The existing IndustryBriefPanel.tsx renders this natively (no frontend
+    # changes needed). Hold-list profiles (no framework entry) get no addendum.
+    profile_name = state["data"].get("profile_names", {}).get(ticker) \
+                   or state["data"].get("profile_name") or ""
+    if profile_name:
+        try:
+            from src.data.sector_kpi_framework import render_specialist_addendum
+            _addendum = render_specialist_addendum(profile_name, sector)
+            if _addendum:
+                sector_block = sector_block + _addendum
+        except Exception:
+            pass   # graceful fallback — specialist still runs without addendum
+
     raw_financials = state["data"].get("raw_financials", {})
     insider_summary = state["data"].get("insider_summary", "")
 

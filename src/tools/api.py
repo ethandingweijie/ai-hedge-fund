@@ -1395,11 +1395,13 @@ def get_revenue_geographic_segments(
 ) -> list[dict]:
     """Fetch geographic-segment revenue breakdown from FMP.
 
-    Endpoint: /stable/revenue-geographic-segments
+    Endpoint: /stable/revenue-geographic-segmentation
+    (FMP renamed /stable/revenue-geographic-segments → /stable/revenue-geographic-segmentation
+    to match the product-segmentation naming convention.)
     Paid-tier endpoint on FMP; returns [] on 402/403.
     """
     return _fetch_revenue_segmentation(
-        "revenue-geographic-segments", ticker, end_date, period, api_key,
+        "revenue-geographic-segmentation", ticker, end_date, period, api_key,
     )
 
 
@@ -1851,8 +1853,10 @@ def get_earnings_surprises(
     api_key: str = None,
 ) -> list[dict]:
     """
-    Earnings beat/miss history from FMP /stable/earnings-surprises.
-    Available on FMP free tier.
+    Earnings beat/miss history from FMP /stable/earnings.
+    (FMP renamed /stable/earnings-surprises → /stable/earnings; new payload
+    uses epsActual / epsEstimated field names and additionally returns
+    revenueActual / revenueEstimated for revenue beats.)
 
     Returns a list of dicts (newest first):
         date, eps_actual, eps_estimated, surprise_pct, beat (bool)
@@ -1868,7 +1872,7 @@ def get_earnings_surprises(
         return _EDGAR_SURPRISES_CACHE[cache_key]
 
     data = _fmp_get(
-        f"{_STABLE}/earnings-surprises",
+        f"{_STABLE}/earnings",
         {"symbol": ticker, "limit": limit},
         api_key,
         uncap=True,
@@ -1881,8 +1885,12 @@ def get_earnings_surprises(
         date = (row.get("date") or "")[:10]
         if date > end_date:
             continue
-        eps_act = _safe_float(row.get("actualEarningResult") or row.get("actual"))
-        eps_est = _safe_float(row.get("estimatedEarning")    or row.get("estimated"))
+        eps_act = _safe_float(
+            row.get("epsActual") or row.get("actualEarningResult") or row.get("actual")
+        )
+        eps_est = _safe_float(
+            row.get("epsEstimated") or row.get("estimatedEarning") or row.get("estimated")
+        )
         if eps_act is None or eps_est is None:
             continue
         surprise_pct = (
@@ -2035,6 +2043,36 @@ _FX_FALLBACK_RATES: dict[str, float] = {
 }
 
 
+_FX_BATCH_CACHE: dict[str, dict] = {}
+_FX_BATCH_TS: float = 0.0
+_FX_BATCH_TTL_SEC: float = 300.0   # 5 min — FX moves slowly intraday
+
+
+def _get_fx_batch(api_key: str | None) -> dict[str, dict]:
+    """Process-wide cache of /stable/batch-forex-quotes keyed by symbol.
+
+    FMP retired the single-pair /stable/fx-quote; the only live FX endpoint
+    is the full ~1500-pair batch. Caching for 5 min keeps the cost at one
+    request per process per 5 min regardless of how many ADRs are processed.
+    """
+    global _FX_BATCH_CACHE, _FX_BATCH_TS
+    import time as _time
+    if _FX_BATCH_CACHE and (_time.time() - _FX_BATCH_TS) < _FX_BATCH_TTL_SEC:
+        return _FX_BATCH_CACHE
+    try:
+        rows = _fmp_get(f"{_STABLE}/batch-forex-quotes", {}, api_key)
+        if isinstance(rows, list):
+            _FX_BATCH_CACHE = {
+                r["symbol"]: r
+                for r in rows
+                if isinstance(r, dict) and r.get("symbol")
+            }
+            _FX_BATCH_TS = _time.time()
+    except Exception:
+        pass
+    return _FX_BATCH_CACHE
+
+
 def get_fx_rate(
     from_currency: str,
     to_currency: str = "USD",
@@ -2044,7 +2082,8 @@ def get_fx_rate(
     Return the FX rate to convert 1 unit of *from_currency* into *to_currency*.
 
     Priority:
-        1. FMP /stable/fx-quote (live mid-rate)
+        1. FMP /stable/batch-forex-quotes (live; full ~1500-pair batch cached
+           process-wide for 5 min — single-pair /stable/fx-quote was retired).
         2. _FX_FALLBACK_RATES hardcoded table (Jan 2026 midpoints)
         3. 1.0 with a warning (unknown pair — caller should flag in output)
 
@@ -2060,24 +2099,21 @@ def get_fx_rate(
 
     pair = f"{from_currency}{to_currency}"
 
-    # ── 1. Try FMP live forex quote (direct pair) ─────────────────────────
+    # ── 1. Try FMP live forex quote (direct pair via cached batch) ────────
     def _fetch_fx_quote(symbol: str) -> float | None:
-        try:
-            data = _fmp_get(f"{_STABLE}/fx-quote", {"symbol": symbol}, api_key)
-            if data and isinstance(data, list) and len(data) > 0:
-                row = data[0]
-                price = _safe_float(
-                    row.get("bid") or row.get("ask") or row.get("price") or row.get("last")
-                )
-                if price and price > 0:
-                    return price
-        except Exception:
-            pass
+        batch = _get_fx_batch(api_key)
+        row = batch.get(symbol)
+        if row:
+            price = _safe_float(
+                row.get("price") or row.get("bid") or row.get("ask") or row.get("last")
+            )
+            if price and price > 0:
+                return price
         return None
 
     price = _fetch_fx_quote(pair)
     if price:
-        print(f"  [FX] {pair} — live rate {price:.6f} (FMP direct)")
+        print(f"  [FX] {pair} — live rate {price:.6f} (FMP batch direct)")
         return price
 
     # ── 1b. Try inverse pair (e.g. USDCNY when CNYUSD not available) ─────
@@ -2086,7 +2122,7 @@ def get_fx_rate(
     inv_price = _fetch_fx_quote(inverse_pair)
     if inv_price and inv_price > 0:
         rate = 1.0 / inv_price
-        print(f"  [FX] {pair} — live rate {rate:.6f} (FMP inverse of {inverse_pair}={inv_price:.4f})")
+        print(f"  [FX] {pair} — live rate {rate:.6f} (FMP batch inverse of {inverse_pair}={inv_price:.4f})")
         return rate
 
     # ── 2. Hardcoded fallback ─────────────────────────────────────────────

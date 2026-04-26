@@ -99,7 +99,7 @@ def earnings_soon(
 
     try:
         resp = requests.get(
-            f"{_STABLE}/earning_calendar",
+            f"{_STABLE}/earnings-calendar",
             params={"from": from_date, "to": to_date, "apikey": _api_key()},
             timeout=_TIMEOUT,
         )

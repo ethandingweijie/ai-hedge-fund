@@ -642,6 +642,70 @@ def run_advanced_pipeline(
         _append_to_trade_log(state, decisions)
 
         # ----------------------------------------------------------------
+        # V3.2 — Augment per-ticker metrics dicts with FMP-derived risk KPIs
+        # (net_debt_to_ebitda, cash_runway_years, debt_to_ebitda).
+        #
+        # WHY HERE: extractor often misses balance-sheet KPIs (rarely quoted
+        # verbatim in research narrative). FMP is authoritative anyway. By
+        # augmenting BEFORE save_run() and BEFORE render_card_payloads_for_run,
+        # the FMP-derived values:
+        #   1. Become part of framework_metrics_all[ticker] dict
+        #   2. Get persisted to web_runs JSON + archive ticker_signals
+        #   3. Survive the run replay path (get_run_result reconstruction)
+        #   4. Show up in the V3 audit_bridge Risk multiplier (no longer 1.0x)
+        # ----------------------------------------------------------------
+        try:
+            from src.data.sector_kpi_framework import (
+                _augment_metrics_with_fmp_risk,
+                _augment_metrics_with_fmp_commodity,  # V3.1
+                is_legacy_profile,
+            )
+            _profile_names = state["data"].get("profile_names", {})
+            _tickers = state["data"].get("tickers", []) or list(_profile_names.keys())
+            for _t in _tickers:
+                _profile = _profile_names.get(_t) or state["data"].get("profile_name") or ""
+                if not _profile or is_legacy_profile(_profile):
+                    continue
+                # Pick the right metrics dict for this profile (framework vs
+                # legacy sector-specific). Augment in-place if present.
+                for _state_key in ("framework_metrics_all",
+                                   "insurance_metrics_all", "bank_metrics_all"):
+                    _bucket = state["data"].get(_state_key) or {}
+                    if _t in _bucket and isinstance(_bucket[_t], dict):
+                        _bucket[_t] = _augment_metrics_with_fmp_risk(_t, _bucket[_t])
+                        # V3.1 — also augment commodity prices for Resources/Energy
+                        _bucket[_t] = _augment_metrics_with_fmp_commodity(_profile, _bucket[_t])
+                        state["data"][_state_key] = _bucket
+                # If no metrics dict exists yet for this ticker, create one
+                # in framework_metrics_all (so render_card_payload finds it)
+                _fwm = state["data"].setdefault("framework_metrics_all", {})
+                if _t not in _fwm:
+                    _aug = _augment_metrics_with_fmp_risk(_t, {})
+                    _aug = _augment_metrics_with_fmp_commodity(_profile, _aug)
+                    _fwm[_t] = _aug
+        except Exception as _e:
+            print(f"  [fmp_risk_augment] failed: {_e!r} — Risk/Commodity multiplier will be 1.0x")
+
+        # ----------------------------------------------------------------
+        # Sector valuation card payload — per-ticker dict consumed by the
+        # frontend `SectorValuationCard` component. Built from the
+        # SECTOR_KPI_FRAMEWORK + already-extracted metric state. Legacy
+        # sub-profiles (SaaS / REIT / Biopharma) return None and keep
+        # their existing bespoke cards.
+        #
+        # CRITICAL: must be written to state BEFORE save_run() so the
+        # archive picks it up, AND added to the run_advanced_pipeline
+        # return dict below so web_runs JSON gets it (per 1ac5490 fix).
+        # ----------------------------------------------------------------
+        try:
+            from src.data.sector_kpi_framework import render_card_payloads_for_run
+            _sector_card = render_card_payloads_for_run(state) or {}
+        except Exception as _e:
+            print(f"  [sector_card] render failed: {_e!r} — frontend will hide card")
+            _sector_card = {}
+        state["data"]["sector_card"] = _sector_card
+
+        # ----------------------------------------------------------------
         # Episodic run archive (SQLite — src/data/run_archive.db)
         # ----------------------------------------------------------------
         _archive_run_id = save_run(state, decisions)
@@ -719,6 +783,10 @@ def run_advanced_pipeline(
             # cards silently hide even when Qwen produced rich 2F content.
             "deep_research_sections": state["data"].get("deep_research_sections", {}),
             "research_tier":          state["data"].get("research_tier"),
+            # Sector-specific valuation card payload (Option B render). Must
+            # be in this return dict — see commit 1ac5490 / sector_kpi_framework
+            # render_card_payload docstring for why state-only writes get lost.
+            "sector_card":            state["data"].get("sector_card", {}),
             # Internal — lets analysis_service link web_runs to the archive row
             # without calling save_run() a second time (which would create a duplicate).
             "_archive_run_id":    _archive_run_id,
