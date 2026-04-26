@@ -1740,13 +1740,47 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── Consumer ──────────────────────────────────────────────────
     'Apparel / Athletic Wear': {
         "sector":         'Consumer',
-        "anchor_methods": ['EV/EBITDA', 'DCF', 'P/E', 'Brand Valuation'],
+        "anchor_methods": ['EV/EBITDA', 'DCF (FCF)', 'P/E (ops)', 'Brand Valuation'],
+        # V3 quality: sssg_pct primary + dtc_revenue_pct kicker (DTC mix =
+        # brand power / margin lever).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "sssg_pct", "direction": "higher_better",
+                 "correlation_group": "apparel_q_primary",
+                 "bands": [
+                     {"min":  0.08, "mult": 1.30, "label": "elite"},
+                     {"min":  0.04, "mult": 1.15, "label": "strong"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "decline"},
+                 ]},
+                {"kpi": "dtc_revenue_pct", "direction": "higher_better",
+                 "correlation_group": "apparel_q_kicker",
+                 "bands": [
+                     {"min": 0.50, "mult": 1.10, "label": "premium-direct"},
+                     {"min": 0.30, "mult": 1.05, "label": "balanced"},
+                     {"min": 0.0,  "mult": 1.00, "label": "wholesale-heavy"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        # V3 risk: inventory_turnover (lower turn = retail death spiral signal —
+        # TGT 2022 lesson). Per-user calibration: 2.5-3.1 in-band for premium
+        # athletic; >4.0 elite.
+        "risk_adjustment": {
+            "kpi": "inventory_turnover", "direction": "higher_better",
+            "bands": [
+                {"min": 4.0,  "mult": 1.10, "label": "elite"},
+                {"min": 3.2,  "mult": 1.05, "label": "strong"},
+                {"min": 2.5,  "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,  "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'sssg_pct',
                 "mandatory":       True,
                 "search_phrases":  ['same-store sales growth', 'comparable store sales', 'comp sales growth'],
-                "compute_hint":    '(current_period_comp_sales / prior_period_comp_sales) - 1',
+                "compute_hint":    '(current_period_comp_sales / prior_period_comp_sales) - 1 (decimal)',
                 "clamp":           (-0.2, 0.4),
                 "source":          'W',
                 "extractor_only":  True,
@@ -1756,31 +1790,65 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'inventory_turnover',
                 "mandatory":       True,
                 "search_phrases":  ['inventory turnover ratio', 'inventory turns', 'COGS / average inventory'],
-                "compute_hint":    'annual_COGS / average_inventory',
-                "clamp":           (2.0, 15.0),
+                "compute_hint":    'annual_COGS / average_inventory (FMP-augmentable)',
+                "clamp":           (1.0, 15.0),
                 "source":          'F',
                 "extractor_only":  False,
+                "fmp_field":       'inventoryTurnoverTTM',
             },
             {
                 "key":             'dtc_revenue_pct',
-                "mandatory":       False,
-                "search_phrases":  ['Direct-to-Consumer sales mix', 'DTC revenue share'],
+                "mandatory":       True,
+                "search_phrases":  ['Direct-to-Consumer sales mix', 'DTC revenue share', 'D2C revenue %'],
+                "compute_hint":    'DTC revenue / total revenue (decimal — premium athletic >50%)',
+                "clamp":           (0.0, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
             },
         ],
-        "source_priority": ['Quarterly SSSG (Same-Store Sales Growth) disclosures', 'Inventory turnover schedules in 10-K footnotes'],
+        "source_priority": ['Quarterly SSSG disclosures', 'Inventory turnover schedules', 'DTC revenue mix (segment notes)'],
     },
 
     'Consumer Durables': {
         "sector":         'Consumer',
-        "anchor_methods": ['EV/EBITDA', 'P/E', 'DCF', 'FCF Yield'],
+        "anchor_methods": ['EV/EBITDA', 'P/E (ops)', 'DCF (FCF)', 'FCF Yield'],
+        # V3 quality: new_orders_growth_yoy primary + warranty_expense_pct
+        # quality drag (lower = fewer product issues = higher Q signal).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "new_orders_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "durables_q_primary",
+                 "bands": [
+                     {"min":  0.10, "mult": 1.30, "label": "elite"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "decline"},
+                 ]},
+                {"kpi": "warranty_expense_pct", "direction": "lower_better",
+                 "correlation_group": "durables_q_kicker",
+                 "bands": [
+                     {"max": 0.02, "mult": 1.10, "label": "low-defect"},
+                     {"max": 0.04, "mult": 1.00, "label": "in-band"},
+                     {"max": 99,   "mult": 0.85, "label": "quality-issues"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.0,  "mult": 1.10, "label": "fortress"},
+                {"max": 2.5,  "mult": 1.00, "label": "in-band"},
+                {"max": 4.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.80, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'new_orders_growth_yoy',
                 "mandatory":       True,
                 "search_phrases":  ['new order intake growth', 'order volume change', 'incoming orders YOY'],
-                "clamp":           (-0.3, 0.6),
+                "clamp":           (-0.30, 0.60),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -1790,10 +1858,20 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "mandatory":       True,
                 "search_phrases":  ['warranty costs as % of sales', 'product warranty expense ratio', 'warranty accruals / revenue'],
                 "compute_hint":    'total_warranty_accrual / total_revenue',
-                "clamp":           (0.005, 0.05),
+                "clamp":           (0.0, 0.10),
                 "source":          'H',
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "compute_hint":    'FMP-augmented',
+                "clamp":           (-3.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'raw_material_cost_delta',
@@ -1803,12 +1881,45 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['New order intake reports', 'Raw material input cost bridges', 'Warranty accrual tables'],
+        "source_priority": ['New order intake reports', 'Warranty accrual tables', 'Leverage disclosures'],
     },
 
     'Consumer Growth': {
         "sector":         'Consumer',
-        "anchor_methods": ['DCF', 'EV/Revenue', 'EV/EBITDA'],
+        "anchor_methods": ['DCF (FCF)', 'EV/Revenue', 'EV/EBITDA'],
+        # V3 quality: GMV growth + payback period (separate groups, multiply).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "gmv_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "cgrowth_q_primary",
+                 "bands": [
+                     {"min":  0.30, "mult": 1.30, "label": "elite"},
+                     {"min":  0.15, "mult": 1.15, "label": "strong"},
+                     {"min":  0.05, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "decel"},
+                 ]},
+                {"kpi": "payback_period_months", "direction": "lower_better",
+                 "correlation_group": "cgrowth_q_kicker",
+                 "bands": [
+                     {"max": 12,  "mult": 1.30, "label": "elite-payback"},
+                     {"max": 18,  "mult": 1.15, "label": "strong-payback"},
+                     {"max": 24,  "mult": 1.00, "label": "in-band"},
+                     {"max": 999, "mult": 0.85, "label": "weak-payback"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: gross_margin_pct (path-to-profitability gate, FMP-augmented)
+        "risk_adjustment": {
+            "kpi": "gross_margin_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.60, "mult": 1.10, "label": "fortress"},
+                {"min": 0.45, "mult": 1.05, "label": "strong"},
+                {"min": 0.30, "mult": 1.00, "label": "in-band"},
+                {"min": 0.25, "mult": 0.92, "label": "soft"},
+                {"min": 0.0,  "mult": 0.80, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'cac_usd',
@@ -1821,30 +1932,125 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'gmv_growth_yoy',
                 "mandatory":       True,
-                "search_phrases":  ['Gross Merchandise Value growth', 'total platform volume growth', 'GMV YOY'],
-                "clamp":           (-0.1, 2.0),
+                "search_phrases":  ['Gross Merchandise Value growth', 'total platform volume growth', 'GMV YOY', 'revenue growth'],
+                "clamp":           (-0.20, 2.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
             {
                 "key":             'payback_period_months',
-                "mandatory":       False,
-                "search_phrases":  ['time to recover CAC', 'customer break-even'],
+                "mandatory":       True,
+                "search_phrases":  ['time to recover CAC', 'customer break-even', 'CAC payback months'],
+                "compute_hint":    'Months to recover blended CAC (Elite <12mo, Weak >24mo)',
+                "clamp":           (3, 60),
                 "source":          'W',
                 "extractor_only":  True,
             },
+            {
+                "key":             'gross_margin_pct',
+                "mandatory":       True,
+                "search_phrases":  ['gross margin', 'gross profit margin'],
+                "compute_hint":    'TTM gross margin (decimal — FMP-augmented)',
+                "clamp":           (0.0, 1.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'grossProfitMarginTTM',
+                "decimal_format":  True,
+            },
         ],
-        "source_priority": ['Unit economics disclosures (CAC/LTV)', 'Platform GMV growth logs', 'Marketing intensity reports'],
+        "source_priority": ['Unit economics disclosures (CAC/LTV/payback)', 'Platform GMV growth logs', 'Gross margin trend'],
     },
 
     'Food & Beverage': {
         "sector":         'Consumer',
-        "anchor_methods": ['P/E', 'DCF', 'EV/EBITDA', 'Brand Valuation'],
+        "anchor_methods": ['P/E (ops)', 'DCF (FCF)', 'EV/EBITDA', 'Brand Valuation'],
+        # V3 quality: weighted-geometric Vol/Price + Moat Integrity kicker +
+        # ad_promotion_pct kicker. Per user A4 spec — Vol 0.6w (the "Truth"
+        # metric) + Price 0.4w (the "Inflation" metric).
+        # Moat Integrity: when volume_growth > price_mix_growth → +1.05x
+        # ("Volume-Led Growth" — share-gain via real demand, not just price).
+        "derived_kpis": [
+            {"key":         "vol_price_diff",
+             "numerator":   "volume_growth_yoy",
+             "denominator": "price_mix_growth_yoy",
+             "op":          "subtract"},
+        ],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "volume_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "fnb_q_volprice",
+                 "kpi_weight": 0.6,
+                 "bands": [
+                     {"min":  0.020, "mult": 1.30, "label": "elite-vol"},
+                     {"min":  0.0,   "mult": 1.15, "label": "strong-vol"},
+                     {"min": -99,    "mult": 0.80, "label": "weak-vol"},
+                 ]},
+                {"kpi": "price_mix_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "fnb_q_volprice",
+                 "kpi_weight": 0.4,
+                 "bands": [
+                     {"min":  0.030, "mult": 1.30, "label": "elite-price"},
+                     {"min":  0.010, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,    "mult": 0.85, "label": "weak-price"},
+                 ]},
+                # Moat Integrity kicker (separate group, multiplies):
+                # vol_price_diff > 0 → "Volume-Led Growth" → 1.05x
+                {"kpi": "vol_price_diff", "direction": "higher_better",
+                 "correlation_group": "fnb_q_moat",
+                 "bands": [
+                     {"min":  0.0001, "mult": 1.05, "label": "volume-led-moat"},
+                     {"min": -99,     "mult": 1.00, "label": "price-led"},
+                 ]},
+                # Ad/promo discipline kicker (separate group):
+                {"kpi": "ad_promotion_pct", "direction": "lower_better",
+                 "correlation_group": "fnb_q_brand",
+                 "bands": [
+                     {"max": 0.08, "mult": 1.10, "label": "brand-gravity"},
+                     {"max": 0.12, "mult": 1.00, "label": "in-band"},
+                     {"max": 0.14, "mult": 0.95, "label": "elevated"},
+                     {"max": 99,   "mult": 0.90, "label": "buying-share"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: net_debt_to_ebitda — F&B carry meaningful leverage.
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 2.0,  "mult": 1.10, "label": "fortress-KO"},
+                {"max": 3.0,  "mult": 1.05, "label": "strong-PEP"},
+                {"max": 4.0,  "mult": 1.00, "label": "in-band-MDLZ"},
+                {"max": 5.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
+            # NEW v3.7 — split vol vs price per A4-impl
+            {
+                "key":             'volume_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['organic volume growth', 'volume contribution to revenue', 'unit volume YoY'],
+                "compute_hint":    'Organic volume growth YoY (decimal — the "Truth" metric per A4 spec)',
+                "clamp":           (-0.15, 0.25),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'price_mix_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['pricing contribution to revenue', 'price/mix impact', 'realised pricing'],
+                "compute_hint":    'Pricing/mix contribution YoY (decimal — the "Inflation" metric per A4 spec)',
+                "clamp":           (-0.10, 0.30),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            # Legacy combined KPI — kept for backward-compat with v3.6 schemas
             {
                 "key":             'volume_vs_price_mix',
-                "mandatory":       True,
+                "mandatory":       False,
                 "search_phrases":  ['organic volume growth', 'pricing contribution to revenue', 'price/mix impact'],
                 "clamp":           (-0.15, 0.25),
                 "source":          'W',
@@ -1855,11 +2061,21 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'ad_promotion_pct',
                 "mandatory":       True,
                 "search_phrases":  ['advertising and promotion as % of sales', 'A&P intensity', 'marketing spend ratio'],
-                "compute_hint":    'total_marketing_spend / total_revenue',
-                "clamp":           (0.02, 0.2),
+                "compute_hint":    'total_marketing_spend / total_revenue (decimal)',
+                "clamp":           (0.0, 0.30),
                 "source":          'H',
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "compute_hint":    'FMP-augmented',
+                "clamp":           (-3.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'input_cost_coverage',
@@ -1869,19 +2085,53 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Organic volume vs price mix reports', 'Commodity cost coverage disclosures', 'A&P spend'],
+        "source_priority": ['Organic volume vs price mix reports', 'A&P spend disclosures', 'Leverage'],
     },
 
     'Household / Personal': {
         "sector":         'Consumer',
-        "anchor_methods": ['P/E', 'EV/EBITDA', 'DCF'],
+        "anchor_methods": ['P/E (ops)', 'EV/EBITDA', 'DCF (FCF)'],
+        # V3 quality: organic_sales_growth + market_share_delta (correlated max-pick).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "organic_sales_growth", "direction": "higher_better",
+                 "correlation_group": "hp_q",
+                 "bands": [
+                     {"min":  0.05, "mult": 1.25, "label": "elite"},
+                     {"min":  0.03, "mult": 1.15, "label": "strong"},
+                     {"min":  0.01, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "market_share_delta", "direction": "higher_better",
+                 "correlation_group": "hp_q",
+                 "bands": [
+                     {"min":  0.005, "mult": 1.25, "label": "elite-share-gain"},
+                     {"min":  0.001, "mult": 1.15, "label": "strong-share-gain"},
+                     {"min":  0.0,   "mult": 1.00, "label": "in-band"},
+                     {"min": -99,    "mult": 0.85, "label": "share-loss"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: net_debt_to_ebitda — staples are bond proxies, more
+        # leverage tolerance than tech but less than utilities. Per A5 spec.
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5,  "mult": 1.10, "label": "fortress-CL"},
+                {"max": 2.5,  "mult": 1.05, "label": "strong-PG"},
+                {"max": 3.5,  "mult": 1.00, "label": "in-band-KMB"},
+                {"max": 4.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak-EL"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'organic_sales_growth',
                 "mandatory":       True,
                 "search_phrases":  ['organic revenue growth', 'underlying sales', 'sales growth ex-FX/M&A'],
-                "compute_hint":    '(revenue_ex_mna_fx / prior_revenue) - 1',
-                "clamp":           (-0.05, 0.15),
+                "compute_hint":    '(revenue_ex_mna_fx / prior_revenue) - 1 (decimal)',
+                "clamp":           (-0.10, 0.25),
                 "source":          'H',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -1890,11 +2140,21 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'market_share_delta',
                 "mandatory":       True,
                 "search_phrases":  ['market share gain/loss', 'share points change', 'category penetration delta'],
-                "compute_hint":    'current_share - prior_share',
-                "clamp":           (-0.03, 0.03),
+                "compute_hint":    'current_share - prior_share (decimal — +50bps elite, -bps share-loss)',
+                "clamp":           (-0.05, 0.05),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "compute_hint":    'FMP-augmented',
+                "clamp":           (-3.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'premium_segment_mix',
@@ -1922,13 +2182,49 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
     'Luxury Goods': {
         "sector":         'Consumer',
-        "anchor_methods": ['P/E Premium'],
+        "anchor_methods": ['P/E Premium', 'EV/EBITDA', 'DCF (FCF)', 'Brand Valuation'],
+        # V3 quality: ASP growth (the Hermès Pricing Standard) +
+        # brand_search_momentum_china kicker (Inventory Stuffing red flag).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "asp_growth_pct", "direction": "higher_better",
+                 "correlation_group": "luxury_q_primary",
+                 "bands": [
+                     {"min":  0.08, "mult": 1.30, "label": "elite-RMS"},
+                     {"min":  0.04, "mult": 1.15, "label": "strong-LVMH"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.80, "label": "weak-KER-discounting"},
+                 ]},
+                {"kpi": "brand_search_momentum_china", "direction": "higher_better",
+                 "correlation_group": "luxury_q_china_kicker",
+                 "bands": [
+                     {"min":  0.10, "mult": 1.10, "label": "demand-pull"},
+                     {"min":  0.0,  "mult": 1.05, "label": "healthy-interest"},
+                     {"min": -0.10, "mult": 1.00, "label": "stable"},
+                     {"min": -99,   "mult": 0.85, "label": "INVENTORY-STUFFING"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        # V3 risk: china_revenue_mix Goldilocks. Bands non-monotonic — ordered
+        # most-restrictive first so the iteration picks the right tier.
+        "risk_adjustment": {
+            "kpi": "china_revenue_mix", "direction": "higher_better",
+            "bands": [
+                {"min": 0.60, "mult": 0.85, "label": "concentration-risk"},
+                {"min": 0.41, "mult": 1.00, "label": "in-band"},
+                {"min": 0.25, "mult": 1.10, "label": "goldilocks"},
+                {"min": 0.15, "mult": 1.00, "label": "moderate"},
+                {"min": 0.0,  "mult": 0.95, "label": "neglected-china"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'asp_growth_pct',
                 "mandatory":       True,
                 "search_phrases":  ['average selling price growth', 'pricing power impact', 'ASP increase'],
-                "clamp":           (-0.05, 0.25),
+                "compute_hint":    'Year-over-year ASP growth (decimal — Hermès >8% elite)',
+                "clamp":           (-0.10, 0.30),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -1937,8 +2233,22 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'china_revenue_mix',
                 "mandatory":       True,
                 "search_phrases":  ['Greater China revenue share', 'exposure to Chinese consumer', 'China region sales %'],
-                "clamp":           (0.1, 0.5),
+                "compute_hint":    'Greater China revenue / total revenue (decimal — Goldilocks 25-40%)',
+                "clamp":           (0.0, 0.80),
                 "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'brand_search_momentum_china',
+                "mandatory":       True,
+                "search_phrases":  ['Baidu search trend', 'Tmall search rank', 'JD search volume',
+                                    'Chinese consumer brand interest', 'China brand momentum YoY'],
+                "compute_hint":    'YoY change in Baidu/Tmall/JD search index for the brand (decimal). '
+                                   'Critical: if revenue is up but search is collapsing, that\'s INVENTORY '
+                                   'STUFFING — the moat is dying.',
+                "clamp":           (-0.50, 1.0),
+                "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
@@ -1950,12 +2260,53 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['High-net-worth sentiment indices', 'Regional exposure mix (LVMH/Hermès reports)'],
+        "source_priority": ['ASP growth disclosures (LVMH/RMS reports)', 'China search momentum (Baidu/Tmall trends)', 'Regional revenue mix'],
     },
 
     'Membership / Subscription Retail': {
         "sector":         'Consumer',
-        "anchor_methods": ['P/E', 'DCF', 'FCF Yield'],
+        "anchor_methods": ['P/E (ops)', 'DCF (FCF)', 'FCF Yield', 'Subscription DCF'],
+        # V3 quality: renewal_rate_pct + fee_revenue_pct_ebitda — joint
+        # qualification per A7 spec ("Subscription Service with Warehouse
+        # Attached"). Separate correlation groups multiply (full magnitudes).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "renewal_rate_pct", "direction": "higher_better",
+                 "correlation_group": "membership_q_renewal",
+                 "bands": [
+                     {"min": 0.92,  "mult": 1.35, "label": "elite-COST"},
+                     {"min": 0.88,  "mult": 1.15, "label": "strong"},
+                     {"min": 0.85,  "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.80, "label": "weak"},
+                 ]},
+                {"kpi": "fee_revenue_pct_ebitda", "direction": "higher_better",
+                 "correlation_group": "membership_q_fee_share",
+                 "bands": [
+                     {"min": 0.50,  "mult": 1.35, "label": "elite-fee-engine"},
+                     {"min": 0.40,  "mult": 1.15, "label": "strong"},
+                     {"min": 0.30,  "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.80, "label": "weak-transactional"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: net_debt_to_ebitda + drag_when on membership_fee_growth_yoy
+        # ("Saturation Risk" — if fee growth <5%, the Inertia Moat is stalling).
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max":  0.0, "mult": 1.10, "label": "fortress-net-cash-COST"},
+                {"max":  1.5, "mult": 1.05, "label": "strong"},
+                {"max":  3.0, "mult": 1.00, "label": "in-band"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+            "drag_when": {
+                "kpi":    "membership_fee_growth_yoy",
+                "lt":     0.05,
+                "factor": 0.95,
+                "note":   "Saturation Risk: fee growth <5% — Inertia Moat stalling",
+            },
+        },
         "kpis": [
             {
                 "key":             'renewal_rate_pct',
@@ -1986,6 +2337,26 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             'membership_fee_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['membership fee growth', 'fee revenue growth', 'membership income YoY'],
+                "compute_hint":    'YoY growth in membership fee revenue (decimal — Saturation Risk drag if <5%)',
+                "clamp":           (-0.20, 0.50),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "compute_hint":    'FMP-augmented (negative = net cash, COST standard)',
+                "clamp":           (-3.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'mkt_penetration_per_region',
@@ -5132,18 +5503,19 @@ def _evaluate_band(kpi_value: float | None, cfg: dict) -> tuple[float, str] | No
 
 
 def _compute_derived_kpis(profile_name: str, metrics: dict | None) -> dict:
-    """Compute schema-defined derived KPIs (e.g. NNA Capture = NNA/AUM).
+    """Compute schema-defined derived KPIs.
 
     Walks SECTOR_KPI_FRAMEWORK[profile_name].derived_kpis and writes each
     computed value into the metrics dict. Returns the (in-place mutated)
     metrics dict for chaining. No-op when no derived_kpis defined or when
-    numerator/denominator missing/non-numeric/zero.
+    operands missing/non-numeric.
 
     Schema format:
         "derived_kpis": [
             {"key": "<output_kpi_name>",
              "numerator": "<existing_kpi_name>",
-             "denominator": "<existing_kpi_name>"},
+             "denominator": "<existing_kpi_name>",
+             "op": "divide" | "subtract" | "add"},   # default "divide"
         ],
     """
     if metrics is None:
@@ -5154,6 +5526,7 @@ def _compute_derived_kpis(profile_name: str, metrics: dict | None) -> dict:
         out_key = cfg.get("key")
         num_key = cfg.get("numerator")
         den_key = cfg.get("denominator")
+        op      = cfg.get("op", "divide")
         if not out_key or not num_key or not den_key:
             continue
         if out_key in metrics and metrics[out_key] is not None:
@@ -5165,9 +5538,14 @@ def _compute_derived_kpis(profile_name: str, metrics: dict | None) -> dict:
                 continue
             num_f = float(num)
             den_f = float(den)
-            if den_f == 0:
-                continue
-            metrics[out_key] = round(num_f / den_f, 6)
+            if op == "divide":
+                if den_f == 0:
+                    continue
+                metrics[out_key] = round(num_f / den_f, 6)
+            elif op == "subtract":
+                metrics[out_key] = round(num_f - den_f, 6)
+            elif op == "add":
+                metrics[out_key] = round(num_f + den_f, 6)
         except (TypeError, ValueError):
             continue
     return metrics
@@ -5227,6 +5605,64 @@ def _apply_risk_cap_when(ra: dict, metrics: dict, mult: float, note: str) -> tup
     )
 
 
+def _apply_drag_when(spec_block: dict, metrics: dict, mult: float, note: str) -> tuple[float, str]:
+    """Apply optional `drag_when` clause — multiplies mult by `factor` when
+    the gate KPI condition is true. Sibling to cap_when but does a
+    MULTIPLICATIVE drag rather than an upper cap.
+
+    Schema format:
+        "drag_when": {
+            "kpi":    "<gate_kpi>",
+            "lt":     <threshold>,    # supports lt/le/gt/ge
+            "factor": <0.0-1.0>,      # typically <1 (drag), can be >1 (boost)
+            "note":   "<reason>",
+        },
+
+    Used by Membership/Subscription Retail (A7) for the "Saturation Risk"
+    rule: if membership_fee_growth_yoy < 5% then risk *= 0.95.
+    """
+    drag = spec_block.get("drag_when")
+    if not isinstance(drag, dict):
+        return mult, note
+    gate_kpi = drag.get("kpi")
+    if not gate_kpi:
+        return mult, note
+    gate_value = metrics.get(gate_kpi) if isinstance(metrics, dict) else None
+    if gate_value is None:
+        return mult, note
+    try:
+        gv = float(gate_value)
+    except (TypeError, ValueError):
+        return mult, note
+    triggered = False
+    op_label = ""
+    threshold = None
+    for op, label in (("lt", "<"), ("le", "<="), ("gt", ">"), ("ge", ">=")):
+        if op in drag:
+            try:
+                threshold = float(drag[op])
+            except (TypeError, ValueError):
+                continue
+            if op == "lt" and gv <  threshold: triggered = True
+            if op == "le" and gv <= threshold: triggered = True
+            if op == "gt" and gv >  threshold: triggered = True
+            if op == "ge" and gv >= threshold: triggered = True
+            if triggered:
+                op_label = label
+                break
+    if not triggered:
+        return mult, note
+    factor = float(drag.get("factor", 1.0))
+    if factor == 1.0:
+        return mult, note
+    new_mult = mult * factor
+    drag_reason = drag.get("note", "drag_when triggered")
+    return (
+        new_mult,
+        f"{note} | DRAG x{factor:.2f} ({gate_kpi}={gv} {op_label} {threshold}: {drag_reason})",
+    )
+
+
 def _quality_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tuple[float, str]:
     """Operational excellence — best-in-class margins/growth/retention.
 
@@ -5249,10 +5685,12 @@ def _quality_multiplier(profile_name: str, sector: str, metrics: dict | None) ->
         z_tier_lookup = _z_tier_kicker  # late-bound; see import at module top
 
         from collections import defaultdict
-        grouped: dict[str, list[tuple[float, str]]] = defaultdict(list)
+        # picks: list of (mult, note); weights: list of kpi_weight (or None)
+        grouped: dict[str, list[tuple[float, str, float | None]]] = defaultdict(list)
         for cfg in qt.get("kpi_bands", []):
             kpi_name = cfg["kpi"]
             kpi_value = m.get(kpi_name)
+            kpi_w = cfg.get("kpi_weight")  # v3.7 — weighted-geometric blend
             z_entry = z_scores.get(kpi_name) if z_tier_lookup else None
             if z_entry and isinstance(z_entry, dict) and "z" in z_entry:
                 mult, label = z_tier_lookup(
@@ -5264,27 +5702,47 @@ def _quality_multiplier(profile_name: str, sector: str, metrics: dict | None) ->
                     f"{kpi_name}={kpi_value} z={z_val:+.2f} "
                     f"(n={cohort_n}, {label}) {mult:.2f}x"
                 )
-                grouped[cfg.get("correlation_group", "_indep")].append((mult, note))
+                grouped[cfg.get("correlation_group", "_indep")].append((mult, note, kpi_w))
                 continue
             result = _evaluate_band(kpi_value, cfg)
             if result is not None:
-                grouped[cfg.get("correlation_group", "_indep")].append(result)
+                grouped[cfg.get("correlation_group", "_indep")].append(
+                    (result[0], result[1], kpi_w)
+                )
         if not grouped:
             return (1.0, "no quality KPIs supplied")
-        # Each group contributes its max-deviation pick
+        # v3.7: each group contributes either:
+        #  - WEIGHTED-GEOMETRIC blend when ALL members have kpi_weight (e.g. F&B
+        #    Vol 0.6w + Price 0.4w → composite = Vol^0.6 × Price^0.4), OR
+        #  - MAX-DEVIATION pick (existing behavior — backward compatible)
         composite = 1.0
         notes: list[str] = []
         for group_id, picks in grouped.items():
-            best = max(picks, key=lambda x: abs(x[0] - 1.0))
-            composite *= best[0]
-            tag = f"[{group_id}] " if group_id != "_indep" else ""
-            notes.append(f"{tag}{best[1]}")
+            weights = [p[2] for p in picks]
+            if picks and all(w is not None for w in weights):
+                # Weighted-geometric — multiply each pick's mult^weight
+                grp_mult = 1.0
+                grp_notes: list[str] = []
+                for mult_v, n, w in picks:
+                    grp_mult *= mult_v ** float(w)
+                    grp_notes.append(f"{n} ^{w:.2f}w")
+                composite *= grp_mult
+                tag = f"[{group_id}] " if group_id != "_indep" else ""
+                notes.append(f"{tag}weighted: {' * '.join(grp_notes)} = {grp_mult:.3f}")
+            else:
+                # Max-deviation pick (existing behavior)
+                best = max(picks, key=lambda x: abs(x[0] - 1.0))
+                composite *= best[0]
+                tag = f"[{group_id}] " if group_id != "_indep" else ""
+                notes.append(f"{tag}{best[1]}")
         cap = qt.get("cap", [0.70, 1.50])
         composite = max(cap[0], min(cap[1], composite))
         # v3.4: cap_when on quality_tiers — symmetric to risk_adjustment.cap_when.
         # Used by Growth SaaS (magic_number < 0.4 caps quality at 1.00x —
         # the "burn-and-pray" override even when NRR / Rule of 40 are elite).
         composite, q_note = _apply_risk_cap_when(qt, m, composite, " * ".join(notes))
+        # v3.7: drag_when on quality_tiers (multiplicative drag, opt-in)
+        composite, q_note = _apply_drag_when(qt, m, composite, q_note)
         return (round(composite, 3), q_note)
 
     # ── Legacy hardcoded fallback (preserves existing tests) ────────────────
@@ -5375,12 +5833,14 @@ def _risk_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tu
                 f"(n={z_entry.get('cohort_size', 0)}, {label}) {mult:.2f}x"
             )
             mult, note = _apply_risk_cap_when(ra, m, mult, note)
+            mult, note = _apply_drag_when(ra, m, mult, note)
             return (round(mult, 3), note)
         result = _evaluate_band(kpi_value, ra)
         if result is not None:
             mult = max(0.70, min(1.20, result[0]))
             note = result[1]
             mult, note = _apply_risk_cap_when(ra, m, mult, note)
+            mult, note = _apply_drag_when(ra, m, mult, note)
             return (round(mult, 3), note)
         return (1.0, f"{ra['kpi']} not extracted")
     # ── Legacy hardcoded fallback ────────────────────────────────────────────
