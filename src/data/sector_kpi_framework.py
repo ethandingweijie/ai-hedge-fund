@@ -1673,13 +1673,68 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── Biopharma ──────────────────────────────────────────────────
     'CDMO / Life Science Tools': {
         "sector":         'Biopharma',
-        "anchor_methods": ['P/E', 'EV/EBITDA', 'DCF', 'FCF Yield'],
+        "anchor_methods": ['P/E (ops)', 'EV/EBITDA', 'DCF (FCF)', 'FCF Yield'],
+        # V3 quality: book_to_bill_ratio primary + utilization_rate_pct kicker
+        # (CDMO-heavy) + consumables_rev_pct kicker (toolmakers TMO/DHR/A).
+        # Both kickers in separate groups → multiply when both present.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "book_to_bill_ratio", "direction": "higher_better",
+                 "correlation_group": "cdmo_q_primary",
+                 "bands": [
+                     {"min": 1.10,  "mult": 1.30, "label": "elite"},
+                     {"min": 1.01,  "mult": 1.15, "label": "strong"},
+                     {"min": 0.95,  "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,   "mult": 0.85, "label": "weak"},
+                 ]},
+                {"kpi": "utilization_rate_pct", "direction": "higher_better",
+                 "correlation_group": "cdmo_q_util_kicker",
+                 "bands": [
+                     {"min": 0.85, "mult": 1.30, "label": "elite-util"},
+                     {"min": 0.75, "mult": 1.15, "label": "strong-util"},
+                     {"min": 0.65, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "weak-util"},
+                 ]},
+                # Toolmaker alternative kicker — recurring consumables/service rev
+                {"kpi": "consumables_rev_pct", "direction": "higher_better",
+                 "correlation_group": "cdmo_q_consumables_kicker",
+                 "bands": [
+                     {"min": 0.60, "mult": 1.10, "label": "razor-blade-moat"},
+                     {"min": 0.40, "mult": 1.05, "label": "strong-recurring"},
+                     {"min": 0.20, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.95, "label": "commodity-tools"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: net_debt_to_ebitda + Innovation Trap multi-gate drag.
+        # ILMN/Grail lesson: high R&D burn with no revenue traction = capital
+        # destruction. Multi-gate AND: rd_intensity >25% AND revenue_growth <5%
+        # → 0.90× drag.
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 2.0,  "mult": 1.10, "label": "fortress"},
+                {"max": 3.5,  "mult": 1.00, "label": "in-band"},
+                {"max": 5.0,  "mult": 0.92, "label": "stretched-post-MA"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+            "drag_when": {
+                "gates": [
+                    {"kpi": "rd_intensity_pct",   "gt": 0.25},
+                    {"kpi": "revenue_growth_pct", "lt": 0.05},
+                ],
+                "factor": 0.90,
+                "note":   "Innovation Trap: high R&D + low growth (ILMN/Grail lesson)",
+            },
+        },
         "kpis": [
             {
                 "key":             'book_to_bill_ratio',
                 "mandatory":       True,
                 "search_phrases":  ['book-to-bill ratio', 'net orders divided by revenue', 'order-to-shipment ratio'],
-                "clamp":           (0.7, 1.5),
+                "compute_hint":    'New orders / shipped revenue (>1.10 elite)',
+                "clamp":           (0.5, 2.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  False,
@@ -1688,30 +1743,107 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'backlog_usd',
                 "mandatory":       True,
                 "search_phrases":  ['total order backlog', 'contracted revenue backlog', 'closing backlog balance'],
-                "clamp":           (500000000, 50000000000),
+                "clamp":           (1e8, 1e11),
                 "source":          'W',
                 "extractor_only":  True,
             },
             {
                 "key":             'utilization_rate_pct',
-                "mandatory":       False,
-                "search_phrases":  ['capacity utilization', 'manufacturing utilization'],
+                "mandatory":       True,
+                "search_phrases":  ['capacity utilization', 'manufacturing utilization', 'plant utilization rate'],
+                "compute_hint":    'Capacity utilization (decimal — CDMO-heavy: WAT/ILMN style)',
+                "clamp":           (0.30, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'consumables_rev_pct',
+                "mandatory":       True,
+                "search_phrases":  ['consumables revenue', 'recurring service revenue', 'razor-blade revenue mix',
+                                    'consumables and service mix'],
+                "compute_hint":    'Recurring consumables + service revenue / total revenue (decimal — toolmaker moat)',
+                "clamp":           (0.0, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'rd_intensity_pct',
+                "mandatory":       True,
+                "search_phrases":  ['R&D intensity', 'research and development % of sales', 'R&D / revenue'],
+                "compute_hint":    'TTM R&D / TTM revenue (decimal — Innovation Trap gate at >25%)',
+                "clamp":           (0.0, 0.50),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'revenue_growth_pct',
+                "mandatory":       True,
+                "search_phrases":  ['revenue growth YoY', 'consolidated revenue growth'],
+                "compute_hint":    'TTM revenue growth (decimal — FMP-augmented)',
+                "clamp":           (-0.30, 0.80),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "clamp":           (-3.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
         ],
-        "source_priority": ['10-K / segment reporting', 'Book-to-bill announcements', 'Quarterly capacity utilization updates'],
+        "source_priority": ['10-K segment reporting', 'Book-to-bill announcements', 'Capacity utilization disclosures', 'Consumables revenue mix'],
     },
 
     'MedTech / Devices': {
         "sector":         'Biopharma',
-        "anchor_methods": ['EV/Revenue'],
+        "anchor_methods": ['EV/Revenue', 'P/E (ops)', 'EV/EBITDA', 'DCF (FCF)'],
+        # V3 quality: procedure_volume_growth_yoy primary (top-of-funnel
+        # demand) + new_product_sales_pct kicker (innovation engine — ISRG
+        # da Vinci, EW TAVR, BSX Watchman moat).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "procedure_volume_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "medtech_q_primary",
+                 "bands": [
+                     {"min":  0.10, "mult": 1.30, "label": "elite-ISRG"},
+                     {"min":  0.05, "mult": 1.15, "label": "strong"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "decel"},
+                 ]},
+                {"kpi": "new_product_sales_pct", "direction": "higher_better",
+                 "correlation_group": "medtech_q_innovation_kicker",
+                 "bands": [
+                     {"min": 0.30, "mult": 1.10, "label": "innovation-led"},
+                     {"min": 0.15, "mult": 1.05, "label": "strong-pipeline"},
+                     {"min": 0.0,  "mult": 1.00, "label": "legacy-heavy"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        # V3 risk: net_debt_to_ebitda
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5,  "mult": 1.10, "label": "fortress"},
+                {"max": 3.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 4.5,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'procedure_volume_growth_yoy',
                 "mandatory":       True,
                 "search_phrases":  ['procedure volume growth', 'surgical case volume', 'underlying utilization growth'],
-                "clamp":           (-0.15, 0.3),
+                "compute_hint":    'YoY procedure/surgical case volume growth (decimal — ISRG da Vinci style >10% elite)',
+                "clamp":           (-0.20, 0.40),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -1720,11 +1852,20 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'new_product_sales_pct',
                 "mandatory":       True,
                 "search_phrases":  ['vitality index', 'revenue from products launched in last 3 years', 'new product contribution'],
-                "compute_hint":    'new_product_revenue / total_revenue',
-                "clamp":           (0.05, 0.5),
+                "compute_hint":    'new_product_revenue / total_revenue (decimal — innovation engine, >30% elite)',
+                "clamp":           (0.0, 0.70),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "clamp":           (-3.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'market_share_pct',
@@ -1734,7 +1875,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['NPI (New Product Introduction) Vitality Index reports', 'Hospital capex budgets'],
+        "source_priority": ['NPI Vitality Index reports', 'Hospital capex budgets', 'Procedure volume disclosures'],
     },
 
 # ── Consumer ──────────────────────────────────────────────────
@@ -4299,14 +4440,47 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── Semiconductor ──────────────────────────────────────────────────
     'Equipment / EDA': {
         "sector":         'Semiconductor',
-        "anchor_methods": ['P/E', 'DCF', 'EV/EBITDA'],
+        "anchor_methods": ['P/E (ops)', 'DCF (FCF)', 'EV/EBITDA'],
+        # V3 quality: book_to_bill_ratio primary + service_revenue_pct kicker
+        # (the "razor-blade" recurring moat for ASML/AMAT/LRCX).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "book_to_bill_ratio", "direction": "higher_better",
+                 "correlation_group": "semi_eq_q_primary",
+                 "bands": [
+                     {"min": 1.20, "mult": 1.30, "label": "hyperscaler-cycle-elite"},
+                     {"min": 1.0,  "mult": 1.15, "label": "strong"},
+                     {"min": 0.85, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "cycle-trough"},
+                 ]},
+                {"kpi": "service_revenue_pct", "direction": "higher_better",
+                 "correlation_group": "semi_eq_q_service_kicker",
+                 "bands": [
+                     {"min": 0.35, "mult": 1.10, "label": "premium-installed-base"},
+                     {"min": 0.25, "mult": 1.05, "label": "in-band"},
+                     {"min": 0.0,  "mult": 1.00, "label": "transactional"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        # V3 risk: R&D intensity (higher_better — staying alive in semi cycle).
+        "risk_adjustment": {
+            "kpi": "rd_intensity_pct", "direction": "higher_better",
+            "bands": [
+                {"min": 0.18, "mult": 1.10, "label": "fortress-reinvest"},
+                {"min": 0.12, "mult": 1.05, "label": "strong"},
+                {"min": 0.08, "mult": 1.00, "label": "in-band"},
+                {"min": 0.07, "mult": 0.95, "label": "stretched"},
+                {"min": 0.0,  "mult": 0.80, "label": "weak-stagnation"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'book_to_bill_ratio',
                 "mandatory":       True,
                 "search_phrases":  ['book-to-bill ratio', 'net orders over shipments', 'order-to-bill'],
                 "compute_hint":    'total_new_orders / total_shipments',
-                "clamp":           (0.7, 1.6),
+                "clamp":           (0.5, 2.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  False,
@@ -4314,19 +4488,19 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'service_revenue_pct',
                 "mandatory":       True,
-                "search_phrases":  ['installed base services revenue', 'recurring service and parts mix'],
-                "compute_hint":    'total_service_revenue / total_revenue',
-                "clamp":           (0.15, 0.5),
+                "search_phrases":  ['installed base services revenue', 'recurring service and parts mix', 'service revenue %'],
+                "compute_hint":    'total_service_revenue / total_revenue (decimal — premium >35%)',
+                "clamp":           (0.0, 0.70),
                 "source":          'H',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
             {
                 "key":             'rd_intensity_pct',
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ['R&D as % of sales', 'research and development intensity'],
-                "compute_hint":    'total_RD_expense / total_revenue',
-                "clamp":           (0.05, 0.25),
+                "compute_hint":    'total_RD_expense / total_revenue (decimal — fortress >18%)',
+                "clamp":           (0.0, 0.40),
                 "source":          'F',
                 "extractor_only":  False,
                 "decimal_format":  True,
@@ -4342,19 +4516,52 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  False,
             },
         ],
-        "source_priority": ['Book-to-Bill Press Releases', 'Foundry Capex Guidance (TSMC / Intel)'],
+        "source_priority": ['Book-to-bill press releases', 'Service revenue mix disclosures', 'R&D intensity (10-K)'],
     },
 
     'OSAT / Packaging': {
         "sector":         'Semiconductor',
-        "anchor_methods": ['EV/EBITDA', 'P/E', 'P/BV', 'FCF Yield'],
+        "anchor_methods": ['EV/EBITDA', 'P/E (ops)', 'P/BV', 'FCF Yield'],
+        # V3 quality: advanced_packaging_revenue_pct primary (the AI-leverage
+        # differentiator vs commodity packaging) + wafer_test_utilization_pct
+        # kicker (cycle leverage).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "advanced_packaging_revenue_pct", "direction": "higher_better",
+                 "correlation_group": "osat_q_primary",
+                 "bands": [
+                     {"min": 0.50, "mult": 1.30, "label": "AI-leverage-elite"},
+                     {"min": 0.30, "mult": 1.15, "label": "strong"},
+                     {"min": 0.15, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "commodity"},
+                 ]},
+                {"kpi": "wafer_test_utilization_pct", "direction": "higher_better",
+                 "correlation_group": "osat_q_util_kicker",
+                 "bands": [
+                     {"min": 0.80, "mult": 1.10, "label": "elite-util"},
+                     {"min": 0.65, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "weak-util"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        # V3 risk: capital_intensity_pct (lower_better — OSAT is capex-heavy,
+        # lower = better cash conversion).
+        "risk_adjustment": {
+            "kpi": "capital_intensity_pct", "direction": "lower_better",
+            "bands": [
+                {"max": 0.15, "mult": 1.10, "label": "strong-cash-conversion"},
+                {"max": 0.25, "mult": 1.00, "label": "in-band"},
+                {"max": 0.99, "mult": 0.85, "label": "over-built"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'advanced_packaging_revenue_pct',
                 "mandatory":       True,
-                "search_phrases":  ['2.5D/3D packaging revenue share', 'CoWoS and advanced packaging mix', 'high-end packaging contribution'],
-                "compute_hint":    'advanced_packaging_revenue / total_revenue',
-                "clamp":           (0.05, 0.8),
+                "search_phrases":  ['2.5D/3D packaging revenue share', 'CoWoS and advanced packaging mix', 'high-end packaging contribution', 'AI packaging revenue %'],
+                "compute_hint":    'advanced_packaging_revenue / total_revenue (decimal — >50% AI-leverage elite)',
+                "clamp":           (0.0, 0.95),
                 "source":          'H',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -4363,21 +4570,24 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'wafer_test_utilization_pct',
                 "mandatory":       True,
                 "search_phrases":  ['test and assembly utilization rate', 'backend utilization', 'factory operating level'],
-                "compute_hint":    'actual_wafer_starts / total_wafer_capacity',
-                "clamp":           (0.4, 1.0),
+                "compute_hint":    'actual_wafer_starts / total_wafer_capacity (decimal)',
+                "clamp":           (0.30, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
             {
                 "key":             'capital_intensity_pct',
-                "mandatory":       False,
-                "search_phrases":  ['capex as % of revenue'],
+                "mandatory":       True,
+                "search_phrases":  ['capex as % of revenue', 'capital intensity', 'capex/sales ratio'],
+                "compute_hint":    'capex / TTM revenue (decimal — FMP-augmented; OSAT typically 15-30%)',
+                "clamp":           (0.0, 0.50),
                 "source":          'F',
                 "extractor_only":  False,
+                "decimal_format":  True,
             },
         ],
-        "source_priority": ['Advanced packaging revenue share (e.g. 2.5D/3D)', 'Wafer-test factory utilization', 'Capex-to-sales intensity'],
+        "source_priority": ['Advanced packaging revenue share (CoWoS / 2.5D / 3D)', 'Backend utilization disclosures', 'Capex-to-sales intensity'],
     },
 
 # ── Tech ──────────────────────────────────────────────────
@@ -5605,51 +5815,81 @@ def _apply_risk_cap_when(ra: dict, metrics: dict, mult: float, note: str) -> tup
     )
 
 
+def _evaluate_gate(gate: dict, metrics: dict) -> tuple[bool, str]:
+    """Evaluate a single gate (kpi + comparator + threshold). Returns
+    (triggered, evidence_string). Used by both single-gate and multi-gate
+    drag_when / cap_when forms."""
+    kpi = gate.get("kpi")
+    if not kpi:
+        return False, ""
+    val = metrics.get(kpi) if isinstance(metrics, dict) else None
+    if val is None:
+        return False, ""
+    try:
+        gv = float(val)
+    except (TypeError, ValueError):
+        return False, ""
+    for op, label in (("lt", "<"), ("le", "<="), ("gt", ">"), ("ge", ">=")):
+        if op in gate:
+            try:
+                threshold = float(gate[op])
+            except (TypeError, ValueError):
+                continue
+            triggered = (
+                (op == "lt" and gv <  threshold) or
+                (op == "le" and gv <= threshold) or
+                (op == "gt" and gv >  threshold) or
+                (op == "ge" and gv >= threshold)
+            )
+            if triggered:
+                return True, f"{kpi}={gv} {label} {threshold}"
+            return False, ""
+    return False, ""
+
+
 def _apply_drag_when(spec_block: dict, metrics: dict, mult: float, note: str) -> tuple[float, str]:
     """Apply optional `drag_when` clause — multiplies mult by `factor` when
-    the gate KPI condition is true. Sibling to cap_when but does a
+    the gate condition(s) are true. Sibling to cap_when but does a
     MULTIPLICATIVE drag rather than an upper cap.
 
-    Schema format:
-        "drag_when": {
-            "kpi":    "<gate_kpi>",
-            "lt":     <threshold>,    # supports lt/le/gt/ge
-            "factor": <0.0-1.0>,      # typically <1 (drag), can be >1 (boost)
-            "note":   "<reason>",
-        },
+    Schema formats (both supported):
+      Single-gate (v3.7):
+        "drag_when": {"kpi": "X", "lt": 0.05, "factor": 0.95, "note": "..."}
 
-    Used by Membership/Subscription Retail (A7) for the "Saturation Risk"
-    rule: if membership_fee_growth_yoy < 5% then risk *= 0.95.
+      Multi-gate AND (v3.8 — Innovation Trap pattern):
+        "drag_when": {
+            "gates": [
+                {"kpi": "rd_intensity_pct",  "gt": 0.25},
+                {"kpi": "revenue_growth_pct","lt": 0.05},
+            ],
+            "factor": 0.90,
+            "note":   "Innovation Trap (CDMO ILMN/Grail lesson)",
+        }
     """
     drag = spec_block.get("drag_when")
     if not isinstance(drag, dict):
         return mult, note
-    gate_kpi = drag.get("kpi")
-    if not gate_kpi:
-        return mult, note
-    gate_value = metrics.get(gate_kpi) if isinstance(metrics, dict) else None
-    if gate_value is None:
-        return mult, note
-    try:
-        gv = float(gate_value)
-    except (TypeError, ValueError):
-        return mult, note
-    triggered = False
-    op_label = ""
-    threshold = None
-    for op, label in (("lt", "<"), ("le", "<="), ("gt", ">"), ("ge", ">=")):
-        if op in drag:
-            try:
-                threshold = float(drag[op])
-            except (TypeError, ValueError):
-                continue
-            if op == "lt" and gv <  threshold: triggered = True
-            if op == "le" and gv <= threshold: triggered = True
-            if op == "gt" and gv >  threshold: triggered = True
-            if op == "ge" and gv >= threshold: triggered = True
-            if triggered:
-                op_label = label
-                break
+
+    # Multi-gate AND form
+    if "gates" in drag and isinstance(drag["gates"], list):
+        evidences: list[str] = []
+        for gate in drag["gates"]:
+            triggered, ev = _evaluate_gate(gate, metrics)
+            if not triggered:
+                return mult, note  # AND semantics — any miss aborts
+            evidences.append(ev)
+        factor = float(drag.get("factor", 1.0))
+        if factor == 1.0:
+            return mult, note
+        new_mult = mult * factor
+        drag_reason = drag.get("note", "multi-gate drag_when triggered")
+        return (
+            new_mult,
+            f"{note} | DRAG x{factor:.2f} ({' AND '.join(evidences)}: {drag_reason})",
+        )
+
+    # Single-gate form (legacy v3.7)
+    triggered, ev = _evaluate_gate(drag, metrics)
     if not triggered:
         return mult, note
     factor = float(drag.get("factor", 1.0))
@@ -5659,7 +5899,7 @@ def _apply_drag_when(spec_block: dict, metrics: dict, mult: float, note: str) ->
     drag_reason = drag.get("note", "drag_when triggered")
     return (
         new_mult,
-        f"{note} | DRAG x{factor:.2f} ({gate_kpi}={gv} {op_label} {threshold}: {drag_reason})",
+        f"{note} | DRAG x{factor:.2f} ({ev}: {drag_reason})",
     )
 
 
