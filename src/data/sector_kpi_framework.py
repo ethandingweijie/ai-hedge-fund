@@ -4696,72 +4696,92 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── Materials ──────────────────────────────────────────────────
     'Specialty Chemicals': {
         "sector":         'Materials',
-        "anchor_methods": ['EV/EBITDA', 'P/E', 'FCF Yield', 'ROIC'],
+        "anchor_methods": ['EV/EBITDA', 'P/E (ops)', 'FCF Yield', 'ROIC vs WACC'],
+        # V3 quality: volume_growth_yoy primary (cyclical demand signal) +
+        # pricing_power_pct kicker (price realization).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "volume_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "specchem_q_primary",
+                 "bands": [
+                     {"min":  0.05, "mult": 1.20, "label": "strong-cycle"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "destocking-weak"},
+                 ]},
+                {"kpi": "pricing_power_pct", "direction": "higher_better",
+                 "correlation_group": "specchem_q_kicker",
+                 "bands": [
+                     {"min":  0.04, "mult": 1.10, "label": "premium-pricing"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.90, "label": "capitulation"},
+                 ]},
+            ],
+            "cap": [0.70, 1.35],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 2.0,  "mult": 1.10, "label": "fortress"},
+                {"max": 3.5,  "mult": 1.00, "label": "in-band"},
+                {"max": 5.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.80, "label": "weak"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'specialty_mix_pct',
-                "mandatory":       True,
-                "search_phrases":  ['revenue mix from specialty vs commodity', 'high-value product contribution', 'specialty chemical segment revenue'],
-                "compute_hint":    'specialty_segment_revenue / total_revenue',
-                "clamp":           (0.1, 1.0),
-                "source":          'H',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'rd_intensity_pct',
-                "mandatory":       True,
-                "search_phrases":  ['R&D as percentage of sales', 'research and development intensity', 'innovation spend'],
-                "compute_hint":    'total_rd_expense / total_revenue',
-                "clamp":           (0.01, 0.15),
-                "source":          'F',
-                "extractor_only":  False,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'raw_material_pass_through_pct',
-                "mandatory":       False,
-                "search_phrases":  ['pricing surcharge effectiveness', 'input cost recovery rate'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
+            {"key": 'volume_growth_yoy',     "mandatory": True, "search_phrases": ['volume growth YoY','organic volume growth','shipment volume change'], "compute_hint": 'YoY volume growth (decimal)', "clamp": (-0.30, 0.30), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'pricing_power_pct',     "mandatory": True, "search_phrases": ['pricing realization','price/mix contribution','price growth YoY'], "compute_hint": 'YoY pricing contribution to revenue (decimal)', "clamp": (-0.15, 0.30), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'specialty_mix_pct',     "mandatory": True, "search_phrases": ['revenue mix from specialty vs commodity','high-value product contribution'], "compute_hint": 'specialty/total revenue (decimal)', "clamp": (0.0, 1.0), "source": 'H', "extractor_only": True, "decimal_format": True},
+            {"key": 'rd_intensity_pct',      "mandatory": True, "search_phrases": ['R&D % of sales','innovation spend'], "clamp": (0.0, 0.15), "source": 'F', "extractor_only": False, "decimal_format": True},
+            {"key": 'net_debt_to_ebitda',    "mandatory": True, "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 8.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
+            {"key": 'raw_material_pass_through_pct', "mandatory": False, "search_phrases": ['pricing surcharge effectiveness','input cost recovery rate'], "source": 'W', "extractor_only": True},
         ],
-        "source_priority": ['Segmented sales (specialty vs commodity)', 'R&D intensity-to-sales', 'Raw material pass-through effectiveness'],
+        "source_priority": ['Volume / pricing contribution', 'Specialty mix', 'Leverage'],
     },
 
     'Steel / Metals': {
         "sector":         'Materials',
-        "anchor_methods": ['EV/EBITDA', 'P/BV', 'FCF Yield', 'P/E'],
+        "anchor_methods": ['EV/EBITDA', 'P/BV', 'FCF Yield', 'P/E (ops)'],
+        # V3 quality: price_yoy_growth primary (relative measure — works
+        # across steel/aluminum/iron-ore without sub-type bands) +
+        # capacity_utilization_pct kicker.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "price_yoy_growth", "direction": "higher_better",
+                 "correlation_group": "steel_q_primary",
+                 "bands": [
+                     {"min":  0.10, "mult": 1.30, "label": "strong-pricing-cycle"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -0.10, "mult": 0.90, "label": "soft-cycle"},
+                     {"min": -99,   "mult": 0.80, "label": "deep-trough"},
+                 ]},
+                {"kpi": "capacity_utilization_pct", "direction": "higher_better",
+                 "correlation_group": "steel_q_kicker",
+                 "bands": [
+                     {"min": 0.85, "mult": 1.10, "label": "strong-cycle"},
+                     {"min": 0.75, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "weak-cycle"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: net_debt_to_ebitda — steel cycles can wipe out 2-3x leverage in trough.
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5,  "mult": 1.10, "label": "fortress-trough-survivor"},
+                {"max": 2.5,  "mult": 1.00, "label": "in-band"},
+                {"max": 3.5,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.75, "label": "weak-trough-bankruptcy-risk"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'capacity_utilization_pct',
-                "mandatory":       True,
-                "search_phrases":  ['steel mill utilization rate', 'capacity utilization', 'plant operating rate'],
-                "compute_hint":    'actual_production / nameplate_capacity',
-                "clamp":           (0.5, 1.05),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'cost_per_tonne_usd',
-                "mandatory":       True,
-                "search_phrases":  ['cash cost of production per tonne', 'all-in sustaining cost per tonne', 'AISC steel'],
-                "compute_hint":    '(COGS + sustaining_capex) / total_tonnes_shipped',
-                "clamp":           (300, 1200),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  False,
-            },
-            {
-                "key":             'green_steel_mix_pct',
-                "mandatory":       False,
-                "search_phrases":  ['low-carbon steel production', 'EAF vs Blast Furnace mix'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
+            {"key": 'price_yoy_growth',         "mandatory": True, "search_phrases": ['realized price YoY','price per ton growth','spot price change YoY','metal price growth'], "compute_hint": 'YoY change in realized price per unit (decimal — works across steel/Al/iron-ore)', "clamp": (-0.50, 1.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'capacity_utilization_pct', "mandatory": True, "search_phrases": ['steel mill utilization rate','capacity utilization','plant operating rate'], "compute_hint": 'actual_production/nameplate_capacity (decimal)', "clamp": (0.40, 1.05), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'cost_per_tonne_usd',       "mandatory": True, "search_phrases": ['cash cost of production per tonne','AISC steel','cost per ton'], "compute_hint": '(COGS+sustaining_capex)/total_tonnes', "clamp": (200, 2500), "source": 'W', "extractor_only": True},
+            {"key": 'net_debt_to_ebitda',       "mandatory": True, "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 12.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
+            {"key": 'green_steel_mix_pct',      "mandatory": False, "search_phrases": ['low-carbon steel production','EAF vs Blast Furnace mix'], "source": 'W', "extractor_only": True},
         ],
-        "source_priority": ['Mill / capacity utilization rates', 'AISC (All-in Sustaining Cost) per tonne', 'Green-steel mix disclosures'],
+        "source_priority": ['Realized price disclosures', 'Mill utilization rates', 'AISC per tonne', 'Leverage'],
     },
 
 # ── ProfessionalServices ──────────────────────────────────────────────────
@@ -5491,83 +5511,89 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     'Airlines': {
         "sector":         'Transportation',
         "anchor_methods": ['EV/EBITDAR', 'FCF Yield', 'P/BV'],
+        # V3 quality: casm_ex_fuel primary (cost discipline) + load_factor_pct kicker.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "casm_ex_fuel", "direction": "lower_better",
+                 "correlation_group": "airline_q_primary",
+                 "bands": [
+                     {"max": 0.10, "mult": 1.30, "label": "elite-Spirit-Frontier-low-cost"},
+                     {"max": 0.12, "mult": 1.15, "label": "strong"},
+                     {"max": 0.13, "mult": 1.00, "label": "in-band"},
+                     {"max": 99,   "mult": 0.85, "label": "bloated-legacy-hubs"},
+                 ]},
+                {"kpi": "load_factor_pct", "direction": "higher_better",
+                 "correlation_group": "airline_q_kicker",
+                 "bands": [
+                     {"min": 0.85, "mult": 1.10, "label": "strong-yield-mgmt"},
+                     {"min": 0.80, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "weak"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: net_debt_to_ebitda — airlines have BANKRUPTCY HISTORY,
+        # leverage gates are tight (LUV historical fortress at <2x).
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 2.0,  "mult": 1.10, "label": "fortress-LUV-historical"},
+                {"max": 3.5,  "mult": 1.00, "label": "in-band"},
+                {"max": 5.0,  "mult": 0.90, "label": "stretched"},
+                {"max": 99,   "mult": 0.70, "label": "weak-bankruptcy-risk"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'casm_ex_fuel',
-                "mandatory":       True,
-                "search_phrases":  ['cost per available seat mile ex-fuel', 'unit cost ex-fuel', 'CASM-ex'],
-                "compute_hint":    'operating_exp_ex_fuel / available_seat_miles',
-                "clamp":           (0.08, 0.28),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  False,
-            },
-            {
-                "key":             'load_factor_pct',
-                "mandatory":       True,
-                "search_phrases":  ['passenger load factor', 'occupancy rate', 'percentage of seats filled'],
-                "compute_hint":    'revenue_passenger_miles / available_seat_miles',
-                "clamp":           (0.65, 0.95),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'yield_per_pax_mile',
-                "mandatory":       False,
-                "search_phrases":  ['passenger yield', 'average fare per mile', 'yield per RPM'],
-                "compute_hint":    'passenger_revenue / revenue_passenger_miles',
-                "clamp":           (0.1, 0.45),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  False,
-            },
-            {
-                "key":             'prasm_yoy',
-                "mandatory":       False,
-                "search_phrases":  ['Passenger Revenue per Available Seat Mile growth', 'PRASM change'],
-                "compute_hint":    '(current_PRASM / prior_PRASM) - 1',
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
+            {"key": 'casm_ex_fuel',     "mandatory": True, "search_phrases": ['cost per available seat mile ex-fuel','unit cost ex-fuel','CASM-ex'], "compute_hint": 'operating_exp_ex_fuel/ASM (cents per ASM)', "clamp": (0.05, 0.30), "source": 'W', "extractor_only": True, "decimal_format": False},
+            {"key": 'load_factor_pct',  "mandatory": True, "search_phrases": ['passenger load factor','occupancy rate','percentage of seats filled'], "compute_hint": 'RPM/ASM (decimal)', "clamp": (0.50, 1.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'net_debt_to_ebitda', "mandatory": True, "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 12.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
+            {"key": 'yield_per_pax_mile', "mandatory": False, "search_phrases": ['passenger yield','average fare per mile','yield per RPM'], "clamp": (0.05, 0.50), "source": 'W', "extractor_only": True},
+            {"key": 'prasm_yoy',          "mandatory": False, "search_phrases": ['PRASM growth','Passenger Revenue per ASM YoY'], "clamp": (-0.30, 0.40), "source": 'W', "extractor_only": True, "decimal_format": True},
         ],
-        "source_priority": ['Monthly Operating Statistics', '10-K Fleet Schedules'],
+        "source_priority": ['Monthly operating statistics', 'CASM-ex schedules', '10-K fleet schedules', 'Leverage'],
     },
 
     'Rail / Logistics': {
         "sector":         'Transportation',
-        "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'P/E'],
+        "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'P/E (ops)'],
+        # V3 quality: operating_ratio_pct primary (THE rail efficiency anchor —
+        # CSX/NSC precision-railroading <60% elite) + revenue_ton_miles_growth kicker.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "operating_ratio_pct", "direction": "lower_better",
+                 "correlation_group": "rail_q_primary",
+                 "bands": [
+                     {"max": 0.60, "mult": 1.30, "label": "elite-precision-railroading-CSX-NSC"},
+                     {"max": 0.65, "mult": 1.15, "label": "strong"},
+                     {"max": 0.70, "mult": 1.00, "label": "in-band"},
+                     {"max": 99,   "mult": 0.85, "label": "weak-bloated"},
+                 ]},
+                {"kpi": "revenue_ton_miles_growth", "direction": "higher_better",
+                 "correlation_group": "rail_q_kicker",
+                 "bands": [
+                     {"min":  0.05, "mult": 1.10, "label": "strong-cycle"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "recession-signal"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 2.5,  "mult": 1.10, "label": "fortress"},
+                {"max": 4.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 4.5,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'operating_ratio_pct',
-                "mandatory":       True,
-                "search_phrases":  ['railroad operating ratio', 'operating expenses divided by revenue', 'efficiency ratio'],
-                "compute_hint":    'total_operating_expenses / total_revenue',
-                "clamp":           (0.5, 0.95),
-                "source":          'F',
-                "extractor_only":  False,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'revenue_ton_miles_growth',
-                "mandatory":       True,
-                "search_phrases":  ['RTM growth', 'revenue ton miles YOY', 'freight volume growth'],
-                "compute_hint":    '(current_rtm / prior_rtm) - 1',
-                "clamp":           (-0.15, 0.2),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'fuel_efficiency_delta',
-                "mandatory":       False,
-                "search_phrases":  ['fuel consumption per ton-mile'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
+            {"key": 'operating_ratio_pct',  "mandatory": True, "search_phrases": ['railroad operating ratio','operating expenses divided by revenue','efficiency ratio'], "compute_hint": 'total_opex/total_revenue (decimal — <60% elite precision-railroading)', "clamp": (0.40, 1.0), "source": 'F', "extractor_only": False, "decimal_format": True},
+            {"key": 'revenue_ton_miles_growth', "mandatory": True, "search_phrases": ['RTM growth','revenue ton miles YOY','freight volume growth'], "compute_hint": '(current_rtm/prior_rtm)-1 (decimal)', "clamp": (-0.30, 0.30), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'net_debt_to_ebitda',   "mandatory": True, "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 8.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
+            {"key": 'fuel_efficiency_delta', "mandatory": False, "search_phrases": ['fuel consumption per ton-mile'], "source": 'W', "extractor_only": True},
         ],
-        "source_priority": ['Operating Ratio (OR)', 'Revenue Ton Miles (RTM) growth', 'Fuel efficiency delta reports'],
+        "source_priority": ['Operating ratio disclosures', 'RTM growth', 'Leverage'],
     },
 
 }
