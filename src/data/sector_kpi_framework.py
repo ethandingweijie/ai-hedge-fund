@@ -350,13 +350,50 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     # ── PR #3: REIT (single profile, sub-types via separate _REIT_SUBTYPE_MULTIPLES) ──
     "REIT": {
         "sector":         "REIT",
-        "anchor_methods": ["NAV (Cap Rates)", "P/FFO", "P/AFFO"],
+        "anchor_methods": ["NAV (Cap Rates)", "P/FFO", "P/AFFO", "DDM"],
+        # V3 quality tiers — same-store NOI growth is THE operating signal
+        # for REITs (works across self-storage, residential, retail, industrial,
+        # data center). Cap rate compression is a secondary lift but mainly
+        # market-driven, not operator-driven, so we lead on SS-NOI.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "same_store_noi_growth_pct", "direction": "higher_better",
+                 "bands": [
+                     {"min":  0.05, "mult": 1.30, "label": "elite"},
+                     {"min":  0.03, "mult": 1.15, "label": "strong"},
+                     {"min":  0.01, "mult": 1.00, "label": "in-band"},
+                     {"min":  0.0,  "mult": 0.95, "label": "flat"},
+                     {"min": -0.99, "mult": 0.85, "label": "declining"},
+                 ]},
+                {"kpi": "occupancy_rate", "direction": "higher_better", "correlation_group": "reit_q",
+                 "bands": [
+                     {"min": 0.95, "mult": 1.15, "label": "elite"},
+                     {"min": 0.90, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.80, "mult": 0.95, "label": "soft"},
+                     {"min": 0.0,  "mult": 0.85, "label": "weak"},
+                 ]},
+            ],
+            "cap": [0.75, 1.45],
+        },
+        # V3 risk adjustment — leverage_ratio is the universal REIT risk gate
+        # (works for both S-REIT aggregate-leverage and US-REIT debt-to-assets
+        # framing once normalised by extractor).
+        "risk_adjustment": {
+            "kpi": "leverage_ratio", "direction": "lower_better",
+            "bands": [
+                {"max": 0.30, "mult": 1.10, "label": "fortress"},
+                {"max": 0.40, "mult": 1.00, "label": "in-band"},
+                {"max": 0.50, "mult": 0.92, "label": "stretched"},
+                {"max": 0.99, "mult": 0.80, "label": "over-levered"},
+            ],
+        },
         "kpis": [
             {
                 "key":             "cap_rate_market",
                 "mandatory":       True,
-                "search_phrases":  ["cap rate", "implied cap rate", "CBRE/JLL appraisal"],
-                "compute_hint":    "Portfolio weighted-avg cap rate",
+                "search_phrases":  ["cap rate", "implied cap rate", "CBRE/JLL appraisal",
+                                    "stabilised cap rate", "implied stabilized yield"],
+                "compute_hint":    "Portfolio weighted-avg cap rate (US-REIT: implied cap rate from EV/NOI also acceptable)",
                 "clamp":           (0.02, 0.20),
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -365,8 +402,8 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             "occupancy_rate",
                 "mandatory":       True,
-                "search_phrases":  ["occupancy"],
-                "compute_hint":    "Portfolio-weighted occupancy",
+                "search_phrases":  ["occupancy", "same-store occupancy", "portfolio occupancy"],
+                "compute_hint":    "Portfolio-weighted occupancy (US-REIT: same-store occupancy if portfolio-wide not disclosed)",
                 "clamp":           (0.3, 1.0),
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -409,6 +446,40 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             # The legacy extractor validates them with bespoke logic; framework
             # extraction returns {} for non-numeric clamps (subtype_mix /
             # geographic_mix continue to require legacy extraction until Stage B).
+
+            # ── US-REIT vocabulary additions (Fix B v3.2) ─────────────────
+            # These rows were added so PSA / EXR / SPG / AMT / O / DLR can
+            # populate the framework_metrics bucket with the metrics US-REITs
+            # actually disclose (versus S-REIT-shaped DPU-in-cents schema).
+            # Same-store NOI growth is the V3 quality_tiers anchor; dps_usd /
+            # core_ffo_per_share are the cash-earnings cross-checks.
+            {
+                "key":             "same_store_noi_growth_pct",
+                "mandatory":       True,
+                "search_phrases":  ["same-store NOI growth", "same-store NOI", "SS NOI",
+                                    "same-store revenue growth"],
+                "compute_hint":    "TTM same-store NOI growth (decimal — 0.04 = 4%). Negative = declining.",
+                "clamp":           (-0.20, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "dps_usd",
+                "mandatory":       False,
+                "search_phrases":  ["annualized dividend", "annual DPS", "quarterly dividend",
+                                    "dividend per share"],
+                "compute_hint":    "Annualised dividend per share (USD). Quarterly DPS × 4 if needed.",
+                "clamp":           (0.01, 100.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "core_ffo_per_share",
+                "mandatory":       False,
+                "search_phrases":  ["Core FFO per share", "AFFO per share", "FFO per share"],
+                "compute_hint":    "Annualised Core FFO / AFFO / FFO per share (whichever the REIT cites primarily)",
+                "clamp":           (0.10, 50.0),
+                "extractor_only":  True,
+            },
         ],
         "source_priority": [
             "Annual report valuation table",
@@ -1116,6 +1187,178 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         ],
     },
 
+    # ── Tech: Hyperscaler / Tech Conglomerate (MSFT, AMZN, GOOGL, AAPL, META) ──
+    # Mega-cap tech umbrella per catalog — covers the 5 biggest names regardless
+    # of whether their anchor is cloud (MSFT/AMZN/GOOGL), ads (META/GOOGL), or
+    # devices+services (AAPL). Schema uses GENERALIST KPIs that all 5 disclose
+    # consolidated — revenue growth, operating margin, capex intensity. Cloud-
+    # and AI-specific KPIs are optional; they fire as a kicker for tickers that
+    # disclose them but don't gate the schema for those that don't.
+    "Hyperscaler / Tech Conglomerate": {
+        "sector":         "Tech",
+        "anchor_methods": ["EV/EBITDA", "P/E (ops)", "DCF (FCF)", "FCF Yield"],
+        # V3 quality tiers — universal: revenue growth + operating margin both
+        # disclosed by all 5 tickers. Correlated as megacap_q (max-deviation
+        # pick) so a single elite signal lifts; multiple elites don't double-
+        # count. Mature mega-cap thresholds: 20% growth = AI-accelerating
+        # (META FY24, MSFT Cloud), 12% = strong, 7% = in-band, <3% = decel.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "revenue_growth_pct", "direction": "higher_better", "correlation_group": "megacap_q",
+                 "bands": [
+                     {"min": 0.20, "mult": 1.30, "label": "AI-accelerating"},
+                     {"min": 0.12, "mult": 1.15, "label": "strong"},
+                     {"min": 0.07, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.03, "mult": 0.95, "label": "mature"},
+                     {"min": -0.99, "mult": 0.85, "label": "decel"},
+                 ]},
+                {"kpi": "operating_margin_pct", "direction": "higher_better", "correlation_group": "megacap_q",
+                 "bands": [
+                     {"min": 0.35, "mult": 1.20, "label": "elite"},
+                     {"min": 0.25, "mult": 1.10, "label": "strong"},
+                     {"min": 0.18, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.10, "mult": 0.95, "label": "compressed"},
+                     {"min": -0.99, "mult": 0.85, "label": "weak"},
+                 ]},
+                # Cloud-specific KPI — only kicks in when extracted (MSFT/AMZN/
+                # GOOGL disclose; AAPL/META don't). Treated as separate group
+                # so it ADDS to the base megacap_q signal when present.
+                {"kpi": "cloud_revenue_growth_pct", "direction": "higher_better", "correlation_group": "cloud_q",
+                 "bands": [
+                     {"min": 0.30, "mult": 1.20, "label": "AI-hyperscale"},
+                     {"min": 0.20, "mult": 1.10, "label": "elite"},
+                     {"min": 0.10, "mult": 1.00, "label": "in-band"},
+                     {"min": -0.99, "mult": 0.92, "label": "decel"},
+                 ]},
+            ],
+            "cap": [0.75, 1.50],
+        },
+        # V3 risk adjustment — capex intensity flags the AI capex digestion
+        # risk. Above 30% capex/rev signals overbuild risk (META 2022 lesson:
+        # 35%+ capex without commensurate ROIC = -65% drawdown). Applies
+        # universally to all 5 tickers.
+        "risk_adjustment": {
+            "kpi": "capex_intensity_pct", "direction": "lower_better",
+            "bands": [
+                {"max": 0.10, "mult": 1.10, "label": "conservative"},
+                {"max": 0.20, "mult": 1.00, "label": "in-band"},
+                {"max": 0.30, "mult": 0.92, "label": "aggressive"},
+                {"max": 0.99, "mult": 0.80, "label": "over-extended"},
+            ],
+        },
+        "kpis": [
+            # ── Universal mandatory KPIs (all 5 tickers disclose) ──────────
+            {
+                "key":             "revenue_growth_pct",
+                "mandatory":       True,
+                "search_phrases":  ["consolidated revenue growth", "revenue grew",
+                                    "total revenue YoY", "TTM revenue growth"],
+                "compute_hint":    "Consolidated revenue growth YoY (decimal — 0.13 = 13%)",
+                "clamp":           (-0.30, 0.80),
+                "source":          "W",
+                "extractor_only":  False,
+                "decimal_format":  True,
+                "fallback":        "compute from FMP TTM revenue / prior TTM revenue",
+            },
+            {
+                "key":             "operating_margin_pct",
+                "mandatory":       True,
+                "search_phrases":  ["operating margin", "GAAP operating income",
+                                    "consolidated operating margin"],
+                "compute_hint":    "GAAP operating income / total revenue (decimal)",
+                "clamp":           (-0.20, 0.55),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "operatingProfitMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "capex_intensity_pct",
+                "mandatory":       True,
+                "search_phrases":  ["capex / revenue", "capital intensity",
+                                    "infrastructure capex", "AI capex commitments"],
+                "compute_hint":    "Capex / TTM revenue (FMP-derivable + earnings-call cross-check)",
+                "clamp":           (0.01, 0.50),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "capexToRevenueTTM",
+                "decimal_format":  True,
+            },
+            # ── Cloud-specific (MSFT/AMZN/GOOGL only — optional kicker) ────
+            {
+                "key":             "cloud_revenue_growth_pct",
+                "mandatory":       False,
+                "search_phrases":  ["Azure revenue growth", "AWS revenue growth", "GCP revenue growth",
+                                    "Intelligent Cloud growth", "cloud segment revenue YoY"],
+                "compute_hint":    "Cloud / hyperscale segment revenue growth YoY (decimal)",
+                "clamp":           (-0.20, 1.00),
+                "source":          "W",
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "cloud_operating_margin_pct",
+                "mandatory":       False,
+                "search_phrases":  ["cloud segment operating margin", "Intelligent Cloud margin",
+                                    "AWS operating income margin"],
+                "compute_hint":    "Cloud segment operating income / segment revenue (decimal)",
+                "clamp":           (-0.20, 0.60),
+                "source":          "W",
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "ai_revenue_run_rate_usd_b",
+                "mandatory":       False,
+                "search_phrases":  ["AI revenue run-rate", "AI annualized revenue",
+                                    "Copilot revenue", "Bedrock revenue"],
+                "compute_hint":    "Latest disclosed AI-attributable run-rate revenue ($B)",
+                "clamp":           (0.0, 200.0),
+                "source":          "W",
+                "extractor_only":  True,
+            },
+            # ── Mature-tech specific (AAPL/META — optional context) ────────
+            {
+                "key":             "services_revenue_pct",
+                "mandatory":       False,
+                "search_phrases":  ["Services revenue", "Services segment", "Family of Apps revenue"],
+                "compute_hint":    "Services / Family-of-Apps revenue as % of total (decimal)",
+                "clamp":           (0.0, 0.60),
+                "source":          "W",
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "fcf_margin_pct",
+                "mandatory":       False,
+                "search_phrases":  ["FCF margin", "free cash flow margin"],
+                "compute_hint":    "TTM FCF / TTM revenue (decimal — FMP-derivable)",
+                "clamp":           (-0.20, 0.55),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "freeCashFlowMarginTTM",
+                "decimal_format":  True,
+            },
+            # ── Risk fallback ──────────────────────────────────────────────
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       False,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — augmented from FMP",
+                "clamp":           (-3.0, 6.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
+        ],
+        "source_priority": [
+            "10-K / 10-Q consolidated income statement",
+            "Earnings call transcripts (capex + segment commentary)",
+            "Segment notes (cloud / Services / Family of Apps)",
+            "IDC / Gartner / Canalys hyperscaler share reports (when applicable)",
+        ],
+    },
+
     # ── Telco (T, VZ, TMUS, BCE, CHL) ─────────────────────────────────────
     "Stable Growth": {
         "sector":         "Telco",
@@ -1669,7 +1912,31 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
     'Traditional Retail': {
         "sector":         'Consumer',
-        "anchor_methods": ['EV/EBITDAR'],
+        "anchor_methods": ['EV/EBITDAR', 'P/E (ops)', 'DCF (FCF)'],
+        # V3 quality tiers — same-store sales growth is THE retail anchor
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "sssg_pct", "direction": "higher_better",
+                 "bands": [
+                     {"min":  0.06, "mult": 1.30, "label": "accelerating"},
+                     {"min":  0.04, "mult": 1.18, "label": "healthy"},
+                     {"min":  0.02, "mult": 1.08, "label": "in-band"},
+                     {"min":  0.0,  "mult": 1.00, "label": "flat"},
+                     {"min": -0.99, "mult": 0.85, "label": "declining"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk adjustment — leverage matters for retail (capex + lease debt)
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5,  "mult": 1.10, "label": "fortress"},
+                {"max": 3.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 4.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99.0, "mult": 0.80, "label": "over-levered"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'sssg_pct',
@@ -1697,8 +1964,23 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "source":          'W',
                 "extractor_only":  True,
             },
+            # Risk KPI — net_debt_to_ebitda is FMP-augmented in pipeline
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       False,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio', 'debt / EBITDA'],
+                "compute_hint":    '(total_debt - cash) / TTM EBITDA — augmented from FMP /stable/key-metrics-ttm',
+                "clamp":           (-1.0, 10.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
         ],
-        "source_priority": ['Quarterly SSSG (Same-Store Sales Growth) disclosures', 'Lease liability footnotes'],
+        "source_priority": [
+            'Quarterly SSSG (Same-Store Sales Growth) disclosures',
+            'Lease liability footnotes',
+            'EBITDAR margin trend (capitalised lease component)',
+        ],
     },
 
     'Travel & Dining': {
@@ -3946,13 +4228,25 @@ _FMP_RISK_CACHE: dict[str, dict] = {}
 
 
 def _fmp_risk_kpis(ticker: str) -> dict:
-    """Returns dict of FMP-derived risk KPIs for the ticker (cached).
+    """Returns dict of FMP-derived KPIs for the ticker (cached).
 
-    Keys produced (matching schema KPI names used by _risk_multiplier):
-      - net_debt_to_ebitda: from /stable/key-metrics-ttm.netDebtToEBITDATTM
-      - debt_to_ebitda:     proxy = net_debt_to_ebitda (when explicit absent)
-      - cash_runway_years:  cash_and_st_inv / |freeCashFlow| if FCF<0,
-                            else 99.0 (self-sustaining)
+    v3.2: broadened beyond risk-only fields to cover the universal mandatory
+    KPIs used by the Hyperscaler / Tech Conglomerate, Traditional Retail, and
+    REIT schemas. These fields are FMP-derivable so the schema can mark them
+    `mandatory=True` without forcing the LLM extractor to re-derive what FMP
+    already computes deterministically.
+
+    Risk fields (consumed by _risk_multiplier):
+      - net_debt_to_ebitda  ← key-metrics-ttm.netDebtToEBITDATTM
+      - debt_to_ebitda      ← alias of net_debt_to_ebitda (Utilities schema)
+      - cash_runway_years   ← cash_and_st_inv / |FCF| if FCF<0, else 99.0
+      - leverage_ratio      ← key-metrics-ttm.debtToAssetsTTM (REIT V3 risk)
+
+    Quality fields (consumed by _quality_multiplier):
+      - operating_margin_pct ← ratios-ttm.operatingProfitMarginTTM
+      - revenue_growth_pct   ← financial-growth.revenueGrowth (1 fy)
+      - capex_intensity_pct  ← key-metrics-ttm.capexToRevenueTTM
+      - fcf_margin_pct       ← key-metrics-ttm.freeCashFlowMarginTTM (when present)
 
     Returns {} on FMP failure (caller treats as "no FMP fallback available").
     """
@@ -3972,14 +4266,28 @@ def _fmp_risk_kpis(ticker: str) -> dict:
             with urllib.request.urlopen(req, timeout=8) as r:
                 return json.loads(r.read())
 
-        keymet = (_get("key-metrics-ttm") or [{}])[0]
-        bs     = (_get("balance-sheet-statement") or [{}])[0]
-        cfs    = (_get("cash-flow-statement") or [{}])[0]
+        keymet  = (_get("key-metrics-ttm") or [{}])[0]
+        ratios  = (_get("ratios-ttm") or [{}])[0]
+        bs      = (_get("balance-sheet-statement") or [{}])[0]
+        cfs     = (_get("cash-flow-statement") or [{}])[0]
+        finGrow = (_get("financial-growth") or [{}])[0]
 
+        # ── Risk fields ────────────────────────────────────────────────────
         nde = keymet.get("netDebtToEBITDATTM")
         if nde is not None:
             out["net_debt_to_ebitda"] = nde
-            out["debt_to_ebitda"]     = nde   # alias used by Utilities schema
+            out["debt_to_ebitda"]     = nde
+
+        # leverage_ratio for REIT (debt-to-assets is the universal proxy).
+        # FMP ratios-ttm field is `debtToAssetsRatioTTM`; key-metrics-ttm
+        # uses `debtToAssetsTTM` on some accounts. Try both.
+        d2a = (
+            ratios.get("debtToAssetsRatioTTM")
+            or ratios.get("debtToAssetsTTM")
+            or keymet.get("debtToAssetsTTM")
+        )
+        if d2a is not None and 0 <= float(d2a) < 1.0:
+            out["leverage_ratio"] = round(float(d2a), 4)
 
         cash_st = bs.get("cashAndShortTermInvestments")
         fcf     = cfs.get("freeCashFlow")
@@ -3987,10 +4295,38 @@ def _fmp_risk_kpis(ticker: str) -> dict:
             if fcf < 0:
                 out["cash_runway_years"] = round(cash_st / abs(fcf), 2)
             else:
-                # Positive FCF -> self-sustaining (>10 yr "ample" sentinel)
                 out["cash_runway_years"] = 99.0
+
+        # ── Quality fields (Hyperscaler/Tech Conglomerate, etc.) ───────────
+        # Source: /stable/ratios-ttm (per user-confirmed schema). Field names
+        # have the `RatioTTM` suffix on this endpoint vs the `TTM` suffix on
+        # key-metrics-ttm — try both.
+        op_m = (
+            ratios.get("operatingProfitMarginTTM")
+            or keymet.get("operatingProfitMarginTTM")
+        )
+        if op_m is not None:
+            out["operating_margin_pct"] = round(float(op_m), 4)
+
+        # Revenue growth — financial-growth endpoint, latest annual entry.
+        rev_g = finGrow.get("revenueGrowth")
+        if rev_g is not None:
+            out["revenue_growth_pct"] = round(float(rev_g), 4)
+
+        # Capex intensity — derive from capexPerShareTTM / revenuePerShareTTM
+        # (ratios-ttm doesn't expose a direct capexToRevenue field).
+        cps = ratios.get("capexPerShareTTM")
+        rps = ratios.get("revenuePerShareTTM")
+        if cps is not None and rps is not None and float(rps) > 0:
+            out["capex_intensity_pct"] = round(abs(float(cps) / float(rps)), 4)
+
+        # FCF margin — derive from FCF-per-share / revenue-per-share if needed
+        fcf_ps = ratios.get("freeCashFlowPerShareTTM")
+        if fcf_ps is not None and rps is not None and float(rps) > 0:
+            out["fcf_margin_pct"] = round(float(fcf_ps) / float(rps), 4)
+
     except Exception:
-        pass  # Fail silently — composite_adjustment will return 1.0x for risk
+        pass  # Fail silently — composite_adjustment will return 1.0x for missing fields
 
     _FMP_RISK_CACHE[ticker] = out
     return out
@@ -4097,6 +4433,9 @@ _PROFILE_WEIGHTS: dict[str, tuple[float, float, float]] = {
     "Hyper-Growth Platform":          (0.70, 0.30, 0.00),
     "Mature Platform":                (0.55, 0.40, 0.05),
     "Early Platform":                 (0.55, 0.45, 0.00),
+    # AAPL/MSFT/AMZN/GOOGL/META — quality-dominant (cloud growth + margin) but
+    # risk weight elevated vs pure SaaS because AI capex digestion is real.
+    "Hyperscaler / Tech Conglomerate": (0.60, 0.35, 0.05),
 
     # ── Commodity-dominant: Mining / Energy / Materials ────────────────
     "Mining (Major)":         (0.10, 0.10, 0.80),
@@ -4127,6 +4466,10 @@ _PROFILE_WEIGHTS: dict[str, tuple[float, float, float]] = {
     "Traditional Retail":     (0.45, 0.50, 0.05),
     "Apparel / Athletic Wear": (0.55, 0.40, 0.05),
     "Consumer Durables":      (0.40, 0.50, 0.10),
+
+    # ── REIT (legacy bespoke panel — but weight present for completeness
+    #    if a future migration moves REIT off the legacy path) ──────────
+    "REIT":                   (0.40, 0.50, 0.10),  # FFO quality + leverage risk
 
     # ── Telco / Healthcare / Other ─────────────────────────────────────
     "Stable Growth":          (0.30, 0.60, 0.10),  # Telco — risk-tilted

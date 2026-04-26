@@ -281,6 +281,11 @@ LEGACY_REIT_CLAMPS = {
     "leverage_ratio":      (0, 0.80),
     "dpu_cents":           (0, 500),
     "affo_per_unit_cents": (0, 500),
+    # v3.2 — US-REIT vocabulary additions; legacy extractor accepts these in
+    # the same validate-and-clamp block, so framework + legacy must agree.
+    "same_store_noi_growth_pct": (-0.20, 0.40),
+    "dps_usd":                   (0.01, 100.0),
+    "core_ffo_per_share":        (0.10, 50.0),
 }
 
 

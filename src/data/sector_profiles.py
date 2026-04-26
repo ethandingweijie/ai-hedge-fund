@@ -2996,7 +2996,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     #   "Cybersecurity / Mission-Critical SaaS" → growth_saas variant with
     #     platform-attach + renewals emphasis (already in place below)
     "MSFT":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (System & Application)", "Azure + M365 + AI capex; hyperscaler profile"),
-    "AAPL":  ("Tech", "",              "Computers/Peripherals",           "Hardware + services mix; Tech WACC applies"),
+    "AAPL":  ("Tech", "Hyperscaler / Tech Conglomerate", "Computers/Peripherals", "Hardware + services + AI capex; Tech WACC applies"),
 
     # ── Semiconductor (separate sector from Tech) ─────────────────────────
     # Fabless
@@ -3085,7 +3085,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # ── Communication Services → Telco ────────────────────────────────────────
     "T":     ("Telco", "",             "Telecom. Services",               "AT&T — high leverage; Telco WACC 5.5%"),
-    "VZ":    ("Telco", "",             "Telecom (Wireless)",              "Verizon"),
+    "VZ":    ("Telco", "Stable Growth", "Telecom (Wireless)",              "Verizon"),
     "CMCSA": ("Telco", "",             "Cable TV",                        "Comcast — cable/broadband"),
     "CHTR":  ("Telco", "",             "Cable TV",                        "Charter Communications"),
     "TMUS":  ("Telco", "",             "Telecom (Wireless)",              "T-Mobile US"),
@@ -3132,7 +3132,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "GM":    ("Industrials", "Automotive (OEM)", "Auto & Truck",         "General Motors — traditional OEM"),
     "F":     ("Industrials", "Automotive (OEM)", "Auto & Truck",         "Ford — traditional OEM"),
     # ── Retail (General) ──────────────────────────────────────────────────
-    "WMT":   ("Consumer", "",          "Retail (General)",                "Walmart"),
+    "WMT":   ("Consumer", "Traditional Retail", "Retail (General)",       "Walmart"),
     "TGT":   ("Consumer", "",          "Retail (General)",                "Target"),
     "HD":    ("Consumer", "",          "Retail (Building Supply)",        "Home Depot"),
     "TJX":   ("Consumer", "",          "Retail (Special Lines)",          "TJX Companies — off-price retail"),
@@ -3195,7 +3195,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "AMT":   ("RealEstate", "",                   "R.E.I.T.",                         "American Tower REIT — telecoms towers"),
     "DLR":   ("RealEstate", "",                   "R.E.I.T.",                         "Digital Realty REIT — wholesale data center · hyperscale cloud colocation"),
     "EQIX":  ("RealEstate", "",                   "R.E.I.T.",                         "Equinix REIT — data center · interconnection moat · meet-me room network"),
-    "PSA":   ("RealEstate", "",                   "R.E.I.T.",                         "Public Storage REIT — self storage"),
+    "PSA":   ("RealEstate", "REIT",              "R.E.I.T.",                         "Public Storage REIT — self storage"),
     "EXR":   ("RealEstate", "",                   "R.E.I.T.",                         "Extra Space Storage REIT — self storage"),
     "ARE":   ("RealEstate", "",                   "R.E.I.T.",                         "Alexandria Real Estate REIT — life-science labs"),
     "WELL":  ("RealEstate", "",                   "R.E.I.T.",                         "Welltower REIT — senior housing / medical office (healthcare)"),

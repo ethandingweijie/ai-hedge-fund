@@ -68,8 +68,28 @@ _load_env()
 # ── Suppress citation_registry + all post-synthesis extractor LLM calls ──────
 # We call them ourselves later in Step 4. Skipping them inside _research_one_ticker
 # avoids the noisy DashScope 401s and ~5-15s of redundant LLM calls per ticker.
+#
+# CRITICAL (v3.2 fix): the ORIGINALS are stashed onto the module under
+# `_ORIGINAL_*` names BEFORE patching, so Step 4 can still call the real
+# extractors without hitting the lambda no-ops. Earlier versions of this patch
+# global-patched the extractor functions which made Step 4's downstream calls
+# return {} in 0.2s (silently — looked like rate-limit / cache, was actually
+# self-inflicted). REIT/SaaS/Bank extractors all silently returned {} as a
+# result, which the user noticed when PSA's metrics.json came back empty
+# despite a perfect 11K-char Section 2F.
 def _patch_isolate_section_2f():
     import src.agents.industry.deep_research as _dr
+    # 1) Stash originals so Step 4 can reach the real implementations
+    _dr._ORIGINAL_extract_citation_registry = _dr._extract_citation_registry
+    _dr._ORIGINAL_extract_dcf_calibration   = _dr._extract_dcf_calibration
+    _dr._ORIGINAL_extract_segment_scenarios = _dr._extract_segment_scenarios
+    _dr._ORIGINAL_extract_pipeline_assets   = _dr._extract_pipeline_assets
+    _dr._ORIGINAL_extract_reit_metrics      = _dr._extract_reit_metrics
+    _dr._ORIGINAL_extract_bank_metrics      = _dr._extract_bank_metrics
+    _dr._ORIGINAL_extract_saas_metrics      = _dr._extract_saas_metrics
+    _dr._ORIGINAL_extract_insurance_metrics = _dr._extract_insurance_metrics
+    # 2) Now stub the public names so deep_research's internal fan-out sees
+    #    no-ops (no duplicate LLM cost during Step 3)
     _dr._extract_citation_registry = lambda *a, **kw: []
     _dr._extract_dcf_calibration   = lambda *a, **kw: {
         "growth_rate_adj": None, "margin_direction": "stable", "risk_flag": ""}
@@ -196,13 +216,18 @@ def step_4_extractor(ticker: str, profile_name: str, sections: dict, final_repor
     if profile_name not in SECTOR_KPI_FRAMEWORK:
         return {"error": f"profile {profile_name!r} not in framework"}
     if is_legacy_profile(profile_name):
-        # Use the legacy hand-written extractor for these
+        # Use the legacy hand-written extractor for these. CRITICAL: reach for
+        # `_ORIGINAL_*` (saved by _patch_isolate_section_2f BEFORE the no-op
+        # patch). Calling the public `_extract_*` would hit the lambda and
+        # return {} in 0.2s. See v3.2 root cause note in the patch function.
         from src.agents.industry import deep_research as _dr
         if profile_name in ("Growth SaaS", "Mature SaaS", "Hyperscaler",
                             "Cybersecurity / Mission-Critical SaaS"):
-            return _dr._extract_saas_metrics(client, model_name, sections, final_report, ticker)
+            fn = getattr(_dr, "_ORIGINAL_extract_saas_metrics", _dr._extract_saas_metrics)
+            return fn(client, model_name, sections, final_report, ticker)
         if profile_name == "REIT":
-            return _dr._extract_reit_metrics(client, model_name, sections, final_report, ticker)
+            fn = getattr(_dr, "_ORIGINAL_extract_reit_metrics", _dr._extract_reit_metrics)
+            return fn(client, model_name, sections, final_report, ticker)
         return {}
     return extract_via_framework(client, model_name, sections, final_report, ticker, profile_name=profile_name)
 

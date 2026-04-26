@@ -1557,8 +1557,17 @@ def _extract_reit_metrics(
                 "no commentary).\n\n"
                 "Schema (all fields OPTIONAL — omit if not substantiated by the research):\n"
                 "  cap_rate_market:    float (0.03-0.12, portfolio weighted-avg cap rate)\n"
+                "                      US-REIT: also accept 'implied cap rate', stabilised cap\n"
+                "                      rate, IMPLIED from EV / NOI (e.g. PSA, EXR). Pick the\n"
+                "                      portfolio-stabilised value, NOT the broad market range.\n"
                 "  occupancy_rate:     float (0.5-1.0, portfolio-weighted occupancy)\n"
+                "                      US-REIT: same-store occupancy is fine when 'portfolio-\n"
+                "                      weighted' isn't disclosed. Self-storage / residential /\n"
+                "                      industrial REITs typically only report same-store.\n"
                 "  wale_years:         float (1-15, weighted-avg lease expiry in years)\n"
+                "                      OMIT for self-storage REITs (month-to-month structure)\n"
+                "                      and residential REITs (12-month leases). Only meaningful\n"
+                "                      for net-lease, office, retail, industrial, data center.\n"
                 "  subtype_mix:        object mapping ASSET CLASS to fraction of portfolio\n"
                 "                      (NOI- or GAV-weighted; sum ≈ 1.0). Extract at the\n"
                 "                      FINEST granularity the research discloses — do NOT\n"
@@ -1578,8 +1587,24 @@ def _extract_reit_metrics(
                 "                      (revenue-weighted OR GAV-weighted). Sub-regions OK\n"
                 "                      (e.g. 'us_west', 'bangalore', 'india', 'emea').\n"
                 "  dpu_cents:          float (distribution per unit, LOCAL cents/pennies)\n"
+                "                      USE FOR S-REITs / HK-REITs only (DPU reported in local\n"
+                "                      cents). For US-REITs, use dps_usd field below instead.\n"
                 "  affo_per_unit_cents: float (AFFO per unit, same unit as dpu_cents)\n"
+                "  dps_usd:            float (annualised dividend per share in USD, 0.01-100)\n"
+                "                      US-REITs: PSA $12.00, O $3.16, AMT $6.96, etc.\n"
+                "                      Convert quarterly DPS × 4 if research reports quarterly.\n"
+                "  core_ffo_per_share: float (annualised Core FFO/AFFO per share USD, 0.10-50)\n"
+                "                      US-REIT primary cash-earnings metric. PSA reports Core\n"
+                "                      FFO; O reports AFFO; SPG reports FFO. Use whichever is\n"
+                "                      the primary metric the REIT cites.\n"
+                "  same_store_noi_growth_pct: float (-0.10 to 0.30, decimal)\n"
+                "                      Annual or TTM same-store NOI growth. Critical operating\n"
+                "                      metric for US-REITs (residential, self-storage, retail,\n"
+                "                      industrial). Negative = declining NOI.\n"
                 "  leverage_ratio:     float (debt/NAV or aggregate leverage, 0-0.60)\n"
+                "                      US-REIT: net debt / total assets, debt-to-EBITDA / 10,\n"
+                "                      or debt-to-EV are all acceptable proxies. Pick the\n"
+                "                      lowest-noise one the research cites.\n"
                 "  evidence:           string ≤300 chars citing the research source\n\n"
                 "Rules:\n"
                 "  * Return {} if the research doesn't discuss real estate / property assets.\n"
@@ -1645,6 +1670,21 @@ def _extract_reit_metrics(
         _affo = parsed.get("affo_per_unit_cents")
         if isinstance(_affo, (int, float)) and 0 < _affo < 500:
             out["affo_per_unit_cents"] = float(_affo)
+
+        # US-REIT vocabulary (Fix A): captured in addition to S-REIT fields so
+        # PSA / EXR / SPG / AMT / O / DLR can populate the framework_metrics
+        # bucket via the catalog KPI keys (Fix B in sector_kpi_framework.py).
+        _dps = parsed.get("dps_usd")
+        if isinstance(_dps, (int, float)) and 0.01 < _dps < 100:
+            out["dps_usd"] = float(_dps)
+
+        _ffo = parsed.get("core_ffo_per_share")
+        if isinstance(_ffo, (int, float)) and 0.10 < _ffo < 50:
+            out["core_ffo_per_share"] = float(_ffo)
+
+        _ssnoi = parsed.get("same_store_noi_growth_pct")
+        if isinstance(_ssnoi, (int, float)) and -0.20 <= _ssnoi <= 0.40:
+            out["same_store_noi_growth_pct"] = float(_ssnoi)
 
         _sub = parsed.get("subtype_mix")
         if isinstance(_sub, dict) and _sub:
