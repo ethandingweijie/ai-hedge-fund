@@ -38,6 +38,19 @@ import json
 import re
 from typing import Any
 
+# V4-β Z-Score Engine — peer-cohort normalisation. Imported lazily in
+# multiplier functions; module-level import is just to register the symbol so
+# the multiplier code can do `_z_tier_kicker(z, direction=...)` without a
+# per-call import overhead.
+try:
+    from src.data.zscore_engine import (
+        z_tier_kicker as _z_tier_kicker,
+        augment_metrics_with_z_scores as _augment_metrics_with_z_scores,
+    )
+except Exception:
+    _z_tier_kicker = None
+    _augment_metrics_with_z_scores = None
+
 
 # ── Schema definition ────────────────────────────────────────────────────────
 # Each entry under SECTOR_KPI_FRAMEWORK:
@@ -3709,12 +3722,31 @@ def _quality_multiplier(profile_name: str, sector: str, metrics: dict | None) ->
     qt = spec.get("quality_tiers")
     if qt:
         # ── Data-driven path ───────────────────────────────────────────────
-        # Group results by correlation_group (same group → max-deviation,
-        # different groups → multiply)
+        # V4-β: when peer cohort z-score is available for a band's KPI, use
+        # the dynamic z-tier kicker INSTEAD of the static band lookup. The
+        # band-based fallback covers KPIs whose cohort is too small (<3 peers)
+        # or whose values are non-numeric.
+        z_scores = m.get("_z_scores") if isinstance(m.get("_z_scores"), dict) else {}
+        z_tier_lookup = _z_tier_kicker  # late-bound; see import at module top
+
         from collections import defaultdict
         grouped: dict[str, list[tuple[float, str]]] = defaultdict(list)
         for cfg in qt.get("kpi_bands", []):
-            kpi_value = m.get(cfg["kpi"])
+            kpi_name = cfg["kpi"]
+            kpi_value = m.get(kpi_name)
+            z_entry = z_scores.get(kpi_name) if z_tier_lookup else None
+            if z_entry and isinstance(z_entry, dict) and "z" in z_entry:
+                mult, label = z_tier_lookup(
+                    z_entry["z"], direction=cfg.get("direction", "higher_better")
+                )
+                z_val = z_entry["z"]
+                cohort_n = z_entry.get("cohort_size", 0)
+                note = (
+                    f"{kpi_name}={kpi_value} z={z_val:+.2f} "
+                    f"(n={cohort_n}, {label}) {mult:.2f}x"
+                )
+                grouped[cfg.get("correlation_group", "_indep")].append((mult, note))
+                continue
             result = _evaluate_band(kpi_value, cfg)
             if result is not None:
                 grouped[cfg.get("correlation_group", "_indep")].append(result)
@@ -3805,7 +3837,21 @@ def _risk_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tu
     spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or {}
     ra = spec.get("risk_adjustment")
     if ra:
-        kpi_value = m.get(ra["kpi"])
+        kpi_name = ra["kpi"]
+        kpi_value = m.get(kpi_name)
+        # V4-β: peer-cohort z-tier kicker takes precedence over static band
+        z_scores = m.get("_z_scores") if isinstance(m.get("_z_scores"), dict) else {}
+        z_entry = z_scores.get(kpi_name) if _z_tier_kicker else None
+        if z_entry and isinstance(z_entry, dict) and "z" in z_entry:
+            mult, label = _z_tier_kicker(
+                z_entry["z"], direction=ra.get("direction", "higher_better")
+            )
+            mult = max(0.70, min(1.20, mult))  # risk cap is tighter than quality
+            note = (
+                f"{kpi_name}={kpi_value} z={z_entry['z']:+.2f} "
+                f"(n={z_entry.get('cohort_size', 0)}, {label}) {mult:.2f}x"
+            )
+            return (round(mult, 3), note)
         result = _evaluate_band(kpi_value, ra)
         if result is not None:
             mult = max(0.70, min(1.20, result[0]))
@@ -4146,13 +4192,29 @@ def composite_adjustment(profile_name: str, sector: str, metrics: dict | None) -
     raw = (q ** (3 * wq)) * (r ** (3 * wr)) * (c ** (3 * wc))
     cap_high = 1.70 if sector in _COMMODITY_SECTORS else 1.85
     capped = max(0.50, min(cap_high, raw))
+
+    # V4-β audit: surface z-score evidence for the dominant Quality + Risk KPIs.
+    # Frontend renders z + cohort_size as a small chip under each lever so the
+    # user can see whether the multiplier was z-driven (peer-relative) or
+    # band-driven (static thresholds).
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or {}
+    z_scores = (metrics or {}).get("_z_scores") if isinstance((metrics or {}).get("_z_scores"), dict) else {}
+    quality_kpi = (spec.get("quality_tiers", {}).get("kpi_bands") or [{}])[0].get("kpi") if spec.get("quality_tiers") else None
+    risk_kpi    = (spec.get("risk_adjustment") or {}).get("kpi")
+    quality_z_entry = z_scores.get(quality_kpi) if quality_kpi else None
+    risk_z_entry    = z_scores.get(risk_kpi)    if risk_kpi    else None
+
     return capped, {
         "quality":          round(q, 3),
         "quality_note":     q_note,
         "quality_weight":   round(wq, 2),
+        "quality_z":        quality_z_entry.get("z")           if isinstance(quality_z_entry, dict) else None,
+        "quality_cohort":   quality_z_entry.get("cohort_size") if isinstance(quality_z_entry, dict) else None,
         "risk":             round(r, 3),
         "risk_note":        r_note,
         "risk_weight":      round(wr, 2),
+        "risk_z":           risk_z_entry.get("z")              if isinstance(risk_z_entry, dict) else None,
+        "risk_cohort":      risk_z_entry.get("cohort_size")    if isinstance(risk_z_entry, dict) else None,
         "commodity":        round(c, 3),
         "commodity_note":   c_note,
         "commodity_weight": round(wc, 2),

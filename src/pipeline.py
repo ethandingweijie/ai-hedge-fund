@@ -687,6 +687,47 @@ def run_advanced_pipeline(
             print(f"  [fmp_risk_augment] failed: {_e!r} — Risk/Commodity multiplier will be 1.0x")
 
         # ----------------------------------------------------------------
+        # V4-β — Z-Score Engine: augment per-ticker metrics dicts with
+        # peer-cohort z-scores. Runs AFTER FMP augmentation (so z-scores
+        # cover augmented KPIs too) and BEFORE render_card_payloads_for_run
+        # (so the audit_bridge picks up z-driven tier kickers).
+        #
+        # Cohort source: web_runs WHERE profile_name=<this profile>
+        # within last 60 days. Self-excludes the current ticker.
+        #
+        # Sparse-cohort safety: per-KPI skip when cohort < 3 peers; the
+        # multiplier path silently falls back to band-based tiers. So a
+        # fresh deploy with empty archive degrades to v3.0 behaviour
+        # (band-only) and progressively migrates to z-driven as runs
+        # accumulate.
+        # ----------------------------------------------------------------
+        try:
+            from src.data.zscore_engine import augment_metrics_with_z_scores as _z_augment
+            from src.data.sector_kpi_framework import is_legacy_profile as _is_legacy
+            _profile_names_z = state["data"].get("profile_names", {})
+            _tickers_z = state["data"].get("tickers", []) or list(_profile_names_z.keys())
+            _z_summary: list[str] = []
+            for _t in _tickers_z:
+                _profile = _profile_names_z.get(_t) or state["data"].get("profile_name") or ""
+                if not _profile or _is_legacy(_profile):
+                    continue
+                for _state_key in ("framework_metrics_all",
+                                   "insurance_metrics_all", "bank_metrics_all"):
+                    _bucket = state["data"].get(_state_key) or {}
+                    if _t in _bucket and isinstance(_bucket[_t], dict):
+                        _bucket[_t] = _z_augment(_profile, _t, _bucket[_t])
+                        state["data"][_state_key] = _bucket
+                        _zs = _bucket[_t].get("_z_scores") or {}
+                        if _zs:
+                            _z_summary.append(f"{_t}({_profile}):{len(_zs)}KPIs")
+            if _z_summary:
+                print(f"  [zscore_engine] {' | '.join(_z_summary)}")
+            else:
+                print(f"  [zscore_engine] no peer cohorts found (fresh archive or sparse profiles)")
+        except Exception as _e:
+            print(f"  [zscore_engine] failed: {_e!r} — composite will use band-based tiers")
+
+        # ----------------------------------------------------------------
         # Sector valuation card payload — per-ticker dict consumed by the
         # frontend `SectorValuationCard` component. Built from the
         # SECTOR_KPI_FRAMEWORK + already-extracted metric state. Legacy

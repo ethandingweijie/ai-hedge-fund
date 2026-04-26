@@ -341,10 +341,17 @@ export interface SectorKpiGroup {
 export interface AuditBridge {
   quality: number;
   quality_note: string;
+  quality_weight?: number;           // V4-α profile-specific weight (0–1)
+  quality_z?: number | null;         // V4-β peer-cohort z-score (when n≥3)
+  quality_cohort?: number | null;    // V4-β peer cohort size used for z
   risk: number;
   risk_note: string;
+  risk_weight?: number;
+  risk_z?: number | null;
+  risk_cohort?: number | null;
   commodity: number;
   commodity_note: string;
+  commodity_weight?: number;
   raw_composite: number;
   final_multiplier: number;
   cap_high: number;     // 1.70 for Resources/Energy/Materials, else 1.85

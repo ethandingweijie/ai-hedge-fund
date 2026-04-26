@@ -229,11 +229,45 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
               : isDrag(v) ? 'text-rose-500'
                           : 'text-muted-foreground';
 
+  // V4-β z-chip: shows peer-cohort z-score when present. Tone matches sign so
+  // user can scan at a glance whether the lever is peer-validated.
+  const zChip = (z?: number | null, n?: number | null) => {
+    if (z == null || !Number.isFinite(z)) return null;
+    const tier =
+      Math.abs(z) >= 1.5 ? 'top/bot decile' :
+      Math.abs(z) >= 1.0 ? 'top/bot quartile' :
+      Math.abs(z) >= 0.5 ? 'above/below' : 'near median';
+    const cls = z > 0
+      ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+      : z < 0
+        ? 'border-rose-500/40 text-rose-500 bg-rose-500/10'
+        : 'border-zinc-500/30 text-muted-foreground bg-zinc-500/10';
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded px-1 py-0.5 text-[8px] font-semibold tabular-nums border',
+          cls,
+        )}
+        title={`Peer cohort: n=${n ?? '?'}, ${tier}`}
+      >
+        z {z >= 0 ? '+' : ''}{z.toFixed(1)}
+        {n != null && <span className="opacity-70">·n{n}</span>}
+      </span>
+    );
+  };
+
+  const hasAnyZ = bridge.quality_z != null || bridge.risk_z != null;
+
   return (
     <div className="px-5 py-3">
       <div className="flex items-center justify-between mb-2">
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
           Composite Adjustment Bridge
+          {hasAnyZ && (
+            <span className="ml-2 inline-flex items-center rounded border border-violet-500/40 bg-violet-500/10 px-1 py-px text-[8px] font-semibold text-violet-600 dark:text-violet-400">
+              V4-β · Z-DRIVEN
+            </span>
+          )}
         </div>
         <div className="text-[10px] text-muted-foreground">
           cap: {bridge.cap_high.toFixed(2)}×
@@ -247,11 +281,19 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
       <div className="grid grid-cols-7 items-center gap-1 text-center">
         {/* Quality */}
         <div className="col-span-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-2 py-1.5">
-          <div className="text-[9px] uppercase tracking-wider text-blue-600 dark:text-blue-400">
-            Quality
+          <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-blue-600 dark:text-blue-400">
+            <span>Quality</span>
+            {bridge.quality_weight != null && (
+              <span className="text-muted-foreground normal-case tracking-normal">
+                w={bridge.quality_weight.toFixed(2)}
+              </span>
+            )}
           </div>
           <div className={cn('text-sm font-bold tabular-nums', tone(bridge.quality))}>
             {fmtMult(bridge.quality)}
+          </div>
+          <div className="mt-0.5 flex items-center justify-center">
+            {zChip(bridge.quality_z, bridge.quality_cohort)}
           </div>
           <div className="text-[9px] text-muted-foreground truncate" title={bridge.quality_note}>
             {bridge.quality_note}
@@ -262,11 +304,19 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
 
         {/* Risk */}
         <div className="col-span-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5">
-          <div className="text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            Risk
+          <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            <span>Risk</span>
+            {bridge.risk_weight != null && (
+              <span className="text-muted-foreground normal-case tracking-normal">
+                w={bridge.risk_weight.toFixed(2)}
+              </span>
+            )}
           </div>
           <div className={cn('text-sm font-bold tabular-nums', tone(bridge.risk))}>
             {fmtMult(bridge.risk)}
+          </div>
+          <div className="mt-0.5 flex items-center justify-center">
+            {zChip(bridge.risk_z, bridge.risk_cohort)}
           </div>
           <div className="text-[9px] text-muted-foreground truncate" title={bridge.risk_note}>
             {bridge.risk_note}
@@ -277,8 +327,13 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
 
         {/* Commodity */}
         <div className="col-span-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
-          <div className="text-[9px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
-            Comm
+          <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
+            <span>Comm</span>
+            {bridge.commodity_weight != null && (
+              <span className="text-muted-foreground normal-case tracking-normal">
+                w={bridge.commodity_weight.toFixed(2)}
+              </span>
+            )}
           </div>
           <div className={cn('text-sm font-bold tabular-nums', tone(bridge.commodity))}>
             {fmtMult(bridge.commodity)}
