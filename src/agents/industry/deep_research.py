@@ -2062,9 +2062,18 @@ def _build_research_system(
     compatible).
     """
     from src.agents.industry.sector_prompts import get_kpi_prompt
+    from src.data.sector_kpi_framework import render_tier_driver_block
     ym1 = str(int(year) - 1)   # e.g. "2025" when year="2026"
     y1  = str(int(year) + 1)   # e.g. "2027" when year="2026"
     kpi_framework_block = get_kpi_prompt(sector, profile_name, reit_subtype)
+    # Append the framework's tier-driver appendix so the deep-research analyst
+    # surfaces the SAME mandatory KPIs the extractor will search for. Closes
+    # the drift between handcrafted 2F prose (sector_prompts.py) and the
+    # framework's extractor schema (sector_kpi_framework.py). Empty when
+    # profile_name isn't in SECTOR_KPI_FRAMEWORK — silent no-op.
+    tier_driver_appendix = render_tier_driver_block(profile_name, sector)
+    if tier_driver_appendix:
+        kpi_framework_block = kpi_framework_block + tier_driver_appendix
     return f"""
 TOOL ENVIRONMENT (read first — non-negotiable):
 - You have exactly ONE tool: web_search. That is the only tool in this context.

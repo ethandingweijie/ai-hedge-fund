@@ -715,11 +715,12 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {"key": "nrr_pct",              "mandatory": True,  "search_phrases": ["NRR", "net retention"], "clamp": (0.80, 1.50), "extractor_only": True, "decimal_format": True},
             {"key": "rpo_growth_yoy",       "mandatory": True,  "search_phrases": ["RPO growth", "remaining performance obligations"], "clamp": (-0.20, 0.80), "extractor_only": True, "decimal_format": True},
             {"key": "billings_growth_yoy", "mandatory": False, "search_phrases": ["billings growth"],      "clamp": (-0.20, 0.80), "extractor_only": True, "decimal_format": True},
-            {"key": "rule_of_40_score",     "mandatory": False, "search_phrases": ["Rule of 40"],          "clamp": (-30, 120),    "extractor_only": True},
+            {"key": "rule_of_40_score",     "mandatory": True,  "search_phrases": ["Rule of 40"],          "clamp": (-30, 120),    "extractor_only": True},
             {"key": "gross_retention_pct",  "mandatory": False, "search_phrases": ["gross retention"],     "clamp": (0.80, 1.00), "extractor_only": True, "decimal_format": True},
             {"key": "cac_payback_months",   "mandatory": False, "search_phrases": ["CAC payback"],          "clamp": (3, 60),       "extractor_only": True},
             {"key": "ltv_cac_ratio",        "mandatory": False, "search_phrases": ["LTV:CAC"],              "clamp": (1, 15),       "extractor_only": True},
             {"key": "magic_number",         "mandatory": False, "search_phrases": ["magic number"],         "clamp": (0.1, 3.0),    "extractor_only": True},
+            {"key": "cash_runway_years",    "mandatory": True,  "search_phrases": ["cash runway", "months of runway", "burn rate"], "compute_hint": "Cash & equivalents / annualised cash burn — FMP-augmented", "clamp": (0.0, 99.0), "source": "F", "extractor_only": False},
         ],
         "source_priority": ["Q4 earnings call supplement", "10-K", "Investor day"],
     },
@@ -842,7 +843,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             # ── V3 schema KPIs (added so extractor LOOKS for them) ──────────
             {
                 "key":             "gross_margin_pct",
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ["gross margin", "gross profit margin", "GM %"],
                 "compute_hint":    "Gross margin % (Big Pharma typically 75-85%)",
                 "clamp":           (0.5, 0.95),
@@ -851,7 +852,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             },
             {
                 "key":             "net_debt_to_ebitda",
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt EBITDA", "debt/EBITDA"],
                 "compute_hint":    "Net debt / TTM EBITDA (Big Pharma typically 0.5-2.0x)",
                 "clamp":           (-2.0, 5.0),
@@ -933,6 +934,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
+            {
+                "key":             "debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["debt to EBITDA", "leverage ratio", "debt/EBITDA"],
+                "compute_hint":    "Total debt / TTM EBITDA — FMP-augmented (utilities typically 4.0-6.0x)",
+                "clamp":           (0.0, 12.0),
+                "source":          "F",
+                "extractor_only":  False,
+            },
         ],
         "source_priority": [
             "Latest 10-K + Q4 earnings call",
@@ -1001,7 +1011,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             },
             {
                 "key":             "reserve_replacement_ratio",
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ["reserve replacement ratio", "reserves added"],
                 "compute_hint":    "New reserves added / production (>1.0 = sustainability)",
                 "clamp":           (0.5, 2.5),
@@ -1032,6 +1042,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "clamp":           (-0.20, 0.30),
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented (E&P typically 0.5-2.0x mid-cycle)",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
             },
         ],
         "source_priority": [
@@ -1126,6 +1146,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "compute_hint":    "Average realised price per oz/lb (net of by-products)",
                 "extractor_only":  True,
             },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented (cycle-sensitive)",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
         ],
         "source_priority": [
             "Latest 10-K + Q4 earnings call",
@@ -1207,6 +1237,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "compute_hint":    "Disclosed design wins for next-gen products (count or qualitative)",
                 "extractor_only":  True,
             },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented (fabless typically <0.5x)",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
         ],
         "source_priority": [
             "Q4 earnings call segment disclosure",
@@ -1269,6 +1309,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "clamp":           (0.10, 0.60),
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented (foundry typically 1.0-2.5x)",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
             },
         ],
         "source_priority": [
@@ -1378,7 +1428,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             # ── Cloud-specific (MSFT/AMZN/GOOGL only — optional kicker) ────
             {
                 "key":             "cloud_revenue_growth_pct",
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ["Azure revenue growth", "AWS revenue growth", "GCP revenue growth",
                                     "Intelligent Cloud growth", "cloud segment revenue YoY"],
                 "compute_hint":    "Cloud / hyperscale segment revenue growth YoY (decimal)",
@@ -1514,6 +1564,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
+            {
+                "key":             "debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["debt to EBITDA", "leverage ratio", "debt/EBITDA"],
+                "compute_hint":    "Total debt / TTM EBITDA — FMP-augmented (telco typically 2.5-4.0x)",
+                "clamp":           (0.0, 12.0),
+                "source":          "F",
+                "extractor_only":  False,
+            },
         ],
         "source_priority": [
             "Q4 earnings call subscriber metrics",
@@ -1582,6 +1641,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "search_phrases":  ["FCF per vehicle", "free cash flow per car"],
                 "compute_hint":    "FCF per delivered vehicle (USD)",
                 "extractor_only":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented (auto OEM 1.0-3.0x)",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
             },
         ],
         "source_priority": [
@@ -1655,6 +1724,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "clamp":           (-0.10, 0.10),
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+            {
+                "key":             "debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["debt to EBITDA", "leverage ratio", "debt/EBITDA"],
+                "compute_hint":    "Total debt / TTM EBITDA — FMP-augmented (managed care typically 2.0-4.0x)",
+                "clamp":           (0.0, 12.0),
+                "source":          "F",
+                "extractor_only":  False,
             },
         ],
         "source_priority": [
@@ -2570,7 +2648,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             # Risk KPI — net_debt_to_ebitda is FMP-augmented in pipeline
             {
                 "key":             'net_debt_to_ebitda',
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ['net debt to EBITDA', 'leverage ratio', 'debt / EBITDA'],
                 "compute_hint":    '(total_debt - cash) / TTM EBITDA — augmented from FMP /stable/key-metrics-ttm',
                 "clamp":           (-1.0, 10.0),
@@ -2636,6 +2714,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "search_phrases":  ['platform commission', 'marketplace take rate'],
                 "source":          'W',
                 "extractor_only":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented (franchise/royalty typically 2.5-4.0x)",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
             },
         ],
         "source_priority": ['System-wide sales reports', 'STR (Smith Travel Research) global data'],
@@ -4523,6 +4611,16 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "source":          'H',
                 "extractor_only":  True,
             },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented (A&D primes typically 1.5-3.0x)",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
         ],
         "source_priority": ['Federal defense budget appropriations (DOD)', 'Book-to-bill ratios'],
     },
@@ -6092,6 +6190,95 @@ def render_specialist_addendum(
     return "\n".join(lines)
 
 
+# ── Renderer 4: tier-driver appendix (deep_research 2F appendix) ────────────
+
+def render_tier_driver_block(profile_name: str, sector: str = "") -> str:
+    """Compact appendix listing the MANDATORY tier-driver KPIs from the
+    framework spec. Designed to be appended to `get_kpi_prompt()` output
+    in `_build_research_system()` so the deep-research analyst is asked
+    for the SAME KPIs the downstream extractor will search for.
+
+    Closes the drift between handcrafted 2F prose (which has its own
+    vocabulary) and the framework's extractor schema (which uses the
+    canonical KPI keys). Without this, KPIs added to SECTOR_KPI_FRAMEWORK
+    don't get surfaced in the analyst's research → extractor returns
+    nulls → multiplier defaults to 1.0x → valuation signal weakens.
+
+    Returns "" when the profile is unknown or has no tier drivers.
+    """
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or SECTOR_KPI_FRAMEWORK.get(sector)
+    if not spec:
+        return ""
+
+    qt = spec.get("quality_tiers") or {}
+    ra = spec.get("risk_adjustment") or {}
+
+    q_drivers, r_drivers = set(), set()
+    for cfg in qt.get("kpi_bands", []):
+        if cfg.get("kpi"):
+            q_drivers.add(cfg["kpi"])
+    for clause in (qt.get("cap_when"), qt.get("drag_when")):
+        if isinstance(clause, dict):
+            if clause.get("kpi"):
+                q_drivers.add(clause["kpi"])
+            for g in clause.get("gates", []) or []:
+                if g.get("kpi"):
+                    q_drivers.add(g["kpi"])
+    if ra.get("kpi"):
+        r_drivers.add(ra["kpi"])
+    for clause in (ra.get("cap_when"), ra.get("drag_when")):
+        if isinstance(clause, dict):
+            if clause.get("kpi"):
+                r_drivers.add(clause["kpi"])
+            for g in clause.get("gates", []) or []:
+                if g.get("kpi"):
+                    r_drivers.add(g["kpi"])
+
+    derived_keys = {d["key"] for d in (spec.get("derived_kpis") or [])}
+    q_drivers -= derived_keys
+    r_drivers -= derived_keys
+
+    if not (q_drivers | r_drivers):
+        return ""
+
+    kpi_lookup = {k["key"]: k for k in spec.get("kpis", [])}
+    sector_for_enrich = spec.get("sector", "")
+
+    lines: list[str] = [
+        "",
+        "──────────────────────────────────────────",
+        "2F.X EXTRACTOR-CRITICAL FIELDS (mandatory — drive quality + risk multipliers)",
+        "──────────────────────────────────────────",
+        "BE HONEST. The downstream extractor agent searches your Section 2F report for",
+        "these EXACT KPI keys. Surface each one with a numeric value (and date) — "
+        "prose, bullet, or table format are all fine. Write 'not disclosed' when the",
+        "research truly didn't surface a value; never invent or estimate a figure to",
+        "fill a gap. Honest n/d beats a fabricated number that contaminates the",
+        "valuation. KPIs missed here become 1.0x defaults in the multiplier.",
+        "",
+    ]
+
+    def _fmt_section(driver_set: set, label: str) -> None:
+        if not driver_set:
+            return
+        lines.append(f"{label}:")
+        for kpi_key in sorted(driver_set):
+            kpi_spec = kpi_lookup.get(kpi_key, {})
+            phrases = enrich_search_phrases(kpi_spec, sector_for_enrich)[:5] if kpi_spec else []
+            phrase_str = ", ".join(f"'{p}'" for p in phrases)
+            hint = f" — {kpi_spec.get('compute_hint')}" if kpi_spec.get("compute_hint") else ""
+            if phrase_str:
+                lines.append(f"  • {kpi_key} (search: {phrase_str}){hint}")
+            else:
+                lines.append(f"  • {kpi_key}{hint}")
+        lines.append("")
+
+    _fmt_section(q_drivers, "QUALITY-TIER DRIVERS")
+    _fmt_section(r_drivers - q_drivers, "RISK-ADJUSTMENT DRIVERS (additional)")
+
+    return "\n".join(lines)
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # render_card_payload — produces the JSON payload consumed by the frontend
 # `SectorValuationCard` component (Option B styling). The shape mirrors the
@@ -7337,6 +7524,7 @@ __all__ = [
     "SECTOR_KPI_FRAMEWORK",
     "render_search_overlay",
     "render_specialist_addendum",
+    "render_tier_driver_block",
     "build_extractor_schema",
     "validate_extractor_output",
     "extract_via_framework",

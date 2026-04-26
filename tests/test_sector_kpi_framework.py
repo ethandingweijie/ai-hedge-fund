@@ -304,11 +304,22 @@ def test_framework_clamps_match_legacy_bank_extractor():
     "Cybersecurity / Mission-Critical SaaS",
 ])
 def test_framework_clamps_match_legacy_saas_extractor(saas_profile):
-    """All SaaS-family sub-profiles must use the legacy SaaS clamps verbatim
-    (legacy _extract_saas_metrics is sector-gated, not sub-profile-gated)."""
+    """All SaaS-family sub-profiles must COVER the legacy SaaS clamps — every
+    legacy KPI must be present with identical (lo, hi). Framework may add new
+    KPIs beyond the legacy snapshot (e.g. cash_runway_years for Cybersecurity's
+    R-driver added v3.x); IV equivalence only requires the legacy KPI subset
+    to remain identical."""
     framework_clamps = build_extractor_schema(saas_profile)["clamps"]
-    assert framework_clamps == LEGACY_SAAS_CLAMPS, (
-        f"{saas_profile} clamps drifted:\n"
+    missing = set(LEGACY_SAAS_CLAMPS) - set(framework_clamps)
+    drifted = {
+        k: (framework_clamps[k], LEGACY_SAAS_CLAMPS[k])
+        for k in LEGACY_SAAS_CLAMPS
+        if k in framework_clamps and framework_clamps[k] != LEGACY_SAAS_CLAMPS[k]
+    }
+    assert not missing and not drifted, (
+        f"{saas_profile} legacy-clamp coverage broken:\n"
+        f"  missing legacy KPIs: {missing}\n"
+        f"  drifted (framework, legacy): {drifted}\n"
         f"  framework: {framework_clamps}\n"
         f"  legacy:    {LEGACY_SAAS_CLAMPS}"
     )

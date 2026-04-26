@@ -31,8 +31,14 @@ _SECTION_2F_HEADER = """
 Purpose: Every industry has 3-5 metrics that actually predict forward
 performance. Generic financial metrics miss what matters. The asks below
 are tailored to this ticker's sector and sub-profile — answer ALL of them
-precisely. If the research doesn't substantiate a specific data point, write
-"not disclosed" rather than omitting the line.
+precisely.
+
+BE HONEST. If the research doesn't substantiate a specific data point, write
+"not disclosed" rather than omitting the line. Never invent, estimate, or
+extrapolate a figure to fill a gap — an honest "not disclosed" is far more
+valuable downstream than a fabricated number that contaminates the valuation.
+Cite the publisher and date for every figure you DO surface, and flag any
+value whose source you cannot identify.
 """
 
 
