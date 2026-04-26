@@ -1,0 +1,4469 @@
+"""
+Sector KPI Framework — single source of truth for sub-profile-specific
+research prompts, extractor schemas, and downstream method consumption.
+
+Architecture (PR #1):
+
+  ┌─────────────────────────────┐
+  │  SECTOR_KPI_FRAMEWORK dict  │  ← one entry per sub-profile (e.g. "Insurance",
+  │  (this file)                │    "Growth SaaS", "REIT", "Pre-approval Biotech")
+  │  - kpis: list with          │
+  │      key, mandatory,        │
+  │      applies_to, clamp,     │
+  │      search_phrases,        │
+  │      extractor_only,        │
+  │      fmp_field, fallback    │
+  └──────────────┬──────────────┘
+                 │
+       ┌─────────┴──────────┬──────────────┬──────────────────┐
+       ▼                    ▼              ▼                  ▼
+  render_search    build_extractor  validate_       attach_
+  _overlay         _schema          extractor       overrides
+  (L4 prompt       (L5 LLM         _output         (L6 dcf_agent
+   text injected   schema +         (soft-           attachment loop —
+   into 2F.5b)     clamps dict)     mandatory        per-key overrides
+                                    flagging)        on most_recent)
+
+Resolution order: profile_name → sector → "" (no overlay, legacy generic 2F)
+
+Migration policy (PR #1 = Option B — low risk):
+  - Insurance is the only sub-profile populated. Other sub-profiles use the
+    legacy hand-written extractors (_extract_saas_metrics, _extract_bank_metrics,
+    _extract_reit_metrics, _extract_pipeline_assets) which keep their behavior
+    byte-identical. Migration to the framework is per-sub-profile follow-up PRs.
+"""
+from __future__ import annotations
+
+import json
+import re
+from typing import Any
+
+
+# ── Schema definition ────────────────────────────────────────────────────────
+# Each entry under SECTOR_KPI_FRAMEWORK:
+#   sector:           str                — broad sector (used for fallback lookup)
+#   anchor_methods:   list[str]          — IV methods this sub-profile drives
+#   kpis:             list[dict]         — per-KPI specs (see fields below)
+#   source_priority:  list[str]          — citation source ranking
+#
+# Each KPI dict:
+#   key:              str                — snake_case field name in extractor output
+#   mandatory:        bool               — drives _completeness_score + UI badge
+#   applies_to:       list[str]          — sub-sub-profile gate (omit = all)
+#   search_phrases:   list[str]          — what the LLM should look for in research
+#   compute_hint:     str                — short formula/definition for prompt
+#   clamp:            (float, float)     — safe range; LLM hallucinations dropped
+#   extractor_only:   bool               — True = WEB-only (LLM); False = FMP-derivable
+#   decimal_format:   bool               — instruct LLM to convert % → decimal
+#   fmp_field:        str (optional)     — when extractor_only=False, FMP key to read
+#   fallback:         str                — human description of fallback behavior
+
+SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
+
+    "Insurance": {
+        "sector":         "Financials",
+        "anchor_methods": ["Embedded Value", "P/BV", "Combined Ratio Gate"],
+        # V3 quality tiers: combined ratio (operational efficiency)
+        "quality_tiers": {
+            "kpi_bands": [{
+                "kpi": "combined_ratio", "direction": "lower_better",
+                "bands": [
+                    {"max": 0.88, "mult": 1.50, "label": "elite"},
+                    {"max": 0.92, "mult": 1.30, "label": "top-quartile"},
+                    {"max": 0.96, "mult": 1.12, "label": "above-avg"},
+                    {"max": 1.02, "mult": 1.00, "label": "in-band"},
+                    {"max": 99.0, "mult": 0.80, "label": "loss-making"},
+                ],
+            }],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk adjustment: solvency ratio (Beta haircut)
+        "risk_adjustment": {
+            "kpi": "solvency_ratio_scr", "direction": "higher_better",
+            "bands": [
+                {"min": 2.0,  "mult": 1.10, "label": "strong"},
+                {"min": 1.3,  "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,  "mult": 0.90, "label": "weak"},
+            ],
+        },
+        "kpis": [
+            {
+                "key":             "combined_ratio",
+                "mandatory":       True,
+                "applies_to":      ["P&C", "Reinsurance"],
+                "search_phrases":  ["combined ratio of X%", "100.X CR", "95.4 CR"],
+                "compute_hint":    "P&C: losses+LAE+expenses / NEP",
+                "clamp":           (0.70, 1.20),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.96 P&C industry average + flag _completeness",
+            },
+            {
+                "key":             "loss_ratio",
+                "mandatory":       False,
+                "applies_to":      ["P&C", "Reinsurance"],
+                "search_phrases":  ["loss ratio"],
+                "compute_hint":    "losses+LAE / NEP, before reserves",
+                "clamp":           (0.40, 0.85),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "expense_ratio",
+                "mandatory":       False,
+                "applies_to":      ["P&C", "Reinsurance"],
+                "search_phrases":  ["expense ratio"],
+                "compute_hint":    "acquisition+admin / NEP",
+                "clamp":           (0.15, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "vnb_margin",
+                "mandatory":       True,
+                "applies_to":      ["Life"],
+                "search_phrases":  ["VNB margin", "VNB / APE"],
+                "compute_hint":    "Life: VNB / APE",
+                "clamp":           (0.05, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.20 Life industry average + flag _completeness",
+            },
+            {
+                "key":             "embedded_value_per_share",
+                "mandatory":       True,
+                "applies_to":      ["Life"],
+                "search_phrases":  ["embedded value", "EV per share"],
+                "compute_hint":    "Life: EV per share, USD or local ccy",
+                "clamp":           (0.0, 1_000_000.0),
+                "extractor_only":  True,
+                "fallback":        "fall back to P/BV proxy (legacy behavior)",
+            },
+            {
+                "key":             "solvency_ratio_scr",
+                "mandatory":       True,
+                "applies_to":      ["P&C", "Life", "Reinsurance"],
+                "search_phrases":  ["SCR ratio", "RBC ratio", "Solvency II coverage"],
+                "compute_hint":    "Solvency II SCR / RBC coverage (1.0 = at requirement)",
+                "clamp":           (1.0, 3.0),
+                "extractor_only":  True,
+                "fallback":        "use 1.80 (regulatory baseline) + flag _completeness",
+            },
+            {
+                "key":             "reserve_release_pct",
+                "mandatory":       False,
+                "applies_to":      ["P&C", "Reinsurance"],
+                "search_phrases":  ["PYD", "prior-year development", "reserve release"],
+                "compute_hint":    "PYD / earned premium (negative if adverse)",
+                "clamp":           (-0.05, 0.15),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "catastrophe_losses_pct",
+                "mandatory":       False,
+                "applies_to":      ["P&C", "Reinsurance"],
+                "search_phrases":  ["cat losses", "catastrophe loss", "pts of CR"],
+                "compute_hint":    "cat losses / NEP, latest qtr",
+                "clamp":           (0.0, 0.20),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "new_money_yield",
+                "mandatory":       False,
+                "applies_to":      ["P&C", "Life", "Reinsurance"],
+                "search_phrases":  ["new money yield", "reinvestment yield"],
+                "compute_hint":    "forward investment yield on newly invested money",
+                "clamp":           (0.02, 0.10),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4/FY earnings call",
+            "IR investor day deck",
+            "10-K MD&A",
+        ],
+    },
+
+    # ════════════════════════════════════════════════════════════════════
+    # STAGE A entries (PR #2-#5) — additive specs for sub-profiles whose
+    # extractors already work today via the legacy hand-written code path.
+    #
+    # These entries provide:
+    #   - L4 Section 2F overlay text (richer than legacy implicit prompts)
+    #   - L5 extractor schema (auto-generated from KPI list)
+    #   - Backward-compatibility test: framework clamps == legacy hand-written clamps
+    #
+    # The legacy _extract_X_metrics functions remain the production code path
+    # until Stage B (deferred) ships per-sub-profile IV equivalence tests.
+    # ════════════════════════════════════════════════════════════════════
+
+    # ── PR #2: Bank (Money Center, Regional, EM, Investment, etc.) ────────
+    "Money Center Bank": {
+        "sector":         "Financials",
+        "anchor_methods": ["Residual Income", "P/TBV", "Excess Capital", "P/E (ops)"],
+        # V3 quality tiers: efficiency_ratio + management_target_roe (correlated —
+        # both proxies for general bank quality, take max-deviation)
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "efficiency_ratio", "direction": "lower_better",
+                 "correlation_group": "bank_op_quality",
+                 "bands": [
+                     {"max": 0.50, "mult": 1.30, "label": "top-decile"},
+                     {"max": 0.55, "mult": 1.18, "label": "strong"},
+                     {"max": 0.65, "mult": 1.00, "label": "in-band"},
+                     {"max": 99.0, "mult": 0.92, "label": "bloated"},
+                 ]},
+                {"kpi": "management_target_roe", "direction": "higher_better",
+                 "correlation_group": "bank_op_quality",
+                 "bands": [
+                     {"min": 0.16, "mult": 1.30, "label": "premium"},
+                     {"min": 0.13, "mult": 1.15, "label": "above-avg"},
+                     {"min": 0.0,  "mult": 1.00, "label": "in-band"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        "risk_adjustment": {
+            "kpi": "cet1_ratio", "direction": "higher_better",
+            "bands": [
+                {"min": 0.14,  "mult": 1.15, "label": "fortress"},
+                {"min": 0.12,  "mult": 1.10, "label": "strong"},
+                {"min": 0.085, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,   "mult": 0.85, "label": "weak"},
+            ],
+        },
+        "kpis": [
+            {
+                "key":             "cet1_ratio",
+                "mandatory":       True,
+                "search_phrases":  ["CET1", "Common Equity Tier 1"],
+                "compute_hint":    "Common Equity Tier 1 ratio (regulatory capital)",
+                "clamp":           (0.05, 0.25),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use cfg['target_cet1'] from _BANK_PROFILE_CALIBRATION",
+            },
+            {
+                "key":             "nim_pct",
+                "mandatory":       True,
+                "search_phrases":  ["NIM", "net interest margin"],
+                "compute_hint":    "Net interest margin (last quarter)",
+                "clamp":           (0.005, 0.08),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "efficiency_ratio",
+                "mandatory":       True,
+                "search_phrases":  ["efficiency ratio", "cost-to-income"],
+                "compute_hint":    "op_exp / total income (lower is better)",
+                "clamp":           (0.30, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "management_target_roe",
+                "mandatory":       True,
+                "search_phrases":  ["target ROE", "through-cycle ROE", "ROTCE target", "aspires to Y% ROTCE"],
+                "compute_hint":    "Through-cycle ROE/ROTCE target from earnings call",
+                "clamp":           (0.05, 0.25),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use cfg['target_roe'] from _BANK_PROFILE_CALIBRATION",
+            },
+            {
+                "key":             "npl_ratio",
+                "mandatory":       False,
+                "search_phrases":  ["NPL", "non-performing loan"],
+                "compute_hint":    "Non-performing loans as % of total loans",
+                "clamp":           (0.0, 0.15),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "net_charge_offs_pct",
+                "mandatory":       False,
+                "search_phrases":  ["net charge-offs", "NCO"],
+                "compute_hint":    "Annualized NCO / avg loans",
+                "clamp":           (0.0, 0.05),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "loan_to_deposit_ratio",
+                "mandatory":       False,
+                "search_phrases":  ["loan-to-deposit", "LDR"],
+                "compute_hint":    "Loans / deposits",
+                "clamp":           (0.40, 1.20),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "dividend_payout_ratio",
+                "mandatory":       False,
+                "search_phrases":  ["payout ratio", "dividend payout"],
+                "compute_hint":    "Dividends / net income (also FMP-derivable)",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "loan_growth_yoy",
+                "mandatory":       False,
+                "search_phrases":  ["loan growth", "loan book growth"],
+                "compute_hint":    "YoY loan growth (decimal)",
+                "clamp":           (-0.30, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "deposit_growth_yoy",
+                "mandatory":       False,
+                "search_phrases":  ["deposit growth"],
+                "compute_hint":    "YoY deposit growth (decimal)",
+                "clamp":           (-0.30, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4/FY earnings call",
+            "10-Q regulatory capital disclosure",
+            "Federal Reserve / regulator filings (FFIEC, EBA)",
+        ],
+    },
+
+    # ── PR #3: REIT (single profile, sub-types via separate _REIT_SUBTYPE_MULTIPLES) ──
+    "REIT": {
+        "sector":         "REIT",
+        "anchor_methods": ["NAV (Cap Rates)", "P/FFO", "P/AFFO"],
+        "kpis": [
+            {
+                "key":             "cap_rate_market",
+                "mandatory":       True,
+                "search_phrases":  ["cap rate", "implied cap rate", "CBRE/JLL appraisal"],
+                "compute_hint":    "Portfolio weighted-avg cap rate",
+                "clamp":           (0.02, 0.20),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use _REIT_SUBTYPE_MULTIPLES sub-type default + flag",
+            },
+            {
+                "key":             "occupancy_rate",
+                "mandatory":       True,
+                "search_phrases":  ["occupancy"],
+                "compute_hint":    "Portfolio-weighted occupancy",
+                "clamp":           (0.3, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.93 industry average + flag",
+            },
+            {
+                "key":             "wale_years",
+                "mandatory":       False,
+                "search_phrases":  ["WALE", "weighted average lease expiry"],
+                "compute_hint":    "Weighted-avg lease expiry in years",
+                "clamp":           (0.5, 30),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "leverage_ratio",
+                "mandatory":       True,
+                "search_phrases":  ["aggregate leverage", "debt to NAV", "debt-to-NAV"],
+                "compute_hint":    "Debt / NAV or aggregate leverage",
+                "clamp":           (0, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "dpu_cents",
+                "mandatory":       True,
+                "search_phrases":  ["DPU", "distribution per unit"],
+                "compute_hint":    "Distribution per unit (LOCAL cents/pennies)",
+                "clamp":           (0, 500),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "affo_per_unit_cents",
+                "mandatory":       False,
+                "search_phrases":  ["AFFO per unit", "AFFO per share"],
+                "compute_hint":    "AFFO per unit (same unit as dpu_cents)",
+                "clamp":           (0, 500),
+                "extractor_only":  True,
+            },
+            # Note: subtype_mix and geographic_mix are dict-shaped, not numeric.
+            # The legacy extractor validates them with bespoke logic; framework
+            # extraction returns {} for non-numeric clamps (subtype_mix /
+            # geographic_mix continue to require legacy extraction until Stage B).
+        ],
+        "source_priority": [
+            "Annual report valuation table",
+            "Q4 supplemental disclosure",
+            "IR investor day deck",
+        ],
+    },
+
+    # ── PR #4: SaaS family (Growth, Mature, Cybersecurity) ────────────────
+    # All three share the SaaS KPI schema (NRR, Rule of 40, CAC payback, etc.)
+    # but differ on which subset is MANDATORY for the valuation card to render
+    # the sub-profile-specific anchor method.
+    "Growth SaaS": {
+        "sector":         "Tech",
+        "anchor_methods": ["NRR-adj DCF", "EV/NTM Revenue", "Rule of 40"],
+        "kpis": [
+            {
+                "key":             "nrr_pct",
+                "mandatory":       True,
+                "search_phrases":  ["NRR", "net retention", "net dollar retention", "net expansion"],
+                "compute_hint":    "Net revenue retention decimal",
+                "clamp":           (0.80, 1.50),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 1.10 sector avg + flag _completeness",
+            },
+            {
+                "key":             "rule_of_40_score",
+                "mandatory":       True,
+                "search_phrases":  ["Rule of 40", "growth + FCF margin"],
+                "compute_hint":    "Revenue growth % + FCF margin %",
+                "clamp":           (-30, 120),
+                "extractor_only":  True,
+                "fallback":        "compute from FMP growth + FCF margin (acceptable proxy)",
+            },
+            {
+                "key":             "gross_retention_pct",
+                "mandatory":       False,
+                "search_phrases":  ["gross retention", "GRR"],
+                "compute_hint":    "Gross retention decimal — floor for NRR quality",
+                "clamp":           (0.80, 1.00),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "cac_payback_months",
+                "mandatory":       False,
+                "search_phrases":  ["CAC payback"],
+                "compute_hint":    "CAC payback in months",
+                "clamp":           (3, 60),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "ltv_cac_ratio",
+                "mandatory":       False,
+                "search_phrases":  ["LTV:CAC", "LTV/CAC"],
+                "compute_hint":    "LTV / CAC ratio (target >3x)",
+                "clamp":           (1, 15),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "magic_number",
+                "mandatory":       False,
+                "search_phrases":  ["magic number", "new ARR / S&M"],
+                "compute_hint":    "New ARR / prior-quarter S&M (target >0.75)",
+                "clamp":           (0.1, 3.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "rpo_growth_yoy",
+                "mandatory":       False,
+                "search_phrases":  ["RPO", "remaining performance obligations"],
+                "compute_hint":    "Remaining performance obligation growth (consumption-revenue leading indicator)",
+                "clamp":           (-0.20, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "billings_growth_yoy",
+                "mandatory":       False,
+                "search_phrases":  ["billings growth"],
+                "compute_hint":    "Leading indicator vs reported GAAP revenue",
+                "clamp":           (-0.20, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4 earnings call supplement",
+            "Latest 10-K",
+            "Company shareholder letter / investor day",
+        ],
+    },
+
+    "Mature SaaS": {
+        "sector":         "Tech",
+        "anchor_methods": ["DCF", "EV/EBITDA", "P/E (ops)"],
+        "kpis": [
+            # Same KPI schema as Growth SaaS, but for Mature SaaS only NRR is
+            # mandatory (Rule of 40 less critical at scale; FCF margin already
+            # FMP-derivable). Keeps clamp-equivalence test simple by sharing
+            # the legacy SaaS extractor schema.
+            {"key": "nrr_pct",              "mandatory": True,  "search_phrases": ["NRR", "net retention"], "clamp": (0.80, 1.50), "extractor_only": True, "decimal_format": True},
+            {"key": "rule_of_40_score",     "mandatory": False, "search_phrases": ["Rule of 40"],          "clamp": (-30, 120),    "extractor_only": True},
+            {"key": "gross_retention_pct",  "mandatory": False, "search_phrases": ["gross retention"],     "clamp": (0.80, 1.00), "extractor_only": True, "decimal_format": True},
+            {"key": "cac_payback_months",   "mandatory": False, "search_phrases": ["CAC payback"],          "clamp": (3, 60),       "extractor_only": True},
+            {"key": "ltv_cac_ratio",        "mandatory": False, "search_phrases": ["LTV:CAC"],              "clamp": (1, 15),       "extractor_only": True},
+            {"key": "magic_number",         "mandatory": False, "search_phrases": ["magic number"],         "clamp": (0.1, 3.0),    "extractor_only": True},
+            {"key": "rpo_growth_yoy",       "mandatory": False, "search_phrases": ["RPO"],                  "clamp": (-0.20, 0.80), "extractor_only": True, "decimal_format": True},
+            {"key": "billings_growth_yoy", "mandatory": False, "search_phrases": ["billings growth"],      "clamp": (-0.20, 0.80), "extractor_only": True, "decimal_format": True},
+        ],
+        "source_priority": ["Q4 earnings call supplement", "10-K", "Investor day"],
+    },
+
+    "Cybersecurity / Mission-Critical SaaS": {
+        "sector":         "Tech",
+        "anchor_methods": ["DCF (FCF+ anchor)", "NRR-adj DCF", "EV/Revenue"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "nrr_pct", "direction": "higher_better", "correlation_group": "saas_q",
+                 "bands": [{"min": 1.30, "mult": 1.40, "label": "elite"},
+                           {"min": 1.15, "mult": 1.20, "label": "strong"},
+                           {"min": 1.00, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,  "mult": 0.85, "label": "contraction"}]},
+                {"kpi": "rule_of_40_score", "direction": "higher_better", "correlation_group": "saas_q",
+                 "bands": [{"min": 60, "mult": 1.30, "label": "elite"},
+                           {"min": 40, "mult": 1.15, "label": "healthy"},
+                           {"min": 0,  "mult": 0.95, "label": "weak"}]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        "risk_adjustment": {
+            "kpi": "cash_runway_years", "direction": "higher_better",
+            "bands": [{"min": 4, "mult": 1.05, "label": "ample"},
+                      {"min": 1.5, "mult": 1.00, "label": "in-band"},
+                      {"min": 0, "mult": 0.80, "label": "tight"}],
+        },
+        "kpis": [
+            # Cybersecurity: NRR + ARR growth proxies (rpo_growth_yoy / billings_growth_yoy) mandatory
+            # because category-king status drives multiple expansion. Rule of 40 nice but FCF margin is
+            # often negative for fast-growth cyber names so it's not a reliable mandatory.
+            {"key": "nrr_pct",              "mandatory": True,  "search_phrases": ["NRR", "net retention"], "clamp": (0.80, 1.50), "extractor_only": True, "decimal_format": True},
+            {"key": "rpo_growth_yoy",       "mandatory": True,  "search_phrases": ["RPO growth", "remaining performance obligations"], "clamp": (-0.20, 0.80), "extractor_only": True, "decimal_format": True},
+            {"key": "billings_growth_yoy", "mandatory": False, "search_phrases": ["billings growth"],      "clamp": (-0.20, 0.80), "extractor_only": True, "decimal_format": True},
+            {"key": "rule_of_40_score",     "mandatory": False, "search_phrases": ["Rule of 40"],          "clamp": (-30, 120),    "extractor_only": True},
+            {"key": "gross_retention_pct",  "mandatory": False, "search_phrases": ["gross retention"],     "clamp": (0.80, 1.00), "extractor_only": True, "decimal_format": True},
+            {"key": "cac_payback_months",   "mandatory": False, "search_phrases": ["CAC payback"],          "clamp": (3, 60),       "extractor_only": True},
+            {"key": "ltv_cac_ratio",        "mandatory": False, "search_phrases": ["LTV:CAC"],              "clamp": (1, 15),       "extractor_only": True},
+            {"key": "magic_number",         "mandatory": False, "search_phrases": ["magic number"],         "clamp": (0.1, 3.0),    "extractor_only": True},
+        ],
+        "source_priority": ["Q4 earnings call supplement", "10-K", "Investor day"],
+    },
+
+    # ── PR #5: Biopharma (Pre-approval + Large Cap Pharma) ────────────────
+    # NOTE: Pipeline assets (per-asset list) are extracted by the legacy
+    # _extract_pipeline_assets and stay there in Stage A. This entry covers
+    # the SUPPLEMENTARY KPIs (cash runway, R&D intensity, LOE for top drugs).
+    # Stage B (deferred) integrates per-asset extraction into the framework
+    # via a new "list" KPI type.
+    "Pre-approval Biotech": {
+        "sector":         "Biopharma",
+        "anchor_methods": ["rNPV (Pipeline)"],
+        "kpis": [
+            {
+                "key":             "cash_runway_qtrs",
+                "mandatory":       True,
+                "search_phrases":  ["cash runway", "quarters of runway", "cash burn"],
+                "compute_hint":    "Quarters until cash zero (cash / quarterly burn)",
+                "clamp":           (0.5, 40.0),
+                "extractor_only":  True,
+                "fallback":        "compute as cash / (|OCF|/4) from FMP — acceptable proxy",
+            },
+            {
+                "key":             "next_catalyst_date",
+                "mandatory":       True,
+                "search_phrases":  ["topline data", "Phase 3 readout", "BLA filing", "FDA decision date", "PDUFA"],
+                "compute_hint":    "Next material clinical / regulatory catalyst (free-form date string)",
+                "extractor_only":  True,
+                "fallback":        "'unknown' + flag",
+            },
+            {
+                "key":             "rd_intensity_pct",
+                "mandatory":       False,
+                "search_phrases":  ["R&D as % of revenue", "R&D intensity"],
+                "compute_hint":    "R&D / revenue (FMP-derivable; included as cross-check)",
+                "clamp":           (0.05, 5.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "max_dilution_pct",
+                "mandatory":       False,
+                "search_phrases":  ["fully diluted shares", "potential dilution", "warrants outstanding"],
+                "compute_hint":    "Max dilution if all options/warrants/notes exercise",
+                "clamp":           (0.0, 0.50),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Latest 10-Q (most recent cash position)",
+            "S-1 (if recent IPO)",
+            "Sell-side initiation note",
+            "Company corporate deck",
+        ],
+    },
+
+    "Large Cap Pharma": {
+        "sector":         "Biopharma",
+        "anchor_methods": ["rNPV (Pipeline)", "DCF", "P/E (ops)"],
+        # FIX (audit Apr 2026): tightened search_phrases below add common
+        # alternate terms ("blockbuster", "patent cliff", "expiry year").
+        # Schema KPIs gross_margin_pct + net_debt_to_ebitda promoted to first-
+        # class kpis so the extractor LOOKS for them (was: V3 schema declared
+        # but kpis list didn't have them, so extractor never tried).
+        "quality_tiers": {
+            "kpi_bands": [{
+                "kpi": "gross_margin_pct", "direction": "higher_better",
+                "bands": [{"min": 0.80, "mult": 1.30, "label": "best-in-class"},
+                          {"min": 0.70, "mult": 1.15, "label": "strong"},
+                          {"min": 0.55, "mult": 1.00, "label": "in-band"},
+                          {"min": 0.0,  "mult": 0.90, "label": "weak"}],
+            }],
+            "cap": [0.70, 1.50],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 1.0, "mult": 1.10, "label": "fortress"},
+                      {"max": 2.5, "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "leveraged"}],
+        },
+        "kpis": [
+            {
+                "key":             "loe_year_top_drug",
+                "mandatory":       True,
+                "search_phrases":  ["patent expiry", "loss of exclusivity", "LOE", "patent cliff", "patent expires", "exclusivity expiry", "blockbuster expiry year"],
+                "compute_hint":    "Year of patent expiry for #1 revenue drug (e.g. Keytruda LOE 2028; Trulicity 2027)",
+                "clamp":           (2026, 2050),
+                "extractor_only":  True,
+                "fallback":        "use generic 12-yr LOE assumption from RNPV_RAMP_PROFILE",
+            },
+            {
+                "key":             "top_drug_revenue_pct",
+                "mandatory":       False,
+                "search_phrases":  ["lead drug", "top drug", "% of revenue", "blockbuster revenue", "concentration", "top product"],
+                "compute_hint":    "% of total revenue from #1 drug (concentration risk indicator)",
+                "clamp":           (0.0, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "rd_intensity_pct",
+                "mandatory":       False,
+                "search_phrases":  ["R&D as % of revenue", "R&D intensity", "research and development spending", "R&D spend"],
+                "compute_hint":    "R&D / revenue (typically 18-25% for Big Pharma)",
+                "clamp":           (0.05, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "effective_tax_rate",
+                "mandatory":       False,
+                "search_phrases":  ["effective tax rate", "ETR", "tax rate", "non-GAAP tax rate"],
+                "compute_hint":    "Effective tax rate (Irish/Swiss IP structures pull this down)",
+                "clamp":           (0.05, 0.30),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            # ── V3 schema KPIs (added so extractor LOOKS for them) ──────────
+            {
+                "key":             "gross_margin_pct",
+                "mandatory":       False,
+                "search_phrases":  ["gross margin", "gross profit margin", "GM %"],
+                "compute_hint":    "Gross margin % (Big Pharma typically 75-85%)",
+                "clamp":           (0.5, 0.95),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       False,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt EBITDA", "debt/EBITDA"],
+                "compute_hint":    "Net debt / TTM EBITDA (Big Pharma typically 0.5-2.0x)",
+                "clamp":           (-2.0, 5.0),
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K + Q4 earnings call",
+            "IR pipeline page",
+            "Sell-side LOE / pipeline coverage notes",
+        ],
+    },
+
+    # ════════════════════════════════════════════════════════════════════
+    # PR #6 — NEW sub-profiles (no legacy extractor exists today)
+    # End-to-end ship: framework spec drives the L4 overlay, the generic
+    # framework_metrics task in deep_research.py runs the LLM extractor,
+    # dcf_agent reads via attach_overrides for any anchor methods.
+    # No regression possible — these tickers had no sector-specific
+    # extraction path before.
+    # ════════════════════════════════════════════════════════════════════
+
+    # ── Energy: Regulated Utility (NEE, DUK, SO, AEP, ED, XEL) ────────────
+    "Regulated Utility": {
+        "sector":         "Energy",
+        "anchor_methods": ["P/Rate Base", "DDM", "P/E (ops)"],
+        "quality_tiers": {
+            "kpi_bands": [{
+                "kpi": "allowed_roe", "direction": "higher_better",
+                "bands": [{"min": 0.105, "mult": 1.20, "label": "premium"},
+                          {"min": 0.095, "mult": 1.10, "label": "above-avg"},
+                          {"min": 0.085, "mult": 1.00, "label": "in-band"},
+                          {"min": 0.0,   "mult": 0.90, "label": "below-allowed"}],
+            }],
+            "cap": [0.80, 1.30],
+        },
+        "risk_adjustment": {
+            "kpi": "debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 4.5, "mult": 1.05, "label": "strong"},
+                      {"max": 6.0, "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.90, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "allowed_roe",
+                "mandatory":       True,
+                "search_phrases":  ["allowed ROE", "authorized return", "regulator-approved ROE"],
+                "compute_hint":    "Regulator-approved return on equity (per state PUC docket)",
+                "clamp":           (0.07, 0.12),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.095 sector default + flag",
+            },
+            {
+                "key":             "rate_base_growth_yoy",
+                "mandatory":       True,
+                "search_phrases":  ["rate base growth", "rate base of $XB growing"],
+                "compute_hint":    "YoY rate-base growth (primary driver, replaces revenue CAGR)",
+                "clamp":           (0.0, 0.15),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.05 sector default + flag",
+            },
+            {
+                "key":             "rate_case_outcome_pct",
+                "mandatory":       False,
+                "search_phrases":  ["rate case", "filed vs granted", "rate case outcome"],
+                "compute_hint":    "Last filing approval ratio (granted / requested)",
+                "clamp":           (0.5, 1.1),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "capex_to_rate_base_pct",
+                "mandatory":       False,
+                "search_phrases":  ["capex / rate base", "capital plan"],
+                "compute_hint":    "Annual capex as % of rate base (capex intensity indicator)",
+                "clamp":           (0.05, 0.25),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K + Q4 earnings call",
+            "State PUC rate case dockets",
+            "FERC Form 1",
+        ],
+    },
+
+    # ── Resources: Upstream Oil & Gas (XOM, CVX, OXY, EOG, PXD) ───────────
+    "Upstream Oil & Gas": {
+        "sector":         "Resources",
+        "anchor_methods": ["NAV (PV-10)", "EV/EBITDAX", "P/CF"],
+        # V4-α aggregator weights — solves the "Integrated Trap":
+        # For supermajors (XOM/CVX), PV-10 only captures upstream reserves and
+        # ignores downstream + chemicals worth $50-70/share. Without weights,
+        # the median is unfairly tethered to the NAV outlier. Weighted mean
+        # tilts toward EV/EBITDAX (integrated cash flow) which is the true
+        # going-concern value for these conglomerates.
+        "method_weights": {
+            "NAV (PV-10)":  0.20,   # downweight — upstream-only proxy
+            "EV/EBITDAX":   0.50,   # primary — integrated cash flow
+            "P/CF":         0.30,   # secondary — operating cash
+        },
+        "quality_tiers": {
+            "kpi_bands": [{
+                # FIX: KPI name aligned with framework's `reserve_replacement_ratio` (was reserves_replacement_pct)
+                "kpi": "reserve_replacement_ratio", "direction": "higher_better",
+                "bands": [{"min": 1.30, "mult": 1.30, "label": "best-in-class"},
+                          {"min": 1.00, "mult": 1.10, "label": "replacing"},
+                          {"min": 0.70, "mult": 1.00, "label": "in-band"},
+                          {"min": 0.0,  "mult": 0.85, "label": "depleting"}],
+            }],
+            "cap": [0.70, 1.40],
+        },
+        "risk_adjustment": {
+            # FIX: switched from net_debt_to_capital (not in FMP) to net_debt_to_ebitda
+            # (FMP-augmented at pipeline level)
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 0.5,  "mult": 1.10, "label": "fortress"},
+                      {"max": 1.5,  "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "leveraged"}],
+        },
+        "commodity_uplift": {
+            "spot_kpi": "spot_brent_price", "realised_kpi": "realised_oil_price",
+            "cost_kpi": "lifting_cost_per_boe",
+            "spot_weight": 0.33, "max_uplift": 1.30,
+        },
+        "kpis": [
+            {
+                "key":             "pv10_value_usd",
+                "mandatory":       True,
+                "search_phrases":  ["PV-10", "discounted future net cash flows"],
+                "compute_hint":    "SEC PV-10 supplement (USD billions)",
+                "clamp":           (1.0e9, 1.0e12),
+                "extractor_only":  True,
+                "fallback":        "use book value as NAV proxy + flag",
+            },
+            {
+                "key":             "breakeven_oil_price_usd",
+                "mandatory":       True,
+                "search_phrases":  ["breakeven oil price", "free cash flow breakeven"],
+                "compute_hint":    "Oil price ($/bbl) at which FCF = 0",
+                "clamp":           (20.0, 80.0),
+                "extractor_only":  True,
+                "fallback":        "use $50/bbl industry mid + flag",
+            },
+            {
+                "key":             "reserve_replacement_ratio",
+                "mandatory":       False,
+                "search_phrases":  ["reserve replacement ratio", "reserves added"],
+                "compute_hint":    "New reserves added / production (>1.0 = sustainability)",
+                "clamp":           (0.5, 2.5),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "f_d_cost_per_boe",
+                "mandatory":       False,
+                "search_phrases":  ["F&D cost", "finding and development cost"],
+                "compute_hint":    "Finding & development cost per boe",
+                "clamp":           (5.0, 60.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "decline_rate_yoy",
+                "mandatory":       False,
+                "search_phrases":  ["decline rate", "production decline"],
+                "compute_hint":    "Annual production decline rate (decimal)",
+                "clamp":           (0.05, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "production_growth_yoy",
+                "mandatory":       False,
+                "search_phrases":  ["production growth", "boe/d growth"],
+                "compute_hint":    "YoY production growth (boe/d)",
+                "clamp":           (-0.20, 0.30),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K (SEC PV-10 supplement)",
+            "Q4 earnings call",
+            "Investor day deck",
+        ],
+    },
+
+    # ── Resources: Mining (Major) (FCX, NEM, GOLD, BHP, RIO) ──────────────
+    "Mining (Major)": {
+        "sector":         "Resources",
+        "anchor_methods": ["NAV (Mine-by-Mine)", "EV/EBITDA", "P/CF"],
+        # V4-α aggregator weights — Major miners (FCX, NEM) often have
+        # smelting + by-products. NAV captures mine reserves; EV/EBITDA
+        # captures the consolidated franchise. Same Integrated Trap as O&G
+        # but less severe — NAV tracks reasonably well for pure miners.
+        "method_weights": {
+            "NAV (Mine-by-Mine)": 0.40,   # primary — mine economics
+            "EV/EBITDA":          0.40,   # consolidated franchise
+            "P/CF":               0.20,   # secondary
+        },
+        # V3 quality tiers: cost_curve_quartile (operational pricing-power leverage)
+        "quality_tiers": {
+            "kpi_bands": [{
+                "kpi": "cost_curve_quartile", "direction": "lower_better",
+                "bands": [
+                    {"max": 1, "mult": 1.30, "label": "Q1-cost (lowest)"},
+                    {"max": 2, "mult": 1.30, "label": "Q2-cost (low)"},
+                    {"max": 3, "mult": 1.00, "label": "Q3-cost (median)"},
+                    {"max": 4, "mult": 0.85, "label": "Q4-cost (highest)"},
+                ],
+            }],
+            "cap": [0.70, 1.50],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 0.5, "mult": 1.10, "label": "fortress"},
+                {"max": 1.5, "mult": 1.05, "label": "strong"},
+                {"max": 2.5, "mult": 1.00, "label": "in-band"},
+                {"max": 99.0, "mult": 0.85, "label": "weak"},
+            ],
+        },
+        "commodity_uplift": {
+            "spot_kpi":     "spot_commodity_price",
+            "realised_kpi": "realised_price_per_unit",
+            "cost_kpi":     "aisc_per_oz",
+            "spot_weight":  0.33,
+            "max_uplift":   1.40,
+        },
+        "kpis": [
+            {
+                "key":             "aisc_per_oz",
+                "mandatory":       True,
+                "search_phrases":  ["AISC", "all-in sustaining cost"],
+                "compute_hint":    "All-in sustaining cost per oz/lb (gold/copper)",
+                "clamp":           (300.0, 3000.0),
+                "extractor_only":  True,
+                "fallback":        "use sector-tier estimate + flag",
+            },
+            {
+                "key":             "cost_curve_quartile",
+                "mandatory":       True,
+                "search_phrases":  ["Q1 cost producer", "cost curve", "cost quartile"],
+                "compute_hint":    "Cost-curve quartile (1 = lowest-cost, 4 = highest)",
+                "clamp":           (1, 4),
+                "extractor_only":  True,
+                "fallback":        "use Q3 (median) + flag",
+            },
+            {
+                "key":             "reserve_life_years",
+                "mandatory":       False,
+                "search_phrases":  ["reserve life", "mine life"],
+                "compute_hint":    "Proved reserves / annual production (years)",
+                "clamp":           (5.0, 80.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "production_yoy_pct",
+                "mandatory":       False,
+                "search_phrases":  ["production growth", "tonnage growth"],
+                "compute_hint":    "YoY production growth (decimal)",
+                "clamp":           (-0.20, 0.30),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "realised_price_per_unit",
+                "mandatory":       False,
+                "search_phrases":  ["realised price", "realized price"],
+                "compute_hint":    "Average realised price per oz/lb (net of by-products)",
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K + Q4 earnings call",
+            "Operator's NI 43-101 / JORC technical reports",
+            "Wood Mackenzie / CRU cost-curve analysis",
+        ],
+    },
+
+    # ── Semiconductor: Fabless (NVDA, AMD, AVGO, QCOM, MRVL) ──────────────
+    "Fabless": {
+        "sector":         "Semiconductor",
+        "anchor_methods": ["DCF", "EV/EBITDA", "EV/Revenue", "P/E (ops)"],
+        # V3.1: bumped cap to 1.65 + added "AI hyperscale" top tier when both
+        # gross_margin AND data_center mix are best-in-class (NVDA-grade).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "gross_margin_pct", "direction": "higher_better", "correlation_group": "fabless_q",
+                 "bands": [{"min": 0.75, "mult": 1.50, "label": "AI hyperscale"},
+                           {"min": 0.65, "mult": 1.30, "label": "elite"},
+                           {"min": 0.55, "mult": 1.15, "label": "strong"},
+                           {"min": 0.45, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,  "mult": 0.90, "label": "weak"}]},
+                {"kpi": "data_center_revenue_pct", "direction": "higher_better", "correlation_group": "fabless_q",
+                 "bands": [{"min": 0.80, "mult": 1.50, "label": "AI dominant"},
+                           {"min": 0.40, "mult": 1.30, "label": "elite"},
+                           {"min": 0.20, "mult": 1.15, "label": "strong"},
+                           {"min": 0.10, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,  "mult": 0.90, "label": "weak"}]}
+            ],
+            "cap": [0.70, 1.65],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 0.5, "mult": 1.1, "label": "fortress"},
+                      {"max": 1.5, "mult": 1.0, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "gross_margin_pct",
+                "mandatory":       True,
+                "search_phrases":  ["gross margin", "gross profit margin"],
+                "compute_hint":    "Gross margin (cycle-amplitude indicator; FMP-derivable cross-check)",
+                "clamp":           (0.15, 0.75),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "data_center_revenue_pct",
+                "mandatory":       True,
+                "search_phrases":  ["data center revenue", "AI accelerator revenue", "DC segment"],
+                "compute_hint":    "Data center / AI accelerator revenue as % of total",
+                "clamp":           (0.0, 0.95),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.30 default + flag (likely zero for non-AI fabless)",
+            },
+            {
+                "key":             "lead_time_weeks",
+                "mandatory":       False,
+                "search_phrases":  ["lead time", "lead times of X weeks"],
+                "compute_hint":    "Customer lead times (demand-supply gap signal)",
+                "clamp":           (0.0, 60.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "china_revenue_pct",
+                "mandatory":       False,
+                "search_phrases":  ["China revenue", "PRC revenue", "China exposure"],
+                "compute_hint":    "China revenue as % of total (geopolitical haircut driver)",
+                "clamp":           (0.0, 0.50),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "design_win_pipeline_qty",
+                "mandatory":       False,
+                "search_phrases":  ["design wins", "next-gen silicon commitments"],
+                "compute_hint":    "Disclosed design wins for next-gen products (count or qualitative)",
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4 earnings call segment disclosure",
+            "Latest 10-K",
+            "Investor day product roadmap",
+        ],
+    },
+
+    # ── Semiconductor: IDM / Foundry (TSM, INTC, GFS) ─────────────────────
+    "IDM / Foundry": {
+        "sector":         "Semiconductor",
+        "anchor_methods": ["DCF", "EV/EBITDA", "P/B"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "utilisation_rate_pct", "direction": "higher_better",
+                 "bands": [{"min": 0.85, "mult": 1.3, "label": "elite"}, {"min": 0.75, "mult": 1.15, "label": "strong"}, {"min": 0.65, "mult": 1.0, "label": "in-band"}, {"min": 0.0, "mult": 0.9, "label": "weak"}]}
+            ],
+            "cap": [0.7, 1.5],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 1.0, "mult": 1.1, "label": "fortress"},
+                      {"max": 2.5, "mult": 1.0, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "wafer_capacity_kwspm",
+                "mandatory":       True,
+                "search_phrases":  ["wafer capacity", "kwspm", "thousand wafers per month"],
+                "compute_hint":    "Wafer capacity in KWSpm (thousand wafers per month)",
+                "clamp":           (10.0, 1500.0),
+                "extractor_only":  True,
+                "fallback":        "skip if not disclosed",
+            },
+            {
+                "key":             "utilisation_rate_pct",
+                "mandatory":       True,
+                "search_phrases":  ["fab utilisation", "fab utilization", "utilization rate"],
+                "compute_hint":    "Fab utilisation rate (cycle position indicator)",
+                "clamp":           (0.50, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.85 mid-cycle + flag",
+            },
+            {
+                "key":             "leading_edge_revenue_pct",
+                "mandatory":       False,
+                "search_phrases":  ["leading edge", "advanced node revenue", "<7nm"],
+                "compute_hint":    "Revenue from leading-edge nodes (3nm/5nm/7nm) as % of total",
+                "clamp":           (0.0, 0.95),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "capex_to_sales_pct",
+                "mandatory":       False,
+                "search_phrases":  ["capex / sales", "capital intensity"],
+                "compute_hint":    "Capex as % of sales (FMP-derivable cross-check; high for foundry)",
+                "clamp":           (0.10, 0.60),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4 earnings call + capex guidance",
+            "Latest 10-K",
+            "TSMC technology symposium / Intel investor day",
+        ],
+    },
+
+    # ── Telco (T, VZ, TMUS, BCE, CHL) ─────────────────────────────────────
+    "Stable Growth": {
+        "sector":         "Telco",
+        "anchor_methods": ["DCF", "DDM", "EV/EBITDA"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "arpu_usd", "direction": "higher_better", "correlation_group": "telco_q",
+                 "bands": [{"min": 60, "mult": 1.3, "label": "elite"}, {"min": 45, "mult": 1.15, "label": "strong"}, {"min": 30, "mult": 1.0, "label": "in-band"}, {"min": 0.0, "mult": 0.9, "label": "weak"}]},
+                {"kpi": "churn_pct_monthly", "direction": "lower_better", "correlation_group": "telco_q",
+                 "bands": [{"max": 0.012, "mult": 1.3, "label": "elite"}, {"max": 0.018, "mult": 1.15, "label": "strong"}, {"max": 0.024, "mult": 1.0, "label": "in-band"}, {"max": 99.0, "mult": 0.9, "label": "weak"}]}
+            ],
+            "cap": [0.7, 1.5],
+        },
+        "risk_adjustment": {
+            "kpi": "debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 2.5, "mult": 1.1, "label": "fortress"},
+                      {"max": 4.0, "mult": 1.0, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "arpu_usd",
+                "mandatory":       True,
+                "search_phrases":  ["ARPU", "average revenue per user"],
+                "compute_hint":    "Blended monthly ARPU (USD or local currency)",
+                "clamp":           (5.0, 200.0),
+                "extractor_only":  True,
+                "fallback":        "use TTM revenue / subscribers from FMP + flag",
+            },
+            {
+                "key":             "postpaid_net_adds_qtr",
+                "mandatory":       True,
+                "search_phrases":  ["postpaid net adds", "net additions"],
+                "compute_hint":    "Postpaid net adds latest quarter (thousands)",
+                "clamp":           (-2000.0, 2000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "churn_pct_monthly",
+                "mandatory":       True,
+                "search_phrases":  ["postpaid churn", "monthly churn"],
+                "compute_hint":    "Postpaid monthly churn (decimal — 0.009 = 0.9%)",
+                "clamp":           (0.005, 0.05),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "fivg_coverage_pct",
+                "mandatory":       False,
+                "search_phrases":  ["5G coverage", "5G population"],
+                "compute_hint":    "% of population covered by 5G network",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "capex_intensity_pct",
+                "mandatory":       False,
+                "search_phrases":  ["capex intensity", "capex / revenue"],
+                "compute_hint":    "Capex / revenue (FMP-derivable cross-check)",
+                "clamp":           (0.10, 0.30),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4 earnings call subscriber metrics",
+            "Latest 10-K",
+            "Industry trackers (Strand Consult, Gartner)",
+        ],
+    },
+
+    # ── Consumer: Automotive & EV (TSLA, F, GM, RIVN, LCID) ───────────────
+    "Automotive & EV": {
+        "sector":         "Consumer",
+        "anchor_methods": ["DCF", "EV/EBITDA"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "vehicle_deliveries_yoy", "direction": "higher_better",
+                 "bands": [{"min": 0.3, "mult": 1.3, "label": "elite"}, {"min": 0.1, "mult": 1.15, "label": "strong"}, {"min": 0.0, "mult": 1.0, "label": "in-band"}, {"min": 0.0, "mult": 0.9, "label": "weak"}]}
+            ],
+            "cap": [0.7, 1.5],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 1.0, "mult": 1.1, "label": "fortress"},
+                      {"max": 3.0, "mult": 1.0, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "vehicle_deliveries_yoy",
+                "mandatory":       True,
+                "search_phrases":  ["vehicle deliveries", "deliveries grew"],
+                "compute_hint":    "YoY vehicle deliveries growth (decimal)",
+                "clamp":           (-0.50, 1.00),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "asp_per_unit_usd",
+                "mandatory":       True,
+                "search_phrases":  ["ASP", "average selling price", "average transaction price"],
+                "compute_hint":    "Average selling price per vehicle (USD)",
+                "clamp":           (15000.0, 200000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "auto_gross_margin_ex_credits",
+                "mandatory":       True,
+                "search_phrases":  ["auto gross margin ex credits", "ex regulatory credits"],
+                "compute_hint":    "Auto gross margin EXCLUDING ZEV credits (TSLA-specific; -ve for cash-burning EVs)",
+                "clamp":           (-0.10, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "fall back to total auto gross margin from FMP + flag",
+            },
+            {
+                "key":             "ev_mix_pct",
+                "mandatory":       False,
+                "search_phrases":  ["EV mix", "BEV mix", "electrification rate"],
+                "compute_hint":    "EV/BEV deliveries as % of total (legacy OEMs only — N/A for pure-EV)",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "free_cash_flow_per_vehicle_usd",
+                "mandatory":       False,
+                "search_phrases":  ["FCF per vehicle", "free cash flow per car"],
+                "compute_hint":    "FCF per delivered vehicle (USD)",
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4 earnings call delivery + mix breakdown",
+            "Latest 10-K",
+            "Production reports (TSLA, RIVN, LCID monthly disclosures)",
+        ],
+    },
+
+    # ── Biopharma: Managed Care (UNH, ELV, HUM, CI, CVS) ──────────────────
+    # NOTE: Currently routed to Biopharma sector in TICKER_SECTOR_LOOKUP but
+    # may need a HealthcareServices sector creation in a follow-up PR.
+    "Managed Care": {
+        "sector":         "Biopharma",
+        "anchor_methods": ["DCF", "P/E (ops)", "EV/EBITDA"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "medical_loss_ratio", "direction": "lower_better",
+                 "bands": [{"max": 0.84, "mult": 1.3, "label": "elite"}, {"max": 0.88, "mult": 1.15, "label": "strong"}, {"max": 0.92, "mult": 1.0, "label": "in-band"}, {"max": 99.0, "mult": 0.9, "label": "weak"}]}
+            ],
+            "cap": [0.7, 1.5],
+        },
+        "risk_adjustment": {
+            "kpi": "debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 2.0, "mult": 1.1, "label": "fortress"},
+                      {"max": 4.0, "mult": 1.0, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "medical_loss_ratio",
+                "mandatory":       True,
+                "search_phrases":  ["medical loss ratio", "MLR", "medical cost ratio"],
+                "compute_hint":    "MLR — claims paid / premium revenue (target <0.85)",
+                "clamp":           (0.75, 0.95),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use 0.83 industry mid + flag",
+            },
+            {
+                "key":             "members_yoy_pct",
+                "mandatory":       True,
+                "search_phrases":  ["membership growth", "members grew", "lives added"],
+                "compute_hint":    "Membership / enrollment growth YoY (decimal)",
+                "clamp":           (-0.10, 0.20),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "medicare_advantage_mix_pct",
+                "mandatory":       True,
+                "search_phrases":  ["Medicare Advantage", "MA membership", "MA mix"],
+                "compute_hint":    "Medicare Advantage members as % of total (higher-margin segment)",
+                "clamp":           (0.0, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "premium_revenue_pmpm_usd",
+                "mandatory":       False,
+                "search_phrases":  ["PMPM", "per member per month"],
+                "compute_hint":    "Premium revenue per member per month (USD)",
+                "clamp":           (200.0, 2000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "reimbursement_rate_change_pct",
+                "mandatory":       False,
+                "search_phrases":  ["CMS rate notice", "reimbursement rate", "rate update"],
+                "compute_hint":    "CMS reimbursement rate change (decimal — regulatory tailwind/headwind)",
+                "clamp":           (-0.10, 0.10),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Q4 earnings call + CMS Final Notice analysis",
+            "Latest 10-K",
+            "CMS rate-update letters (annual)",
+        ],
+    },
+
+# ════════════════════════════════════════════════════════════════════
+# AUTO-GENERATED FROM PROFILE_CATALOG.md
+# 48 sub-profiles built from Gemini-authored catalog specs
+# (skips: 16 already-shipped framework + Hyperscaler / Tech Conglomerate)
+# ════════════════════════════════════════════════════════════════════
+
+# ── Biopharma ──────────────────────────────────────────────────
+    'CDMO / Life Science Tools': {
+        "sector":         'Biopharma',
+        "anchor_methods": ['P/E', 'EV/EBITDA', 'DCF', 'FCF Yield'],
+        "kpis": [
+            {
+                "key":             'book_to_bill_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['book-to-bill ratio', 'net orders divided by revenue', 'order-to-shipment ratio'],
+                "clamp":           (0.7, 1.5),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'backlog_usd',
+                "mandatory":       True,
+                "search_phrases":  ['total order backlog', 'contracted revenue backlog', 'closing backlog balance'],
+                "clamp":           (500000000, 50000000000),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'utilization_rate_pct',
+                "mandatory":       False,
+                "search_phrases":  ['capacity utilization', 'manufacturing utilization'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['10-K / segment reporting', 'Book-to-bill announcements', 'Quarterly capacity utilization updates'],
+    },
+
+    'MedTech / Devices': {
+        "sector":         'Biopharma',
+        "anchor_methods": ['EV/Revenue'],
+        "kpis": [
+            {
+                "key":             'procedure_volume_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['procedure volume growth', 'surgical case volume', 'underlying utilization growth'],
+                "clamp":           (-0.15, 0.3),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'new_product_sales_pct',
+                "mandatory":       True,
+                "search_phrases":  ['vitality index', 'revenue from products launched in last 3 years', 'new product contribution'],
+                "compute_hint":    'new_product_revenue / total_revenue',
+                "clamp":           (0.05, 0.5),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'market_share_pct',
+                "mandatory":       False,
+                "search_phrases":  ['segment share', 'market penetration'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['NPI (New Product Introduction) Vitality Index reports', 'Hospital capex budgets'],
+    },
+
+# ── Consumer ──────────────────────────────────────────────────
+    'Apparel / Athletic Wear': {
+        "sector":         'Consumer',
+        "anchor_methods": ['EV/EBITDA', 'DCF', 'P/E', 'Brand Valuation'],
+        "kpis": [
+            {
+                "key":             'sssg_pct',
+                "mandatory":       True,
+                "search_phrases":  ['same-store sales growth', 'comparable store sales', 'comp sales growth'],
+                "compute_hint":    '(current_period_comp_sales / prior_period_comp_sales) - 1',
+                "clamp":           (-0.2, 0.4),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'inventory_turnover',
+                "mandatory":       True,
+                "search_phrases":  ['inventory turnover ratio', 'inventory turns', 'COGS / average inventory'],
+                "compute_hint":    'annual_COGS / average_inventory',
+                "clamp":           (2.0, 15.0),
+                "source":          'F',
+                "extractor_only":  False,
+            },
+            {
+                "key":             'dtc_revenue_pct',
+                "mandatory":       False,
+                "search_phrases":  ['Direct-to-Consumer sales mix', 'DTC revenue share'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Quarterly SSSG (Same-Store Sales Growth) disclosures', 'Inventory turnover schedules in 10-K footnotes'],
+    },
+
+    'Consumer Durables': {
+        "sector":         'Consumer',
+        "anchor_methods": ['EV/EBITDA', 'P/E', 'DCF', 'FCF Yield'],
+        "kpis": [
+            {
+                "key":             'new_orders_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['new order intake growth', 'order volume change', 'incoming orders YOY'],
+                "clamp":           (-0.3, 0.6),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'warranty_expense_pct',
+                "mandatory":       True,
+                "search_phrases":  ['warranty costs as % of sales', 'product warranty expense ratio', 'warranty accruals / revenue'],
+                "compute_hint":    'total_warranty_accrual / total_revenue',
+                "clamp":           (0.005, 0.05),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'raw_material_cost_delta',
+                "mandatory":       False,
+                "search_phrases":  ['input cost inflation', 'commodity price impact'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['New order intake reports', 'Raw material input cost bridges', 'Warranty accrual tables'],
+    },
+
+    'Consumer Growth': {
+        "sector":         'Consumer',
+        "anchor_methods": ['DCF', 'EV/Revenue', 'EV/EBITDA'],
+        "kpis": [
+            {
+                "key":             'cac_usd',
+                "mandatory":       True,
+                "search_phrases":  ['customer acquisition cost', 'blended CAC', 'cost to acquire a new customer'],
+                "clamp":           (5, 500),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'gmv_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['Gross Merchandise Value growth', 'total platform volume growth', 'GMV YOY'],
+                "clamp":           (-0.1, 2.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'payback_period_months',
+                "mandatory":       False,
+                "search_phrases":  ['time to recover CAC', 'customer break-even'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Unit economics disclosures (CAC/LTV)', 'Platform GMV growth logs', 'Marketing intensity reports'],
+    },
+
+    'Food & Beverage': {
+        "sector":         'Consumer',
+        "anchor_methods": ['P/E', 'DCF', 'EV/EBITDA', 'Brand Valuation'],
+        "kpis": [
+            {
+                "key":             'volume_vs_price_mix',
+                "mandatory":       True,
+                "search_phrases":  ['organic volume growth', 'pricing contribution to revenue', 'price/mix impact'],
+                "clamp":           (-0.15, 0.25),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'ad_promotion_pct',
+                "mandatory":       True,
+                "search_phrases":  ['advertising and promotion as % of sales', 'A&P intensity', 'marketing spend ratio'],
+                "compute_hint":    'total_marketing_spend / total_revenue',
+                "clamp":           (0.02, 0.2),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'input_cost_coverage',
+                "mandatory":       False,
+                "search_phrases":  ['gross margin bridge', 'cost of goods sold analysis'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Organic volume vs price mix reports', 'Commodity cost coverage disclosures', 'A&P spend'],
+    },
+
+    'Household / Personal': {
+        "sector":         'Consumer',
+        "anchor_methods": ['P/E', 'EV/EBITDA', 'DCF'],
+        "kpis": [
+            {
+                "key":             'organic_sales_growth',
+                "mandatory":       True,
+                "search_phrases":  ['organic revenue growth', 'underlying sales', 'sales growth ex-FX/M&A'],
+                "compute_hint":    '(revenue_ex_mna_fx / prior_revenue) - 1',
+                "clamp":           (-0.05, 0.15),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'market_share_delta',
+                "mandatory":       True,
+                "search_phrases":  ['market share gain/loss', 'share points change', 'category penetration delta'],
+                "compute_hint":    'current_share - prior_share',
+                "clamp":           (-0.03, 0.03),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'premium_segment_mix',
+                "mandatory":       False,
+                "search_phrases":  ['prestige brand mix', 'premium product revenue share', 'high-end contribution'],
+                "compute_hint":    'premium_revenue / total_revenue',
+                "clamp":           (0.1, 0.65),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'gross_margin_bridge',
+                "mandatory":       False,
+                "search_phrases":  ['gross margin price/mix impact', 'commodity cost headwind', 'COGS inflation delta'],
+                "compute_hint":    'change in gross margin basis points',
+                "clamp":           (-0.1, 0.1),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+        ],
+        "source_priority": ['10-K Segmented Disclosures', 'Nielsen / IRI Market Share Reports', 'Management Commentary'],
+    },
+
+    'Luxury Goods': {
+        "sector":         'Consumer',
+        "anchor_methods": ['P/E Premium'],
+        "kpis": [
+            {
+                "key":             'asp_growth_pct',
+                "mandatory":       True,
+                "search_phrases":  ['average selling price growth', 'pricing power impact', 'ASP increase'],
+                "clamp":           (-0.05, 0.25),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'china_revenue_mix',
+                "mandatory":       True,
+                "search_phrases":  ['Greater China revenue share', 'exposure to Chinese consumer', 'China region sales %'],
+                "clamp":           (0.1, 0.5),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'store_network_growth',
+                "mandatory":       False,
+                "search_phrases":  ['net new boutiques', 'square footage expansion'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['High-net-worth sentiment indices', 'Regional exposure mix (LVMH/Hermès reports)'],
+    },
+
+    'Membership / Subscription Retail': {
+        "sector":         'Consumer',
+        "anchor_methods": ['P/E', 'DCF', 'FCF Yield'],
+        "kpis": [
+            {
+                "key":             'renewal_rate_pct',
+                "mandatory":       True,
+                "search_phrases":  ['membership renewal rate', 'member retention percentage', 'renewal rate'],
+                "compute_hint":    'renewed_members / total_base',
+                "clamp":           (0.75, 0.99),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'fee_revenue_pct_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['membership fees as % of EBITDA', 'fee income contribution to profit'],
+                "compute_hint":    'total_membership_fees / adjusted_EBITDA',
+                "clamp":           (0.3, 0.95),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'new_club_growth_yoy',
+                "mandatory":       False,
+                "search_phrases":  ['net new warehouse openings', 'club count growth', 'unit expansion count'],
+                "compute_hint":    '(current_clubs / prior_clubs) - 1',
+                "clamp":           (0.01, 0.1),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'mkt_penetration_per_region',
+                "mandatory":       False,
+                "search_phrases":  ['households per club location', 'market saturation', 'club density'],
+                "compute_hint":    'households_in_radius / club_count',
+                "clamp":           (1, 1000),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+        ],
+        "source_priority": ['Quarterly Membership Supplements', '10-K Deferred Revenue Footnotes'],
+    },
+
+    'Traditional Retail': {
+        "sector":         'Consumer',
+        "anchor_methods": ['EV/EBITDAR'],
+        "kpis": [
+            {
+                "key":             'sssg_pct',
+                "mandatory":       True,
+                "search_phrases":  ['same-store sales growth', 'comparable store sales', 'comp sales growth'],
+                "compute_hint":    '(current_period_comp_sales / prior_period_comp_sales) - 1',
+                "clamp":           (-0.2, 0.4),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'inventory_turnover',
+                "mandatory":       True,
+                "search_phrases":  ['inventory turnover ratio', 'inventory turns', 'COGS / average inventory'],
+                "compute_hint":    'annual_COGS / average_inventory',
+                "clamp":           (2.0, 15.0),
+                "source":          'F',
+                "extractor_only":  False,
+            },
+            {
+                "key":             'sales_per_sq_ft',
+                "mandatory":       False,
+                "search_phrases":  ['store productivity', 'revenue per square foot'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Quarterly SSSG (Same-Store Sales Growth) disclosures', 'Lease liability footnotes'],
+    },
+
+    'Travel & Dining': {
+        "sector":         'Consumer',
+        # Multi-method anchor list — single EV/EBITDA was too fragile when
+        # shares_out missing (audit Apr 2026: MCD test failed with only 1 method).
+        "anchor_methods": ['EV/EBITDA', 'P/E (ops)', 'DCF (FCF)'],
+        # V3.1: system-wide sales growth = brand pricing power for franchise/royalty model
+        "quality_tiers": {
+            "kpi_bands": [{
+                "kpi": "system_wide_sales_growth", "direction": "higher_better",
+                # Calibrated for mature brand-royalty model: 5%+ sustained growth
+                # is genuinely premium for QSR (MCD/SBUX class).
+                "bands": [{"min": 0.10, "mult": 1.30, "label": "best-in-class"},
+                          {"min": 0.05, "mult": 1.20, "label": "premium brand"},
+                          {"min": 0.02, "mult": 1.10, "label": "above-avg"},
+                          {"min": 0.0,  "mult": 1.00, "label": "in-band"},
+                          {"min": -1.0, "mult": 0.85, "label": "negative comp"}],
+            }],
+            "cap": [0.80, 1.40],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 2.5,  "mult": 1.10, "label": "fortress"},
+                      {"max": 4.0,  "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.90, "label": "leveraged"}],
+        },
+        "kpis": [
+            {
+                "key":             'revpar_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['RevPAR growth', 'Revenue Per Available Room YOY', 'hotel yield growth'],
+                "clamp":           (-0.1, 0.5),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'system_wide_sales_growth',
+                "mandatory":       True,
+                "search_phrases":  ['global system-wide sales growth', 'franchisee sales growth', 'total network sales'],
+                "clamp":           (-0.05, 0.3),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'take_rate_pct',
+                "mandatory":       False,
+                "search_phrases":  ['platform commission', 'marketplace take rate'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['System-wide sales reports', 'STR (Smith Travel Research) global data'],
+    },
+
+# ── Crypto ──────────────────────────────────────────────────
+    'Pre-Revenue Tech': {
+        "sector":         'Crypto',
+        "anchor_methods": ['Scenario Intrinsic Value', 'Comparable Transactions', 'Revenue DCF', 'TAM Penetration'],
+        "kpis": [
+            {
+                "key":             'active_developer_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['active ecosystem developers growth', 'GitHub contributor growth', 'developer commits YOY'],
+                "compute_hint":    '(current_period_devs / prior_period_devs) - 1',
+                "clamp":           (-0.5, 5.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'tam_penetration_pct',
+                "mandatory":       True,
+                "search_phrases":  ['market share of total addressable volume', 'protocol penetration rate', 'adoption share of target market'],
+                "compute_hint":    'protocol_volume / total_addressable_market_volume',
+                "clamp":           (0.0001, 0.2),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'token_velocity',
+                "mandatory":       False,
+                "search_phrases":  ['on-chain transaction volume vs market cap'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Ecosystem developer activity (GitHub / developer reports)', 'Protocol volume logs', 'TAM penetration benchmarks'],
+    },
+
+# ── Energy ──────────────────────────────────────────────────
+    'EPC Contractor': {
+        "sector":         'Energy',
+        "anchor_methods": ['Backlog DCF'],
+        "kpis": [
+            {
+                "key":             'backlog_burn_rate_pct',
+                "mandatory":       True,
+                "search_phrases":  ['backlog execution rate', 'revenue as % of opening backlog', 'project burn rate'],
+                "compute_hint":    'annual_revenue / opening_backlog_balance',
+                "clamp":           (0.1, 0.6),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'order_backlog_usd',
+                "mandatory":       True,
+                "search_phrases":  ['total contracted backlog', 'remaining performance obligations', 'order book value'],
+                "clamp":           (100000000, 100000000000),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'project_gross_margin',
+                "mandatory":       False,
+                "search_phrases":  ['weighted average project margin'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Contract award announcements', 'Project burn rate (Execution Velocity)'],
+    },
+
+    'Energy Tech Licensor': {
+        "sector":         'Energy',
+        "anchor_methods": ['Licensing NPV', 'Real Options', 'EV/Forward Revenue', 'TAM Penetration'],
+        "kpis": [
+            {
+                "key":             'royalty_revenue_pct',
+                "mandatory":       True,
+                "search_phrases":  ['royalty and licensing revenue share', 'recurring royalty contribution'],
+                "compute_hint":    'total_royalty_revenue / total_revenue',
+                "clamp":           (0.1, 0.95),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'patent_portfolio_count',
+                "mandatory":       True,
+                "search_phrases":  ['active patents', 'technology disclosures'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'licensed_capacity_gw',
+                "mandatory":       False,
+                "search_phrases":  ['total licensed capacity', 'installed technology base'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Royalty revenue segment logs', 'Patent portfolio count', 'Licensed capacity (GW) disclosures'],
+    },
+
+    'IPP': {
+        "sector":         'Energy',
+        "anchor_methods": ['PPA-backed DCF'],
+        "kpis": [
+            {
+                "key":             'ppa_coverage_pct',
+                "mandatory":       True,
+                "search_phrases":  ['capacity under long-term PPA', 'contracted revenue mix', 'PPA-backed capacity %'],
+                "clamp":           (0.4, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'weighted_avg_contract_life',
+                "mandatory":       True,
+                "search_phrases":  ['average remaining PPA term', 'WALE for power contracts', 'contract duration years'],
+                "clamp":           (5, 25),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'installed_capacity_gw',
+                "mandatory":       False,
+                "search_phrases":  ['total operating capacity', 'megawatts in operation'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Long-term Power Purchase Agreements (PPAs)', 'LCOE (Levelized Cost of Energy) benchmarks'],
+    },
+
+    'Merchant Power': {
+        "sector":         'Energy',
+        "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'Power Price DCF', 'LBO Floor'],
+        "kpis": [
+            {
+                "key":             'realized_spark_spread',
+                "mandatory":       True,
+                "search_phrases":  ['realized spark spread', 'dark spread per MWh', 'generation margin per unit'],
+                "compute_hint":    'average_realized_power_price - (fuel_cost_per_unit * heat_rate)',
+                "clamp":           (5.0, 100.0),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'hedged_revenue_pct',
+                "mandatory":       True,
+                "search_phrases":  ['forward hedging percentage', 'locked-in revenue for next 12 months'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'generation_output_mwh',
+                "mandatory":       False,
+                "search_phrases":  ['total gigawatt hours generated', 'GWh output'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Realized spark spread indices', 'Forward hedging logs', 'Generation availability (uptime) reports'],
+    },
+
+# ── Financials ──────────────────────────────────────────────────
+    'Alt Asset Manager': {
+        "sector":         'Financials',
+        "anchor_methods": ['SOTP'],
+        "kpis": [
+            {
+                "key":             'fre_margin_pct',
+                "mandatory":       True,
+                "search_phrases":  ['fee-related earnings margin', 'FRE margin'],
+                "clamp":           (0.2, 0.6),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'aum_growth_yoy_pct',
+                "mandatory":       True,
+                "search_phrases":  ['AUM growth', 'assets under management growth'],
+                "clamp":           (-0.1, 0.4),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'dry_powder_usd',
+                "mandatory":       False,
+                "search_phrases":  ['uncalled capital', 'dry powder'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Quarterly Non-GAAP Supplements'],
+    },
+
+    'Bank / Lending Institution': {
+        "sector":         'Financials',
+        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        "kpis": [
+            {
+                "key":             'nim_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Net Interest Margin', 'NIM', 'net interest spread'],
+                "clamp":           (0.01, 0.08),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'npl_ratio_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Non-Performing Loans ratio', 'Gross NPL ratio', 'impaired loans %'],
+                "clamp":           (0.0, 0.15),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'efficiency_ratio',
+                "mandatory":       False,
+                "search_phrases":  ['cost-to-income ratio', 'Efficiency Ratio'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Statutory filings (NSE/BSE, SGX, 10-K)', 'NIM/NPL ratio disclosures', 'CASA (Current and Savings Account) mix reports'],
+    },
+
+    'Brokerage': {
+        "sector":         'Financials',
+        "anchor_methods": ['P/E'],
+        "kpis": [
+            {
+                "key":             'net_new_assets_usd',
+                "mandatory":       True,
+                "search_phrases":  ['net new assets', 'NNA'],
+                "clamp":           (1000000000, 500000000000),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'interest_earning_assets_usd',
+                "mandatory":       True,
+                "search_phrases":  ['total interest-earning assets', 'IEA'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'cash_as_pct_of_client_assets',
+                "mandatory":       False,
+                "search_phrases":  ['cash as % of total client assets'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'recurring_data_rev_pct',
+                "mandatory":       False,
+                "search_phrases":  ['recurring data revenue', 'information services mix'],
+                "clamp":           (0.1, 0.7),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": ['SEC 10-K/Q', 'Supplemental Earnings Data', 'Management Commentary'],
+    },
+
+    'EM Bank': {
+        "sector":         'Financials',
+        "anchor_methods": ['Residual Income / P/TBV'],
+        "kpis": [
+            {
+                "key":             'casa_ratio_pct',
+                "mandatory":       True,
+                "search_phrases":  ['CASA ratio', 'current and savings account mix'],
+                "clamp":           (0.2, 0.6),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'npl_ratio_pct',
+                "mandatory":       True,
+                "search_phrases":  ['non-performing loan ratio', 'gross NPL'],
+                "clamp":           (0.0, 0.15),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'nim_pct',
+                "mandatory":       False,
+                "search_phrases":  ['net interest margin'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Statutory Filings (NSE/BSE/SGX)'],
+    },
+
+    'EM Bank (Premium)': {
+        "sector":         'Financials',
+        "anchor_methods": ['Residual Income / P/TBV'],
+        "kpis": [
+            {
+                "key":             'casa_ratio_pct',
+                "mandatory":       True,
+                "search_phrases":  ['CASA ratio', 'current and savings account mix'],
+                "clamp":           (0.2, 0.6),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'roa_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Return on Assets'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'provision_coverage_ratio',
+                "mandatory":       False,
+                "search_phrases":  ['PCR', 'NPL coverage'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'npl_ratio_pct',
+                "mandatory":       False,
+                "search_phrases":  ['non-performing loan ratio', 'gross NPL'],
+                "clamp":           (0.0, 0.15),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": ['Statutory Filings (NSE/BSE/SGX)'],
+    },
+
+    'FinTech': {
+        "sector":         'Financials',
+        "anchor_methods": ['EV/NTM Revenue'],
+        "kpis": [
+            {
+                "key":             'tpv_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['Total Payment Volume growth', 'processed volume'],
+                "clamp":           (0.05, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'tpv_growth_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Total Payment Volume growth', 'TPV YOY', 'processed volume expansion'],
+                "clamp":           (-0.1, 1.5),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'take_rate_bps',
+                "mandatory":       True,
+                "search_phrases":  ['net take rate in bps', 'revenue as bps of volume'],
+                "clamp":           (5, 300),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'ltv_cac_ratio',
+                "mandatory":       False,
+                "search_phrases":  ['lifetime value to acquisition cost'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Take-rate (bps) trends', 'TPV (Total Payment Volume) growth logs'],
+    },
+
+    'Holding Company': {
+        "sector":         'Financials',
+        "anchor_methods": ['SOTP / Net Asset Value', 'NAV Discount', 'DDM'],
+        "kpis": [
+            {
+                "key":             'sotp_nav_per_share',
+                "mandatory":       True,
+                "search_phrases":  ['intrinsic value per share', 'Sum-of-the-parts NAV', 'book value plus look-through'],
+                "clamp":           (100, 1000000),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'look_through_earnings_usd',
+                "mandatory":       True,
+                "search_phrases":  ['proportionate share of investee earnings', 'look-through net income', 'total economic earnings'],
+                "clamp":           (1000000000, 200000000000),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'cash_and_equivalents_usd',
+                "mandatory":       False,
+                "search_phrases":  ['total cash and short-term investments'],
+                "source":          'F',
+                "extractor_only":  False,
+            },
+        ],
+        "source_priority": ['Intrinsic value / NAV per share disclosures', 'Look-through earnings tables', 'Cash / investment schedules'],
+    },
+
+    'Investment Bank': {
+        "sector":         'Financials',
+        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        "kpis": [
+            {
+                "key":             'advisory_backlog_growth',
+                "mandatory":       True,
+                "search_phrases":  ['M&A deal pipeline growth', 'investment banking backlog', 'advisory mandates'],
+                "clamp":           (-0.3, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'compensation_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['compensation and benefits as % of revenue', 'bonus pool ratio', 'staff cost ratio'],
+                "compute_hint":    'total_comp_expense / total_net_revenue',
+                "clamp":           (0.3, 0.55),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'assets_under_custody_usd',
+                "mandatory":       False,
+                "search_phrases":  ['AUC', 'total client assets'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Advisory / M&A backlog pipeline growth', 'Compensation-to-revenue ratio', 'Assets under custody (AUC)'],
+    },
+
+    'Market Infrastructure': {
+        "sector":         'Financials',
+        "anchor_methods": ['P/E'],
+        "kpis": [
+            {
+                "key":             'recurring_data_rev_pct',
+                "mandatory":       True,
+                "search_phrases":  ['recurring data revenue', 'information services mix'],
+                "clamp":           (0.1, 0.7),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'avg_daily_volume_adv',
+                "mandatory":       True,
+                "search_phrases":  ['average daily volume', 'ADV by product', 'total contracts traded per day'],
+                "clamp":           (100000, 50000000),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'recurring_data_revenue_pct',
+                "mandatory":       True,
+                "search_phrases":  ['data and analytics revenue share', 'non-transactional revenue %'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'clearing_fee_per_contract',
+                "mandatory":       False,
+                "search_phrases":  ['RPC', 'rate per contract', 'capture rate'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['SEC 10-K/Q', 'Exchange ADV Reports', 'Supplemental Segment Data'],
+    },
+
+    'Money Center Bank (EU)': {
+        "sector":         'Financials',
+        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        "kpis": [
+            {
+                "key":             'cet1_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['Common Equity Tier 1 ratio', 'CET1 solvency', 'fully loaded CET1'],
+                "clamp":           (0.1, 0.2),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cost_of_risk_bps',
+                "mandatory":       True,
+                "search_phrases":  ['impairment charge basis points', 'cost of risk'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'leverage_ratio_delegated',
+                "mandatory":       False,
+                "search_phrases":  ['EU leverage ratio', 'Tier 1 leverage'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Basel III / CET1 ratio filings', 'EU leverage ratio disclosures', 'Cost-of-risk (bps) logs'],
+    },
+
+    'Mortgage/GSE': {
+        "sector":         'Financials',
+        "anchor_methods": ['None'],
+        "kpis": [
+            {
+                "key":             'net_charge_off_pct',
+                "mandatory":       True,
+                "search_phrases":  ['NCO ratio', 'annualized charge-offs'],
+                "clamp":           (0.0, 0.05),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cet1_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['CET1 ratio', 'common equity tier 1'],
+                "clamp":           (0.08, 0.18),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'delinquency_rate_90plus',
+                "mandatory":       True,
+                "search_phrases":  ['90-day delinquency rate', 'mortgage non-accrual ratio', 'serious delinquency rate'],
+                "clamp":           (0.0, 0.15),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'g_fee_rate_bps',
+                "mandatory":       True,
+                "search_phrases":  ['guarantee fee rate', 'G-fee yields'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'servicing_portfolio_val_usd',
+                "mandatory":       False,
+                "search_phrases":  ['MSR fair value', 'Mortgage Servicing Rights'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['SEC 10-K/Q', 'FHFA Monthly Summary Reports', 'Quarterly Credit Supplements'],
+    },
+
+    'Neo/Challenger': {
+        "sector":         'Financials',
+        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        "kpis": [
+            {
+                "key":             'cost_to_serve_per_user',
+                "mandatory":       True,
+                "search_phrases":  ['operating cost per active user', 'service cost per head', 'opex per customer'],
+                "compute_hint":    'total_operating_expenses / total_active_users',
+                "clamp":           (1.0, 100.0),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'deposit_beta_pct',
+                "mandatory":       True,
+                "search_phrases":  ['rate pass-through to depositors', 'deposit beta'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'arpu_monthly_usd',
+                "mandatory":       False,
+                "search_phrases":  ['average revenue per active user', 'monthly ARPU'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Cost-to-serve per user', 'Deposit beta (rate pass-through) logs', 'Monthly ARPU'],
+    },
+
+    'Payment Networks': {
+        "sector":         'Financials',
+        "anchor_methods": ['EV/NTM Revenue'],
+        "kpis": [
+            {
+                "key":             'take_rate_bps',
+                "mandatory":       True,
+                "search_phrases":  ['net take rate in bps', 'revenue as bps of volume'],
+                "clamp":           (5, 300),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'tpv_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['Total Payment Volume growth', 'processed volume'],
+                "clamp":           (0.05, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cross_border_vol_growth_pct',
+                "mandatory":       True,
+                "search_phrases":  ['cross-border volume growth', 'international transaction growth'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'rebates_and_incentives_pct_rev',
+                "mandatory":       True,
+                "search_phrases":  ['client incentives as % of gross revenue'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'processed_transactions_yoy',
+                "mandatory":       False,
+                "search_phrases":  ['total processed transactions', 'transaction count growth'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['SEC 10-K/Q', 'Quarterly Operating Statistics', 'Earnings Presentations'],
+    },
+
+    'Regional Bank': {
+        "sector":         'Financials',
+        "anchor_methods": ['Residual Income', 'P/TBV', 'P/E', 'Excess Capital'],
+        "kpis": [
+            {
+                "key":             'nim_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Net Interest Margin', 'NIM', 'net interest spread'],
+                "clamp":           (0.01, 0.08),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'npl_ratio_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Non-Performing Loans ratio', 'Gross NPL ratio', 'impaired loans %'],
+                "clamp":           (0.0, 0.15),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'loan_to_deposit_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['LDR', 'Loan-to-Deposit ratio'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'tier_1_capital_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['Tier 1 capital'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'yield_on_advances_pct',
+                "mandatory":       False,
+                "search_phrases":  ['loan yield', 'average interest on advances'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Statutory filings (NSE/BSE, SGX, 10-K)', 'NIM/NPL ratio disclosures', 'CASA mix reports'],
+    },
+
+    'Super-Regional Bank': {
+        "sector":         'Financials',
+        "anchor_methods": ['None'],
+        "kpis": [
+            {
+                "key":             'net_charge_off_pct',
+                "mandatory":       True,
+                "search_phrases":  ['NCO ratio', 'annualized charge-offs'],
+                "clamp":           (0.0, 0.05),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cet1_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['CET1 ratio', 'common equity tier 1'],
+                "clamp":           (0.08, 0.18),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'efficiency_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['cost-to-income', 'non-interest expense % of revenue'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'net_charge_offs_pct',
+                "mandatory":       True,
+                "search_phrases":  ['NCO ratio', 'annualized loan losses'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'tangible_book_value_per_share',
+                "mandatory":       False,
+                "search_phrases":  ['TBVPS', 'NAV per share ex-intangibles'],
+                "source":          'F',
+                "extractor_only":  False,
+            },
+        ],
+        "source_priority": ['SEC 10-K/Q', 'FFIEC Call Reports', 'Supplemental Earnings Presentations'],
+    },
+
+# ── Industrials ──────────────────────────────────────────────────
+    'Aerospace & Defense': {
+        "sector":         'Industrials',
+        # Multi-method anchor list — Aerospace/Defense often has lumpy EBITDA
+        # so blend with P/E and DCF for robustness (audit Apr 2026: LMT failed
+        # with only EV/EBITDA when shares_out was None).
+        "anchor_methods": ['EV/EBITDA', 'P/E (ops)', 'DCF (FCF)'],
+        # V3.1: book_to_bill_ratio = backlog visibility quality (LMT $150B+ backlog deserves premium)
+        "quality_tiers": {
+            "kpi_bands": [{
+                "kpi": "book_to_bill_ratio", "direction": "higher_better",
+                "bands": [{"min": 1.20, "mult": 1.20, "label": "best-in-class"},
+                          {"min": 1.05, "mult": 1.10, "label": "growing backlog"},
+                          {"min": 0.95, "mult": 1.00, "label": "in-band"},
+                          {"min": 0.0,  "mult": 0.90, "label": "shrinking"}],
+            }],
+            "cap": [0.80, 1.30],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 1.5,  "mult": 1.10, "label": "fortress"},
+                      {"max": 3.0,  "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "leveraged"}],
+        },
+        "kpis": [
+            {
+                "key":             'total_backlog_usd',
+                "mandatory":       True,
+                "search_phrases":  ['total funded and unfunded backlog', 'multi-year order book', 'RPO balance'],
+                "clamp":           (1000000000, 500000000000),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'book_to_bill_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['orders divided by revenue', 'book-to-bill', 'net new orders / shipments'],
+                "clamp":           (0.7, 1.5),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'aftermarket_revenue_pct',
+                "mandatory":       False,
+                "search_phrases":  ['spare parts and service revenue mix'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Federal defense budget appropriations (DOD)', 'Book-to-bill ratios'],
+    },
+
+    'Automotive (OEM)': {
+        "sector":         'Industrials',
+        "anchor_methods": ['EV/EBITDA', 'P/E', 'P/BV', 'FCF Yield'],
+        "kpis": [
+            {
+                "key":             'inventory_days_sales',
+                "mandatory":       True,
+                "search_phrases":  ['days of inventory on hand', 'dealer stock levels', 'DOH'],
+                "clamp":           (15, 100),
+                "source":          'F',
+                "extractor_only":  False,
+            },
+            {
+                "key":             'unit_deliveries_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['wholesale vehicle deliveries', 'retail sales volume growth', 'unit sales YOY'],
+                "clamp":           (-0.25, 0.4),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'ev_delivery_mix_pct',
+                "mandatory":       False,
+                "search_phrases":  ['EV penetration', 'electrification share of total units'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ["Dealer inventory 'days of supply' (DOH)", 'Wholesale unit delivery logs', 'EV delivery mix percentage'],
+    },
+
+    'Capital Goods': {
+        "sector":         'Industrials',
+        "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'ROIC vs WACC', 'P/E'],
+        "kpis": [
+            {
+                "key":             'organic_revenue_growth',
+                "mandatory":       True,
+                "search_phrases":  ['organic revenue growth', 'like-for-like sales growth', 'revenue growth ex-FX/M&A'],
+                "clamp":           (-0.2, 0.4),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'book_to_bill_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['order-to-delivery ratio'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'service_revenue_mix_pct',
+                "mandatory":       False,
+                "search_phrases":  ['service and maintenance revenue share'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Organic revenue growth ex-FX/M&A', 'Book-to-bill ratios', 'High-margin service revenue mix'],
+    },
+
+# ── Materials ──────────────────────────────────────────────────
+    'Specialty Chemicals': {
+        "sector":         'Materials',
+        "anchor_methods": ['EV/EBITDA', 'P/E', 'FCF Yield', 'ROIC'],
+        "kpis": [
+            {
+                "key":             'specialty_mix_pct',
+                "mandatory":       True,
+                "search_phrases":  ['revenue mix from specialty vs commodity', 'high-value product contribution', 'specialty chemical segment revenue'],
+                "compute_hint":    'specialty_segment_revenue / total_revenue',
+                "clamp":           (0.1, 1.0),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'rd_intensity_pct',
+                "mandatory":       True,
+                "search_phrases":  ['R&D as percentage of sales', 'research and development intensity', 'innovation spend'],
+                "compute_hint":    'total_rd_expense / total_revenue',
+                "clamp":           (0.01, 0.15),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'raw_material_pass_through_pct',
+                "mandatory":       False,
+                "search_phrases":  ['pricing surcharge effectiveness', 'input cost recovery rate'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Segmented sales (specialty vs commodity)', 'R&D intensity-to-sales', 'Raw material pass-through effectiveness'],
+    },
+
+    'Steel / Metals': {
+        "sector":         'Materials',
+        "anchor_methods": ['EV/EBITDA', 'P/BV', 'FCF Yield', 'P/E'],
+        "kpis": [
+            {
+                "key":             'capacity_utilization_pct',
+                "mandatory":       True,
+                "search_phrases":  ['steel mill utilization rate', 'capacity utilization', 'plant operating rate'],
+                "compute_hint":    'actual_production / nameplate_capacity',
+                "clamp":           (0.5, 1.05),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'cost_per_tonne_usd',
+                "mandatory":       True,
+                "search_phrases":  ['cash cost of production per tonne', 'all-in sustaining cost per tonne', 'AISC steel'],
+                "compute_hint":    '(COGS + sustaining_capex) / total_tonnes_shipped',
+                "clamp":           (300, 1200),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'green_steel_mix_pct',
+                "mandatory":       False,
+                "search_phrases":  ['low-carbon steel production', 'EAF vs Blast Furnace mix'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Mill / capacity utilization rates', 'AISC (All-in Sustaining Cost) per tonne', 'Green-steel mix disclosures'],
+    },
+
+# ── ProfessionalServices ──────────────────────────────────────────────────
+    'Ad / Consulting': {
+        "sector":         'ProfessionalServices',
+        "anchor_methods": ['EV/EBIT', 'FCF Yield', 'P/E', 'Revenue DCF'],
+        "kpis": [
+            {
+                "key":             'organic_revenue_growth',
+                "mandatory":       True,
+                "search_phrases":  ['organic revenue growth ex-FX', 'like-for-like sales growth', 'revenue growth excluding acquisitions'],
+                "compute_hint":    '(revenue_ex_mna_fx / prior_revenue) - 1',
+                "clamp":           (-0.2, 0.4),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'personnel_cost_to_revenue',
+                "mandatory":       True,
+                "search_phrases":  ['staff costs as percentage of net revenue', 'personnel expense ratio', 'compensation and benefits / revenue'],
+                "compute_hint":    'total_employee_compensation / net_revenue',
+                "clamp":           (0.4, 0.85),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'net_new_billings',
+                "mandatory":       False,
+                "search_phrases":  ['new business wins', 'net account movement'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Personnel cost-to-revenue ratio', 'Organic revenue growth ex-FX', 'Net new business billings'],
+    },
+
+    'IT Services': {
+        "sector":         'ProfessionalServices',
+        "anchor_methods": ['P/E'],
+        "kpis": [
+            {
+                "key":             'attrition_rate_pct',
+                "mandatory":       True,
+                "search_phrases":  ['voluntary attrition', 'LTM attrition'],
+                "clamp":           (0.05, 0.3),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'utilization_rate_pct',
+                "mandatory":       True,
+                "search_phrases":  ['billable utilization', 'bench utilization'],
+                "clamp":           (0.7, 0.95),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'offshore_delivery_mix_pct',
+                "mandatory":       False,
+                "search_phrases":  ['offshore mix', 'global delivery center headcount %'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'digital_revenue_pct',
+                "mandatory":       False,
+                "search_phrases":  ['digital services mix', 'cloud and data revenue'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Earnings Presentations', 'Statutory Filings'],
+    },
+
+    'Payment Processors': {
+        "sector":         'ProfessionalServices',
+        "anchor_methods": ['EV/Gross Profit', 'EV/Volume', 'DCF', 'Rule of 40'],
+        "kpis": [
+            {
+                "key":             'tpv_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['Total Processing Volume growth', 'processed volume YOY', 'merchant volume growth'],
+                "compute_hint":    '(current_tpv / prior_tpv) - 1',
+                "clamp":           (-0.1, 1.5),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'blended_take_rate_bps',
+                "mandatory":       True,
+                "search_phrases":  ['net take rate in basis points', 'revenue as bps of volume', 'blended fee margin'],
+                "compute_hint":    '(total_revenue / TPV) * 10000',
+                "clamp":           (5, 500),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'e_commerce_volume_mix',
+                "mandatory":       False,
+                "search_phrases":  ['online vs card-present volume'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Total Processing Volume (TPV) growth', 'Net take rate (bps)', 'E-commerce vs card-present mix'],
+    },
+
+# ── Semiconductor ──────────────────────────────────────────────────
+    'Equipment / EDA': {
+        "sector":         'Semiconductor',
+        "anchor_methods": ['P/E', 'DCF', 'EV/EBITDA'],
+        "kpis": [
+            {
+                "key":             'book_to_bill_ratio',
+                "mandatory":       True,
+                "search_phrases":  ['book-to-bill ratio', 'net orders over shipments', 'order-to-bill'],
+                "compute_hint":    'total_new_orders / total_shipments',
+                "clamp":           (0.7, 1.6),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'service_revenue_pct',
+                "mandatory":       True,
+                "search_phrases":  ['installed base services revenue', 'recurring service and parts mix'],
+                "compute_hint":    'total_service_revenue / total_revenue',
+                "clamp":           (0.15, 0.5),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'rd_intensity_pct',
+                "mandatory":       False,
+                "search_phrases":  ['R&D as % of sales', 'research and development intensity'],
+                "compute_hint":    'total_RD_expense / total_revenue',
+                "clamp":           (0.05, 0.25),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'backlog_coverage_ratio',
+                "mandatory":       False,
+                "search_phrases":  ['backlog divided by quarterly revenue', 'months of backlog visibility'],
+                "compute_hint":    'total_backlog / avg_quarterly_revenue',
+                "clamp":           (2.0, 18.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+        ],
+        "source_priority": ['Book-to-Bill Press Releases', 'Foundry Capex Guidance (TSMC / Intel)'],
+    },
+
+    'OSAT / Packaging': {
+        "sector":         'Semiconductor',
+        "anchor_methods": ['EV/EBITDA', 'P/E', 'P/BV', 'FCF Yield'],
+        "kpis": [
+            {
+                "key":             'advanced_packaging_revenue_pct',
+                "mandatory":       True,
+                "search_phrases":  ['2.5D/3D packaging revenue share', 'CoWoS and advanced packaging mix', 'high-end packaging contribution'],
+                "compute_hint":    'advanced_packaging_revenue / total_revenue',
+                "clamp":           (0.05, 0.8),
+                "source":          'H',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'wafer_test_utilization_pct',
+                "mandatory":       True,
+                "search_phrases":  ['test and assembly utilization rate', 'backend utilization', 'factory operating level'],
+                "compute_hint":    'actual_wafer_starts / total_wafer_capacity',
+                "clamp":           (0.4, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'capital_intensity_pct',
+                "mandatory":       False,
+                "search_phrases":  ['capex as % of revenue'],
+                "source":          'F',
+                "extractor_only":  False,
+            },
+        ],
+        "source_priority": ['Advanced packaging revenue share (e.g. 2.5D/3D)', 'Wafer-test factory utilization', 'Capex-to-sales intensity'],
+    },
+
+# ── Tech ──────────────────────────────────────────────────
+    'Early Platform': {
+        "sector":         'Tech',
+        "anchor_methods": ['GMV-TAM Penetration', 'DCF', 'EV/NTM Revenue'],
+        "kpis": [
+            {
+                "key":             'gmv_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['Gross Merchandise Value growth', 'total platform volume growth', 'GMV YOY'],
+                "clamp":           (0.1, 10.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'customer_acquisition_cost_usd',
+                "mandatory":       True,
+                "search_phrases":  ['CAC', 'blended acquisition cost'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'burn_rate_monthly_usd',
+                "mandatory":       False,
+                "search_phrases":  ['monthly cash burn', 'net cash consumption'],
+                "source":          'H',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['GMV / take-rate expansion bps', 'Rule of 40 score logs', 'Monthly burn rate'],
+    },
+
+    'High-Growth Tech / AI': {
+        "sector":         'Tech',
+        "anchor_methods": ['Reverse DCF', 'TAM Penetration', 'EV/NTM Revenue'],
+        "kpis": [
+            {
+                "key":             'rpo_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['Remaining Performance Obligations growth', 'RPO YOY', 'backlog expansion'],
+                "clamp":           (0.0, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'net_retention_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Net Revenue Retention', 'NRR', 'net dollar retention'],
+                "clamp":           (0.8, 1.6),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'customer_acquisition_cost_usd',
+                "mandatory":       False,
+                "search_phrases":  ['CAC', 'blended acquisition cost'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Data center revenue mix', 'Lead-time (weeks) logs', 'Design-win pipeline quantity'],
+    },
+
+    'Hyper-Growth Platform': {
+        "sector":         'Tech',
+        "anchor_methods": ['GMV-TAM Penetration', 'DCF', 'EV/NTM Revenue'],
+        "kpis": [
+            {
+                "key":             'take_rate_expansion_bps',
+                "mandatory":       True,
+                "search_phrases":  ['take rate expansion basis points', 'platform fee increase', 'monetization rate delta'],
+                "compute_hint":    'current_take_rate_bps - prior_take_rate_bps',
+                "clamp":           (-100, 500),
+                "source":          'W',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'rule_of_40_score',
+                "mandatory":       True,
+                "search_phrases":  ['Rule of 40 score', 'revenue growth plus FCF margin'],
+                "compute_hint":    'revenue_growth_pct + fcf_margin_pct',
+                "clamp":           (-20, 120),
+                "source":          'H',
+                "extractor_only":  True,
+            },
+            {
+                "key":             'contribution_margin_pct',
+                "mandatory":       False,
+                "search_phrases":  ['unit contribution margin', 'variable margin per order'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['GMV / take-rate expansion bps', 'Rule of 40 score logs', 'Monthly burn rate'],
+    },
+
+    'Levered Subscription': {
+        "sector":         'Tech',
+        "anchor_methods": ['DCF', 'EV/EBITDA', 'LBO Analysis'],
+        "kpis": [
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net leverage ratio', 'Net Debt / Adjusted EBITDA', 'leverage covenant'],
+                "compute_hint":    '(total_debt - cash) / LTM_EBITDA',
+                "clamp":           (-1.0, 12.0),
+                "source":          'F',
+                "extractor_only":  False,
+            },
+            {
+                "key":             'fcf_debt_service_coverage',
+                "mandatory":       True,
+                "search_phrases":  ['FCF / interest expense', 'debt service coverage ratio'],
+                "source":          'F',
+                "extractor_only":  False,
+            },
+            {
+                "key":             'cost_of_debt_pct',
+                "mandatory":       False,
+                "search_phrases":  ['weighted-average cost of debt', 'interest rate on borrowings'],
+                "source":          'F',
+                "extractor_only":  False,
+            },
+        ],
+        "source_priority": ['Net debt-to-EBITDA (leverage covenants)', 'FCF / buyback yield', 'Debt service coverage ratios'],
+    },
+
+    'Mature Platform': {
+        "sector":         'Tech',
+        "anchor_methods": ['DCF', 'EV/EBITDA', 'LBO Analysis'],
+        "kpis": [
+            {
+                "key":             'fcf_yield_pct',
+                "mandatory":       True,
+                "search_phrases":  ['Free Cash Flow yield', 'FCF as percentage of market cap'],
+                "compute_hint":    'LTM_FCF / market_cap',
+                "clamp":           (0.01, 0.15),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'buyback_yield_pct',
+                "mandatory":       True,
+                "search_phrases":  ['share repurchase yield', 'buyback as % of market cap'],
+                "source":          'F',
+                "extractor_only":  False,
+            },
+            {
+                "key":             'dividend_payout_ratio',
+                "mandatory":       False,
+                "search_phrases":  ['dividend payout ratio', 'dividends / net income'],
+                "source":          'F',
+                "extractor_only":  False,
+            },
+        ],
+        "source_priority": ['Net debt-to-EBITDA (leverage covenants)', 'FCF / buyback yield', 'Debt service coverage ratios'],
+    },
+
+# ── Transportation ──────────────────────────────────────────────────
+    'Airlines': {
+        "sector":         'Transportation',
+        "anchor_methods": ['EV/EBITDAR', 'FCF Yield', 'P/BV'],
+        "kpis": [
+            {
+                "key":             'casm_ex_fuel',
+                "mandatory":       True,
+                "search_phrases":  ['cost per available seat mile ex-fuel', 'unit cost ex-fuel', 'CASM-ex'],
+                "compute_hint":    'operating_exp_ex_fuel / available_seat_miles',
+                "clamp":           (0.08, 0.28),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'load_factor_pct',
+                "mandatory":       True,
+                "search_phrases":  ['passenger load factor', 'occupancy rate', 'percentage of seats filled'],
+                "compute_hint":    'revenue_passenger_miles / available_seat_miles',
+                "clamp":           (0.65, 0.95),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'yield_per_pax_mile',
+                "mandatory":       False,
+                "search_phrases":  ['passenger yield', 'average fare per mile', 'yield per RPM'],
+                "compute_hint":    'passenger_revenue / revenue_passenger_miles',
+                "clamp":           (0.1, 0.45),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  False,
+            },
+            {
+                "key":             'prasm_yoy',
+                "mandatory":       False,
+                "search_phrases":  ['Passenger Revenue per Available Seat Mile growth', 'PRASM change'],
+                "compute_hint":    '(current_PRASM / prior_PRASM) - 1',
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": ['Monthly Operating Statistics', '10-K Fleet Schedules'],
+    },
+
+    'Rail / Logistics': {
+        "sector":         'Transportation',
+        "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'P/E'],
+        "kpis": [
+            {
+                "key":             'operating_ratio_pct',
+                "mandatory":       True,
+                "search_phrases":  ['railroad operating ratio', 'operating expenses divided by revenue', 'efficiency ratio'],
+                "compute_hint":    'total_operating_expenses / total_revenue',
+                "clamp":           (0.5, 0.95),
+                "source":          'F',
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'revenue_ton_miles_growth',
+                "mandatory":       True,
+                "search_phrases":  ['RTM growth', 'revenue ton miles YOY', 'freight volume growth'],
+                "compute_hint":    '(current_rtm / prior_rtm) - 1',
+                "clamp":           (-0.15, 0.2),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'fuel_efficiency_delta',
+                "mandatory":       False,
+                "search_phrases":  ['fuel consumption per ton-mile'],
+                "source":          'W',
+                "extractor_only":  True,
+            },
+        ],
+        "source_priority": ['Operating Ratio (OR)', 'Revenue Ton Miles (RTM) growth', 'Fuel efficiency delta reports'],
+    },
+
+}
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# V3.2 — 3-Layer Search Phrase Enrichment
+#
+# Auto-augments per-KPI search_phrases at extraction time so the framework
+# data stays terse but the LLM gets rich phrase guidance. Same ~30 KPIs that
+# previously had 1-3 phrases each now get 5-10 phrases via pattern matching
+# and sector vocabulary, without touching 60 profile dicts.
+# ════════════════════════════════════════════════════════════════════════════
+
+# Layer 1 — KPI key-suffix patterns (cross-sector, KPI-shape-keyed)
+_PHRASE_LIBRARY: dict[str, list[str]] = {
+    "_ratio":      ["ratio", "expressed as %", "as decimal", "in basis points"],
+    "_pct":        ["%", "percent", "basis points", "bps", "as decimal"],
+    "_yoy":        ["YoY", "year-over-year", "vs prior year", "annual growth"],
+    "_growth":     ["YoY growth", "growth rate", "CAGR"],
+    "_margin":     ["margin", "as % of revenue", "as % of sales", "operating margin"],
+    "_per_share":  ["per share", "per diluted share", "DPS", "EPS"],
+    "_per_oz":     ["per oz", "per ounce", "per troy ounce"],
+    "_per_boe":    ["per BOE", "per barrel of oil equivalent", "per Mcfe"],
+    "_runway":     ["months of runway", "cash runway", "burn coverage"],
+    "_quartile":   ["quartile", "Q1/Q2/Q3/Q4", "decile rank"],
+    "_year":       ["year", "expiry year", "in 20XX"],
+    "_intensity":  ["intensity", "as % of revenue", "spending"],
+    "_coverage":   ["coverage ratio", "times covered", "x"],
+    "_yield":      ["yield", "% per annum", "yield-to-maturity"],
+}
+
+# Layer 2 — Sector-specific vocabulary (broad sector → standard industry terms)
+_SECTOR_LEXICON: dict[str, list[str]] = {
+    "Biopharma":   ["blockbuster", "patent cliff", "GLP-1", "PDUFA", "FDA approval",
+                    "Phase 3 readout", "label expansion", "exclusivity"],
+    "Healthcare":  ["MLR", "underwriting", "membership growth", "PMPM", "premium yield"],
+    "Financials":  ["Basel III", "RWA", "Tier 1 capital", "regulatory stress test",
+                    "leverage ratio", "loan-to-deposit"],
+    "Resources":   ["AISC", "C1 cost", "by-product credit", "ore grade",
+                    "reserve replacement", "PV-10", "cost curve"],
+    "Energy":      ["lifting cost", "F&D cost", "spot vs realised", "rate base",
+                    "regulatory lag", "PPA pricing", "spark spread"],
+    "Materials":   ["realized price", "throughput", "utilization rate", "spread"],
+    "Tech":        ["NRR", "ARR", "Rule of 40", "billings", "RPO", "magic number",
+                    "CAC payback", "logo retention", "GAAP-to-non-GAAP"],
+    "Semiconductor": ["wafer", "design wins", "lead times", "GM%", "fab utilisation",
+                      "node generation", "AI accelerator"],
+    "Industrials": ["book-to-bill", "backlog conversion", "order momentum",
+                    "service revenue mix", "aftermarket"],
+    "Industrial":  ["book-to-bill", "backlog conversion", "order momentum"],
+    "Consumer":    ["SSSG", "comp sales", "store productivity", "unit growth",
+                    "mix headwind", "pricing power"],
+    "Telco":       ["ARPU", "churn", "5G coverage", "fiber penetration", "subscriber adds",
+                    "FTTH"],
+    "Transportation": ["load factor", "yield per mile", "operating ratio", "RTM"],
+    "Crypto":      ["DAU", "TPS", "TVL", "hash rate", "block reward"],
+    "ProfessionalServices": ["billable utilisation", "attrition", "offshore mix",
+                             "attach rate"],
+}
+
+# Layer 3 — Section-aware extraction hints (where in the report to look)
+_SECTION_HINTS = (
+    "Look in BOTH (a) the 2F.5b sub-profile-specific metrics table AND "
+    "(b) the narrative prose of 2F.1-2F.4 AND (c) the 2F.6 Management "
+    "Guidance section. KPI values may be quoted as midpoints, ranges, "
+    "or with citation markers like [12]."
+)
+
+
+def enrich_search_phrases(kpi: dict, sector: str) -> list[str]:
+    """V3.2 — auto-enrich KPI search_phrases without editing 60 profile dicts.
+
+    Returns deduped list of phrases =
+        kpi["search_phrases"] (curated minimum from framework data)
+      + Layer 1: pattern-matched variants from _PHRASE_LIBRARY (key suffix)
+      + Layer 2: sector-specific vocabulary (capped to top 4 to avoid bloat)
+      + Layer 3: narrative form of the KPI key itself ("net debt to ebitda")
+    """
+    out = list(kpi.get("search_phrases", []))
+    key = kpi.get("key", "").lower()
+    # Layer 1: pattern matching on key suffix
+    for suffix, lib in _PHRASE_LIBRARY.items():
+        if suffix in key:
+            out.extend(lib)
+    # Layer 2: sector lexicon (cap to keep prompt size bounded)
+    sector_terms = _SECTOR_LEXICON.get(sector, [])
+    out.extend(sector_terms[:4])
+    # Layer 3: narrative form of key itself
+    if "_" in key:
+        out.append(key.replace("_", " "))
+    # Dedupe preserving order
+    return list(dict.fromkeys(out))
+
+
+# ── Renderer 1: Section 2F overlay text ──────────────────────────────────────
+
+def render_search_overlay(
+    profile_name: str,
+    sector: str = "",
+    sub_sub: str = "",
+) -> str:
+    """L4 — produce the text to inject into Section 2F (between 2F.5 and 2F.6)
+    of the deep research system prompt.
+
+    Resolution order:
+      1. profile_name (e.g. "Insurance")
+      2. sector       (e.g. "Financials")
+      3. ""           (no append; generic 2F is unchanged)
+
+    sub_sub gate: when set (e.g. "P&C" or "Life"), filters to KPIs whose
+    `applies_to` includes the sub-sub-profile. When unset, all KPIs are listed.
+    """
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or SECTOR_KPI_FRAMEWORK.get(sector)
+    if not spec:
+        return ""
+    web_kpis = [k for k in spec["kpis"] if k.get("extractor_only")]
+    if sub_sub:
+        web_kpis = [
+            k for k in web_kpis
+            if not k.get("applies_to") or sub_sub in k["applies_to"]
+        ]
+    if not web_kpis:
+        return ""
+
+    mandatory = [k for k in web_kpis if k.get("mandatory")]
+    optional  = [k for k in web_kpis if not k.get("mandatory")]
+
+    lines: list[str] = [
+        f"\n2F.5b {profile_name.upper()}-SPECIFIC METRICS "
+        f"(in addition to generic 2F.1\u20132F.5 above):"
+    ]
+    sector_for_enrich = spec.get("sector", "")
+    if mandatory:
+        lines.append("\nMANDATORY (must appear in your Section 2F report):")
+        for k in mandatory:
+            # V3.2 enrichment: combine framework phrases + Layer 1 patterns + Layer 2 sector lexicon
+            enriched = enrich_search_phrases(k, sector_for_enrich)
+            phrases = " | ".join(f"'{p}'" for p in enriched[:8])
+            applies = (
+                f"  ({', '.join(k['applies_to'])} only)"
+                if k.get("applies_to") and not sub_sub else ""
+            )
+            hint = f" \u2014 {k['compute_hint']}" if k.get("compute_hint") else ""
+            lines.append(f"  - {k['key']}: search for {phrases}{applies}{hint}")
+    if optional:
+        lines.append("\nNICE-TO-HAVE (include when found):")
+        for k in optional:
+            enriched = enrich_search_phrases(k, sector_for_enrich)
+            phrases = " | ".join(f"'{p}'" for p in enriched[:6])
+            applies = (
+                f"  ({', '.join(k['applies_to'])} only)"
+                if k.get("applies_to") and not sub_sub else ""
+            )
+            lines.append(f"  - {k['key']}: {phrases}{applies}")
+    if spec.get("source_priority"):
+        lines.append(
+            f"\nSource priority: {' > '.join(spec['source_priority'])}"
+        )
+    lines.append(
+        "Cite each figure with date and source name "
+        "(e.g. \"Q1 2026 release 2026-04-15\")."
+    )
+    return "\n".join(lines) + "\n"
+
+
+# ── Renderer 2: extractor schema (system prompt + clamps dict) ───────────────
+
+def build_extractor_schema(profile_name: str) -> dict:
+    """L5 — auto-generate the extractor LLM system prompt + clamps dict from
+    the framework spec. Replaces hand-written schemas in _extract_X_metrics.
+
+    Returns:
+        {
+            "system_prompt": str,            # send to sdk_client.messages.create
+            "clamps":        dict[str, tuple],  # per-field (lo, hi) for validation
+            "kpi_keys":      list[str],      # all WEB-only field names
+            "mandatory":     list[str],      # subset that are required for completeness
+        }
+    """
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name)
+    if not spec:
+        return {"system_prompt": "", "clamps": {}, "kpi_keys": [], "mandatory": []}
+
+    web_kpis = [k for k in spec["kpis"] if k.get("extractor_only")]
+    clamps = {k["key"]: tuple(k["clamp"]) for k in web_kpis if "clamp" in k}
+    mandatory = [k["key"] for k in web_kpis if k.get("mandatory")]
+    sector = spec.get("sector", "")
+
+    # V3.2 — embed enriched search phrases per KPI so the extractor LLM
+    # has concrete terms to look for in the text (vs guessing what synonyms
+    # the report used).
+    schema_lines = []
+    for k in web_kpis:
+        enriched_phrases = enrich_search_phrases(k, sector)
+        # Cap phrase string length to keep prompt size bounded
+        phrase_str = ", ".join(enriched_phrases[:8])
+        if "clamp" in k:
+            schema_lines.append(
+                f"  {k['key']}: float ({k['clamp'][0]}-{k['clamp'][1]}, "
+                f"{k.get('compute_hint', '')}) "
+                f"[search: {phrase_str}]"
+            )
+        else:
+            schema_lines.append(
+                f"  {k['key']}: {k.get('compute_hint', 'free-form')} "
+                f"[search: {phrase_str}]"
+            )
+
+    rule_lines = []
+    for k in web_kpis:
+        if k.get("decimal_format"):
+            rule_lines.append(
+                f"  * {k['key']}: convert percentages to decimals "
+                f"(e.g. 95.3% \u2192 0.953)"
+            )
+
+    system_prompt = (
+        f"You are a {profile_name}-sector analyst. Extract structured KPIs from "
+        f"the research and return ONLY valid JSON (no markdown fences, no commentary).\n\n"
+        f"Schema (all fields OPTIONAL \u2014 omit if not substantiated by research):\n"
+        + "\n".join(schema_lines) + "\n"
+        + "  evidence: string \u2264300 chars citing research source\n\n"
+        + f"Where to look in the text: {_SECTION_HINTS}\n\n"
+        + f"Rules:\n"
+        + f"  * Return {{}} if the company isn't a {profile_name.lower()} business.\n"
+        + ("\n".join(rule_lines) + "\n" if rule_lines else "")
+    )
+
+    return {
+        "system_prompt": system_prompt,
+        "clamps":        clamps,
+        "kpi_keys":      [k["key"] for k in web_kpis],
+        "mandatory":     mandatory,
+    }
+
+
+# ── Renderer 3: validator (soft-mandatory completeness scoring) ──────────────
+
+def validate_extractor_output(profile_name: str, output: dict) -> dict:
+    """Annotate extractor output with _completeness_score + _mandatory_missing.
+
+    Soft-mandatory: NEVER raises. Missing mandatory KPIs are flagged for the
+    UI badge but the extractor still returns whatever it found. Downstream
+    method branches in dcf_agent apply per-KPI fallbacks.
+    """
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name)
+    if not spec:
+        output["_completeness_score"] = 1.0
+        return output
+
+    mandatory_keys = [
+        k["key"] for k in spec["kpis"] if k.get("mandatory")
+    ]
+    if not mandatory_keys:
+        output["_completeness_score"] = 1.0
+        return output
+
+    missing = [k for k in mandatory_keys if k not in output]
+    output["_mandatory_missing"]  = missing
+    output["_completeness_score"] = round(
+        (len(mandatory_keys) - len(missing)) / len(mandatory_keys), 2
+    )
+    return output
+
+
+# ── Renderer 4: generic LLM extractor (replaces hand-written _extract_X) ─────
+
+def extract_via_framework(
+    sdk_client,
+    model_name: str,
+    sections: dict[str, str],
+    deep_research: str,
+    ticker: str,
+    profile_name: str,
+) -> dict:
+    """L5 — generic sector extractor. Calls the LLM with the framework-rendered
+    system prompt, validates the output against framework clamps, and annotates
+    with completeness score.
+
+    Mirrors the input gate + try/except + parse + clamp + validate pipeline
+    used by the legacy _extract_X_metrics functions, but driven entirely by
+    the framework spec instead of hand-typed schemas.
+
+    Returns {} when not applicable or research too thin.
+    """
+    spec_built = build_extractor_schema(profile_name)
+    if not spec_built["system_prompt"]:
+        return {}     # profile not in framework — caller should use legacy extractor
+
+    if not deep_research and not sections:
+        return {}
+
+    section_2a = sections.get("2a") or sections.get("2A") or ""
+    section_2d = sections.get("2d") or sections.get("2D") or ""
+    section_2f = sections.get("2f") or sections.get("2F") or ""
+    # FIX (audit Apr 2026): Section 2F goes FIRST (the 2F.5b table contains
+    # the framework KPIs we're extracting). Old order was 2A+2D+2F which got
+    # truncated at 8000 chars when 2A was verbose, dropping 2F.5b entirely.
+    # New order: 2F-first + bumped truncation to 16000 chars (covers full
+    # Pharma/Bank reports without losing the KPI table).
+    combined = (section_2f + "\n\n" + section_2a + "\n\n" + section_2d).strip()
+    if not combined or len(combined) < 500:
+        combined = (deep_research or "")[:16000]
+    if not combined:
+        return {}
+
+    # Tightened mandatory-extraction directive: forces the LLM to actually
+    # search for each declared KPI rather than returning {} when uncertain.
+    mandatory_keys = spec_built.get("mandatory", [])
+    mandatory_directive = ""
+    if mandatory_keys:
+        mandatory_directive = (
+            f"\n\nMANDATORY: For each of these KPIs you MUST search the text "
+            f"for the value (look in section 2F.5b table format, narrative "
+            f"prose, and the Management Guidance section): "
+            f"{', '.join(mandatory_keys)}.\n"
+            f"If a value is in the text expressed as a range (e.g. '13-15%'), "
+            f"return the midpoint. If expressed as 'approximately X', return X. "
+            f"Only return null/omit if the value is genuinely absent.\n"
+        )
+
+    try:
+        # temperature=0.1 — extractors want deterministic JSON output. Default
+        # ~0.7 is fine for prose synthesis but causes Qwen to skip mandatory
+        # KPIs randomly (~25% recall observed). Mirror the fix from c0ce2e9
+        # which applied this to the re-extract adapter path.
+        resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=900,    # bumped from 600 to allow more KPIs + evidence
+            temperature=0.1,
+            system=spec_built["system_prompt"] + mandatory_directive,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Ticker: {ticker}\n\n"
+                    f"Research excerpts (Section 2F prioritised — KPI table "
+                    f"is typically in 2F.5b):\n{combined[:16000]}"
+                ),
+            }],
+        )
+        raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return {}
+
+        out: dict = {}
+        for k, (lo, hi) in spec_built["clamps"].items():
+            v = parsed.get(k)
+            if isinstance(v, (int, float)) and lo <= v <= hi:
+                out[k] = float(v)
+        if "evidence" in parsed:
+            out["evidence"] = str(parsed["evidence"])[:300]
+
+        return validate_extractor_output(profile_name, out)
+    except Exception:
+        return {}
+
+
+# ── Renderer 5: dcf_agent attachment (override most_recent in one loop) ──────
+
+def attach_overrides(
+    profile_name: str,
+    extractor_output: dict,
+    most_recent: dict,
+) -> list[str]:
+    """L6a — generic loop that attaches extractor output to `most_recent` so
+    `_compute_method_value` branches can read overrides via `.get()`.
+
+    Replaces hand-written per-sector if-blocks like:
+        if "cap_rate_market" in _rm_override:
+            most_recent["cap_rate_market"] = _rm_override["cap_rate_market"]
+
+    Returns a list of human-readable audit lines (e.g. for ticker_forward_flags).
+    """
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name)
+    if not spec or not extractor_output:
+        return []
+
+    audit: list[str] = []
+    for kpi in spec["kpis"]:
+        key = kpi["key"]
+        if key in extractor_output:
+            most_recent[key] = extractor_output[key]
+            if "compute_hint" in kpi:
+                audit.append(f"{key}={extractor_output[key]} ({kpi['compute_hint']})")
+            else:
+                audit.append(f"{key}={extractor_output[key]}")
+
+    # Surface metadata
+    if "_completeness_score" in extractor_output:
+        most_recent[f"_{profile_name}_completeness"] = extractor_output["_completeness_score"]
+    if "_mandatory_missing" in extractor_output:
+        most_recent[f"_{profile_name}_missing"] = extractor_output["_mandatory_missing"]
+
+    return audit
+
+
+# ── Renderer 6: specialist prompt addendum (industry brief KPI table) ────────
+
+def render_specialist_addendum(
+    profile_name: str,
+    sector: str = "",
+    sub_sub: str = "",
+) -> str:
+    """Produce a markdown prompt addendum that instructs the specialist agent's
+    LLM to output a `## Key Sector Metrics` markdown table containing this
+    sub-profile's mandatory + nice-to-have KPIs.
+
+    The specialist agent appends this addendum to its sector_block prompt at
+    LLM-call time. The LLM then writes the filled-in KPI table into the
+    industry_brief markdown, which the existing IndustryBriefPanel.tsx
+    renders natively to the frontend (auto-built ToC picks up the h2 heading).
+
+    Resolution order:
+      1. SECTOR_KPI_FRAMEWORK[profile_name]
+      2. SECTOR_KPI_FRAMEWORK[sector]
+      3. ""  → empty addendum → specialist prompt unchanged
+
+    sub_sub gate: when set (e.g. "P&C" or "Life"), filters KPIs whose
+    `applies_to` includes the sub-sub-profile. Unset → all KPIs included.
+    """
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or SECTOR_KPI_FRAMEWORK.get(sector)
+    if not spec:
+        return ""
+    web_kpis = [k for k in spec["kpis"] if k.get("extractor_only")]
+    if sub_sub:
+        web_kpis = [
+            k for k in web_kpis
+            if not k.get("applies_to") or sub_sub in k["applies_to"]
+        ]
+    # Include FMP-derivable KPIs too — they're informative for the brief even
+    # if not LLM-extracted (the LLM can read them from the FMP-loaded data block).
+    fmp_kpis = [k for k in spec["kpis"] if not k.get("extractor_only")]
+    all_kpis = web_kpis + fmp_kpis
+    if not all_kpis:
+        return ""
+
+    label_for = lambda k: (
+        k.get("compute_hint") or k["key"].replace("_", " ").title()
+    )
+
+    lines: list[str] = []
+    lines.append("\n")
+    lines.append("=" * 60)
+    lines.append(f"SECTOR KPI ADDENDUM — {profile_name}")
+    lines.append("=" * 60)
+    lines.append("")
+    lines.append(
+        f"After your sector analysis, you MUST output a `## Key Sector Metrics` "
+        f"section containing the markdown table below. Fill values from the "
+        f"research; mark missing ones as `n/d` (not disclosed). Use the units "
+        f"implied by the metric name (% for ratios, $ for monetary, count "
+        f"for ratios like Rule of 40)."
+    )
+    lines.append("")
+    lines.append("## Key Sector Metrics")
+    lines.append("")
+    lines.append("| Metric | Value | Source |")
+    lines.append("|---|---|---|")
+    for kpi in all_kpis:
+        label = label_for(kpi)
+        applies = (
+            f" ({', '.join(kpi['applies_to'])} only)"
+            if kpi.get("applies_to") and not sub_sub else ""
+        )
+        mandatory_marker = " **(M)**" if kpi.get("mandatory") else ""
+        lines.append(f"| {label}{applies}{mandatory_marker} | <fill> | <[n]> |")
+    lines.append("")
+    lines.append(
+        f"**Mandatory metrics** are flagged with the M-marker in bold parens — "
+        f"these MUST be populated (use `n/d` only if the research truly didn't "
+        f"surface them). Nice-to-have metrics are unmarked."
+    )
+    if spec.get("source_priority"):
+        lines.append("")
+        lines.append(
+            f"**Source priority** (cite [n] for each value): "
+            f"{' > '.join(spec['source_priority'])}."
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# render_card_payload — produces the JSON payload consumed by the frontend
+# `SectorValuationCard` component (Option B styling). The shape mirrors the
+# TypeScript `SectorValuationCardDataB` interface exactly, so adding new
+# fields here requires updating reportTypes.ts in lockstep.
+#
+# CRITICAL persistence rules (per prior incident — see commits 1ac5490,
+# 10ed937, d748ad4):
+#   1. The pipeline MUST include the rendered `sector_card` dict in its
+#      return-dict (`run_advanced_pipeline()`); state-only writes get lost.
+#   2. The web_runs partial-save (_save_checkpoint) MUST include sector_card
+#      so SSE progressive UI works.
+#   3. The archive MUST add a `sector_card_json` column (ticker_signals)
+#      via the migrations list, and save_run() MUST write it.
+#   4. get_run_result() MUST read it back from BOTH paths (web_runs JSON
+#      AND archive ticker_signals reconstruction).
+# ════════════════════════════════════════════════════════════════════════════
+
+# ════════════════════════════════════════════════════════════════════════════
+# V3 COMPOSITE ADJUSTMENT — Quality × Risk × Commodity multipliers
+#
+# Three independent multipliers that lift/discount the aggregated IV:
+#   - Quality (Fix 1): operational excellence (best-in-class margins/growth)
+#   - Risk    (Fix 2): balance sheet strength (lower discount rate)
+#   - Commodity (Fix 3): forward commodity-price leverage (terminal margin)
+#
+# Stacking: multiplicative with correlation guard (correlated KPIs in same
+# bucket take max-deviation, independent KPIs multiply).
+#
+# Sector caps:
+#   - Resources/Energy/Materials: composite ∈ [0.50, 1.70]  (commodity ceiling)
+#   - All other sectors:           composite ∈ [0.50, 1.85]
+# ════════════════════════════════════════════════════════════════════════════
+
+_COMMODITY_SECTORS: frozenset[str] = frozenset({"Resources", "Energy", "Materials"})
+
+
+# ── V3 Data-driven schema: per-profile bands ────────────────────────────────
+#
+# Each profile in SECTOR_KPI_FRAMEWORK can declare any of three optional
+# top-level keys:
+#
+#   "quality_tiers": {
+#       "kpi_bands": [
+#           {
+#               "kpi": "<KPI name from kpis list>",
+#               "direction": "lower_better" | "higher_better",
+#               "correlation_group": "<group_id>",  # KPIs in same group take max-dev
+#               "bands": [
+#                   {"max": 0.88, "mult": 1.50, "label": "elite"},  # for lower_better
+#                   {"min": 0.16, "mult": 1.30, "label": "premium"},  # for higher_better
+#                   ...
+#               ],
+#           },
+#           ...
+#       ],
+#       "cap": [0.70, 1.50],  # final quality_multiplier clamp
+#   }
+#
+#   "risk_adjustment": {
+#       "kpi": "<KPI name>", "direction": "lower_better" | "higher_better",
+#       "bands": [...],
+#   }
+#
+#   "commodity_uplift": {
+#       "spot_kpi": "spot_commodity_price",
+#       "realised_kpi": "realised_price_per_unit",
+#       "cost_kpi": "aisc_per_oz",
+#       "spot_weight": 0.33,
+#       "max_uplift": 1.40,
+#   }
+#
+# Profiles WITHOUT these slots fall back to (1.0, "no schema declared").
+
+
+def _evaluate_band(kpi_value: float | None, cfg: dict) -> tuple[float, str] | None:
+    """Walk a kpi-bands config and return the matching band's (multiplier, note),
+    or None if no band matches or value is missing."""
+    if kpi_value is None:
+        return None
+    direction = cfg.get("direction", "lower_better")
+    bands = cfg.get("bands", [])
+    is_higher_better = direction == "higher_better"
+    # Sort so we evaluate strongest-first (lowest threshold for lower_better,
+    # highest for higher_better — first match wins)
+    if is_higher_better:
+        sorted_bands = sorted(bands, key=lambda b: -b.get("min", float("-inf")))
+    else:
+        sorted_bands = sorted(bands, key=lambda b: b.get("max", float("inf")))
+    for band in sorted_bands:
+        if is_higher_better and "min" in band and kpi_value >= band["min"]:
+            return (float(band["mult"]),
+                    f"{cfg['kpi']}={kpi_value} {band.get('label','')} ({band['mult']:.2f}x)")
+        if not is_higher_better and "max" in band and kpi_value <= band["max"]:
+            return (float(band["mult"]),
+                    f"{cfg['kpi']}={kpi_value} {band.get('label','')} ({band['mult']:.2f}x)")
+    return None
+
+
+def _quality_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tuple[float, str]:
+    """Operational excellence — best-in-class margins/growth/retention.
+
+    V3.1: Data-driven via SECTOR_KPI_FRAMEWORK[profile_name].quality_tiers.
+    Falls back to legacy hardcoded sector branches if no schema present
+    (preserves existing behavior during rollout transition).
+
+    Returns (multiplier ∈ [0.70, 1.50], note).
+    """
+    m = metrics or {}
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or {}
+    qt = spec.get("quality_tiers")
+    if qt:
+        # ── Data-driven path ───────────────────────────────────────────────
+        # Group results by correlation_group (same group → max-deviation,
+        # different groups → multiply)
+        from collections import defaultdict
+        grouped: dict[str, list[tuple[float, str]]] = defaultdict(list)
+        for cfg in qt.get("kpi_bands", []):
+            kpi_value = m.get(cfg["kpi"])
+            result = _evaluate_band(kpi_value, cfg)
+            if result is not None:
+                grouped[cfg.get("correlation_group", "_indep")].append(result)
+        if not grouped:
+            return (1.0, "no quality KPIs supplied")
+        # Each group contributes its max-deviation pick
+        composite = 1.0
+        notes: list[str] = []
+        for group_id, picks in grouped.items():
+            best = max(picks, key=lambda x: abs(x[0] - 1.0))
+            composite *= best[0]
+            tag = f"[{group_id}] " if group_id != "_indep" else ""
+            notes.append(f"{tag}{best[1]}")
+        cap = qt.get("cap", [0.70, 1.50])
+        composite = max(cap[0], min(cap[1], composite))
+        return (round(composite, 3), " * ".join(notes))
+
+    # ── Legacy hardcoded fallback (preserves existing tests) ────────────────
+    m = metrics or {}
+    multipliers, notes = [], []
+
+    # Insurance — combined ratio (operational efficiency)
+    cr = m.get("combined_ratio")
+    if cr is not None:
+        if   cr < 0.88: multipliers.append(1.50); notes.append(f"CR={cr*100:.1f}% elite +50%")
+        elif cr < 0.92: multipliers.append(1.30); notes.append(f"CR={cr*100:.1f}% top-quartile +30%")
+        elif cr < 0.96: multipliers.append(1.12); notes.append(f"CR={cr*100:.1f}% above-avg +12%")
+        elif cr > 1.02: multipliers.append(0.80); notes.append(f"CR={cr*100:.1f}% loss-making -20%")
+
+    # Bank — efficiency + target ROE (correlated → take max-deviation)
+    if "Bank" in profile_name:
+        bank_signals = []
+        eff = m.get("efficiency_ratio")
+        if eff is not None:
+            if   eff < 0.50: bank_signals.append((1.30, f"Eff={eff*100:.1f}% top-decile +30%"))
+            elif eff < 0.55: bank_signals.append((1.18, f"Eff={eff*100:.1f}% strong +18%"))
+            elif eff > 0.65: bank_signals.append((0.92, f"Eff={eff*100:.1f}% bloated -8%"))
+        target_roe = m.get("management_target_roe")
+        if target_roe is not None:
+            if   target_roe > 0.16: bank_signals.append((1.30, f"ROE_tgt={target_roe*100:.0f}% premium +30%"))
+            elif target_roe > 0.13: bank_signals.append((1.15, f"ROE_tgt={target_roe*100:.0f}% above-avg +15%"))
+        if bank_signals:
+            pick = max(bank_signals, key=lambda x: abs(x[0] - 1.0))
+            multipliers.append(pick[0]); notes.append(f"[corr] {pick[1]}")
+
+    # Mining — cost curve quartile (operational signal)
+    quartile = m.get("cost_curve_quartile")
+    if quartile is not None:
+        q = int(quartile)
+        if   q == 1: multipliers.append(1.30); notes.append("Q1 cost producer +30%")
+        elif q == 2: multipliers.append(1.30); notes.append("Q2 cost producer +30%")
+        elif q == 4: multipliers.append(0.85); notes.append("Q4 cost producer -15%")
+
+    # SaaS — NRR + Rule of 40 (correlated)
+    saas_signals = []
+    nrr = m.get("nrr_pct")
+    if nrr is not None:
+        if   nrr > 1.30: saas_signals.append((1.40, f"NRR={nrr*100:.0f}% elite +40%"))
+        elif nrr > 1.15: saas_signals.append((1.20, f"NRR={nrr*100:.0f}% strong +20%"))
+        elif nrr < 1.0:  saas_signals.append((0.85, f"NRR={nrr*100:.0f}% contraction -15%"))
+    r40 = m.get("rule_of_40_score")
+    if r40 is not None:
+        if   r40 > 60: saas_signals.append((1.30, f"Rule40={r40:.0f} elite +30%"))
+        elif r40 > 40: saas_signals.append((1.15, f"Rule40={r40:.0f} healthy +15%"))
+        elif r40 < 20: saas_signals.append((0.90, f"Rule40={r40:.0f} weak -10%"))
+    if saas_signals:
+        pick = max(saas_signals, key=lambda x: abs(x[0] - 1.0))
+        multipliers.append(pick[0]); notes.append(f"[corr] {pick[1]}")
+
+    if not multipliers:
+        return (1.0, "no operational quality KPIs")
+    composite = 1.0
+    for x in multipliers: composite *= x
+    composite = max(0.70, min(1.50, composite))
+    return (round(composite, 3), " * ".join(notes))
+
+
+def _risk_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tuple[float, str]:
+    """Balance sheet strength — Beta haircut / discount rate compression.
+
+    The 'JPM Capital Drag' fix: high CET1 isn't a drag, it's a stabilizer.
+    V3.1: Data-driven via SECTOR_KPI_FRAMEWORK[profile_name].risk_adjustment.
+    Falls back to hardcoded sector branches if no schema present.
+
+    Returns (multiplier ∈ [0.70, 1.20], note).
+    """
+    m = metrics or {}
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or {}
+    ra = spec.get("risk_adjustment")
+    if ra:
+        kpi_value = m.get(ra["kpi"])
+        result = _evaluate_band(kpi_value, ra)
+        if result is not None:
+            mult = max(0.70, min(1.20, result[0]))
+            return (round(mult, 3), result[1])
+        return (1.0, f"{ra['kpi']} not extracted")
+    # ── Legacy hardcoded fallback ────────────────────────────────────────────
+    if "Insurance" in profile_name:
+        scr = m.get("solvency_ratio_scr")
+        if scr is not None:
+            if   scr > 2.0: return (1.10, f"SCR={scr:.2f}x strong +10%")
+            elif scr < 1.3: return (0.90, f"SCR={scr:.2f}x weak -10%")
+    if "Bank" in profile_name:
+        cet1 = m.get("cet1_ratio")
+        if cet1 is not None:
+            if   cet1 > 0.14: return (1.15, f"CET1={cet1*100:.1f}% fortress +15%")
+            elif cet1 > 0.12: return (1.10, f"CET1={cet1*100:.1f}% strong +10%")
+            elif cet1 < 0.085: return (0.85, f"CET1={cet1*100:.1f}% weak -15%")
+    if "Mining" in profile_name:
+        nd = m.get("net_debt_to_ebitda")
+        if nd is not None:
+            if   nd < 0.5: return (1.10, f"ND/EBITDA={nd:.2f}x fortress +10%")
+            elif nd > 2.5: return (0.85, f"ND/EBITDA={nd:.2f}x weak -15%")
+    if "Biotech" in profile_name or "Pre-approval" in profile_name:
+        runway = m.get("cash_runway_quarters")
+        if runway is not None:
+            if   runway > 12: return (1.15, f"Runway={runway}q strong +15%")
+            elif runway < 4:  return (0.70, f"Runway={runway}q dilution risk -30%")
+    return (1.0, "no balance sheet KPIs")
+
+
+def _commodity_multiplier(profile_name: str, sector: str, metrics: dict | None) -> tuple[float, str]:
+    """Commodity terminal-value uplift — only fires for commodity sectors.
+    Returns (multiplier ∈ [1.00, 1.40], note).
+
+    V4-α: Schema-aware KPI lookup. Reads commodity_uplift slot from
+    SECTOR_KPI_FRAMEWORK[profile] to find the right spot/realised/cost KPI
+    names per profile (e.g. Upstream O&G uses spot_brent_price + lifting_cost,
+    Mining uses spot_commodity_price + aisc_per_oz).
+
+    Also: when realised or cost KPIs are missing but spot is available,
+    derive sensible proxies (realised = spot × 0.90, cost = breakeven × 0.50)
+    so commodity_uplift doesn't silently fail when the extractor only catches
+    spot price.
+    """
+    m = metrics or {}
+    if sector not in _COMMODITY_SECTORS:
+        return (1.0, "n/a (non-commodity sector)")
+
+    # Read profile-specific KPI names from schema
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name, {})
+    cu_cfg = spec.get("commodity_uplift", {})
+    spot_key     = cu_cfg.get("spot_kpi", "spot_commodity_price")
+    realised_key = cu_cfg.get("realised_kpi", "realised_price_per_unit")
+    cost_key     = cu_cfg.get("cost_kpi", "aisc_per_oz")
+    max_uplift   = cu_cfg.get("max_uplift", 1.40)
+
+    spot     = m.get(spot_key)
+    realised = m.get(realised_key)
+    cost     = m.get(cost_key)
+
+    # Fall-back proxies when extractor missed realised or cost KPIs
+    if spot and not realised:
+        realised = spot * 0.90  # typical oil/gold realization vs spot
+    if spot and not cost:
+        # Use breakeven_oil_price as cost proxy for E&P (50% conservative)
+        bep = m.get("breakeven_oil_price_usd")
+        if bep:
+            cost = bep * 0.50
+
+    if not (spot and realised and cost):
+        return (1.0, f"no commodity price KPIs ({spot_key}={spot}, {realised_key}={realised}, {cost_key}={cost})")
+    hist_margin = realised - cost
+    if hist_margin <= 0:
+        return (1.0, f"negative historical margin (realised={realised:.0f}, cost={cost:.0f})")
+    blended = spot * 0.33 + realised * 0.67
+    fwd_margin = blended - cost
+    leverage = fwd_margin / hist_margin
+    uplift = max(1.0, min(max_uplift, 1.0 + (leverage - 1.0) * 0.5))
+    return (round(uplift, 3),
+            f"spot={spot:.0f}/realised={realised:.0f}/cost={cost:.0f} -> {uplift:.2f}x")
+
+
+# V3.2 FMP fallback for balance-sheet risk KPIs.
+#
+# Most extractor outputs lack `net_debt_to_ebitda` / `cash_runway_years` because
+# these are balance-sheet derived and rarely quoted verbatim in deep research
+# narrative. FMP is the authoritative source. We fetch lazily at composite_
+# adjustment time and cache per-ticker per-process to avoid repeated calls
+# (one fmp call set per ticker, not per render).
+
+_FMP_RISK_CACHE: dict[str, dict] = {}
+
+
+def _fmp_risk_kpis(ticker: str) -> dict:
+    """Returns dict of FMP-derived risk KPIs for the ticker (cached).
+
+    Keys produced (matching schema KPI names used by _risk_multiplier):
+      - net_debt_to_ebitda: from /stable/key-metrics-ttm.netDebtToEBITDATTM
+      - debt_to_ebitda:     proxy = net_debt_to_ebitda (when explicit absent)
+      - cash_runway_years:  cash_and_st_inv / |freeCashFlow| if FCF<0,
+                            else 99.0 (self-sustaining)
+
+    Returns {} on FMP failure (caller treats as "no FMP fallback available").
+    """
+    if ticker in _FMP_RISK_CACHE:
+        return _FMP_RISK_CACHE[ticker]
+    out: dict = {}
+    try:
+        import os
+        import urllib.request
+        import urllib.parse
+        key = os.environ.get("FMP_API_KEY") or "UFPUuQjTht66l2GmJhQbUZzij7IfJbsx"
+        base = "https://financialmodelingprep.com/stable"
+
+        def _get(path: str) -> Any:
+            url = f"{base}/{path}?symbol={urllib.parse.quote(ticker)}&apikey={key}"
+            req = urllib.request.Request(url, headers={"User-Agent": "framework-fmp/1.0"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                return json.loads(r.read())
+
+        keymet = (_get("key-metrics-ttm") or [{}])[0]
+        bs     = (_get("balance-sheet-statement") or [{}])[0]
+        cfs    = (_get("cash-flow-statement") or [{}])[0]
+
+        nde = keymet.get("netDebtToEBITDATTM")
+        if nde is not None:
+            out["net_debt_to_ebitda"] = nde
+            out["debt_to_ebitda"]     = nde   # alias used by Utilities schema
+
+        cash_st = bs.get("cashAndShortTermInvestments")
+        fcf     = cfs.get("freeCashFlow")
+        if cash_st is not None and fcf is not None:
+            if fcf < 0:
+                out["cash_runway_years"] = round(cash_st / abs(fcf), 2)
+            else:
+                # Positive FCF -> self-sustaining (>10 yr "ample" sentinel)
+                out["cash_runway_years"] = 99.0
+    except Exception:
+        pass  # Fail silently — composite_adjustment will return 1.0x for risk
+
+    _FMP_RISK_CACHE[ticker] = out
+    return out
+
+
+def _augment_metrics_with_fmp_risk(ticker: str, metrics: dict | None) -> dict:
+    """Merge FMP-derived risk KPIs into the extractor metrics dict.
+
+    Extractor wins where it has an explicit value — FMP only fills gaps.
+    Returns a NEW dict (doesn't mutate the input).
+    """
+    out = dict(metrics or {})
+    fmp_risk = _fmp_risk_kpis(ticker)
+    for k, v in fmp_risk.items():
+        if k not in out or out[k] is None:
+            out[k] = v
+    return out
+
+
+# ── V3.1: FMP commodity-price augmentation ──────────────────────────────────
+# Resources/Energy/Materials profiles need spot commodity prices for the
+# commodity_uplift multiplier. The extractor often misses these (they're
+# market data, not company-disclosed) — FMP /stable/quote provides them.
+_FMP_COMMODITY_CACHE: dict[str, dict] = {}
+
+# Map per-profile commodity → FMP symbol + KPI name
+_PROFILE_COMMODITY_MAP: dict[str, list[tuple[str, str]]] = {
+    "Upstream Oil & Gas": [("BZUSD", "spot_brent_price")],
+    "Mining (Major)":     [("GCUSD", "spot_commodity_price")],
+    "Mining (Junior)":    [("GCUSD", "spot_commodity_price")],
+    "Refining":           [("BZUSD", "spot_brent_price")],
+    # Steel/Materials (no FMP commodity for hot-rolled coil — skip)
+}
+
+
+def _fmp_commodity_price(symbol: str) -> float | None:
+    """Fetch latest commodity spot price from FMP. Cached per-process."""
+    if symbol in _FMP_COMMODITY_CACHE:
+        return _FMP_COMMODITY_CACHE[symbol].get("price")
+    try:
+        import os, urllib.request, urllib.parse
+        key = os.environ.get("FMP_API_KEY") or "UFPUuQjTht66l2GmJhQbUZzij7IfJbsx"
+        url = f"https://financialmodelingprep.com/stable/quote?symbol={urllib.parse.quote(symbol)}&apikey={key}"
+        req = urllib.request.Request(url, headers={"User-Agent": "framework-fmp/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            data = json.loads(r.read())
+        if data:
+            _FMP_COMMODITY_CACHE[symbol] = data[0]
+            return data[0].get("price")
+    except Exception:
+        pass
+    return None
+
+
+def _augment_metrics_with_fmp_commodity(profile_name: str, metrics: dict | None) -> dict:
+    """Merge FMP-derived commodity prices into metrics for commodity sectors.
+    Same gap-fill semantics: extractor wins, FMP only fills gaps."""
+    out = dict(metrics or {})
+    pricing = _PROFILE_COMMODITY_MAP.get(profile_name, [])
+    for fmp_symbol, kpi_key in pricing:
+        if kpi_key in out and out[kpi_key] is not None:
+            continue  # extractor caught it
+        spot = _fmp_commodity_price(fmp_symbol)
+        if spot is not None:
+            out[kpi_key] = spot
+    return out
+
+
+# ── V4-α: Cross-profile multiplier weights ──────────────────────────────────
+# Different sectors prioritize different valuation levers:
+#   Tech / Biopharma → Quality dominant (growth >> safety)
+#   Banks / Utilities → Risk dominant (capital safety = valuation floor)
+#   Energy / Materials / Mining → Commodity dominant (spot price >> ops excellence)
+#
+# Weights expressed as (quality, risk, commodity) tuples summing to 1.0.
+# Geometric weighted mean: composite = q^(3*wq) * r^(3*wr) * c^(3*wc)
+# (× 3 normalizes so equal weights (1/3, 1/3, 1/3) give the original q×r×c).
+
+_PROFILE_WEIGHTS: dict[str, tuple[float, float, float]] = {
+    # ── Default (when profile not listed) ──────────────────────────────
+    "default":              (0.40, 0.40, 0.20),  # Q+R balanced, Commodity rare
+
+    # ── Risk-dominant: Banks / Utilities / regulated ───────────────────
+    "Money Center Bank":      (0.20, 0.60, 0.20),
+    "Money Center Bank (EU)": (0.20, 0.60, 0.20),
+    "Regional Bank":          (0.20, 0.60, 0.20),
+    "Super-Regional Bank":    (0.20, 0.60, 0.20),
+    "Investment Bank":        (0.30, 0.50, 0.20),
+    "Bank / Lending Institution": (0.20, 0.60, 0.20),
+    "EM Bank":                (0.20, 0.60, 0.20),
+    "EM Bank (Premium)":      (0.20, 0.60, 0.20),
+    "Insurance":              (0.30, 0.50, 0.20),
+    "Mortgage/GSE":           (0.10, 0.70, 0.20),
+    "Regulated Utility":      (0.20, 0.60, 0.20),
+    "IPP":                    (0.30, 0.50, 0.20),
+
+    # ── Quality-dominant: Tech / Biopharma / Pharma ────────────────────
+    "Large Cap Pharma":               (0.70, 0.30, 0.00),
+    "Pre-approval Biotech":           (0.60, 0.40, 0.00),
+    "MedTech / Devices":              (0.60, 0.40, 0.00),
+    "CDMO / Life Science Tools":      (0.60, 0.40, 0.00),
+    "High-Growth Tech / AI":          (0.70, 0.30, 0.00),
+    "Cybersecurity / Mission-Critical SaaS": (0.70, 0.30, 0.00),
+    "Hyper-Growth Platform":          (0.70, 0.30, 0.00),
+    "Mature Platform":                (0.55, 0.40, 0.05),
+    "Early Platform":                 (0.55, 0.45, 0.00),
+
+    # ── Commodity-dominant: Mining / Energy / Materials ────────────────
+    "Mining (Major)":         (0.10, 0.10, 0.80),
+    "Mining (Junior)":        (0.10, 0.10, 0.80),
+    "Upstream Oil & Gas":     (0.10, 0.10, 0.80),
+    "Refining":               (0.10, 0.10, 0.80),
+    "Steel / Metals":         (0.20, 0.20, 0.60),
+    "Specialty Chemicals":    (0.40, 0.30, 0.30),
+    "Merchant Power":         (0.20, 0.20, 0.60),
+
+    # ── Quality + Risk balanced (specialty) ────────────────────────────
+    "Fabless":                (0.60, 0.30, 0.10),  # quality dominant; cycle matters
+    "IDM / Foundry":          (0.50, 0.40, 0.10),
+    "Equipment / EDA":        (0.60, 0.40, 0.00),
+    "OSAT / Packaging":       (0.50, 0.50, 0.00),
+    "Aerospace & Defense":    (0.40, 0.50, 0.10),  # backlog visibility + balance sheet
+    "Capital Goods":          (0.40, 0.50, 0.10),
+    "Automotive (OEM)":       (0.50, 0.40, 0.10),
+    "Automotive & EV":        (0.55, 0.40, 0.05),
+
+    # ── Quality + brand pricing (Consumer) ─────────────────────────────
+    "Travel & Dining":        (0.50, 0.40, 0.10),
+    "Luxury Goods":           (0.55, 0.40, 0.05),
+    "Consumer Growth":        (0.60, 0.40, 0.00),
+    "Food & Beverage":        (0.45, 0.50, 0.05),
+    "Household / Personal":   (0.45, 0.50, 0.05),
+    "Membership / Subscription Retail": (0.55, 0.40, 0.05),
+    "Traditional Retail":     (0.45, 0.50, 0.05),
+    "Apparel / Athletic Wear": (0.55, 0.40, 0.05),
+    "Consumer Durables":      (0.40, 0.50, 0.10),
+
+    # ── Telco / Healthcare / Other ─────────────────────────────────────
+    "Stable Growth":          (0.30, 0.60, 0.10),  # Telco — risk-tilted
+    "Managed Care":           (0.40, 0.50, 0.10),
+    "Asset Manager":          (0.40, 0.50, 0.10),
+    "Alt Asset Manager":      (0.50, 0.40, 0.10),
+    "Brokerage":              (0.30, 0.60, 0.10),
+    "Holding Company":        (0.40, 0.50, 0.10),
+    "Market Infrastructure":  (0.30, 0.60, 0.10),
+    "Payment Networks":       (0.55, 0.40, 0.05),
+    "FinTech":                (0.60, 0.40, 0.00),
+    "Neo/Challenger":         (0.50, 0.50, 0.00),
+    "Pre-Revenue Tech":       (0.60, 0.40, 0.00),
+
+    # ── Energy infrastructure (NOT commodity-exposed) ───────────────────
+    "EPC Contractor":         (0.40, 0.50, 0.10),  # service biz on fixed-price contracts
+    "Energy Tech Licensor":   (0.55, 0.40, 0.05),  # asset-light royalty/IP model
+
+    # ── ProfessionalServices ────────────────────────────────────────────
+    "Ad / Consulting":        (0.55, 0.40, 0.05),  # talent + brand franchise
+    "IT Services":            (0.60, 0.35, 0.05),  # quality-dominant: utilization/attrition
+    "Payment Processors":     (0.55, 0.40, 0.05),  # TPV + take rate × scale
+
+    # ── Tech (debt-burdened) ────────────────────────────────────────────
+    "Levered Subscription":   (0.50, 0.45, 0.05),  # NFLX-like — debt service is existential
+
+    # ── Transportation (capital-intensive cyclicals) ────────────────────
+    "Airlines":               (0.30, 0.60, 0.10),  # MOST risk-dominant — bankruptcy history
+    "Rail / Logistics":       (0.40, 0.50, 0.10),  # oligopoly stability vs Airlines
+}
+
+
+def _profile_weights(profile_name: str) -> tuple[float, float, float]:
+    """Returns (q_weight, r_weight, c_weight) for the profile. Defaults to balanced."""
+    return _PROFILE_WEIGHTS.get(profile_name, _PROFILE_WEIGHTS["default"])
+
+
+def composite_adjustment(profile_name: str, sector: str, metrics: dict | None) -> tuple[float, dict]:
+    """V4-α aggregator — multiplicative stacking with PER-PROFILE WEIGHTS,
+    sector-aware cap, and full audit bridge.
+
+    Math: composite = q^(3*wq) × r^(3*wr) × c^(3*wc)
+    (× 3 normalizes so equal weights (1/3, 1/3, 1/3) reproduce the V3 q*r*c)
+
+    A bank with weights (0.2, 0.6, 0.2) sees Risk's effect AMPLIFIED 1.8×
+    (3 × 0.6) and Quality's effect DAMPED to 0.6× (3 × 0.2). So a bank with
+    Q=1.30, R=1.15, C=1.00 produces:
+      composite = 1.30^0.6 × 1.15^1.8 × 1.00^0.6 = 1.173 × 1.290 × 1.0 = 1.513
+    vs equal weights: 1.30 × 1.15 × 1.00 = 1.495 (negligible change for this case)
+
+    But for Tech (0.7, 0.3, 0.0) with Q=1.50, R=1.10, C=1.00:
+      composite = 1.50^2.1 × 1.10^0.9 × 1.00^0.0 = 2.347 × 1.090 × 1.0 = 2.558
+    vs equal weights: 1.50 × 1.10 × 1.00 = 1.650 — Quality REALLY drives Tech.
+
+    Returns (final_multiplier, bridge_dict).
+    """
+    q, q_note = _quality_multiplier(profile_name, sector, metrics)
+    r, r_note = _risk_multiplier(profile_name, sector, metrics)
+    c, c_note = _commodity_multiplier(profile_name, sector, metrics)
+
+    wq, wr, wc = _profile_weights(profile_name)
+    # Geometric weighted mean (× 3 normalization keeps backward compat at equal weights)
+    raw = (q ** (3 * wq)) * (r ** (3 * wr)) * (c ** (3 * wc))
+    cap_high = 1.70 if sector in _COMMODITY_SECTORS else 1.85
+    capped = max(0.50, min(cap_high, raw))
+    return capped, {
+        "quality":          round(q, 3),
+        "quality_note":     q_note,
+        "quality_weight":   round(wq, 2),
+        "risk":             round(r, 3),
+        "risk_note":        r_note,
+        "risk_weight":      round(wr, 2),
+        "commodity":        round(c, 3),
+        "commodity_note":   c_note,
+        "commodity_weight": round(wc, 2),
+        "raw_composite":    round(raw, 3),
+        "final_multiplier": round(capped, 3),
+        "cap_high":         cap_high,
+        "was_capped":       raw != capped,
+    }
+
+
+# Legacy sub-profiles already render bespoke cards (per separate KPI panels
+# in the existing frontend). Do NOT generate a generic sector_card for these
+# — the existing UI is purpose-built and the user has explicitly held them.
+_LEGACY_PROFILES: frozenset[str] = frozenset({
+    "Growth SaaS",
+    "Mature SaaS",
+    "Hyperscaler",
+    "REIT",
+    "Pipeline (Pre-revenue Biotech)",
+    "Pre-approval Biotech",
+    "Pre-Revenue Biotech",
+})
+
+
+def is_legacy_profile(profile_name: str | None) -> bool:
+    """True when the sub-profile already has a bespoke frontend card and
+    should NOT receive the generic sector_card render."""
+    return bool(profile_name) and profile_name in _LEGACY_PROFILES
+
+
+# Heuristic format inference for KPI values. Keyed on substrings in `key` —
+# the framework spec doesn't store an explicit format so we derive it.
+def _infer_kpi_format(kpi: dict) -> str:
+    if kpi.get("decimal_format"):
+        return "pct"
+    key = kpi.get("key", "").lower()
+    label = (kpi.get("compute_hint") or "").lower()
+    blob = key + " " + label
+    if any(t in key for t in ("_pct", "ratio", "_rate", "yield", "margin", "_yoy")):
+        return "pct"
+    if any(t in key for t in ("per_share", "per_oz", "per_unit", "price", "_aisc", "value")):
+        return "usd"
+    if any(t in key for t in ("_x", "coverage", "leverage", "multiple", "turnover")):
+        return "x"
+    if any(t in key for t in ("count", "quartile", "weeks", "years", "_qty")):
+        return "int"
+    if "$" in label:
+        return "usd"
+    if "%" in label:
+        return "pct"
+    return "string"
+
+
+# Heuristic auto-grouping into themed sections. Each KPI is assigned to one
+# of four buckets based on its key/label semantics. Frontend renders each
+# group with the Option B accent color.
+def _classify_kpi_group(kpi: dict) -> tuple[str, str]:
+    """Return (group_title, accent) for the given KPI."""
+    key = kpi.get("key", "").lower()
+    label = (kpi.get("compute_hint") or "").lower()
+    blob = key + " " + label
+    # Capital / balance-sheet strength
+    if any(t in blob for t in (
+        "tier", "cet1", "scr", "rbc", "solvency", "capital", "leverage",
+        "book", "tangible", "tbv", "embedded_value",
+    )):
+        return ("Capital", "green")
+    # Risk / loss / quality
+    if any(t in blob for t in (
+        "loss", "reserve", "cat ", "catastrophe", "default", "npl",
+        "churn", "dilution", "credit", "delinquen",
+    )):
+        return ("Risk & Reserves", "rose")
+    # Profitability / margins / returns / yield
+    if any(t in blob for t in (
+        "margin", "roe", "roa", "rotce", "yield", "ratio",
+        "nim", "efficiency", "spread", "profit",
+    )):
+        return ("Profitability", "blue")
+    # Growth / pipeline / forward
+    if any(t in blob for t in (
+        "growth", "yoy", "_qoq", "pipeline", "design_win", "backlog",
+        "lead_time", "production",
+    )):
+        return ("Growth & Pipeline", "violet")
+    # Catch-all
+    return ("Operations", "amber")
+
+
+# Map ticker-keyed state metric dicts to their canonical name. The framework
+# dispatch writes per-profile metrics under different state keys; render_card
+# reads from all of them and merges so any present extractor wins.
+_METRIC_STATE_KEYS: tuple[str, ...] = (
+    "framework_metrics_all",
+    "insurance_metrics_all",
+    "bank_metrics_all",
+    # legacy keys — read for completeness when render_card_payload is called
+    # for a legacy profile during a transition window (caller normally gates
+    # on is_legacy_profile() and skips):
+    "saas_metrics_all",
+    "reit_metrics_all",
+    "pipeline_assets_all",
+)
+
+
+def _collect_kpi_values(state: dict, ticker: str) -> dict[str, Any]:
+    """Walk all metric state-dicts and collect the per-ticker KPI values
+    into a single flat dict {kpi_key: value}. Later writers win, but the
+    framework dispatch writes uniquely so collisions are rare."""
+    if not isinstance(state, dict):
+        return {}
+    data = state.get("data") if "data" in state else state
+    if not isinstance(data, dict):
+        return {}
+    merged: dict[str, Any] = {}
+    for state_key in _METRIC_STATE_KEYS:
+        bucket = data.get(state_key)
+        if not isinstance(bucket, dict):
+            continue
+        ticker_bucket = bucket.get(ticker)
+        if not isinstance(ticker_bucket, dict):
+            continue
+        for k, v in ticker_bucket.items():
+            # Skip framework metadata (_completeness_score, _mandatory_missing)
+            if isinstance(k, str) and k.startswith("_"):
+                continue
+            merged[k] = v
+    return merged
+
+
+def _kpi_label(kpi: dict) -> str:
+    """Human-readable label for the KPI card. Prefers a short noun-phrase
+    derived from the key over the long compute_hint."""
+    key = kpi.get("key", "")
+    # Snake-case → Title Case, with a few common abbreviation fixes
+    label = key.replace("_", " ").title()
+    label = (label
+        .replace(" Pct", " %")
+        .replace(" Tbv", " TBV")
+        .replace("Cet1", "CET1")
+        .replace(" Roe", " ROE")
+        .replace(" Roa", " ROA")
+        .replace("Nim", "NIM")
+        .replace("Aisc", "AISC")
+        .replace("Scr", "SCR")
+        .replace("Rbc", "RBC")
+        .replace("Pyd", "PYD")
+        .replace("Npl", "NPL")
+    )
+    return label
+
+
+def render_card_payload(
+    profile_name: str,
+    state: dict,
+    ticker: str,
+    sub_sub: str = "",
+) -> dict | None:
+    """Build the JSON payload for the frontend sector valuation card.
+
+    Returns ``None`` when:
+      - profile_name is empty / not in the framework
+      - profile_name is a legacy sub-profile (frontend uses its bespoke card)
+
+    Shape (mirrors `SectorValuationCardDataB` in TS):
+
+        {
+          "ticker": str,
+          "sector": str,
+          "profile_name": str,
+          "sub_profile": str | None,
+          "anchor_methods": list[str],
+          "groups": [
+            {
+              "title": str,
+              "accent": "blue" | "green" | "amber" | "rose" | "violet",
+              "kpis": [
+                {
+                  "key": str,
+                  "label": str,
+                  "value": float | str | None,
+                  "format": "pct" | "usd" | "x" | "int" | "string",
+                  "decimals": int | None,
+                  "unit": str | None,
+                  "mandatory": bool,
+                  "clamp_low": float | None,
+                  "clamp_high": float | None,
+                },
+                ...
+              ]
+            },
+            ...
+          ],
+          "source_priority": list[str],
+        }
+    """
+    if not profile_name or is_legacy_profile(profile_name):
+        return None
+
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name)
+    if not spec:
+        return None
+
+    # Read all extracted KPI values for this ticker
+    values = _collect_kpi_values(state, ticker)
+
+    # Filter KPIs to those applicable to the sub_sub_profile (if specified)
+    kpis = list(spec.get("kpis", []))
+    if sub_sub:
+        kpis = [
+            k for k in kpis
+            if not k.get("applies_to") or sub_sub in k["applies_to"]
+        ]
+
+    # Bucket KPIs into themed groups (preserve original order within each group)
+    buckets: dict[str, dict] = {}
+    for kpi in kpis:
+        title, accent = _classify_kpi_group(kpi)
+        buckets.setdefault(title, {"title": title, "accent": accent, "kpis": []})
+        clamp = kpi.get("clamp")
+        if isinstance(clamp, (list, tuple)) and len(clamp) == 2:
+            clamp_low, clamp_high = float(clamp[0]), float(clamp[1])
+        else:
+            clamp_low, clamp_high = None, None
+        value = values.get(kpi["key"])
+        # Coerce non-finite floats to None — they break frontend tabular-nums
+        if isinstance(value, float):
+            try:
+                if not (value == value) or value in (float("inf"), float("-inf")):
+                    value = None
+            except Exception:
+                value = None
+        buckets[title]["kpis"].append({
+            "key":       kpi["key"],
+            "label":     _kpi_label(kpi),
+            "value":     value,
+            "format":    _infer_kpi_format(kpi),
+            "mandatory": bool(kpi.get("mandatory")),
+            "clamp_low":  clamp_low,
+            "clamp_high": clamp_high,
+        })
+
+    # Render groups in a stable, semantically meaningful order
+    _GROUP_ORDER = (
+        "Profitability", "Capital", "Risk & Reserves",
+        "Growth & Pipeline", "Operations",
+    )
+    groups = [buckets[t] for t in _GROUP_ORDER if t in buckets]
+
+    # ── V3: Composite adjustment audit bridge ───────────────────────────────
+    # Computes the Quality x Risk x Commodity multipliers from extracted KPIs
+    # and includes the full breakdown in the payload so the frontend can
+    # render the "Pre-IV -> Q x R x C -> Final" bridge on every card.
+    _composite_mult, _bridge = composite_adjustment(profile_name, spec.get("sector", ""), values)
+
+    return {
+        "ticker":         ticker,
+        "sector":         spec.get("sector", ""),
+        "profile_name":   profile_name,
+        "sub_profile":    sub_sub or None,
+        "anchor_methods": list(spec.get("anchor_methods", [])),
+        "groups":         groups,
+        "source_priority": list(spec.get("source_priority", [])),
+        # V3 Composite Adjustment Audit Bridge — frontend renders this as
+        # "Pre-IV  ->  Q × R × C  ->  Final" for full transparency.
+        "audit_bridge":   _bridge,
+    }
+
+
+def render_card_payloads_for_run(state: dict) -> dict[str, dict]:
+    """Convenience: build sector_card dict for every ticker in the run.
+
+    Returns ``{ticker: payload}`` where payload is the dict from
+    `render_card_payload`. Tickers whose profile is legacy or unknown are
+    omitted (frontend should fall back to its existing bespoke card or
+    render nothing — both are valid).
+
+    Call site: add this AFTER dcf_agent (so all metric extractors have
+    finished writing to state) and BEFORE the pipeline return so it
+    propagates to web_runs JSON. See pipeline.py call site.
+    """
+    if not isinstance(state, dict):
+        return {}
+    data = state.get("data") if "data" in state else state
+    if not isinstance(data, dict):
+        return {}
+    profile_names = data.get("profile_names") or {}
+    tickers = data.get("tickers") or list(profile_names.keys())
+    out: dict[str, dict] = {}
+    for ticker in tickers:
+        profile = profile_names.get(ticker) or data.get("profile_name") or ""
+        payload = render_card_payload(profile, state, ticker)
+        if payload is not None:
+            out[ticker] = payload
+    return out
+
+
+# ── Public API surface ───────────────────────────────────────────────────────
+
+__all__ = [
+    "SECTOR_KPI_FRAMEWORK",
+    "render_search_overlay",
+    "render_specialist_addendum",
+    "build_extractor_schema",
+    "validate_extractor_output",
+    "extract_via_framework",
+    "attach_overrides",
+    # Sector card payload (Option B card render)
+    "render_card_payload",
+    "render_card_payloads_for_run",
+    "is_legacy_profile",
+    # V3 Composite Adjustment audit bridge
+    "composite_adjustment",
+]
