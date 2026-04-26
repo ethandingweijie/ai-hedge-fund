@@ -2680,14 +2680,48 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── Energy ──────────────────────────────────────────────────
     'EPC Contractor': {
         "sector":         'Energy',
-        "anchor_methods": ['Backlog DCF'],
+        "anchor_methods": ['Backlog DCF', 'EV/EBITDA', 'P/E (ops)'],
+        # V3 quality: backlog_burn_rate primary (slow burn = long visibility) +
+        # backlog_growth_yoy kicker.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "backlog_burn_rate_pct", "direction": "lower_better",
+                 "correlation_group": "epc_q_primary",
+                 "bands": [
+                     {"max": 0.25, "mult": 1.30, "label": "slow-burn-elite"},
+                     {"max": 0.35, "mult": 1.15, "label": "strong"},
+                     {"max": 0.50, "mult": 1.00, "label": "in-band"},
+                     {"max": 99,   "mult": 0.85, "label": "rapid-burn"},
+                 ]},
+                {"kpi": "backlog_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "epc_q_kicker",
+                 "bands": [
+                     {"min":  0.20, "mult": 1.10, "label": "elite-growth"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.95, "label": "shrinking"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: project_gross_margin (negative = death spiral — Bechtel/
+        # Skanska 2018 lessons).
+        "risk_adjustment": {
+            "kpi": "project_gross_margin", "direction": "higher_better",
+            "bands": [
+                {"min": 0.10, "mult": 1.10, "label": "fortress"},
+                {"min": 0.06, "mult": 1.05, "label": "strong"},
+                {"min": 0.03, "mult": 1.00, "label": "in-band"},
+                {"min": 0.0,  "mult": 0.85, "label": "compression"},
+                {"min": -99,  "mult": 0.70, "label": "negative-death-spiral"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'backlog_burn_rate_pct',
                 "mandatory":       True,
                 "search_phrases":  ['backlog execution rate', 'revenue as % of opening backlog', 'project burn rate'],
-                "compute_hint":    'annual_revenue / opening_backlog_balance',
-                "clamp":           (0.1, 0.6),
+                "compute_hint":    'annual_revenue / opening_backlog_balance (decimal — slow burn = long visibility)',
+                "clamp":           (0.0, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -2696,38 +2730,96 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'order_backlog_usd',
                 "mandatory":       True,
                 "search_phrases":  ['total contracted backlog', 'remaining performance obligations', 'order book value'],
-                "clamp":           (100000000, 100000000000),
+                "clamp":           (1e8, 1e11),
                 "source":          'W',
                 "extractor_only":  True,
             },
             {
-                "key":             'project_gross_margin',
-                "mandatory":       False,
-                "search_phrases":  ['weighted average project margin'],
+                "key":             'backlog_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['backlog growth YoY', 'order book expansion', 'contracted backlog change'],
+                "compute_hint":    'YoY change in order_backlog_usd (decimal)',
+                "clamp":           (-0.50, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'project_gross_margin',
+                "mandatory":       True,
+                "search_phrases":  ['weighted average project margin', 'project gross margin', 'EPC margin'],
+                "compute_hint":    'Weighted average project gross margin (decimal — negative = death spiral)',
+                "clamp":           (-0.20, 0.30),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
             },
         ],
-        "source_priority": ['Contract award announcements', 'Project burn rate (Execution Velocity)'],
+        "source_priority": ['Contract award announcements', 'Project burn rate disclosures', 'Project gross margin schedule'],
     },
 
     'Energy Tech Licensor': {
         "sector":         'Energy',
         "anchor_methods": ['Licensing NPV', 'Real Options', 'EV/Forward Revenue', 'TAM Penetration'],
+        # V3 quality: royalty_revenue_pct primary + licensed_capacity_growth_yoy
+        # kicker (Platform Velocity per user — raw GW lumpy, growth signals
+        # adoption velocity).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "royalty_revenue_pct", "direction": "higher_better",
+                 "correlation_group": "etl_q_primary",
+                 "bands": [
+                     {"min": 0.40, "mult": 1.30, "label": "royalty-rich-elite"},
+                     {"min": 0.25, "mult": 1.15, "label": "strong"},
+                     {"min": 0.10, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "transactional-weak"},
+                 ]},
+                {"kpi": "licensed_capacity_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "etl_q_velocity_kicker",
+                 "bands": [
+                     {"min": 0.30, "mult": 1.30, "label": "massive-adoption"},
+                     {"min": 0.15, "mult": 1.15, "label": "strong-velocity"},
+                     {"min": 0.05, "mult": 1.00, "label": "pilot-phase"},
+                     {"min": -99,  "mult": 0.80, "label": "obsolescence"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: cash_runway_years — for licensors like Plug Power, Survival
+        # is the only Moat. Royalty growth is lagging; runway is leading.
+        "risk_adjustment": {
+            "kpi": "cash_runway_years", "direction": "higher_better",
+            "bands": [
+                {"min": 3.0,  "mult": 1.10, "label": "fortress"},
+                {"min": 1.5,  "mult": 1.00, "label": "in-band"},
+                {"min": 0.75, "mult": 0.90, "label": "warning"},
+                {"min": 0.0,  "mult": 0.70, "label": "distressed"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'royalty_revenue_pct',
                 "mandatory":       True,
                 "search_phrases":  ['royalty and licensing revenue share', 'recurring royalty contribution'],
-                "compute_hint":    'total_royalty_revenue / total_revenue',
-                "clamp":           (0.1, 0.95),
+                "compute_hint":    'total_royalty_revenue / total_revenue (decimal — >40% royalty-rich elite)',
+                "clamp":           (0.0, 1.0),
+                "source":          'W',
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'licensed_capacity_growth_yoy',
+                "mandatory":       True,
+                "search_phrases":  ['licensed capacity growth', 'GW adoption growth', 'platform deployment YoY'],
+                "compute_hint":    'YoY growth in licensed_capacity_gw (decimal — >30% massive adoption)',
+                "clamp":           (-0.50, 2.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
             {
                 "key":             'patent_portfolio_count',
-                "mandatory":       True,
+                "mandatory":       False,
                 "search_phrases":  ['active patents', 'technology disclosures'],
                 "source":          'W',
                 "extractor_only":  True,
@@ -2739,19 +2831,59 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "source":          'W',
                 "extractor_only":  True,
             },
+            {
+                "key":             'cash_runway_years',
+                "mandatory":       True,
+                "search_phrases":  ['cash runway months', 'months of cash', 'liquidity runway'],
+                "compute_hint":    'cash + ST investments / (annualized burn rate) — FMP-augmented',
+                "clamp":           (0.0, 99.0),
+                "source":          'F',
+                "extractor_only":  False,
+            },
         ],
-        "source_priority": ['Royalty revenue segment logs', 'Patent portfolio count', 'Licensed capacity (GW) disclosures'],
+        "source_priority": ['Royalty revenue segment logs', 'Licensed capacity growth (GW)', 'Cash runway disclosures'],
     },
 
     'IPP': {
         "sector":         'Energy',
-        "anchor_methods": ['PPA-backed DCF'],
+        "anchor_methods": ['PPA-backed DCF', 'EV/EBITDA', 'P/AFFO'],
+        # V3 quality: ppa_coverage_pct primary + WALE kicker.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "ppa_coverage_pct", "direction": "higher_better",
+                 "correlation_group": "ipp_q_primary",
+                 "bands": [
+                     {"min": 0.90, "mult": 1.30, "label": "fortress-contracted"},
+                     {"min": 0.75, "mult": 1.15, "label": "strong"},
+                     {"min": 0.60, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "merchant-exposed"},
+                 ]},
+                {"kpi": "weighted_avg_contract_life", "direction": "higher_better",
+                 "correlation_group": "ipp_q_wale_kicker",
+                 "bands": [
+                     {"min": 10, "mult": 1.10, "label": "elite-WALE"},
+                     {"min": 5,  "mult": 1.05, "label": "strong-WALE"},
+                     {"min": 0,  "mult": 0.95, "label": "exposure-risk"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        # V3 risk: net_debt_to_ebitda — IPPs are LEVERAGED infrastructure (project finance norm).
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 4.0,  "mult": 1.10, "label": "fortress-project-finance"},
+                {"max": 6.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 8.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'ppa_coverage_pct',
                 "mandatory":       True,
                 "search_phrases":  ['capacity under long-term PPA', 'contracted revenue mix', 'PPA-backed capacity %'],
-                "clamp":           (0.4, 1.0),
+                "clamp":           (0.0, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -2760,9 +2892,19 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "key":             'weighted_avg_contract_life',
                 "mandatory":       True,
                 "search_phrases":  ['average remaining PPA term', 'WALE for power contracts', 'contract duration years'],
-                "clamp":           (5, 25),
+                "compute_hint":    'Weighted-avg years remaining on power contracts',
+                "clamp":           (1, 30),
                 "source":          'W',
                 "extractor_only":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio', 'project finance leverage'],
+                "clamp":           (-3.0, 12.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'installed_capacity_gw',
@@ -2772,28 +2914,71 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Long-term Power Purchase Agreements (PPAs)', 'LCOE (Levelized Cost of Energy) benchmarks'],
+        "source_priority": ['Long-term PPA disclosures', 'WALE schedules', 'Net leverage disclosures'],
     },
 
     'Merchant Power': {
         "sector":         'Energy',
         "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'Power Price DCF', 'LBO Floor'],
+        # V3 quality: realized_spark_spread primary ($/MWh — Nuclear AI-uptime
+        # premium per CEG/VST 2026) + hedged_revenue_pct kicker (risk dampener).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "realized_spark_spread", "direction": "higher_better",
+                 "correlation_group": "merchant_q_primary",
+                 "bands": [
+                     {"min": 35,  "mult": 1.30, "label": "nuclear-AI-elite-CEG"},
+                     {"min": 25,  "mult": 1.15, "label": "high-eff-CCGT"},
+                     {"min": 15,  "mult": 1.00, "label": "in-band"},
+                     {"min":  0,  "mult": 0.80, "label": "commodity-trap"},
+                 ]},
+                {"kpi": "hedged_revenue_pct", "direction": "higher_better",
+                 "correlation_group": "merchant_q_hedge_kicker",
+                 "bands": [
+                     {"min": 0.70, "mult": 1.10, "label": "well-hedged"},
+                     {"min": 0.40, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.90, "label": "open-exposure"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 3.5,  "mult": 1.10, "label": "fortress"},
+                {"max": 5.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 7.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'realized_spark_spread',
                 "mandatory":       True,
-                "search_phrases":  ['realized spark spread', 'dark spread per MWh', 'generation margin per unit'],
-                "compute_hint":    'average_realized_power_price - (fuel_cost_per_unit * heat_rate)',
-                "clamp":           (5.0, 100.0),
+                "search_phrases":  ['realized spark spread', 'dark spread per MWh', 'generation margin per unit', '$/MWh spread'],
+                "compute_hint":    'average_realized_power_price - (fuel_cost_per_unit * heat_rate) — USD per MWh',
+                "clamp":           (0.0, 200.0),
                 "source":          'W',
                 "extractor_only":  True,
             },
             {
                 "key":             'hedged_revenue_pct',
                 "mandatory":       True,
-                "search_phrases":  ['forward hedging percentage', 'locked-in revenue for next 12 months'],
+                "search_phrases":  ['forward hedging percentage', 'locked-in revenue for next 12 months', 'hedged revenue %'],
+                "compute_hint":    'Forward-hedged revenue / total revenue (decimal)',
+                "clamp":           (0.0, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "clamp":           (-3.0, 12.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'generation_output_mwh',
@@ -2803,7 +2988,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Realized spark spread indices', 'Forward hedging logs', 'Generation availability (uptime) reports'],
+        "source_priority": ['Realized spark spread indices', 'Forward hedging logs', 'Generation availability'],
     },
 
 # ── Financials ──────────────────────────────────────────────────
@@ -4194,45 +4379,137 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 
     'Automotive (OEM)': {
         "sector":         'Industrials',
-        "anchor_methods": ['EV/EBITDA', 'P/E', 'P/BV', 'FCF Yield'],
+        "anchor_methods": ['EV/EBITDA', 'P/E (ops)', 'P/BV', 'FCF Yield'],
+        # V3 quality: unit_deliveries_yoy primary + ev_delivery_mix_pct (BEV)
+        # kicker (Electrification Alpha — 2026 BEV >25% Elite, recalibrated
+        # per E1 spec since global BEV share now ~19%).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "unit_deliveries_yoy", "direction": "higher_better",
+                 "correlation_group": "auto_q_primary",
+                 "bands": [
+                     {"min":  0.10, "mult": 1.30, "label": "elite"},
+                     {"min":  0.05, "mult": 1.15, "label": "strong"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "decel"},
+                 ]},
+                {"kpi": "ev_delivery_mix_pct", "direction": "higher_better",
+                 "correlation_group": "auto_q_ev_kicker",
+                 "bands": [
+                     {"min": 0.25, "mult": 1.30, "label": "elite-BEV-leader"},
+                     {"min": 0.15, "mult": 1.15, "label": "strong-electrification"},
+                     {"min": 0.05, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.80, "label": "legacy-ICE-only"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # V3 risk: inventory_days_sales primary (death-spiral signal, F 2024
+        # lesson — Toyota gold standard ~33d) + drag_when on net_debt_to_ebitda
+        # >4.5x (the "Debt Trap" — high leverage restricts R&D pivot to Gen-3
+        # EV platforms).
+        "risk_adjustment": {
+            "kpi": "inventory_days_sales", "direction": "lower_better",
+            "bands": [
+                {"max":  60, "mult": 1.10, "label": "fortress-Toyota"},
+                {"max":  90, "mult": 1.00, "label": "in-band"},
+                {"max": 120, "mult": 0.92, "label": "stretched"},
+                {"max": 999, "mult": 0.80, "label": "weak-Stellantis-VW-bloat"},
+            ],
+            "drag_when": {
+                "kpi":    "net_debt_to_ebitda",
+                "gt":     4.5,
+                "factor": 0.90,
+                "note":   "Debt Trap: high leverage restricts R&D pivot to Gen-3 EV platforms",
+            },
+        },
         "kpis": [
             {
                 "key":             'inventory_days_sales',
                 "mandatory":       True,
-                "search_phrases":  ['days of inventory on hand', 'dealer stock levels', 'DOH'],
-                "clamp":           (15, 100),
+                "search_phrases":  ['days of inventory on hand', 'dealer stock levels', 'DOH', 'days of supply'],
+                "compute_hint":    'Days of inventory on dealer lots (Toyota ~33d gold standard, >120d bloat)',
+                "clamp":           (15, 200),
                 "source":          'F',
                 "extractor_only":  False,
+                "fmp_field":       'daysOfInventoryOnHandTTM',
             },
             {
                 "key":             'unit_deliveries_yoy',
                 "mandatory":       True,
                 "search_phrases":  ['wholesale vehicle deliveries', 'retail sales volume growth', 'unit sales YOY'],
-                "clamp":           (-0.25, 0.4),
+                "compute_hint":    'YoY unit delivery growth (decimal)',
+                "clamp":           (-0.30, 0.50),
                 "source":          'W',
                 "extractor_only":  True,
                 "decimal_format":  True,
             },
             {
                 "key":             'ev_delivery_mix_pct',
-                "mandatory":       False,
-                "search_phrases":  ['EV penetration', 'electrification share of total units'],
+                "mandatory":       True,
+                "search_phrases":  ['BEV mix', 'battery EV penetration', 'electrification share of units', 'BEV % of deliveries'],
+                "compute_hint":    'BEV deliveries / total deliveries (decimal — 2026 BEV share ~19%; >25% Elite)',
+                "clamp":           (0.0, 1.0),
                 "source":          'W',
                 "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio', 'industrial net debt'],
+                "compute_hint":    'Excluding Finance Arm debt — FMP-augmented',
+                "clamp":           (-3.0, 12.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
         ],
-        "source_priority": ["Dealer inventory 'days of supply' (DOH)", 'Wholesale unit delivery logs', 'EV delivery mix percentage'],
+        "source_priority": ['Dealer inventory days of supply', 'Wholesale unit delivery logs', 'BEV delivery mix', 'Net leverage ex-finance arm'],
     },
 
     'Capital Goods': {
         "sector":         'Industrials',
-        "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'ROIC vs WACC', 'P/E'],
+        "anchor_methods": ['EV/EBITDA', 'FCF Yield', 'ROIC vs WACC', 'P/E (ops)'],
+        # V3 quality: organic_revenue_growth + book_to_bill_ratio (joint
+        # qualification per E2 spec — separate groups, multiply, full magnitudes).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "organic_revenue_growth", "direction": "higher_better",
+                 "correlation_group": "capgoods_q_primary",
+                 "bands": [
+                     {"min":  0.08, "mult": 1.30, "label": "elite"},
+                     {"min":  0.05, "mult": 1.15, "label": "strong"},
+                     {"min":  0.01, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "decline"},
+                 ]},
+                {"kpi": "book_to_bill_ratio", "direction": "higher_better",
+                 "correlation_group": "capgoods_q_b2b_kicker",
+                 "bands": [
+                     {"min": 1.15, "mult": 1.30, "label": "elite-pipeline"},
+                     {"min": 1.05, "mult": 1.15, "label": "strong-pipeline"},
+                     {"min": 0.95, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "weak-pipeline"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5,  "mult": 1.10, "label": "fortress"},
+                {"max": 3.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 4.5,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.80, "label": "weak"},
+            ],
+        },
         "kpis": [
             {
                 "key":             'organic_revenue_growth',
                 "mandatory":       True,
                 "search_phrases":  ['organic revenue growth', 'like-for-like sales growth', 'revenue growth ex-FX/M&A'],
-                "clamp":           (-0.2, 0.4),
+                "compute_hint":    'YoY revenue growth ex-FX ex-M&A (decimal — global >8% elite, India L&T >16%)',
+                "clamp":           (-0.30, 0.50),
                 "source":          'H',
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -4240,9 +4517,20 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             'book_to_bill_ratio',
                 "mandatory":       True,
-                "search_phrases":  ['order-to-delivery ratio'],
+                "search_phrases":  ['order-to-delivery ratio', 'book-to-bill', 'orders to revenue'],
+                "compute_hint":    'New orders / shipped revenue',
+                "clamp":           (0.5, 2.0),
                 "source":          'W',
                 "extractor_only":  True,
+            },
+            {
+                "key":             'net_debt_to_ebitda',
+                "mandatory":       True,
+                "search_phrases":  ['net debt to EBITDA', 'leverage ratio'],
+                "clamp":           (-3.0, 8.0),
+                "source":          'F',
+                "extractor_only":  False,
+                "fmp_field":       'netDebtToEBITDATTM',
             },
             {
                 "key":             'service_revenue_mix_pct',
@@ -4252,7 +4540,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
         ],
-        "source_priority": ['Organic revenue growth ex-FX/M&A', 'Book-to-bill ratios', 'High-margin service revenue mix'],
+        "source_priority": ['Organic revenue growth ex-FX/M&A', 'Book-to-bill ratios', 'Leverage disclosures'],
     },
 
 # ── Materials ──────────────────────────────────────────────────
