@@ -303,6 +303,65 @@ export interface RiskManagerOutput {
   };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Sector valuation card (Option B render). Built backend-side by
+// `src/data/sector_kpi_framework.render_card_payload(profile_name, state, ticker)`
+// and persisted in three places (per the persistence fix chain — see commits
+// 1ac5490, 10ed937, d748ad4):
+//   1. Pipeline return dict → web_runs.full_result_json (fresh runs)
+//   2. _save_checkpoint partial_data → SSE progressive UI
+//   3. ticker_signals.sector_card_json → archive (historical runs)
+// Legacy sub-profiles (SaaS / REIT / Biopharma) intentionally omit this
+// payload — the existing bespoke cards remain authoritative for them.
+// ═══════════════════════════════════════════════════════════════════════════
+export type SectorKpiAccent = 'blue' | 'green' | 'amber' | 'rose' | 'violet';
+export type SectorKpiFormat = 'pct' | 'usd' | 'x' | 'int' | 'string';
+
+export interface SectorKpi {
+  key: string;
+  label: string;
+  value: number | string | null;
+  format: SectorKpiFormat;
+  decimals?: number | null;
+  unit?: string | null;
+  mandatory?: boolean;
+  clamp_low?: number | null;
+  clamp_high?: number | null;
+}
+
+export interface SectorKpiGroup {
+  title: string;
+  accent: SectorKpiAccent;
+  kpis: SectorKpi[];
+}
+
+// V3 — Composite adjustment audit bridge. Tells the user WHY the IV moved:
+// Quality (operational) × Risk (balance sheet) × Commodity (forward leverage)
+// → Final composite multiplier (capped at 1.85x or 1.70x for commodity sectors).
+export interface AuditBridge {
+  quality: number;
+  quality_note: string;
+  risk: number;
+  risk_note: string;
+  commodity: number;
+  commodity_note: string;
+  raw_composite: number;
+  final_multiplier: number;
+  cap_high: number;     // 1.70 for Resources/Energy/Materials, else 1.85
+  was_capped: boolean;
+}
+
+export interface SectorCardPayload {
+  ticker: string;
+  sector: string;
+  profile_name: string;
+  sub_profile?: string | null;
+  anchor_methods: string[];
+  groups: SectorKpiGroup[];
+  source_priority?: string[];
+  audit_bridge?: AuditBridge;  // V3 composite adjustment breakdown
+}
+
 export interface PipelineData {
   tickers?: string[];
   macro_regime?: MacroRegime;
@@ -320,6 +379,9 @@ export interface PipelineData {
   deep_research_report?: string;
   deep_research_annotated?: string;   // report text with [n] markers inserted
   citation_registry?: CitationRegistryEntry[];
+  // Sector-specific valuation card (Option B). One entry per ticker; absent
+  // for legacy sub-profiles (frontend gates on `sector_card?.[ticker]`).
+  sector_card?: Record<string, SectorCardPayload>;
   [key: string]: unknown;
 }
 

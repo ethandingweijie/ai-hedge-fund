@@ -25,6 +25,7 @@ import type {
   MacroRegime,
   BiopharmaPipelineAsset,
   SaasMetrics,
+  SectorCardPayload,
 } from '@/lib/reportTypes';
 import {
   getStockData, getCompanyName,
@@ -42,6 +43,7 @@ import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel'
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
+import { SectorValuationCard } from '@/components/report/SectorValuationCard';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
@@ -112,6 +114,8 @@ export function V2ReportView({
   const powerLaw = (data.power_law_analysis as Record<string, PowerLawAnalysis> | undefined)?.[ticker];
   const valueTrap = (data.value_trap_analysis as Record<string, ValueTrapAnalysis> | undefined)?.[ticker];
   const dcfRange = (data.dcf_range as Record<string, DcfRange> | undefined)?.[ticker];
+  // Sector-specific valuation card (Option B). Absent for legacy sub-profiles.
+  const sectorCard = (data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker];
   const industryBrief = data.industry_brief as string | undefined;
   const deepResearch = (data.deep_research ?? data.deep_research_report) as string | undefined;
   const deepAnnotated = data.deep_research_annotated as string | undefined;
@@ -331,6 +335,7 @@ export function V2ReportView({
             ?? (data.profile_name as string | undefined)
           }
           saasMetrics={(data.saas_metrics as Record<string, SaasMetrics> | undefined)?.[ticker]}
+          sectorCard={sectorCard}
         />}
         {tab === 'investors'  && <InvestorsBody  agentSignals={agentSignals} debateResult={debateResult} ticker={ticker} isRunning={isRunning} />}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
@@ -538,7 +543,7 @@ function SummaryBody({
 /* ───────── Valuation Tab ───────── */
 function ValuationBody({
   dcfRange, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
-  sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics,
+  sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics, sectorCard,
 }: {
   dcfRange: DcfRange | undefined;
   scenarioAnalysis: ScenarioAnalysis | undefined;
@@ -558,6 +563,8 @@ function ValuationBody({
   profile?: string;
   /** SaaS metrics extractor output — Tech sub-type NRR / Rule-of-40 / CAC tiles. */
   saasMetrics?: SaasMetrics;
+  /** Sector-specific valuation card payload (V3 audit bridge UI). */
+  sectorCard?: SectorCardPayload;
 }) {
   // Extract all the numbers we need from real data
   const target = (scenarioAnalysis?.['12m_price_target'] ?? decision?.price_target ?? null);
@@ -786,6 +793,9 @@ function ValuationBody({
       ) : (
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       )}
+
+      {/* ── Sector Valuation Card (Option B render) ─────────────────── */}
+      {sectorCard && <SectorValuationCard payload={sectorCard} />}
 
       {isRunning && !haveAny && (
         <p className="text-center text-[11px] text-zinc-400 dark:text-zinc-500 pt-2">

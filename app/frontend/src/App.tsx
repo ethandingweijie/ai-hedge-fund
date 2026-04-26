@@ -7,6 +7,7 @@ import { ScreenerPage } from './pages/ScreenerPage';
 import { WatchlistPage } from './pages/WatchlistPage';
 import { PricingPage } from './pages/PricingPage';
 import { LoginPage } from './pages/LoginPage';
+import { SectorCardPreviewPage } from './pages/SectorCardPreviewPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
 import { ThemeProvider } from './contexts/theme-context';
 import { AuthProvider, useAuth } from './contexts/auth-context';
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/screener" element={<RequireAuth><ScreenerPage /></RequireAuth>} />
           <Route path="/watchlist" element={<RequireAuth><WatchlistPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/sector-card-preview" element={<SectorCardPreviewPage />} />
 
           {/* Default: redirect to login (will redirect to /report after auth) */}
           <Route path="*" element={<Navigate to="/login" replace />} />

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { RunResult, VgpmResult, AgentSignals, DebateResult, ScenarioAnalysis, PowerLawAnalysis, ValueTrapAnalysis, DcfRange, CitationRegistryEntry } from '@/lib/reportTypes';
+import type { RunResult, VgpmResult, AgentSignals, DebateResult, ScenarioAnalysis, PowerLawAnalysis, ValueTrapAnalysis, DcfRange, CitationRegistryEntry, SectorCardPayload } from '@/lib/reportTypes';
 import { getStockData } from '@/lib/api';
 import { gradeColorClass } from '@/lib/gradeColors';
 
@@ -18,6 +18,7 @@ import { AgentSignalsPanel } from '@/components/report/AgentSignalsPanel';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
+import { SectorValuationCard } from '@/components/report/SectorValuationCard';
 import { DebatePanel } from '@/components/report/DebatePanel';
 import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
@@ -63,6 +64,9 @@ export function MobileReportView({ result, runId }: MobileReportViewProps) {
   const powerLaw = (data.power_law_analysis as Record<string, PowerLawAnalysis> | undefined)?.[ticker];
   const valueTrap = (data.value_trap_analysis as Record<string, ValueTrapAnalysis> | undefined)?.[ticker];
   const dcfRange = (data.dcf_range as Record<string, DcfRange> | undefined)?.[ticker];
+  // Sector-specific valuation card payload (Option B). Absent for legacy
+  // sub-profiles (SaaS / REIT / Biopharma) — those keep their bespoke cards.
+  const sectorCard = (data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker];
   const industryBrief = data.industry_brief as string | undefined;
   const deepResearchReport = (data.deep_research ?? data.deep_research_report) as string | undefined;
   const deepResearchAnnotated = data.deep_research_annotated as string | undefined;
@@ -328,6 +332,13 @@ export function MobileReportView({ result, runId }: MobileReportViewProps) {
               />
             </div>
           </MobileContentCard>
+          {sectorCard && (
+            <MobileContentCard title="Sector Valuation" defaultExpanded priority="high">
+              <div className="pt-3">
+                <SectorValuationCard payload={sectorCard} />
+              </div>
+            </MobileContentCard>
+          )}
         </div>
 
         {/* ── Financials ───────────────────────────────── */}
