@@ -3307,12 +3307,15 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "EOG":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "EOG Resources"),
     "LEU":   ("Resources",  "",  "Uranium",               "Centrus Energy — uranium enrichment (SWU contracts); NOT power generation"),
 
-    # ── Crypto ────────────────────────────────────────────────────────────────
-    "MSTR":  ("Crypto", "",  "Diversified",  "MicroStrategy — BTC treasury company"),
-    "MARA":  ("Crypto", "",  "Diversified",  "Marathon Digital — BTC miner"),
-    "RIOT":  ("Crypto", "",  "Diversified",  "Riot Platforms — BTC miner"),
-    "CLSK":  ("Crypto", "",  "Diversified",  "CleanSpark — BTC miner"),
-    "BTDR":  ("Crypto", "",  "Diversified",  "Bitdeer — crypto mining hardware (SEALMINER ASICs) + hosting; OEM + miner hybrid"),
+    # ── Crypto (multimodal Family G — sub-industry router by ticker) ──────────
+    "MSTR":  ("Crypto", "BTC Treasury / Proxy",  "Diversified",  "MicroStrategy — BTC treasury company (Saylor playbook)"),
+    "MARA":  ("Crypto", "Digital Asset Mining",  "Diversified",  "Marathon Digital — BTC miner"),
+    "RIOT":  ("Crypto", "Digital Asset Mining",  "Diversified",  "Riot Platforms — BTC miner"),
+    "CLSK":  ("Crypto", "Digital Asset Mining",  "Diversified",  "CleanSpark — BTC miner"),
+    "CIFR":  ("Crypto", "Digital Asset Mining",  "Diversified",  "Cipher Mining — low-cost BTC miner"),
+    "BTDR":  ("Crypto", "Digital Asset Mining",  "Diversified",  "Bitdeer — crypto mining hardware (SEALMINER ASICs) + hosting; OEM + miner hybrid"),
+    "COIN":  ("Crypto", "Crypto Exchange",        "Diversified",  "Coinbase — institutional crypto exchange + custody"),
+    "HOOD":  ("Crypto", "Crypto Exchange",        "Diversified",  "Robinhood — crypto-arm exchange (also Brokerage profile candidate)"),
 
     # ── China / ADR tickers that are commonly misclassified ───────────────────
     "CHA":   ("Consumer", "",  "Restaurant/Dining",       "Chagee Holdings — premium Chinese tea brand (NASDAQ: CHA)"),

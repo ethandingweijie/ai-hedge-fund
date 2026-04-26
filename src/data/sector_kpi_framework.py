@@ -2642,39 +2642,189 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     },
 
 # ── Crypto ──────────────────────────────────────────────────
+    # ── G4: Pre-Revenue / Network Tech (Protocol / L1 / L2 plays —
+    # Solana-style, DePIN, Filecoin, Helium etc.) ────────────────────────
     'Pre-Revenue Tech': {
         "sector":         'Crypto',
         "anchor_methods": ['Scenario Intrinsic Value', 'Comparable Transactions', 'Revenue DCF', 'TAM Penetration'],
+        # V3 quality: active_developer_growth_yoy primary + tam_penetration_pct kicker.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "active_developer_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "prerev_q_primary",
+                 "bands": [
+                     {"min":  0.30, "mult": 1.30, "label": "elite-Solana-Base-momentum"},
+                     {"min":  0.10, "mult": 1.15, "label": "strong"},
+                     {"min":  0.0,  "mult": 1.00, "label": "maturing"},
+                     {"min": -99,   "mult": 0.80, "label": "ecosystem-decay"},
+                 ]},
+                {"kpi": "tam_penetration_pct", "direction": "higher_better",
+                 "correlation_group": "prerev_q_kicker",
+                 "bands": [
+                     {"min": 0.05, "mult": 1.10, "label": "breakout"},
+                     {"min": 0.01, "mult": 1.05, "label": "growth-phase"},
+                     {"min": 0.0,  "mult": 1.00, "label": "early-pilot"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        # V3 risk: cash_runway_years — Survival is the only Moat for pre-rev.
+        "risk_adjustment": {
+            "kpi": "cash_runway_years", "direction": "higher_better",
+            "bands": [
+                {"min": 3.0,  "mult": 1.10, "label": "fortress"},
+                {"min": 1.5,  "mult": 1.00, "label": "in-band"},
+                {"min": 0.75, "mult": 0.90, "label": "warning"},
+                {"min": 0.0,  "mult": 0.70, "label": "distressed"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'active_developer_growth_yoy',
-                "mandatory":       True,
-                "search_phrases":  ['active ecosystem developers growth', 'GitHub contributor growth', 'developer commits YOY'],
-                "compute_hint":    '(current_period_devs / prior_period_devs) - 1',
-                "clamp":           (-0.5, 5.0),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'tam_penetration_pct',
-                "mandatory":       True,
-                "search_phrases":  ['market share of total addressable volume', 'protocol penetration rate', 'adoption share of target market'],
-                "compute_hint":    'protocol_volume / total_addressable_market_volume',
-                "clamp":           (0.0001, 0.2),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'token_velocity',
-                "mandatory":       False,
-                "search_phrases":  ['on-chain transaction volume vs market cap'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
+            {"key": 'active_developer_growth_yoy', "mandatory": True, "search_phrases": ['active ecosystem developers growth','GitHub contributor growth','developer commits YOY'], "compute_hint": '(current_devs/prior_devs)-1 (decimal)', "clamp": (-0.50, 5.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'tam_penetration_pct',         "mandatory": True, "search_phrases": ['market share of total addressable volume','protocol penetration rate','adoption share of target market'], "compute_hint": 'protocol_volume/TAM (decimal)', "clamp": (0.0, 0.50), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'cash_runway_years',           "mandatory": True, "search_phrases": ['cash runway months','months of cash','liquidity runway'], "compute_hint": 'FMP-augmented from cash + burn rate', "clamp": (0.0, 99.0), "source": 'F', "extractor_only": False},
+            {"key": 'token_velocity',              "mandatory": False, "search_phrases": ['on-chain transaction volume vs market cap'], "source": 'W', "extractor_only": True},
         ],
-        "source_priority": ['Ecosystem developer activity (GitHub / developer reports)', 'Protocol volume logs', 'TAM penetration benchmarks'],
+        "source_priority": ['Ecosystem developer activity', 'Protocol volume logs', 'Cash runway disclosures'],
+    },
+
+    # ── G1: Crypto Exchange (COIN, Kraken-public, Robinhood-crypto-arm) ──
+    # 2026 driver: Institutional AUM Flow (not retail hype).
+    'Crypto Exchange': {
+        "sector":         'Crypto',
+        "anchor_methods": ['EV/Revenue', 'P/E (ops)', 'DCF (FCF)', 'EV/EBITDA'],
+        # Q: trading_volume_growth_yoy (primary 0.7w) + assets_on_platform_growth (kicker 0.3w).
+        # Joint qualification per user's table — separate groups multiply.
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "trading_volume_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "cexch_q_primary",
+                 "bands": [
+                     {"min":  0.15, "mult": 1.30, "label": "elite"},
+                     {"min":  0.05, "mult": 1.15, "label": "strong"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.80, "label": "weak"},
+                 ]},
+                {"kpi": "assets_on_platform_growth", "direction": "higher_better",
+                 "correlation_group": "cexch_q_kicker",
+                 "bands": [
+                     {"min":  0.25, "mult": 1.30, "label": "elite-AUM-flow"},
+                     {"min":  0.10, "mult": 1.15, "label": "strong-AUM"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.80, "label": "AUM-outflow"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # R: non_interest_expense_pct_rev (efficiency gate — operating leverage).
+        "risk_adjustment": {
+            "kpi": "non_interest_expense_pct_rev", "direction": "lower_better",
+            "bands": [
+                {"max": 0.55, "mult": 1.10, "label": "fortress-bull-cycle-COIN"},
+                {"max": 0.75, "mult": 1.00, "label": "in-band"},
+                {"max": 0.95, "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.80, "label": "loss-making-bear-cycle"},
+            ],
+        },
+        "kpis": [
+            {"key": 'trading_volume_growth_yoy', "mandatory": True, "search_phrases": ['trading volume growth','transaction volume YoY','platform trading volume change'], "compute_hint": 'YoY % growth in trading volume (decimal)', "clamp": (-0.80, 5.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'assets_on_platform_growth', "mandatory": True, "search_phrases": ['assets on platform growth','custody assets growth','AUM on exchange YoY','client assets growth'], "compute_hint": 'YoY % growth in assets held on platform (decimal)', "clamp": (-0.50, 3.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'non_interest_expense_pct_rev', "mandatory": True, "search_phrases": ['non-interest expense as % of revenue','operating expense ratio','total expenses / revenue'], "compute_hint": 'Total non-interest expense / total revenue (decimal — fortress <55%)', "clamp": (0.0, 2.0), "source": 'F', "extractor_only": False, "decimal_format": True},
+        ],
+        "source_priority": ['Quarterly trading volume disclosures', 'Custody / assets on platform reports', 'Operating expense ratio'],
+    },
+
+    # ── G2: BTC Treasury / Proxy (MSTR — Saylor playbook) ──────────────
+    # 2026: BTC Yield model — outperform raw BTC through accretive capital raises.
+    'BTC Treasury / Proxy': {
+        "sector":         'Crypto',
+        "anchor_methods": ['mNAV', 'BTC NAV-Anchored DCF', 'EV/BTC Holdings'],
+        # Q: btc_yield_pct (BTC-per-share growth) + mNAV_multiple (premium/discount to NAV).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "btc_yield_pct", "direction": "higher_better",
+                 "correlation_group": "btct_q_primary",
+                 "bands": [
+                     {"min":  0.20, "mult": 1.30, "label": "elite-accretive"},
+                     {"min":  0.10, "mult": 1.15, "label": "strong"},
+                     {"min":  0.05, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.80, "label": "weak-dilutive"},
+                 ]},
+                {"kpi": "mNAV_multiple", "direction": "higher_better",
+                 "correlation_group": "btct_q_premium_kicker",
+                 "bands": [
+                     {"min": 2.0,  "mult": 1.30, "label": "premium-capital-raise-window"},
+                     {"min": 1.2,  "mult": 1.15, "label": "modest-premium"},
+                     {"min": 0.9,  "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.80, "label": "discount-no-accretion"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # R: btc_ltv_ratio (Liquidation Floor — debt/BTC value).
+        "risk_adjustment": {
+            "kpi": "btc_ltv_ratio", "direction": "lower_better",
+            "bands": [
+                {"max": 0.15, "mult": 1.10, "label": "fortress-MSTR-2020-conservative"},
+                {"max": 0.30, "mult": 1.00, "label": "in-band-steady-state"},
+                {"max": 0.45, "mult": 0.90, "label": "stretched-MSTR-2022-bear"},
+                {"max": 99,   "mult": 0.70, "label": "distress-margin-call"},
+            ],
+        },
+        "kpis": [
+            {"key": 'btc_yield_pct', "mandatory": True, "search_phrases": ['BTC yield','BTC per share growth','accretive BTC accumulation','BTC holdings growth relative to share count'], "compute_hint": 'YoY growth in (btc_holdings/diluted_shares) (decimal)', "clamp": (-0.30, 1.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'mNAV_multiple', "mandatory": True, "search_phrases": ['mNAV multiple','premium to NAV','price to BTC NAV','mark-to-NAV multiple'], "compute_hint": 'Market cap / (BTC holdings * BTC price)', "clamp": (0.3, 5.0), "source": 'W', "extractor_only": True},
+            {"key": 'btc_ltv_ratio', "mandatory": True, "search_phrases": ['debt to BTC value ratio','BTC LTV','convertible notes vs BTC holdings'], "compute_hint": 'Total debt / (BTC holdings * BTC price) (decimal)', "clamp": (0.0, 1.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'btc_holdings_value', "mandatory": True, "search_phrases": ['total BTC holdings value','BTC treasury value USD'], "clamp": (1e7, 1e12), "source": 'W', "extractor_only": True},
+            {"key": 'btc_holdings_per_share', "mandatory": False, "search_phrases": ['BTC per share','satoshis per share'], "clamp": (0.000001, 0.1), "source": 'W', "extractor_only": True},
+        ],
+        "source_priority": ['MSTR investor presentations (BTC Yield disclosures)', 'mNAV multiple from research providers', 'Debt schedule + BTC holdings'],
+    },
+
+    # ── G3: Digital Asset Mining (MARA, RIOT, CIFR) ──────────────────────
+    # Post-halving 2026: Cost-of-Production game.
+    'Digital Asset Mining': {
+        "sector":         'Crypto',
+        "anchor_methods": ['EV/Hash', 'EV/EBITDA', 'NAV (BTC + Cash)', 'P/E (ops)'],
+        # Q: hash_rate_growth_yoy + all_in_sustainable_cost_per_btc (AISC) — joint
+        # qualification (separate groups multiply, full magnitudes capped).
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "hash_rate_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "miner_q_primary",
+                 "bands": [
+                     {"min":  0.40, "mult": 1.30, "label": "elite-aggressive-buildout"},
+                     {"min":  0.20, "mult": 1.15, "label": "strong"},
+                     {"min":  0.10, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.80, "label": "weak-shrinking-fleet"},
+                 ]},
+                {"kpi": "cost_per_btc_mined", "direction": "lower_better",
+                 "correlation_group": "miner_q_aisc_kicker",
+                 "bands": [
+                     {"max": 45000, "mult": 1.30, "label": "elite-low-cost-CIFR-style"},
+                     {"max": 65000, "mult": 1.15, "label": "strong"},
+                     {"max": 85000, "mult": 1.00, "label": "in-band"},
+                     {"max": 999999, "mult": 0.70, "label": "weak-uneconomic-MARA-stress"},
+                 ]},
+            ],
+            "cap": [0.70, 1.50],
+        },
+        # R: cash_and_btc_runway_months — survive bear markets.
+        "risk_adjustment": {
+            "kpi": "cash_and_btc_runway_months", "direction": "higher_better",
+            "bands": [
+                {"min": 24, "mult": 1.10, "label": "fortress-CIFR-style"},
+                {"min": 12, "mult": 1.00, "label": "in-band"},
+                {"min":  6, "mult": 0.90, "label": "warning-post-halving-stress"},
+                {"min":  0, "mult": 0.70, "label": "distress-forced-sell"},
+            ],
+        },
+        "kpis": [
+            {"key": 'hash_rate_growth_yoy',     "mandatory": True, "search_phrases": ['hash rate growth','EH/s growth YoY','mining capacity expansion'], "compute_hint": 'YoY growth in installed hash rate (decimal — >40% elite post-halving)', "clamp": (-0.50, 5.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'cost_per_btc_mined',       "mandatory": True, "search_phrases": ['all-in sustainable cost per BTC','AISC per BTC','cost to mine BTC','direct cost per BTC mined'], "compute_hint": 'Total mining cost / BTC mined (USD per BTC — Elite <$45k, Weak >$85k)', "clamp": (10000, 250000), "source": 'W', "extractor_only": True},
+            {"key": 'cash_and_btc_runway_months', "mandatory": True, "search_phrases": ['cash and BTC runway','liquidity runway months','months of operating cash plus BTC'], "compute_hint": '(cash + BTC value) / monthly opex (months — Fortress >24mo)', "clamp": (0, 99), "source": 'W', "extractor_only": True},
+            {"key": 'all_in_sustainable_cost_per_btc', "mandatory": False, "search_phrases": ['AISC','all-in sustainable cost'], "clamp": (10000, 250000), "source": 'W', "extractor_only": True},
+        ],
+        "source_priority": ['Hash rate and AISC disclosures (monthly mining updates)', 'BTC holdings + cash position', 'Operating cost schedules'],
     },
 
 # ── Energy ──────────────────────────────────────────────────
@@ -4617,112 +4767,127 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
 # ── ProfessionalServices ──────────────────────────────────────────────────
     'Ad / Consulting': {
         "sector":         'ProfessionalServices',
-        "anchor_methods": ['EV/EBIT', 'FCF Yield', 'P/E', 'Revenue DCF'],
+        "anchor_methods": ['EV/EBIT', 'FCF Yield', 'P/E (ops)', 'Revenue DCF'],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "organic_revenue_growth", "direction": "higher_better",
+                 "correlation_group": "adcons_q_primary",
+                 "bands": [
+                     {"min":  0.08, "mult": 1.30, "label": "elite"},
+                     {"min":  0.04, "mult": 1.15, "label": "strong"},
+                     {"min":  0.0,  "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "ad-recession"},
+                 ]},
+                {"kpi": "personnel_cost_to_revenue", "direction": "lower_better",
+                 "correlation_group": "adcons_q_kicker",
+                 "bands": [
+                     {"max": 0.55, "mult": 1.10, "label": "efficient"},
+                     {"max": 0.65, "mult": 1.00, "label": "in-band"},
+                     {"max": 99,   "mult": 0.90, "label": "bloated"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 1.5,  "mult": 1.10, "label": "fortress"},
+                {"max": 3.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 4.5,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'organic_revenue_growth',
-                "mandatory":       True,
-                "search_phrases":  ['organic revenue growth ex-FX', 'like-for-like sales growth', 'revenue growth excluding acquisitions'],
-                "compute_hint":    '(revenue_ex_mna_fx / prior_revenue) - 1',
-                "clamp":           (-0.2, 0.4),
-                "source":          'H',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'personnel_cost_to_revenue',
-                "mandatory":       True,
-                "search_phrases":  ['staff costs as percentage of net revenue', 'personnel expense ratio', 'compensation and benefits / revenue'],
-                "compute_hint":    'total_employee_compensation / net_revenue',
-                "clamp":           (0.4, 0.85),
-                "source":          'H',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'net_new_billings',
-                "mandatory":       False,
-                "search_phrases":  ['new business wins', 'net account movement'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
+            {"key": 'organic_revenue_growth',  "mandatory": True,  "search_phrases": ['organic revenue growth ex-FX','like-for-like sales growth'], "compute_hint": '(revenue_ex_mna_fx/prior_revenue)-1', "clamp": (-0.30, 0.50), "source": 'H', "extractor_only": True, "decimal_format": True},
+            {"key": 'personnel_cost_to_revenue', "mandatory": True, "search_phrases": ['staff costs as percentage of net revenue','personnel expense ratio','compensation/revenue'], "compute_hint": 'total_employee_compensation/net_revenue (decimal)', "clamp": (0.30, 0.95), "source": 'H', "extractor_only": True, "decimal_format": True},
+            {"key": 'net_debt_to_ebitda',      "mandatory": True,  "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 8.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
+            {"key": 'net_new_billings',        "mandatory": False, "search_phrases": ['new business wins','net account movement'], "source": 'W', "extractor_only": True},
         ],
-        "source_priority": ['Personnel cost-to-revenue ratio', 'Organic revenue growth ex-FX', 'Net new business billings'],
+        "source_priority": ['Personnel cost-to-revenue ratio', 'Organic revenue growth ex-FX', 'Leverage'],
     },
 
     'IT Services': {
         "sector":         'ProfessionalServices',
-        "anchor_methods": ['P/E'],
+        "anchor_methods": ['P/E (ops)', 'EV/EBITDA', 'DCF (FCF)'],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "utilization_rate_pct", "direction": "higher_better",
+                 "correlation_group": "itsv_q_primary",
+                 "bands": [
+                     {"min": 0.83, "mult": 1.30, "label": "elite"},
+                     {"min": 0.78, "mult": 1.15, "label": "strong"},
+                     {"min": 0.73, "mult": 1.00, "label": "in-band"},
+                     {"min": 0.0,  "mult": 0.85, "label": "weak-idle-bench"},
+                 ]},
+                {"kpi": "attrition_rate_pct", "direction": "lower_better",
+                 "correlation_group": "itsv_q_kicker",
+                 "bands": [
+                     {"max": 0.13, "mult": 1.10, "label": "retention-strong"},
+                     {"max": 0.18, "mult": 1.00, "label": "in-band"},
+                     {"max": 0.22, "mult": 0.95, "label": "concerning"},
+                     {"max": 99,   "mult": 0.85, "label": "bleeding"},
+                 ]},
+            ],
+            "cap": [0.70, 1.45],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 0.0,  "mult": 1.10, "label": "fortress-net-cash-TCS"},
+                {"max": 1.0,  "mult": 1.05, "label": "strong"},
+                {"max": 2.0,  "mult": 1.00, "label": "in-band"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'attrition_rate_pct',
-                "mandatory":       True,
-                "search_phrases":  ['voluntary attrition', 'LTM attrition'],
-                "clamp":           (0.05, 0.3),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'utilization_rate_pct',
-                "mandatory":       True,
-                "search_phrases":  ['billable utilization', 'bench utilization'],
-                "clamp":           (0.7, 0.95),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'offshore_delivery_mix_pct',
-                "mandatory":       False,
-                "search_phrases":  ['offshore mix', 'global delivery center headcount %'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
-            {
-                "key":             'digital_revenue_pct',
-                "mandatory":       False,
-                "search_phrases":  ['digital services mix', 'cloud and data revenue'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
+            {"key": 'attrition_rate_pct',  "mandatory": True, "search_phrases": ['voluntary attrition','LTM attrition','employee attrition rate'], "compute_hint": 'TTM voluntary attrition (decimal)', "clamp": (0.0, 0.50), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'utilization_rate_pct',"mandatory": True, "search_phrases": ['billable utilization','bench utilization','consultant utilization'], "compute_hint": 'Billable hours/total hours (decimal)', "clamp": (0.50, 1.0), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'net_debt_to_ebitda',  "mandatory": True, "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 8.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
+            {"key": 'offshore_delivery_mix_pct', "mandatory": False, "search_phrases": ['offshore mix'], "source": 'W', "extractor_only": True},
+            {"key": 'digital_revenue_pct', "mandatory": False, "search_phrases": ['digital services mix','cloud and data revenue'], "source": 'W', "extractor_only": True},
         ],
-        "source_priority": ['Earnings Presentations', 'Statutory Filings'],
+        "source_priority": ['Earnings Presentations', 'Statutory Filings', 'Leverage'],
     },
 
     'Payment Processors': {
         "sector":         'ProfessionalServices',
-        "anchor_methods": ['EV/Gross Profit', 'EV/Volume', 'DCF', 'Rule of 40'],
+        "anchor_methods": ['EV/Gross Profit', 'EV/Volume', 'DCF (FCF)', 'Rule of 40'],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "tpv_growth_yoy", "direction": "higher_better",
+                 "correlation_group": "ppro_q_primary",
+                 "bands": [
+                     {"min":  0.15, "mult": 1.30, "label": "elite"},
+                     {"min":  0.08, "mult": 1.15, "label": "strong"},
+                     {"min":  0.03, "mult": 1.00, "label": "in-band"},
+                     {"min": -99,   "mult": 0.85, "label": "decel"},
+                 ]},
+                {"kpi": "blended_take_rate_bps", "direction": "higher_better",
+                 "correlation_group": "ppro_q_kicker",
+                 "bands": [
+                     {"min": 100, "mult": 1.15, "label": "premium-Adyen-PYPL"},
+                     {"min":  40, "mult": 1.00, "label": "in-band-merchant-acquirer"},
+                     {"min":   0, "mult": 0.85, "label": "commodity-FIS-FISV-legacy"},
+                 ]},
+            ],
+            "cap": [0.70, 1.40],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [
+                {"max": 2.0,  "mult": 1.10, "label": "fortress"},
+                {"max": 3.5,  "mult": 1.00, "label": "in-band"},
+                {"max": 5.0,  "mult": 0.92, "label": "stretched"},
+                {"max": 99,   "mult": 0.85, "label": "weak"},
+            ],
+        },
         "kpis": [
-            {
-                "key":             'tpv_growth_yoy',
-                "mandatory":       True,
-                "search_phrases":  ['Total Processing Volume growth', 'processed volume YOY', 'merchant volume growth'],
-                "compute_hint":    '(current_tpv / prior_tpv) - 1',
-                "clamp":           (-0.1, 1.5),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  True,
-            },
-            {
-                "key":             'blended_take_rate_bps',
-                "mandatory":       True,
-                "search_phrases":  ['net take rate in basis points', 'revenue as bps of volume', 'blended fee margin'],
-                "compute_hint":    '(total_revenue / TPV) * 10000',
-                "clamp":           (5, 500),
-                "source":          'W',
-                "extractor_only":  True,
-                "decimal_format":  False,
-            },
-            {
-                "key":             'e_commerce_volume_mix',
-                "mandatory":       False,
-                "search_phrases":  ['online vs card-present volume'],
-                "source":          'W',
-                "extractor_only":  True,
-            },
+            {"key": 'tpv_growth_yoy',       "mandatory": True, "search_phrases": ['Total Processing Volume growth','processed volume YOY'], "compute_hint": '(current_tpv/prior_tpv)-1', "clamp": (-0.20, 1.5), "source": 'W', "extractor_only": True, "decimal_format": True},
+            {"key": 'blended_take_rate_bps',"mandatory": True, "search_phrases": ['net take rate in basis points','blended fee margin'], "compute_hint": '(total_revenue/TPV)*10000 — bps', "clamp": (5, 500), "source": 'W', "extractor_only": True},
+            {"key": 'net_debt_to_ebitda',   "mandatory": True, "search_phrases": ['net debt to EBITDA','leverage ratio'], "clamp": (-3.0, 8.0), "source": 'F', "extractor_only": False, "fmp_field": 'netDebtToEBITDATTM'},
+            {"key": 'e_commerce_volume_mix',"mandatory": False, "search_phrases": ['online vs card-present volume'], "source": 'W', "extractor_only": True},
         ],
-        "source_priority": ['Total Processing Volume (TPV) growth', 'Net take rate (bps)', 'E-commerce vs card-present mix'],
+        "source_priority": ['TPV growth', 'Take rate (bps)', 'Leverage'],
     },
 
 # ── Semiconductor ──────────────────────────────────────────────────
@@ -6723,7 +6888,11 @@ _PROFILE_WEIGHTS: dict[str, tuple[float, float, float]] = {
     "Payment Networks":       (0.55, 0.40, 0.05),
     "FinTech":                (0.60, 0.40, 0.00),
     "Neo/Challenger":         (0.50, 0.50, 0.00),
-    "Pre-Revenue Tech":       (0.60, 0.40, 0.00),
+    "Pre-Revenue Tech":       (0.60, 0.40, 0.00),  # Network/L1/L2 — quality-dominant
+    # v3.10 — Crypto sub-profiles (multimodal Family G):
+    "Crypto Exchange":        (0.70, 0.30, 0.00),  # COIN — quality dominant (volume + AUM are everything)
+    "BTC Treasury / Proxy":   (0.55, 0.45, 0.00),  # MSTR — balanced; LTV gate matters
+    "Digital Asset Mining":   (0.50, 0.50, 0.00),  # MARA/RIOT/CIFR — survival = quality, runway = risk
 
     # ── Energy infrastructure (NOT commodity-exposed) ───────────────────
     "EPC Contractor":         (0.40, 0.50, 0.10),  # service biz on fixed-price contracts
