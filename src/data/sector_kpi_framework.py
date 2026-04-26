@@ -5798,30 +5798,63 @@ def composite_adjustment(profile_name: str, sector: str, metrics: dict | None) -
     # user can see whether the multiplier was z-driven (peer-relative) or
     # band-driven (static thresholds).
     spec = SECTOR_KPI_FRAMEWORK.get(profile_name) or {}
-    z_scores = (metrics or {}).get("_z_scores") if isinstance((metrics or {}).get("_z_scores"), dict) else {}
+    m = metrics or {}
+    z_scores = m.get("_z_scores") if isinstance(m.get("_z_scores"), dict) else {}
     quality_kpi = (spec.get("quality_tiers", {}).get("kpi_bands") or [{}])[0].get("kpi") if spec.get("quality_tiers") else None
     risk_kpi    = (spec.get("risk_adjustment") or {}).get("kpi")
     quality_z_entry = z_scores.get(quality_kpi) if quality_kpi else None
     risk_z_entry    = z_scores.get(risk_kpi)    if risk_kpi    else None
 
+    # ── v3.6 P2: extraction-coverage counters per lever ──────────────────
+    # Counts how many tier KPIs (referenced by the schema's quality_tiers
+    # / risk_adjustment) have non-None values in the metrics dict. Lets
+    # the frontend surface "low-confidence multiplier" badges when only
+    # some of the levers actually fired.
+    qt_for_count = spec.get("quality_tiers") or {}
+    quality_total = len(qt_for_count.get("kpi_bands", []))
+    quality_extracted = sum(
+        1 for cfg in qt_for_count.get("kpi_bands", [])
+        if m.get(cfg.get("kpi")) is not None
+    )
+    risk_total     = 1 if risk_kpi else 0
+    risk_extracted = 1 if (risk_kpi and m.get(risk_kpi) is not None) else 0
+    # cap_when gate KPI counts as risk-extracted dependency
+    cap_when_ra = (spec.get("risk_adjustment") or {}).get("cap_when") or {}
+    cap_gate_kpi = cap_when_ra.get("kpi") if isinstance(cap_when_ra, dict) else None
+
+    # ── v3.6 P1: completeness signal from extract_via_framework ───────────
+    # _completeness_score = ratio of mandatory KPIs the extractor populated
+    # _mandatory_missing  = list of mandatory KPI names that came back null
+    completeness_score = m.get("_completeness_score")
+    mandatory_missing  = m.get("_mandatory_missing") or []
+
     return capped, {
-        "quality":          round(q, 3),
-        "quality_note":     q_note,
-        "quality_weight":   round(wq, 2),
-        "quality_z":        quality_z_entry.get("z")           if isinstance(quality_z_entry, dict) else None,
-        "quality_cohort":   quality_z_entry.get("cohort_size") if isinstance(quality_z_entry, dict) else None,
-        "risk":             round(r, 3),
-        "risk_note":        r_note,
-        "risk_weight":      round(wr, 2),
-        "risk_z":           risk_z_entry.get("z")              if isinstance(risk_z_entry, dict) else None,
-        "risk_cohort":      risk_z_entry.get("cohort_size")    if isinstance(risk_z_entry, dict) else None,
-        "commodity":        round(c, 3),
-        "commodity_note":   c_note,
-        "commodity_weight": round(wc, 2),
-        "raw_composite":    round(raw, 3),
-        "final_multiplier": round(capped, 3),
-        "cap_high":         cap_high,
-        "was_capped":       raw != capped,
+        "quality":            round(q, 3),
+        "quality_note":       q_note,
+        "quality_weight":     round(wq, 2),
+        "quality_z":          quality_z_entry.get("z")           if isinstance(quality_z_entry, dict) else None,
+        "quality_cohort":     quality_z_entry.get("cohort_size") if isinstance(quality_z_entry, dict) else None,
+        "quality_extracted":  quality_extracted,
+        "quality_total":      quality_total,
+        "risk":               round(r, 3),
+        "risk_note":          r_note,
+        "risk_weight":        round(wr, 2),
+        "risk_z":             risk_z_entry.get("z")              if isinstance(risk_z_entry, dict) else None,
+        "risk_cohort":        risk_z_entry.get("cohort_size")    if isinstance(risk_z_entry, dict) else None,
+        "risk_extracted":     risk_extracted,
+        "risk_total":         risk_total,
+        "risk_cap_gate_kpi":  cap_gate_kpi,
+        "commodity":          round(c, 3),
+        "commodity_note":     c_note,
+        "commodity_weight":   round(wc, 2),
+        "raw_composite":      round(raw, 3),
+        "final_multiplier":   round(capped, 3),
+        "cap_high":           cap_high,
+        "was_capped":         raw != capped,
+        # P1: completeness from the framework extractor — surfaces "fallback used"
+        # (mandatory KPI missing) so frontend can show low-confidence badge.
+        "completeness_score": completeness_score,
+        "mandatory_missing":  mandatory_missing,
     }
 
 

@@ -258,6 +258,39 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
 
   const hasAnyZ = bridge.quality_z != null || bridge.risk_z != null;
 
+  // P2: extraction-coverage chip (e.g. "1/2") — small chip below the
+  // multiplier value indicating how many tier KPIs were actually extracted.
+  // Only shown when the schema has multi-KPI tiers (where partial extraction
+  // is meaningful).
+  const coverageChip = (extracted?: number, total?: number) => {
+    if (extracted == null || total == null || total <= 1) return null;
+    const isFull = extracted === total;
+    const cls = isFull
+      ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+      : extracted === 0
+        ? 'border-rose-500/30 text-rose-500 bg-rose-500/10'
+        : 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10';
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center rounded px-1 py-0.5 text-[8px] font-semibold tabular-nums border',
+          cls,
+        )}
+        title={`${extracted} of ${total} tier KPIs extracted`}
+      >
+        {extracted}/{total} extracted
+      </span>
+    );
+  };
+
+  // P1: completeness badge — visible when extract_via_framework flagged
+  // missing mandatory KPIs (low-confidence multiplier).
+  const completeness = bridge.completeness_score;
+  const missing      = bridge.mandatory_missing ?? [];
+  const showCompletenessWarning =
+    (typeof completeness === 'number' && completeness < 1.0) ||
+    missing.length > 0;
+
   return (
     <div className="px-5 py-3">
       <div className="flex items-center justify-between mb-2">
@@ -266,6 +299,20 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
           {hasAnyZ && (
             <span className="ml-2 inline-flex items-center rounded border border-violet-500/40 bg-violet-500/10 px-1 py-px text-[8px] font-semibold text-violet-600 dark:text-violet-400">
               V4-β · Z-DRIVEN
+            </span>
+          )}
+          {showCompletenessWarning && (
+            <span
+              className="ml-2 inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1 py-px text-[8px] font-semibold text-amber-600 dark:text-amber-400"
+              title={
+                missing.length > 0
+                  ? `Mandatory KPIs missing (fallback used): ${missing.join(', ')}`
+                  : `Extraction completeness: ${(completeness! * 100).toFixed(0)}%`
+              }
+            >
+              {missing.length > 0
+                ? `LOW-CONFIDENCE · ${missing.length} MANDATORY MISSING`
+                : `COMPLETENESS ${(completeness! * 100).toFixed(0)}%`}
             </span>
           )}
         </div>
@@ -292,8 +339,9 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
           <div className={cn('text-sm font-bold tabular-nums', tone(bridge.quality))}>
             {fmtMult(bridge.quality)}
           </div>
-          <div className="mt-0.5 flex items-center justify-center">
+          <div className="mt-0.5 flex items-center justify-center gap-1 flex-wrap">
             {zChip(bridge.quality_z, bridge.quality_cohort)}
+            {coverageChip(bridge.quality_extracted, bridge.quality_total)}
           </div>
           <div className="text-[9px] text-muted-foreground truncate" title={bridge.quality_note}>
             {bridge.quality_note}
@@ -315,8 +363,9 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
           <div className={cn('text-sm font-bold tabular-nums', tone(bridge.risk))}>
             {fmtMult(bridge.risk)}
           </div>
-          <div className="mt-0.5 flex items-center justify-center">
+          <div className="mt-0.5 flex items-center justify-center gap-1 flex-wrap">
             {zChip(bridge.risk_z, bridge.risk_cohort)}
+            {coverageChip(bridge.risk_extracted, bridge.risk_total)}
           </div>
           <div className="text-[9px] text-muted-foreground truncate" title={bridge.risk_note}>
             {bridge.risk_note}
