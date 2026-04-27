@@ -4312,6 +4312,41 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
             saas_metrics_all[t] = sm
     state["data"]["saas_metrics"] = saas_metrics_all
 
+    # ── Per-ticker insurance metrics (combined ratio + reserve dev) ──────────
+    insurance_metrics_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        im = res.get("insurance_metrics")
+        if im:
+            insurance_metrics_all[t] = im
+    state["data"]["insurance_metrics"] = insurance_metrics_all
+
+    # ── Per-ticker framework metrics (V3 SECTOR_KPI_FRAMEWORK dispatch) ──────
+    # NEW v3.13 — was never aggregated before. Without this, the V3
+    # SectorValuationCard renders empty for ALL non-legacy profiles even
+    # when extract_via_framework() returned a populated dict.
+    framework_metrics_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        fm = res.get("framework_metrics")
+        if fm:
+            framework_metrics_all[t] = fm
+    state["data"]["framework_metrics"] = framework_metrics_all
+
+    # ── v3.13 BRIDGE: also publish under `*_all` state keys ──────────────────
+    # The new SectorValuationCard's _collect_kpi_values() reads these
+    # `*_all`-suffixed keys (the canonical naming). Legacy panels keep reading
+    # the no-`_all` keys above; both naming conventions now coexist.
+    # Without this bridge, every non-legacy framework profile (REIT-only,
+    # Stable Growth, Cybersecurity / Mission-Critical SaaS, Hyperscaler, etc.)
+    # rendered the new card with mostly-empty values — only the FMP-augmented
+    # KPIs (net_debt_to_ebitda, capex_intensity_pct) showed up because
+    # pipeline.py wrote those directly to framework_metrics_all.
+    state["data"]["framework_metrics_all"]  = framework_metrics_all
+    state["data"]["insurance_metrics_all"]  = insurance_metrics_all
+    state["data"]["saas_metrics_all"]       = saas_metrics_all
+    state["data"]["bank_metrics_all"]       = bank_metrics_all
+    state["data"]["reit_metrics_all"]       = reit_metrics_all
+    state["data"]["pipeline_assets_all"]    = pipeline_assets_all
+
     # ── Per-ticker management guidance extraction ─────────────────────────────
     mgmt_guidance: dict[str, dict] = {}
     for t, res in deep_research_map.items():
