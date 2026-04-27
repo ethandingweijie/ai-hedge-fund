@@ -365,6 +365,25 @@ def _run_extractors(
             sdk_client, model_name, sections, deep_research, ticker
         )
 
+    # v3.15 — always fire framework_metrics dispatch alongside the legacy
+    # extractor (matches the live pipeline post-v3.14). Without this the
+    # backfill path leaves framework_metrics_all empty, so the new
+    # SectorValuationCard renders mostly blank even when the legacy panel
+    # has full values. Empty for profiles not in SECTOR_KPI_FRAMEWORK.
+    if profile_name:
+        try:
+            from src.data.sector_kpi_framework import (
+                SECTOR_KPI_FRAMEWORK,
+                extract_via_framework,
+            )
+            if profile_name in SECTOR_KPI_FRAMEWORK:
+                tasks["framework_metrics"] = lambda: extract_via_framework(
+                    sdk_client, model_name, sections, deep_research, ticker,
+                    profile_name=profile_name,
+                )
+        except Exception:
+            pass
+
     # Fan out all LLM calls concurrently. Each extractor has its own
     # _call_llm_with_rate_retry wrapper for rate-limit + timeout handling.
     out: dict[str, Any] = {}
@@ -657,6 +676,7 @@ def reextract_for_run(
             "reit_metrics":      _keys(extracted.get("reit_metrics", {})),
             "pipeline_assets":   _keys(extracted.get("pipeline_assets", [])),
             "dcf_calibration":   _keys(extracted.get("dcf_calibration", {})),
+            "framework_metrics": _keys(extracted.get("framework_metrics", {})),
         }
 
         # Decide whether an update is warranted — skip write when AFTER is
@@ -708,17 +728,64 @@ def reextract_for_run(
 
         # Patch stored JSON — merge extractor output into data dict.
         # Key convention: dcf_calibration + segment_scenarios are flat;
-        # saas/bank/reit/pipeline are ticker-keyed dicts in state.
+        # saas/bank/reit/pipeline/framework are ticker-keyed dicts in state.
         data["dcf_calibration"]   = extracted.get("dcf_calibration", {})
         data["segment_scenarios"] = extracted.get("segment_scenarios", {})
 
-        for k in ("saas_metrics", "bank_metrics", "reit_metrics", "pipeline_assets"):
+        # v3.15 — write to BOTH legacy (no `_all`) AND canonical `_all` keys
+        # so legacy panels (TechValuationPanel etc.) AND the new
+        # SectorValuationCard both pick up the backfilled values. Mirrors the
+        # v3.13 aggregator bridge in deep_research.py.
+        for k in ("saas_metrics", "bank_metrics", "reit_metrics",
+                  "pipeline_assets", "framework_metrics"):
             if k in extracted:
+                # Legacy bucket (no _all suffix)
                 existing = data.get(k) or {}
                 if not isinstance(existing, dict):
                     existing = {}
                 existing[ticker] = extracted[k]
                 data[k] = existing
+                # Canonical *_all bucket — what _collect_kpi_values reads
+                all_key = f"{k}_all"
+                existing_all = data.get(all_key) or {}
+                if not isinstance(existing_all, dict):
+                    existing_all = {}
+                existing_all[ticker] = extracted[k]
+                data[all_key] = existing_all
+
+        # v3.15 — re-render sector_card from the freshly-extracted metrics so
+        # the new SectorValuationCard reflects the backfill on next page load
+        # (frontend reads sector_card[ticker], not the raw *_all buckets).
+        try:
+            from src.data.sector_kpi_framework import (
+                render_card_payload, is_legacy_profile, _augment_metrics_with_fmp_risk,
+            )
+            if profile_name and not is_legacy_profile(profile_name):
+                # Mirror pipeline.py L671-687: FMP-augment the framework_metrics_all
+                # bucket for this ticker BEFORE rendering, so the card's R-multiplier
+                # picks up FMP-derived KPIs (net_debt_to_ebitda etc.) that
+                # extract_via_framework alone wouldn't surface.
+                fwm = data.get("framework_metrics_all") or {}
+                if not isinstance(fwm, dict):
+                    fwm = {}
+                ticker_metrics = fwm.get(ticker) or {}
+                try:
+                    ticker_metrics = _augment_metrics_with_fmp_risk(ticker, ticker_metrics)
+                    fwm[ticker] = ticker_metrics
+                    data["framework_metrics_all"] = fwm
+                except Exception:
+                    pass  # FMP augment is best-effort
+
+                synthetic_state = {"data": data}
+                rendered = render_card_payload(profile_name, synthetic_state, ticker)
+                if rendered:
+                    sector_card = data.get("sector_card") or {}
+                    if not isinstance(sector_card, dict):
+                        sector_card = {}
+                    sector_card[ticker] = rendered
+                    data["sector_card"] = sector_card
+        except Exception as _re:
+            print(f"  [reextract {ticker}] sector_card re-render failed: {_re!r}")
 
         full["data"] = data
 
