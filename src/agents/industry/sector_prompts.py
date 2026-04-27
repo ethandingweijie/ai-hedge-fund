@@ -426,44 +426,46 @@ Gross retention ≥95%.
 
 2F.3 RULE OF 40 — calculate and score. Growth SaaS should be 50-70.
 
-2F.4 UNIT ECONOMICS (MANDATORY — LTV/CAC with churn context is the
-hidden "valuation-collapse" factor for Growth SaaS):
+2F.4 UNIT ECONOMICS (MANDATORY):
   • CAC Payback (months) — target <18 months mature, 24-36 for expansion.
   • MAGIC NUMBER (net new ARR / S&M spend) — target >1.0.
-  • LTV/CAC RATIO — COHORT-MATCHED CALCULATION (READ CAREFULLY — two
-    common errors silently inflate this 5-10x):
 
-    Formula:  LTV/CAC = [(cohort ACV × gross margin) / annual churn] / CAC
-              where CAC = period S&M $ / number of NEW customers added in period
-              and  ACV = revenue per customer FOR THE SAME COHORT as CAC
+  • LTV/CAC RATIO — follow this exact protocol:
 
-    DO NOT compute CAC as (total S&M ÷ total customers). That mixes the
-    S&M cost of acquiring NEW customers with the customer base built up
-    over many prior years — gives an artificially low CAC.
-    Correct: divide period S&M by NET NEW customers added that same period.
+    Step 1 — FULLY-LOADED CAC: Divide total Sales & Marketing (S&M) spend
+    by NET NEW LOGOS (not the total customer base). If logo count is
+    unavailable, use S&M / Net New ARR to find the "CAC Ratio."
 
-    DO NOT compute ACV as (total revenue ÷ enterprise-cohort customer count).
-    That attributes 100% of revenue to (e.g.) the top 15% of customers and
-    inflates ACV ~6x. Use the cohort-specific revenue share — for a
-    "$100k+ enterprise" cohort, estimate that cohort's revenue share of
-    total ARR (often 60-75% for cybersecurity / mission-critical SaaS) and
-    divide by that cohort's customer count.
+    Step 2 — LTV CALCULATION: Use the formula
+      LTV = (Blended ACV × Subscription Gross Margin) / Annual Revenue Churn
 
-    REPORT THE INPUTS — analyst will validate the calculation:
-      - Period S&M spend ($M)
-      - Net new customers added in period (matched cohort)
-      - Implied CAC = S&M / new customers ($k or $M per customer)
-      - Cohort ACV ($k per customer)
-      - Gross margin % (use subscription/non-GAAP for SaaS)
-      - Annual gross churn % (= 1 − gross retention; not net retention)
-      - Implied LTV ($M per customer)
-      - LTV/CAC = LTV / CAC
+    Step 3 — LOGIC CHECK: Calculate the Payback Period
+      Payback = CAC / (ACV × Margin)
+    If the resulting LTV/CAC exceeds 10x or the Payback is under 6
+    months, flag it as a potential "outlier" and re-calculate using
+    ONLY the "Enterprise" cohort (i.e. swap blended ACV + new-logo
+    count for the enterprise-cohort-specific ACV + enterprise net new
+    logo count, since enterprise S&M intensity is much higher per logo
+    than SMB).
 
-    Sanity check: SaaS LTV/CAC for healthy unit economics is 3-7x;
-    elite/cybersecurity 7-15x. Anything above 15x is almost always one
-    of the two errors above — recompute with cohort matching before
-    reporting. If the recomputed value is still >15, FLAG it explicitly
-    so the analyst can audit the inputs.
+    Step 4 — OUTPUT: Provide a step-by-step math table with the inputs
+    and intermediate values:
+      | Metric              | Value | Source |
+      | S&M spend (period)  | $X    | 10-K   |
+      | Net New Logos       | N     | IR     |
+      | Fully-Loaded CAC    | S&M/N | computed |
+      | Blended ACV         | $Y    | revenue / customers |
+      | Subscription GM %   | Z%    | non-GAAP |
+      | Annual Revenue Churn| C%    | 1 − gross retention |
+      | LTV                 | (Y×Z)/C | computed |
+      | LTV/CAC             | LTV/CAC | computed |
+      | Payback (months)    | CAC/(Y×Z)×12 | computed |
+    Then a brief 1-2 sentence VERDICT on whether the company is
+    under-investing in growth relative to its efficiency (high LTV/CAC
+    + long payback = under-spending on S&M; low LTV/CAC + short payback
+    = over-spending or churning). If you triggered the Step-3 outlier
+    re-calculation, present BOTH the blended and enterprise-cohort
+    rows so the reader can see the cohort effect.
 
   • NRR ÷ Gross Retention split: if NRR=115% but Gross Retention=85%,
     business is reliant on expansion to offset 15% churn.
