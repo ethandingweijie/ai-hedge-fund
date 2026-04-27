@@ -364,6 +364,11 @@ export interface AuditBridge {
   // P1 — extraction completeness signals from extract_via_framework
   completeness_score?: number | null;
   mandatory_missing?: string[];
+  // v3.19 — Composite normalised to 0-100 score with tier label for UI display
+  // (replaces the raw "1.14x" multiplier as the prominent number on the card).
+  // tier_label ∈ {"premium" (≥80), "in-band" (40-79), "haircut" (<40)}.
+  composite_score?: number | null;
+  tier_label?: 'premium' | 'in-band' | 'haircut' | null;
 }
 
 export interface SectorCardPayload {

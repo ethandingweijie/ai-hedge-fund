@@ -2797,22 +2797,55 @@ def _compute_method_value(
     return None
 
 
+_DCF_FAMILY_NAMES: frozenset[str] = frozenset({
+    "DCF", "DCF (2-stage)", "DCF (FCF+)", "NRR-adj DCF",
+    "Rev DCF (ARR)", "Backlog DCF", "PPA-backed DCF",
+    "Unit Econ DCF", "Power Price DCF", "Reverse DCF",
+    "DCF (Levered)", "Rev DCF (Mkt Sh)",
+})
+
+
 def _blend_methods(
     profile_methods: list[dict],
     method_values: dict[str, Optional[float]],
     c_macro: float,
     forward_flags: list[str],
     dcf_tv_fraction: float,
-) -> Optional[float]:
+    composite_mult: float = 1.0,
+) -> tuple[Optional[float], dict]:
     """
-    Apply the Master Map weights with C_macro modifier.
+    Apply the Master Map weights with C_macro modifier and (v3.19+) the V3
+    Composite multiplier on the multi-method portion only.
 
-    Formula: IV = Σ(V_i × W_i × (1+C_macro)) / Σ(W_i × (1+C_macro))
+    Formula (v3.19+):
+      IV_DCF   = weighted-mean(values from DCF-family methods)
+      IV_Multi = weighted-mean(values from non-DCF methods, e.g. P/E, EV/EBITDA, P/BV)
+      IV_Final = (W_DCF × IV_DCF + W_Multi × IV_Multi × Composite) / (W_DCF + W_Multi)
+
+    Composite ONLY biases the multi-method portion (peer/historical-relative
+    multiples). DCF stays sentiment-free per the V4 architecture spec — DCF is
+    the "fair math" anchor agnostic of market quality recognition; Composite is
+    the premium/discount the market applies to peer-relative multiples.
+
+    When composite_mult == 1.0, behaviour is byte-equivalent to the pre-v3.19
+    unsplit weighted-mean.
 
     Forward Gate A: if dcf_tv_fraction > 0.80, reduce DCF family weight by
-    _TV_DOMINANCE_REWEIGHT and redistribute to P/BV (asset floor).
+    _TV_DOMINANCE_REWEIGHT and redistribute to P/BV (asset floor, multi bucket).
+
+    Returns (final_iv, breakdown). breakdown is:
+      {
+        "iv_dcf":         float | None — weighted-mean DCF IV
+        "iv_multi":       float | None — weighted-mean Multi IV (PRE-composite)
+        "iv_multi_post":  float | None — Multi IV × composite_mult
+        "weight_dcf":     0..1         — DCF fraction of total weight
+        "weight_multi":   0..1         — Multi fraction of total weight
+        "composite":      float        — composite_mult applied
+        "iv_pre_composite": float | None — what IV would be at composite=1.0
+      }
     """
-    adjusted_methods = []
+    dcf_bucket: list[tuple[float, float]] = []
+    multi_bucket: list[tuple[float, float]] = []
     asset_floor_reweight = 0.0
 
     for m in profile_methods:
@@ -2826,35 +2859,59 @@ def _blend_methods(
             continue
 
         w = m["weight"]
+        is_dcf = (raw_name in _DCF_FAMILY_NAMES) or (effective_name == "DCF")
 
         # Forward Gate A: de-weight DCF family if TV-dominated
-        dcf_family_names = {"DCF", "DCF (2-stage)", "DCF (FCF+)", "NRR-adj DCF",
-                            "Rev DCF (ARR)", "Backlog DCF", "PPA-backed DCF",
-                            "Unit Econ DCF", "Power Price DCF", "Reverse DCF",
-                            "DCF (Levered)", "Rev DCF (Mkt Sh)"}
-        if dcf_tv_fraction > _TV_DOMINANCE_THRESHOLD:
-            if raw_name in dcf_family_names or effective_name in {"DCF"}:
-                asset_floor_reweight += w * _TV_DOMINANCE_REWEIGHT
-                w = w * (1 - _TV_DOMINANCE_REWEIGHT)
-                if "80/20 Rule: DCF weight reduced (TV > 80%)" not in forward_flags:
-                    forward_flags.append("80/20 Rule: DCF weight reduced (TV > 80%)")
+        if dcf_tv_fraction > _TV_DOMINANCE_THRESHOLD and is_dcf:
+            asset_floor_reweight += w * _TV_DOMINANCE_REWEIGHT
+            w = w * (1 - _TV_DOMINANCE_REWEIGHT)
+            if "80/20 Rule: DCF weight reduced (TV > 80%)" not in forward_flags:
+                forward_flags.append("80/20 Rule: DCF weight reduced (TV > 80%)")
 
-        adjusted_methods.append((value, w))
+        if is_dcf:
+            dcf_bucket.append((value, w))
+        else:
+            multi_bucket.append((value, w))
 
-    # Add Asset Floor (P/BV proxy) if weight was shifted from DCF
+    # Asset floor reweight goes to multi (P/BV is a multi-method anchor)
     if asset_floor_reweight > 0:
         asset_floor_val = method_values.get("P/BV")
         if asset_floor_val and asset_floor_val > 0:
-            adjusted_methods.append((asset_floor_val, asset_floor_reweight))
+            multi_bucket.append((asset_floor_val, asset_floor_reweight))
 
-    if not adjusted_methods:
-        return None
+    if not dcf_bucket and not multi_bucket:
+        return None, {}
 
-    multiplier = 1.0 + c_macro
-    numerator   = sum(v * w * multiplier for v, w in adjusted_methods)
-    denominator = sum(w * multiplier     for _, w in adjusted_methods)
+    # c_macro applies uniformly inside each bucket → cancels in the bucket's
+    # weighted-mean. Kept for parity with the legacy formula (ratio-invariant).
+    macro = 1.0 + c_macro
+    dcf_w_total   = sum(w * macro for _, w in dcf_bucket)
+    multi_w_total = sum(w * macro for _, w in multi_bucket)
+    total_w       = dcf_w_total + multi_w_total
+    if total_w <= 0:
+        return None, {}
 
-    return numerator / denominator if denominator > 0 else None
+    iv_dcf   = (sum(v * w * macro for v, w in dcf_bucket)   / dcf_w_total)   if dcf_w_total   > 0 else 0.0
+    iv_multi = (sum(v * w * macro for v, w in multi_bucket) / multi_w_total) if multi_w_total > 0 else 0.0
+
+    # v3.19 — Composite biases multi-method portion only
+    iv_multi_post = iv_multi * composite_mult
+
+    # Final blended IV
+    final_iv = (dcf_w_total * iv_dcf + multi_w_total * iv_multi_post) / total_w
+    iv_pre_composite = (dcf_w_total * iv_dcf + multi_w_total * iv_multi) / total_w
+
+    breakdown = {
+        "iv_dcf":           round(iv_dcf, 4)         if iv_dcf   > 0 else None,
+        "iv_multi":         round(iv_multi, 4)       if iv_multi > 0 else None,
+        "iv_multi_post":    round(iv_multi_post, 4)  if iv_multi > 0 else None,
+        "weight_dcf":       round(dcf_w_total   / total_w, 4),
+        "weight_multi":     round(multi_w_total / total_w, 4),
+        "composite":        round(composite_mult, 4),
+        "iv_pre_composite": round(iv_pre_composite, 4),
+    }
+
+    return final_iv, breakdown
 
 
 # ── Backward Logic Gate ───────────────────────────────────────────────────────
@@ -2962,12 +3019,13 @@ def _run_backward_gate(
                 method_values_t1.pop(ex, None)
 
             forward_flags_t1: list[str] = []
-            iv_t1_blended = _blend_methods(
+            iv_t1_blended, _t1_breakdown = _blend_methods(
                 profile_methods=profile_data["methods"],
                 method_values=method_values_t1,
                 c_macro=0.0,  # no macro adjustment for historical T-1 test
                 forward_flags=forward_flags_t1,
                 dcf_tv_fraction=tv_fraction_t1,
+                composite_mult=1.0,  # v3.19: T-1 calibration is sentiment-free
             )
             iv_t1 = iv_t1_blended if (iv_t1_blended is not None and iv_t1_blended > 0) else iv_dcf_t1
             method_label = "blended"
@@ -3948,6 +4006,48 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # keep legacy bands that are calibrated for cash-generative profiles.
         _g_mult, _m_mult = _scenario_mults_for_profile(profile_name)
 
+        # v3.19 — Compute V3 composite multiplier ONCE per ticker (before
+        # scenario loop). Per Phase 1 spec: the composite biases the multi-
+        # method portion only inside _blend_methods. DCF stays sentiment-free
+        # (the "fair math" anchor). Same composite applied uniformly across
+        # bear/base/bull scenarios; bull/bear differentiation comes from the
+        # existing scenario growth multipliers (and Phase 2 Z_width, future).
+        _composite_mult = 1.0
+        _composite_bridge: dict = {}
+        try:
+            from src.data.sector_kpi_framework import (
+                composite_adjustment as _composite_adjustment,
+                is_legacy_profile as _is_legacy_for_composite,
+            )
+            if profile_name and not _is_legacy_for_composite(profile_name):
+                _ticker_metrics: dict = dict((framework_metrics_all or {}).get(ticker) or {})
+                # Overlay legacy buckets (saas_metrics, bank_metrics, reit_metrics,
+                # insurance_metrics) so post-v3.13 bridged keys feed the composite
+                # for legacy-covered profiles. framework_metrics_all wins on conflicts.
+                for _legacy_key in ("saas_metrics", "bank_metrics", "reit_metrics",
+                                    "insurance_metrics"):
+                    _legacy_bucket = state["data"].get(_legacy_key, {}) or {}
+                    _legacy_for_t = _legacy_bucket.get(ticker) or {}
+                    if isinstance(_legacy_for_t, dict):
+                        for _k, _v in _legacy_for_t.items():
+                            if isinstance(_k, str) and not _k.startswith("_") and _k not in _ticker_metrics:
+                                _ticker_metrics[_k] = _v
+                _composite_mult, _composite_bridge = _composite_adjustment(
+                    profile_name, sector, _ticker_metrics
+                )
+                progress.update_status(
+                    agent_id, ticker,
+                    f"V3 composite {_composite_mult:.3f}x "
+                    f"(Q={_composite_bridge.get('quality', 1.0):.2f} "
+                    f"R={_composite_bridge.get('risk', 1.0):.2f} "
+                    f"C={_composite_bridge.get('commodity', 1.0):.2f}) "
+                    f"score={_composite_bridge.get('composite_score', 'n/a')}"
+                )
+        except Exception as _ce:
+            print(f"  [composite v3.19] {ticker} composite computation failed: "
+                  f"{type(_ce).__name__}: {_ce!r} — defaulting to 1.0x")
+            _composite_mult = 1.0
+
         for scenario in ("bear", "base", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -4251,14 +4351,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 for ex in excluded:
                     method_values.pop(ex, None)
 
-            # ── Blended IV with C_macro and Forward Gate A ─────────────────
+            # ── Blended IV with C_macro, Forward Gate A, and v3.19 Composite ─
+            blend_breakdown: dict = {}
             if profile_data and profile_data.get("methods"):
-                blended_iv = _blend_methods(
+                blended_iv, blend_breakdown = _blend_methods(
                     profile_methods=profile_data["methods"],
                     method_values=method_values,
                     c_macro=c_macro,
                     forward_flags=forward_flags,
                     dcf_tv_fraction=tv_fraction,
+                    composite_mult=_composite_mult,  # v3.19: biases multi only
                 )
                 final_iv = blended_iv if blended_iv is not None else iv_dcf
                 methods_used = [m["name"] for m in profile_data["methods"]
@@ -4266,6 +4368,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 or method_values.get(m["name"]) is not None]
             else:
                 # No profile found — fall back to pure DCF with C_macro scaling
+                # (composite NOT applied — pure-DCF fallback is sentiment-free)
                 final_iv = iv_dcf * (1.0 + c_macro)
                 methods_used = ["DCF (fallback)"]
 
@@ -4369,6 +4472,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "yr1_eps_est":       round(yr1_eps_est, 4) if yr1_eps_est else None,
                 "methods_count":     len(method_iv_table),
                 "growth_premium":    round(growth_premium, 3) if profile_data else 1.0,
+                # v3.19 — Composite breakdown (pre/post for audit_bridge transparency)
+                "intrinsic_value_pre_composite": round(blend_breakdown["iv_pre_composite"], 2)
+                                                  if blend_breakdown.get("iv_pre_composite") else None,
+                "iv_dcf":            blend_breakdown.get("iv_dcf"),
+                "iv_multi":          blend_breakdown.get("iv_multi"),
+                "iv_multi_post":     blend_breakdown.get("iv_multi_post"),
+                "weight_dcf":        blend_breakdown.get("weight_dcf"),
+                "weight_multi":      blend_breakdown.get("weight_multi"),
+                "composite_applied": blend_breakdown.get("composite", _composite_mult),
             }
 
         # ── rNPV per-asset audit (Biopharma only) ────────────────────────

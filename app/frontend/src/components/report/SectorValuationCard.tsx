@@ -390,17 +390,42 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
         </div>
       </div>
 
-      {/* Final composite */}
+      {/* v3.19 — Composite Score (0-100) + tier label as the prominent display.
+         The raw multiplier is still shown small for technical reference. */}
       <div className="mt-2 flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-1.5">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-          Final composite multiplier
+          Composite score
         </div>
-        <div className="text-base font-bold tabular-nums">
-          <span className="text-muted-foreground text-xs font-normal">
-            {fmtMult(bridge.raw_composite)} raw →
-          </span>{' '}
-          <span className={tone(bridge.final_multiplier)}>
-            {fmtMult(bridge.final_multiplier)}
+        <div className="flex items-center gap-2">
+          {bridge.composite_score != null && (
+            <span
+              className={cn(
+                'text-base font-bold tabular-nums',
+                bridge.tier_label === 'premium' ? 'text-emerald-600 dark:text-emerald-400'
+                  : bridge.tier_label === 'haircut' ? 'text-rose-500'
+                  : 'text-foreground',
+              )}
+              title={`Mapped from composite multiplier ${fmtMult(bridge.final_multiplier)} on a 0.50–1.85 → 0-100 axis.`}
+            >
+              {bridge.composite_score} / 100
+            </span>
+          )}
+          {bridge.tier_label && (
+            <span
+              className={cn(
+                'inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider',
+                bridge.tier_label === 'premium'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : bridge.tier_label === 'haircut'
+                    ? 'border-rose-500/40 bg-rose-500/10 text-rose-500'
+                    : 'border-zinc-500/30 bg-zinc-500/10 text-muted-foreground',
+              )}
+            >
+              {bridge.tier_label}
+            </span>
+          )}
+          <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+            ({fmtMult(bridge.raw_composite)} raw → {fmtMult(bridge.final_multiplier)})
           </span>
         </div>
       </div>

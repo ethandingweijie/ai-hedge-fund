@@ -7198,6 +7198,30 @@ def composite_adjustment(profile_name: str, sector: str, metrics: dict | None) -
     completeness_score = m.get("_completeness_score")
     mandatory_missing  = m.get("_mandatory_missing") or []
 
+    # ── v3.19: Composite normalised to a 0-100 score with tier labels ─────
+    # Maps the multiplier (capped 0.50–1.85) onto a 0-100 axis so the UI can
+    # display "Score: 74" instead of "1.14x". Anchored at 1.0x = score 50 so
+    # NEUTRAL multipliers (no quality bias) sit at the natural midpoint
+    # (linear-from-cap mapping put 1.0x at ~37 which mis-classified neutral
+    # tickers as "haircut" — fixed in this two-segment piecewise mapping).
+    #   mult ≥ 1.0:  score = 50 + (mult − 1.0) / (cap_high − 1.0) × 50
+    #   mult < 1.0:  score = (mult − 0.50) / (1.0 − 0.50) × 50
+    # Tier thresholds (per user spec):
+    #   ≥80 → "premium"   (mult ≳ 1.5x, genuine premium)
+    #   <40 → "haircut"   (mult ≲ 0.90x, genuine discount)
+    #   else → "in-band"  (40-79; covers the typical 0.95-1.40x range)
+    if capped >= 1.0:
+        composite_score = 50 + round((capped - 1.0) / (cap_high - 1.0) * 50) if cap_high > 1.0 else 50
+    else:
+        composite_score = round((capped - 0.50) / (1.0 - 0.50) * 50)
+    composite_score = max(0, min(100, composite_score))
+    if composite_score >= 80:
+        tier_label = "premium"
+    elif composite_score < 40:
+        tier_label = "haircut"
+    else:
+        tier_label = "in-band"
+
     return capped, {
         "quality":            round(q, 3),
         "quality_note":       q_note,
@@ -7225,6 +7249,10 @@ def composite_adjustment(profile_name: str, sector: str, metrics: dict | None) -
         # (mandatory KPI missing) so frontend can show low-confidence badge.
         "completeness_score": completeness_score,
         "mandatory_missing":  mandatory_missing,
+        # v3.19: 0-100 composite score with tier label for the SectorValuationCard
+        # display. Frontend renders "Score: 74 (in-band)" instead of "1.14x".
+        "composite_score":    composite_score,
+        "tier_label":         tier_label,
     }
 
 
