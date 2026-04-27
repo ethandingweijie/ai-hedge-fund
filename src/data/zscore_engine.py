@@ -33,6 +33,18 @@ DEFAULT_LOOKBACK_DAYS = 60      # how far back to scan web_runs
 DEFAULT_MIN_COHORT    = 3       # below this, skip z-scoring (band fallback)
 MAD_NORMALIZATION     = 1.4826  # scales MAD to stdev-equivalent (normal dist)
 
+# v3.20 — Cohort eligibility cutoff. Excludes the 47 historical web_runs
+# accumulated during v3.0–v3.18 debugging (CRWD's wrong 76x ltv_cac_ratio,
+# stale extractor outputs from pre-v3.13 field-name drift, runs done before
+# the LTV/CAC 4-step protocol landed in v3.18, etc.). Only post-v3.19 runs
+# (the first commit where IV is actually biased by composite) feed cohort
+# statistics — guarantees z-tier kickers fire on a clean, internally-
+# consistent peer set.
+#
+# Override via env var COHORT_MIN_RUN_AT_ISO (e.g. for staging environments
+# that need a different cutoff). Default = v3.19 commit timestamp (2026-04-27).
+COHORT_MIN_RUN_AT_ISO_DEFAULT = "2026-04-27T00:00:00+00:00"
+
 
 # ── DB path resolution (matches analysis_service._get_db_path) ────────────────
 
@@ -68,6 +80,7 @@ def fetch_peer_cohort(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     exclude_ticker: str | None = None,
     max_runs: int = 200,
+    min_run_at_iso: str | None = None,
 ) -> dict[str, list[float]]:
     """Returns {kpi_name: [peer values]} for the given profile.
 
@@ -78,13 +91,30 @@ def fetch_peer_cohort(
     `exclude_ticker` is the current ticker being scored — always excluded
     from its own cohort to prevent self-reference bias.
 
+    `min_run_at_iso` is an explicit ISO-timestamp floor for cohort eligibility
+    (v3.20). When set, runs older than this date are excluded REGARDLESS of
+    `lookback_days`. Default resolution order:
+      1. explicit `min_run_at_iso` argument
+      2. env var COHORT_MIN_RUN_AT_ISO
+      3. module constant COHORT_MIN_RUN_AT_ISO_DEFAULT
+    The effective cutoff is `max(now − lookback_days, min_run_at_iso)` —
+    whichever is later wins. Lets us mask the 47 v3.0–v3.18 debugging-era
+    rows from polluting the cohort median.
+
     Returns {} if cohort fetch fails or yields no data.
     """
     conn = _connect_ro()
     if conn is None:
         return {}
     try:
-        cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+        rolling_cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+        explicit_floor = (
+            min_run_at_iso
+            or os.environ.get("COHORT_MIN_RUN_AT_ISO")
+            or COHORT_MIN_RUN_AT_ISO_DEFAULT
+        )
+        # Whichever is LATER wins (most restrictive cutoff)
+        cutoff_iso = max(rolling_cutoff, explicit_floor)
         rows = conn.execute(
             """
             SELECT ticker, run_at, full_result_json

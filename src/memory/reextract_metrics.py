@@ -789,12 +789,37 @@ def reextract_for_run(
 
         full["data"] = data
 
+        # v3.20 — Also patch the indexed profile_name column. Pre-v3.20 the
+        # column stayed NULL even when JSON had the value, which broke the
+        # z-score peer cohort SQL (`WHERE profile_name = ?` returned 0 rows).
+        # Resolves the column from the resolved profile_name, falling back to
+        # data.profile_names[ticker] then TICKER_SECTOR_LOOKUP. Sector column
+        # is updated in lockstep when known to keep historical filters working.
+        _resolved_profile = (profile_name or "").strip()
+        if not _resolved_profile:
+            _pn_dict = data.get("profile_names") or {}
+            if isinstance(_pn_dict, dict):
+                _resolved_profile = (_pn_dict.get(ticker) or "").strip()
+        if not _resolved_profile:
+            try:
+                from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+                _entry = TICKER_SECTOR_LOOKUP.get((ticker or "").upper())
+                if _entry and len(_entry) >= 2:
+                    _resolved_profile = (_entry[1] or "").strip()
+            except Exception:
+                pass
+        _resolved_sector = (data.get("sector") or "").strip() or sector
+
         conn.execute(
-            "UPDATE web_runs SET full_result_json = ? WHERE run_id = ?",
-            (json.dumps(full, default=str), row["run_id"]),
+            "UPDATE web_runs SET full_result_json = ?, "
+            "profile_name = COALESCE(NULLIF(?, ''), profile_name), "
+            "sector       = COALESCE(NULLIF(?, ''), sector) "
+            "WHERE run_id = ?",
+            (json.dumps(full, default=str), _resolved_profile, _resolved_sector, row["run_id"]),
         )
         conn.commit()
         result["updated"] = True
+        result["profile_name_column_patched"] = bool(_resolved_profile)
         return result
     finally:
         conn.close()
