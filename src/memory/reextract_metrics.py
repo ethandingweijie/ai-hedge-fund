@@ -493,7 +493,7 @@ def _diagnose_saas_extractor(
         "  nrr_pct: float (0.80-1.50)\n"
         "  gross_retention_pct: float (0.80-1.00)\n"
         "  cac_payback_months: float (3-60)\n"
-        "  ltv_cac_ratio: float (1-15)\n"
+        "  ltv_cac_ratio: float (1-100, cybersecurity / mission-critical SaaS may hit 50-100x)\n"
         "  rule_of_40_score: float (-30 to 120)\n"
         "  magic_number: float (0.1-3.0)\n"
         "  rpo_growth_yoy: float (-0.20 to 0.80)\n"
@@ -537,7 +537,7 @@ def _diagnose_saas_extractor(
                 "nrr_pct":             (0.80, 1.50),
                 "gross_retention_pct": (0.80, 1.00),
                 "cac_payback_months":  (3, 60),
-                "ltv_cac_ratio":       (1, 15),
+                "ltv_cac_ratio":       (1, 100),
                 "rule_of_40_score":    (-30, 120),
                 "magic_number":        (0.1, 3.0),
                 "rpo_growth_yoy":      (-0.20, 0.80),
