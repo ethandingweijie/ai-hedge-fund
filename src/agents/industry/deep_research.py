@@ -3896,14 +3896,33 @@ def _research_one_ticker(
     }
 
     def _framework_metrics_dispatch():
-        """Generic framework extractor — fires only for new sub-profiles.
+        """Generic framework extractor — fires for ALL profiles in
+        SECTOR_KPI_FRAMEWORK, including those with a dedicated legacy
+        extractor.
 
-        Returns {} when:
-          - profile_name is not registered in SECTOR_KPI_FRAMEWORK, OR
-          - profile_name IS covered by a legacy dedicated extractor (avoid
-            double-extracting; legacy extractor is the canonical output).
+        v3.14 — removed the `_LEGACY_COVERED_PROFILES` gate. The 68-profile
+        coverage audit (v3.13) showed 15 of 68 profiles had mandatory KPIs
+        the legacy extractor wouldn't surface because of field-name drift
+        (e.g. legacy bank emits `npl_ratio`, framework expects `npl_ratio_pct`)
+        or framework-only KPIs (e.g. `cloud_revenue_growth_pct`,
+        `casa_ratio_pct`, `customer_concentration_pct`) that the legacy
+        schema simply doesn't declare.
+
+        With both extractors firing, the legacy bucket continues to feed the
+        bespoke panels (TechValuationPanel reads `saas_metrics`, etc.) using
+        legacy field names, while `framework_metrics_all` populates with the
+        framework's canonical key names so the new SectorValuationCard finds
+        every mandatory tier-driver KPI.
+
+        Cost: ~1 extra LLM call (~800 tokens) per legacy-covered ticker per
+        run. For a 5-ticker run with 2 SaaS tickers that's ~1600 extra tokens
+        — acceptable for the gap-closing benefit (15 profiles regain
+        mandatory-KPI coverage on the new card).
+
+        Returns {} only when profile_name is empty or absent from
+        SECTOR_KPI_FRAMEWORK.
         """
-        if not profile_name or profile_name in _LEGACY_COVERED_PROFILES:
+        if not profile_name:
             return {}
         try:
             from src.data.sector_kpi_framework import (
