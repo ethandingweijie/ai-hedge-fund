@@ -265,7 +265,7 @@ LEGACY_SAAS_CLAMPS = {
     "nrr_pct":              (0.80, 1.50),
     "gross_retention_pct":  (0.80, 1.00),
     "cac_payback_months":   (3, 60),
-    "ltv_cac_ratio":        (1, 100),
+    "ltv_cac_ratio":        (1, 15),
     "rule_of_40_score":     (-30, 120),
     "magic_number":         (0.1, 3.0),
     "rpo_growth_yoy":       (-0.20, 0.80),

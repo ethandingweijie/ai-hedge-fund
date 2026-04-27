@@ -430,10 +430,41 @@ Gross retention ≥95%.
 hidden "valuation-collapse" factor for Growth SaaS):
   • CAC Payback (months) — target <18 months mature, 24-36 for expansion.
   • MAGIC NUMBER (net new ARR / S&M spend) — target >1.0.
-  • LTV/CAC ratio — calculated as (ACV × gross margin ÷ annual churn) ÷ CAC.
-    Report the INPUTS: ACV, gross margin %, ANNUAL CHURN % (inverse of
-    NRR minus expansion), CAC. A high magic number with low LTV (due to
-    high churn) is a red flag — business is acquiring customers it loses.
+  • LTV/CAC RATIO — COHORT-MATCHED CALCULATION (READ CAREFULLY — two
+    common errors silently inflate this 5-10x):
+
+    Formula:  LTV/CAC = [(cohort ACV × gross margin) / annual churn] / CAC
+              where CAC = period S&M $ / number of NEW customers added in period
+              and  ACV = revenue per customer FOR THE SAME COHORT as CAC
+
+    DO NOT compute CAC as (total S&M ÷ total customers). That mixes the
+    S&M cost of acquiring NEW customers with the customer base built up
+    over many prior years — gives an artificially low CAC.
+    Correct: divide period S&M by NET NEW customers added that same period.
+
+    DO NOT compute ACV as (total revenue ÷ enterprise-cohort customer count).
+    That attributes 100% of revenue to (e.g.) the top 15% of customers and
+    inflates ACV ~6x. Use the cohort-specific revenue share — for a
+    "$100k+ enterprise" cohort, estimate that cohort's revenue share of
+    total ARR (often 60-75% for cybersecurity / mission-critical SaaS) and
+    divide by that cohort's customer count.
+
+    REPORT THE INPUTS — analyst will validate the calculation:
+      - Period S&M spend ($M)
+      - Net new customers added in period (matched cohort)
+      - Implied CAC = S&M / new customers ($k or $M per customer)
+      - Cohort ACV ($k per customer)
+      - Gross margin % (use subscription/non-GAAP for SaaS)
+      - Annual gross churn % (= 1 − gross retention; not net retention)
+      - Implied LTV ($M per customer)
+      - LTV/CAC = LTV / CAC
+
+    Sanity check: SaaS LTV/CAC for healthy unit economics is 3-7x;
+    elite/cybersecurity 7-15x. Anything above 15x is almost always one
+    of the two errors above — recompute with cohort matching before
+    reporting. If the recomputed value is still >15, FLAG it explicitly
+    so the analyst can audit the inputs.
+
   • NRR ÷ Gross Retention split: if NRR=115% but Gross Retention=85%,
     business is reliant on expansion to offset 15% churn.
 
