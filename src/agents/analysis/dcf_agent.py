@@ -3644,6 +3644,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     agent_id, ticker,
                     f"Profile override from TICKER_SECTOR_LOOKUP: {_lookup_profile}"
                 )
+
+        # v3.21 (Fix D) — write the locally-resolved profile_name back to state
+        # so late-pipeline consumers (sector_card render, reextract path, audit
+        # bridge) see the profile even when strategic_router skipped pre-
+        # classification (ticker not in TICKER_SECTOR_LOOKUP and no LLM-based
+        # router-side classifier in the v3.21 deploy yet). Belt-and-suspenders
+        # — won't help upstream extractors that already ran in deep_research,
+        # but ensures aggregation + frontend rendering picks up the resolved
+        # profile correctly.
+        if profile_name:
+            try:
+                _pn_dict = state["data"].setdefault("profile_names", {})
+                if isinstance(_pn_dict, dict) and not _pn_dict.get(ticker):
+                    _pn_dict[ticker] = profile_name
+                if not state["data"].get("profile_name"):
+                    state["data"]["profile_name"] = profile_name
+            except Exception:
+                pass  # state-write failure is non-fatal
         if not profile_name:
             _log.warning(
                 "[DCF] %s: No valuation profile found for sector='%s'. "

@@ -3097,6 +3097,13 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "WPP":   ("ProfessionalServices", "Ad / Consulting", "Advertising",  "WPP plc ADR"),
     "IPG":   ("ProfessionalServices", "Ad / Consulting", "Advertising",  "Interpublic"),
     "OMC":   ("ProfessionalServices", "Ad / Consulting", "Advertising",  "Omnicom"),
+    # v3.21 — additional tickers surfaced from card-pipeline audit (were
+    # rendering generic valuation cards because TICKER_SECTOR_LOOKUP didn't
+    # cover them, so strategic_router pre-classification skipped them and
+    # framework_metrics_dispatch returned {})
+    "TRI":   ("ProfessionalServices", "Ad / Consulting", "Information Services", "Thomson Reuters — Westlaw + Reuters + Analytics; recurring-content/data ARR"),
+    "GTM":   ("Tech", "Levered Subscription", "Software (System & Application)", "ZoomInfo Technologies — sales-intelligence SaaS with significant PE-era leverage"),
+    "LIF":   ("Tech", "Hyper-Growth Platform", "Software (Internet)",            "Life360 — consumer-subscription family-tracking platform; high subscriber growth"),
 
     # ── Consumer Discretionary ────────────────────────────────────────────────
     "AMZN":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (Internet)", "Amazon — AWS + retail + ads + AI capex; AWS > 60% EBIT"),
