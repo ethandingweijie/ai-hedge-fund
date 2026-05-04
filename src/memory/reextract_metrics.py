@@ -740,6 +740,23 @@ def reextract_for_run(
 
         gained_any = any(_gained(before[k], after[k]) for k in before)
 
+        # v3.24 — additional update triggers beyond extractor-content gain:
+        # 1. profile_name column was NULL but now resolves via lookup → patch
+        # 2. sector_card[ticker] doesn't exist yet → render-fresh is value
+        # 3. profile_names dict in JSON didn't have ticker → patch JSON state
+        # Without these triggers, tickers that resolve via TICKER_SECTOR_LOOKUP
+        # for the first time AND whose extractors return no new fields stay
+        # un-updated forever — column stays NULL, card stays generic.
+        _existing_pn_dict = (data.get("profile_names") or {}) if isinstance(data, dict) else {}
+        _stored_pn_for_t  = _existing_pn_dict.get(ticker) if isinstance(_existing_pn_dict, dict) else None
+        _stored_sc        = (data.get("sector_card") or {}) if isinstance(data, dict) else {}
+        _has_card_for_t   = bool(isinstance(_stored_sc, dict) and _stored_sc.get(ticker))
+
+        _column_needs_patch = bool(profile_name) and not _stored_pn_for_t
+        _card_needs_render  = bool(profile_name) and not _has_card_for_t
+
+        gained_any = gained_any or _column_needs_patch or _card_needs_render
+
         result: dict[str, Any] = {
             "ok": True,
             "run_id": row["run_id"],
