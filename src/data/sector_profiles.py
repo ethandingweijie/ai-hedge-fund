@@ -3101,8 +3101,18 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # rendering generic valuation cards because TICKER_SECTOR_LOOKUP didn't
     # cover them, so strategic_router pre-classification skipped them and
     # framework_metrics_dispatch returned {})
-    "TRI":   ("ProfessionalServices", "Ad / Consulting", "Information Services", "Thomson Reuters — Westlaw + Reuters + Analytics; recurring-content/data ARR"),
-    "GTM":   ("Tech", "Levered Subscription", "Software (System & Application)", "ZoomInfo Technologies — sales-intelligence SaaS with significant PE-era leverage"),
+    # v3.23 — reclassified after dry-run showed mismatched KPI vocabulary:
+    #   • GTM was Levered Subscription — extractor expected arpu_monthly_usd_growth /
+    #     subscriber_growth_yoy / fcf_debt_service_coverage which GTM (enterprise
+    #     B2B SaaS) does not disclose. Mature SaaS expects nrr_pct / rule_of_40_score /
+    #     fcf_margin_pct / gross_margin_pct which GTM DOES disclose.
+    #   • TRI was Ad / Consulting — extractor expected agency-billings KPIs which
+    #     Thomson Reuters does not disclose. TRI's revenue is mostly recurring
+    #     software/data subscription (Westlaw, Refinitiv) which fits Mature SaaS.
+    #   • LIF kept as Hyper-Growth Platform — Life360 IS consumer subscription
+    #     with disclosed subscriber/ARPU metrics that fit the platform spec.
+    "TRI":   ("ProfessionalServices", "IT Services", "Information Services", "Thomson Reuters — Westlaw + Refinitiv + Reuters; recurring B2B information-services subscription"),
+    "GTM":   ("Tech", "Mature SaaS", "Software (System & Application)", "ZoomInfo Technologies — enterprise B2B SaaS (sales intelligence); slowing growth + strong FCF + PE-era leverage"),
     "LIF":   ("Tech", "Hyper-Growth Platform", "Software (Internet)",            "Life360 — consumer-subscription family-tracking platform; high subscriber growth"),
 
     # ── Consumer Discretionary ────────────────────────────────────────────────
