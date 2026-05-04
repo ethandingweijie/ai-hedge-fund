@@ -369,17 +369,38 @@ def _run_extractors(
     # extractor (matches the live pipeline post-v3.14). Without this the
     # backfill path leaves framework_metrics_all empty, so the new
     # SectorValuationCard renders mostly blank even when the legacy panel
-    # has full values. Empty for profiles not in SECTOR_KPI_FRAMEWORK.
-    if profile_name:
+    # has full values.
+    #
+    # v3.21 — resolve framework profile_name via TICKER_SECTOR_LOOKUP when the
+    # stored profile_name is empty. Older runs (pre-strategic-router) and
+    # tickers absent from the lookup at original-save time (GTM, LIF, TRI
+    # before v3.21 added them) have empty stored profile_name. Without this
+    # fallback the framework dispatch task isn't registered → backfill leaves
+    # the card unchanged, which defeats the purpose of the v3.21 lookup-table
+    # additions.
+    _framework_profile_for_dispatch = (profile_name or "").strip()
+    if not _framework_profile_for_dispatch and ticker:
+        try:
+            from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+            _entry = TICKER_SECTOR_LOOKUP.get(ticker.upper())
+            if _entry and len(_entry) >= 2 and _entry[1]:
+                _framework_profile_for_dispatch = _entry[1]
+                print(f"  [reextract {ticker}] framework profile resolved from "
+                      f"TICKER_SECTOR_LOOKUP: {_framework_profile_for_dispatch}")
+        except Exception:
+            pass
+
+    if _framework_profile_for_dispatch:
         try:
             from src.data.sector_kpi_framework import (
                 SECTOR_KPI_FRAMEWORK,
                 extract_via_framework,
             )
-            if profile_name in SECTOR_KPI_FRAMEWORK:
+            if _framework_profile_for_dispatch in SECTOR_KPI_FRAMEWORK:
+                _resolved = _framework_profile_for_dispatch  # capture for lambda
                 tasks["framework_metrics"] = lambda: extract_via_framework(
                     sdk_client, model_name, sections, deep_research, ticker,
-                    profile_name=profile_name,
+                    profile_name=_resolved,
                 )
         except Exception:
             pass
@@ -651,6 +672,34 @@ def reextract_for_run(
         # before strategic_router pre-classification landed). Surfaced in the
         # result so callers can see what the lookup recovered.
         _, effective_profile = _decide_sector_extractor(sector, profile_name, ticker=ticker)
+
+        # v3.21 — Generic profile resolution for the framework path. _decide_
+        # sector_extractor only resolves to one of {Hyperscaler, Mature SaaS,
+        # Growth SaaS, Cybersecurity / Mission-Critical SaaS} — leaves other
+        # profiles (Levered Subscription, Hyper-Growth Platform, IT Services,
+        # Ad/Consulting, etc.) unresolved. Add a generic TICKER_SECTOR_LOOKUP
+        # fallback so the framework dispatch + sector_card re-render see a
+        # real profile and back-fill these tickers' cards correctly.
+        _framework_profile = (profile_name or "").strip()
+        if not _framework_profile:
+            try:
+                from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
+                _entry = TICKER_SECTOR_LOOKUP.get((ticker or "").upper())
+                if _entry and len(_entry) >= 2 and _entry[1]:
+                    _framework_profile = _entry[1]
+                    print(f"  [reextract {ticker}] framework profile resolved from "
+                          f"TICKER_SECTOR_LOOKUP: {_framework_profile}")
+                    # Patch the in-memory data dict so downstream consumers
+                    # (sector_card render, DB column patch) see it as well.
+                    _pn_dict = data.get("profile_names") or {}
+                    if isinstance(_pn_dict, dict):
+                        _pn_dict[ticker] = _framework_profile
+                        data["profile_names"] = _pn_dict
+                    if not data.get("profile_name"):
+                        data["profile_name"] = _framework_profile
+                    profile_name = _framework_profile  # reuse downstream
+            except Exception as _e:
+                print(f"  [reextract {ticker}] TICKER_SECTOR_LOOKUP fallback failed: {_e!r}")
 
         # Build client + run extractors. provider="auto" tries Qwen first
         # and falls back to Anthropic if DashScope creds missing; explicit
