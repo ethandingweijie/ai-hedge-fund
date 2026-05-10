@@ -160,22 +160,11 @@ export function DDAlertsPage() {
         <DigestPanel digest={digest} loading={loading} />
       </section>
 
-      {/* Section 3 — Older alerts (everything that's not today) */}
-      {filtered.length > todayAlerts.length && (
-        <section>
-          <h2 className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">
-            Earlier alerts ({filtered.length - todayAlerts.length})
-          </h2>
-          <div className="space-y-2">
-            {filtered
-              .filter(a => a.last_triggered_at < todayIso)
-              .slice(0, 20)
-              .map(a => (
-                <AlertCard key={`${a.dd_run_id || a.ticker}-${a.last_triggered_at}`} alert={a} />
-              ))}
-          </div>
-        </section>
-      )}
+      {/* The Auto Due-D feed is intentionally daily-refreshing — yesterday's
+          alerts disappear from this view by design. The dd_alerts table is
+          retained server-side for ~7 days (DD_RETENTION_DAYS env, see
+          src/agents/dd/alert_dedup.py::cleanup_old_alerts) so the audit trail
+          isn't lost. Permanent ticker-research history lives in the History tab. */}
     </div>
   );
 }

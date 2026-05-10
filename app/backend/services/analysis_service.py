@@ -808,7 +808,14 @@ def get_history(
             # Exclude checkpoint rows: prefer the fast column; fall back to json_extract
             # for legacy rows where is_checkpoint is NULL.
             "(w.is_checkpoint = 0 OR (w.is_checkpoint IS NULL AND "
-            "json_extract(w.full_result_json, '$.checkpoint') IS NULL))"
+            "json_extract(w.full_result_json, '$.checkpoint') IS NULL))",
+            # Phase 2B: belt-and-suspenders DD exclusion. New DD reports go
+            # to the dedicated dd_reports table (NOT web_runs), so this
+            # filter is technically a no-op for fresh installs. It still
+            # catches any stragglers from the pre-Phase-2B architecture
+            # that haven't been purged yet via /admin/dd-purge-legacy-web-runs.
+            "(w.model_name IS NULL OR "
+            "(w.model_name NOT LIKE 'dd_%' AND w.model_name != 'synthetic-dd-trigger'))",
         ]
         web_params: list[Any] = []
 

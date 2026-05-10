@@ -361,3 +361,199 @@ def test_get_latest_alert_returns_most_recent_across_directions(tmp_db):
     assert rec is not None
     assert rec.last_direction == "PUMP"
     assert rec.alert_reason == "direction_flip_DROP_to_PUMP"
+
+
+# ── cleanup_old_alerts (Phase 2B retention) ─────────────────────────────────
+
+
+def test_cleanup_old_alerts_deletes_only_expired_rows(tmp_db):
+    """Rows older than retention_days are deleted; fresher rows preserved."""
+    now = datetime.now(timezone.utc)
+
+    # 1 fresh, 1 stale (30 days old)
+    tmp_db.mark_alerted(
+        ticker="FRESH", direction="DROP",
+        pct=-0.11, price=89.0,
+        tier="tier2_active", reason="first_breach",
+        now=now - timedelta(days=2),    # 2 days ago — within 7-day default
+    )
+    tmp_db.mark_alerted(
+        ticker="STALE", direction="DROP",
+        pct=-0.12, price=88.0,
+        tier="tier2_active", reason="first_breach",
+        now=now - timedelta(days=30),   # 30 days ago — well past 7
+    )
+
+    result = tmp_db.cleanup_old_alerts(retention_days=7)
+    assert result["alerts_deleted"] == 1
+    assert result["retention_days"] == 7
+
+    # FRESH still around, STALE gone
+    assert tmp_db.get_latest_alert("FRESH") is not None
+    assert tmp_db.get_latest_alert("STALE") is None
+
+
+def test_cleanup_old_alerts_zero_when_nothing_expired(tmp_db):
+    now = datetime.now(timezone.utc)
+    tmp_db.mark_alerted(
+        ticker="PEGA", direction="DROP",
+        pct=-0.11, price=89.0,
+        tier="tier2_active", reason="first_breach",
+        now=now - timedelta(days=1),
+    )
+    result = tmp_db.cleanup_old_alerts(retention_days=7)
+    assert result["alerts_deleted"] == 0
+    assert result["reports_deleted"] == 0
+
+
+def test_cleanup_old_alerts_deletes_paired_dd_reports(tmp_db):
+    """When a dd_alerts row is paired with a dd_reports row of the same age,
+    both get deleted together."""
+    now = datetime.now(timezone.utc)
+    stale = now - timedelta(days=30)
+
+    DD_RUN_ID = "dd-run-delete-me"
+    tmp_db.upsert_dd_report(
+        run_id=DD_RUN_ID,
+        ticker="PEGA",
+        model_name="dd_agent_qwen",
+        full_result_json='{"report":{"cause_summary":"x"}}',
+        run_at=stale,
+    )
+    tmp_db.mark_alerted(
+        ticker="PEGA", direction="DROP",
+        pct=-0.11, price=89.0,
+        tier="tier2_active", reason="first_breach",
+        dd_run_id=DD_RUN_ID,
+        now=stale,
+    )
+
+    result = tmp_db.cleanup_old_alerts(retention_days=7)
+    assert result["alerts_deleted"] == 1
+    assert result["reports_deleted"] == 1
+
+
+def test_cleanup_never_touches_web_runs_in_new_architecture(tmp_db):
+    """Phase 2B: cleanup_old_alerts deletes from dd_alerts + dd_reports
+    only. web_runs rows (user ticker research) MUST never be touched by
+    DD cleanup, regardless of what's in there."""
+    from app.backend.services.analysis_service import _ensure_web_runs_table, _connect
+    _ensure_web_runs_table()
+    now = datetime.now(timezone.utc)
+
+    # Pre-populate web_runs with a stale user research row
+    stale_iso = (now - timedelta(days=400)).isoformat()
+    SHARED_RUN_ID = "user-research-keep-me"
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO web_runs (run_id, run_at, ticker, model_name, full_result_json, is_checkpoint) "
+            "VALUES (?,?,?,?,?,0)",
+            (SHARED_RUN_ID, stale_iso, "PEGA", "warren_buffett_agent", "{}"),
+        )
+        conn.commit()
+
+    # Also add a stale dd_alerts/dd_reports pair that COINCIDENTALLY shares
+    # the same run_id (defensive — should never happen in practice)
+    tmp_db.upsert_dd_report(
+        run_id=SHARED_RUN_ID, ticker="PEGA", model_name="dd_agent_qwen",
+        full_result_json="{}",
+        run_at=now - timedelta(days=400),
+    )
+    tmp_db.mark_alerted(
+        ticker="PEGA", direction="DROP",
+        pct=-0.11, price=89.0,
+        tier="tier2_active", reason="first_breach",
+        dd_run_id=SHARED_RUN_ID,
+        now=now - timedelta(days=400),
+    )
+
+    tmp_db.cleanup_old_alerts(retention_days=7)
+
+    # web_runs row survived
+    with _connect() as conn:
+        survived = conn.execute(
+            "SELECT model_name FROM web_runs WHERE run_id = ?", (SHARED_RUN_ID,),
+        ).fetchone()
+    assert survived is not None
+    assert survived[0] == "warren_buffett_agent"
+
+
+# ── Phase 2B refactor: dd_reports table + upsert_dd_report ─────────────────
+
+
+def test_upsert_dd_report_inserts_then_replaces(tmp_db):
+    """upsert is INSERT-OR-REPLACE keyed by run_id."""
+    tmp_db.upsert_dd_report(
+        run_id="abc",
+        ticker="PEGA",
+        model_name="dd_agent_pending",
+        full_result_json='{"report":{"cause_summary":"placeholder"}}',
+    )
+    tmp_db.upsert_dd_report(
+        run_id="abc",
+        ticker="PEGA",
+        model_name="dd_agent_qwen",
+        full_result_json='{"report":{"cause_summary":"real"}}',
+    )
+    # Single row with the latest content
+    with tmp_db._conn() as conn:
+        rows = conn.execute(
+            "SELECT model_name, full_result_json FROM dd_reports WHERE run_id = ?",
+            ("abc",),
+        ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] == "dd_agent_qwen"
+    assert "real" in rows[0][1]
+
+
+# ── Phase 2B: purge_legacy_dd_rows_from_web_runs ────────────────────────────
+
+
+def test_purge_legacy_only_deletes_dd_prefixed_web_runs(tmp_db):
+    """Safety: only model_name LIKE 'dd_%' or = 'synthetic-dd-trigger'
+    rows are removed from web_runs. Real ticker research is preserved."""
+    from app.backend.services.analysis_service import _ensure_web_runs_table, _connect
+    _ensure_web_runs_table()
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        # 3 DD-prefixed legacy rows + 2 real research rows
+        for run_id, model in [
+            ("legacy-1", "dd_agent_qwen"),
+            ("legacy-2", "dd_agent_pending"),
+            ("legacy-3", "synthetic-dd-trigger"),
+            ("research-1", "warren_buffett_agent"),
+            ("research-2", "fundamentals_analyst_agent"),
+        ]:
+            conn.execute(
+                "INSERT INTO web_runs (run_id, run_at, ticker, model_name, full_result_json, is_checkpoint) "
+                "VALUES (?,?,?,?,?,0)",
+                (run_id, now, "AAPL", model, "{}"),
+            )
+        conn.commit()
+
+    result = tmp_db.purge_legacy_dd_rows_from_web_runs()
+    assert result["web_runs_purged"] == 3
+
+    # Research rows survived
+    with _connect() as conn:
+        survivors = {r[0] for r in conn.execute(
+            "SELECT run_id FROM web_runs WHERE run_id IN ('research-1','research-2','legacy-1','legacy-2','legacy-3')"
+        ).fetchall()}
+    assert survivors == {"research-1", "research-2"}
+
+
+def test_purge_legacy_is_idempotent(tmp_db):
+    """Second call returns 0 (already purged)."""
+    from app.backend.services.analysis_service import _ensure_web_runs_table, _connect
+    _ensure_web_runs_table()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO web_runs (run_id, run_at, ticker, model_name, full_result_json, is_checkpoint) "
+            "VALUES (?,?,?,?,?,0)",
+            ("x", datetime.now(timezone.utc).isoformat(), "AAPL", "dd_agent_qwen", "{}"),
+        )
+        conn.commit()
+    r1 = tmp_db.purge_legacy_dd_rows_from_web_runs()
+    r2 = tmp_db.purge_legacy_dd_rows_from_web_runs()
+    assert r1["web_runs_purged"] == 1
+    assert r2["web_runs_purged"] == 0

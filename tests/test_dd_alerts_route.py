@@ -332,6 +332,181 @@ def test_admin_trigger_invalid_agent_mode_rejected(client):
     assert r.status_code == 400
 
 
+def test_admin_dd_cleanup_requires_secret(client):
+    r = client.post("/admin/dd-cleanup")
+    assert r.status_code == 403
+
+
+def test_admin_dd_purge_legacy_requires_secret(client):
+    r = client.post("/admin/dd-purge-legacy-web-runs")
+    assert r.status_code == 403
+
+
+def test_admin_dd_purge_legacy_returns_count(client):
+    """Endpoint returns the count of rows removed from web_runs."""
+    # Insert 2 fake DD-prefixed rows + 1 real research row directly
+    from app.backend.services.analysis_service import _connect, _ensure_web_runs_table
+    from datetime import datetime, timezone
+    _ensure_web_runs_table()
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO web_runs (run_id, run_at, ticker, model_name, full_result_json, is_checkpoint) "
+            "VALUES (?,?,?,?,?,0)",
+            ("legacy-a", now, "PEGA", "dd_agent_qwen", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO web_runs (run_id, run_at, ticker, model_name, full_result_json, is_checkpoint) "
+            "VALUES (?,?,?,?,?,0)",
+            ("legacy-b", now, "PEGA", "synthetic-dd-trigger", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO web_runs (run_id, run_at, ticker, model_name, full_result_json, is_checkpoint) "
+            "VALUES (?,?,?,?,?,0)",
+            ("real-x", now, "PEGA", "warren_buffett_agent", "{}"),
+        )
+        conn.commit()
+
+    r = client.post(f"/admin/dd-purge-legacy-web-runs?secret={ADMIN_SECRET}")
+    assert r.status_code == 200
+    assert r.json()["web_runs_purged"] == 2
+
+
+def test_admin_dd_cleanup_returns_counts(client):
+    """End-to-end: fire 2 alerts (one fresh, one synthetic-dated stale),
+    cleanup with retention_days=0 deletes the stale one."""
+    # Fire one fresh alert via the admin trigger (synthetic mode for speed)
+    client.post(f"/admin/dd-trigger?secret={ADMIN_SECRET}&agent_mode=synthetic&ticker=FRESH&pct=-0.11")
+    # Cleanup with a long retention should delete nothing (alert is fresh)
+    r = client.post(f"/admin/dd-cleanup?secret={ADMIN_SECRET}&retention_days=365")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["alerts_deleted"] == 0
+    # And with retention_days=0 (delete everything older than NOW), the
+    # alert *just* fired is "older than now" by milliseconds → deleted.
+    r2 = client.post(f"/admin/dd-cleanup?secret={ADMIN_SECRET}&retention_days=0")
+    body2 = r2.json()
+    assert body2["alerts_deleted"] >= 1
+
+
+# ── Phase 2B architecture invariants — explicit user-requested checks ──────
+
+
+def test_invariant_dd_runs_stored_in_dd_reports_not_web_runs(client):
+    """End-to-end proof of the Phase 2B refactor:
+
+    User requirement: 'DD runs are stored separately from web runs.
+    DD runs are refreshed daily but web runs are permanent.'
+
+    Verifies that firing /admin/dd-trigger writes to the dd_reports table,
+    NOT to web_runs.
+    """
+    from app.backend.services.analysis_service import _connect
+
+    # Fire one DD alert (synthetic to keep it sync)
+    r = client.post(
+        f"/admin/dd-trigger?secret={ADMIN_SECRET}&agent_mode=synthetic"
+        f"&ticker=PEGA&pct=-0.11"
+    )
+    assert r.json()["fired"] is True
+    run_id = r.json()["dd_run_id"]
+
+    # ── Invariant 1: a row appeared in dd_reports ─────────────────────────
+    with _connect() as conn:
+        dd_row = conn.execute(
+            "SELECT run_id, ticker, model_name FROM dd_reports WHERE run_id = ?",
+            (run_id,),
+        ).fetchone()
+    assert dd_row is not None, "Expected a row in dd_reports for the new alert"
+    assert dd_row[1] == "PEGA"
+    assert dd_row[2].startswith("dd_")
+
+    # ── Invariant 2: web_runs is UNTOUCHED ────────────────────────────────
+    # First ensure the table exists (the dd-trigger flow no longer needs it,
+    # which is itself a proof of separation — but we still need to query it
+    # to verify zero DD rows leaked through). Touching this table is
+    # intentional: it's the table the History tab reads from.
+    from app.backend.services.analysis_service import _ensure_web_runs_table
+    _ensure_web_runs_table()
+    with _connect() as conn:
+        web_row = conn.execute(
+            "SELECT COUNT(*) FROM web_runs WHERE run_id = ?", (run_id,),
+        ).fetchone()
+    assert web_row[0] == 0, "DD report MUST NOT appear in web_runs"
+
+
+def test_invariant_auto_due_d_endpoint_reads_from_dd_reports(client):
+    """User requirement: 'Auto Due-D side tab reads from dd_reports
+    database and prints.'
+
+    Verifies GET /api/dd-alerts hydrates the report payload via the
+    dd_alerts ⨝ dd_reports JOIN — and that the payload is the real one
+    written by the trigger (not a stale web_runs leak)."""
+    client.post(
+        f"/admin/dd-trigger?secret={ADMIN_SECRET}&agent_mode=synthetic"
+        f"&ticker=NVDA&pct=0.12"
+    )
+    r = client.get("/api/dd-alerts")
+    items = r.json()
+    assert len(items) == 1
+    item = items[0]
+    assert item["ticker"] == "NVDA"
+    assert item["report"] is not None
+    # The report must come through the dd_reports JOIN (not web_runs).
+    # Direct verification: drop the dd_reports row, the GET should now
+    # show report=None even though dd_alerts row still exists.
+    from app.backend.services.analysis_service import _connect
+    with _connect() as conn:
+        conn.execute("DELETE FROM dd_reports WHERE run_id = ?", (item["dd_run_id"],))
+        conn.commit()
+    r2 = client.get("/api/dd-alerts")
+    items2 = r2.json()
+    assert len(items2) == 1
+    assert items2[0]["report"] is None, (
+        "After dropping dd_reports row, report must vanish — proving the JOIN "
+        "target is dd_reports, not web_runs"
+    )
+
+
+def test_invariant_web_runs_clean_after_purge(client):
+    """User requirement: 'Web runs no longer have DD runs data.'
+
+    Tests the full cleanup story: /admin/dd-purge-legacy-web-runs removes
+    pre-Phase-2B DD-prefixed rows from web_runs."""
+    from app.backend.services.analysis_service import _connect, _ensure_web_runs_table
+    from datetime import datetime, timezone
+    _ensure_web_runs_table()
+
+    # Simulate pre-Phase-2B state: a few legacy DD rows hanging out in web_runs
+    now = datetime.now(timezone.utc).isoformat()
+    with _connect() as conn:
+        for run_id, model in [
+            ("legacy-dd-1", "dd_agent_qwen"),
+            ("legacy-dd-2", "synthetic-dd-trigger"),
+            ("legacy-dd-3", "dd_agent_pending"),
+            ("user-research", "warren_buffett_agent"),  # MUST be preserved
+        ]:
+            conn.execute(
+                "INSERT INTO web_runs (run_id, run_at, ticker, model_name, full_result_json, is_checkpoint) "
+                "VALUES (?,?,?,?,?,0)",
+                (run_id, now, "AAPL", model, "{}"),
+            )
+        conn.commit()
+
+    # Run the purge
+    r = client.post(f"/admin/dd-purge-legacy-web-runs?secret={ADMIN_SECRET}")
+    assert r.json()["web_runs_purged"] == 3
+
+    # All DD rows gone, user research preserved
+    with _connect() as conn:
+        rows = conn.execute("SELECT run_id, model_name FROM web_runs").fetchall()
+    survivors = {r[0]: r[1] for r in rows}
+    assert "legacy-dd-1" not in survivors
+    assert "legacy-dd-2" not in survivors
+    assert "legacy-dd-3" not in survivors
+    assert survivors.get("user-research") == "warren_buffett_agent"
+
+
 def test_admin_trigger_real_mode_includes_prior_direction(client):
     """The real-mode response should expose prior_direction so the caller
     knows which prompt the agent will run (DROP-after-PUMP → Reversal, etc.)."""

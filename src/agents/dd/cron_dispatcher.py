@@ -1,0 +1,332 @@
+"""
+cron_dispatcher.py — Phase 2B entry point: auto-fire DD agent on ±10% breaches.
+
+Run as a Railway cron service (every 5 min default). Each tick:
+
+  1. Check market-hours gate (scheduler.should_run)              — instant
+  2. Build dispatcher universe (universe.build_dispatcher_universe) — instant
+  3. Batch-quote everything (batch_quote.fetch_batch_quotes)      — ~50ms
+  4. Detect ±10% breaches (batch_quote.detect_breaches)           — instant
+  5. For each breach: HTTP POST → /admin/dd-trigger              — ~100ms
+  6. Web service handles cooldown + dd_agent + Slack             — async, ~60s
+
+Architecture: dispatcher is a stateless HTTP client. All persistence + LLM
+work happens server-side in the existing FastAPI service. This avoids
+sharing the SQLite volume between two Railway services.
+
+Required env vars:
+  PORTFOLIO_TICKERS         — Tier 1 universe (e.g. "AAPL,MSFT,NVDA")
+  DD_DISPATCHER_BASE_URL    — Web service URL (e.g. https://...railway.app)
+  DB_UPLOAD_SECRET          — Shared admin secret (same as web service uses)
+  FINANCIAL_DATASETS_API_KEY — FMP key (already wired for the rest of the app)
+
+Optional env vars:
+  DD_DISPATCH_THRESHOLD_PCT — Default 0.10 (10%)
+  DD_MAX_ALERTS_PER_TICK    — Safety valve, default 10. If we detect more
+                              breaches than this in one tick (e.g. flash
+                              crash), we only dispatch the top N to prevent
+                              runaway Qwen costs.
+  DD_DISPATCH_TIER          — "tier1_dispatch" tag written to dd_alerts.tier
+  DD_DRY_RUN                — If truthy, log breaches but skip the POST.
+                              Useful for local smoke testing.
+  DD_INCLUDE_ANALYZED       — Expand universe to include analyzed tickers
+  DD_INCLUDE_SP500          — Expand universe to include S&P 500
+  DD_FORCE_DISPATCH         — Bypass the market-hours gate (testing only)
+
+Exit codes:
+  0 — tick completed (whether or not any alerts fired)
+  1 — fatal config error (missing env, bad URL, etc.)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import sys
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+from typing import Final
+
+import requests
+
+from src.agents.dd import batch_quote, scheduler, universe
+
+
+logger = logging.getLogger(__name__)
+
+
+# Env var names
+ENV_BASE_URL:        Final[str] = "DD_DISPATCHER_BASE_URL"
+ENV_ADMIN_SECRET:    Final[str] = "DB_UPLOAD_SECRET"
+ENV_THRESHOLD_PCT:   Final[str] = "DD_DISPATCH_THRESHOLD_PCT"
+ENV_MAX_ALERTS_TICK: Final[str] = "DD_MAX_ALERTS_PER_TICK"
+ENV_DISPATCH_TIER:   Final[str] = "DD_DISPATCH_TIER"
+ENV_DRY_RUN:         Final[str] = "DD_DRY_RUN"
+
+# Defaults
+DEFAULT_THRESHOLD_PCT     = 0.10
+DEFAULT_MAX_ALERTS_TICK   = 10
+DEFAULT_DISPATCH_TIER     = "tier1_dispatch"
+
+# HTTP timeout for /admin/dd-trigger. The route returns in ~50ms (real-mode
+# dispatches a background thread), so 15s is comfortable headroom.
+HTTP_TIMEOUT_SEC = 15
+
+
+@dataclass
+class DispatchSummary:
+    """One-tick summary written to stdout as JSON for easy parsing in
+    Railway logs / structured monitoring."""
+    timestamp_utc:    str
+    decision:         str            # gate decision (skipped/ran)
+    universe_size:    int
+    quotes_returned:  int
+    breaches_found:   int
+    alerts_dispatched: int
+    alerts_skipped:    int           # breaches above MAX_ALERTS_TICK cap
+    failures:          int           # POSTs that errored
+    breaches:          list[dict]    # [{"ticker":..., "pct":..., "price":...}]
+
+
+def main() -> int:
+    """Cron entry point. Returns process exit code."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
+    base_url = os.environ.get(ENV_BASE_URL, "").rstrip("/")
+    secret   = os.environ.get(ENV_ADMIN_SECRET, "")
+    if not base_url:
+        logger.error("Missing required env: %s", ENV_BASE_URL)
+        return 1
+    if not secret:
+        logger.error("Missing required env: %s", ENV_ADMIN_SECRET)
+        return 1
+
+    threshold = _read_float_env(ENV_THRESHOLD_PCT, DEFAULT_THRESHOLD_PCT)
+    max_alerts = _read_int_env(ENV_MAX_ALERTS_TICK, DEFAULT_MAX_ALERTS_TICK)
+    tier_label = os.environ.get(ENV_DISPATCH_TIER, DEFAULT_DISPATCH_TIER).strip() or DEFAULT_DISPATCH_TIER
+    dry_run    = _truthy(os.environ.get(ENV_DRY_RUN, ""))
+
+    summary = DispatchSummary(
+        timestamp_utc=datetime.now(timezone.utc).isoformat(),
+        decision="(unset)",
+        universe_size=0,
+        quotes_returned=0,
+        breaches_found=0,
+        alerts_dispatched=0,
+        alerts_skipped=0,
+        failures=0,
+        breaches=[],
+    )
+
+    # Step 1: market-hours gate
+    decision = scheduler.should_run()
+    summary.decision = decision.reason
+    if not decision.should_run:
+        logger.info("dispatcher: skipping (%s)", decision.reason)
+        _emit_summary(summary)
+        return 0
+    logger.info("dispatcher: running (%s)", decision.reason)
+
+    # Step 2: build universe
+    tickers = universe.build_dispatcher_universe()
+    summary.universe_size = len(tickers)
+    if not tickers:
+        logger.warning(
+            "dispatcher: empty universe (set %s env var on Railway)",
+            universe.ENV_PORTFOLIO_TICKERS,
+        )
+        _emit_summary(summary)
+        return 0
+
+    # Step 3: batch quote
+    quotes = batch_quote.fetch_batch_quotes(tickers)
+    summary.quotes_returned = len(quotes)
+    if not quotes:
+        logger.warning("dispatcher: no quotes returned (FMP unavailable?)")
+        _emit_summary(summary)
+        return 0
+
+    # Step 4: detect breaches
+    breaches = batch_quote.detect_breaches(quotes, threshold_pct=threshold)
+    summary.breaches_found = len(breaches)
+
+    if not breaches:
+        logger.info(
+            "dispatcher: no breaches in %d quotes at ±%.0f%% threshold",
+            len(quotes), threshold * 100,
+        )
+        _emit_summary(summary)
+        return 0
+
+    # Step 5: cap + dispatch
+    to_dispatch = breaches[:max_alerts]
+    summary.alerts_skipped = len(breaches) - len(to_dispatch)
+    if summary.alerts_skipped > 0:
+        logger.warning(
+            "dispatcher: %d breaches found but capping to %d "
+            "(safety valve DD_MAX_ALERTS_PER_TICK)",
+            len(breaches), max_alerts,
+        )
+
+    # Opportunistic retention cleanup: run once per UTC date, on the first
+    # tick after midnight ET / first tick of the day. Every other tick is a
+    # no-op. Bounded by `DD_RETENTION_DAYS` (default 7). Runs server-side
+    # via the admin /admin/dd-cleanup endpoint so we don't need DB access
+    # here in the cron service.
+    _maybe_run_daily_cleanup(base_url=base_url, secret=secret)
+
+    for q in to_dispatch:
+        summary.breaches.append({
+            "ticker": q.ticker,
+            "pct":    round(q.changes_percentage, 4),
+            "price":  q.price,
+        })
+        if dry_run:
+            logger.info(
+                "dispatcher: [DRY-RUN] would POST trigger for %s pct=%+.2f%%",
+                q.ticker, q.changes_percentage * 100,
+            )
+            summary.alerts_dispatched += 1
+            continue
+
+        ok = _post_trigger(
+            base_url=base_url,
+            secret=secret,
+            ticker=q.ticker,
+            pct=q.changes_percentage,
+            price=q.price,
+            tier=tier_label,
+        )
+        if ok:
+            summary.alerts_dispatched += 1
+        else:
+            summary.failures += 1
+
+    _emit_summary(summary)
+    return 0
+
+
+# ── Internals ───────────────────────────────────────────────────────────────
+
+
+def _post_trigger(
+    *, base_url: str, secret: str, ticker: str, pct: float, price: float, tier: str,
+) -> bool:
+    """POST to the web service's /admin/dd-trigger.
+
+    Always uses agent_mode=real (the whole point of auto-dispatch is that
+    the user gets a real LLM brief). Returns True on 200 + fired:true OR
+    fired:false (cooldown is a healthy outcome — the alert engine
+    correctly rejected a duplicate).
+    """
+    url = f"{base_url}/admin/dd-trigger"
+    params = {
+        "secret":     secret,
+        "ticker":     ticker,
+        "pct":        pct,
+        "price":      price,
+        "tier":       tier,
+        "agent_mode": "real",
+    }
+    try:
+        r = requests.post(url, params=params, timeout=HTTP_TIMEOUT_SEC)
+    except requests.RequestException as exc:
+        logger.error("dispatcher: POST failed for %s: %s", ticker, exc)
+        return False
+
+    if r.status_code != 200:
+        logger.error("dispatcher: %s → HTTP %d: %s", ticker, r.status_code, r.text[:200])
+        return False
+
+    try:
+        body = r.json()
+    except Exception:
+        logger.error("dispatcher: %s → non-JSON response: %s", ticker, r.text[:200])
+        return False
+
+    if body.get("fired"):
+        logger.info(
+            "dispatcher: %s FIRED  pct=%+.2f%%  reason=%s  run_id=%s",
+            ticker, pct * 100, body.get("eligibility_reason"), body.get("dd_run_id", "?")[:8],
+        )
+    else:
+        logger.info(
+            "dispatcher: %s skipped (%s)",
+            ticker, body.get("eligibility_reason", "unknown"),
+        )
+    return True
+
+
+def _maybe_run_daily_cleanup(*, base_url: str, secret: str) -> None:
+    """Hit /admin/dd-cleanup at most once per UTC day.
+
+    Tracking is best-effort via a file in /tmp (Railway gives each service
+    instance a writable /tmp). If the file is missing or stale, fire a
+    cleanup. If it's today, no-op.
+
+    Failure to write the marker file or contact the admin endpoint is
+    logged but never raises — cleanup is "nice to have," not critical to
+    the dispatch itself.
+    """
+    import tempfile
+    from pathlib import Path
+
+    marker = Path(tempfile.gettempdir()) / "dd_cleanup_last_utc_date.txt"
+    today = datetime.now(timezone.utc).date().isoformat()
+    try:
+        if marker.exists() and marker.read_text().strip() == today:
+            return
+    except OSError:
+        pass   # fall through and try cleanup anyway
+
+    url = f"{base_url}/admin/dd-cleanup"
+    try:
+        r = requests.post(url, params={"secret": secret}, timeout=HTTP_TIMEOUT_SEC)
+        if r.status_code == 200:
+            try:
+                logger.info("dispatcher: daily cleanup → %s", r.json())
+            except Exception:
+                logger.info("dispatcher: daily cleanup HTTP 200 (non-JSON body)")
+            try:
+                marker.write_text(today)
+            except OSError as exc:
+                logger.warning("dispatcher: cleanup marker write failed: %s", exc)
+        else:
+            logger.warning("dispatcher: cleanup HTTP %d: %s", r.status_code, r.text[:200])
+    except requests.RequestException as exc:
+        logger.warning("dispatcher: cleanup POST failed: %s", exc)
+
+
+def _emit_summary(summary: DispatchSummary) -> None:
+    """Write the tick summary to stdout as JSON. Railway log aggregation
+    can grep for this prefix to build dispatch-rate dashboards."""
+    print(f"[dd_dispatcher_summary] {json.dumps(asdict(summary))}")
+
+
+def _read_float_env(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        logger.warning("Bad %s; using default %s", name, default)
+        return default
+
+
+def _read_int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        logger.warning("Bad %s; using default %d", name, default)
+        return default
+
+
+def _truthy(s: str) -> bool:
+    return s.strip().lower() in {"true", "1", "yes", "on", "y", "t"}
+
+
+# Allow `python -m src.agents.dd.cron_dispatcher` invocation
+if __name__ == "__main__":
+    sys.exit(main())

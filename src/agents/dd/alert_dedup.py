@@ -59,13 +59,28 @@ CREATE TABLE IF NOT EXISTS dd_alerts (
     alert_reason      TEXT NOT NULL,        -- 'first_breach' | 'direction_flip_*' | 'high_water_mark*' | 'cooldown_expired'
     cluster_id        TEXT,                 -- non-null when alert is part of a sector cluster
     quote_json        TEXT,                 -- full quote snapshot at trigger (audit)
-    dd_run_id         TEXT,                 -- link to web_runs.run_id of the DD report
+    dd_run_id         TEXT,                 -- link to dd_reports.run_id of the DD report
     sent_status       TEXT DEFAULT 'pending',  -- 'pending' | 'sent' | 'failed' | 'cluster_member'
     PRIMARY KEY (ticker, last_direction, last_triggered_at)
 );
 CREATE INDEX IF NOT EXISTS dd_alerts_ticker_time ON dd_alerts(ticker, last_triggered_at DESC);
 CREATE INDEX IF NOT EXISTS dd_alerts_status_idx  ON dd_alerts(sent_status);
 CREATE INDEX IF NOT EXISTS dd_alerts_recent_idx  ON dd_alerts(last_triggered_at DESC);
+
+-- Phase 2B refactor: DD reports live here, NOT in web_runs.
+-- Rationale: the web_runs table is for ticker research that the user
+-- explicitly initiated and wants permanent history of (History tab).
+-- DD reports are auto-fired ephemeral alerts (Auto Due-D tab, daily refresh,
+-- 7-day retention). Storing them in the same table caused History pollution.
+CREATE TABLE IF NOT EXISTS dd_reports (
+    run_id           TEXT PRIMARY KEY,
+    run_at           TEXT NOT NULL,         -- ISO datetime UTC
+    ticker           TEXT NOT NULL,
+    model_name       TEXT NOT NULL,         -- 'dd_agent_qwen' | 'dd_synthetic_trigger' | etc.
+    full_result_json TEXT NOT NULL          -- {report:{...}, trigger:{...}, data:{...}}
+);
+CREATE INDEX IF NOT EXISTS dd_reports_ticker_time ON dd_reports(ticker, run_at DESC);
+CREATE INDEX IF NOT EXISTS dd_reports_recent_idx  ON dd_reports(run_at DESC);
 """
 
 
@@ -274,6 +289,105 @@ def mark_alerted(
                 sent_status,
             ),
         )
+
+
+# ── DD reports (paired storage for the LLM agent's report payload) ─────────
+
+
+def upsert_dd_report(
+    *,
+    run_id:           str,
+    ticker:           str,
+    model_name:       str,
+    full_result_json: str,
+    run_at:           datetime | None = None,
+) -> None:
+    """Write/replace a row in the dd_reports table.
+
+    This is the dedicated storage for DD agent reports — separate from
+    web_runs (which holds permanent ticker research). The dashboard JOINs
+    dd_alerts → dd_reports via run_id to hydrate report content.
+
+    Args:
+      run_id:            UUID of the DD run.
+      ticker:            Ticker symbol.
+      model_name:        e.g. 'dd_agent_qwen', 'dd_synthetic_trigger',
+                         'dd_agent_pending'.
+      full_result_json:  JSON-serialized {report, trigger, data} blob.
+      run_at:            UTC datetime of write. Defaults to now.
+    """
+    ts = (run_at or datetime.now(timezone.utc)).isoformat()
+    with _conn() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO dd_reports "
+            "(run_id, run_at, ticker, model_name, full_result_json) "
+            "VALUES (?,?,?,?,?)",
+            (run_id, ts, ticker.upper(), model_name, full_result_json),
+        )
+
+
+# ── Retention cleanup ──────────────────────────────────────────────────────
+
+
+def cleanup_old_alerts(retention_days: int = 7) -> dict:
+    """Delete dd_alerts + dd_reports rows older than `retention_days`.
+
+    Per Phase 2B UX decision: the Auto Due-D dashboard shows only TODAY'S
+    alerts (vs. the History tab which is permanent). The dd_alerts +
+    dd_reports tables are retained for `retention_days` so a brief audit
+    window exists, but old rows are pruned to keep tables small + queries
+    fast.
+
+    Pass `retention_days=0` to wipe ALL existing rows (one-shot reset).
+
+    Args:
+      retention_days: How many days of dd_alerts to keep. Default 7.
+
+    Returns:
+      {"alerts_deleted": int, "reports_deleted": int,
+       "cutoff_iso": str, "retention_days": int}
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM dd_reports WHERE run_at < ?",
+            (cutoff,),
+        )
+        reports_deleted = cur.rowcount
+        cur = conn.execute(
+            "DELETE FROM dd_alerts WHERE last_triggered_at < ?",
+            (cutoff,),
+        )
+        alerts_deleted = cur.rowcount
+        conn.commit()
+    return {
+        "alerts_deleted":   alerts_deleted,
+        "reports_deleted":  reports_deleted,
+        "cutoff_iso":       cutoff,
+        "retention_days":   retention_days,
+    }
+
+
+def purge_legacy_dd_rows_from_web_runs() -> dict:
+    """One-shot housekeeping: delete DD-prefixed rows that were written to
+    web_runs by the pre-Phase-2B architecture.
+
+    Also clears any rows with model_name='synthetic-dd-trigger' (the original
+    name before Phase 2A renamed it to 'dd_synthetic_trigger') and the legacy
+    'dd_agent_pending'/'dd_agent_qwen*'/etc. prefixes.
+
+    Idempotent. Safe to run repeatedly. Returns the count of rows purged.
+    Web ticker-research rows (any model_name not starting with 'dd_' nor
+    equal to 'synthetic-dd-trigger') are NEVER touched.
+    """
+    with _conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM web_runs "
+            "WHERE model_name LIKE 'dd_%' OR model_name = 'synthetic-dd-trigger'"
+        )
+        purged = cur.rowcount
+        conn.commit()
+    return {"web_runs_purged": purged}
 
 
 # ── Test helper (do not use in production code) ─────────────────────────────

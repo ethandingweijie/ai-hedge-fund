@@ -115,37 +115,31 @@ def _agent_in_flight_report(ticker: str, pct_change: float, direction: str,
     }
 
 
-def _upsert_dd_web_run(run_id: str, ticker: str, report: dict,
-                       trigger: dict, model_name: str) -> None:
-    """Write/replace a web_runs row so the GET /api/dd-alerts list+detail
-    JOIN can hydrate the report payload.
+def _upsert_dd_report(run_id: str, ticker: str, report: dict,
+                      trigger: dict, model_name: str) -> None:
+    """Write/replace a row in dd_reports (NOT web_runs).
+
+    Phase 2B refactor: DD reports live in their own table now. The
+    History tab queries web_runs and never sees DD content; the Auto
+    Due-D dashboard JOINs dd_alerts → dd_reports for full hydration.
 
     Used in 3 places:
       1. Initial 'agent in flight' placeholder when alert fires
       2. Background thread on agent SUCCESS — replaces with real report
       3. Background thread on agent FAILURE — replaces with synthetic fallback
     """
-    _ensure_web_runs_table()  # idempotent — ensures table exists in fresh DBs
+    from src.agents.dd import alert_dedup
     full_result_json = json.dumps({
         "report": report,
         "trigger": trigger,
         "data": {"sector": "_dd_alert", "profile_name": "_dd_agent"},
     }, default=str)
-    with _connect() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO web_runs "
-            "(run_id, run_at, ticker, model_name, full_result_json, "
-            " is_checkpoint) "
-            "VALUES (?,?,?,?,?,0)",
-            (
-                run_id,
-                datetime.now(timezone.utc).isoformat(),
-                ticker.upper(),
-                model_name,
-                full_result_json,
-            ),
-        )
-        conn.commit()
+    alert_dedup.upsert_dd_report(
+        run_id=run_id,
+        ticker=ticker,
+        model_name=model_name,
+        full_result_json=full_result_json,
+    )
 
 
 def _update_alert_sent_status(run_id: str, sent_status: str) -> None:
@@ -162,14 +156,21 @@ def _update_alert_sent_status(run_id: str, sent_status: str) -> None:
 
 
 def _ensure_tables_for_read() -> None:
-    """Idempotent: ensure both web_runs and dd_alerts tables exist before
-    a read query. Lets fresh-DB endpoints (no triggers ever fired) return
-    empty lists / 404s gracefully instead of throwing OperationalError."""
+    """Idempotent: ensure dd_alerts + dd_reports tables exist before any
+    read query. Lets fresh-DB endpoints (no triggers ever fired) return
+    empty lists / 404s gracefully instead of throwing OperationalError.
+
+    Phase 2B: web_runs is no longer touched by DD reads — DD content
+    lives in dd_reports. We still call _ensure_web_runs_table for
+    backward compatibility with admin/list_dd_alerts callers that may
+    coincidentally have an old DB without web_runs.
+    """
     _ensure_web_runs_table()
-    # Importing alert_dedup here ensures its DDL runs (via its _conn helper)
+    # Importing alert_dedup here ensures its DDL runs (creates BOTH
+    # dd_alerts and dd_reports via the _conn context manager).
     from src.agents.dd import alert_dedup
     with alert_dedup._conn():
-        pass   # _conn's context manager calls _ensure_table on entry
+        pass
 
 
 def _try_post_slack(*, ticker: str, pct: float, direction: str, reason: str,
@@ -250,7 +251,7 @@ def _real_agent_worker(
 
         # 2. Replace the in-flight placeholder web_runs row
         try:
-            _upsert_dd_web_run(run_id, ticker, report_dict, trigger_meta, model_name)
+            _upsert_dd_report(run_id, ticker, report_dict, trigger_meta, model_name)
         except Exception as exc:
             logger.exception(f"[dd-agent] {ticker} web_runs upsert failed: {exc}")
 
@@ -381,7 +382,7 @@ def admin_dd_trigger(
         # Sync flow — original Phase C behavior. Useful for tests and manual
         # verification without burning Qwen tokens.
         report = _synthetic_report(ticker, pct, direction, reason)
-        _upsert_dd_web_run(run_id, ticker, report, trigger_meta, "synthetic-dd-trigger")
+        _upsert_dd_report(run_id, ticker, report, trigger_meta, "dd_synthetic_trigger")
         slack_status = _try_post_slack(
             ticker=ticker, pct=pct, direction=direction, reason=reason,
             report=report, run_id=run_id,
@@ -424,7 +425,7 @@ def admin_dd_trigger(
 
     # agent_mode == "real" — async LLM agent flow
     placeholder = _agent_in_flight_report(ticker, pct, direction, reason)
-    _upsert_dd_web_run(run_id, ticker, placeholder, trigger_meta, "dd_agent_pending")
+    _upsert_dd_report(run_id, ticker, placeholder, trigger_meta, "dd_agent_pending")
     alert_dedup.mark_alerted(
         ticker=ticker, direction=direction, pct=pct, price=current_price,
         tier=tier, reason=reason,
@@ -461,6 +462,52 @@ def admin_dd_trigger(
     }
 
 
+# ── Daily retention cleanup ─────────────────────────────────────────────────
+
+
+@router.post("/admin/dd-cleanup")
+def admin_dd_cleanup(
+    secret: str = "",
+    retention_days: int = Query(7, ge=0, le=365, description="Keep alerts newer than this many days. Pass 0 to wipe everything (one-shot reset)."),
+):
+    """Delete dd_alerts + paired web_runs rows older than `retention_days`.
+
+    Phase 2B UX decision: Auto Due-D is a daily-refreshing feed (vs. the
+    permanent History tab). The cron dispatcher hits this endpoint once per
+    UTC day to keep the dd_alerts table small + dashboard queries fast.
+
+    Auth: same DB_UPLOAD_SECRET as other /admin/* endpoints.
+
+    Safe to invoke manually too — it's idempotent and logs the count of rows
+    deleted. Won't touch web_runs rows whose model_name doesn't start with
+    'dd_' (so ticker-research history is never accidentally pruned).
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    from src.agents.dd import alert_dedup
+    return alert_dedup.cleanup_old_alerts(retention_days=retention_days)
+
+
+@router.post("/admin/dd-purge-legacy-web-runs")
+def admin_dd_purge_legacy(secret: str = ""):
+    """One-shot housekeeping: remove DD-prefixed rows that the pre-Phase-2B
+    architecture wrote into web_runs. After Phase 2B all new DD reports go
+    to the dedicated dd_reports table, but rows already on disk from prior
+    runs (e.g. smoke tests) need to be cleaned up so the History tab is
+    fully cut over.
+
+    Idempotent. Safe to call multiple times — second call is a no-op.
+    Only deletes rows where model_name LIKE 'dd_%' OR model_name =
+    'synthetic-dd-trigger' — never touches user ticker-research history.
+
+    Auth: same DB_UPLOAD_SECRET as other /admin/* endpoints.
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    from src.agents.dd import alert_dedup
+    return alert_dedup.purge_legacy_dd_rows_from_web_runs()
+
+
 # ── Read endpoints (web dashboard backend) ──────────────────────────────────
 
 @router.get("/api/dd-alerts")
@@ -487,7 +534,7 @@ def list_dd_alerts(
                a.last_triggered_at, a.tier, a.alert_reason, a.cluster_id,
                a.dd_run_id, a.sent_status, w.full_result_json
         FROM dd_alerts a
-        LEFT JOIN web_runs w ON w.run_id = a.dd_run_id
+        LEFT JOIN dd_reports w ON w.run_id = a.dd_run_id
         WHERE {' AND '.join(where)}
         ORDER BY a.last_triggered_at DESC
         LIMIT ?
@@ -513,14 +560,14 @@ def todays_digest():
         conn.row_factory = sqlite3.Row
         drops = conn.execute(
             "SELECT a.*, w.full_result_json FROM dd_alerts a "
-            "LEFT JOIN web_runs w ON w.run_id = a.dd_run_id "
+            "LEFT JOIN dd_reports w ON w.run_id = a.dd_run_id "
             "WHERE a.last_triggered_at >= ? AND a.last_direction = 'DROP' "
             "ORDER BY a.trigger_pct ASC LIMIT 10",
             (today,),
         ).fetchall()
         pumps = conn.execute(
             "SELECT a.*, w.full_result_json FROM dd_alerts a "
-            "LEFT JOIN web_runs w ON w.run_id = a.dd_run_id "
+            "LEFT JOIN dd_reports w ON w.run_id = a.dd_run_id "
             "WHERE a.last_triggered_at >= ? AND a.last_direction = 'PUMP' "
             "ORDER BY a.trigger_pct DESC LIMIT 10",
             (today,),
@@ -553,7 +600,7 @@ def get_alert_detail(dd_run_id: str):
         conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT a.*, w.full_result_json FROM dd_alerts a "
-            "LEFT JOIN web_runs w ON w.run_id = a.dd_run_id "
+            "LEFT JOIN dd_reports w ON w.run_id = a.dd_run_id "
             "WHERE a.dd_run_id = ? "
             "ORDER BY a.last_triggered_at DESC LIMIT 1",
             (dd_run_id,),
