@@ -34,18 +34,26 @@ from src.agents.dd.universe import ENV_PORTFOLIO_TICKERS
 def basic_env(monkeypatch):
     """Set the minimum env required for main() to run.
 
-    Also no-ops the daily cleanup so dispatch-related tests count POSTs to
-    /admin/dd-trigger only (cleanup hits /admin/dd-cleanup which would
-    otherwise inflate post_mock.call_count by 1)."""
+    - Stubs out the daily cleanup (covered by its own tests below) so
+      dispatch tests count POSTs to /admin/dd-trigger only.
+    - Stubs out the Tier 1 HTTP fetch (covered by its own tests) so
+      tests don't wait for fake HTTP calls to time out.
+    - Falls Tier 1 back to PORTFOLIO_TICKERS=AAPL,MSFT for the universe.
+    """
     monkeypatch.setenv(ENV_BASE_URL,     "http://test-host:1234")
     monkeypatch.setenv(ENV_ADMIN_SECRET, "test-secret")
     monkeypatch.setenv(ENV_PORTFOLIO_TICKERS, "AAPL,MSFT")
     # Force-dispatch so test isn't time-of-day dependent
     monkeypatch.setenv(ENV_FORCE_RUN, "true")
-    # Stub out cleanup — covered by its own dedicated tests below
     monkeypatch.setattr(
         "src.agents.dd.cron_dispatcher._maybe_run_daily_cleanup",
         lambda **_kw: None,
+    )
+    # Stub the Tier 1 HTTP fetch to use the env-var path directly. Real HTTP
+    # behaviour is covered by test_fetch_tier1_via_http_*.
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._fetch_tier1_via_http",
+        lambda *, base_url: {"AAPL", "MSFT"},
     )
     yield
 
@@ -238,6 +246,52 @@ def test_main_uses_custom_threshold(monkeypatch, basic_env):
                return_value=fake_resp) as post_mock:
         main()
     assert post_mock.call_count == 1
+
+
+def test_fetch_tier1_via_http_happy_path():
+    """Web service returns the expected JSON shape → tickers parsed correctly."""
+    from src.agents.dd.cron_dispatcher import _fetch_tier1_via_http
+    fake_resp = MagicMock(status_code=200)
+    fake_resp.json.return_value = {"tier": "tier1_watchlist", "tickers": ["CRM", "NOW", "PYPL"], "count": 3}
+    fake_resp.raise_for_status = MagicMock()
+    with patch("src.agents.dd.cron_dispatcher.requests.get", return_value=fake_resp):
+        out = _fetch_tier1_via_http(base_url="http://x")
+    assert out == {"CRM", "NOW", "PYPL"}
+
+
+def test_fetch_tier1_via_http_unions_env_override(monkeypatch):
+    """ENV var contents UNION with the HTTP response (force-add path)."""
+    monkeypatch.setenv(ENV_PORTFOLIO_TICKERS, "EXTRA1,EXTRA2")
+    from src.agents.dd.cron_dispatcher import _fetch_tier1_via_http
+    fake_resp = MagicMock(status_code=200)
+    fake_resp.json.return_value = {"tickers": ["CRM"]}
+    fake_resp.raise_for_status = MagicMock()
+    with patch("src.agents.dd.cron_dispatcher.requests.get", return_value=fake_resp):
+        out = _fetch_tier1_via_http(base_url="http://x")
+    assert out == {"CRM", "EXTRA1", "EXTRA2"}
+
+
+def test_fetch_tier1_via_http_falls_back_to_env_on_http_failure(monkeypatch):
+    """Network blip → HTTP fails → fall back to PORTFOLIO_TICKERS so
+    monitoring isn't silently disabled."""
+    monkeypatch.setenv(ENV_PORTFOLIO_TICKERS, "FALLBACK1,FALLBACK2")
+    from src.agents.dd.cron_dispatcher import _fetch_tier1_via_http
+    import requests as r
+    with patch("src.agents.dd.cron_dispatcher.requests.get",
+               side_effect=r.RequestException("network down")):
+        out = _fetch_tier1_via_http(base_url="http://x")
+    assert out == {"FALLBACK1", "FALLBACK2"}
+
+
+def test_fetch_tier1_via_http_empty_when_both_sources_empty(monkeypatch):
+    """HTTP fails AND no env override → empty set (caller logs + skips)."""
+    monkeypatch.delenv(ENV_PORTFOLIO_TICKERS, raising=False)
+    from src.agents.dd.cron_dispatcher import _fetch_tier1_via_http
+    import requests as r
+    with patch("src.agents.dd.cron_dispatcher.requests.get",
+               side_effect=r.RequestException("down")):
+        out = _fetch_tier1_via_http(base_url="http://x")
+    assert out == set()
 
 
 def test_maybe_run_daily_cleanup_fires_once_per_day(monkeypatch, tmp_path):

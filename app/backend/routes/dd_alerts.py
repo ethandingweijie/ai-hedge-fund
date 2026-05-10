@@ -508,6 +508,28 @@ def admin_dd_purge_legacy(secret: str = ""):
     return alert_dedup.purge_legacy_dd_rows_from_web_runs()
 
 
+# ── Universe endpoint (consumed by the dd-dispatcher cron service) ─────────
+
+
+@router.get("/api/dd-universe/tier1")
+def get_dd_universe_tier1():
+    """Return the Tier 1 ticker list for the dd-dispatcher cron service.
+
+    Tier 1 = the user's watchlist (canonical curated set, same source the
+    Watchlist UI tab reads from).
+
+    The cron service calls this endpoint instead of reading the SQLite DB
+    directly — keeps the dispatcher stateless and avoids needing to share
+    the Railway volume between two services.
+
+    No auth required: this leaks ticker symbols only (no secrets, no PII,
+    no positions). Intentionally cheap so the cron can hit it every 5 min.
+    """
+    from src.agents.dd.universe import get_watchlist_tickers
+    tickers = sorted(get_watchlist_tickers())
+    return {"tier": "tier1_watchlist", "tickers": tickers, "count": len(tickers)}
+
+
 # ── Read endpoints (web dashboard backend) ──────────────────────────────────
 
 @router.get("/api/dd-alerts")

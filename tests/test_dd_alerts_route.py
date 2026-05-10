@@ -337,6 +337,40 @@ def test_admin_dd_cleanup_requires_secret(client):
     assert r.status_code == 403
 
 
+def test_get_dd_universe_tier1_returns_watchlist(client):
+    """The dd-dispatcher cron service hits this to fetch its monitoring
+    universe. Verify it reflects what's in the watchlist DB."""
+    # Seed the watchlist directly (no auth flow needed for tests)
+    from app.backend.services.analysis_service import _connect
+    with _connect() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS watchlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                added_at TEXT,
+                user_id INTEGER
+            )
+        """)
+        for t in ("CRM", "NOW", "PYPL"):
+            conn.execute("INSERT INTO watchlist (ticker, added_at) VALUES (?, ?)",
+                         (t, "2026-05-10T00:00:00Z"))
+        conn.commit()
+
+    r = client.get("/api/dd-universe/tier1")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tier"] == "tier1_watchlist"
+    assert set(body["tickers"]) == {"CRM", "NOW", "PYPL"}
+    assert body["count"] == 3
+
+
+def test_get_dd_universe_tier1_empty_returns_empty_list(client):
+    """No watchlist → returns empty list (cron service logs + skips tick)."""
+    r = client.get("/api/dd-universe/tier1")
+    assert r.status_code == 200
+    assert r.json() == {"tier": "tier1_watchlist", "tickers": [], "count": 0}
+
+
 def test_admin_dd_purge_legacy_requires_secret(client):
     r = client.post("/admin/dd-purge-legacy-web-runs")
     assert r.status_code == 403

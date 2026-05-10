@@ -131,12 +131,19 @@ def main() -> int:
         return 0
     logger.info("dispatcher: running (%s)", decision.reason)
 
-    # Step 2: build universe
-    tickers = universe.build_dispatcher_universe()
+    # Step 2: build universe.
+    #
+    # Tier 1 is fetched via HTTP from the web service (so the cron service
+    # doesn't need the SQLite volume). Tier 2 / 3 (if enabled) still come
+    # from the in-process universe builders — Tier 2 needs DB access and
+    # Tier 3 hits FMP directly, neither of which has the shared-volume
+    # constraint of the watchlist.
+    tickers: set[str] = _fetch_tier1_via_http(base_url=base_url) | _fetch_tier_2_3_inprocess()
     summary.universe_size = len(tickers)
     if not tickers:
         logger.warning(
-            "dispatcher: empty universe (set %s env var on Railway)",
+            "dispatcher: empty universe — add tickers via the Watchlist UI tab, "
+            "or set %s env var as a fallback",
             universe.ENV_PORTFOLIO_TICKERS,
         )
         _emit_summary(summary)
@@ -259,6 +266,68 @@ def _post_trigger(
             ticker, body.get("eligibility_reason", "unknown"),
         )
     return True
+
+
+def _fetch_tier1_via_http(*, base_url: str) -> set[str]:
+    """Pull Tier 1 (watchlist) tickers from the web service over HTTP.
+
+    Designed to keep the cron service stateless — it never touches the
+    SQLite DB directly. The web service exposes the watchlist via
+    GET /api/dd-universe/tier1.
+
+    Falls back to env-var (PORTFOLIO_TICKERS) if the HTTP call fails so a
+    network blip doesn't blank the universe and silently disable monitoring.
+
+    Returns set() if both HTTP and env are empty.
+    """
+    url = f"{base_url}/api/dd-universe/tier1"
+    try:
+        r = requests.get(url, timeout=HTTP_TIMEOUT_SEC)
+        r.raise_for_status()
+        body = r.json()
+        tickers = {t.strip().upper() for t in body.get("tickers", []) if t and t.strip()}
+        logger.info("dispatcher: Tier 1 (watchlist) → %d tickers via HTTP", len(tickers))
+        # Also union the env-var override (matches universe.get_watchlist_tickers's
+        # behaviour for the in-process path).
+        env_raw = os.environ.get(universe.ENV_PORTFOLIO_TICKERS, "")
+        if env_raw.strip():
+            extras = {p.strip().upper() for p in env_raw.replace(",", " ").split() if p.strip()}
+            tickers |= extras
+            logger.info("dispatcher: + %d env-var tickers", len(extras))
+        return tickers
+    except Exception as exc:
+        logger.warning(
+            "dispatcher: Tier 1 HTTP fetch failed (%s) — falling back to env-only", exc,
+        )
+        # Fallback: use env var only. This keeps monitoring alive if the
+        # web service is briefly unreachable.
+        env_raw = os.environ.get(universe.ENV_PORTFOLIO_TICKERS, "")
+        if not env_raw.strip():
+            return set()
+        return {p.strip().upper() for p in env_raw.replace(",", " ").split() if p.strip()}
+
+
+def _fetch_tier_2_3_inprocess() -> set[str]:
+    """Build Tier 2 (analyzed) + Tier 3 (S&P 500) via the in-process
+    universe helpers. Both are gated by env vars and default off.
+
+    Tier 2 needs DB access (web_runs query); if the cron service can't
+    reach the DB it returns empty (graceful degradation). Tier 3 hits
+    FMP directly so it works regardless of DB sharing.
+    """
+    extra: set[str] = set()
+    include_analyzed = _truthy(os.environ.get(universe.ENV_INCLUDE_ANALYZED, ""))
+    include_sp500    = _truthy(os.environ.get(universe.ENV_INCLUDE_SP500, ""))
+
+    if include_analyzed:
+        analyzed = universe.get_analyzed_universe()
+        logger.info("dispatcher: Tier 2 (analyzed last 90d) → %d tickers", len(analyzed))
+        extra |= analyzed
+    if include_sp500:
+        sp500 = universe.get_sp500_universe()
+        logger.info("dispatcher: Tier 3 (S&P 500) → %d tickers", len(sp500))
+        extra |= sp500
+    return extra
 
 
 def _maybe_run_daily_cleanup(*, base_url: str, secret: str) -> None:

@@ -1,6 +1,16 @@
 # Phase 2B — Auto Due-D Cron Service Setup (Railway)
 
-Phase 2B introduces the **`dd-dispatcher`** cron service. It's a separate Railway service that wakes up every 5 minutes during US market hours, batch-quotes the configured universe (default: PORTFOLIO_TICKERS env), detects ±10% breaches, and POSTs `/admin/dd-trigger` against the existing web service for each breach.
+Phase 2B introduces the **`dd-dispatcher`** cron service. It's a separate Railway service that wakes up every 5 minutes during US market hours, batch-quotes the configured universe, detects ±10% breaches, and POSTs `/admin/dd-trigger` against the existing web service for each breach.
+
+## Universe definition (Tier 1 / 2 / 3)
+
+| Tier | Source | Default | Env to enable |
+|---|---|---|---|
+| **Tier 1 — Watchlist** | `watchlist` table in the SQLite DB (same one the Watchlist UI tab writes to) | **Always on** | _(no env needed — add/remove via UI)_ |
+| **Tier 2 — Recently analyzed** | `web_runs` query, last 90 days | Off | `DD_INCLUDE_ANALYZED=true` |
+| **Tier 3 — S&P 500** | FMP `/stable/sp500-constituent` (~503 names) | Off | `DD_INCLUDE_SP500=true` |
+
+Tickers added via `PORTFOLIO_TICKERS` env var are **UNIONed** with the watchlist (lets ops force-add escalation tickers without UI access), but the watchlist is the canonical Tier 1 source. Edits in the Watchlist UI tab take effect on the next cron tick — no redeploy needed.
 
 ## Architecture
 
@@ -49,9 +59,17 @@ The cron service does NOT share the SQLite DB with the web service. All state li
    ```
    DD_DISPATCHER_BASE_URL    https://ai-hedge-fund-production-7131.up.railway.app
    DB_UPLOAD_SECRET          <same value as web service>
-   PORTFOLIO_TICKERS         AAPL,MSFT,NVDA,GOOGL,...   (comma-separated)
    FINANCIAL_DATASETS_API_KEY <FMP API key>
    ```
+
+   That's it for required env. Tier 1 (watchlist) is fetched over HTTP
+   from `${DD_DISPATCHER_BASE_URL}/api/dd-universe/tier1` — no SQLite
+   volume sharing needed. The cron service is fully stateless.
+
+   `PORTFOLIO_TICKERS` is **optional** — its contents UNION with the
+   watchlist for force-add scenarios (e.g. an on-call escalation where
+   you want to monitor a name without going through the UI). Also serves
+   as the fallback if the HTTP fetch fails (network blip).
 
    **Optional (sensible defaults shown):**
    ```
