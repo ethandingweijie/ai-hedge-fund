@@ -126,6 +126,14 @@ def main() -> int:
         cluster_summary=[],
     )
 
+    # Step 0: always-run housekeeping that fires once per UTC day
+    # (independent of the dispatcher gate so they still execute on
+    # weekdays' after-market ticks before the gate skips):
+    #   - daily cleanup of expired dd_alerts/dd_reports rows
+    #   - EOD digest narrative (Phase 2E) — fires after market close
+    _maybe_run_daily_cleanup(base_url=base_url, secret=secret)
+    _maybe_run_daily_digest(base_url=base_url, secret=secret)
+
     # Step 1: market-hours gate
     decision = scheduler.should_run()
     summary.decision = decision.reason
@@ -226,12 +234,8 @@ def main() -> int:
     # Then dispatch the singletons (existing path)
     to_dispatch = singleton_events
 
-    # Opportunistic retention cleanup: run once per UTC date, on the first
-    # tick after midnight ET / first tick of the day. Every other tick is a
-    # no-op. Bounded by `DD_RETENTION_DAYS` (default 7). Runs server-side
-    # via the admin /admin/dd-cleanup endpoint so we don't need DB access
-    # here in the cron service.
-    _maybe_run_daily_cleanup(base_url=base_url, secret=secret)
+    # (cleanup + digest already fired at Step 0 above; no per-dispatch
+    # retention call here.)
 
     for q in to_dispatch:
         summary.breaches.append({
@@ -375,6 +379,53 @@ def _fetch_tier_2_3_inprocess() -> set[str]:
         logger.info("dispatcher: Tier 3 (S&P 500) → %d tickers", len(sp500))
         extra |= sp500
     return extra
+
+
+def _maybe_run_daily_digest(*, base_url: str, secret: str) -> None:
+    """Phase 2E: hit /admin/dd-digest at most once per UTC day, AFTER the
+    market has closed.
+
+    Tracking via marker file in /tmp (one per day). Only fires when
+    `now_utc.hour >= 20` so the digest is generated post-close in EDT
+    (16:00 ET = 20:00 UTC) and post-close in EST (16:00 ET = 21:00 UTC).
+    Earlier ticks no-op cleanly.
+
+    Failures are logged but never raised — digest is "nice to have," not
+    critical to dispatch.
+    """
+    import tempfile
+    from pathlib import Path
+
+    now = datetime.now(timezone.utc)
+    if now.hour < 20:
+        return   # market still open (or pre-EDT-close); too early
+
+    marker = Path(tempfile.gettempdir()) / "dd_digest_last_utc_date.txt"
+    today = now.date().isoformat()
+    try:
+        if marker.exists() and marker.read_text().strip() == today:
+            return
+    except OSError:
+        pass
+
+    url = f"{base_url}/admin/dd-digest"
+    try:
+        # The digest LLM call can take ~30-60s; give it extra headroom
+        # over the dispatch HTTP timeout.
+        r = requests.post(url, params={"secret": secret}, timeout=120)
+        if r.status_code == 200:
+            try:
+                logger.info("dispatcher: daily digest → %s", r.json())
+            except Exception:
+                logger.info("dispatcher: daily digest HTTP 200 (non-JSON body)")
+            try:
+                marker.write_text(today)
+            except OSError as exc:
+                logger.warning("dispatcher: digest marker write failed: %s", exc)
+        else:
+            logger.warning("dispatcher: digest HTTP %d: %s", r.status_code, r.text[:200])
+    except requests.RequestException as exc:
+        logger.warning("dispatcher: digest POST failed: %s", exc)
 
 
 def _maybe_run_daily_cleanup(*, base_url: str, secret: str) -> None:

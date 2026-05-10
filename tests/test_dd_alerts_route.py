@@ -448,6 +448,73 @@ def test_admin_dd_trigger_cluster_real_mode_dispatches_thread(client):
     )
 
 
+# ── Phase 2E: EOD digest route ─────────────────────────────────────────────
+
+
+def test_admin_dd_digest_requires_secret(client):
+    r = client.post("/admin/dd-digest")
+    assert r.status_code == 403
+
+
+def test_admin_dd_digest_off_mode_returns_aggregates_only(client):
+    """agent_mode=off aggregates today's data without LLM call or DB write."""
+    # Fire a synthetic alert so today's aggregates are non-zero
+    client.post(
+        f"/admin/dd-trigger?secret={ADMIN_SECRET}&agent_mode=synthetic&ticker=PEGA&pct=-0.11"
+    )
+    r = client.post(f"/admin/dd-digest?secret={ADMIN_SECRET}&agent_mode=off")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["agent_mode"] == "off"
+    assert body["aggregates"]["n_drops"] == 1
+    # No dd_reports row written for the digest (off mode)
+    from app.backend.services.analysis_service import _connect
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM dd_reports WHERE run_id LIKE 'digest_%'"
+        ).fetchone()
+    assert row[0] == 0
+
+
+def test_admin_dd_digest_synthetic_writes_dd_reports_row(client):
+    r = client.post(f"/admin/dd-digest?secret={ADMIN_SECRET}&agent_mode=synthetic")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["agent_mode"] == "synthetic"
+    assert body["run_id"].startswith("digest_")
+
+    from app.backend.services.analysis_service import _connect
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT model_name FROM dd_reports WHERE run_id = ?",
+            (body["run_id"],),
+        ).fetchone()
+    assert row is not None
+    assert "FALLBACK" in row[0] or "synthetic" in row[0].lower() or "digest" in row[0].lower()
+
+
+def test_admin_dd_digest_invalid_agent_mode_rejected(client):
+    r = client.post(f"/admin/dd-digest?secret={ADMIN_SECRET}&agent_mode=bogus")
+    assert r.status_code == 400
+
+
+def test_get_digest_today_includes_narrative_when_present(client):
+    """After /admin/dd-digest synthetic runs, /digest/today surfaces the
+    narrative payload."""
+    # First call: no digest yet → narrative is None
+    r1 = client.get("/api/dd-alerts/digest/today")
+    assert r1.json()["narrative"] is None
+
+    # Run synthetic digest
+    client.post(f"/admin/dd-digest?secret={ADMIN_SECRET}&agent_mode=synthetic")
+
+    r2 = client.get("/api/dd-alerts/digest/today")
+    body = r2.json()
+    assert body["narrative"] is not None
+    assert "narrative" in body["narrative"]    # the inner key
+    assert body["narrative"]["_model_name"]   # tagged with model name
+
+
 def test_get_dd_universe_tier1_returns_watchlist(client):
     """The dd-dispatcher cron service hits this to fetch its monitoring
     universe. Verify it reflects what's in the watchlist DB."""

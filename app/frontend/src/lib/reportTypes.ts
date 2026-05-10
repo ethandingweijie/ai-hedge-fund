@@ -577,11 +577,26 @@ export interface DdCluster {
   median_pct: number;
 }
 
+/** Phase 2E: LLM-narrated EOD digest payload (web-only). Present when
+ *  the digest agent has run for the current UTC date; null otherwise. */
+export interface DdDigestNarrative {
+  narrative:        string;            // 3-5 sentence prose
+  key_themes:       string[];          // up to ~5 short clauses
+  macro_or_micro:   'macro' | 'micro' | 'mixed';
+  tomorrow_watch:   string;            // 1-2 sentences
+  generated_at?:    string;            // ISO timestamp
+  _model_name?:     string;            // 'dd_digest_qwen' | 'dd_digest_qwen_FALLBACK'
+  drops?:           Array<{ ticker: string; pct: number; price: number }>;
+  pumps?:           Array<{ ticker: string; pct: number; price: number }>;
+  clusters?:        Array<{ sector: string; direction: DdDirection; n: number; median_pct: number }>;
+}
+
 export interface DdDigest {
-  date:     string;
-  drops:    DdAlert[];
-  pumps:    DdAlert[];
-  clusters: DdCluster[];
+  date:       string;
+  drops:      DdAlert[];
+  pumps:      DdAlert[];
+  clusters:   DdCluster[];
+  narrative?: DdDigestNarrative | null;   // Phase 2E
 }
 
 // ── SSE progress event ──────────────────────────────────────────────────────

@@ -4,13 +4,66 @@
  * Top 10 drops + top 10 pumps + active sector clusters for "today" (UTC).
  * Compact list view (vs the AlertCard list above) — designed for retrospective
  * scan rather than active monitoring.
+ *
+ * Phase 2E: when an LLM-narrated digest exists for today, surface it at the
+ * top of the panel as the "headline" — a 3-5 sentence senior-analyst note
+ * answering "what was the dominant story today, was it macro or micro,
+ * what to watch tomorrow." The raw aggregates remain below as the
+ * supporting data.
  */
-import { TrendingDown, TrendingUp, Layers } from 'lucide-react';
-import type { DdDigest } from '@/lib/reportTypes';
+import { TrendingDown, TrendingUp, Layers, Sparkles } from 'lucide-react';
+import type { DdDigest, DdDigestNarrative } from '@/lib/reportTypes';
 
 interface DigestPanelProps {
   digest: DdDigest | null;
   loading?: boolean;
+}
+
+function NarrativeCard({ narrative }: { narrative: DdDigestNarrative }) {
+  const isFallback = (narrative._model_name || '').includes('FALLBACK');
+  const macroLabel =
+    narrative.macro_or_micro === 'macro'  ? 'Macro-driven' :
+    narrative.macro_or_micro === 'micro'  ? 'Ticker-driven' :
+                                            'Mixed signals';
+  return (
+    <section
+      className={`rounded-lg border ${isFallback ? 'border-amber-500/40' : 'border-primary/30'}
+        ${isFallback ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-primary/5'}
+        px-4 py-3 space-y-2`}
+    >
+      <div className="flex items-center justify-between">
+        <h3 className="text-[11px] uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+          <Sparkles size={12} className="text-primary" />
+          EOD Narrative
+        </h3>
+        <span className="text-[10px] font-medium text-muted-foreground">{macroLabel}</span>
+      </div>
+      <p className="text-sm leading-relaxed text-foreground">{narrative.narrative}</p>
+      {narrative.key_themes && narrative.key_themes.length > 0 && (
+        <ul className="space-y-0.5 pt-1">
+          {narrative.key_themes.map((t, i) => (
+            <li key={i} className="text-xs text-foreground/80 flex gap-1.5">
+              <span className="text-muted-foreground/60">·</span>
+              <span>{t}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {narrative.tomorrow_watch && narrative.tomorrow_watch !== 'n/a' && (
+        <div className="pt-1.5 border-t border-border/40">
+          <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+            Tomorrow's watch:&nbsp;
+          </span>
+          <span className="text-xs text-foreground">{narrative.tomorrow_watch}</span>
+        </div>
+      )}
+      {isFallback && (
+        <div className="text-[10px] italic text-amber-700 dark:text-amber-400">
+          (LLM agent fell back to synthetic — see logs)
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function DigestPanel({ digest, loading }: DigestPanelProps) {
@@ -21,7 +74,7 @@ export function DigestPanel({ digest, loading }: DigestPanelProps) {
     return <div className="text-sm text-muted-foreground italic px-2 py-3">No digest available.</div>;
   }
   const empty = digest.drops.length === 0 && digest.pumps.length === 0 && digest.clusters.length === 0;
-  if (empty) {
+  if (empty && !digest.narrative) {
     return (
       <div className="text-sm text-muted-foreground italic px-2 py-3">
         No alerts today. Cooldown gates are working — or no qualifying movements detected yet.
@@ -31,6 +84,9 @@ export function DigestPanel({ digest, loading }: DigestPanelProps) {
 
   return (
     <div className="space-y-4">
+      {/* Phase 2E: LLM narrative leads the panel when present */}
+      {digest.narrative && <NarrativeCard narrative={digest.narrative} />}
+
       {/* Sector clusters — surfaced first when active (sector signal trumps individual) */}
       {digest.clusters.length > 0 && (
         <section>

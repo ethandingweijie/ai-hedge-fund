@@ -294,6 +294,59 @@ def test_fetch_tier1_via_http_empty_when_both_sources_empty(monkeypatch):
     assert out == set()
 
 
+def test_maybe_run_daily_digest_skips_pre_close(monkeypatch, tmp_path):
+    """Phase 2E: digest only fires when UTC hour >= 20 (post-close)."""
+    import tempfile
+    from datetime import datetime, timezone
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+
+    # Mock 'now' to be 14:00 UTC (mid-EDT-trading)
+    fake_now = datetime(2026, 5, 11, 14, 0, tzinfo=timezone.utc)
+    with patch("src.agents.dd.cron_dispatcher.datetime") as mock_dt:
+        mock_dt.now.return_value = fake_now
+        from src.agents.dd.cron_dispatcher import _maybe_run_daily_digest
+        with patch("src.agents.dd.cron_dispatcher.requests.post") as post_mock:
+            _maybe_run_daily_digest(base_url="http://x", secret="s")
+        post_mock.assert_not_called()
+
+
+def test_maybe_run_daily_digest_fires_post_close(monkeypatch, tmp_path):
+    """At 21:00 UTC (post-close), digest fires."""
+    import tempfile
+    from datetime import datetime, timezone
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+
+    fake_now = datetime(2026, 5, 11, 21, 0, tzinfo=timezone.utc)
+    fake_resp = MagicMock(status_code=200, json=lambda: {"run_id": "digest_2026-05-11"})
+    with patch("src.agents.dd.cron_dispatcher.datetime") as mock_dt:
+        mock_dt.now.return_value = fake_now
+        from src.agents.dd.cron_dispatcher import _maybe_run_daily_digest
+        with patch("src.agents.dd.cron_dispatcher.requests.post",
+                   return_value=fake_resp) as post_mock:
+            _maybe_run_daily_digest(base_url="http://x", secret="s")
+            assert post_mock.call_count == 1
+            # Second call same day → marker file blocks it
+            _maybe_run_daily_digest(base_url="http://x", secret="s")
+            assert post_mock.call_count == 1
+
+
+def test_maybe_run_daily_digest_swallows_errors(monkeypatch, tmp_path):
+    """Network failure during digest must not crash dispatch."""
+    import tempfile
+    from datetime import datetime, timezone
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+
+    fake_now = datetime(2026, 5, 11, 21, 0, tzinfo=timezone.utc)
+    import requests as r
+    with patch("src.agents.dd.cron_dispatcher.datetime") as mock_dt:
+        mock_dt.now.return_value = fake_now
+        from src.agents.dd.cron_dispatcher import _maybe_run_daily_digest
+        with patch("src.agents.dd.cron_dispatcher.requests.post",
+                   side_effect=r.RequestException("boom")):
+            # Must not raise
+            _maybe_run_daily_digest(base_url="http://x", secret="s")
+
+
 def test_maybe_run_daily_cleanup_fires_once_per_day(monkeypatch, tmp_path):
     """First call hits /admin/dd-cleanup; subsequent calls same UTC day no-op."""
     import tempfile

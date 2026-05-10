@@ -731,6 +731,90 @@ def admin_dd_trigger_cluster(
     }
 
 
+# ── Phase 2E: EOD digest ───────────────────────────────────────────────────
+
+
+@router.post("/admin/dd-digest")
+def admin_dd_digest(
+    secret: str = "",
+    utc_date: str | None = Query(None, description="ISO date YYYY-MM-DD; defaults to today UTC"),
+    agent_mode: str = Query("real", description="real | synthetic | off"),
+):
+    """Generate the EOD digest for a given UTC date (default: today).
+
+    Web-only delivery — no Slack post. Writes ONE dd_reports row keyed by
+    `digest_<utc_date>` so re-running on the same date overwrites.
+
+    Auth: gated on DB_UPLOAD_SECRET (same as other /admin/* endpoints).
+
+    Behavior:
+      - real: runs Qwen with web_search; falls back to synthetic on failure
+      - synthetic: writes a minimal placeholder digest (used by tests + cron
+        when LLM credentials aren't available)
+      - off: aggregates today's data without any LLM call or DB write —
+        useful for testing the aggregator in isolation
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    if agent_mode not in ("real", "synthetic", "off"):
+        raise HTTPException(status_code=400, detail=f"agent_mode must be real|synthetic|off; got {agent_mode}")
+
+    from src.agents.dd.digest_agent import (
+        gather_today_aggregates, run_digest_agent,
+        upsert_digest_row, upsert_synthetic_digest,
+    )
+    from src.agents.dd.dd_agent import DDAgentError
+
+    if utc_date is None:
+        utc_date = datetime.now(timezone.utc).date().isoformat()
+
+    aggregates = gather_today_aggregates(utc_date)
+
+    if agent_mode == "off":
+        return {
+            "ok": True, "agent_mode": "off",
+            "utc_date": utc_date, "aggregates": aggregates,
+            "note": "No LLM call made; dd_reports row not written.",
+        }
+
+    if agent_mode == "synthetic":
+        run_id = upsert_synthetic_digest(utc_date=utc_date, aggregates=aggregates)
+        return {
+            "ok": True, "agent_mode": "synthetic",
+            "utc_date": utc_date, "run_id": run_id,
+            "n_drops": aggregates["n_drops"], "n_pumps": aggregates["n_pumps"],
+            "n_clusters": aggregates["n_clusters"],
+        }
+
+    # agent_mode == "real" — synchronous (digest LLM call is fast enough,
+    # and the cron tick can wait ~30-60s after market close)
+    try:
+        narrative = run_digest_agent(utc_date=utc_date)
+        run_id = upsert_digest_row(
+            utc_date=utc_date, narrative=narrative, aggregates=aggregates,
+        )
+        return {
+            "ok": True, "agent_mode": "real",
+            "utc_date": utc_date, "run_id": run_id,
+            "narrative_preview": narrative.narrative[:200],
+            "key_themes_count": len(narrative.key_themes),
+            "macro_or_micro": narrative.macro_or_micro,
+            "n_drops": aggregates["n_drops"], "n_pumps": aggregates["n_pumps"],
+            "n_clusters": aggregates["n_clusters"],
+        }
+    except DDAgentError as exc:
+        # Fallback: write a synthetic digest so the dashboard still has SOMETHING
+        logger.warning(f"[digest] {utc_date} LLM failed ({exc}) — synthetic fallback")
+        run_id = upsert_synthetic_digest(utc_date=utc_date, aggregates=aggregates)
+        return {
+            "ok": True, "agent_mode": "real_fell_back_to_synthetic",
+            "utc_date": utc_date, "run_id": run_id,
+            "fallback_reason": str(exc),
+            "n_drops": aggregates["n_drops"], "n_pumps": aggregates["n_pumps"],
+            "n_clusters": aggregates["n_clusters"],
+        }
+
+
 # ── Daily retention cleanup ─────────────────────────────────────────────────
 
 
@@ -871,6 +955,26 @@ def todays_digest():
             "GROUP BY cluster_id, last_direction",
             (today,),
         ).fetchall()
+    # Phase 2E: hydrate the LLM-narrated digest if today's row exists
+    narrative_payload = None
+    digest_run_id = f"digest_{today}"
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT full_result_json, model_name FROM dd_reports WHERE run_id = ?",
+                (digest_run_id,),
+            ).fetchone()
+        if row:
+            try:
+                narrative_payload = json.loads(row[0])
+                # Tag whether this came from the real LLM or a fallback
+                narrative_payload["_model_name"] = row[1]
+            except Exception:
+                narrative_payload = None
+    except Exception:
+        # Table missing on a brand-new DB — graceful no-op
+        narrative_payload = None
+
     return {
         "date":     today,
         "drops":    [_row_to_alert_dict(r) for r in drops],
@@ -880,6 +984,7 @@ def todays_digest():
              "n": r["n"], "median_pct": r["median_pct"]}
             for r in clusters
         ],
+        "narrative": narrative_payload,    # null if no digest run yet
     }
 
 
