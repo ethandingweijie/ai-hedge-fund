@@ -25,6 +25,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -75,44 +76,60 @@ def _row_to_alert_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 def _synthetic_report(ticker: str, pct_change: float, direction: str,
                       reason: str) -> dict[str, Any]:
-    """Build a placeholder DD report for the admin trigger. Future Phase 3
-    work replaces this with the real LLM agent's output."""
+    """Build a placeholder DD report — used as the in-flight 'agent generating'
+    payload AND as the fallback when the real LLM agent fails."""
     sign = "+" if pct_change > 0 else ""
     return {
         "cause_summary": (
-            f"[SYNTHETIC] {ticker} moved {sign}{pct_change*100:.1f}%. "
-            f"Trigger reason: {reason}. This is a placeholder report from the "
-            f"admin trigger — replace with real DD agent output in Phase 3."
+            f"[SYNTHETIC FALLBACK] {ticker} moved {sign}{pct_change*100:.1f}%. "
+            f"Trigger reason: {reason}. The real LLM agent did not produce a "
+            f"parseable report — this placeholder preserves the alert."
         ),
-        "thesis_impact": "thesis_under_review (synthetic admin trigger)",
+        "thesis_impact": "thesis_under_review (LLM agent fell back to synthetic)",
         "recommended_action": (
-            f"Review the {direction.lower()} catalyst. This synthetic alert "
-            f"verifies the alert_dedup → mark_alerted → web_runs → Slack pipeline."
+            f"Review the {direction.lower()} catalyst manually — the automated "
+            f"DD agent could not synthesize a report this run."
         ),
-        "news_drivers": [
-            {"title": "Synthetic news driver — replace with real news_search MCP output",
-             "url": "https://example.com/synthetic-news",
-             "publishedDate": datetime.now(timezone.utc).isoformat()},
-        ],
-        "filings": [
-            {"form": "8-K", "filing_date": datetime.now(timezone.utc).date().isoformat(),
-             "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany",
-             "summary": "Synthetic 8-K — replace with real sec_edgar MCP output"},
-        ],
-        "insider_signal": "n/a (synthetic — no FMP call made)",
+        "news_drivers": [],
+        "filings":      [],
+        "insider_signal": "n/a (synthetic fallback)",
     }
 
 
-def _insert_synthetic_web_run(run_id: str, ticker: str, report: dict,
-                              trigger: dict) -> None:
-    """Write a minimal web_runs row so the GET /api/dd-alerts list+detail
-    JOIN can hydrate the report payload. Mirrors the analysis_service
-    _save_web_run shape for forward-compat with the real agent."""
+def _agent_in_flight_report(ticker: str, pct_change: float, direction: str,
+                            reason: str) -> dict[str, Any]:
+    """Placeholder report inserted IMMEDIATELY when an alert fires with
+    agent_mode=real. The dashboard shows this until the background agent
+    finishes (~30-90s) and updates the row."""
+    sign = "+" if pct_change > 0 else ""
+    return {
+        "cause_summary": (
+            f"⏳ DD agent generating report for {ticker} ({sign}{pct_change*100:.1f}%) — "
+            f"web search + synthesis in progress. Refresh in ~60s."
+        ),
+        "thesis_impact": "(pending — agent running)",
+        "recommended_action": "(pending — agent running)",
+        "news_drivers": [],
+        "filings":      [],
+        "insider_signal": "(pending — agent running)",
+    }
+
+
+def _upsert_dd_web_run(run_id: str, ticker: str, report: dict,
+                       trigger: dict, model_name: str) -> None:
+    """Write/replace a web_runs row so the GET /api/dd-alerts list+detail
+    JOIN can hydrate the report payload.
+
+    Used in 3 places:
+      1. Initial 'agent in flight' placeholder when alert fires
+      2. Background thread on agent SUCCESS — replaces with real report
+      3. Background thread on agent FAILURE — replaces with synthetic fallback
+    """
     _ensure_web_runs_table()  # idempotent — ensures table exists in fresh DBs
     full_result_json = json.dumps({
         "report": report,
         "trigger": trigger,
-        "data": {"sector": "_synthetic", "profile_name": "_admin_trigger"},
+        "data": {"sector": "_dd_alert", "profile_name": "_dd_agent"},
     }, default=str)
     with _connect() as conn:
         conn.execute(
@@ -124,9 +141,22 @@ def _insert_synthetic_web_run(run_id: str, ticker: str, report: dict,
                 run_id,
                 datetime.now(timezone.utc).isoformat(),
                 ticker.upper(),
-                "synthetic-dd-trigger",
+                model_name,
                 full_result_json,
             ),
+        )
+        conn.commit()
+
+
+def _update_alert_sent_status(run_id: str, sent_status: str) -> None:
+    """Patch dd_alerts.sent_status after the background agent finishes.
+    Bypasses alert_dedup.mark_alerted to avoid touching the cooldown PK row's
+    other fields. Idempotent — silent no-op if row doesn't exist."""
+    from src.agents.dd import alert_dedup
+    with alert_dedup._conn() as conn:
+        conn.execute(
+            "UPDATE dd_alerts SET sent_status = ? WHERE dd_run_id = ?",
+            (sent_status, run_id),
         )
         conn.commit()
 
@@ -162,6 +192,88 @@ def _try_post_slack(*, ticker: str, pct: float, direction: str, reason: str,
         return {"posted": False, "reason": f"{type(exc).__name__}: {exc}"}
 
 
+def _real_agent_worker(
+    *,
+    run_id:          str,
+    ticker:          str,
+    direction:       str,
+    pct:             float,
+    current_price:   float,
+    prior_direction: str | None,
+    reason:          str,
+    trigger_meta:    dict,
+) -> None:
+    """Background-thread entry point for the real LLM DD agent.
+
+    Sequence:
+      1. Run the LLM agent (web search + Qwen synthesis, ~30-90s)
+      2. Replace the in-flight web_runs placeholder with the real report
+      3. Post to Slack (with the real report content)
+      4. Patch dd_alerts.sent_status
+
+    On any exception:
+      • Replace the placeholder with a synthetic fallback report
+      • Post Slack with the fallback so the alert still notifies
+      • Mark sent_status="sent_synthetic_fallback" so dashboard / monitoring
+        can distinguish real vs degraded runs
+
+    Never raises — this runs in a daemon thread, so an unhandled exception
+    would just vanish into the void.
+    """
+    try:
+        from src.agents.dd.dd_agent import run_dd_agent, DDAgentError
+
+        logger.info(f"[dd-agent] starting background run for {ticker} (run_id={run_id})")
+        try:
+            dd_report = run_dd_agent(
+                ticker=ticker,
+                direction=direction,
+                pct_change=pct,
+                current_price=current_price,
+                prior_direction=prior_direction,
+                reason=reason,
+            )
+            report_dict = dd_report.model_dump()
+            model_name  = "dd_agent_qwen"
+            sent_status = "sent"
+            logger.info(f"[dd-agent] {ticker} succeeded — posting to Slack")
+        except DDAgentError as exc:
+            logger.warning(f"[dd-agent] {ticker} failed ({exc}) — using synthetic fallback")
+            report_dict = _synthetic_report(ticker, pct, direction, reason)
+            model_name  = "dd_agent_qwen_FALLBACK"
+            sent_status = "sent_synthetic_fallback"
+        except Exception as exc:
+            logger.exception(f"[dd-agent] {ticker} unexpected error — using synthetic fallback: {exc}")
+            report_dict = _synthetic_report(ticker, pct, direction, reason)
+            model_name  = "dd_agent_qwen_ERROR"
+            sent_status = "sent_synthetic_fallback"
+
+        # 2. Replace the in-flight placeholder web_runs row
+        try:
+            _upsert_dd_web_run(run_id, ticker, report_dict, trigger_meta, model_name)
+        except Exception as exc:
+            logger.exception(f"[dd-agent] {ticker} web_runs upsert failed: {exc}")
+
+        # 3. Post to Slack (best-effort)
+        slack_status = _try_post_slack(
+            ticker=ticker, pct=pct, direction=direction, reason=reason,
+            report=report_dict, run_id=run_id,
+        )
+        if not slack_status.get("posted"):
+            sent_status = sent_status + "_no_slack"
+
+        # 4. Patch dd_alerts.sent_status
+        try:
+            _update_alert_sent_status(run_id, sent_status)
+        except Exception as exc:
+            logger.exception(f"[dd-agent] {ticker} sent_status update failed: {exc}")
+
+        logger.info(f"[dd-agent] {ticker} background run COMPLETE (sent_status={sent_status})")
+    except Exception as outer_exc:
+        # Catastrophic failure — log so we have visibility, but never raise.
+        logger.exception(f"[dd-agent] catastrophic failure for {ticker}: {outer_exc}")
+
+
 # ── Admin trigger ───────────────────────────────────────────────────────────
 
 @router.post("/admin/dd-trigger")
@@ -173,18 +285,42 @@ def admin_dd_trigger(
     price: float | None = Query(None, description="Optional current price; defaults to 100*(1+pct)"),
     tier: str = Query("admin_trigger", description="Tier label for the alert row"),
     force: bool = Query(False, description="Bypass cooldown gate (for testing)"),
+    agent_mode: str = Query(
+        "real",
+        description="real | synthetic | off — 'real' runs the LLM DD agent in a background "
+                    "thread (Slack posts ~30-90s later with the full report). "
+                    "'synthetic' uses the placeholder + Slacks immediately (legacy behavior). "
+                    "'off' records the alert but skips both agent and Slack.",
+    ),
 ):
-    """Synthesize a DD alert end-to-end. Used by the vertical slice to verify
-    alert_dedup → mark_alerted → web_runs → Slack delivery without needing
-    the real LLM agent / cron / MCP servers.
+    """Fire a DD alert end-to-end.
 
-    Returns a summary dict with the resolved direction, eligibility decision,
-    dd_run_id, and Slack delivery status.
+    Default (agent_mode=real, async per Phase 2A):
+      1. Eligibility check → cooldown gate
+      2. Capture prior_direction (for prompt routing)
+      3. Insert dd_alerts row + 'agent in flight' web_runs placeholder
+      4. Spawn background thread → real LLM agent → real Slack post
+      5. Return immediately (~50ms) with dd_run_id and status='agent_running'
+
+    The dashboard polls /api/dd-alerts every 5min, so the in-flight placeholder
+    is visible during the 30-90s the agent runs, then auto-replaced with the
+    real report on the next refresh.
+
+    Synthetic mode (agent_mode=synthetic):
+      Original sync behavior — instant Slack post with placeholder content.
+      Used by tests and as a manual escape hatch.
+
+    Off mode (agent_mode=off):
+      Records the alert and cooldown but skips both LLM agent AND Slack post.
+      Useful for backfilling or testing the cooldown engine in isolation.
 
     Auth: gated on DB_UPLOAD_SECRET env var (same as other /admin/* endpoints).
     """
     if not ADMIN_SECRET or secret != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Invalid secret")
+
+    if agent_mode not in ("real", "synthetic", "off"):
+        raise HTTPException(status_code=400, detail=f"agent_mode must be real|synthetic|off; got {agent_mode}")
 
     # Resolve direction
     if direction == "auto":
@@ -199,6 +335,13 @@ def admin_dd_trigger(
 
     # Late import to avoid circular dependencies + keep route module light
     from src.agents.dd import alert_dedup
+
+    # Capture prior_direction BEFORE check_alert_eligibility / mark_alerted
+    # because those touch the latest-alert row. The DD agent needs to know
+    # what direction the previous alert went to pick the right system prompt
+    # (e.g. DROP-after-PUMP gets the Reversal "Narrative Shift" prompt).
+    prior = alert_dedup.get_latest_alert(ticker)
+    prior_direction = prior.last_direction if prior else None
 
     # Cooldown check (or bypass)
     if force:
@@ -220,9 +363,7 @@ def admin_dd_trigger(
             "note": "Alert blocked by cooldown. Pass &force=true to bypass.",
         }
 
-    # Synthesize report + write web_runs row
     run_id = str(uuid.uuid4())
-    report = _synthetic_report(ticker, pct, direction, reason)
     trigger_meta = {
         "source": "admin_trigger",
         "ticker": ticker.upper(),
@@ -230,35 +371,93 @@ def admin_dd_trigger(
         "price": current_price,
         "direction": direction,
         "reason": reason,
+        "prior_direction": prior_direction,
         "triggered_at": datetime.now(timezone.utc).isoformat(),
     }
-    _insert_synthetic_web_run(run_id, ticker, report, trigger_meta)
 
-    # Best-effort Slack post (silent skip if SLACK_WEBHOOK_URL absent)
-    slack_status = _try_post_slack(
-        ticker=ticker, pct=pct, direction=direction, reason=reason,
-        report=report, run_id=run_id,
-    )
+    # ── Branch on agent_mode ───────────────────────────────────────────────
 
-    # Persist the alert row (records cooldown + visible to dashboard)
+    if agent_mode == "synthetic":
+        # Sync flow — original Phase C behavior. Useful for tests and manual
+        # verification without burning Qwen tokens.
+        report = _synthetic_report(ticker, pct, direction, reason)
+        _upsert_dd_web_run(run_id, ticker, report, trigger_meta, "synthetic-dd-trigger")
+        slack_status = _try_post_slack(
+            ticker=ticker, pct=pct, direction=direction, reason=reason,
+            report=report, run_id=run_id,
+        )
+        alert_dedup.mark_alerted(
+            ticker=ticker, direction=direction, pct=pct, price=current_price,
+            tier=tier, reason=reason,
+            quote={"changesPercentage": pct * 100, "price": current_price, "_source": "admin_trigger"},
+            dd_run_id=run_id,
+            sent_status="sent" if slack_status.get("posted") else "pending",
+        )
+        return {
+            "ok": True, "fired": True,
+            "ticker": ticker.upper(), "direction": direction, "pct": pct,
+            "price": current_price, "eligibility_reason": reason,
+            "prior_direction": prior_direction,
+            "dd_run_id": run_id,
+            "agent_mode": "synthetic",
+            "slack": slack_status,
+        }
+
+    if agent_mode == "off":
+        # Record alert + cooldown only. No web_runs row, no Slack, no agent.
+        alert_dedup.mark_alerted(
+            ticker=ticker, direction=direction, pct=pct, price=current_price,
+            tier=tier, reason=reason,
+            quote={"changesPercentage": pct * 100, "price": current_price, "_source": "admin_trigger"},
+            dd_run_id=run_id,
+            sent_status="recorded_no_delivery",
+        )
+        return {
+            "ok": True, "fired": True,
+            "ticker": ticker.upper(), "direction": direction, "pct": pct,
+            "price": current_price, "eligibility_reason": reason,
+            "prior_direction": prior_direction,
+            "dd_run_id": run_id,
+            "agent_mode": "off",
+            "slack": {"posted": False, "reason": "agent_mode=off"},
+        }
+
+    # agent_mode == "real" — async LLM agent flow
+    placeholder = _agent_in_flight_report(ticker, pct, direction, reason)
+    _upsert_dd_web_run(run_id, ticker, placeholder, trigger_meta, "dd_agent_pending")
     alert_dedup.mark_alerted(
         ticker=ticker, direction=direction, pct=pct, price=current_price,
         tier=tier, reason=reason,
         quote={"changesPercentage": pct * 100, "price": current_price, "_source": "admin_trigger"},
         dd_run_id=run_id,
-        sent_status="sent" if slack_status.get("posted") else "pending",
+        sent_status="agent_running",
     )
 
+    # Spawn the background thread. daemon=True means it doesn't block app
+    # shutdown if uvicorn is restarted mid-flight (the alert is already
+    # persisted; the worst case is a missed Slack post + stuck placeholder
+    # row that a re-trigger would overwrite anyway).
+    worker = threading.Thread(
+        target=_real_agent_worker,
+        kwargs=dict(
+            run_id=run_id, ticker=ticker, direction=direction, pct=pct,
+            current_price=current_price, prior_direction=prior_direction,
+            reason=reason, trigger_meta=trigger_meta,
+        ),
+        daemon=True,
+        name=f"dd_agent_{ticker}_{run_id[:8]}",
+    )
+    worker.start()
+
     return {
-        "ok": True,
-        "fired": True,
-        "ticker": ticker.upper(),
-        "direction": direction,
-        "pct": pct,
-        "price": current_price,
-        "eligibility_reason": reason,
+        "ok": True, "fired": True,
+        "ticker": ticker.upper(), "direction": direction, "pct": pct,
+        "price": current_price, "eligibility_reason": reason,
+        "prior_direction": prior_direction,
         "dd_run_id": run_id,
-        "slack": slack_status,
+        "agent_mode": "real",
+        "agent_status": "running",
+        "note": "LLM agent dispatched in background. Slack post (with real report) will fire ~30-90s after this response. Poll GET /api/dd-alerts/{dd_run_id} or refresh /#/dd-alerts to see the populated report.",
     }
 
 
