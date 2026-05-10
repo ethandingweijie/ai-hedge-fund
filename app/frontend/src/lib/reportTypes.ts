@@ -542,6 +542,48 @@ export interface CitationRegistryEntry {
   verified?: boolean;
 }
 
+// ── DD Alerts (Auto Due-D dashboard) ───────────────────────────────────────
+
+export type DdDirection = 'DROP' | 'PUMP';
+
+export interface DdReport {
+  cause_summary?:       string;
+  thesis_impact?:       string;
+  recommended_action?:  string;
+  news_drivers?:        Array<{ title?: string; url?: string; publishedDate?: string; date?: string }>;
+  filings?:             Array<{ form?: string; type?: string; filing_date?: string; date?: string; url?: string; summary?: string; title?: string }>;
+  insider_signal?:      string;
+}
+
+export interface DdAlert {
+  ticker:            string;
+  last_direction:    DdDirection;
+  trigger_pct:       number;
+  trigger_price:     number;
+  last_triggered_at: string;
+  tier:              string;
+  alert_reason:      string;          // 'first_breach' | 'direction_flip_*' | 'high_water_mark*' | 'cooldown_expired'
+  cluster_id?:       string | null;
+  dd_run_id?:        string | null;
+  sent_status?:      string;
+  /** Hydrated from web_runs.full_result_json when dd_run_id is present. */
+  report?:           DdReport | null;
+}
+
+export interface DdCluster {
+  cluster_id: string;
+  direction:  DdDirection;
+  n:          number;
+  median_pct: number;
+}
+
+export interface DdDigest {
+  date:     string;
+  drops:    DdAlert[];
+  pumps:    DdAlert[];
+  clusters: DdCluster[];
+}
+
 // ── SSE progress event ──────────────────────────────────────────────────────
 
 export interface ProgressEvent {

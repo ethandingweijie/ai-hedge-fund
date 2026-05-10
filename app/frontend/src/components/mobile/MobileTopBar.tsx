@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Menu, X, User, Plus, BarChart2, Filter, BookMarked, History, Sun, Moon, Monitor, LogOut, Zap } from 'lucide-react';
+import { Menu, X, User, Plus, BarChart2, Filter, BookMarked, History, Sun, Moon, Monitor, LogOut, Zap, BellRing } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type Theme } from '@/contexts/theme-context';
@@ -16,11 +16,12 @@ const ACTION_COLORS: Record<string, string> = {
 };
 
 const NAV_ITEMS = [
-  { label: 'New Ticker',       icon: Plus,       path: '/report'   },
-  { label: 'Ticker Research',  icon: BarChart2,  path: '/report'   },
-  { label: 'Screener',         icon: Filter,     path: '/screener' },
+  { label: 'New Ticker',       icon: Plus,       path: '/report'    },
+  { label: 'Ticker Research',  icon: BarChart2,  path: '/report'    },
+  { label: 'Screener',         icon: Filter,     path: '/screener'  },
   { label: 'Watchlist',        icon: BookMarked, path: '/watchlist' },
-  { label: 'History',          icon: History,    path: '/history'  },
+  { label: 'Auto Due-D',       icon: BellRing,   path: '/dd-alerts' },
+  { label: 'History',          icon: History,    path: '/history'   },
 ] as const;
 
 export function MobileTopBar() {

@@ -1,6 +1,9 @@
 // ── API client for the analysis service ────────────────────────────────────
 import type {
   ArchiveSummary,
+  DdAlert,
+  DdDigest,
+  DdDirection,
   HistoryResponse,
   RunResult,
   ScreenerResponse,
@@ -285,4 +288,36 @@ export function getRevenueProductSegmentation(ticker: string, period: 'annual' |
  *  segmentation — segment names are regions instead of product lines. */
 export function getRevenueGeoSegmentation(ticker: string, period: 'annual' | 'quarter' = 'annual'): Promise<RevenueSegmentation> {
   return fetchJson(`${BASE}/analysis/revenue-geo-segmentation/${encodeURIComponent(ticker.toUpperCase())}?period=${period}`);
+}
+
+// ── DD Alerts (Auto Due-D dashboard) ───────────────────────────────────────
+
+/** List recent DD alerts. All filters optional. */
+export function listDdAlerts(params: {
+  since?:     string;
+  until?:     string;
+  direction?: DdDirection;
+  tier?:      string;
+  ticker?:    string;
+  limit?:     number;
+} = {}): Promise<DdAlert[]> {
+  const qs = new URLSearchParams();
+  if (params.since)     qs.set('since', params.since);
+  if (params.until)     qs.set('until', params.until);
+  if (params.direction) qs.set('direction', params.direction);
+  if (params.tier)      qs.set('tier', params.tier);
+  if (params.ticker)    qs.set('ticker', params.ticker);
+  if (params.limit)     qs.set('limit', String(params.limit));
+  const q = qs.toString();
+  return fetchJson<DdAlert[]>(`${BASE}/api/dd-alerts${q ? `?${q}` : ''}`, { headers: _authHeaders() });
+}
+
+/** Today's aggregate digest — top drops, top pumps, active sector clusters. */
+export function getDdDigestToday(): Promise<DdDigest> {
+  return fetchJson<DdDigest>(`${BASE}/api/dd-alerts/digest/today`, { headers: _authHeaders() });
+}
+
+/** Single full DD report (hydrated from web_runs). */
+export function getDdAlertDetail(runId: string): Promise<DdAlert> {
+  return fetchJson<DdAlert>(`${BASE}/api/dd-alerts/${encodeURIComponent(runId)}`, { headers: _authHeaders() });
 }
