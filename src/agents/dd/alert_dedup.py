@@ -73,7 +73,10 @@ CREATE TABLE IF NOT EXISTS dd_alerts (
 CREATE INDEX IF NOT EXISTS dd_alerts_ticker_time ON dd_alerts(ticker, last_triggered_at DESC);
 CREATE INDEX IF NOT EXISTS dd_alerts_status_idx  ON dd_alerts(sent_status);
 CREATE INDEX IF NOT EXISTS dd_alerts_recent_idx  ON dd_alerts(last_triggered_at DESC);
-CREATE INDEX IF NOT EXISTS dd_alerts_outcome_idx ON dd_alerts(action_outcome);
+-- NOTE: idx on action_outcome is created AFTER the ALTER TABLE migrations
+-- below (see _PHASE3_POST_MIGRATIONS). Keeping it here would fail on a
+-- pre-Phase-3 production DB where the column doesn't exist yet at the
+-- moment _DDL runs (executescript runs before the ALTERs).
 
 -- Phase 2B refactor: DD reports live here, NOT in web_runs.
 -- Rationale: the web_runs table is for ticker research that the user
@@ -106,6 +109,13 @@ _PHASE3_MIGRATIONS = [
     "ALTER TABLE dd_alerts ADD COLUMN action_grade_at    TEXT",
 ]
 
+# Indexes that depend on Phase 3 columns — must run AFTER the ALTERs
+# above so the referenced columns exist. Each is idempotent via
+# CREATE INDEX IF NOT EXISTS.
+_PHASE3_POST_MIGRATIONS = [
+    "CREATE INDEX IF NOT EXISTS dd_alerts_outcome_idx ON dd_alerts(action_outcome)",
+]
+
 
 def _ensure_table(conn: sqlite3.Connection) -> None:
     """Idempotent. Cheap enough to call on every operation."""
@@ -113,6 +123,13 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
     # Apply Phase 3 attribution migrations — silently skip when columns
     # already exist (SQLite raises OperationalError on duplicate columns).
     for sql in _PHASE3_MIGRATIONS:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError:
+            pass
+    # Post-migration indexes — must run after the ALTERs above so the
+    # referenced columns exist on legacy DBs.
+    for sql in _PHASE3_POST_MIGRATIONS:
         try:
             conn.execute(sql)
         except sqlite3.OperationalError:

@@ -737,7 +737,7 @@ def admin_dd_trigger_cluster(
 @router.post("/admin/dd-grade-pending")
 def admin_dd_grade_pending(
     secret: str = "",
-    min_age_days: int = Query(7, ge=1, le=90, description="Only grade alerts older than this many days"),
+    min_age_days: int = Query(7, ge=0, le=90, description="Only grade alerts older than this many days (0 to grade everything regardless of age — useful for backfill)"),
     max_rows: int = Query(50, ge=1, le=500, description="Cap on rows graded per call"),
 ):
     """Grade pending dd_alerts rows by computing forward returns from FMP
