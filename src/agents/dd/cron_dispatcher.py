@@ -131,8 +131,11 @@ def main() -> int:
     # weekdays' after-market ticks before the gate skips):
     #   - daily cleanup of expired dd_alerts/dd_reports rows
     #   - EOD digest narrative (Phase 2E) — fires after market close
+    #   - Phase 3 attribution grading — runs after market close so the
+    #     freshly-closed prices are already in FMP
     _maybe_run_daily_cleanup(base_url=base_url, secret=secret)
     _maybe_run_daily_digest(base_url=base_url, secret=secret)
+    _maybe_run_daily_grading(base_url=base_url, secret=secret)
 
     # Step 1: market-hours gate
     decision = scheduler.should_run()
@@ -379,6 +382,51 @@ def _fetch_tier_2_3_inprocess() -> set[str]:
         logger.info("dispatcher: Tier 3 (S&P 500) → %d tickers", len(sp500))
         extra |= sp500
     return extra
+
+
+def _maybe_run_daily_grading(*, base_url: str, secret: str) -> None:
+    """Phase 3 attribution: hit /admin/dd-grade-pending at most once per
+    UTC day, post-close.
+
+    Same gating pattern as the cleanup + digest helpers — marker file in
+    /tmp + only fire when now.hour >= 20 (post-EDT-close). Picks off
+    alerts that are at least 7 calendar days old and haven't been graded
+    yet (server-side dedupe on forward_5d_return IS NULL). Failures are
+    logged but never raised — grading is "nice to have," not critical.
+    """
+    import tempfile
+    from pathlib import Path
+
+    now = datetime.now(timezone.utc)
+    if now.hour < 20:
+        return
+
+    marker = Path(tempfile.gettempdir()) / "dd_grading_last_utc_date.txt"
+    today = now.date().isoformat()
+    try:
+        if marker.exists() and marker.read_text().strip() == today:
+            return
+    except OSError:
+        pass
+
+    url = f"{base_url}/admin/dd-grade-pending"
+    try:
+        # Grading can take ~1-2 min if many rows are pending (1 FMP call
+        # per row); generous timeout.
+        r = requests.post(url, params={"secret": secret}, timeout=180)
+        if r.status_code == 200:
+            try:
+                logger.info("dispatcher: daily grading → %s", r.json())
+            except Exception:
+                logger.info("dispatcher: daily grading HTTP 200 (non-JSON body)")
+            try:
+                marker.write_text(today)
+            except OSError as exc:
+                logger.warning("dispatcher: grading marker write failed: %s", exc)
+        else:
+            logger.warning("dispatcher: grading HTTP %d: %s", r.status_code, r.text[:200])
+    except requests.RequestException as exc:
+        logger.warning("dispatcher: grading POST failed: %s", exc)
 
 
 def _maybe_run_daily_digest(*, base_url: str, secret: str) -> None:

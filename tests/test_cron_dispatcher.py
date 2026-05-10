@@ -49,6 +49,16 @@ def basic_env(monkeypatch):
         "src.agents.dd.cron_dispatcher._maybe_run_daily_cleanup",
         lambda **_kw: None,
     )
+    # Phase 2E + Phase 3: stub the digest + grading helpers too. Their
+    # real behavior is exercised by their own dedicated tests below.
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._maybe_run_daily_digest",
+        lambda **_kw: None,
+    )
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._maybe_run_daily_grading",
+        lambda **_kw: None,
+    )
     # Stub the Tier 1 HTTP fetch to use the env-var path directly. Real HTTP
     # behaviour is covered by test_fetch_tier1_via_http_*.
     monkeypatch.setattr(
@@ -292,6 +302,42 @@ def test_fetch_tier1_via_http_empty_when_both_sources_empty(monkeypatch):
                side_effect=r.RequestException("down")):
         out = _fetch_tier1_via_http(base_url="http://x")
     assert out == set()
+
+
+def test_maybe_run_daily_grading_fires_post_close(monkeypatch, tmp_path):
+    """Phase 3: grading hits /admin/dd-grade-pending once per UTC day post-close."""
+    import tempfile
+    from datetime import datetime, timezone
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+
+    fake_now = datetime(2026, 5, 11, 21, 0, tzinfo=timezone.utc)
+    fake_resp = MagicMock(status_code=200, json=lambda: {"n_graded": 3})
+    with patch("src.agents.dd.cron_dispatcher.datetime") as mock_dt:
+        mock_dt.now.return_value = fake_now
+        from src.agents.dd.cron_dispatcher import _maybe_run_daily_grading
+        with patch("src.agents.dd.cron_dispatcher.requests.post",
+                   return_value=fake_resp) as post_mock:
+            _maybe_run_daily_grading(base_url="http://x", secret="s")
+            assert post_mock.call_count == 1
+            url = post_mock.call_args.args[0]
+            assert "/admin/dd-grade-pending" in url
+            # Second call same day no-ops
+            _maybe_run_daily_grading(base_url="http://x", secret="s")
+            assert post_mock.call_count == 1
+
+
+def test_maybe_run_daily_grading_skips_pre_close(monkeypatch, tmp_path):
+    import tempfile
+    from datetime import datetime, timezone
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
+
+    fake_now = datetime(2026, 5, 11, 14, 0, tzinfo=timezone.utc)
+    with patch("src.agents.dd.cron_dispatcher.datetime") as mock_dt:
+        mock_dt.now.return_value = fake_now
+        from src.agents.dd.cron_dispatcher import _maybe_run_daily_grading
+        with patch("src.agents.dd.cron_dispatcher.requests.post") as post_mock:
+            _maybe_run_daily_grading(base_url="http://x", secret="s")
+        post_mock.assert_not_called()
 
 
 def test_maybe_run_daily_digest_skips_pre_close(monkeypatch, tmp_path):

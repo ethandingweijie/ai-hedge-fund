@@ -731,6 +731,244 @@ def admin_dd_trigger_cluster(
     }
 
 
+# ── Phase 3: Performance attribution (forward-return grading) ─────────────
+
+
+@router.post("/admin/dd-grade-pending")
+def admin_dd_grade_pending(
+    secret: str = "",
+    min_age_days: int = Query(7, ge=1, le=90, description="Only grade alerts older than this many days"),
+    max_rows: int = Query(50, ge=1, le=500, description="Cap on rows graded per call"),
+):
+    """Grade pending dd_alerts rows by computing forward returns from FMP
+    and matching against the LLM's recommended_action.
+
+    Phase 3 attribution: closes the loop on whether the agent's action
+    suggestions correlate with subsequent price moves.
+
+    For each row whose forward_5d_return IS NULL and is at least
+    `min_age_days` old:
+      1. Read recommended_action from dd_reports.full_result_json.report
+      2. Parse to ActionCategory (ADD/TRIM/EXIT/HOLD/WATCH/UNCLEAR)
+      3. Fetch FMP daily prices T..T+35d
+      4. Compute forward_{1,5,22}d_return decimals
+      5. Grade action_outcome (correct/incorrect/neutral/no_data)
+      6. Persist via alert_dedup.set_alert_grade()
+
+    Idempotent — safe to call repeatedly. Subsequent calls on the same row
+    refresh the grade (useful when 22d data becomes available later).
+
+    Auth: gated on DB_UPLOAD_SECRET.
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    from src.agents.dd import alert_dedup
+    from src.agents.dd.performance import (
+        ActionCategory, ActionOutcome,
+        compute_forward_returns, grade_action, parse_recommended_action,
+    )
+
+    pending = alert_dedup.get_pending_grade_rows(min_age_days=min_age_days)[:max_rows]
+
+    n_graded     = 0
+    n_no_action  = 0
+    n_no_data    = 0
+    by_outcome:  dict[str, int] = {}
+
+    for row in pending:
+        # Look up the recommended_action from the joined dd_reports payload
+        rec_action_text = ""
+        if row["dd_run_id"]:
+            with _connect() as conn:
+                rep_row = conn.execute(
+                    "SELECT full_result_json FROM dd_reports WHERE run_id = ?",
+                    (row["dd_run_id"],),
+                ).fetchone()
+            if rep_row and rep_row[0]:
+                try:
+                    payload = json.loads(rep_row[0])
+                    rec_action_text = (
+                        (payload.get("report") or {}).get("recommended_action") or ""
+                    )
+                except Exception:
+                    rec_action_text = ""
+
+        action = parse_recommended_action(rec_action_text)
+        if action == ActionCategory.UNCLEAR:
+            n_no_action += 1
+
+        # Compute forward returns (synchronous FMP fetch)
+        try:
+            trigger_dt = datetime.fromisoformat(
+                row["last_triggered_at"].replace("Z", "+00:00")
+            )
+        except Exception:
+            trigger_dt = datetime.now(timezone.utc)
+
+        fr = compute_forward_returns(
+            ticker        = row["ticker"],
+            trigger_date  = trigger_dt,
+            trigger_price = row["trigger_price"],
+        )
+
+        if fr.fwd_5d is None:
+            outcome = ActionOutcome.NO_DATA
+            n_no_data += 1
+        else:
+            outcome = grade_action(action, fr.fwd_5d)
+
+        alert_dedup.set_alert_grade(
+            ticker            = row["ticker"],
+            last_direction    = row["last_direction"],
+            last_triggered_at = row["last_triggered_at"],
+            forward_1d_return = fr.fwd_1d,
+            forward_5d_return = fr.fwd_5d,
+            forward_22d_return= fr.fwd_22d,
+            action_category   = action.value,
+            action_outcome    = outcome.value,
+        )
+        n_graded += 1
+        by_outcome[outcome.value] = by_outcome.get(outcome.value, 0) + 1
+
+    return {
+        "ok": True,
+        "n_pending":  len(pending),
+        "n_graded":   n_graded,
+        "n_no_action": n_no_action,
+        "n_no_data":  n_no_data,
+        "by_outcome": by_outcome,
+        "min_age_days": min_age_days,
+    }
+
+
+@router.get("/api/dd-alerts/performance")
+def get_dd_performance(
+    since: str | None = Query(None, description="ISO date; alerts at or after this time"),
+    until: str | None = Query(None, description="ISO date; alerts strictly before this time"),
+):
+    """Aggregate Phase 3 attribution: hit rates by action / direction /
+    reason + agent-vs-naive-baseline alpha.
+
+    Naive baseline = "if you had done nothing" — the mean forward return
+    of all alerts. Agent alpha = mean forward return weighted by action
+    direction (ADD = +return signal, TRIM/EXIT = -return signal,
+    HOLD = held position, WATCH/UNCLEAR = excluded).
+    """
+    where = ["1=1"]
+    params: list = []
+    if since: where.append("last_triggered_at >= ?"); params.append(since)
+    if until: where.append("last_triggered_at <  ?"); params.append(until)
+    where.append("forward_5d_return IS NOT NULL")   # only graded alerts
+
+    sql = f"""
+      SELECT action_category, action_outcome, last_direction, alert_reason,
+             forward_1d_return, forward_5d_return, forward_22d_return
+      FROM dd_alerts
+      WHERE {' AND '.join(where)}
+    """
+    _ensure_tables_for_read()
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(sql, params).fetchall()
+
+    if not rows:
+        return {
+            "n_alerts_graded": 0,
+            "by_action":       {},
+            "by_direction":    {},
+            "by_reason":       {},
+            "alpha":           None,
+            "since": since, "until": until,
+        }
+
+    def _bucket(rows_subset):
+        """Return {n, hit_rate (correct / non-neutral), mean_5d, mean_1d, mean_22d}."""
+        if not rows_subset:
+            return None
+        n = len(rows_subset)
+        n_correct   = sum(1 for r in rows_subset if r["action_outcome"] == "correct")
+        n_incorrect = sum(1 for r in rows_subset if r["action_outcome"] == "incorrect")
+        n_decisive  = n_correct + n_incorrect
+        hit_rate    = (n_correct / n_decisive) if n_decisive else None
+
+        def _mean(field):
+            vals = [r[field] for r in rows_subset if r[field] is not None]
+            return (sum(vals) / len(vals)) if vals else None
+
+        return {
+            "n":           n,
+            "n_correct":   n_correct,
+            "n_incorrect": n_incorrect,
+            "hit_rate":    round(hit_rate, 4) if hit_rate is not None else None,
+            "mean_1d_return":  round(_mean("forward_1d_return") or 0, 4) if _mean("forward_1d_return") is not None else None,
+            "mean_5d_return":  round(_mean("forward_5d_return") or 0, 4) if _mean("forward_5d_return") is not None else None,
+            "mean_22d_return": round(_mean("forward_22d_return") or 0, 4) if _mean("forward_22d_return") is not None else None,
+        }
+
+    rows_list = [dict(r) for r in rows]
+
+    by_action: dict[str, dict] = {}
+    for category in ("ADD", "TRIM", "EXIT", "HOLD", "WATCH", "UNCLEAR"):
+        subset = [r for r in rows_list if r["action_category"] == category]
+        bucket = _bucket(subset)
+        if bucket:
+            by_action[category] = bucket
+
+    by_direction = {}
+    for d in ("DROP", "PUMP"):
+        subset = [r for r in rows_list if r["last_direction"] == d]
+        b = _bucket(subset)
+        if b:
+            by_direction[d] = b
+
+    # Reason buckets — group by category prefix so all "direction_flip_*"
+    # variants roll up
+    reasons = {"first_breach", "direction_flip", "high_water_mark",
+               "cooldown_expired", "admin_force_override"}
+    by_reason = {}
+    for prefix in reasons:
+        subset = [r for r in rows_list if (r["alert_reason"] or "").startswith(prefix)]
+        b = _bucket(subset)
+        if b:
+            by_reason[prefix] = b
+
+    # Naive baseline = mean fwd_5d across all graded alerts
+    fwd_5d_vals = [r["forward_5d_return"] for r in rows_list if r["forward_5d_return"] is not None]
+    naive_mean_5d = (sum(fwd_5d_vals) / len(fwd_5d_vals)) if fwd_5d_vals else 0
+
+    # Agent alpha = signed return weighted by action direction
+    #   ADD: full credit for positive returns (long bias)
+    #   TRIM/EXIT: credit for negative returns (short / no-position bias)
+    #   HOLD: forward return × 0 (holding cash-equivalent in the alert window)
+    #   WATCH/UNCLEAR: excluded from alpha calc
+    alpha_5d_terms = []
+    for r in rows_list:
+        if r["forward_5d_return"] is None:
+            continue
+        cat = r["action_category"]
+        ret = r["forward_5d_return"]
+        if cat == "ADD":
+            alpha_5d_terms.append(ret)        # long: capture the upside
+        elif cat in ("TRIM", "EXIT"):
+            alpha_5d_terms.append(-ret)       # short / no-position: capture avoided downside
+        elif cat == "HOLD":
+            alpha_5d_terms.append(0.0)        # held: no alpha contribution
+        # WATCH/UNCLEAR excluded
+    agent_mean_5d = (sum(alpha_5d_terms) / len(alpha_5d_terms)) if alpha_5d_terms else 0
+
+    return {
+        "n_alerts_graded":   len(rows_list),
+        "by_action":         by_action,
+        "by_direction":      by_direction,
+        "by_reason":         by_reason,
+        "naive_mean_5d_return": round(naive_mean_5d, 4),
+        "agent_mean_5d_alpha":  round(agent_mean_5d, 4),
+        "alpha_vs_naive":       round(agent_mean_5d - naive_mean_5d, 4),
+        "since": since, "until": until,
+    }
+
+
 # ── Phase 2E: EOD digest ───────────────────────────────────────────────────
 
 

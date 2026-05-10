@@ -4,6 +4,7 @@ import type {
   DdAlert,
   DdDigest,
   DdDirection,
+  DdPerformance,
   HistoryResponse,
   RunResult,
   ScreenerResponse,
@@ -320,4 +321,13 @@ export function getDdDigestToday(): Promise<DdDigest> {
 /** Single full DD report (hydrated from web_runs). */
 export function getDdAlertDetail(runId: string): Promise<DdAlert> {
   return fetchJson<DdAlert>(`${BASE}/api/dd-alerts/${encodeURIComponent(runId)}`, { headers: _authHeaders() });
+}
+
+/** Phase 3 attribution: aggregate hit rates + alpha-vs-naive. */
+export function getDdPerformance(params: { since?: string; until?: string } = {}): Promise<DdPerformance> {
+  const qs = new URLSearchParams();
+  if (params.since) qs.set('since', params.since);
+  if (params.until) qs.set('until', params.until);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return fetchJson<DdPerformance>(`${BASE}/api/dd-alerts/performance${suffix}`, { headers: _authHeaders() });
 }

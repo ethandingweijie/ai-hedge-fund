@@ -599,6 +599,30 @@ export interface DdDigest {
   narrative?: DdDigestNarrative | null;   // Phase 2E
 }
 
+/** Phase 3 attribution: aggregate hit rates by action / direction / reason
+ *  + agent-vs-naive-baseline alpha. Returned by GET /api/dd-alerts/performance. */
+export interface DdPerformanceBucket {
+  n:                  number;
+  n_correct:          number;
+  n_incorrect:        number;
+  hit_rate:           number | null;       // (correct / (correct + incorrect)); null if zero decisive grades
+  mean_1d_return:     number | null;       // decimal
+  mean_5d_return:     number | null;
+  mean_22d_return:    number | null;
+}
+
+export interface DdPerformance {
+  n_alerts_graded:        number;
+  by_action:              Record<string, DdPerformanceBucket>;   // ADD/TRIM/EXIT/HOLD/WATCH/UNCLEAR
+  by_direction:           Record<string, DdPerformanceBucket>;   // DROP/PUMP
+  by_reason:              Record<string, DdPerformanceBucket>;   // first_breach/direction_flip/...
+  naive_mean_5d_return:   number;
+  agent_mean_5d_alpha:    number;
+  alpha_vs_naive:         number;
+  since:                  string | null;
+  until:                  string | null;
+}
+
 // ── SSE progress event ──────────────────────────────────────────────────────
 
 export interface ProgressEvent {

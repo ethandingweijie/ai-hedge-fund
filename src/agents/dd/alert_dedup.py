@@ -61,11 +61,19 @@ CREATE TABLE IF NOT EXISTS dd_alerts (
     quote_json        TEXT,                 -- full quote snapshot at trigger (audit)
     dd_run_id         TEXT,                 -- link to dd_reports.run_id of the DD report
     sent_status       TEXT DEFAULT 'pending',  -- 'pending' | 'sent' | 'failed' | 'cluster_member'
+    -- Phase 3 attribution (forward-return grading) — populated by /admin/dd-grade-pending
+    forward_1d_return  REAL,                 -- decimal return from trigger_price to T+1 trading day
+    forward_5d_return  REAL,                 -- T+5 trading day; primary grading window
+    forward_22d_return REAL,                 -- T+22 trading day (~1 month)
+    action_category    TEXT,                 -- ADD | TRIM | EXIT | HOLD | WATCH | UNCLEAR
+    action_outcome     TEXT,                 -- correct | incorrect | neutral | pending | no_data
+    action_grade_at    TEXT,                 -- ISO datetime when last graded
     PRIMARY KEY (ticker, last_direction, last_triggered_at)
 );
 CREATE INDEX IF NOT EXISTS dd_alerts_ticker_time ON dd_alerts(ticker, last_triggered_at DESC);
 CREATE INDEX IF NOT EXISTS dd_alerts_status_idx  ON dd_alerts(sent_status);
 CREATE INDEX IF NOT EXISTS dd_alerts_recent_idx  ON dd_alerts(last_triggered_at DESC);
+CREATE INDEX IF NOT EXISTS dd_alerts_outcome_idx ON dd_alerts(action_outcome);
 
 -- Phase 2B refactor: DD reports live here, NOT in web_runs.
 -- Rationale: the web_runs table is for ticker research that the user
@@ -84,9 +92,31 @@ CREATE INDEX IF NOT EXISTS dd_reports_recent_idx  ON dd_reports(run_at DESC);
 """
 
 
+# Phase 3 attribution: ALTER statements applied idempotently on every
+# connection, in case the dd_alerts table was created by a pre-Phase-3
+# build of the codebase. SQLite's "ADD COLUMN" raises if the column
+# already exists, so each is wrapped in try/except. Each migration is
+# safe to skip when the column is already present.
+_PHASE3_MIGRATIONS = [
+    "ALTER TABLE dd_alerts ADD COLUMN forward_1d_return  REAL",
+    "ALTER TABLE dd_alerts ADD COLUMN forward_5d_return  REAL",
+    "ALTER TABLE dd_alerts ADD COLUMN forward_22d_return REAL",
+    "ALTER TABLE dd_alerts ADD COLUMN action_category    TEXT",
+    "ALTER TABLE dd_alerts ADD COLUMN action_outcome     TEXT",
+    "ALTER TABLE dd_alerts ADD COLUMN action_grade_at    TEXT",
+]
+
+
 def _ensure_table(conn: sqlite3.Connection) -> None:
     """Idempotent. Cheap enough to call on every operation."""
     conn.executescript(_DDL)
+    # Apply Phase 3 attribution migrations — silently skip when columns
+    # already exist (SQLite raises OperationalError on duplicate columns).
+    for sql in _PHASE3_MIGRATIONS:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError:
+            pass
 
 
 @contextmanager
@@ -388,6 +418,86 @@ def purge_legacy_dd_rows_from_web_runs() -> dict:
         purged = cur.rowcount
         conn.commit()
     return {"web_runs_purged": purged}
+
+
+# ── Phase 3 attribution: grade-write helper ────────────────────────────────
+
+
+def set_alert_grade(
+    *,
+    ticker:             str,
+    last_direction:     str,
+    last_triggered_at:  str,             # ISO datetime — matches PK
+    forward_1d_return:  float | None,
+    forward_5d_return:  float | None,
+    forward_22d_return: float | None,
+    action_category:    str,
+    action_outcome:     str,
+) -> int:
+    """Write Phase 3 attribution columns onto an existing dd_alerts row.
+
+    Args (PK fields uniquely identify the row):
+      ticker / last_direction / last_triggered_at — together a PK match
+      forward_1d_return / forward_5d_return / forward_22d_return — decimal
+      action_category — one of ActionCategory enum values
+      action_outcome  — one of ActionOutcome enum values
+
+    Returns the number of rows updated (0 if the PK didn't match anything).
+    Idempotent — safe to call multiple times for the same row (e.g. re-grade
+    when 22d data becomes available later).
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    with _conn() as conn:
+        cur = conn.execute(
+            "UPDATE dd_alerts SET "
+            "  forward_1d_return  = ?, "
+            "  forward_5d_return  = ?, "
+            "  forward_22d_return = ?, "
+            "  action_category    = ?, "
+            "  action_outcome     = ?, "
+            "  action_grade_at    = ? "
+            "WHERE ticker = ? AND last_direction = ? AND last_triggered_at = ?",
+            (
+                forward_1d_return, forward_5d_return, forward_22d_return,
+                action_category, action_outcome, now_iso,
+                ticker, last_direction, last_triggered_at,
+            ),
+        )
+        conn.commit()
+        return cur.rowcount
+
+
+def get_pending_grade_rows(min_age_days: int = 7) -> list[dict]:
+    """Return dd_alerts rows ripe for Phase 3 grading.
+
+    A row is "pending" if:
+      - forward_5d_return IS NULL (never graded), AND
+      - last_triggered_at is at least `min_age_days` calendar days old
+        (gives 5 trading days of forward data + buffer).
+
+    Each returned dict has the PK fields + dd_run_id + trigger_price so
+    the caller can fetch FMP prices and compute returns.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=min_age_days)).isoformat()
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT ticker, last_direction, last_triggered_at, "
+            "       trigger_price, dd_run_id "
+            "FROM dd_alerts "
+            "WHERE forward_5d_return IS NULL AND last_triggered_at < ? "
+            "ORDER BY last_triggered_at ASC",
+            (cutoff,),
+        ).fetchall()
+    return [
+        {
+            "ticker":            r[0],
+            "last_direction":    r[1],
+            "last_triggered_at": r[2],
+            "trigger_price":     float(r[3]),
+            "dd_run_id":         r[4],
+        }
+        for r in rows
+    ]
 
 
 # ── Test helper (do not use in production code) ─────────────────────────────

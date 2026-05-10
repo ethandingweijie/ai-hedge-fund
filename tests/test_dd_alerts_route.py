@@ -448,6 +448,128 @@ def test_admin_dd_trigger_cluster_real_mode_dispatches_thread(client):
     )
 
 
+# ── Phase 3 attribution: grading + performance routes ─────────────────────
+
+
+def test_admin_dd_grade_pending_requires_secret(client):
+    r = client.post("/admin/dd-grade-pending")
+    assert r.status_code == 403
+
+
+def test_admin_dd_grade_pending_no_pending_rows(client):
+    """Fresh DB → 0 pending → returns counts of zero."""
+    r = client.post(f"/admin/dd-grade-pending?secret={ADMIN_SECRET}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_pending"] == 0
+    assert body["n_graded"] == 0
+
+
+def test_admin_dd_grade_pending_grades_old_alerts(client, monkeypatch):
+    """Seed an old alert + matching dd_reports row, then grade it."""
+    from datetime import datetime, timedelta, timezone
+    from src.agents.dd import alert_dedup
+    from app.backend.services.analysis_service import _connect
+
+    old = datetime.now(timezone.utc) - timedelta(days=10)
+    alert_dedup.mark_alerted(
+        ticker="PEGA", direction="DROP", pct=-0.13, price=100.0,
+        tier="t1", reason="first_breach", now=old,
+        dd_run_id="run-pega-old",
+    )
+    # Seed the dd_reports row with a recommended_action
+    alert_dedup.upsert_dd_report(
+        run_id="run-pega-old", ticker="PEGA", model_name="dd_agent_qwen",
+        full_result_json='{"report":{"recommended_action":"WATCH-CLOSELY. Stand aside."}}',
+        run_at=old,
+    )
+
+    # Mock FMP to return forward prices
+    class _Px:
+        def __init__(self, t, c): self.time, self.close = t, c
+    fake = [
+        _Px((old + timedelta(days=i)).date().isoformat(), 100.0 + i * 0.5)
+        for i in range(0, 30)
+    ]
+    with patch("src.tools.api.get_prices", return_value=fake):
+        r = client.post(f"/admin/dd-grade-pending?secret={ADMIN_SECRET}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_pending"] >= 1
+    assert body["n_graded"] >= 1
+
+    # Verify columns populated
+    with alert_dedup._conn() as conn:
+        row = conn.execute(
+            "SELECT action_category, action_outcome, forward_5d_return "
+            "FROM dd_alerts WHERE ticker = 'PEGA'"
+        ).fetchone()
+    assert row[0] == "WATCH"      # parsed from prose
+    assert row[1] == "neutral"    # WATCH always neutral
+    assert row[2] is not None     # 5d return computed
+
+
+def test_get_dd_performance_empty(client):
+    """No graded alerts yet → empty result, no errors."""
+    r = client.get("/api/dd-alerts/performance")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_alerts_graded"] == 0
+    assert body["by_action"] == {}
+
+
+def test_get_dd_performance_aggregates(client):
+    """Seed two graded alerts (one ADD-correct + one TRIM-incorrect) and
+    verify the aggregator buckets correctly."""
+    from datetime import datetime, timezone
+    from src.agents.dd import alert_dedup
+    now = datetime.now(timezone.utc)
+
+    alert_dedup.mark_alerted(
+        ticker="A", direction="DROP", pct=-0.11, price=100.0,
+        tier="t1", reason="first_breach", now=now,
+    )
+    alert_dedup.set_alert_grade(
+        ticker="A", last_direction="DROP",
+        last_triggered_at=now.isoformat(),
+        forward_1d_return=0.04, forward_5d_return=0.07,
+        forward_22d_return=0.10,
+        action_category="ADD", action_outcome="correct",
+    )
+
+    alert_dedup.mark_alerted(
+        ticker="B", direction="PUMP", pct=0.12, price=100.0,
+        tier="t1", reason="first_breach", now=now,
+    )
+    alert_dedup.set_alert_grade(
+        ticker="B", last_direction="PUMP",
+        last_triggered_at=now.isoformat(),
+        forward_1d_return=0.02, forward_5d_return=0.05,
+        forward_22d_return=0.08,
+        action_category="TRIM", action_outcome="incorrect",
+    )
+
+    r = client.get("/api/dd-alerts/performance")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_alerts_graded"] == 2
+
+    assert body["by_action"]["ADD"]["n"] == 1
+    assert body["by_action"]["ADD"]["hit_rate"] == 1.0
+    assert body["by_action"]["TRIM"]["hit_rate"] == 0.0
+
+    assert body["by_direction"]["DROP"]["n"] == 1
+    assert body["by_direction"]["PUMP"]["n"] == 1
+
+    # Naive baseline = mean of 0.07 and 0.05 = 0.06
+    assert body["naive_mean_5d_return"] == pytest.approx(0.06)
+    # Agent alpha: ADD captures +0.07, TRIM captures -(0.05) = -0.05; mean = 0.01
+    assert body["agent_mean_5d_alpha"] == pytest.approx(0.01)
+    # Alpha-vs-naive = 0.01 - 0.06 = -0.05 (in this case, agent
+    # underperformed because the TRIM was wrong)
+    assert body["alpha_vs_naive"] == pytest.approx(-0.05)
+
+
 # ── Phase 2E: EOD digest route ─────────────────────────────────────────────
 
 

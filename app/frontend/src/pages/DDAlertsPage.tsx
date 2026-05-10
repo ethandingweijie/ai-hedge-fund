@@ -15,6 +15,7 @@ import { listDdAlerts, getDdDigestToday } from '@/lib/api';
 import type { DdAlert, DdDigest, DdDirection } from '@/lib/reportTypes';
 import { AlertCard } from '@/components/dd/AlertCard';
 import { DigestPanel } from '@/components/dd/DigestPanel';
+import { PerformanceFooter } from '@/components/dd/PerformanceFooter';
 
 const REFRESH_MS = 5 * 60 * 1000;   // 5 min auto-refresh
 
@@ -165,6 +166,11 @@ export function DDAlertsPage() {
           retained server-side for ~7 days (DD_RETENTION_DAYS env, see
           src/agents/dd/alert_dedup.py::cleanup_old_alerts) so the audit trail
           isn't lost. Permanent ticker-research history lives in the History tab. */}
+
+      {/* Phase 3 attribution — measures whether recommended_action correlates
+          with subsequent forward returns. Renders nothing if no graded
+          alerts in the last 30d; otherwise shows hit rate + alpha vs naive. */}
+      <PerformanceFooter sinceDays={30} />
     </div>
   );
 }
