@@ -404,6 +404,43 @@ are cited. Mature SaaS gross retention typically 90-95% (vs Growth SaaS 95%+).
   • Dilution rate = SBC / market cap (annualized). Markets increasingly
     value SaaS on post-SBC economics.
 
+2F.4b UNIT ECONOMICS (MANDATORY — sales-efficiency lens for mature SaaS):
+  • CAC Payback (months) — target <18 months at maturity, 24-36 acceptable
+    if growth investment is accelerating. Compute as
+    (S&M $ ÷ (net new ARR × gross margin)) × 12.
+  • MAGIC NUMBER (net new ARR / S&M spend) — target >0.7 at scale, >1.0
+    indicates aggressive efficient growth.
+  • RPO GROWTH YoY — Remaining Performance Obligations growth (a leading
+    indicator of bookings; large enterprise SaaS reports this in the 10-K
+    contract balance footnote). Report current $B and YoY %.
+  • LTV/CAC RATIO — follow this exact protocol (mandatory; the extractor
+    will silently drop values >15 as the cohort-mismatch error):
+
+    Step 1 — FULLY-LOADED CAC: Divide total Sales & Marketing (S&M) spend
+    by NET NEW LOGOS (not the total customer base). If logo count is
+    unavailable, use S&M / Net New ARR to find the "CAC Ratio."
+
+    Step 2 — LTV CALCULATION: Use the formula
+      LTV = (Blended ACV × Subscription Gross Margin) / Annual Revenue Churn
+
+    Step 3 — LOGIC CHECK: Calculate the Payback Period
+      Payback = CAC / (ACV × Margin)
+    If LTV/CAC > 10x OR Payback < 6mo → flag as outlier and re-calculate
+    using ONLY the "Enterprise" cohort (enterprise-cohort ACV + enterprise
+    net new logo count, since enterprise S&M intensity is much higher per
+    logo than SMB).
+
+    Step 4 — OUTPUT: Step-by-step math table (S&M / Net New Logos /
+    Fully-Loaded CAC / Blended ACV / Subscription GM / Annual Revenue
+    Churn / LTV / LTV-CAC / Payback months) + 1-2 sentence verdict on
+    whether the company is under-investing in growth relative to its
+    efficiency. If the Step-3 outlier re-calc was triggered, present
+    BOTH blended and enterprise-cohort rows so the reader sees the
+    cohort effect.
+
+  • NRR ÷ Gross Retention split: if NRR=112% but Gross Retention=92%,
+    business is reliant on expansion to offset 8% churn — note this.
+
 2F.5 OPERATING LEVERAGE: non-GAAP operating margin, path to GAAP
 margin (reconciliation).
 
