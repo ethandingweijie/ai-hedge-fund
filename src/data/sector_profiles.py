@@ -3245,6 +3245,16 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "JNJ":   ("Biopharma", "",  "Drugs (Pharmaceutical)",    "Johnson & Johnson (post-Kenvue spin-off)"),
     "MDT":   ("Biopharma", "",               "Healthcare Products",    "Medtronic — MedTech devices"),
     "ISRG":  ("Biopharma", "",               "Healthcare Products",    "Intuitive Surgical"),
+    # Zoetis — animal-health pharma (spun out of Pfizer 2013). $9B revenue,
+    # ~35% op margin, sub-10% growth, no clinical pipeline of human drugs.
+    # Fits Large Cap Pharma archetype; without this override the LLM
+    # classifier was routing ZTS to "Managed Care" because the production
+    # sector classifier was returning "HealthcareServices" and the only
+    # default profile registered for that sector is Managed Care
+    # (strategic_router._SECTOR_PROFILE_DEFAULT). Result was every Managed
+    # Care KPI (medical_loss_ratio, members_yoy, medicare_advantage_mix_pct)
+    # showing FALLBACK USED on the dashboard.
+    "ZTS":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Zoetis — animal health pharma; routed to Large Cap Pharma to avoid Managed Care misclassification"),
     "NVO":   ("Biopharma", "",               "Drugs (Pharmaceutical)", "Novo Nordisk ADR — GLP-1/obesity; 20-F filer (DKK reporting currency)"),
     "TXG":   ("Biopharma", "LifeSciTools",   "Healthcare Products",    "10X Genomics — single-cell/spatial genomics instruments; tools co, NOT drug developer"),
     "MRK":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Merck"),

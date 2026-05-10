@@ -3164,8 +3164,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 limit=7,
                 api_key=api_key,
             )
-        except Exception:
+        except Exception as _exc:
             progress.update_status(agent_id, ticker, "Failed to fetch line items — skipping")
+            # Diagnostic — surface the bail reason in state so post-hoc
+            # forensics can identify which early-exit fired without
+            # needing live progress logs (which aren't persisted).
+            state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
+                f"line_items_fetch_failed: {type(_exc).__name__}: {str(_exc)[:120]}"
+            )
             dcf_range[ticker] = {}
             continue
 
@@ -3173,6 +3179,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if len(series) < _MIN_HISTORY_YEARS:
             progress.update_status(agent_id, ticker,
                                    f"Insufficient history ({len(series)} yr) — skipping")
+            state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
+                f"insufficient_history: only_{len(series)}_years_min_{_MIN_HISTORY_YEARS}"
+            )
             dcf_range[ticker] = {}
             continue
 
@@ -3274,6 +3283,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 shares = series[-2]["shares_outstanding"]
             else:
                 progress.update_status(agent_id, ticker, "No shares data — skipping")
+                state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
+                    f"no_shares_data: most_recent={most_recent.get('shares_outstanding')}, "
+                    f"series_len={len(series)}"
+                )
                 dcf_range[ticker] = {}
                 continue
 
@@ -3511,6 +3524,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             if growth_base is None:
                 progress.update_status(agent_id, ticker,
                                        "Cannot derive growth rate — skipping")
+                state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
+                    f"no_growth_rate: guidance_keys={list(guidance.keys())[:5] if guidance else 'none'}, "
+                    f"estimates_count={len(estimates) if estimates else 0}, "
+                    f"series_count={len(series)}, "
+                    f"revenue_first={series[0]['revenue'] if series else None}, "
+                    f"revenue_last={series[-1]['revenue'] if series else None}"
+                )
                 dcf_range[ticker] = {}
                 continue
 
