@@ -337,6 +337,117 @@ def test_admin_dd_cleanup_requires_secret(client):
     assert r.status_code == 403
 
 
+# ── Phase 2C: sector cluster route ─────────────────────────────────────────
+
+
+def test_admin_dd_trigger_cluster_requires_secret(client):
+    r = client.post(
+        "/admin/dd-trigger-cluster?sector=Tech&direction=DROP&members=A,B,C&pcts=-0.1,-0.1,-0.1&prices=100,100,100"
+    )
+    assert r.status_code == 403
+
+
+def test_admin_dd_trigger_cluster_validates_array_lengths(client):
+    """Mismatched member/pct/price arrays return 400."""
+    r = client.post(
+        f"/admin/dd-trigger-cluster?secret={ADMIN_SECRET}"
+        f"&sector=Tech&direction=DROP&members=A,B,C&pcts=-0.1,-0.1&prices=100,100,100"
+    )
+    assert r.status_code == 400
+    assert "same length" in r.json()["detail"].lower()
+
+
+def test_admin_dd_trigger_cluster_validates_min_members(client):
+    """A cluster of 1 isn't really a cluster — 400."""
+    r = client.post(
+        f"/admin/dd-trigger-cluster?secret={ADMIN_SECRET}"
+        f"&sector=Tech&direction=DROP&members=A&pcts=-0.1&prices=100"
+    )
+    assert r.status_code == 400
+
+
+def test_admin_dd_trigger_cluster_validates_direction(client):
+    r = client.post(
+        f"/admin/dd-trigger-cluster?secret={ADMIN_SECRET}"
+        f"&sector=Tech&direction=NEUTRAL&members=A,B,C&pcts=-0.1,-0.1,-0.1&prices=100,100,100"
+    )
+    assert r.status_code == 400
+
+
+def test_admin_dd_trigger_cluster_synthetic_path_writes_to_dd_reports(client):
+    """agent_mode=synthetic writes one dd_reports row + member dd_alerts rows."""
+    r = client.post(
+        f"/admin/dd-trigger-cluster?secret={ADMIN_SECRET}"
+        f"&sector=Tech&direction=DROP&members=CRM,NOW,NET"
+        f"&pcts=-0.11,-0.12,-0.13&prices=200,800,60"
+        f"&agent_mode=synthetic"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["fired"] is True
+    assert body["agent_mode"] == "synthetic"
+    assert body["sector"] == "Tech"
+    assert body["direction"] == "DROP"
+    assert set(body["members"]) == {"CRM", "NOW", "NET"}
+    cid = body["cluster_id"]
+
+    # Verify the cluster report sits in dd_reports keyed by cluster_id
+    from app.backend.services.analysis_service import _connect
+    with _connect() as conn:
+        rep = conn.execute(
+            "SELECT model_name FROM dd_reports WHERE run_id = ?", (cid,)
+        ).fetchone()
+    assert rep is not None
+    assert "synthetic" in rep[0].lower() or "sector" in rep[0].lower()
+
+    # Verify each member has a dd_alerts row tagged sent_status='cluster_member'
+    # (or already-tagged if cleanup happened); cluster_id should match
+    from src.agents.dd import alert_dedup
+    with alert_dedup._conn() as conn:
+        member_rows = conn.execute(
+            "SELECT ticker, cluster_id, sent_status FROM dd_alerts WHERE cluster_id = ?",
+            (cid,),
+        ).fetchall()
+    member_tickers = {row[0] for row in member_rows}
+    assert member_tickers == {"CRM", "NOW", "NET"}
+    for row in member_rows:
+        assert row[1] == cid
+        assert "cluster" in row[2]   # 'cluster_member' or 'sent' if cleanup done
+
+
+def test_admin_dd_trigger_cluster_off_mode_no_slack(client):
+    r = client.post(
+        f"/admin/dd-trigger-cluster?secret={ADMIN_SECRET}"
+        f"&sector=Tech&direction=DROP&members=A,B,C&pcts=-0.11,-0.12,-0.10&prices=100,100,100"
+        f"&agent_mode=off"
+    )
+    body = r.json()
+    assert body["fired"] is True
+    assert body["agent_mode"] == "off"
+    assert body["slack"]["posted"] is False
+
+
+def test_admin_dd_trigger_cluster_real_mode_dispatches_thread(client):
+    """Real mode returns immediately + spawns background thread."""
+    import threading
+    r = client.post(
+        f"/admin/dd-trigger-cluster?secret={ADMIN_SECRET}"
+        f"&sector=Tech&direction=DROP&members=A,B,C&pcts=-0.11,-0.12,-0.10&prices=100,100,100"
+        f"&agent_mode=real"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["fired"] is True
+    assert body["agent_mode"] == "real"
+    assert body["agent_status"] == "running"
+    assert body["cluster_id"]
+    # A daemon thread should be alive
+    assert any(
+        t.name.startswith("dd_sector_agent_") and t.daemon
+        for t in threading.enumerate()
+    )
+
+
 def test_get_dd_universe_tier1_returns_watchlist(client):
     """The dd-dispatcher cron service hits this to fetch its monitoring
     universe. Verify it reflects what's in the watchlist DB."""

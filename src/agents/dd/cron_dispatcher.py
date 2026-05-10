@@ -50,7 +50,7 @@ from typing import Final
 
 import requests
 
-from src.agents.dd import batch_quote, scheduler, universe
+from src.agents.dd import batch_quote, scheduler, sector_clustering, universe
 
 
 logger = logging.getLogger(__name__)
@@ -87,6 +87,8 @@ class DispatchSummary:
     alerts_skipped:    int           # breaches above MAX_ALERTS_TICK cap
     failures:          int           # POSTs that errored
     breaches:          list[dict]    # [{"ticker":..., "pct":..., "price":...}]
+    clusters_dispatched: int = 0     # Phase 2C: sector cluster posts
+    cluster_summary:    list[dict] = None  # [{"sector":..., "direction":..., "n":..., "members":[...]}]
 
 
 def main() -> int:
@@ -120,6 +122,8 @@ def main() -> int:
         alerts_skipped=0,
         failures=0,
         breaches=[],
+        clusters_dispatched=0,
+        cluster_summary=[],
     )
 
     # Step 1: market-hours gate
@@ -169,15 +173,58 @@ def main() -> int:
         _emit_summary(summary)
         return 0
 
-    # Step 5: cap + dispatch
-    to_dispatch = breaches[:max_alerts]
-    summary.alerts_skipped = len(breaches) - len(to_dispatch)
-    if summary.alerts_skipped > 0:
+    # Step 5: cluster breaches into (sector × direction) groups (Phase 2C)
+    # Clusters of ≥3 same-sector same-direction breaches fire ONE sector
+    # alert; the remaining "singletons" fire as individual ticker alerts.
+    cluster_result = sector_clustering.cluster_breaches(breaches)
+    summary.cluster_summary = [
+        {"sector": c.sector, "direction": c.direction,
+         "n": c.n, "members": [m.ticker for m in c.members],
+         "median_pct": round(c.median_pct, 4),
+         "cluster_id": c.cluster_id}
+        for c in cluster_result.clusters
+    ]
+
+    # Sector clusters first, then singletons. Cap applies to TOTAL events.
+    cluster_events = list(cluster_result.clusters)
+    singleton_events = list(cluster_result.singletons)
+    total_events = len(cluster_events) + len(singleton_events)
+    if total_events > max_alerts:
+        # Trim singletons first (clusters are higher-signal)
+        keep_clusters = cluster_events[:max_alerts]
+        keep_singletons = singleton_events[:max_alerts - len(keep_clusters)]
+        summary.alerts_skipped = total_events - (len(keep_clusters) + len(keep_singletons))
+        cluster_events = keep_clusters
+        singleton_events = keep_singletons
         logger.warning(
-            "dispatcher: %d breaches found but capping to %d "
+            "dispatcher: %d total events but capping to %d "
             "(safety valve DD_MAX_ALERTS_PER_TICK)",
-            len(breaches), max_alerts,
+            total_events, max_alerts,
         )
+
+    # Dispatch clusters first
+    for cluster in cluster_events:
+        if dry_run:
+            logger.info(
+                "dispatcher: [DRY-RUN] would POST cluster %s/%s (%d members: %s)",
+                cluster.sector, cluster.direction, cluster.n,
+                ",".join(m.ticker for m in cluster.members),
+            )
+            summary.clusters_dispatched += 1
+            continue
+
+        ok = _post_cluster_trigger(
+            base_url=base_url, secret=secret,
+            sector=cluster.sector, direction=cluster.direction,
+            members=cluster.members, cluster_id=cluster.cluster_id,
+        )
+        if ok:
+            summary.clusters_dispatched += 1
+        else:
+            summary.failures += 1
+
+    # Then dispatch the singletons (existing path)
+    to_dispatch = singleton_events
 
     # Opportunistic retention cleanup: run once per UTC date, on the first
     # tick after midnight ET / first tick of the day. Every other tick is a
@@ -368,6 +415,62 @@ def _maybe_run_daily_cleanup(*, base_url: str, secret: str) -> None:
             logger.warning("dispatcher: cleanup HTTP %d: %s", r.status_code, r.text[:200])
     except requests.RequestException as exc:
         logger.warning("dispatcher: cleanup POST failed: %s", exc)
+
+
+def _post_cluster_trigger(
+    *, base_url: str, secret: str, sector: str, direction: str,
+    members: tuple, cluster_id: str,
+) -> bool:
+    """POST a sector cluster to /admin/dd-trigger-cluster on the web service.
+
+    Always uses agent_mode=real. Members is the tuple from
+    sector_clustering.Cluster.members (BatchQuote objects).
+    Returns True on 200+fired:true; False on any failure.
+    """
+    url = f"{base_url}/admin/dd-trigger-cluster"
+    member_tickers = ",".join(m.ticker for m in members)
+    pcts_str       = ",".join(f"{m.changes_percentage:.6f}" for m in members)
+    prices_str     = ",".join(f"{m.price:.6f}" for m in members)
+    params = {
+        "secret":     secret,
+        "sector":     sector,
+        "direction":  direction,
+        "members":    member_tickers,
+        "pcts":       pcts_str,
+        "prices":     prices_str,
+        "cluster_id": cluster_id,
+        "agent_mode": "real",
+    }
+    try:
+        r = requests.post(url, params=params, timeout=HTTP_TIMEOUT_SEC)
+    except requests.RequestException as exc:
+        logger.error("dispatcher: cluster POST failed for %s/%s: %s", sector, direction, exc)
+        return False
+
+    if r.status_code != 200:
+        logger.error(
+            "dispatcher: cluster %s/%s → HTTP %d: %s",
+            sector, direction, r.status_code, r.text[:200],
+        )
+        return False
+
+    try:
+        body = r.json()
+    except Exception:
+        logger.error("dispatcher: cluster %s/%s → non-JSON response", sector, direction)
+        return False
+
+    if body.get("fired"):
+        logger.info(
+            "dispatcher: CLUSTER FIRED  %s/%s  (n=%d)  cluster_id=%s",
+            sector, direction, len(members), body.get("cluster_id", "?")[:24],
+        )
+    else:
+        logger.info(
+            "dispatcher: cluster %s/%s skipped (%s)",
+            sector, direction, body.get("note", "unknown"),
+        )
+    return True
 
 
 def _emit_summary(summary: DispatchSummary) -> None:

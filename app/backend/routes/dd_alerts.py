@@ -193,6 +193,139 @@ def _try_post_slack(*, ticker: str, pct: float, direction: str, reason: str,
         return {"posted": False, "reason": f"{type(exc).__name__}: {exc}"}
 
 
+# ── Sector cluster helpers (Phase 2C) ──────────────────────────────────────
+
+
+def _synthetic_sector_report(sector: str, direction: str, members: list[str],
+                             median_pct: float) -> dict[str, Any]:
+    """Placeholder used as fallback when the sector LLM agent fails."""
+    sign = "+" if median_pct >= 0 else ""
+    return {
+        "sector": sector,
+        "direction": direction,
+        "cluster_members": members,
+        "cause_summary": (
+            f"[SYNTHETIC FALLBACK] {len(members)} {sector} names moved "
+            f"{sign}{median_pct*100:.1f}% (median) in the same direction today. "
+            f"The sector LLM agent did not produce a parseable report — manual "
+            f"review recommended."
+        ),
+        "thesis_impact": "thesis_under_review (sector LLM agent fell back to synthetic)",
+        "recommended_action": (
+            f"Review sector-wide catalysts manually. Consider sector ETF "
+            f"action, recent macro / regulatory news, and cohort earnings."
+        ),
+        "news_drivers": [],
+        "filings":      [],
+        "insider_signal": "n/a (synthetic fallback)",
+    }
+
+
+def _agent_in_flight_sector_report(sector: str, direction: str, members: list[str],
+                                   median_pct: float) -> dict[str, Any]:
+    """Placeholder shown to the dashboard while the background agent runs."""
+    sign = "+" if median_pct >= 0 else ""
+    return {
+        "sector": sector,
+        "direction": direction,
+        "cluster_members": members,
+        "cause_summary": (
+            f"⏳ Sector DD agent generating report for {sector}/{direction} "
+            f"({len(members)} names, median {sign}{median_pct*100:.1f}%). "
+            f"Web search + synthesis in progress. Refresh in ~60s."
+        ),
+        "thesis_impact": "(pending — sector agent running)",
+        "recommended_action": "(pending — sector agent running)",
+        "news_drivers": [],
+        "filings":      [],
+        "insider_signal": "(pending — sector agent running)",
+    }
+
+
+def _try_post_sector_slack(*, sector: str, direction: str, members: list[str],
+                           median_pct: float, report: dict, run_id: str) -> dict:
+    """Best-effort Slack post for a sector cluster. Never raises."""
+    if not os.environ.get("SLACK_WEBHOOK_URL"):
+        return {"posted": False, "reason": "SLACK_WEBHOOK_URL not set"}
+    try:
+        from src.agents.dd.slack_delivery import post_sector_cluster
+        app_base_url = os.environ.get("APP_BASE_URL")
+        resp = post_sector_cluster(
+            sector=sector, direction=direction, members=members,
+            median_pct=median_pct, report=report, run_id=run_id,
+            app_base_url=app_base_url,
+        )
+        return {"posted": True, "status_code": resp.status_code}
+    except Exception as exc:
+        logger.exception(f"[dd-alerts] Sector Slack post failed for {sector}/{direction}: {exc}")
+        return {"posted": False, "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def _real_sector_agent_worker(
+    *, cluster_id: str, sector: str, direction: str,
+    members: list[tuple[str, float, float]],   # [(ticker, pct, price), ...]
+    median_pct: float, trigger_meta: dict,
+) -> None:
+    """Background-thread entry point for the sector LLM agent.
+
+    Mirrors _real_agent_worker but for sector clusters: runs the sector
+    DD agent, replaces the in-flight placeholder, posts the cluster Slack
+    message. On any failure, falls back to a synthetic report so the
+    cluster alert is preserved.
+    """
+    try:
+        from src.agents.dd.sector_dd_agent import run_sector_dd_agent
+        from src.agents.dd.dd_agent import DDAgentError
+
+        members_tickers = [m[0] for m in members]
+        logger.info(f"[sector-agent] starting {sector}/{direction} (n={len(members)})")
+
+        try:
+            report = run_sector_dd_agent(sector=sector, direction=direction, members=members)
+            report_dict = report.model_dump()
+            model_name  = "dd_sector_agent_qwen"
+            log_status  = "sent"
+            logger.info(f"[sector-agent] {sector}/{direction} succeeded — posting to Slack")
+        except DDAgentError as exc:
+            logger.warning(f"[sector-agent] {sector}/{direction} failed ({exc}) — synthetic fallback")
+            report_dict = _synthetic_sector_report(sector, direction, members_tickers, median_pct)
+            model_name  = "dd_sector_agent_qwen_FALLBACK"
+            log_status  = "sent_synthetic_fallback"
+        except Exception as exc:
+            logger.exception(f"[sector-agent] {sector}/{direction} unexpected error: {exc}")
+            report_dict = _synthetic_sector_report(sector, direction, members_tickers, median_pct)
+            model_name  = "dd_sector_agent_qwen_ERROR"
+            log_status  = "sent_synthetic_fallback"
+
+        try:
+            _upsert_dd_report(cluster_id, sector, report_dict, trigger_meta, model_name)
+        except Exception as exc:
+            logger.exception(f"[sector-agent] {sector}/{direction} dd_reports upsert failed: {exc}")
+
+        slack_status = _try_post_sector_slack(
+            sector=sector, direction=direction, members=members_tickers,
+            median_pct=median_pct, report=report_dict, run_id=cluster_id,
+        )
+        if not slack_status.get("posted"):
+            log_status = log_status + "_no_slack"
+
+        # Patch each member's sent_status to reflect cluster delivery
+        try:
+            from src.agents.dd import alert_dedup
+            with alert_dedup._conn() as conn:
+                conn.execute(
+                    "UPDATE dd_alerts SET sent_status = ? WHERE cluster_id = ?",
+                    (log_status, cluster_id),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.exception(f"[sector-agent] {sector}/{direction} member sent_status update failed: {exc}")
+
+        logger.info(f"[sector-agent] {sector}/{direction} background run COMPLETE (status={log_status})")
+    except Exception as outer_exc:
+        logger.exception(f"[sector-agent] catastrophic failure for {sector}/{direction}: {outer_exc}")
+
+
 def _real_agent_worker(
     *,
     run_id:          str,
@@ -459,6 +592,142 @@ def admin_dd_trigger(
         "agent_mode": "real",
         "agent_status": "running",
         "note": "LLM agent dispatched in background. Slack post (with real report) will fire ~30-90s after this response. Poll GET /api/dd-alerts/{dd_run_id} or refresh /#/dd-alerts to see the populated report.",
+    }
+
+
+# ── Sector cluster trigger (Phase 2C) ──────────────────────────────────────
+
+
+@router.post("/admin/dd-trigger-cluster")
+def admin_dd_trigger_cluster(
+    secret: str = "",
+    sector: str = Query(..., description="Sector name, e.g. 'Tech', 'Banks', 'Semiconductor'"),
+    direction: str = Query(..., description="DROP | PUMP"),
+    members: str = Query(..., description="Comma-separated tickers in the cluster, e.g. 'NVDA,AMD,AVGO'"),
+    pcts: str = Query(..., description="Comma-separated decimal pct changes matching members order, e.g. '-0.13,-0.11,-0.10'"),
+    prices: str = Query(..., description="Comma-separated prices matching members order, e.g. '87,89,91'"),
+    cluster_id: str | None = Query(None, description="Optional override; auto-built from sector+direction+date if absent"),
+    agent_mode: str = Query("real", description="real | synthetic | off"),
+):
+    """Fire a sector-cluster alert. Called by the cron dispatcher after
+    detecting ≥3 same-sector same-direction breaches in one tick.
+
+    Behavior:
+      1. Build cluster_id (or use override) — stable per (sector, direction, UTC-date)
+      2. Insert one dd_alerts row per member with cluster_id populated and
+         sent_status='cluster_member' (so individual cooldown still applies
+         but Slack delivery is skipped per-member — the cluster covers them)
+      3. Insert ONE dd_reports placeholder row (run_id == cluster_id) for
+         the sector-level brief
+      4. Spawn background thread → run_sector_dd_agent → real Slack post
+      5. Return immediately with cluster_id
+
+    Auth: gated on DB_UPLOAD_SECRET.
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    if agent_mode not in ("real", "synthetic", "off"):
+        raise HTTPException(status_code=400, detail=f"agent_mode must be real|synthetic|off; got {agent_mode}")
+    if direction not in ("DROP", "PUMP"):
+        raise HTTPException(status_code=400, detail=f"direction must be DROP or PUMP; got {direction}")
+
+    # Parse parallel arrays
+    member_list = [t.strip().upper() for t in members.split(",") if t.strip()]
+    try:
+        pct_list = [float(p.strip()) for p in pcts.split(",") if p.strip()]
+        price_list = [float(p.strip()) for p in prices.split(",") if p.strip()]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid pcts/prices: {exc}")
+
+    if not (len(member_list) == len(pct_list) == len(price_list)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"members ({len(member_list)}), pcts ({len(pct_list)}), prices ({len(price_list)}) must be same length",
+        )
+    if len(member_list) < 2:
+        raise HTTPException(status_code=400, detail="A cluster needs at least 2 members")
+
+    from src.agents.dd import alert_dedup, sector_clustering
+    cid = cluster_id or sector_clustering.build_cluster_id(sector, direction)
+
+    # Mark each member as cluster_member (records cooldown but skips Slack)
+    for ticker, pct, price in zip(member_list, pct_list, price_list):
+        # Each member individually checks eligibility — if a member is in
+        # cooldown, we still tag it as cluster_member but skip the new alert
+        # row write to avoid duplicating cooldown bookkeeping.
+        eligible, reason = alert_dedup.check_alert_eligibility(
+            ticker, current_pct=pct, current_price=price,
+        )
+        if not eligible:
+            logger.info(
+                f"[cluster] {ticker} skipped within cluster {cid} (reason={reason})"
+            )
+            continue
+        alert_dedup.mark_alerted(
+            ticker=ticker, direction=direction, pct=pct, price=price,
+            tier="tier_cluster_member", reason=reason,
+            quote={"changesPercentage": pct * 100, "price": price, "_source": "sector_cluster"},
+            cluster_id=cid,
+            dd_run_id=cid,         # all members link to the cluster's report
+            sent_status="cluster_member",
+        )
+
+    members_for_agent = list(zip(member_list, pct_list, price_list))
+    pcts_sorted = sorted(pct_list)
+    median_pct = pcts_sorted[len(pcts_sorted) // 2]
+
+    trigger_meta = {
+        "source": "admin_dd_trigger_cluster",
+        "sector": sector,
+        "direction": direction,
+        "members": member_list,
+        "median_pct": median_pct,
+        "triggered_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    if agent_mode == "off":
+        return {
+            "ok": True, "fired": True, "agent_mode": "off",
+            "sector": sector, "direction": direction, "members": member_list,
+            "cluster_id": cid,
+            "slack": {"posted": False, "reason": "agent_mode=off"},
+        }
+
+    if agent_mode == "synthetic":
+        report = _synthetic_sector_report(sector, direction, member_list, median_pct)
+        _upsert_dd_report(cid, sector, report, trigger_meta, "dd_synthetic_sector_cluster")
+        slack_status = _try_post_sector_slack(
+            sector=sector, direction=direction, members=member_list,
+            median_pct=median_pct, report=report, run_id=cid,
+        )
+        return {
+            "ok": True, "fired": True, "agent_mode": "synthetic",
+            "sector": sector, "direction": direction, "members": member_list,
+            "cluster_id": cid,
+            "slack": slack_status,
+        }
+
+    # agent_mode == "real" — async background dispatch
+    placeholder = _agent_in_flight_sector_report(sector, direction, member_list, median_pct)
+    _upsert_dd_report(cid, sector, placeholder, trigger_meta, "dd_sector_agent_pending")
+
+    worker = threading.Thread(
+        target=_real_sector_agent_worker,
+        kwargs=dict(
+            cluster_id=cid, sector=sector, direction=direction,
+            members=members_for_agent, median_pct=median_pct,
+            trigger_meta=trigger_meta,
+        ),
+        daemon=True,
+        name=f"dd_sector_agent_{sector[:8]}_{cid[-8:]}",
+    )
+    worker.start()
+
+    return {
+        "ok": True, "fired": True, "agent_mode": "real", "agent_status": "running",
+        "sector": sector, "direction": direction, "members": member_list,
+        "cluster_id": cid, "median_pct": median_pct,
+        "note": "Sector cluster LLM agent dispatched in background. Slack will fire ~30-90s after this response.",
     }
 
 

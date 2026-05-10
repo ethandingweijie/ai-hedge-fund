@@ -222,6 +222,89 @@ def build_payload(*, ticker: str, pct_change: float, direction: str,
 
 # ── Delivery ────────────────────────────────────────────────────────────────
 
+def build_sector_cluster_payload(
+    *, sector: str, direction: str, members: list[str], median_pct: float,
+    report: dict[str, Any], run_id: str,
+    app_base_url: str | None = None,
+) -> dict[str, Any]:
+    """Build the Slack blocks payload for a SECTOR CLUSTER alert.
+
+    Differentiated from single-ticker alerts by:
+      - 🌐 SECTOR prefix in the title
+      - Member ticker list in the header
+      - Same 4-palette colors (DROP→red, PUMP→green) so cross-references
+        with constituent ticker alerts share visual identity, but the
+        title format makes the cluster-vs-individual distinction obvious
+
+    Sector clusters never use Reversal / HWM Extension palettes — those
+    are direction-flip / continuation patterns specific to single tickers.
+    """
+    p = PALETTE["new_drop"] if direction == "DROP" else PALETTE["new_pump"]
+    sign = "+" if median_pct >= 0 else ""
+    members_inline = ", ".join(members[:8]) + (f" (+{len(members)-8} more)" if len(members) > 8 else "")
+    direction_word = "decline" if direction == "DROP" else "rally"
+
+    blocks: list[dict[str, Any]] = [
+        {"type": "header", "text": {"type": "plain_text",
+            "text": f"🌐 SECTOR {direction}: {sector} — {len(members)} names · median {sign}{median_pct*100:.1f}%"}},
+        {"type": "context", "elements": [{"type": "mrkdwn",
+            "text": f"{p['emoji']}  *coordinated_sector_{direction_word}*  ·  {p['tone']}"}]},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*Members*\n`{members_inline}`"}},
+        {"type": "section", "fields": [
+            {"type": "mrkdwn", "text": f"*Cause*\n{report.get('cause_summary', 'n/a')}"},
+            {"type": "mrkdwn", "text": f"*Thesis impact*\n{report.get('thesis_impact', 'n/a')}"},
+        ]},
+        {"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*Recommended action*\n{report.get('recommended_action', 'n/a')}"}},
+    ]
+
+    news = report.get("news_drivers", [])[:3]
+    if news:
+        news_md = "\n".join(
+            f"• <{n.get('url', '#')}|{n.get('title', 'untitled')[:90]}>"
+            for n in news if isinstance(n, dict)
+        )
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"*News drivers*\n{news_md}"}})
+
+    if app_base_url:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn",
+            "text": f"<{app_base_url.rstrip('/')}/#/dd-alerts|Open in Equitable →>"}})
+
+    blocks.append({"type": "context", "elements": [{"type": "mrkdwn",
+        "text": f"insider: {report.get('insider_signal', 'n/a')}  ·  "
+                f"cluster_id: `{run_id}`  ·  "
+                f"{datetime.now(timezone.utc).isoformat(timespec='seconds')}"}]})
+
+    return {
+        "text": f"🌐 {sector} sector {direction.lower()} — {len(members)} names · median {sign}{median_pct*100:.1f}%",
+        "attachments": [{"color": p["color"], "blocks": blocks}],
+    }
+
+
+def post_sector_cluster(
+    *, sector: str, direction: str, members: list[str], median_pct: float,
+    report: dict[str, Any], run_id: str,
+    app_base_url: str | None = None,
+    timeout_s: float = 10.0,
+) -> requests.Response:
+    """POST a sector-cluster DD report to Slack.
+
+    Used by the cron dispatcher when ≥3 same-sector same-direction breaches
+    are detected on the same tick. Replaces N individual posts with one
+    cluster post + N member tickers tagged sent_status='cluster_member'.
+
+    See build_sector_cluster_payload() for the visual structure.
+    """
+    payload = build_sector_cluster_payload(
+        sector=sector, direction=direction, members=members,
+        median_pct=median_pct, report=report, run_id=run_id,
+        app_base_url=app_base_url,
+    )
+    return requests.post(_webhook_url(), json=payload, timeout=timeout_s)
+
+
 def post_dd_report(*, ticker: str, pct_change: float, direction: str,
                    reason: str, report: dict[str, Any], run_id: str,
                    app_base_url: str | None = None,

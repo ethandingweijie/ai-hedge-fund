@@ -325,6 +325,101 @@ def test_maybe_run_daily_cleanup_swallows_errors(monkeypatch, tmp_path):
         _maybe_run_daily_cleanup(base_url="http://x", secret="s")
 
 
+def test_main_dispatches_cluster_via_dd_trigger_cluster(basic_env, monkeypatch):
+    """Phase 2C: when 3+ same-sector same-direction breaches detected,
+    cron should POST to /admin/dd-trigger-cluster instead of N individual
+    /admin/dd-trigger calls."""
+    monkeypatch.setenv(ENV_PORTFOLIO_TICKERS, "CRM,NOW,NET")
+    # basic_env stubs Tier 1 HTTP fetch — re-stub with the right tickers
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._fetch_tier1_via_http",
+        lambda *, base_url: {"CRM", "NOW", "NET"},
+    )
+    quotes = {
+        "CRM":  _q("CRM",  -0.11, price=200),
+        "NOW":  _q("NOW",  -0.12, price=800),
+        "NET":  _q("NET",  -0.13, price=60),
+    }
+    fake_lookup = {
+        "CRM": ("Tech", "", "", ""),
+        "NOW": ("Tech", "", "", ""),
+        "NET": ("Tech", "", "", ""),
+    }
+    fake_resp = MagicMock(status_code=200, json=lambda: {
+        "fired": True, "cluster_id": "tech_drop_2026-05-10",
+    })
+    with patch("src.data.sector_profiles.TICKER_SECTOR_LOOKUP", fake_lookup), \
+         patch("src.agents.dd.cron_dispatcher.batch_quote.fetch_batch_quotes",
+               return_value=quotes), \
+         patch("src.agents.dd.cron_dispatcher.requests.post",
+               return_value=fake_resp) as post_mock:
+        rc = main()
+    assert rc == 0
+    # Exactly ONE POST — to the cluster endpoint, not 3 individual triggers
+    assert post_mock.call_count == 1
+    call = post_mock.call_args
+    assert "/admin/dd-trigger-cluster" in call.args[0]
+    assert call.kwargs["params"]["sector"] == "Tech"
+    assert call.kwargs["params"]["direction"] == "DROP"
+    assert set(call.kwargs["params"]["members"].split(",")) == {"CRM", "NOW", "NET"}
+
+
+def test_main_dispatches_cluster_plus_singletons(basic_env, monkeypatch):
+    """3 Tech breaches form a cluster; 1 Energy breach stays individual."""
+    monkeypatch.setenv(ENV_PORTFOLIO_TICKERS, "CRM,NOW,NET,XOM")
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._fetch_tier1_via_http",
+        lambda *, base_url: {"CRM", "NOW", "NET", "XOM"},
+    )
+    quotes = {
+        "CRM":  _q("CRM",  -0.11, price=200),
+        "NOW":  _q("NOW",  -0.12, price=800),
+        "NET":  _q("NET",  -0.13, price=60),
+        "XOM":  _q("XOM",  -0.10, price=110),
+    }
+    fake_lookup = {
+        "CRM": ("Tech",   "", "", ""),
+        "NOW": ("Tech",   "", "", ""),
+        "NET": ("Tech",   "", "", ""),
+        "XOM": ("Energy", "", "", ""),
+    }
+    fake_resp = MagicMock(status_code=200, json=lambda: {"fired": True})
+    with patch("src.data.sector_profiles.TICKER_SECTOR_LOOKUP", fake_lookup), \
+         patch("src.agents.dd.cron_dispatcher.batch_quote.fetch_batch_quotes",
+               return_value=quotes), \
+         patch("src.agents.dd.cron_dispatcher.requests.post",
+               return_value=fake_resp) as post_mock:
+        main()
+    # 1 cluster post + 1 singleton post = 2 total
+    assert post_mock.call_count == 2
+    urls = [c.args[0] for c in post_mock.call_args_list]
+    assert any("/admin/dd-trigger-cluster" in u for u in urls)
+    assert any("/admin/dd-trigger" in u and "cluster" not in u for u in urls)
+
+
+def test_main_dry_run_logs_cluster_without_posting(basic_env, monkeypatch):
+    """DD_DRY_RUN suppresses both individual AND cluster POSTs."""
+    monkeypatch.setenv(ENV_DRY_RUN, "true")
+    monkeypatch.setenv(ENV_PORTFOLIO_TICKERS, "CRM,NOW,NET")
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._fetch_tier1_via_http",
+        lambda *, base_url: {"CRM", "NOW", "NET"},
+    )
+    quotes = {
+        "CRM":  _q("CRM",  -0.11, price=200),
+        "NOW":  _q("NOW",  -0.12, price=800),
+        "NET":  _q("NET",  -0.13, price=60),
+    }
+    fake_lookup = {t: ("Tech", "", "", "") for t in ("CRM", "NOW", "NET")}
+    with patch("src.data.sector_profiles.TICKER_SECTOR_LOOKUP", fake_lookup), \
+         patch("src.agents.dd.cron_dispatcher.batch_quote.fetch_batch_quotes",
+               return_value=quotes), \
+         patch("src.agents.dd.cron_dispatcher.requests.post") as post_mock:
+        rc = main()
+    assert rc == 0
+    post_mock.assert_not_called()
+
+
 def test_main_records_cooldown_skip_as_success(basic_env):
     """A 200 response with fired=false is a healthy cooldown skip — not
     counted as a failure."""

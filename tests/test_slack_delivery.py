@@ -334,3 +334,95 @@ def test_post_dd_report_does_not_leak_webhook_url_into_payload(fake_webhook, sam
     import json
     serialized = json.dumps(p)
     assert "hooks.slack.com" not in serialized
+
+
+# ── Phase 2C: sector cluster delivery ──────────────────────────────────────
+
+
+@pytest.fixture
+def sector_report() -> dict:
+    return {
+        "sector": "Tech",
+        "direction": "DROP",
+        "cluster_members": ["CRM", "NOW", "NET"],
+        "cause_summary": "Sector-wide rate-cut anticipation triggered rotation out of high-multiple SaaS.",
+        "thesis_impact": "Transient flow; durable thesis intact.",
+        "recommended_action": "HOLD high-quality leaders; consider trimming high-beta names.",
+        "news_drivers": [
+            {"title": "Fed minutes hint at slower cuts", "url": "https://x.com/n", "publishedDate": "2026-05-10"},
+        ],
+        "filings": [],
+        "insider_signal": "Quiet across cluster.",
+    }
+
+
+def test_build_sector_cluster_payload_has_correct_palette(sector_report):
+    """DROP cluster uses the new_drop palette (red); PUMP would use new_pump."""
+    from src.agents.dd.slack_delivery import build_sector_cluster_payload, PALETTE
+    p_drop = build_sector_cluster_payload(
+        sector="Tech", direction="DROP",
+        members=["CRM", "NOW", "NET"], median_pct=-0.12,
+        report=sector_report, run_id="tech_drop_2026-05-10",
+    )
+    assert p_drop["attachments"][0]["color"] == PALETTE["new_drop"]["color"]
+
+    p_pump = build_sector_cluster_payload(
+        sector="Tech", direction="PUMP",
+        members=["CRM", "NOW", "NET"], median_pct=0.12,
+        report={**sector_report, "direction": "PUMP"}, run_id="tech_pump_2026-05-10",
+    )
+    assert p_pump["attachments"][0]["color"] == PALETTE["new_pump"]["color"]
+
+
+def test_build_sector_cluster_payload_includes_sector_prefix(sector_report):
+    """The header text starts with 🌐 SECTOR so Slack readers immediately
+    distinguish a cluster post from an individual ticker post."""
+    from src.agents.dd.slack_delivery import build_sector_cluster_payload
+    p = build_sector_cluster_payload(
+        sector="Tech", direction="DROP",
+        members=["CRM", "NOW", "NET"], median_pct=-0.12,
+        report=sector_report, run_id="tech_drop_2026-05-10",
+    )
+    text = p["text"]
+    header_text = p["attachments"][0]["blocks"][0]["text"]["text"]
+    assert "Tech" in text
+    assert "🌐" in header_text or "SECTOR" in header_text
+
+
+def test_build_sector_cluster_payload_truncates_member_list(sector_report):
+    """≥9 members → first 8 inline + '(+N more)' suffix."""
+    from src.agents.dd.slack_delivery import build_sector_cluster_payload
+    members = [f"T{i}" for i in range(15)]
+    p = build_sector_cluster_payload(
+        sector="Tech", direction="DROP", members=members, median_pct=-0.12,
+        report=sector_report, run_id="x",
+    )
+    members_block = p["attachments"][0]["blocks"][2]["text"]["text"]
+    assert "(+7 more)" in members_block
+
+
+def test_post_sector_cluster_uses_webhook(fake_webhook, sector_report):
+    from src.agents.dd import slack_delivery
+    fake_resp = MagicMock(status_code=200)
+    with patch.object(slack_delivery.requests, "post", return_value=fake_resp) as mock_post:
+        resp = slack_delivery.post_sector_cluster(
+            sector="Tech", direction="DROP",
+            members=["CRM", "NOW", "NET"], median_pct=-0.12,
+            report=sector_report, run_id="tech_drop_2026-05-10",
+        )
+    assert resp.status_code == 200
+    args = mock_post.call_args
+    assert args.args[0] == "https://hooks.slack.com/test/FAKE/FAKE"
+    posted = args.kwargs["json"]
+    assert "Tech" in posted["text"]
+
+
+def test_post_sector_cluster_raises_when_webhook_missing(monkeypatch, sector_report):
+    from src.agents.dd import slack_delivery
+    monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+    with pytest.raises(Exception):
+        slack_delivery.post_sector_cluster(
+            sector="Tech", direction="DROP",
+            members=["CRM", "NOW", "NET"], median_pct=-0.12,
+            report=sector_report, run_id="x",
+        )
