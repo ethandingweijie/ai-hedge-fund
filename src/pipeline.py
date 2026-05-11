@@ -371,6 +371,18 @@ def run_advanced_pipeline(
                     f"DCF CRASHED — {_err_head}"
                 )
                 print(f"\n[ERROR] DCF engine crashed:\n{_err_trace}\n")
+                # Persist the exception to state for post-hoc forensics —
+                # progress.update_status is transient, print() goes to
+                # Railway logs but isn't accessible from /analysis/runs.
+                # state["data"]["dcf_engine_error"] is the only surface
+                # that survives into the run JSON for browsing later.
+                state["data"]["dcf_engine_error"] = {
+                    "exception_type": type(_dcf_exc).__name__,
+                    "message":        str(_dcf_exc)[:500],
+                    "traceback":      _err_trace,
+                    "primary_ticker": primary_ticker,
+                    "tickers":        list(tickers),
+                }
                 # Ensure dcf_range is set to empty dict for each ticker so
                 # downstream code doesn't re-throw on missing key
                 state["data"]["dcf_range"] = {t: {} for t in tickers}
