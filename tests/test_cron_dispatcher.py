@@ -108,11 +108,37 @@ def test_main_returns_0_when_gate_blocks(monkeypatch, basic_env, capsys):
 
 
 def test_main_returns_0_when_universe_empty(monkeypatch):
-    """No PORTFOLIO_TICKERS set → empty universe → no FMP call → no POST."""
+    """No PORTFOLIO_TICKERS set → empty universe → no FMP call → no DISPATCH POST.
+
+    Stubs the housekeeping helpers (added in Phase 2E + Phase 3 attribution)
+    since those hit requests.post for daily cleanup/digest/grading admin
+    endpoints regardless of universe content — we only want to verify the
+    DISPATCH path doesn't fire."""
     monkeypatch.setenv(ENV_BASE_URL, "http://x")
     monkeypatch.setenv(ENV_ADMIN_SECRET, "s")
     monkeypatch.delenv(ENV_PORTFOLIO_TICKERS, raising=False)
     monkeypatch.setenv(ENV_FORCE_RUN, "true")
+    # Stub the housekeeping helpers (cleanup/digest/grading) — they have
+    # their own dedicated tests and would otherwise fire requests.post here
+    # and pollute the assert_not_called check on dispatch POSTs.
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._maybe_run_daily_cleanup",
+        lambda **_kw: None,
+    )
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._maybe_run_daily_digest",
+        lambda **_kw: None,
+    )
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._maybe_run_daily_grading",
+        lambda **_kw: None,
+    )
+    # Also stub the Tier 1 HTTP fetch to avoid a DNS resolution attempt on
+    # the fake "http://x" hostname (which logs noise + slows the test).
+    monkeypatch.setattr(
+        "src.agents.dd.cron_dispatcher._fetch_tier1_via_http",
+        lambda *, base_url: set(),   # empty Tier 1 → universe stays empty
+    )
 
     with patch("src.agents.dd.cron_dispatcher.batch_quote.fetch_batch_quotes") as fetch_mock, \
          patch("src.agents.dd.cron_dispatcher.requests.post") as post_mock:

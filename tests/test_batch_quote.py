@@ -83,6 +83,38 @@ def test_fetch_dedupes_input():
     assert len(out) == 1
 
 
+def test_fetch_uses_path_style_url_format():
+    """Regression guard: FMP /stable/quote requires PATH-style comma-separated
+    symbols (`/stable/quote/AAPL,MSFT`), NOT query-param style
+    (`/stable/quote?symbol=AAPL,MSFT`). The query-param form silently returns
+    `200 OK, []` instead of the expected price array. This test fails fast if
+    anyone reverts the URL format. See watchlist_service.py:128 + 230 for the
+    canonical pattern in this codebase.
+
+    Root cause history: this bug caused every Auto Due-D cron tick in production
+    to scan zero tickers from May 10 to May 12 — every dispatcher invocation
+    fetched 0 quotes despite the API returning HTTP 200. Fixed via path-style
+    URL after the issue was diagnosed from Railway dispatcher logs.
+    """
+    fake = [{"symbol": "AAPL", "price": 150.0, "changesPercentage": 2.5}]
+    with patch("src.tools.api._fmp_get", return_value=fake) as mock_get:
+        fetch_batch_quotes(["AAPL", "MSFT", "GOOGL"])
+
+    # The URL passed to _fmp_get must contain the symbols in the path,
+    # not in the query params. fetch_batch_quotes() sorts+dedupes symbols
+    # first, so input ["AAPL","MSFT","GOOGL"] becomes "AAPL,GOOGL,MSFT".
+    url_arg = mock_get.call_args.args[0]
+    params_arg = mock_get.call_args.kwargs.get("params", {})
+
+    assert "/quote/AAPL,GOOGL,MSFT" in url_arg, (
+        f"Expected path-style URL with sorted symbols embedded, got: {url_arg}"
+    )
+    assert "symbol" not in params_arg, (
+        f"params must NOT contain 'symbol' key (path-style URL puts symbols "
+        f"in the path); got params={params_arg}"
+    )
+
+
 # ── detect_breaches ─────────────────────────────────────────────────────────
 
 

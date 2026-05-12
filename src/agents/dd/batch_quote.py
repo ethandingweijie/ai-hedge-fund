@@ -131,14 +131,23 @@ def _fetch_one_batch(symbols: list[str]) -> list[dict]:
     """Single FMP /stable/quote call for up to 100 symbols.
 
     Returns the raw FMP rows or [] on any failure. Logs but never raises.
+
+    URL FORMAT NOTE: FMP's /stable/quote requires **path-style** comma-
+    separated symbols: `/stable/quote/AAPL,MSFT,GOOGL` — NOT the
+    query-param form `?symbol=AAPL,MSFT,GOOGL`. The query-param form is
+    silently accepted (returns 200 OK) but produces an empty result array,
+    which was the root cause of `quotes_returned: 0` for every cron tick in
+    production (every Tier 1 dispatcher invocation produced zero quotes
+    despite the API call succeeding). The fix matches the working pattern
+    in `app/backend/services/watchlist_service.py` (lines 128, 230).
     """
     try:
         from src.tools.api import _fmp_get, _STABLE   # type: ignore
 
         symbol_param = ",".join(symbols)
         data = _fmp_get(
-            f"{_STABLE}/quote",
-            params={"symbol": symbol_param},
+            f"{_STABLE}/quote/{symbol_param}",   # path-style, not ?symbol=...
+            params={},                            # empty — symbol is in the URL path now
             api_key=None,
             uncap=True,
         )
