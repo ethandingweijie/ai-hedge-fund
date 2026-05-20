@@ -798,6 +798,45 @@ def run_advanced_pipeline(
         state["data"]["sector_card"] = _sector_card
 
         # ----------------------------------------------------------------
+        # PHASE 10.5 — Card QA Agent (Layer A self-healing audit)
+        #
+        # Walks each ticker through Meta-Check (10.5a) + per-card audits
+        # (10.5b). For missing mandatory fields, calls the LLM judge; for
+        # EXTRACTOR_DROPPED verdicts, hint-driven re-extraction can mutate
+        # state[field_path] in place. All work runs under a $0.50 per-
+        # ticker budget cap with a heartbeat inside the LLM wrapper.
+        #
+        # Wrapped in try/except so any QA failure is logged + persisted
+        # but never blocks downstream save_run + return — the pipeline
+        # must always finish producing a usable run, even when self-
+        # healing breaks.
+        #
+        # See plan: C:/Users/ethan/.claude/plans/mighty-gliding-graham.md
+        # ----------------------------------------------------------------
+        try:
+            from src.agents.audit.card_qa_agent import run_card_qa_agent  # type: ignore
+            _qa_audits: dict[str, dict] = {}
+            for _qa_ticker in tickers:
+                if not _qa_ticker:
+                    continue
+                _qa_audits[_qa_ticker] = run_card_qa_agent(state, _qa_ticker)
+            state["data"]["card_qa_audit"] = _qa_audits
+        except Exception as _qa_exc:
+            import traceback as _qa_tb
+            _qa_trace = "".join(
+                _qa_tb.format_exception(type(_qa_exc), _qa_exc, _qa_exc.__traceback__)
+            )
+            print(f"  [card_qa_agent] FAILED — pipeline continues: {type(_qa_exc).__name__}: {_qa_exc!r}")
+            state["data"]["card_qa_engine_error"] = {
+                "exception_type": type(_qa_exc).__name__,
+                "message":        str(_qa_exc)[:500],
+                "traceback":      _qa_trace,
+                "primary_ticker": primary_ticker,
+                "tickers":        list(tickers),
+            }
+            state["data"]["card_qa_audit"] = {}
+
+        # ----------------------------------------------------------------
         # Episodic run archive (SQLite — src/data/run_archive.db)
         # ----------------------------------------------------------------
         _archive_run_id = save_run(state, decisions)
@@ -887,6 +926,12 @@ def run_advanced_pipeline(
             "profile_name":           state["data"].get("profile_name", ""),
             "profile_names":          state["data"].get("profile_names", {}),
             "sectors":                state["data"].get("sectors", {}),
+            # ── Phase 10.5: Card QA Agent audit (Layer A self-healing) ──────
+            # Per-ticker audit dicts with Meta-Check + card-level findings +
+            # any auto-remediations + human_review_flags. Empty dict on QA
+            # failure (card_qa_engine_error captured separately).
+            "card_qa_audit":          state["data"].get("card_qa_audit", {}),
+            "card_qa_engine_error":   state["data"].get("card_qa_engine_error"),
             # ── Phase 3 deep research artifacts ─────────────────────────────
             # deep_research_sections is the parsed Section 2A-2F dict that
             # feeds the frontend commentary cards (NRR Trajectory, Path to

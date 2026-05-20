@@ -1,0 +1,166 @@
+# Ground-truth labels for Phase 0 eval fixtures.
+#
+# These labels are what the Card QA Agent (Phases 1-9) SHOULD produce when
+# run against each fixture. Phase 10 verification compares agent outputs to
+# these labels and computes precision/recall.
+#
+# Key conventions:
+#   expected_meta_check        — "pass" | "fail" (Phase 10.5a)
+#   expected_suggested_profile — only if meta_check=fail
+#   expected_cards.<card>      — "pass" | "fail" | "skipped" (skipped = meta_check failed, audit skipped)
+#   expected_human_review      — true | false (≥1 flag should be persisted)
+#
+# Each entry's name is {TICKER}__{run_id_first8} to match fixture filenames.
+#
+# IMPORTANT: These labels reflect what's actually IN the persisted state, not
+# what was originally planned. After pulling fixtures we discovered the
+# `dcf_range={}` bug is more widespread than just MRNA — several "healthy"
+# tickers also exhibit it. That's the QA agent's job to catch (correctly).
+
+# ─ Broken (3) ─────────────────────────────────────────────────────────────
+
+MRNA__0182e126:
+  ticker: MRNA
+  category: broken
+  expected_meta_check: pass        # Biopharma + Pre-approval Biotech is correct
+  expected_cards:
+    biopharma_pipeline_rnpv: fail  # dcf_range.MRNA = {}; verdict=EXTRACTOR_DROPPED or DCF_CRASHED
+    biopharma_pipeline_table: fail # 9 pipeline assets present; peak_sales_usd likely missing on rows
+    dcf_range_summary: fail        # dcf_range.MRNA = {}
+  expected_human_review: true      # at least 1 flag (dcf_engine_error not captured in old run)
+  notes: |
+    Canonical "dcf_range empty + pipeline peaks missing" bug. Phase 10.5b should
+    fire EXTRACTOR_DROPPED on peak_sales_usd; DCF_CRASHED on the rNPV (because
+    pre-80be3b5 fixture doesn't have dcf_engine_error captured in state).
+
+ZTS__b91aa9b4:
+  ticker: ZTS
+  category: broken
+  expected_meta_check: fail        # Animal pharma misclassified as Managed Care
+  expected_suggested_profile: "Large Cap Pharma"
+  expected_cards: skipped          # meta-check fail short-circuits card audits (per plan)
+  expected_human_review: true      # single classification_likely_wrong flag
+  notes: |
+    Canonical "wrong profile" bug. Zoetis is animal pharma (veterinary) but
+    state.sectors=HealthcareServices and state.profile_names=Managed Care.
+    No card audits should run. Single human-review flag expected.
+
+MRNA__70b7d8b1:
+  ticker: MRNA
+  category: broken
+  expected_meta_check: pass
+  expected_cards:
+    biopharma_pipeline_rnpv: fail
+    biopharma_pipeline_table: fail
+    dcf_range_summary: fail
+  expected_human_review: true
+  notes: |
+    Historical MRNA run. Same bugs as 0182e126 — proves reproducibility.
+    If Phase 8 Pattern Aggregation works, it should cluster these two MRNA
+    failures as the same root cause.
+
+# ─ Healthy (7) — but mixed reality ────────────────────────────────────────
+
+AAPL__8a81be97:
+  ticker: AAPL
+  category: healthy
+  expected_meta_check: pass
+  expected_cards:
+    dcf_range_summary: pass        # dcf_range populated
+    valuation_anchors: pass
+    decisions_panel: pass
+  expected_human_review: false
+  notes: |
+    Clean fixture. NOTE: state.sectors[AAPL] not present (sector classification
+    inferred elsewhere). Meta-Check needs to tolerate this — it's not the same
+    failure as ZTS where sectors has a WRONG value.
+
+MSFT__f616514d:
+  ticker: MSFT
+  category: healthy_with_dcf_gap
+  expected_meta_check: pass        # Tech + Hyperscaler/Tech Co correct
+  expected_cards:
+    dcf_range_summary: fail        # dcf_range.MSFT empty
+    valuation_anchors: pass
+    decisions_panel: pass
+  expected_human_review: true      # flag the dcf gap, but no classification issue
+  notes: |
+    Profile is correct (Hyperscaler/Tech Co), but dcf_range.MSFT is empty.
+    The same DCF bug pattern as MRNA, just on a Tech ticker. QA agent should
+    NOT classify this as a Meta-Check failure — only flag the dcf card.
+
+JPM__f58865fb:
+  ticker: JPM
+  category: healthy_with_dcf_gap
+  expected_meta_check: pass        # profile=Money Center Bank is correct
+  expected_cards:
+    bank_card: pass                # CET1/TBV/NIM should be populated for a bank fixture
+    dcf_range_summary: fail
+    valuation_anchors: pass
+    decisions_panel: pass
+  expected_human_review: true
+  notes: |
+    Bank profile + dcf gap. Tests both: (a) Meta-Check correctly accepts Money
+    Center Bank, (b) bank_card audit passes, (c) dcf_range_summary correctly flags.
+
+MOH__cebfa77e:
+  ticker: MOH
+  category: healthy_with_dcf_gap
+  expected_meta_check: pass        # profile=Managed Care is correct for Molina Healthcare
+  expected_cards:
+    managed_care_sector_card: pass # MA Mix / MLR / cohort margins populated
+    dcf_range_summary: fail
+  expected_human_review: true
+  notes: |
+    THE direct contrast to ZTS. MOH is genuinely Managed Care (Molina Healthcare —
+    health insurer). Meta-Check must distinguish: ZTS=Managed Care → FAIL,
+    MOH=Managed Care → PASS. This is the highest-value pair in the eval set.
+
+DLR__e4ecbe13:
+  ticker: DLR
+  category: healthy
+  expected_meta_check: pass
+  expected_cards:
+    reit_card: pass                # NAV/P-FFO/P-AFFO populated
+    dcf_range_summary: pass        # dcf_range populated
+  expected_human_review: false
+  notes: |
+    Clean REIT fixture. Same sector-key-missing pattern as AAPL.
+
+NVO__3a5d11f5:
+  ticker: NVO
+  category: healthy
+  expected_meta_check: pass
+  expected_cards:
+    large_cap_pharma_card: pass
+    dcf_range_summary: pass
+  expected_human_review: false
+  notes: |
+    Foreign large-cap pharma. Should pass Meta-Check (sector + profile fit
+    Novo Nordisk's business model).
+
+INTU__869c6dfe:
+  ticker: INTU
+  category: healthy_with_dcf_gap
+  expected_meta_check: pass        # profile=Mature SaaS is correct
+  expected_cards:
+    tech_saas_card: pass           # NRR/Rule-of-40/LTV-CAC populated
+    dcf_range_summary: fail
+    valuation_anchors: pass
+  expected_human_review: true
+  notes: |
+    SaaS profile + dcf gap. Tests tech_saas_card mandatory paths AND
+    confirms the dcf bug pattern extends to Tech.
+
+# ─ Summary expectations ────────────────────────────────────────────────────
+#
+# Across 10 fixtures:
+#   - 1  meta_check FAIL  (ZTS)
+#   - 9  meta_check PASS
+#   - 7  human_review flag fires (MRNA×2, ZTS, MSFT, JPM, MOH, INTU)
+#   - 3  fully clean (AAPL, DLR, NVO)
+#
+# Phase 10 success criteria (per plan §Phase 10):
+#   - 90% precision: 9 of 10 flags should be real failures
+#   - 85% recall:    catch 85% of the labeled failures above
+#   - Meta-Check accuracy: 10/10 on the ZTS-vs-MOH disambiguation
