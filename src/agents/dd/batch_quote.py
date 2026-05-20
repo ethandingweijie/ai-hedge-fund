@@ -128,33 +128,78 @@ def _chunks(seq: list[str], n: int):
 
 
 def _fetch_one_batch(symbols: list[str]) -> list[dict]:
-    """Single FMP /stable/quote call for up to 100 symbols.
+    """Single FMP call for up to 100 symbols. Tries bulk endpoint first;
+    falls back to per-ticker quotes when bulk isn't on the plan.
 
     Returns the raw FMP rows or [] on any failure. Logs but never raises.
 
-    URL FORMAT NOTE: FMP's /stable/quote requires **path-style** comma-
-    separated symbols: `/stable/quote/AAPL,MSFT,GOOGL` — NOT the
-    query-param form `?symbol=AAPL,MSFT,GOOGL`. The query-param form is
-    silently accepted (returns 200 OK) but produces an empty result array,
-    which was the root cause of `quotes_returned: 0` for every cron tick in
-    production (every Tier 1 dispatcher invocation produced zero quotes
-    despite the API call succeeding). The fix matches the working pattern
-    in `app/backend/services/watchlist_service.py` (lines 128, 230).
+    URL FORMAT HISTORY (2026-05):
+      v1 (broken): `/stable/quote?symbol=AAPL,MSFT,GOOGL` (query-param)
+                   → 200 OK but empty array. FMP silently dropped the comma
+                     list. Discovered when every Tier 1 cron tick reported
+                     `quotes_returned: 0`.
+      v2 (wrong endpoint, commit 59b1d09):
+                   `/stable/quote/AAPL,MSFT,GOOGL` (path-style)
+                   → 404 not-found. `/stable/quote/{TICKER}` is a SINGLE-
+                     ticker path; multi-ticker comma in the PATH isn't
+                     supported on this account's plan. Discovered 2026-05-20
+                     from dispatcher logs.
+      v3 (current): `/stable/batch-quote?symbols=AAPL,MSFT,GOOGL`
+                   → correct bulk endpoint per FMP /stable/batch-quote docs.
+                     Note the param name is `symbols` (plural), NOT `symbol`.
+
+    Fallback: if `/stable/batch-quote` returns None (404 / 402 / plan limit),
+    we fan out into per-ticker `/stable/quote?symbol=TICKER` calls. That
+    endpoint is on every FMP plan and is the same one watchlist_service.py
+    uses for single-ticker fetches. The fanout costs N API calls instead
+    of 1, but Tier 1 universes are small (~10 tickers) so the cost is
+    negligible. The fallback ALSO trips when bulk returns an empty list
+    (FMP sometimes degrades to silently empty rather than 4xx for plan
+    issues — defense in depth catches both signatures).
     """
+    if not symbols:
+        return []
+
     try:
         from src.tools.api import _fmp_get, _STABLE   # type: ignore
+    except Exception as exc:
+        logger.warning("batch_quote: cannot import _fmp_get/_STABLE: %s", exc)
+        return []
 
-        symbol_param = ",".join(symbols)
+    symbols_csv = ",".join(symbols)
+
+    # ── v3: primary — bulk endpoint with `symbols` query param ───────────
+    try:
         data = _fmp_get(
-            f"{_STABLE}/quote/{symbol_param}",   # path-style, not ?symbol=...
-            params={},                            # empty — symbol is in the URL path now
+            f"{_STABLE}/batch-quote",
+            params={"symbols": symbols_csv},
             api_key=None,
             uncap=True,
         )
-        if isinstance(data, list):
+        if isinstance(data, list) and data:
             return data
-        return []
+        # Empty list = plan likely doesn't include batch-quote OR FMP
+        # degraded to silent-empty. Fall through to per-ticker fallback.
+        logger.info(
+            "batch_quote: /stable/batch-quote returned empty for %d symbols — "
+            "falling back to per-ticker /stable/quote", len(symbols),
+        )
     except Exception as exc:
-        logger.warning("batch_quote: FMP /stable/quote failed for %d symbols: %s",
-                       len(symbols), exc)
-        return []
+        logger.warning("batch_quote: /stable/batch-quote raised: %s — falling back", exc)
+
+    # ── Fallback: per-ticker /stable/quote?symbol=TICKER ─────────────────
+    rows: list[dict] = []
+    for sym in symbols:
+        try:
+            data = _fmp_get(
+                f"{_STABLE}/quote",
+                params={"symbol": sym},
+                api_key=None,
+                uncap=True,
+            )
+            if isinstance(data, list) and data:
+                rows.extend(data)
+        except Exception as exc:
+            logger.warning("batch_quote: per-ticker /stable/quote failed for %s: %s", sym, exc)
+            continue
+    return rows

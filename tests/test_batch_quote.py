@@ -65,12 +65,26 @@ def test_fetch_returns_empty_dict_on_fmp_none():
 
 
 def test_fetch_batches_in_chunks_of_100():
-    """600 input symbols → 6 FMP calls."""
+    """600 input symbols → 6 bulk FMP calls (one per 100-ticker chunk).
+
+    Uses a non-empty mock response so the fallback path doesn't fire — we're
+    checking BATCH-LEVEL chunking here, not the fallback. See
+    test_fetch_falls_back_to_per_ticker_when_batch_returns_empty for the
+    fallback path.
+    """
     syms = [f"T{i:03d}" for i in range(600)]
-    fake = []  # empty responses are fine, we're checking call_count
+    # Mock returns at least one row so the bulk path is treated as successful
+    # and no fallback fires.
+    fake = [{"symbol": "T000", "price": 1.0, "changesPercentage": 0.0}]
     with patch("src.tools.api._fmp_get", return_value=fake) as mock_get:
         fetch_batch_quotes(syms)
+    # Exactly 6 bulk calls — one per 100-ticker chunk. The mock returning
+    # a non-empty list keeps us on the happy-path bulk endpoint.
     assert mock_get.call_count == 6
+    # And every call hit the bulk endpoint (not the per-ticker fallback)
+    for call in mock_get.call_args_list:
+        url = call.args[0]
+        assert "/batch-quote" in url
 
 
 def test_fetch_dedupes_input():
@@ -83,36 +97,76 @@ def test_fetch_dedupes_input():
     assert len(out) == 1
 
 
-def test_fetch_uses_path_style_url_format():
-    """Regression guard: FMP /stable/quote requires PATH-style comma-separated
-    symbols (`/stable/quote/AAPL,MSFT`), NOT query-param style
-    (`/stable/quote?symbol=AAPL,MSFT`). The query-param form silently returns
-    `200 OK, []` instead of the expected price array. This test fails fast if
-    anyone reverts the URL format. See watchlist_service.py:128 + 230 for the
-    canonical pattern in this codebase.
+def test_fetch_uses_batch_quote_endpoint_with_symbols_param():
+    """Regression guard: FMP's multi-ticker bulk endpoint is
+    `/stable/batch-quote?symbols=AAPL,MSFT` (NOTE: param is `symbols`
+    PLURAL, not `symbol`). DO NOT change this to:
 
-    Root cause history: this bug caused every Auto Due-D cron tick in production
-    to scan zero tickers from May 10 to May 12 — every dispatcher invocation
-    fetched 0 quotes despite the API returning HTTP 200. Fixed via path-style
-    URL after the issue was diagnosed from Railway dispatcher logs.
+      * `/stable/quote?symbol=AAPL,MSFT` — silently returns 200 OK, [].
+        (Was the bug before commit 59b1d09.)
+      * `/stable/quote/AAPL,MSFT,GOOGL` (path-style) — returns 404 because
+        path-style /stable/quote/{TICKER} only accepts a single ticker on
+        most FMP plans. (Was the regression in commit 59b1d09.)
+      * Singular `?symbol=` on /stable/batch-quote — FMP returns 4xx.
+
+    Failure history:
+      2026-05-10..12: query-param ?symbol form returned empty arrays
+                      silently → zero alerts despite real market moves
+      2026-05-20:     path-style /stable/quote/MULTI returned 404 → still
+                      zero alerts; user pinged with dispatcher logs
+      2026-05-20+:    switched to /stable/batch-quote?symbols=...
+                      (the correct dedicated bulk endpoint per FMP docs:
+                       https://site.financialmodelingprep.com/developer/docs/stable/batch-quote)
     """
     fake = [{"symbol": "AAPL", "price": 150.0, "changesPercentage": 2.5}]
     with patch("src.tools.api._fmp_get", return_value=fake) as mock_get:
         fetch_batch_quotes(["AAPL", "MSFT", "GOOGL"])
 
-    # The URL passed to _fmp_get must contain the symbols in the path,
-    # not in the query params. fetch_batch_quotes() sorts+dedupes symbols
-    # first, so input ["AAPL","MSFT","GOOGL"] becomes "AAPL,GOOGL,MSFT".
     url_arg = mock_get.call_args.args[0]
     params_arg = mock_get.call_args.kwargs.get("params", {})
 
-    assert "/quote/AAPL,GOOGL,MSFT" in url_arg, (
-        f"Expected path-style URL with sorted symbols embedded, got: {url_arg}"
+    # 1. URL targets the BULK endpoint (not /stable/quote)
+    assert "/batch-quote" in url_arg and "/quote/" not in url_arg, (
+        f"Expected /stable/batch-quote endpoint, got: {url_arg}"
     )
+    # 2. Param name is PLURAL `symbols`, comma-separated, sorted
+    assert "symbols" in params_arg, f"params must use 'symbols' (plural); got params={params_arg}"
+    assert params_arg["symbols"] == "AAPL,GOOGL,MSFT", (
+        f"symbols value should be sorted+joined ticker list; got {params_arg['symbols']!r}"
+    )
+    # 3. Defensive: must NOT use the singular 'symbol' form (that was the v1 bug)
     assert "symbol" not in params_arg, (
-        f"params must NOT contain 'symbol' key (path-style URL puts symbols "
-        f"in the path); got params={params_arg}"
+        f"params must NOT contain singular 'symbol' key (v1 bug pattern); got {params_arg}"
     )
+
+
+def test_fetch_falls_back_to_per_ticker_when_batch_returns_empty():
+    """If /stable/batch-quote returns empty (plan doesn't include bulk or
+    FMP silently degrades), we fall back to per-ticker /stable/quote calls.
+
+    This is what protects against the v3 fix failing silently the same way
+    v1 did. Bulk + fallback = belt + suspenders.
+    """
+    call_log = []
+
+    def _fake_fmp_get(url, params=None, api_key=None, uncap=False):
+        call_log.append((url, dict(params or {})))
+        if "/batch-quote" in url:
+            return []   # simulate plan-restricted empty response
+        if "/quote" in url:
+            sym = (params or {}).get("symbol")
+            return [{"symbol": sym, "price": 100.0, "changesPercentage": 1.0}]
+        return None
+
+    with patch("src.tools.api._fmp_get", side_effect=_fake_fmp_get):
+        out = fetch_batch_quotes(["AAPL", "MSFT"])
+
+    # Bulk attempt + 2 per-ticker fallback attempts
+    assert any("/batch-quote" in u for u, _ in call_log)
+    per_ticker_calls = [(u, p) for u, p in call_log if "/quote" in u and "/batch-quote" not in u]
+    assert len(per_ticker_calls) == 2
+    # Both tickers should have data despite bulk-empty
+    assert set(out.keys()) == {"AAPL", "MSFT"}
 
 
 # ── detect_breaches ─────────────────────────────────────────────────────────
