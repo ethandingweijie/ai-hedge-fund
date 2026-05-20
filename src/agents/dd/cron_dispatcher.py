@@ -136,6 +136,7 @@ def main() -> int:
     _maybe_run_daily_cleanup(base_url=base_url, secret=secret)
     _maybe_run_daily_digest(base_url=base_url, secret=secret)
     _maybe_run_daily_grading(base_url=base_url, secret=secret)
+    _maybe_run_daily_card_patterns(base_url=base_url, secret=secret)
 
     # Step 1: market-hours gate
     decision = scheduler.should_run()
@@ -514,6 +515,60 @@ def _maybe_run_daily_cleanup(*, base_url: str, secret: str) -> None:
             logger.warning("dispatcher: cleanup HTTP %d: %s", r.status_code, r.text[:200])
     except requests.RequestException as exc:
         logger.warning("dispatcher: cleanup POST failed: %s", exc)
+
+
+def _maybe_run_daily_card_patterns(*, base_url: str, secret: str) -> None:
+    """Phase 8 (Card QA): hit /admin/dd-card-patterns at most once per UTC
+    day, AFTER market close so the day's audit data has fully landed.
+
+    Aggregates the last 30 days of card_qa_audit data and posts a Slack
+    digest of recurring failure patterns (≥threshold across runs). The
+    intent is to surface engineering work — "fix the extractor that's
+    been missing peak_sales 12 times this month" — vs. the per-run
+    auto-remediation that Layer A handles in real-time.
+
+    Failures are logged but never raised — pattern alerts are "nice to
+    have," not critical to dispatch.
+
+    Marker file in /tmp tracks the last-run UTC date so we don't double-
+    fire. Same pattern as _maybe_run_daily_digest / _maybe_run_daily_grading.
+    """
+    import tempfile
+    from pathlib import Path
+
+    now = datetime.now(timezone.utc)
+    if now.hour < 20:
+        return   # market still open in US; wait until post-close
+
+    marker = Path(tempfile.gettempdir()) / "dd_card_patterns_last_utc_date.txt"
+    today = now.date().isoformat()
+    try:
+        if marker.exists() and marker.read_text().strip() == today:
+            return
+    except OSError:
+        pass
+
+    url = f"{base_url}/admin/dd-card-patterns"
+    try:
+        # Pattern analysis is a single SQL scan + aggregate — fast,
+        # but Slack POST can be slow. Give it some headroom.
+        r = requests.post(url, params={"secret": secret}, timeout=60)
+        if r.status_code == 200:
+            try:
+                logger.info("dispatcher: card patterns → %s", r.json())
+            except Exception:
+                logger.info("dispatcher: card patterns HTTP 200 (non-JSON body)")
+            try:
+                marker.write_text(today)
+            except OSError as exc:
+                logger.warning("dispatcher: card-patterns marker write failed: %s", exc)
+        else:
+            logger.warning(
+                "dispatcher: card-patterns HTTP %d: %s",
+                r.status_code, r.text[:200],
+            )
+    except requests.RequestException as exc:
+        logger.warning("dispatcher: card-patterns POST failed: %s", exc)
 
 
 def _post_cluster_trigger(

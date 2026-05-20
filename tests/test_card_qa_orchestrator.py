@@ -155,7 +155,13 @@ def test_mrna_extractor_dropped_path_writes_remediation():
 
 def test_mrna_genuinely_absent_path_flags_but_no_remediation():
     """When judge says GENUINELY_ABSENT, no reextract fires; the field is
-    flagged for transparency but accepted as expected-empty."""
+    flagged for transparency but accepted as expected-empty.
+
+    Post-Phase-7 (universal cards added): MRNA's empty dcf_range trips
+    BOTH `biopharma_pipeline_rnpv` AND `dcf_range_summary` cards (same
+    underlying field path). Each returns one GENUINELY_ABSENT flag.
+    Pipeline_assets is populated and scenario/decisions are populated,
+    so they don't fire."""
     fixture = _load_fixture("MRNA__0182e126.json")
     judge_resp = json.dumps({
         "verdict":         "GENUINELY_ABSENT",
@@ -170,17 +176,24 @@ def test_mrna_genuinely_absent_path_flags_but_no_remediation():
     card = cards["biopharma_pipeline_rnpv"]
     assert card["judge_verdict"] == "GENUINELY_ABSENT"
     assert card["remediation_attempted"] is False
-    # Exactly one human-review flag (the genuinely-absent one)
-    assert len(audit["human_review_flags"]) == 1
-    assert audit["human_review_flags"][0]["reason"] == "genuinely_absent_per_judge"
-    # No remediation
+    # Both biopharma_pipeline_rnpv AND dcf_range_summary flag the same
+    # empty dcf_range path. They produce one flag each → 2 flags total.
+    assert all(f["reason"] == "genuinely_absent_per_judge"
+               for f in audit["human_review_flags"])
+    assert {f["card"] for f in audit["human_review_flags"]} == {
+        "biopharma_pipeline_rnpv", "dcf_range_summary",
+    }
+    # No remediation on the GENUINELY_ABSENT path
     assert audit["auto_remediations"] == []
 
 
 def test_mrna_wrong_profile_path_flags_for_review():
     """Judge says WRONG_PROFILE → flag, no remediation. (Note: this is a
     second line of defense; Meta-Check should catch most wrong-profile
-    cases upstream. This test verifies the per-card path still works.)"""
+    cases upstream. This test verifies the per-card path still works.)
+
+    Two universal cards (biopharma_pipeline_rnpv + dcf_range_summary)
+    flag for MRNA's empty dcf_range — both get WRONG_PROFILE flags."""
     fixture = _load_fixture("MRNA__0182e126.json")
     judge_resp = json.dumps({
         "verdict":         "WRONG_PROFILE",
@@ -192,8 +205,8 @@ def test_mrna_wrong_profile_path_flags_for_review():
 
     audit = run_card_qa_agent(fixture, "MRNA", sdk_client=client)
     flags = audit["human_review_flags"]
-    assert len(flags) == 1
-    assert flags[0]["reason"] == "wrong_profile_per_judge"
+    assert len(flags) >= 1
+    assert all(f["reason"] == "wrong_profile_per_judge" for f in flags)
     assert audit["auto_remediations"] == []
 
 
@@ -231,8 +244,10 @@ def test_mrna_reextract_not_found_flags_judge_was_wrong():
 
 
 def test_healthy_aapl_no_llm_calls_zero_cost():
-    """Phase 5 Gate: AAPL is Tech, biopharma_pipeline_rnpv doesn't apply,
-    no cards need auditing, no LLM call. Cost stays at $0.00."""
+    """Phase 5 Gate: AAPL is Tech (and the fixture has dcf_range +
+    scenario_analysis + decisions all populated). Universal cards APPLY
+    but every mandatory path resolves to a non-empty value → no judge
+    call fires. Cost stays at $0.00."""
     fixture = _load_fixture("AAPL__8a81be97.json")
     spy = {"calls": 0}
 
@@ -244,7 +259,16 @@ def test_healthy_aapl_no_llm_calls_zero_cost():
 
     audit = run_card_qa_agent(fixture, "AAPL", sdk_client=client)
     assert audit["meta_check"]["passed"] is True
-    assert audit["cards_inspected"] == []        # no biopharma cards apply to AAPL
+    # Universal cards apply, but ALL their mandatory paths are populated
+    # (AAPL fixture has dcf_range, scenario_analysis, decisions all set).
+    inspected = {c["card"] for c in audit["cards_inspected"]}
+    assert inspected == {"dcf_range_summary", "scenario_analysis_card", "decisions_panel"}
+    # Every card should have no missing fields
+    for c in audit["cards_inspected"]:
+        assert c["missing_mandatory"] == [], (
+            f"Unexpected missing field on AAPL card {c['card']}: {c['missing_mandatory']}"
+        )
+    # No judge calls fire (clean cards short-circuit before LLM)
     assert audit["qa_cost_estimate_usd"] == 0.0
     assert spy["calls"] == 0
 
@@ -301,19 +325,31 @@ def test_audit_dict_carries_full_persistence_schema():
 def test_orchestrator_does_not_crash_on_empty_state():
     """Defensive: even with an empty / weird state shape, return a valid
     audit dict (Phase 6's try/except is defense-in-depth but the orchestrator
-    itself shouldn't rely on it)."""
+    itself shouldn't rely on it).
+
+    Post-Phase-7: empty state still triggers the 3 universal cards
+    (dcf_range_summary, scenario_analysis_card, decisions_panel). All
+    paths resolve to None → judge fires; without an sdk_client and no
+    DEEP_RESEARCH_API_KEY, the wrapper returns "" → judge defaults to
+    GENUINELY_ABSENT. So we expect 3 cards in cards_inspected, all
+    flagged."""
     audit = run_card_qa_agent({}, "XYZ")
     assert audit["qa_version"] == "v1"
-    assert audit["cards_inspected"] == []
+    # All 3 universal cards applied
+    inspected = {c["card"] for c in audit["cards_inspected"]}
+    assert inspected == {"dcf_range_summary", "scenario_analysis_card", "decisions_panel"}
 
 
 def test_orchestrator_does_not_crash_on_unknown_ticker():
-    """A ticker we've never seen → Meta-Check has nothing to check, no
-    cards apply, return clean audit."""
+    """A ticker we've never seen → Meta-Check passes (no override conflict),
+    universal cards apply but everything's None → all flagged."""
     audit = run_card_qa_agent({"data": {}}, "FAKETICKER_999")
     assert audit["meta_check"]["passed"] is True
-    assert audit["cards_inspected"] == []
-    assert audit["human_review_flags"] == []
+    # Universal cards fire (3 of them); all missing → flagged GENUINELY_ABSENT
+    # by the default-on-empty-response judge path
+    inspected = {c["card"] for c in audit["cards_inspected"]}
+    assert inspected == {"dcf_range_summary", "scenario_analysis_card", "decisions_panel"}
+    assert all(c["missing_mandatory"] for c in audit["cards_inspected"])
 
 
 # ── Sanity: cost stays at zero when no remediation ──────────────────────────
@@ -321,13 +357,19 @@ def test_orchestrator_does_not_crash_on_unknown_ticker():
 
 def test_passed_card_no_judge_call_no_cost():
     """A card whose mandatory paths are POPULATED (no missing fields)
-    should not invoke the judge — saves budget."""
+    should not invoke the judge — saves budget.
+
+    Post-Phase-7: populate ALL universal-card paths too so no card
+    spuriously fires the judge."""
     state = {
         "data": {
-            "sectors":       {"MRNA": "Biopharma"},
-            "profile_names": {"MRNA": "Pre-approval Biotech"},
-            "dcf_range":     {"MRNA": {"base": {"intrinsic_value": 42.0}}},
-            "deep_research": "...",
+            "sectors":          {"MRNA": "Biopharma"},
+            "profile_names":    {"MRNA": "Pre-approval Biotech"},
+            "dcf_range":        {"MRNA": {"base": {"intrinsic_value": 42.0}}},
+            "pipeline_assets":  {"MRNA": [{"name": "X", "peak_sales_usd": 1.5}]},
+            "scenario_analysis":{"MRNA": {"bear": 30, "base": 50, "bull": 70}},
+            "decisions":        {"MRNA": {"action": "BUY"}},
+            "deep_research":    "...",
         }
     }
     spy = {"calls": 0}
@@ -340,7 +382,13 @@ def test_passed_card_no_judge_call_no_cost():
 
     audit = run_card_qa_agent(state, "MRNA", sdk_client=client)
     cards = {c["card"]: c for c in audit["cards_inspected"]}
-    assert cards["biopharma_pipeline_rnpv"]["missing_mandatory"] == []
-    assert cards["biopharma_pipeline_rnpv"]["judge_verdict"] is None   # not called
+    # All cards that apply should have clean mandatory checks
+    for name, card in cards.items():
+        assert card["missing_mandatory"] == [], (
+            f"Card {name} unexpectedly missing fields: {card['missing_mandatory']}"
+        )
+        assert card["judge_verdict"] is None, (
+            f"Card {name} called the judge despite clean state"
+        )
     assert spy["calls"] == 0
     assert audit["qa_cost_estimate_usd"] == 0.0

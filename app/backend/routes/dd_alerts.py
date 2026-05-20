@@ -1099,6 +1099,76 @@ def admin_dd_purge_legacy(secret: str = ""):
     return alert_dedup.purge_legacy_dd_rows_from_web_runs()
 
 
+# ── Layer B: Card QA pattern aggregation (Phase 8) ─────────────────────────
+
+
+@router.post("/admin/dd-card-patterns")
+def admin_dd_card_patterns(
+    secret: str = "",
+    window_days: int = 30,
+    threshold: int = 10,
+    top_n: int = 10,
+    dry_run: bool = False,
+):
+    """Run Layer B aggregation over the last N days of card_qa_audit data
+    and post a Slack digest of recurring failure patterns.
+
+    Called by the dd-dispatcher cron once per UTC day post-close
+    (_maybe_run_daily_card_patterns) and is also invokable on-demand for
+    debugging.
+
+    Args (all via query params):
+      secret:      ADMIN_SECRET — gates this endpoint
+      window_days: aggregation window (default 30)
+      threshold:   minimum failure count to surface (default 10)
+      top_n:       max patterns in Slack digest (default 10)
+      dry_run:     skip the Slack POST; return the digest payload only
+
+    Returns the analysis result + Slack post outcome.
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    from src.agents.audit.pattern_analysis import analyze_card_failure_patterns
+    from src.agents.audit.pattern_alerts import post_pattern_digest
+
+    result = analyze_card_failure_patterns(
+        window_days=window_days,
+        threshold=threshold,
+        top_n=top_n,
+    )
+
+    slack_status: dict[str, Any] = {"posted": False}
+    significant = result.get("significant_patterns", [])
+    if significant:
+        try:
+            resp = post_pattern_digest(significant, result, dry_run=dry_run)
+            if resp is None:
+                slack_status = {"posted": False, "reason": "no_patterns_to_send"}
+            else:
+                slack_status = {
+                    "posted":      True,
+                    "status_code": getattr(resp, "status_code", "?"),
+                    "dry_run":     dry_run,
+                }
+        except RuntimeError as exc:
+            # Most likely SLACK_WEBHOOK_URL missing — log + continue without erroring
+            logger.warning("admin_dd_card_patterns: Slack post failed: %s", exc)
+            slack_status = {"posted": False, "reason": str(exc)[:200]}
+    else:
+        slack_status = {"posted": False, "reason": "no_patterns_above_threshold"}
+
+    return {
+        "ok": True,
+        "window_days":       window_days,
+        "threshold":         threshold,
+        "top_n":             top_n,
+        "dry_run":           dry_run,
+        "analysis":          result,
+        "slack":             slack_status,
+    }
+
+
 # ── Universe endpoint (consumed by the dd-dispatcher cron service) ─────────
 
 

@@ -47,28 +47,112 @@ def _data(state: dict) -> dict:
     return d if isinstance(d, dict) else {}
 
 
-def _is_biopharma_pre_approval(state: dict, ticker: str) -> bool:
-    """True when ticker is classified as a pre-approval / clinical-stage
-    biotech — the cohort for which Pipeline rNPV is the dominant valuation
-    method. Large-cap pharma (e.g. NVO, PFE) uses different cards.
+def _sector(state: dict, ticker: str) -> str:
+    """Persisted sector for ticker, '' if absent. Older pipeline runs sometimes
+    don't populate state.sectors[ticker] even when the analysis succeeded —
+    profile is the more reliable signal in those cases."""
+    return ((_data(state).get("sectors") or {}).get(ticker) or "")
 
-    Predicate uses the CURRENT persisted classification, even if it might
-    be wrong. Catching wrong classifications is Meta-Check's job (Phase 3),
-    not this predicate's. Keeping the two responsibilities separate prevents
-    the QA agent from second-guessing every applies_when decision via LLM.
-    """
-    data = _data(state)
-    sectors = data.get("sectors") or {}
-    profile_names = data.get("profile_names") or {}
-    if sectors.get(ticker) != "Biopharma":
-        return False
-    profile = profile_names.get(ticker) or ""
-    return "Pre-approval Biotech" in profile or "Clinical-Stage" in profile
+
+def _profile(state: dict, ticker: str) -> str:
+    """Persisted profile_name for ticker, '' if absent."""
+    return ((_data(state).get("profile_names") or {}).get(ticker) or "")
+
+
+def _matches_any(haystack: str, needles: tuple[str, ...]) -> bool:
+    """Case-insensitive substring match of any needle in haystack."""
+    h = (haystack or "").lower()
+    return any(n.lower() in h for n in needles)
+
+
+# ── Profile predicates ──────────────────────────────────────────────────────
+#
+# Each predicate is PERMISSIVE: matches when EITHER sector OR profile_name
+# signals the card's domain. This handles older fixture runs where
+# state.sectors[ticker] is absent but profile_names[ticker] is populated.
+# Meta-Check (Phase 3) separately catches sector/profile inconsistencies.
+
+
+def _is_biopharma_pre_approval(state: dict, ticker: str) -> bool:
+    """Pre-approval / clinical-stage biotech — Pipeline rNPV cohort.
+    Large-cap pharma (e.g. NVO, PFE) uses different cards."""
+    sector  = _sector(state, ticker)
+    profile = _profile(state, ticker)
+    is_biopharma_sector = sector == "Biopharma"
+    is_preapproval_profile = _matches_any(profile, ("Pre-approval Biotech", "Clinical-Stage"))
+    return is_biopharma_sector and is_preapproval_profile
+
+
+def _is_biopharma_any(state: dict, ticker: str) -> bool:
+    """Any biopharma profile (pre-approval + large-cap). Used for the
+    pipeline-table card which can show data for both subtypes."""
+    sector  = _sector(state, ticker)
+    profile = _profile(state, ticker)
+    if sector == "Biopharma":
+        return True
+    return _matches_any(profile, (
+        "Pre-approval Biotech", "Clinical-Stage Biotech",
+        "Large Cap Pharma", "Generics",
+    ))
+
+
+def _is_large_cap_pharma(state: dict, ticker: str) -> bool:
+    profile = _profile(state, ticker)
+    sector  = _sector(state, ticker)
+    return sector == "Biopharma" and "Large Cap Pharma" in profile
+
+
+def _is_managed_care(state: dict, ticker: str) -> bool:
+    """HealthcareServices + Managed Care profile (UNH, MOH, ELV, HUM).
+    NOT animal pharma (ZTS misclassification — Meta-Check catches that)."""
+    sector  = _sector(state, ticker)
+    profile = _profile(state, ticker)
+    sector_match = sector == "HealthcareServices"
+    profile_match = "Managed Care" in profile
+    return sector_match or profile_match
+
+
+def _is_tech_saas(state: dict, ticker: str) -> bool:
+    """Mature SaaS / Growth SaaS / Cybersecurity / Mission-Critical SaaS.
+    NOT hardware-heavy Tech (AAPL hyperscaler) — those use a different card."""
+    profile = _profile(state, ticker)
+    sector  = _sector(state, ticker)
+    is_tech = sector in ("Tech", "Technology")
+    saas_profile = _matches_any(profile, ("SaaS", "Software"))
+    return is_tech and saas_profile
+
+
+def _is_bank(state: dict, ticker: str) -> bool:
+    """Money Center Bank / Regional Bank / Investment Bank profile.
+    Profile is the more reliable signal here because state.sectors is
+    often missing on older fixture runs."""
+    profile = _profile(state, ticker)
+    sector  = _sector(state, ticker)
+    sector_match = sector in ("Financials", "Financial Services", "Banks")
+    profile_match = _matches_any(profile, ("Money Center Bank", "Regional Bank", "Investment Bank"))
+    return sector_match or profile_match
+
+
+def _is_reit(state: dict, ticker: str) -> bool:
+    """REIT (any sub-type: Data Center / Industrial / Residential / Office)."""
+    profile = _profile(state, ticker)
+    sector  = _sector(state, ticker)
+    sector_match = sector in ("RealEstate", "Real Estate", "REITs")
+    profile_match = "REIT" in profile
+    return sector_match or profile_match
+
+
+def _applies_always(state: dict, ticker: str) -> bool:
+    """Universal cards that fire on every ticker analysis (DCF, scenario,
+    decisions, industry brief). Used to catch upstream agent crashes that
+    blank these out across all profiles."""
+    return True
 
 
 # ── Card catalog ────────────────────────────────────────────────────────────
 
 CARD_SCHEMAS: dict[str, CardSchema] = {
+    # ── Biopharma family ────────────────────────────────────────────────
     "biopharma_pipeline_rnpv": CardSchema(
         schema_version=1,
         applies_when=_is_biopharma_pre_approval,
@@ -81,16 +165,164 @@ CARD_SCHEMAS: dict[str, CardSchema] = {
             "data.dcf_range.{ticker}.bull.intrinsic_value",
         ),
         qa_prompt_hint=(
-            "This is the Pipeline rNPV / Share card for a pre-approval "
-            "Biopharma ticker. It needs a populated dcf_range[ticker] "
-            "with bear/base/bull intrinsic_value entries computed by the "
-            "DCF agent. If dcf_range[ticker] is empty {{}}, the DCF agent "
-            "likely crashed — check state.data.dcf_engine_error first. "
-            "If both dcf_range AND dcf_engine_error are absent, the run "
-            "pre-dates the diagnostic landing and the cause cannot be "
-            "directly verified from this state alone."
+            "Pipeline rNPV / Share card for a pre-approval Biopharma. "
+            "Needs dcf_range[ticker] with bear/base/bull intrinsic_value. "
+            "If dcf_range[ticker]={{}}, the DCF agent likely crashed — "
+            "check state.data.dcf_engine_error first."
         ),
     ),
-    # Phase 7 will add the remaining 9-14 cards (biopharma_pipeline_table,
-    # managed_care_sector_card, tech_saas_card, bank_card, reit_card, ...).
+
+    "biopharma_pipeline_table": CardSchema(
+        schema_version=1,
+        applies_when=_is_biopharma_any,
+        # The MRNA bug: 9 pipeline assets extracted but each one missing
+        # peak_sales_usd. The card needs the LIST to be non-empty AND every
+        # row's peak_sales_usd populated. We can only check the LIST here;
+        # per-row peak_sales is judged by the LLM (path indexing into a
+        # list is Phase 8+ territory).
+        mandatory_state_paths=(
+            "data.pipeline_assets.{ticker}",
+        ),
+        opportunistic_state_paths=(),
+        qa_prompt_hint=(
+            "Pipeline Assets table for Biopharma. Each pipeline asset row "
+            "should include name, indication, phase, AND peak_sales_usd. "
+            "MRNA bug pattern: rows present but peak_sales_usd missing from "
+            "every row → renders '—' for every Peak column. If the deep "
+            "research mentions peak sales projections (e.g. '$1.5B by 2028') "
+            "for assets present in the list, classify as EXTRACTOR_DROPPED."
+        ),
+    ),
+
+    "large_cap_pharma_card": CardSchema(
+        schema_version=1,
+        applies_when=_is_large_cap_pharma,
+        mandatory_state_paths=(
+            "data.framework_metrics_all.{ticker}",
+        ),
+        opportunistic_state_paths=(
+            "data.dcf_range.{ticker}",
+        ),
+        qa_prompt_hint=(
+            "Large-cap pharma KPI card (e.g. NVO, PFE, MRK). Needs the "
+            "framework_metrics_all[ticker] dict populated with margin / "
+            "R&D-intensity / mature-pharma KPIs. ZTS (animal pharma) "
+            "routes here via TICKER_SECTOR_LOOKUP override — but that's "
+            "a Meta-Check concern, not this card's."
+        ),
+    ),
+
+    # ── Sector-specific cards ──────────────────────────────────────────
+    "managed_care_sector_card": CardSchema(
+        schema_version=1,
+        applies_when=_is_managed_care,
+        mandatory_state_paths=(
+            "data.framework_metrics_all.{ticker}",
+        ),
+        opportunistic_state_paths=(),
+        qa_prompt_hint=(
+            "Managed Care card — Medicare Advantage Mix, Medical Loss Ratio "
+            "(MLR), member growth, cohort margins. Applies to legitimate "
+            "Managed Care insurers (UNH, MOH, ELV, HUM). ZTS misclassification "
+            "would route here — Meta-Check should catch that upstream, but "
+            "if it doesn't, the judge should return WRONG_PROFILE because "
+            "ZTS deep_research won't contain MLR or member data."
+        ),
+    ),
+
+    "tech_saas_card": CardSchema(
+        schema_version=1,
+        applies_when=_is_tech_saas,
+        mandatory_state_paths=(
+            "data.saas_metrics.{ticker}",
+        ),
+        opportunistic_state_paths=(
+            "data.framework_metrics_all.{ticker}",
+        ),
+        qa_prompt_hint=(
+            "Tech SaaS card — NRR, Rule of 40, LTV/CAC, Magic Number, "
+            "CAC Payback. Applies to Mature SaaS / Growth SaaS / "
+            "Cybersecurity profiles. NOT applicable to hyperscaler "
+            "conglomerates (MSFT/AAPL) — they get a different card."
+        ),
+    ),
+
+    "bank_card": CardSchema(
+        schema_version=1,
+        applies_when=_is_bank,
+        mandatory_state_paths=(
+            "data.framework_metrics_all.{ticker}",
+        ),
+        opportunistic_state_paths=(),
+        qa_prompt_hint=(
+            "Bank card — CET1 ratio, Tangible Book Value (TBV) per share, "
+            "Net Interest Margin (NIM), Efficiency Ratio. Applies to Money "
+            "Center / Regional / Investment Banks (JPM, BAC, GS). NOT "
+            "insurance, NOT asset managers (different KPI families)."
+        ),
+    ),
+
+    "reit_card": CardSchema(
+        schema_version=1,
+        applies_when=_is_reit,
+        mandatory_state_paths=(
+            "data.framework_metrics_all.{ticker}",
+        ),
+        opportunistic_state_paths=(),
+        qa_prompt_hint=(
+            "REIT card — NAV per share, P/FFO, P/AFFO, occupancy rate, "
+            "same-store NOI growth. Applies to any REIT sub-type (Data "
+            "Center / Industrial / Residential / Office)."
+        ),
+    ),
+
+    # ── Universal cards (apply to every ticker) ────────────────────────
+    "dcf_range_summary": CardSchema(
+        schema_version=1,
+        applies_when=_applies_always,
+        mandatory_state_paths=(
+            "data.dcf_range.{ticker}",
+        ),
+        opportunistic_state_paths=(),
+        qa_prompt_hint=(
+            "DCF Range Summary — needs dcf_range[ticker] with bear/base/bull "
+            "intrinsic_value. This card universally applies (all profiles). "
+            "Empty dcf_range[ticker] is the most common breakage pattern — "
+            "DCF agent crashed. If state.data.dcf_engine_error is also "
+            "present, the verdict should be GENUINELY_ABSENT (system "
+            "error, not extraction issue). Most non-extraction failures "
+            "in our pipeline trip this card."
+        ),
+    ),
+
+    "scenario_analysis_card": CardSchema(
+        schema_version=1,
+        applies_when=_applies_always,
+        mandatory_state_paths=(
+            "data.scenario_analysis.{ticker}",
+        ),
+        opportunistic_state_paths=(),
+        qa_prompt_hint=(
+            "Scenario Analysis — bear/base/bull fair values. Computed by "
+            "the scenario engine downstream of DCF. Missing usually means "
+            "the upstream agent didn't run or crashed silently."
+        ),
+    ),
+
+    "decisions_panel": CardSchema(
+        schema_version=1,
+        applies_when=_applies_always,
+        mandatory_state_paths=(
+            "data.decisions.{ticker}",
+        ),
+        opportunistic_state_paths=(),
+        qa_prompt_hint=(
+            "Decisions panel — recommended_action + reasoning. The portfolio "
+            "manager agent produces this. Missing means PM agent crashed or "
+            "the ticker was filtered out before PM ran."
+        ),
+    ),
+    # Total cards: 10 (1 from Phase 1 + 9 added in Phase 7).
+    # Future expansions (industry_intelligence_brief, valuation_anchors,
+    # per-asset peak_sales tracking) go in Phase 12 or later.
 }
