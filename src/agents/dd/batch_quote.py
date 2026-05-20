@@ -75,7 +75,16 @@ def fetch_batch_quotes(tickers: Iterable[str]) -> dict[str, BatchQuote]:
         for r in rows:
             sym   = (r.get("symbol") or "").strip().upper()
             price = r.get("price")
-            pct   = r.get("changesPercentage")
+            # FMP changed the field name between endpoints:
+            #   /stable/quote?symbol=X        → "changesPercentage" (PLURAL)
+            #   /stable/batch-quote?symbols=X → "changePercentage"  (SINGULAR)
+            #   /stable/batch-quote-short?... → "change"            (raw delta, not pct)
+            # Verified live on 2026-05-20 with upgraded plan key. Accept both
+            # field names so the parser works regardless of which path
+            # _fetch_one_batch took (bulk vs per-ticker fallback).
+            pct = r.get("changePercentage")
+            if pct is None:
+                pct = r.get("changesPercentage")
             if not sym or price is None or pct is None:
                 continue
             try:

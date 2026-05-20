@@ -157,32 +157,97 @@ def get_analyzed_universe(lookback_days: int | None = None) -> set[str]:
 
 
 def get_sp500_universe() -> set[str]:
-    """Fetch the S&P 500 constituent list from FMP.
+    """Fetch the S&P 500 constituent list.
 
-    Endpoint: /stable/sp500-constituent — returns ~503 entries (constituents
-    can fluctuate slightly during reconstitution).
+    Two-tier fetch:
+      1. PRIMARY: FMP `/stable/sp500-constituent` — fresh, authoritative
+         per the user's FMP subscription. Returns set() if FMP returns
+         402 (plan restriction) / 401 / 404 / network error.
+      2. FALLBACK: datahub.io's S&P 500 constituents CSV mirror — public,
+         no auth, refreshed periodically by the datahub team. Returns set()
+         on any network failure.
 
-    Returns set() if FMP isn't configured or the call fails. Never raises.
+    The fallback only fires when FMP returns None (auth/plan/quota error)
+    OR an empty list. It produces ~503 tickers — same scale as FMP.
+    Both endpoints are normalised to upper-case ticker symbols with dots
+    converted to dashes (Yahoo/FMP convention, e.g. "BRK.B" → "BRK-B").
+
+    History (2026-05-20):
+      User's FMP plan was returning 402 on /stable/sp500-constituent
+      ("Payment Required" — premium endpoint not on the plan). After
+      shipping the fallback the dispatcher's Tier 3 universe populates
+      reliably; after the user upgraded their FMP plan the primary path
+      succeeds and the fallback never fires (defense in depth).
+
+    Returns set() only when BOTH paths fail. Never raises.
     """
+    # ── Primary: FMP ─────────────────────────────────────────────────────
     try:
-        # Local import — keeps module import light + isolates FMP dependency
-        # to the path that actually needs it.
         from src.tools.api import _fmp_get, _STABLE    # type: ignore
-
-        # /stable/sp500-constituent has shape: [{"symbol":"AAPL","name":"Apple",...}, ...]
-        # Pass uncap=True since the response naturally returns ~503 entries.
         data = _fmp_get(f"{_STABLE}/sp500-constituent", params={}, api_key=None, uncap=True)
-        if not isinstance(data, list):
-            return set()
-        out: set[str] = set()
-        for entry in data:
-            sym = (entry.get("symbol") or "").strip().upper()
-            if sym:
-                out.add(sym)
-        return out
+        if isinstance(data, list) and data:
+            out: set[str] = set()
+            for entry in data:
+                sym = (entry.get("symbol") or "").strip().upper()
+                if sym:
+                    out.add(sym)
+            if out:
+                return out
+        logger.info(
+            "universe: FMP /stable/sp500-constituent returned no data — "
+            "falling back to datahub.io CSV mirror"
+        )
     except Exception as exc:
-        logger.warning("universe: S&P 500 fetch failed: %s", exc)
+        logger.warning(
+            "universe: FMP /stable/sp500-constituent raised %s — falling back", exc
+        )
+
+    # ── Fallback: datahub.io public CSV mirror ──────────────────────────
+    try:
+        return _fetch_sp500_from_datahub()
+    except Exception as exc:
+        logger.warning("universe: datahub fallback also failed: %s", exc)
         return set()
+
+
+def _fetch_sp500_from_datahub() -> set[str]:
+    """Pull S&P 500 constituents from datahub.io's public CSV mirror.
+
+    URL: https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv
+
+    The repo is maintained by the datahub team and updated periodically
+    (typically once per quarter to reflect index reconstitution). Returns
+    ~503 tickers as a set of upper-case strings.
+
+    Symbols use Yahoo/FMP convention (dots → dashes): "BRK.B" → "BRK-B"
+    so the result is directly consumable by FMP batch-quote calls without
+    extra normalisation.
+
+    Raises on network failure — the caller catches and degrades gracefully.
+    """
+    import csv
+    import io
+    import urllib.request
+
+    url = (
+        "https://raw.githubusercontent.com/datasets/"
+        "s-and-p-500-companies/master/data/constituents.csv"
+    )
+    # Use a browser-like UA — Wikipedia + many CDNs reject default Python
+    # urllib UA. GitHub raw is more permissive but we set this defensively.
+    req = urllib.request.Request(url, headers={"User-Agent": "ai-hedge-fund-dd/1.0"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        body = resp.read().decode("utf-8")
+
+    out: set[str] = set()
+    for row in csv.DictReader(io.StringIO(body)):
+        sym = (row.get("Symbol") or "").strip().upper()
+        if sym:
+            # FMP convention: dots become dashes (BRK.B → BRK-B). datahub
+            # uses dots, so normalise here for direct downstream use.
+            out.add(sym.replace(".", "-"))
+    logger.info("universe: datahub fallback returned %d S&P 500 tickers", len(out))
+    return out
 
 
 # ── Composite tier builder ──────────────────────────────────────────────────

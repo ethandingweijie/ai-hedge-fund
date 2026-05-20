@@ -37,6 +37,29 @@ def test_fetch_normalizes_pct_to_decimal():
     assert out["PEGA"].changes_percentage == pytest.approx(-0.115)
 
 
+def test_fetch_accepts_both_changepercentage_field_names():
+    """Critical compat: FMP renamed the pct field between endpoints:
+
+      * /stable/quote?symbol=X        → 'changesPercentage' (plural)
+      * /stable/batch-quote?symbols=X → 'changePercentage'  (singular)
+
+    Verified live on 2026-05-20 with the upgraded plan. The parser MUST
+    accept both forms or the dispatcher reports `quotes_returned: 0`
+    even though the API call returned valid data.
+    """
+    # New bulk endpoint shape (singular)
+    new_shape = [{"symbol": "AAPL", "price": 150.0, "changePercentage": 2.5}]
+    with patch("src.tools.api._fmp_get", return_value=new_shape):
+        out = fetch_batch_quotes(["AAPL"])
+    assert out["AAPL"].changes_percentage == pytest.approx(0.025)
+
+    # Legacy /quote endpoint shape (plural)
+    old_shape = [{"symbol": "MSFT", "price": 380.0, "changesPercentage": -1.2}]
+    with patch("src.tools.api._fmp_get", return_value=old_shape):
+        out = fetch_batch_quotes(["MSFT"])
+    assert out["MSFT"].changes_percentage == pytest.approx(-0.012)
+
+
 def test_fetch_skips_rows_missing_required_fields():
     """Rows without price OR changesPercentage are skipped silently."""
     fake = [

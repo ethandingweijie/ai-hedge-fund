@@ -169,26 +169,85 @@ def test_analyzed_universe_uses_explicit_lookback(tmp_path, monkeypatch):
 # ── get_sp500_universe ──────────────────────────────────────────────────────
 
 
-def test_sp500_universe_empty_on_fmp_failure():
-    with patch("src.tools.api._fmp_get", return_value=None):
+def test_sp500_universe_empty_when_both_fmp_and_datahub_fail():
+    """If FMP returns None AND the datahub fallback raises, return set()
+    rather than crashing the dispatcher tick."""
+    with patch("src.tools.api._fmp_get", return_value=None), \
+         patch("src.agents.dd.universe._fetch_sp500_from_datahub",
+               side_effect=RuntimeError("network down")):
         assert get_sp500_universe() == set()
 
 
-def test_sp500_universe_empty_on_unexpected_shape():
-    """If FMP returns a dict instead of a list, fail soft."""
-    with patch("src.tools.api._fmp_get", return_value={"oops": "wrong shape"}):
-        assert get_sp500_universe() == set()
+def test_sp500_universe_empty_on_unexpected_shape_falls_back():
+    """If FMP returns a dict (wrong shape), fall back to datahub.
+    The fallback path is what populates the universe."""
+    with patch("src.tools.api._fmp_get", return_value={"oops": "wrong shape"}), \
+         patch("src.agents.dd.universe._fetch_sp500_from_datahub",
+               return_value={"AAPL", "MSFT", "NVDA"}):
+        assert get_sp500_universe() == {"AAPL", "MSFT", "NVDA"}
 
 
-def test_sp500_universe_extracts_symbols():
+def test_sp500_universe_extracts_symbols_from_fmp_primary():
+    """When FMP succeeds, the datahub fallback should NOT fire."""
     fake_response = [
         {"symbol": "AAPL", "name": "Apple"},
         {"symbol": "MSFT", "name": "Microsoft"},
         {"symbol": "",     "name": "Empty"},      # filtered
         {"name": "Missing symbol"},                # filtered
     ]
-    with patch("src.tools.api._fmp_get", return_value=fake_response):
+    with patch("src.tools.api._fmp_get", return_value=fake_response), \
+         patch("src.agents.dd.universe._fetch_sp500_from_datahub") as datahub_spy:
         assert get_sp500_universe() == {"AAPL", "MSFT"}
+        datahub_spy.assert_not_called()
+
+
+def test_sp500_universe_falls_back_to_datahub_on_fmp_none():
+    """The Tier 3 plan-restriction scenario: FMP returns None (402/404),
+    fallback to datahub must populate the universe."""
+    with patch("src.tools.api._fmp_get", return_value=None), \
+         patch("src.agents.dd.universe._fetch_sp500_from_datahub",
+               return_value={"AAPL", "GOOGL", "AMZN"}) as datahub_spy:
+        result = get_sp500_universe()
+        assert result == {"AAPL", "GOOGL", "AMZN"}
+        datahub_spy.assert_called_once()
+
+
+def test_sp500_universe_falls_back_to_datahub_on_fmp_empty_list():
+    """Defense in depth: FMP returning [] (silent degradation) also triggers
+    the datahub fallback — same pattern as batch_quote.py."""
+    with patch("src.tools.api._fmp_get", return_value=[]), \
+         patch("src.agents.dd.universe._fetch_sp500_from_datahub",
+               return_value={"AAPL"}) as datahub_spy:
+        assert get_sp500_universe() == {"AAPL"}
+        datahub_spy.assert_called_once()
+
+
+def test_datahub_fallback_normalises_dots_to_dashes():
+    """datahub returns 'BRK.B' but FMP expects 'BRK-B' (Yahoo convention).
+    The fallback must normalise so downstream consumers (batch_quote)
+    don't have to."""
+    import io
+    import urllib.request as _urllib_req
+    from src.agents.dd.universe import _fetch_sp500_from_datahub
+
+    fake_csv = b"Symbol,Security,Sector\nAAPL,Apple,Tech\nBRK.B,Berkshire,Financials\nBF.B,Brown-Forman,Consumer\n"
+
+    class _FakeResponse:
+        def __init__(self, body):
+            self.body = body
+        def read(self):
+            return self.body
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    with patch.object(_urllib_req, "urlopen", return_value=_FakeResponse(fake_csv)):
+        result = _fetch_sp500_from_datahub()
+    assert "AAPL" in result
+    assert "BRK-B" in result    # dot → dash
+    assert "BRK.B" not in result
+    assert "BF-B" in result
 
 
 # ── build_dispatcher_universe ───────────────────────────────────────────────
