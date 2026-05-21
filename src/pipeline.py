@@ -556,6 +556,11 @@ def run_advanced_pipeline(
         #    waiting for the full pipeline to return to analysis_service.
         _vgpm: dict = {}
         _analyst_signals = state["data"].get("analyst_signals", {})
+        # Sector lookup for sector-aware VGPM sub-score thresholds (added
+        # 2026-05-21 to fix the post-Apr-25 B-band grade compression).
+        # Pulls sector from state.data.sectors[ticker]; falls back to
+        # _SECTOR_DEFAULT (Technology) when absent.
+        _sectors_map = state["data"].get("sectors", {})
         for _t in tickers:
             try:
                 _dcf_t   = state["data"].get("dcf_range", {}).get(_t, {})
@@ -567,12 +572,14 @@ def run_advanced_pipeline(
                 }
                 _insider_raw = _analyst_signals.get("insider_activity_agent", {}).get(_t, {})
                 _insider_sum = _insider_raw.get("summary", "") if isinstance(_insider_raw, dict) else ""
+                _sector = _sectors_map.get(_t) if isinstance(_sectors_map, dict) else None
                 _vgpm[_t] = _compute_vgpm(
                     dcf_ticker=_dcf_t,
                     scen_ticker=_scen_t,
                     raw_financials=_raw_fin,
                     dcf_cal=_dcf_cal,
                     insider_summary=_insider_sum,
+                    sector=_sector,
                 )
             except Exception as _e:
                 print(f"  [vgpm] Warning: could not compute VGPM for {_t}: {_e}")

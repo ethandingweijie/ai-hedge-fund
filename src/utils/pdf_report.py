@@ -965,12 +965,31 @@ def _compute_vgpm(
     raw_financials: dict,
     dcf_cal: dict,
     insider_summary: str,
+    sector: str | None = None,
 ) -> dict:
     """
     Compute Valuation / Growth / Profitability / Momentum scores (0–100 each).
     Returns a dict keyed by dimension with 'score', 'grade', and 'subs' (sub-metric lines).
     All inputs are already available in state at PDF render time — no extra API calls.
+
+    `sector` (added 2026-05-21) routes 4 of the 12 sub-scores to per-sector
+    threshold tables (v3 / g1 / p1 / p2). Pre-fix these were cross-sector
+    universal — a Bank with 8% growth and a Tech with 8% growth both hit
+    the same B-band sub-score, washing out sector dynamics and collapsing
+    letter grades to the B/B+/B- band. Sector-aware bands restore signal:
+    Utility 5%-growth = A, Tech 5%-growth = B-band. See
+    src/utils/vgpm_thresholds.py for the per-sector bands.
+
+    When sector is None / unknown, falls back to "Technology" (the safe
+    default — most aggressive thresholds, no regressions on saved runs
+    that lack sector metadata).
     """
+    from src.utils.vgpm_thresholds import (
+        score_fcf_margin,
+        score_growth,
+        score_p_fcf,
+        score_roic_spread,
+    )
     base       = dcf_ticker.get("base") or {}
     current_p  = scen_ticker.get("current_price") or 0
     base_iv    = base.get("intrinsic_value") or 0
@@ -1008,34 +1027,27 @@ def _compute_vgpm(
     else:                  v2 = 12
     ev_lbl = f"EV (Expected Value) upside: {upside_pct:+.1f}%"
 
-    # Sub 3: P/FCF (forward; skip if negative FCF)
+    # Sub 3: P/FCF (forward; skip if negative FCF). SECTOR-AWARE bands.
     if shares > 0 and rev_base > 0 and fcf_margin > 0:
         fcf_ps  = rev_base * fcf_margin / shares
         p_fcf   = current_p / fcf_ps if fcf_ps > 0 else None
     else:
         p_fcf = None
+    v3 = score_p_fcf(p_fcf, sector)
     if p_fcf is None:
-        v3 = 30          # negative / unavailable FCF → below-average
         pfcf_lbl = "P/FCF: N/A (neg)"
-    elif p_fcf <  8:  v3 = 95; pfcf_lbl = f"P/FCF: {p_fcf:.1f}×"
-    elif p_fcf < 15:  v3 = 80; pfcf_lbl = f"P/FCF: {p_fcf:.1f}×"
-    elif p_fcf < 25:  v3 = 62; pfcf_lbl = f"P/FCF: {p_fcf:.1f}×"
-    elif p_fcf < 40:  v3 = 40; pfcf_lbl = f"P/FCF: {p_fcf:.1f}×"
-    else:             v3 = 18; pfcf_lbl = f"P/FCF: {p_fcf:.1f}×"
+    else:
+        pfcf_lbl = f"P/FCF: {p_fcf:.1f}×"
 
     val_score = _clamp(v1 * 0.40 + v2 * 0.35 + v3 * 0.25)
 
     # ══════════════════════════════════════════════════════════════════════════
     # GROWTH  (Revenue growth 45% · Bull/Bear asymmetry 30% · Data confidence 25%)
     # ══════════════════════════════════════════════════════════════════════════
-    # Sub 1: Revenue growth rate used in DCF (guided > analyst > historical)
+    # Sub 1: Revenue growth rate used in DCF (guided > analyst > historical).
+    # SECTOR-AWARE: Utility 5% = A; Tech 5% = B-band. See vgpm_thresholds.
     gr_pct = growth * 100
-    if   gr_pct > 30: g1 = 95
-    elif gr_pct > 20: g1 = 85
-    elif gr_pct > 10: g1 = 70
-    elif gr_pct >  5: g1 = 58
-    elif gr_pct >  0: g1 = 44
-    else:             g1 = 20
+    g1 = score_growth(gr_pct, sector)
     gr_lbl = f"Rev CAGR: {gr_pct:+.1f}%"
 
     # Sub 2: Bull / Bear asymmetry (upside leverage)
@@ -1061,15 +1073,9 @@ def _compute_vgpm(
     # ══════════════════════════════════════════════════════════════════════════
     # PROFITABILITY  (FCF Margin 50% · ROIC proxy 30% · Margin trend 20%)
     # ══════════════════════════════════════════════════════════════════════════
-    # Sub 1: FCF Margin
+    # Sub 1: FCF Margin. SECTOR-AWARE bands — Tech 12% = B+, Utility 12% = A+.
     fm_pct = fcf_margin * 100
-    if   fm_pct > 20: p1 = 95
-    elif fm_pct > 10: p1 = 82
-    elif fm_pct >  5: p1 = 68
-    elif fm_pct >  0: p1 = 54
-    elif fm_pct > -5: p1 = 34
-    elif fm_pct >-15: p1 = 18
-    else:             p1 = 6
+    p1 = score_fcf_margin(fm_pct, sector)
     fm_lbl = f"FCF margin: {fm_pct:.1f}%"
 
     # Sub 2: ROIC proxy from most recent raw_financials
@@ -1083,11 +1089,9 @@ def _compute_vgpm(
     if _rev > 0:
         roic_proxy = _ni / (_rev * 0.35)
         roic_spread = roic_proxy - wacc
-        if   roic_spread > 0.10: p2 = 92
-        elif roic_spread > 0.05: p2 = 78
-        elif roic_spread > 0.0:  p2 = 62
-        elif roic_spread >-0.05: p2 = 42
-        else:                    p2 = 20
+        # SECTOR-AWARE: Bank +2pp spread = A; Tech needs +15pp for the
+        # same letter grade. Reflects sector ROIC norms.
+        p2 = score_roic_spread(roic_spread, sector)
         roic_lbl = f"ROIC−WACC: {roic_spread*100:+.1f}pp"
     else:
         p2 = 45; roic_lbl = "ROIC−WACC: N/A"
@@ -3361,6 +3365,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
     _cal_all_vgpm  = result.get("dcf_calibration_signals") or {}
     _rf_raw        = result.get("raw_financials") or {}
     _ins_raw       = result.get("insider_summary") or result.get("insider_activity") or {}
+    # Sector map for sector-aware VGPM sub-score thresholds (2026-05-21 fix).
+    _sectors_pdf   = result.get("sectors") or {}
     for _vt in tickers:
         _vgpm_dcf  = _dcf_all_vgpm.get(_vt, {})
         _vgpm_scen = _scen_all_vgpm.get(_vt, {})
@@ -3386,6 +3392,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
                 raw_financials=_rf_raw,
                 dcf_cal=_vgpm_cal,
                 insider_summary=_ins_str,
+                sector=_sectors_pdf.get(_vt) if isinstance(_sectors_pdf, dict) else None,
             )
             _co_vgpm = _fetch_company_name(_vt)
             story.extend(_vgpm_scorecard(_vgpm_scores, _vt, _co_vgpm, styles, page_w))
