@@ -772,3 +772,52 @@ async def reextract_metrics(
         "would_update": would_up,
         "results": results,
     }
+
+
+
+@router.post("/admin/vgpm-backfill")
+async def vgpm_backfill(
+    secret: str = "",
+    since: str = "2026-04-25T00:00:00+00:00",
+    dry_run: bool = True,
+    sample_limit: int = 50,
+):
+    """Recompute VGPM for historical web_runs using the new sector-aware
+    sub-score bands shipped in commit 74a0b26 (src/utils/vgpm_thresholds.py).
+
+    The pre-fix VGPM scorer used cross-sector universal threshold bands, so
+    every analysed ticker collapsed to B-band letter grades post-2026-04-25.
+    The sector-aware fix produces realistic grade distributions, but only
+    affects FRESH runs (anything analysed AFTER the deploy). This endpoint
+    re-runs `_compute_vgpm()` against the inputs already saved in each
+    historical web_runs row, using the new sector-aware bands, and writes
+    the recomputed VGPM back in place.
+
+    Idempotent: same inputs → same outputs. Re-running after the first apply
+    is a no-op.
+
+    Query params:
+      secret       — DB_UPLOAD_SECRET (required)
+      since        — ISO-8601 lower bound (default: 2026-04-25T00:00:00+00:00)
+      dry_run      — default True. When True, computes diffs but does NOT
+                     write. Pass dry_run=false to actually persist.
+      sample_limit — cap on grade_changes detail in response (default 50)
+
+    Returns: full summary dict with runs_examined / runs_updated /
+    tickers_updated / sample grade_changes (pre→post per ticker per dim).
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    paths = _get_db_paths()
+    db_path = paths.get("run_archive")
+    if not db_path or not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="run_archive DB not found")
+
+    from src.data.backfill_vgpm import backfill_vgpm_for_runs
+    return backfill_vgpm_for_runs(
+        db_path=db_path,
+        since_iso=since,
+        dry_run=dry_run,
+        sample_limit=sample_limit,
+    )
