@@ -37,6 +37,8 @@ import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechS
 // Existing panel components (reused as-is)
 import { FinancialsChart } from '@/components/report/FinancialsChart';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
+import { CardAuditBanner } from '@/components/report/CardAuditBanner';
+import type { DdCardAudit } from '@/lib/reportTypes';
 import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
 import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
@@ -315,6 +317,13 @@ export function V2ReportView({
           />
         </div>
       )}
+
+      {/* Card QA banner (Phase 10.5 self-healing audit). Renders above
+          tab content so users see data-quality warnings on every tab. */}
+      <CardAuditBanner
+        audit={(data.card_qa_audit as Record<string, DdCardAudit> | undefined)?.[ticker]}
+        ticker={ticker}
+      />
 
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">

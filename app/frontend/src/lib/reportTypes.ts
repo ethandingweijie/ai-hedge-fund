@@ -402,7 +402,72 @@ export interface PipelineData {
   // Sector-specific valuation card (Option B). One entry per ticker; absent
   // for legacy sub-profiles (frontend gates on `sector_card?.[ticker]`).
   sector_card?: Record<string, SectorCardPayload>;
+  // Card QA Agent audit (Phase 10.5 self-healing). One entry per ticker.
+  // Surfaces in CardAuditBanner when severity >= warning. Absent on runs
+  // that pre-date the QA agent landing.
+  card_qa_audit?: Record<string, DdCardAudit>;
+  card_qa_engine_error?: {
+    exception_type: string;
+    message: string;
+    traceback?: string;
+  } | null;
   [key: string]: unknown;
+}
+
+// ── Card QA Agent (Phase 10.5 / src/agents/audit/) ────────────────────────
+//
+// Mirrors the Python persistence schema in src/agents/audit/card_qa_agent.py.
+// Bump only when the Python schema's TOP-LEVEL shape changes — per-card
+// schema versions are tracked separately in `qa_schema_versions`.
+
+export interface DdCardAuditMetaCheck {
+  passed: boolean;
+  checks_run: string[];
+  issues: string[];
+  suggested_profile: string | null;
+}
+
+export interface DdCardAuditCardInspection {
+  card: string;
+  applies_when_passed: boolean;
+  missing_mandatory: string[];
+  missing_opportunistic: string[];
+  judge_verdict: 'EXTRACTOR_DROPPED' | 'WRONG_PROFILE' | 'GENUINELY_ABSENT' | 'BUDGET_EXHAUSTED' | null;
+  judge_reasoning: string | null;
+  judge_evidence_quote: string | null;
+  remediation_attempted: boolean;
+  remediation_success: boolean | null;
+}
+
+export interface DdCardAuditRemediation {
+  card: string;
+  field: string;
+  method: 'hinted_reextract';
+  value_set: unknown;
+}
+
+export interface DdCardAuditFlag {
+  card: string | null;     // null for meta_check flags
+  field: string | null;
+  reason: string;          // 'classification_likely_wrong' | 'wrong_profile_per_judge' |
+                           // 'genuinely_absent_per_judge' | 'reextract_returned_not_found' |
+                           // 'budget_exhausted_mid_run' | etc.
+  context: string;
+  evidence_quote: string;
+  suggested_profile?: string | null;
+}
+
+export interface DdCardAudit {
+  qa_version: string;
+  qa_ran_at: string;
+  qa_model: string;
+  qa_schema_versions: Record<string, number>;
+  meta_check: DdCardAuditMetaCheck | null;
+  cards_inspected: DdCardAuditCardInspection[];
+  auto_remediations: DdCardAuditRemediation[];
+  human_review_flags: DdCardAuditFlag[];
+  qa_cost_estimate_usd: number;
+  qa_budget_hit: boolean;
 }
 
 export interface PortfolioDecision {

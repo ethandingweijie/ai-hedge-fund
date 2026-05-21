@@ -23,6 +23,7 @@ import type { ProgressEvent } from '@/lib/reportTypes';
 
 // ── Report section components ────────────────────────────────────────────────
 import { ReportHeader }        from '@/components/report/ReportHeader';
+import { CardAuditBanner }     from '@/components/report/CardAuditBanner';
 import { ScenarioChart }       from '@/components/report/ScenarioChart';
 import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
@@ -1476,6 +1477,13 @@ export function ReportPage() {
 
         {/* ── Summary: Header | StockPanel ─────────────────────────────────── */}
         <div id="summary" className="scroll-mt-28" />
+        {/* Card QA Banner — Phase 10.5 self-healing audit. Renders above the
+            header only when severity >= 'warning'. Reads from displayResult
+            via the same `data` accessor as other panels below. */}
+        <CardAuditBanner
+          audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[liveTicker]}
+          ticker={liveTicker}
+        />
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-stretch">
           <ReportHeader
             ticker={liveTicker}

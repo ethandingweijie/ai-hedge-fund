@@ -10,6 +10,7 @@ import { V2ReportView } from '@/components/v2/V2ReportView';
 
 import { ResearchNav } from '@/components/layout/ResearchNav';
 import { ReportHeader } from '@/components/report/ReportHeader';
+import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import { ScenarioChart } from '@/components/report/ScenarioChart';
 import { PowerLawRadar } from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist } from '@/components/report/ValueTrapChecklist';
@@ -192,6 +193,11 @@ export function ReportViewPage() {
 
         {/* ── Summary ────────────────────────────────────────────────────── */}
         <div id="summary" className="scroll-mt-28" />
+        {/* Card QA Banner — surfaces self-healing audit findings */}
+        <CardAuditBanner
+          audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[ticker]}
+          ticker={ticker}
+        />
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-stretch">
           <ReportHeader
             ticker={ticker}
