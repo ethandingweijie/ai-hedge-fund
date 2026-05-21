@@ -181,8 +181,9 @@ def backfill_vgpm_for_runs(
 
     started_at = datetime.now(timezone.utc).isoformat()
 
-    # Read rows. Cohort fetch logic is independent of write — we read the
-    # rows we'll consider, decide what to update in-memory, then apply.
+    # Read rows. Production schema: run_id is the TEXT PRIMARY KEY (no
+    # integer 'id' column — see app/backend/services/analysis_service.py
+    # CREATE TABLE web_runs).
     try:
         # Always open read-write so we can persist on dry_run=False. The
         # uri=mode=ro form would block writes; not what we want.
@@ -190,7 +191,7 @@ def backfill_vgpm_for_runs(
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT id, run_id, ticker, run_at, full_result_json
+            SELECT run_id, ticker, run_at, full_result_json
             FROM web_runs
             WHERE run_at >= ?
               AND full_result_json IS NOT NULL
@@ -212,7 +213,7 @@ def backfill_vgpm_for_runs(
     tickers_skipped = 0
     grade_changes: list[dict] = []
     errors: list[dict] = []
-    updates_pending: list[tuple[int, str]] = []   # [(row_id, new_json_str), ...]
+    updates_pending: list[tuple[str, str]] = []   # [(run_id, new_json_str), ...]
 
     for row in rows:
         try:
@@ -273,13 +274,13 @@ def backfill_vgpm_for_runs(
             payload["vgpm"] = new_vgpm_map
             if isinstance(data_dict, dict):
                 data_dict["vgpm"] = new_vgpm_map
-            updates_pending.append((row["id"], json.dumps(payload)))
+            updates_pending.append((row["run_id"], json.dumps(payload)))
 
     # Apply updates if not dry-run
     if not dry_run and updates_pending:
         try:
             conn.executemany(
-                "UPDATE web_runs SET full_result_json = ? WHERE id = ?",
+                "UPDATE web_runs SET full_result_json = ? WHERE run_id = ?",
                 [(j, rid) for (rid, j) in updates_pending],
             )
             conn.commit()

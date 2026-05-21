@@ -38,10 +38,12 @@ def tmp_archive_db():
     os.close(fd)
 
     with sqlite3.connect(path) as conn:
+        # Mirror the production schema (analysis_service.py) so backfill
+        # SQL works identically against this temp DB. Key column is
+        # run_id TEXT PRIMARY KEY — NOT an integer id.
         conn.execute("""
             CREATE TABLE web_runs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id TEXT,
+                run_id TEXT PRIMARY KEY,
                 ticker TEXT,
                 run_at TEXT,
                 full_result_json TEXT
