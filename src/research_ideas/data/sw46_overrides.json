@@ -1,0 +1,5 @@
+{
+  "_comment": "Per-ticker manual overrides. Keys not present in a ticker's entry fall back to defaults.",
+  "MSFT": { "tax_rate_normalized": 0.19 },
+  "ADBE": { "tax_rate_normalized": 0.18 }
+}

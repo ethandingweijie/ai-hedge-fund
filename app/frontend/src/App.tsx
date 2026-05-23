@@ -5,6 +5,8 @@ import { ReportViewPage } from './pages/ReportViewPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { ScreenerPage } from './pages/ScreenerPage';
 import { WatchlistPage } from './pages/WatchlistPage';
+import { ResearchIdeasPage } from './pages/ResearchIdeasPage';
+import { SW46Page } from './pages/SW46Page';
 import { PricingPage } from './pages/PricingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DDAlertsPage } from './pages/DDAlertsPage';
@@ -43,6 +45,8 @@ export default function App() {
           <Route path="/screener" element={<RequireAuth><ScreenerPage /></RequireAuth>} />
           <Route path="/watchlist" element={<RequireAuth><WatchlistPage /></RequireAuth>} />
           <Route path="/dd-alerts" element={<RequireAuth><DDAlertsPage /></RequireAuth>} />
+          <Route path="/research-ideas" element={<RequireAuth><ResearchIdeasPage /></RequireAuth>} />
+          <Route path="/research-ideas/sw46" element={<RequireAuth><SW46Page /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
 
           {/* Default: redirect to login (will redirect to /report after auth) */}

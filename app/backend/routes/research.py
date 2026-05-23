@@ -1,0 +1,134 @@
+"""
+app/backend/routes/research.py
+================================
+Research-Ideas endpoints. v1 surfaces a single idea, "SW46" (software-46
+cohort using the Cassandra Unchained / Scion methodology).
+
+  GET  /research/ideas                  -> list of ideas (v1: just SW46 meta)
+  GET  /research/ideas/sw46             -> latest cohort snapshot
+  GET  /research/ideas/sw46/{ticker}    -> per-ticker detail
+  POST /research/ideas/sw46/refresh     -> run cohort fresh & persist
+  GET  /research/ideas/sw46/runs        -> historical run list
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import traceback
+
+from fastapi import APIRouter, HTTPException
+
+from app.backend.services import sw46_storage
+from src.research_ideas.sw46.runner import run_sw46
+from src.research_ideas.sw46.universe import list_tickers
+
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+# ─── Idea catalogue ────────────────────────────────────────────────────────
+
+
+@router.get("/ideas")
+async def list_research_ideas():
+    """Catalogue of research ideas. v1: SW46 only."""
+    latest = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
+    sw46_meta = {
+        "id": "sw46",
+        "name": "SW46 — Software Cohort Valuation",
+        "blurb": (
+            "Cassandra Unchained / Scion methodology: Tragic Algebra owner "
+            "earnings, fully-adjusted ROIC, AI Competitive Threat tiering, "
+            "and IV15 (15-year / 15% required-return hybrid intrinsic value)."
+        ),
+        "ticker_count": len(list_tickers()),
+        "last_run_at": latest.get("created_at") if latest else None,
+        "last_pooled_delta_e": latest.get("cohort_pooled_delta_e") if latest else None,
+    }
+    return {"ideas": [sw46_meta]}
+
+
+# ─── SW46 endpoints ────────────────────────────────────────────────────────
+
+
+@router.get("/ideas/sw46")
+async def get_sw46_cohort():
+    """Most-recent persisted SW46 cohort snapshot."""
+    try:
+        latest = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
+        if not latest:
+            # Empty shape (UI shows "No runs yet — click Refresh").
+            return {
+                "run_id": None,
+                "created_at": None,
+                "cohort_pooled_delta_e": None,
+                "ticker_count": 0,
+                "failed_tickers": [],
+                "results": [],
+            }
+        return latest
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_sw46_cohort failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/sw46/runs")
+async def list_sw46_runs(limit: int = 20):
+    """Historical SW46 cohort runs (header-only — no results JSON)."""
+    try:
+        runs = await asyncio.to_thread(sw46_storage.list_sw46_runs, limit)
+        return {"runs": runs}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_sw46_runs failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/sw46/{ticker}")
+async def get_sw46_ticker(ticker: str):
+    """Per-ticker detail — pulls from the latest cohort run."""
+    ticker = ticker.upper()
+    try:
+        latest = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
+        if not latest:
+            raise HTTPException(status_code=404, detail="No SW46 cohort run yet — refresh first")
+        for r in latest.get("results", []):
+            if r.get("ticker") == ticker:
+                return r
+        raise HTTPException(status_code=404, detail=f"{ticker} not in SW46 universe")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_sw46_ticker(%s) failed: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/sw46/refresh")
+async def refresh_sw46(history_years: int = 7, max_workers: int = 6):
+    """
+    Trigger a fresh cohort run. Synchronous (returns once persisted) —
+    full run takes ~2-3 min for 46 tickers on FMP free tier due to per-year
+    avg-price calls. Frontend should display a spinner.
+    """
+    try:
+        cohort = await asyncio.to_thread(
+            run_sw46,
+            history_years=history_years,
+            max_workers=max_workers,
+            save=True,
+        )
+        return {
+            "run_id": cohort.run_id,
+            "created_at": cohort.created_at,
+            "cohort_pooled_delta_e": cohort.pooled_delta_e,
+            "ticker_count": cohort.ticker_count,
+            "failed_tickers": cohort.failed_tickers,
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("refresh_sw46 failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")

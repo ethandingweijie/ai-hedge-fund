@@ -331,3 +331,159 @@ export function getDdPerformance(params: { since?: string; until?: string } = {}
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   return fetchJson<DdPerformance>(`${BASE}/api/dd-alerts/performance${suffix}`, { headers: _authHeaders() });
 }
+
+// ── Research Ideas ──────────────────────────────────────────────────────────
+//
+// Endpoints expose research artifacts that live outside the main pipeline.
+// v1 surfaces SW46 — software-46 cohort using the Cassandra Unchained /
+// Scion methodology (Tragic Algebra owner earnings, AICT tiering, IV15).
+
+export type AICTTier = 'Fortress' | 'Castle' | 'Chapel' | 'Stone' | 'Wood';
+export type TATier   = 'Not-TT' | 'Near-TT' | 'TT*' | 'N/A';
+
+export interface SW46IdeaMeta {
+  id: string;
+  name: string;
+  blurb: string;
+  ticker_count: number;
+  last_run_at: string | null;
+  last_pooled_delta_e: number | null;
+}
+
+export interface SW46TragicAlgebraYear {
+  fiscal_year: number;
+  net_income: number | null;
+  sbc_expense: number | null;
+  cash_tax_withholding: number | null;
+  cash_tax_withholding_estimated: boolean;
+  buybacks: number | null;
+  share_change: number | null;
+  avg_share_price: number | null;
+  omega: number | null;
+  owner_earnings: number | null;
+  delta_e: number | null;
+}
+
+export type IV15Block = {
+  iv15_total: number | null;
+  iv15_per_share: number | null;
+  iv15_ddm_total: number | null;
+  iv15_buffett_total: number | null;
+  base_oe: number | null;
+  base_oe_source: 'latest' | 'median' | 'forward_ni' | 'forward_margin' | 'none';
+  required_return_used: number;
+  growth_year1_5: number | null;
+  growth_year6_10: number | null;
+  growth_year11_15: number | null;
+  terminal_multiple_used: number | null;
+  shares_outstanding: number | null;
+};
+
+export interface SW46TickerResult {
+  ticker: string;
+  name: string;
+  price: number | null;
+  market_cap: number | null;
+  fwd_revenue_growth: number | null;
+  rank: number | null;
+  aict: {
+    tier: AICTTier;
+    growth_haircut: number;
+    terminal_multiple: number;
+    blend_buffett_weight: number;
+  };
+  tragic_algebra: {
+    years: SW46TragicAlgebraYear[];
+    pooled_delta_e: number | null;
+    avg_owner_earnings: number | null;
+    latest_owner_earnings: number | null;
+    median_owner_earnings: number | null;
+    positive_oe_years: number;
+    sum_net_income: number | null;
+    sbc_trend: number | null;
+    ta_tier: TATier;
+    estimated_c_years: number;
+  };
+  roic: {
+    owner_earnings: number | null;
+    interest_income: number | null;
+    capital_lease_payments: number | null;
+    other_expense_adjustments: number;
+    numerator: number | null;
+    total_capital: number | null;
+    lt_operating_leases: number | null;
+    net_cash: number | null;
+    purchase_obligations: number;
+    other_capital: number;
+    denominator: number | null;
+    roic: number | null;
+  };
+  iv15: IV15Block;
+  iv12: IV15Block | null;
+  iv18: IV15Block | null;
+  ivb_pct: number | null;
+  p_iv12: number | null;
+  p_iv18: number | null;
+  justification: string | null;
+  composite: {
+    shareholder_bucket: number;
+    quality_bucket: number;
+    valuation_bucket: number;
+    total: number;
+    pts_ta_tier: number;
+    pts_delta_e: number;
+    pts_sbc_trend: number;
+    pts_aict_tier: number;
+    pts_roic: number;
+    pts_growth: number;
+    pts_p_iv15: number;
+    p_iv15: number | null;
+  };
+  error?: string | null;
+}
+
+export interface SW46Cohort {
+  run_id: string | null;
+  created_at: string | null;
+  cohort_pooled_delta_e: number | null;
+  ticker_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+  results: SW46TickerResult[];
+}
+
+export interface SW46RunHeader {
+  run_id: string;
+  created_at: string;
+  cohort_pooled_delta_e: number | null;
+  ticker_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}
+
+export function listResearchIdeas(): Promise<{ ideas: SW46IdeaMeta[] }> {
+  return fetchJson(`${BASE}/research/ideas`);
+}
+
+export function getSW46Cohort(): Promise<SW46Cohort> {
+  return fetchJson(`${BASE}/research/ideas/sw46`);
+}
+
+export function getSW46Ticker(ticker: string): Promise<SW46TickerResult> {
+  return fetchJson(`${BASE}/research/ideas/sw46/${encodeURIComponent(ticker.toUpperCase())}`);
+}
+
+export function refreshSW46(opts: { historyYears?: number; maxWorkers?: number } = {}): Promise<{
+  run_id: string;
+  created_at: string;
+  cohort_pooled_delta_e: number | null;
+  ticker_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}> {
+  const q = new URLSearchParams();
+  if (opts.historyYears != null) q.set('history_years', String(opts.historyYears));
+  if (opts.maxWorkers  != null) q.set('max_workers',   String(opts.maxWorkers));
+  return fetchJson(`${BASE}/research/ideas/sw46/refresh?${q}`, { method: 'POST' });
+}
+
+export function listSW46Runs(limit = 20): Promise<{ runs: SW46RunHeader[] }> {
+  return fetchJson(`${BASE}/research/ideas/sw46/runs?limit=${limit}`);
+}

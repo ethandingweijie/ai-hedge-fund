@@ -1,0 +1,9 @@
+{
+  "_comment": "Hand-curated long-term purchase obligations in USD (forward-contracted manufacturing capacity, multi-year cloud commitments, etc.). Sourced from 10-K MD&A. Update yearly. Default 0 for any ticker not listed.",
+  "SNOW": 5400000000,
+  "ORCL": 11000000000,
+  "TEAM": 1200000000,
+  "DDOG": 4600000000,
+  "CRWD": 1700000000,
+  "NTAP": 1400000000
+}
