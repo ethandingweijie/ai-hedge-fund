@@ -57,6 +57,7 @@ export function ResearchIdeasPage() {
 
   const handleClick = (idea: SW46IdeaMeta) => {
     if (idea.id === 'sw46') navigate('/research-ideas/sw46');
+    else if (idea.id === 'complacency') navigate('/research-ideas/complacency');
   };
 
   return (
@@ -103,6 +104,9 @@ export function ResearchIdeasPage() {
                     <span>Last run: <span className="font-mono">{formatRunTime(idea.last_run_at)}</span></span>
                     {idea.last_pooled_delta_e != null && (
                       <span>Pooled ΔE: <span className="font-mono font-semibold text-foreground">{(idea.last_pooled_delta_e * 100).toFixed(1)}%</span></span>
+                    )}
+                    {idea.last_gate_passers != null && (
+                      <span>Gate passers: <span className="font-mono font-semibold text-foreground">{idea.last_gate_passers}</span></span>
                     )}
                   </div>
                   {/* Top-3 picks preview */}

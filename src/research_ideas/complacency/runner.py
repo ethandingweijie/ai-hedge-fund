@@ -1,0 +1,139 @@
+"""
+src/research_ideas/complacency/runner.py
+=========================================
+Complacency screener orchestrator.
+
+  run_complacency(max_workers=4, save=True) → ComplacencyCohortResult
+
+For each ticker in the complacency universe:
+  fetch → 4-pillar score → cohort assembly → persist.
+
+Per-ticker exceptions go into failed_tickers; the cohort run never aborts
+on a single bad ticker.
+
+Persistence: app/backend/services/complacency_storage.py (SQLite).
+"""
+from __future__ import annotations
+
+import logging
+import traceback
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+
+from src.research_ideas.complacency.data_fetch import fetch_ticker_bundle
+from src.research_ideas.complacency.scoring import score_bundle
+from src.research_ideas.complacency.schemas import (
+    ComplacencyCohortResult,
+    ComplacencyTickerResult,
+)
+from src.research_ideas.complacency.universe import (
+    get_ticker_metadata,
+    list_tickers,
+)
+
+
+logger = logging.getLogger(__name__)
+
+
+def _process_ticker(ticker: str) -> ComplacencyTickerResult | dict:
+    try:
+        meta = get_ticker_metadata(ticker)
+        bundle = fetch_ticker_bundle(ticker, meta)
+        if bundle is None:
+            return {"ticker": ticker, "reason": "fetch_returned_none"}
+
+        s = score_bundle(bundle)
+
+        return ComplacencyTickerResult(
+            ticker=ticker,
+            name=meta.get("name", ticker),
+            sector=meta.get("sector"),
+            industry=meta.get("industry"),
+            price=bundle.price,
+            market_cap=bundle.market_cap,
+            ev_sales=s["ev_sales"],
+            ev_sales_sector_median=s["ev_sales_sector_median"],
+            ev_sales_relative=s["ev_sales_relative"],
+            fcf_yield_ttm=s["fcf_yield_ttm"],
+            altman_z=s["altman_z"],
+            piotroski=s["piotroski"],
+            ad_ratio_4q_avg=s["ad_ratio_4q_avg"],
+            eps_revision_yoy=s["eps_revision_yoy"],
+            sma200_extension=s["sma200_extension"],
+            rsi_weekly=s["rsi_weekly"],
+            range_position=s["range_position"],
+            val_score=s["val_score"],
+            beh_score=s["beh_score"],
+            tech_score=s["tech_score"],
+            qual_score=s["qual_score"],
+            composite=s["composite"],
+            passes_gate=s["passes_gate"],
+            verdict=s["verdict"],
+            flag_notes=s["flag_notes"],
+            justification=s["justification"],
+        )
+    except Exception as exc:
+        logger.exception("Complacency ticker %s failed: %s", ticker, exc)
+        return {
+            "ticker": ticker,
+            "reason": f"{type(exc).__name__}: {exc}",
+            "trace": traceback.format_exc(),
+        }
+
+
+def run_complacency(
+    max_workers: int = 4,
+    save: bool = True,
+    run_id: str | None = None,
+) -> ComplacencyCohortResult:
+    tickers = list_tickers()
+    results: list[ComplacencyTickerResult] = []
+    failed: list[dict] = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(_process_ticker, t): t for t in tickers}
+        for fut in as_completed(futures):
+            out = fut.result()
+            if isinstance(out, ComplacencyTickerResult):
+                results.append(out)
+            elif isinstance(out, dict):
+                failed.append({k: v for k, v in out.items() if k != "trace"})
+
+    # Sort: highest composite first, ties broken by ticker.
+    results.sort(key=lambda r: (-(r.composite or 0.0), r.ticker))
+    for i, r in enumerate(results, 1):
+        r.rank = i
+
+    gate_passers = sum(1 for r in results if r.passes_gate)
+
+    cohort = ComplacencyCohortResult(
+        run_id=run_id or uuid.uuid4().hex[:12],
+        created_at=datetime.now(timezone.utc).isoformat(),
+        ticker_count=len(results),
+        gate_passers=gate_passers,
+        failed_tickers=failed,
+        results=results,
+    )
+
+    if save:
+        try:
+            from app.backend.services.complacency_storage import save_complacency_run
+
+            save_complacency_run(cohort)
+        except Exception as exc:
+            logger.warning("Complacency: persistence skipped — %s", exc)
+
+    return cohort
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    r = run_complacency(max_workers=4, save=False)
+    print(f"\nComplacency run_id={r.run_id}")
+    print(f"tickers={r.ticker_count}  gate_passers={r.gate_passers}  failed={len(r.failed_tickers)}")
+    for t in r.results[:10]:
+        print(
+            f"  #{t.rank:<3} {t.ticker:<6} {t.verdict:<14} composite={t.composite:.1f}/8  "
+            f"V={t.val_score} B={t.beh_score} T={t.tech_score} Q={t.qual_score}"
+        )

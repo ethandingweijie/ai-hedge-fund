@@ -347,7 +347,11 @@ export interface SW46IdeaMeta {
   blurb: string;
   ticker_count: number;
   last_run_at: string | null;
-  last_pooled_delta_e: number | null;
+  headline_metric_label?: string;
+  // SW46-specific:
+  last_pooled_delta_e?: number | null;
+  // Complacency-specific:
+  last_gate_passers?: number | null;
 }
 
 export interface SW46TragicAlgebraYear {
@@ -486,4 +490,90 @@ export function refreshSW46(opts: { historyYears?: number; maxWorkers?: number }
 
 export function listSW46Runs(limit = 20): Promise<{ runs: SW46RunHeader[] }> {
   return fetchJson(`${BASE}/research/ideas/sw46/runs?limit=${limit}`);
+}
+
+// ── Complacency Detector (Ackman 4-pillar equity screener) ──────────────────
+
+export type ComplacencyVerdict =
+  | 'Strong-Short'
+  | 'Watch'
+  | 'Borderline'
+  | 'Pass'
+  | 'N/A';
+
+export interface ComplacencyTickerResult {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  industry: string | null;
+  price: number | null;
+  market_cap: number | null;
+  rank: number | null;
+  // Pillar inputs
+  ev_sales: number | null;
+  ev_sales_sector_median: number | null;
+  ev_sales_relative: number | null;
+  fcf_yield_ttm: number | null;
+  altman_z: number | null;
+  piotroski: number | null;
+  ad_ratio_4q_avg: number | null;
+  eps_revision_yoy: number | null;
+  sma200_extension: number | null;
+  rsi_weekly: number | null;
+  range_position: number | null;
+  // Pillar scores (0-2)
+  val_score: number;
+  beh_score: number;
+  tech_score: number;
+  qual_score: number;
+  composite: number;
+  passes_gate: boolean;
+  verdict: ComplacencyVerdict;
+  flag_notes: string[];
+  justification: string | null;
+  error?: string | null;
+}
+
+export interface ComplacencyCohort {
+  run_id: string | null;
+  created_at: string | null;
+  universe: string;
+  ticker_count: number;
+  gate_passers: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+  results: ComplacencyTickerResult[];
+}
+
+export interface ComplacencyRunHeader {
+  run_id: string;
+  created_at: string;
+  universe: string;
+  ticker_count: number;
+  gate_passers: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}
+
+export function getComplacencyCohort(): Promise<ComplacencyCohort> {
+  return fetchJson(`${BASE}/research/ideas/complacency`);
+}
+
+export function getComplacencyTicker(ticker: string): Promise<ComplacencyTickerResult> {
+  return fetchJson(`${BASE}/research/ideas/complacency/${encodeURIComponent(ticker.toUpperCase())}`);
+}
+
+export function refreshComplacency(opts: { maxWorkers?: number } = {}): Promise<{
+  run_id: string;
+  created_at: string;
+  universe: string;
+  ticker_count: number;
+  gate_passers: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}> {
+  const q = new URLSearchParams();
+  if (opts.maxWorkers != null) q.set('max_workers', String(opts.maxWorkers));
+  return fetchJson(`${BASE}/research/ideas/complacency/refresh?${q}`, { method: 'POST' });
+}
+
+export function listComplacencyRuns(limit = 20): Promise<{ runs: ComplacencyRunHeader[] }> {
+  return fetchJson(`${BASE}/research/ideas/complacency/runs?limit=${limit}`);
 }
