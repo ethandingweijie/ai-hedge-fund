@@ -214,12 +214,21 @@ def fetch_ticker_bundle(ticker: str, meta: dict) -> Optional[ComplacencyBundle]:
     bundle.week52_high = _safe_float(q.get("yearHigh"))
     bundle.week52_low = _safe_float(q.get("yearLow"))
 
-    # Key metrics TTM (EV/Sales, FCF yield)
+    # Key metrics TTM (EV/Sales, FCF yield).
+    # FMP /stable/key-metrics-ttm uses `TTM`-suffixed field names — verified
+    # via /diag_fmp NVDA: `evToSalesTTM`, `freeCashFlowYieldTTM`. Older
+    # /v3 endpoint used unsuffixed names; keep those as fallbacks.
     km = _fetch_key_metrics_ttm(ticker)
     time.sleep(0.10)
     if km:
-        bundle.ev_sales = _safe_float(km.get("evToSales") or km.get("enterpriseValueOverSales"))
-        bundle.fcf_yield_ttm = _safe_float(km.get("freeCashFlowYield"))
+        bundle.ev_sales = _safe_float(
+            km.get("evToSalesTTM")
+            or km.get("evToSales")
+            or km.get("enterpriseValueOverSales")
+        )
+        bundle.fcf_yield_ttm = _safe_float(
+            km.get("freeCashFlowYieldTTM") or km.get("freeCashFlowYield")
+        )
 
     # Financial scores
     fs = _fetch_financial_scores(ticker)
