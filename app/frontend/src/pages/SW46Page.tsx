@@ -412,7 +412,10 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
         className="ml-auto relative h-full w-full max-w-2xl bg-background border-l border-border shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-background border-b border-border px-4 py-3 z-10">
+        <div
+          className="sticky top-0 bg-background border-b border-border px-4 pb-3 z-10"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+        >
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <div className="flex items-baseline gap-2">
@@ -431,8 +434,12 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                 )}
               </div>
             </div>
-            <button onClick={onClose} className="p-1 rounded hover:bg-muted ml-2">
-              <X size={18} className="text-muted-foreground" />
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full hover:bg-muted ml-2 flex-shrink-0 -mt-1 -mr-1 bg-muted/30"
+              aria-label="Close detail"
+            >
+              <X size={20} className="text-foreground" />
             </button>
           </div>
           {ticker.justification && (
