@@ -285,6 +285,86 @@ async def get_idea(idea_id: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
+@router.get("/diag/llm-health")
+async def diag_llm_health():
+    """
+    Diagnostic: which LLM env vars are set on this deployment, and can we
+    actually reach Qwen? Returns presence-only for env vars (no key values
+    are exposed). Helps debug "DEEP_RESEARCH_API_KEY missing or Qwen failed"
+    surfacing in chat / qualitative scoring.
+
+    Run via:  curl https://<your-railway-app>/research/diag/llm-health
+    """
+    import os as _os
+
+    keys_to_check = [
+        "DEEP_RESEARCH_API_KEY",
+        "DEEP_RESEARCH_SEARCH_BASE_URL",
+        "DEEP_RESEARCH_BASE_URL",
+        "DEEP_RESEARCH_MODEL",
+        "QWEN_MODEL",
+        "COMPLACENCY_QUAL_MODEL",
+        "CONTRARIAN_CHAT_MODEL",
+        "ALIBABA_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "TAVILY_API_KEY",
+        "FMP_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]
+    env_state = {
+        k: {
+            "set": bool(_os.environ.get(k)),
+            "length": len(_os.environ.get(k, "")) if _os.environ.get(k) else 0,
+        }
+        for k in keys_to_check
+    }
+
+    # Live Qwen connectivity test — single tiny call so it costs ~$0.0001
+    qwen_test: dict = {"ok": False, "error": None, "model": None, "base_url": None, "elapsed_ms": None}
+    try:
+        from openai import OpenAI
+        import time as _time
+        api_key = _os.environ.get("DEEP_RESEARCH_API_KEY")
+        if not api_key:
+            qwen_test["error"] = "DEEP_RESEARCH_API_KEY not set"
+        else:
+            base_url = _os.environ.get(
+                "DEEP_RESEARCH_SEARCH_BASE_URL",
+                "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            )
+            model = _os.environ.get("CONTRARIAN_CHAT_MODEL", "qwen3.6-plus")
+            qwen_test["base_url"] = base_url
+            qwen_test["model"] = model
+
+            client = OpenAI(api_key=api_key, base_url=base_url, timeout=30)
+            t0 = _time.time()
+            resp = await asyncio.to_thread(
+                lambda: client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+                    max_tokens=10,
+                    temperature=0.0,
+                )
+            )
+            qwen_test["elapsed_ms"] = int((_time.time() - t0) * 1000)
+            content = (resp.choices[0].message.content or "").strip()[:30]
+            qwen_test["ok"] = True
+            qwen_test["sample_response"] = content
+    except ImportError as exc:
+        qwen_test["error"] = f"openai package not installed: {exc}"
+    except Exception as exc:
+        qwen_test["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+
+    return {
+        "env": env_state,
+        "qwen_test": qwen_test,
+        "summary": (
+            "ALL OK" if (env_state["DEEP_RESEARCH_API_KEY"]["set"] and qwen_test["ok"])
+            else "FAILED — see env_state['DEEP_RESEARCH_API_KEY']['set'] and qwen_test['error']"
+        ),
+    }
+
+
 @router.get("/ideas/idea-of-the-day/{idea_id}/chat")
 async def get_chat(idea_id: str):
     try:
@@ -320,17 +400,24 @@ async def post_chat(idea_id: str, body: dict):
         logger.exception("chat_turn failed for %s: %s", idea_id, exc)
         response = None
 
-    if not response or not response.get("content"):
+    # chat_turn now embeds the ACTUAL failure reason in response["content"]
+    # (e.g. "missing_env_var:DEEP_RESEARCH_API_KEY" or a specific Qwen API
+    # exception) rather than returning None, so the user sees real diagnostic
+    # info instead of the generic "DEEP_RESEARCH_API_KEY missing or Qwen failed".
+    if response is None:
         assistant_msg = await asyncio.to_thread(
             contrarian_storage.append_chat_message,
             idea_id, "assistant",
-            "(agent unavailable â€” DEEP_RESEARCH_API_KEY missing or Qwen failed)",
+            "(agent unavailable - openai package not installed on server; "
+            "see GET /research/diag/llm-health for env diagnostics)",
             None,
         )
     else:
         assistant_msg = await asyncio.to_thread(
             contrarian_storage.append_chat_message,
-            idea_id, "assistant", response["content"], response.get("cost_usd"),
+            idea_id, "assistant",
+            response.get("content", "(agent unavailable - empty response)"),
+            response.get("cost_usd"),
         )
     return {"user_message": user_msg, "assistant_message": assistant_msg}
 

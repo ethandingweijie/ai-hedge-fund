@@ -97,21 +97,47 @@ def chat_turn(
     max_chars: int = 6000,
 ) -> Optional[dict]:
     """
-    Run one chat turn. Returns {content, cost_usd} or None on failure.
+    Run one chat turn. Returns {content, cost_usd, error?} or None when the
+    Qwen client cannot be constructed at all (e.g. openai package missing).
+
+    On Qwen failure, returns {content: "(error: ...)", cost_usd: 0, error: ...}
+    so the route can surface the ACTUAL reason instead of a generic message.
 
     `history` is the existing conversation as a list of {role, content} dicts
     (oldest first). `user_message` is the new message to respond to.
     """
+    if not os.environ.get("DEEP_RESEARCH_API_KEY"):
+        return {
+            "content": (
+                "(agent unavailable — DEEP_RESEARCH_API_KEY is not set "
+                "in this deployment's environment. Add it to Railway "
+                "Variables and redeploy.)"
+            ),
+            "cost_usd": 0.0,
+            "error": "missing_env_var:DEEP_RESEARCH_API_KEY",
+        }
+
     client = _qwen_client()
     if client is None:
-        logger.warning("chat_turn: DEEP_RESEARCH_API_KEY missing")
-        return None
+        return {
+            "content": (
+                "(agent unavailable — Qwen client could not be constructed. "
+                "Verify the openai package is installed in the backend.)"
+            ),
+            "cost_usd": 0.0,
+            "error": "qwen_client_init_failed",
+        }
 
-    # Compose messages: system → idea context → past history → new user msg
-    messages = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
-        {"role": "system", "content": _format_idea_context(idea)},
-    ]
+    # Compose messages. CRITICAL: Qwen DashScope rejects requests with more
+    # than ONE system message ("Agent invalid parameter: The input messages
+    # must contain no more than one system message"). Merge our forensic-
+    # analyst system prompt and the idea-card context into a single system
+    # message — this was the actual root cause of "(agent unavailable —
+    # DEEP_RESEARCH_API_KEY missing or Qwen failed)" on production: the
+    # key WAS set, but every call returned 400.
+    merged_system = _SYSTEM_PROMPT + "\n\n" + _format_idea_context(idea)
+    messages = [{"role": "system", "content": merged_system}]
+
     # Trim history to last 12 turns to keep cost bounded
     for m in (history or [])[-12:]:
         role = m.get("role", "user")
@@ -128,6 +154,7 @@ def chat_turn(
         }
 
     text = ""
+    last_exc_msg: Optional[str] = None
     try:
         stream = client.chat.completions.create(
             model=os.environ.get("CONTRARIAN_CHAT_MODEL", "qwen3.6-plus"),
@@ -147,7 +174,7 @@ def chat_turn(
             text = (stream.choices[0].message.content or "").strip()
     except Exception as exc:
         logger.exception("chat_turn LLM call failed: %s", exc)
-        return None
+        last_exc_msg = f"{type(exc).__name__}: {str(exc)[:300]}"
 
     text = (text or "").strip()
     if not text:
@@ -164,10 +191,20 @@ def chat_turn(
                 text = (resp.choices[0].message.content or "").strip()
             except Exception as exc:
                 logger.exception("chat_turn fallback failed: %s", exc)
-                return None
+                last_exc_msg = (
+                    last_exc_msg or
+                    f"fallback {type(exc).__name__}: {str(exc)[:300]}"
+                )
 
     if not text:
-        return None
+        # Both paths failed — return the specific error rather than None so
+        # the user sees the ACTUAL reason in the chat panel.
+        err = last_exc_msg or "Qwen returned empty content"
+        return {
+            "content": f"(agent error: {err})",
+            "cost_usd": 0.0,
+            "error": err,
+        }
 
     # Rough cost estimate
     input_chars = sum(len(m["content"]) for m in messages)

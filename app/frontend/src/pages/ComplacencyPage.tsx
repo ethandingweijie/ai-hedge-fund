@@ -704,19 +704,38 @@ function ComplacencyDrawer({
         },
       });
       toast.dismiss(toastId);
-      const qualSummary = updated.qualitative
-        ? `${updated.qualitative.composite}/${updated.qualitative.max_possible} qual`
-        : 'no qual returned';
-      const aggSummary = updated.aggregate_score != null
-        ? `agg ${updated.aggregate_score.toFixed(1)}/100`
-        : 'agg —';
-      toast.success(
-        `${updated.ticker} re-scored: ${qualSummary} · ${aggSummary}`,
-        {
-          duration: 10000,
-          style: { fontSize: '15px', padding: '16px 20px', fontWeight: 600 },
-        },
-      );
+
+      // If the backend surfaced an error (e.g. DEEP_RESEARCH_API_KEY missing,
+      // every Qwen call failed, etc.) show it as an error toast rather than
+      // pretending the run succeeded. The error field is populated by the
+      // runner's preflight check or post-assessment validation.
+      const backendError = (updated as { error?: string | null }).error;
+      const hasIndicators = !!updated.qualitative
+        && Object.keys(updated.qualitative.indicators ?? {}).length > 0;
+
+      if (backendError || !hasIndicators) {
+        const reason = backendError
+          || 'no qualitative indicators were scored — see /research/diag/llm-health';
+        toast.error(
+          `${updated.ticker} re-score: qualitative did not produce results. ${reason}`,
+          {
+            duration: 15000,
+            style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
+          },
+        );
+      } else {
+        const qualSummary = `${updated.qualitative!.composite}/${updated.qualitative!.max_possible} qual`;
+        const aggSummary = updated.aggregate_score != null
+          ? `agg ${updated.aggregate_score.toFixed(1)}/100`
+          : 'agg —';
+        toast.success(
+          `${updated.ticker} re-scored: ${qualSummary} · ${aggSummary}`,
+          {
+            duration: 10000,
+            style: { fontSize: '15px', padding: '16px 20px', fontWeight: 600 },
+          },
+        );
+      }
       // Browser push notification (fires even if user switched apps)
       if (typeof window !== 'undefined' && 'Notification' in window
           && Notification.permission === 'granted') {

@@ -124,19 +124,55 @@ def _process_ticker_with_meta(
         # not a return-from-stale-cache. Otherwise the button feels broken
         # for any ticker that ever had qualitative cached at any confidence.
         qual_assessment = None
+        qual_error_summary: str | None = None
         if force_qual or s["verdict"] in ("Strong-Short", "Watch"):
-            try:
-                from src.research_ideas.complacency.qualitative import assess_qualitative
-                qual_assessment = assess_qualitative(
-                    ticker=ticker,
-                    name=meta.get("name", ticker),
-                    sector=meta.get("sector"),
-                    quant_passes_gate=s["passes_gate"],
-                    quant_composite=s["composite"],
-                    force_refresh=force_qual,
+            # Preflight: surface a CLEAR reason if the LLM key isn't set
+            # rather than silently letting assess_qualitative produce
+            # 10×score-0 with confidence 0 (which the user sees as "no
+            # change to aggregate" — because qual_pts stays 0).
+            import os as _os
+            if not _os.environ.get("DEEP_RESEARCH_API_KEY"):
+                qual_error_summary = (
+                    "DEEP_RESEARCH_API_KEY is not set in this deployment's "
+                    "environment — qualitative scorer cannot reach Qwen. "
+                    "Add the key to Railway Variables and redeploy."
                 )
-            except Exception as exc:
-                logger.warning("Qualitative assessment for %s failed: %s", ticker, exc)
+                logger.warning(
+                    "Qualitative skipped for %s: DEEP_RESEARCH_API_KEY missing",
+                    ticker,
+                )
+            else:
+                try:
+                    from src.research_ideas.complacency.qualitative import assess_qualitative
+                    qual_assessment = assess_qualitative(
+                        ticker=ticker,
+                        name=meta.get("name", ticker),
+                        sector=meta.get("sector"),
+                        quant_passes_gate=s["passes_gate"],
+                        quant_composite=s["composite"],
+                        force_refresh=force_qual,
+                    )
+                    # If assess_qualitative returned an "empty shell" (no
+                    # indicators scored — typically every Qwen call failed),
+                    # record that so the UI can surface a real error instead
+                    # of pretending success.
+                    if (
+                        qual_assessment is not None
+                        and not (qual_assessment.indicators or {})
+                    ):
+                        qual_error_summary = (
+                            "Qualitative assessment returned no scored "
+                            "indicators (likely Qwen API failure for every "
+                            "indicator — check /research/diag/llm-health)."
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "Qualitative assessment for %s failed: %s", ticker, exc,
+                    )
+                    qual_error_summary = (
+                        f"Qualitative assessment threw: {type(exc).__name__}: "
+                        f"{str(exc)[:200]}"
+                    )
 
         # Put-option recommendation — only fire for Strong-Short / Watch
         put_rec = None
@@ -201,6 +237,7 @@ def _process_ticker_with_meta(
             put_recommendation=put_rec,
             options_data_freshness=put_rec_at,
             qualitative=qual_assessment,
+            error=qual_error_summary,
             **_compute_aggregate(s["composite"], qual_assessment),
         )
     except Exception as exc:
