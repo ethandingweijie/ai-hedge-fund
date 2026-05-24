@@ -82,11 +82,52 @@ def _process_ticker(ticker: str) -> ComplacencyTickerResult | dict:
         }
 
 
+def _auto_refresh_sector_medians_if_stale(max_age_days: int = 7) -> None:
+    """
+    Trigger a sector-median refresh if the latest cached row is older than
+    `max_age_days` (or the table is empty). Quiet — failures logged, not raised.
+    The refresh itself takes ~5 min on FMP Premium, so this only fires once per
+    week per cohort run.
+    """
+    try:
+        from app.backend.services.sector_medians_storage import get_latest_refresh_timestamp
+        from src.research_ideas.complacency.sector_medians import refresh_sector_medians
+
+        latest = get_latest_refresh_timestamp()
+        if latest:
+            from datetime import datetime, timezone
+            try:
+                dt = datetime.fromisoformat(latest.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                age_days = (datetime.now(timezone.utc) - dt).total_seconds() / 86400
+                if age_days <= max_age_days:
+                    logger.info("Sector medians fresh (age=%.1fd) — skipping auto-refresh.", age_days)
+                    return
+                logger.info("Sector medians stale (age=%.1fd > %dd) — refreshing.", age_days, max_age_days)
+            except Exception:
+                logger.info("Sector medians timestamp unparseable — refreshing.")
+        else:
+            logger.info("Sector medians cache empty — running initial seed.")
+
+        summary = refresh_sector_medians(max_workers=8, persist=True)
+        logger.info("Sector-median refresh complete: %s", summary)
+    except Exception as exc:
+        logger.warning("Auto-refresh sector medians failed: %s", exc)
+
+
 def run_complacency(
     max_workers: int = 4,
     save: bool = True,
     run_id: str | None = None,
+    auto_refresh_sectors: bool = True,
+    sector_max_age_days: int = 7,
 ) -> ComplacencyCohortResult:
+    # If the sector-median cache is stale, refresh BEFORE scoring so we
+    # use live medians for this run. Costs ~5 min once a week.
+    if auto_refresh_sectors:
+        _auto_refresh_sector_medians_if_stale(max_age_days=sector_max_age_days)
+
     tickers = list_tickers()
     results: list[ComplacencyTickerResult] = []
     failed: list[dict] = []

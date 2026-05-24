@@ -28,10 +28,12 @@ from typing import Optional
 from src.research_ideas.complacency.data_fetch import ComplacencyBundle
 
 
-# ─── Sector medians (rough Nov-2025 defaults; overridable per run) ─────────
-# When the sector layer is built (v2), these will be computed live from the
-# scored universe. For v1 we use static medians keyed by sector.
-SECTOR_EV_SALES_MEDIAN: dict[str, float] = {
+# ─── Sector medians ────────────────────────────────────────────────────────
+# PRIMARY source: live cache in `sector_medians` SQLite table (populated
+# weekly by `complacency.sector_medians.refresh_sector_medians()` from S&P
+# 500 constituents). FALLBACK: the static Nov-2025 defaults below, used
+# only when the cache is empty or older than max_age_days.
+SECTOR_EV_SALES_MEDIAN_FALLBACK: dict[str, float] = {
     "Technology":              7.0,
     "Communication Services":  4.5,
     "Consumer Cyclical":       2.5,
@@ -44,6 +46,30 @@ SECTOR_EV_SALES_MEDIAN: dict[str, float] = {
     "Materials":               1.8,
     "Real Estate":             6.0,
 }
+
+# Back-compat alias — preserves any callers that still reference the old name.
+SECTOR_EV_SALES_MEDIAN = SECTOR_EV_SALES_MEDIAN_FALLBACK
+
+
+def resolve_sector_median(sector: Optional[str], metric: str = "ev_sales") -> Optional[float]:
+    """
+    Resolve a sector median, preferring the live cache (≤14 days old) over
+    the static fallback. Returns None only if sector is None / unknown and
+    not in the fallback table.
+    """
+    if not sector:
+        return None
+    try:
+        from app.backend.services.sector_medians_storage import get_latest_sector_median
+        cached = get_latest_sector_median(sector, metric, max_age_days=14)
+        if cached and cached.get("median") is not None:
+            return cached["median"]
+    except Exception:
+        # Storage layer may not be initialized in some test contexts; fall through.
+        pass
+    if metric == "ev_sales":
+        return SECTOR_EV_SALES_MEDIAN_FALLBACK.get(sector)
+    return None
 
 
 def _score_valuation(b: ComplacencyBundle, sector_median_ev_sales: Optional[float]) -> tuple[float, list[str]]:
@@ -222,7 +248,7 @@ def compose_justification(
 
 def score_bundle(b: ComplacencyBundle) -> dict:
     """Returns a dict of pillar scores + composite + verdict + notes."""
-    sector_median = SECTOR_EV_SALES_MEDIAN.get(b.sector or "", None) if b.sector else None
+    sector_median = resolve_sector_median(b.sector, metric="ev_sales")
     val, val_notes = _score_valuation(b, sector_median)
     beh, beh_notes = _score_behavioral(b)
     tech, tech_notes = _score_technical(b)

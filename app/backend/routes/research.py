@@ -236,3 +236,44 @@ async def refresh_complacency(max_workers: int = 4):
         tb = traceback.format_exc()
         logger.exception("refresh_complacency failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/complacency/refresh-sectors")
+async def refresh_complacency_sectors(max_workers: int = 8):
+    """
+    Manually re-pull S&P 500 EV/Sales + FCF Yield and recompute the per-sector
+    medians cached in `sector_medians`. Takes ~5 min on FMP Premium. The
+    complacency cohort runner also calls this auto-magically when the cache
+    is >7 days old.
+    """
+    try:
+        from src.research_ideas.complacency.sector_medians import refresh_sector_medians
+        summary = await asyncio.to_thread(
+            refresh_sector_medians, max_workers=max_workers, persist=True
+        )
+        return summary
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("refresh_complacency_sectors failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/complacency/sectors")
+async def list_complacency_sector_medians(metric: str = "ev_sales"):
+    """Latest cached sector medians for the given metric (default ev_sales)."""
+    try:
+        from app.backend.services.sector_medians_storage import (
+            list_latest_sector_medians,
+            get_latest_refresh_timestamp,
+        )
+        rows = await asyncio.to_thread(list_latest_sector_medians, metric)
+        latest_at = await asyncio.to_thread(get_latest_refresh_timestamp)
+        return {
+            "metric": metric,
+            "latest_refresh_at": latest_at,
+            "rows": rows,
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_complacency_sector_medians failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
