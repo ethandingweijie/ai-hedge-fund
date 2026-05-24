@@ -162,8 +162,30 @@ def fail_job(job_id: str, error: str) -> None:
         conn.close()
 
 
+# Watchdog ceiling — jobs pending/running longer than this are auto-failed
+# at read time. Covers cases where the background task died silently
+# (uvicorn worker restart, OOM kill, asyncio task GC'd before the
+# strong-reference fix landed, etc.) so the user gets a definitive
+# "failed" instead of an indefinite "pending" that the poll layer waits
+# on until its own 25-min timeout fires.
+_STUCK_JOB_CEILING_MINUTES = 30
+
+
+def _is_stuck(status: str, started_at: str) -> bool:
+    if status not in ("pending", "running"):
+        return False
+    try:
+        dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        age_minutes = (datetime.now(timezone.utc) - dt).total_seconds() / 60
+        return age_minutes > _STUCK_JOB_CEILING_MINUTES
+    except Exception:
+        return False
+
+
 def get_job(job_id: str) -> Optional[dict]:
-    """Fetch full job state."""
+    """Fetch full job state. Auto-fails jobs that have been stuck >30 min."""
     _ensure_table()
     conn = _connect()
     try:
@@ -177,7 +199,7 @@ def get_job(job_id: str) -> Optional[dict]:
         conn.close()
     if not row:
         return None
-    return {
+    job = {
         "job_id":       row[0],
         "kind":         row[1],
         "ticker":       row[2],
@@ -188,6 +210,36 @@ def get_job(job_id: str) -> Optional[dict]:
         "result":       json.loads(row[7]) if row[7] else None,
         "error":        row[8],
     }
+    if _is_stuck(job["status"], job["started_at"]):
+        logger.warning(
+            "Job %s stuck in %s state since %s — auto-failing",
+            job_id, job["status"], job["started_at"],
+        )
+        fail_job(
+            job_id,
+            f"Watchdog: job stuck in '{job['status']}' state for >{_STUCK_JOB_CEILING_MINUTES} min. "
+            "Background task likely died (worker recycled / OOM / GC'd before strong-ref fix landed)."
+        )
+        # Re-read to surface the now-failed state
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT job_id, kind, ticker, status, started_at, finished_at, "
+                "progress_msg, result_json, error_msg "
+                "FROM complacency_jobs WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row:
+            job = {
+                "job_id":       row[0], "kind": row[1], "ticker": row[2],
+                "status":       row[3], "started_at": row[4], "finished_at": row[5],
+                "progress_msg": row[6],
+                "result":       json.loads(row[7]) if row[7] else None,
+                "error":        row[8],
+            }
+    return job
 
 
 def list_recent_jobs(limit: int = 20) -> list[dict]:
@@ -221,6 +273,10 @@ def find_in_flight_job(kind: str, ticker: Optional[str] = None) -> Optional[dict
     Find a pending/running job of the same kind (+ ticker if specified).
     Used to dedupe: if the user clicks Refresh twice, return the existing
     in-flight job instead of starting a duplicate.
+
+    Stuck jobs (pending/running > 30 min) are auto-failed and treated as
+    NOT in-flight, so the user's next click starts a fresh task instead of
+    being permanently stuck on a dead job_id.
     """
     _ensure_table()
     conn = _connect()
@@ -246,6 +302,17 @@ def find_in_flight_job(kind: str, ticker: Optional[str] = None) -> Optional[dict
     finally:
         conn.close()
     if not row:
+        return None
+    if _is_stuck(row[3], row[4]):
+        logger.warning(
+            "find_in_flight: %s job %s stuck since %s — auto-failing",
+            kind, row[0], row[4],
+        )
+        fail_job(
+            row[0],
+            f"Watchdog: stuck in '{row[3]}' for >{_STUCK_JOB_CEILING_MINUTES} min "
+            "(background task likely died). Treating as not-in-flight so caller can start fresh."
+        )
         return None
     return {
         "job_id":       row[0],

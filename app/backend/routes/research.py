@@ -1,4 +1,4 @@
-"""
+﻿"""
 app/backend/routes/research.py
 ================================
 Research-Ideas endpoints.
@@ -41,7 +41,43 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ─── Idea catalogue ────────────────────────────────────────────────────────
+# â”€â”€â”€ Background-task strong-reference set â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Python's asyncio docs (3.11+) explicitly warn:
+#   "The event loop only keeps WEAK references to tasks. A task that isn't
+#    referenced elsewhere may get garbage-collected at any time, even
+#    before it's done."
+# So every asyncio.create_task() in this module MUST store the task in this
+# set; otherwise the long-running Complacency refresh / force-qual / IoTD
+# generation jobs get silently killed mid-flight, leaving the job_store
+# row stuck in 'pending' status forever. The done-callback removes the
+# task from the set once it completes (success or failure).
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro):
+    """Wrap asyncio.create_task with strong-reference + done-cleanup."""
+    task = asyncio.create_task(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    def _on_done(t: asyncio.Task):
+        try:
+            exc = t.exception()
+            if exc is not None:
+                logger.exception(
+                    "Background task %s crashed: %s",
+                    t.get_name(), exc,
+                )
+        except asyncio.CancelledError:
+            logger.warning("Background task %s was cancelled", t.get_name())
+        except Exception:
+            pass
+
+    task.add_done_callback(_on_done)
+    return task
+
+
+# â”€â”€â”€ Idea catalogue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 @router.get("/ideas")
@@ -52,7 +88,7 @@ async def list_research_ideas():
 
     sw46_meta = {
         "id": "sw46",
-        "name": "SW46 — Software Cohort Valuation",
+        "name": "SW46 â€” Software Cohort Valuation",
         "blurb": (
             "Cassandra Unchained / Scion methodology: Tragic Algebra owner "
             "earnings, fully-adjusted ROIC, AI Competitive Threat tiering, "
@@ -61,16 +97,16 @@ async def list_research_ideas():
         "ticker_count": len(sw46_list_tickers()),
         "last_run_at": latest_sw46.get("created_at") if latest_sw46 else None,
         "last_pooled_delta_e": latest_sw46.get("cohort_pooled_delta_e") if latest_sw46 else None,
-        "headline_metric_label": "Pooled ΔE",
+        "headline_metric_label": "Pooled Î”E",
     }
 
     complacency_meta = {
         "id": "complacency",
-        "name": "Complacency Detector — Ackman 4-Pillar",
+        "name": "Complacency Detector â€” Ackman 4-Pillar",
         "blurb": (
             "Bill Ackman-style equity screener: detects when price has "
             "decoupled from fundamentals across Valuation, Behavioral, "
-            "Technical, and Quality pillars. Composite ≥6/8 + all pillars ≥1 "
+            "Technical, and Quality pillars. Composite â‰¥6/8 + all pillars â‰¥1 "
             "flags structural complacency."
         ),
         "ticker_count": len(complacency_list_tickers()),
@@ -79,7 +115,7 @@ async def list_research_ideas():
         "headline_metric_label": "Gate passers",
     }
 
-    # "Research Idea of the Day" — AI-generated contrarian deep-value
+    # "Research Idea of the Day" â€” AI-generated contrarian deep-value
     # hypothesis. v1 surfaces just the meta + the latest idea's headline.
     latest_iotd = await asyncio.to_thread(contrarian_storage.get_latest_idea)
     shortlist_count = len(await asyncio.to_thread(contrarian_storage.list_shortlist, 100))
@@ -104,7 +140,7 @@ async def list_research_ideas():
     return {"ideas": [iotd_meta, sw46_meta, complacency_meta]}
 
 
-# ─── Research Idea of the Day (contrarian deep-value) ────────────────────
+# â”€â”€â”€ Research Idea of the Day (contrarian deep-value) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 @router.get("/ideas/idea-of-the-day")
@@ -137,7 +173,7 @@ async def list_recent_ideas(limit: int = 10):
 
 def _execute_idea_gen_job(job_id: str) -> None:
     """Background worker for idea generation (~30-90s via Qwen web search)."""
-    job_store.update_progress(job_id, "running", "Qwen searching the web for contrarian opportunities…")
+    job_store.update_progress(job_id, "running", "Qwen searching the web for contrarian opportunitiesâ€¦")
     try:
         # Exclude tickers from the last 7 generated ideas to avoid same-day duplicates
         recent = contrarian_storage.list_ideas(limit=7, include_deleted=True)
@@ -166,7 +202,7 @@ async def trigger_idea_generation():
     async def _run():
         await asyncio.to_thread(_execute_idea_gen_job, job_id)
 
-    asyncio.create_task(_run())
+    _spawn_background(_run())
     return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False}
 
 
@@ -243,7 +279,7 @@ async def post_chat(idea_id: str, body: dict):
         assistant_msg = await asyncio.to_thread(
             contrarian_storage.append_chat_message,
             idea_id, "assistant",
-            "(agent unavailable — DEEP_RESEARCH_API_KEY missing or Qwen failed)",
+            "(agent unavailable â€” DEEP_RESEARCH_API_KEY missing or Qwen failed)",
             None,
         )
     else:
@@ -296,7 +332,7 @@ async def remove_from_shortlist(idea_id: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-# ─── SW46 endpoints ────────────────────────────────────────────────────────
+# â”€â”€â”€ SW46 endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 @router.get("/ideas/sw46")
@@ -305,7 +341,7 @@ async def get_sw46_cohort():
     try:
         latest = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
         if not latest:
-            # Empty shape (UI shows "No runs yet — click Refresh").
+            # Empty shape (UI shows "No runs yet â€” click Refresh").
             return {
                 "run_id": None,
                 "created_at": None,
@@ -323,7 +359,7 @@ async def get_sw46_cohort():
 
 @router.get("/ideas/sw46/runs")
 async def list_sw46_runs(limit: int = 20):
-    """Historical SW46 cohort runs (header-only — no results JSON)."""
+    """Historical SW46 cohort runs (header-only â€” no results JSON)."""
     try:
         runs = await asyncio.to_thread(sw46_storage.list_sw46_runs, limit)
         return {"runs": runs}
@@ -335,12 +371,12 @@ async def list_sw46_runs(limit: int = 20):
 
 @router.get("/ideas/sw46/{ticker}")
 async def get_sw46_ticker(ticker: str):
-    """Per-ticker detail — pulls from the latest cohort run."""
+    """Per-ticker detail â€” pulls from the latest cohort run."""
     ticker = ticker.upper()
     try:
         latest = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
         if not latest:
-            raise HTTPException(status_code=404, detail="No SW46 cohort run yet — refresh first")
+            raise HTTPException(status_code=404, detail="No SW46 cohort run yet â€” refresh first")
         for r in latest.get("results", []):
             if r.get("ticker") == ticker:
                 return r
@@ -356,7 +392,7 @@ async def get_sw46_ticker(ticker: str):
 @router.post("/ideas/sw46/refresh")
 async def refresh_sw46(history_years: int = 7, max_workers: int = 6):
     """
-    Trigger a fresh cohort run. Synchronous (returns once persisted) —
+    Trigger a fresh cohort run. Synchronous (returns once persisted) â€”
     full run takes ~2-3 min for 46 tickers on FMP free tier due to per-year
     avg-price calls. Frontend should display a spinner.
     """
@@ -380,7 +416,7 @@ async def refresh_sw46(history_years: int = 7, max_workers: int = 6):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-# ─── Complacency endpoints ────────────────────────────────────────────────
+# â”€â”€â”€ Complacency endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
 @router.get("/ideas/complacency")
@@ -421,7 +457,7 @@ async def get_complacency_ticker(ticker: str):
     try:
         latest = await asyncio.to_thread(complacency_storage.get_latest_complacency_run)
         if not latest:
-            raise HTTPException(status_code=404, detail="No Complacency cohort run yet — refresh first")
+            raise HTTPException(status_code=404, detail="No Complacency cohort run yet â€” refresh first")
         for r in latest.get("results", []):
             if r.get("ticker") == ticker:
                 return r
@@ -434,7 +470,7 @@ async def get_complacency_ticker(ticker: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-# ─── Long-running ops use async-job pattern ─────────────────────────────
+# â”€â”€â”€ Long-running ops use async-job pattern â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Cohort refresh + force-qual re-scoring can take 5-10 min when deep-
 # research escalates for multiple indicators. Synchronous HTTP fails on
 # iOS Safari (kills fetches on backgrounding / cellular flakes). So we
@@ -484,7 +520,7 @@ async def refresh_complacency(max_workers: int = 4):
     async def _run():
         await asyncio.to_thread(_execute_refresh_job, job_id, max_workers)
 
-    asyncio.create_task(_run())
+    _spawn_background(_run())
     return {
         "job_id":    job_id,
         "status":    "pending",
@@ -528,8 +564,8 @@ async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
     GET /research/ideas/complacency/jobs/{job_id} for completion.
 
     Used for two flows:
-      1. Brand-new ticker not in the curated universe — full fresh score.
-      2. Existing-cohort ticker with force_qual=true — runs qualitative
+      1. Brand-new ticker not in the curated universe â€” full fresh score.
+      2. Existing-cohort ticker with force_qual=true â€” runs qualitative
          regardless of verdict; patched back into cohort storage.
 
     If a job is already in flight for this (ticker, force_qual=any), returns
@@ -553,7 +589,7 @@ async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
     async def _run():
         await asyncio.to_thread(_execute_score_job, job_id, ticker, force_qual)
 
-    asyncio.create_task(_run())
+    _spawn_background(_run())
     return {
         "job_id":    job_id,
         "status":    "pending",
