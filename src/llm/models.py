@@ -235,16 +235,20 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
         if not api_key:
             print("API Key Error: Please make sure DEEP_RESEARCH_API_KEY is set in your .env file.")
             raise ValueError("Alibaba API key not found. Set DEEP_RESEARCH_API_KEY in your .env file.")
-        # Explicit 120s timeout + 1 retry — without these LangChain's httpx
-        # client has essentially no upper bound on hangs, which compounds
-        # badly in the qualitative scorer's parallel pool: a single slow
-        # Qwen response can stall the entire 10-indicator run for hours.
+        # Explicit 120s timeout + 3 retries:
+        #  • timeout=120: caps individual call hangs (prevents indefinite
+        #    blocking on slow Qwen responses).
+        #  • max_retries=3: DashScope rate-limits aggressively when we
+        #    burst-fire 3-4 parallel indicator scoring calls. The
+        #    openai-python retry layer uses exponential backoff (~1s,
+        #    2s, 4s) on 429s, which is exactly what DashScope's
+        #    "limit_burst_rate" recovery window needs.
         return ChatOpenAI(
             model=model_name,
             api_key=api_key,
             base_url=base_url,
             timeout=120,
-            max_retries=1,
+            max_retries=3,
         )
     elif model_provider == ModelProvider.AZURE_OPENAI:
         # Get and validate API key

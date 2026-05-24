@@ -1468,7 +1468,8 @@ def assess_qualitative(
     quant_composite: float,
     indicators: Optional[list[str]] = None,
     force_refresh: bool = False,
-    max_workers: int = 4,
+    max_workers: int = 3,                  # 3 (not 4): burst of 4 parallel Qwen calls trips DashScope's
+                                            # "limit_burst_rate" 429 throttle. 3 stays under the threshold.
     per_indicator_timeout_s: int = 240,   # 4 min — first-pass (2 min) + 1 deep escalation (up to 3 min) capped
 ) -> QualitativeAssessment:
     """
@@ -1501,10 +1502,16 @@ def assess_qualitative(
     # their own internal timeouts.
     ex = ThreadPoolExecutor(max_workers=max_workers)
     try:
-        futures = {
-            ex.submit(score_indicator, ticker, name, sector, code, force_refresh): code
-            for code in indicator_codes
-        }
+        # Stagger submissions by 1.5s each to avoid 3 simultaneous Qwen
+        # calls hitting DashScope's burst-rate limiter at t=0. The
+        # parallel pool still runs 3 concurrent at steady state, but the
+        # first 3 calls now start 0s / 1.5s / 3s apart — well outside
+        # the burst window.
+        futures: dict = {}
+        for i, code in enumerate(indicator_codes):
+            futures[ex.submit(score_indicator, ticker, name, sector, code, force_refresh)] = code
+            if i < max_workers - 1:
+                _time.sleep(1.5)
         try:
             # Total cap = per_indicator_timeout_s * ceil(N / max_workers)
             # i.e. 240s × ceil(10/4) = 240 × 3 = 720s = 12 min worst case
