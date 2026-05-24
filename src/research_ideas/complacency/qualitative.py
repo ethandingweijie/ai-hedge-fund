@@ -40,6 +40,7 @@ from src.research_ideas.complacency.evidence_sources import (
     fetch_sec_recent_form144, format_form144_for_prompt,
     fetch_sec_10q_diff, format_10q_diff_for_prompt,
     fetch_price_target_consensus,
+    fetch_price_target_summary,
     tavily_search,
     fetch_stock_news,
     fetch_press_releases,
@@ -779,6 +780,45 @@ def _gather_evidence_A3(ticker: str) -> list[dict]:
                 f"Half-range / mean = {cv*100:.1f}% — {crowded}. "
                 f"(Low CV = tight target clustering = crowded long view)"
             ),
+        })
+    # /price-target-summary: time-windowed averages.  When the last-month
+    # avg PT is meaningfully higher than the all-time avg, sell-side is
+    # CHASING (textbook A3 melt-up complacency signature).
+    pts = fetch_price_target_summary(ticker)
+    if pts and pts.get("all_time_avg"):
+        chase_m = pts.get("chase_ratio_month_vs_alltime")
+        chase_q = pts.get("chase_ratio_quarter_vs_year")
+        def _chase_label(r):
+            if r is None: return "n/a"
+            if r >= 1.50: return "AGGRESSIVE CHASING (+50% vs baseline)"
+            if r >= 1.20: return "CHASING (+20-50%)"
+            if r >= 1.05: return "drifting up (+5-20%)"
+            if r >= 0.95: return "stable (±5%)"
+            if r >= 0.80: return "drifting down (-5-20%)"
+            return "RESETTING DOWN (>-20%)"
+        text = (
+            f"Sell-side price-target time series:\n"
+            f"  last month   : ${pts.get('last_month_avg')}  ({pts.get('last_month_count')} analysts)\n"
+            f"  last quarter : ${pts.get('last_quarter_avg')}  ({pts.get('last_quarter_count')} analysts)\n"
+            f"  last year    : ${pts.get('last_year_avg')}  ({pts.get('last_year_count')} analysts)\n"
+            f"  all-time avg : ${pts.get('all_time_avg')}  ({pts.get('all_time_count')} analysts)\n"
+            f"  chase ratio month/alltime    : "
+            f"{chase_m:.2f}x → {_chase_label(chase_m)}\n"
+            if chase_m is not None else
+            f"Sell-side price-target time series: last month=${pts.get('last_month_avg')} "
+            f"alltime=${pts.get('all_time_avg')}; chase-ratio n/a.\n"
+        )
+        if chase_q is not None:
+            text += f"  chase ratio quarter/year     : {chase_q:.2f}x → {_chase_label(chase_q)}\n"
+        publishers = pts.get("publishers") or []
+        if publishers:
+            text += f"  publishers ({len(publishers)})           : {', '.join(publishers[:8])}"
+            if len(publishers) > 8:
+                text += f" +{len(publishers)-8} more"
+        packs.append({
+            "source": "FMP price-target summary (/price-target-summary)",
+            "date": date.today().isoformat(),
+            "text": text,
         })
     packs.extend(_tavily_packs(
         f'"{ticker}" analyst downgrade OR price target OR initiates coverage OR upgrade',

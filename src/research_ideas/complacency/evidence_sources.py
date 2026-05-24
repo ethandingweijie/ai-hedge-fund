@@ -853,6 +853,60 @@ def format_10q_diff_for_prompt(diff: dict) -> str:
 # ─── 6. FMP price-target consensus (dispersion for A3) ────────────────────
 
 
+def fetch_price_target_summary(ticker: str) -> Optional[dict]:
+    """
+    /stable/price-target-summary returns rolling-window averages:
+      lastMonth / lastQuarter / lastYear / allTime  (count + avg)
+    plus a 'publishers' JSON-encoded list.
+
+    Key A3 signal: when lastMonthAvgPriceTarget >> allTimeAvgPriceTarget
+    (e.g. +50%), sell-side is CHASING the stock — a textbook complacency
+    signature. Complements the consensus (high/low/median) endpoint.
+    """
+    data = _fmp_get(
+        f"{_STABLE}/price-target-summary",
+        {"symbol": ticker},
+        api_key=None, uncap=True,
+    )
+    if not isinstance(data, list) or not data:
+        return None
+    r = data[0]
+
+    last_month_avg = _safe_float(r.get("lastMonthAvgPriceTarget"))
+    last_quarter_avg = _safe_float(r.get("lastQuarterAvgPriceTarget"))
+    last_year_avg = _safe_float(r.get("lastYearAvgPriceTarget"))
+    all_time_avg = _safe_float(r.get("allTimeAvgPriceTarget"))
+
+    # Chasing ratios: how much higher is the recent window vs all-time?
+    # > 1.20 = chasing; > 1.50 = aggressive chasing.
+    def _ratio(num, den):
+        if num is None or not den or den <= 0:
+            return None
+        return num / den
+
+    publishers_raw = r.get("publishers") or "[]"
+    try:
+        import json as _json
+        publishers = _json.loads(publishers_raw) if isinstance(publishers_raw, str) else publishers_raw
+    except Exception:
+        publishers = []
+
+    return {
+        "symbol": ticker,
+        "last_month_count": int(r.get("lastMonthCount") or 0),
+        "last_month_avg": last_month_avg,
+        "last_quarter_count": int(r.get("lastQuarterCount") or 0),
+        "last_quarter_avg": last_quarter_avg,
+        "last_year_count": int(r.get("lastYearCount") or 0),
+        "last_year_avg": last_year_avg,
+        "all_time_count": int(r.get("allTimeCount") or 0),
+        "all_time_avg": all_time_avg,
+        "chase_ratio_month_vs_alltime": _ratio(last_month_avg, all_time_avg),
+        "chase_ratio_quarter_vs_year": _ratio(last_quarter_avg, last_year_avg),
+        "publishers": publishers,
+    }
+
+
 def fetch_price_target_consensus(ticker: str) -> Optional[dict]:
     """
     /stable/price-target-consensus returns targetHigh / targetLow /
