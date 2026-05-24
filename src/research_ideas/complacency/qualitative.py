@@ -33,6 +33,14 @@ from pydantic import BaseModel, Field
 
 from src.llm.models import ModelProvider, get_model
 from src.tools.api import _fmp_get, _safe_float, _STABLE
+from src.research_ideas.complacency.evidence_sources import (
+    fetch_sec_10k_sections,
+    tavily_search,
+    fetch_stock_news,
+    fetch_press_releases,
+    compute_financial_signals,
+    format_financial_signals_for_prompt,
+)
 from src.research_ideas.complacency.schemas import (
     QualitativeAssessment,
     QualIndicatorScore,
@@ -436,9 +444,29 @@ Score the proximity of a near-term catalyst that could re-rate the stock down.
 """
 
 
+def _tavily_packs(query: str, days: int, max_results: int = 5) -> list[dict]:
+    """Tavily search results normalised to the gatherer pack shape."""
+    out: list[dict] = []
+    for r in tavily_search(query, days=days, max_results=max_results):
+        out.append({
+            "source": f"Tavily — {r.get('title','')[:80]}",
+            "date": (r.get("published_date") or "")[:10],
+            "text": f"{r.get('title','')}\n\n{r.get('content','')}",
+        })
+    return out
+
+
+def _fmp_news_packs(rows: list[dict]) -> list[dict]:
+    """Normalize fetch_stock_news / fetch_press_releases output to pack shape."""
+    return [{
+        "source": r["source"],
+        "date": r["date"],
+        "text": f"{r['title']}\n\n{r['text']}",
+    } for r in rows]
+
+
 def _gather_evidence_A2(ticker: str) -> list[dict]:
-    """Catalyst proximity needs: next earnings date, recent transcript Q&A (if available),
-    recent news. Transcript endpoint is plan-gated; degrades to more news."""
+    """Catalyst proximity: earnings cal + Tavily query for upcoming-event hedge language."""
     packs: list[dict] = []
     cal = _fetch_earnings_calendar(ticker)
     if cal:
@@ -455,24 +483,14 @@ def _gather_evidence_A2(ticker: str) -> list[dict]:
                     f"({days} days from today). EPS est: {cal.get('eps_estimate')}, "
                     f"Revenue est: {cal.get('revenue_estimate')}",
         })
-    transcript = _fetch_latest_transcript(ticker)
-    if transcript:
-        packs.append({
-            "source": transcript["source"],
-            "date": transcript["date"],
-            "text": transcript["content_snippet"],
-        })
-        news_limit = 4
-    else:
-        # Compensate for missing transcript with more news context.
-        news_limit = 8
-    news = _fetch_recent_news(ticker, days=90, limit=news_limit)
-    for n in news:
-        packs.append({
-            "source": n["source"],
-            "date": n["date"],
-            "text": f"{n['title']}\n\n{n['text_snippet']}",
-        })
+    # Tavily: catalyst-specific signals (guidance pressure, contract loss, regulatory ruling)
+    packs.extend(_tavily_packs(
+        f'"{ticker}" earnings preview OR guidance OR catalyst OR contract loss OR regulatory',
+        days=60, max_results=4,
+    ))
+    # FMP stock news + press releases — official corporate actions / earnings previews
+    packs.extend(_fmp_news_packs(fetch_stock_news(ticker, days=45, limit=4)))
+    packs.extend(_fmp_news_packs(fetch_press_releases(ticker, days=60, limit=3)))
     return packs
 
 
@@ -492,35 +510,36 @@ Score how aggressive the company's accounting / disclosure practices are.
 
 
 def _gather_evidence_C2(ticker: str) -> list[dict]:
-    """Accounting aggressiveness: 10-K sections + transcript (if available) + news fallback."""
+    """Accounting aggressiveness: SEC EDGAR 10-K (KAM + Risk Factors) + computed ratios + Tavily."""
     packs: list[dict] = []
-    risk = _fetch_10k_risk_factors(ticker)
-    if risk:
+    sec = fetch_sec_10k_sections(ticker)
+    if sec.get("kam"):
         packs.append({
-            "source": risk["source"],
-            "date": risk["date"],
-            "text": risk["content_snippet"],
+            "source": f"SEC 10-K Critical Audit Matters (filed {sec.get('_filed_date','?')})",
+            "date": sec.get("_filed_date", ""),
+            "text": sec["kam"],
         })
-    transcript = _fetch_latest_transcript(ticker)
-    if transcript:
+    if sec.get("risk_factors"):
         packs.append({
-            "source": transcript["source"],
-            "date": transcript["date"],
-            "text": transcript["content_snippet"],
+            "source": f"SEC 10-K Risk Factors (filed {sec.get('_filed_date','?')})",
+            "date": sec.get("_filed_date", ""),
+            "text": sec["risk_factors"][:4000],
         })
-    # Fallback: filtered news with accounting keywords.
-    if not risk and not transcript:
-        for n in _fetch_recent_news(ticker, days=180, limit=10):
-            body = (n["title"] + " " + n["text_snippet"]).lower()
-            if any(k in body for k in (
-                "restat", "audit", "goodwill", "impair", "guidance",
-                "deferred", "channel stuffing", "sec inquiry", "accounting",
-                "cfo", "10-k", "non-gaap", "revenue recogn",
-            )):
-                packs.append({
-                    "source": n["source"], "date": n["date"],
-                    "text": f"{n['title']}\n\n{n['text_snippet']}",
-                })
+    # Computed financial signals — direct numeric evidence
+    sig = compute_financial_signals(ticker)
+    if any(v is not None for v in sig.values()):
+        packs.append({
+            "source": "Derived financial signals (FMP 4yr statements)",
+            "date": date.today().isoformat(),
+            "text": format_financial_signals_for_prompt(sig),
+        })
+    # Tavily for any narrative around restatements / accounting concerns
+    packs.extend(_tavily_packs(
+        f'"{ticker}" restatement OR goodwill impairment OR channel stuffing OR accounting concerns',
+        days=180, max_results=3,
+    ))
+    # FMP press releases — direct corporate-action evidence (write-downs, restatements)
+    packs.extend(_fmp_news_packs(fetch_press_releases(ticker, days=180, limit=4)))
     return packs
 
 
@@ -540,24 +559,20 @@ Score management-quality red flags.
 
 
 def _gather_evidence_D1(ticker: str) -> list[dict]:
+    """Management red flags: Tavily targeted query catches actual scandal/turnover news."""
     packs: list[dict] = []
-    transcript = _fetch_latest_transcript(ticker)
-    if transcript:
+    packs.extend(_tavily_packs(
+        f'"{ticker}" CEO OR CFO OR executive scandal OR departure OR investigation OR lawsuit OR resign',
+        days=180, max_results=6,
+    ))
+    # Plus SEC 10-K Controls section (catches material weaknesses)
+    sec = fetch_sec_10k_sections(ticker)
+    if sec.get("controls"):
         packs.append({
-            "source": transcript["source"],
-            "date": transcript["date"],
-            "text": transcript["content_snippet"],
+            "source": f"SEC 10-K Controls & Procedures (filed {sec.get('_filed_date','?')})",
+            "date": sec.get("_filed_date", ""),
+            "text": sec["controls"][:3000],
         })
-    news = _fetch_recent_news(ticker, days=90, limit=6)
-    for n in news:
-        # Prioritize news with management / executive keywords
-        body = (n["title"] + " " + n["text_snippet"]).lower()
-        if any(k in body for k in ("ceo", "cfo", "executive", "resign", "depart", "restat", "sec", "lawsuit", "scandal", "investig")):
-            packs.append({
-                "source": n["source"],
-                "date": n["date"],
-                "text": f"{n['title']}\n\n{n['text_snippet']}",
-            })
     return packs
 
 
@@ -582,13 +597,13 @@ Score how much the bull case depends on ONE assumption.
 
 
 def _gather_evidence_A1(ticker: str) -> list[dict]:
-    """Single-thesis: news (sell-side narrative quotes) + transcript if available."""
+    """Single-thesis: Tavily for thesis framing + FMP stock news for sell-side narrative."""
     packs: list[dict] = []
-    for n in _fetch_recent_news(ticker, days=90, limit=8):
-        packs.append({
-            "source": n["source"], "date": n["date"],
-            "text": f"{n['title']}\n\n{n['text_snippet']}",
-        })
+    packs.extend(_tavily_packs(
+        f'"{ticker}" bull case OR investment thesis OR TAM OR AI moat OR hyperscaler',
+        days=120, max_results=4,
+    ))
+    packs.extend(_fmp_news_packs(fetch_stock_news(ticker, days=90, limit=6)))
     return packs
 
 
@@ -608,6 +623,7 @@ Score how crowded / uniform the long view is on Wall Street.
 
 
 def _gather_evidence_A3(ticker: str) -> list[dict]:
+    """Consensus uniformity: analyst tally + Tavily for downgrade / price-target news."""
     packs: list[dict] = []
     recs = _fetch_analyst_recommendations(ticker)
     if recs:
@@ -621,11 +637,12 @@ def _gather_evidence_A3(ticker: str) -> list[dict]:
                 f"Total {recs['total']} analysts; {recs['pct_buy_or_strong']*100:.0f}% Buy+StrongBuy."
             ),
         })
-    for n in _fetch_recent_news(ticker, days=60, limit=4):
-        packs.append({
-            "source": n["source"], "date": n["date"],
-            "text": f"{n['title']}\n\n{n['text_snippet']}",
-        })
+    packs.extend(_tavily_packs(
+        f'"{ticker}" analyst downgrade OR price target OR initiates coverage OR upgrade',
+        days=60, max_results=3,
+    ))
+    # FMP stock news — analyst-coverage articles often appear here with full text
+    packs.extend(_fmp_news_packs(fetch_stock_news(ticker, days=45, limit=4)))
     return packs
 
 
@@ -645,21 +662,19 @@ Score customer or revenue-segment concentration.
 
 
 def _gather_evidence_B1(ticker: str) -> list[dict]:
-    """B1 — risk-factor section often discloses material customers; news fills gaps."""
+    """Customer concentration: SEC 10-K Risk Factors disclose material customers."""
     packs: list[dict] = []
-    risk = _fetch_10k_risk_factors(ticker)
-    if risk:
+    sec = fetch_sec_10k_sections(ticker)
+    if sec.get("risk_factors"):
         packs.append({
-            "source": risk["source"], "date": risk["date"],
-            "text": risk["content_snippet"],
+            "source": f"SEC 10-K Risk Factors (filed {sec.get('_filed_date','?')})",
+            "date": sec.get("_filed_date", ""),
+            "text": sec["risk_factors"][:6000],
         })
-    for n in _fetch_recent_news(ticker, days=90, limit=4):
-        body = (n["title"] + " " + n["text_snippet"]).lower()
-        if any(k in body for k in ("customer", "client", "concentration", "contract", "rfp", "renewal", "churn")):
-            packs.append({
-                "source": n["source"], "date": n["date"],
-                "text": f"{n['title']}\n\n{n['text_snippet']}",
-            })
+    packs.extend(_tavily_packs(
+        f'"{ticker}" largest customer OR customer concentration OR top customer OR loses contract',
+        days=180, max_results=3,
+    ))
     return packs
 
 
@@ -679,25 +694,19 @@ Score competitive disintermediation risk (overlaps with AICT but more granular).
 
 
 def _gather_evidence_B2(ticker: str) -> list[dict]:
-    """B2 — news (competitor mentions) + 10-K Competition section if present."""
+    """Competitive disintermediation: SEC 10-K Risk Factors + Tavily on AI-native rivals."""
     packs: list[dict] = []
-    for n in _fetch_recent_news(ticker, days=120, limit=8):
-        body = (n["title"] + " " + n["text_snippet"]).lower()
-        if any(k in body for k in (
-            "competitor", "competition", "ai-native", "disrupt", "replac",
-            "alternative", "open-source", "open source", "hyperscaler",
-            "agent", "automat",
-        )):
-            packs.append({
-                "source": n["source"], "date": n["date"],
-                "text": f"{n['title']}\n\n{n['text_snippet']}",
-            })
-    risk = _fetch_10k_risk_factors(ticker)
-    if risk:
+    sec = fetch_sec_10k_sections(ticker)
+    if sec.get("risk_factors"):
         packs.append({
-            "source": risk["source"], "date": risk["date"],
-            "text": risk["content_snippet"][:4000],
+            "source": f"SEC 10-K Risk Factors (filed {sec.get('_filed_date','?')})",
+            "date": sec.get("_filed_date", ""),
+            "text": sec["risk_factors"][:5000],
         })
+    packs.extend(_tavily_packs(
+        f'"{ticker}" competitor OR AI-native OR disrupt OR hyperscaler bundle OR open-source alternative',
+        days=120, max_results=5,
+    ))
     return packs
 
 
@@ -717,23 +726,19 @@ Score pricing-power erosion signals.
 
 
 def _gather_evidence_B3(ticker: str) -> list[dict]:
+    """Pricing power erosion: computed financial signals (gross-margin trend, deferred-rev) + Tavily."""
     packs: list[dict] = []
-    for n in _fetch_recent_news(ticker, days=120, limit=6):
-        body = (n["title"] + " " + n["text_snippet"]).lower()
-        if any(k in body for k in (
-            "pricing", "price cut", "discount", "nrr", "net retention",
-            "renewal", "guidance", "billings", "deferred revenue", "ARR",
-        )):
-            packs.append({
-                "source": n["source"], "date": n["date"],
-                "text": f"{n['title']}\n\n{n['text_snippet']}",
-            })
-    risk = _fetch_10k_risk_factors(ticker)
-    if risk:
+    sig = compute_financial_signals(ticker)
+    if any(v is not None for v in sig.values()):
         packs.append({
-            "source": risk["source"], "date": risk["date"],
-            "text": risk["content_snippet"][:4000],
+            "source": "Derived financial signals (FMP 4yr statements)",
+            "date": date.today().isoformat(),
+            "text": format_financial_signals_for_prompt(sig),
         })
+    packs.extend(_tavily_packs(
+        f'"{ticker}" pricing power OR net retention OR NRR OR billings OR deferred revenue OR ARR',
+        days=120, max_results=4,
+    ))
     return packs
 
 
@@ -753,24 +758,28 @@ Score disclosure-quality deterioration.
 
 
 def _gather_evidence_C1(ticker: str) -> list[dict]:
+    """Disclosure deterioration: SEC 10-K Controls + KAM + Tavily for restatement/auditor news."""
     packs: list[dict] = []
-    risk = _fetch_10k_risk_factors(ticker)
-    if risk:
+    sec = fetch_sec_10k_sections(ticker)
+    if sec.get("controls"):
         packs.append({
-            "source": risk["source"], "date": risk["date"],
-            "text": risk["content_snippet"],
+            "source": f"SEC 10-K Controls & Procedures (filed {sec.get('_filed_date','?')})",
+            "date": sec.get("_filed_date", ""),
+            "text": sec["controls"][:3000],
         })
-    for n in _fetch_recent_news(ticker, days=270, limit=6):
-        body = (n["title"] + " " + n["text_snippet"]).lower()
-        if any(k in body for k in (
-            "restat", "auditor", "10-k", "kam", "going concern",
-            "sec inquiry", "sec subpoena", "subpoena", "cfo",
-            "non-gaap", "segment reporting", "material weakness",
-        )):
-            packs.append({
-                "source": n["source"], "date": n["date"],
-                "text": f"{n['title']}\n\n{n['text_snippet']}",
-            })
+    if sec.get("kam"):
+        packs.append({
+            "source": f"SEC 10-K Critical Audit Matters (filed {sec.get('_filed_date','?')})",
+            "date": sec.get("_filed_date", ""),
+            "text": sec["kam"],
+        })
+    packs.extend(_tavily_packs(
+        f'"{ticker}" restatement OR auditor change OR SEC inquiry OR material weakness OR going concern OR CFO change',
+        days=270, max_results=3,
+    ))
+    # FMP press releases — earliest channel for securities class-action investigations,
+    # CFO appointments, auditor changes, etc.
+    packs.extend(_fmp_news_packs(fetch_press_releases(ticker, days=270, limit=6)))
     return packs
 
 
