@@ -291,6 +291,7 @@ export function ComplacencyPage() {
                   <th className="px-2 py-2 text-right" title="Quality (Altman Z, Piotroski)">Q</th>
                   <th className="px-2 py-2 text-right">EV/S</th>
                   <th className="px-2 py-2 text-right" title="FCF Yield TTM">FCF Y</th>
+                  <th className="px-2 py-2 text-right" title="Insider Acquired ÷ (Acquired + Disposed) 4Q avg. 0 = all sales (bearish), 1 = all buys (bullish), null = no transactions in window">A/D</th>
                   <th className="px-2 py-2 text-right" title="Weekly RSI(14)">RSI</th>
                   <th className="px-2 py-2 text-right" title="% above 200-day SMA">200x</th>
                   <th className="px-2 py-2 text-right" title="Altman Z-Score">Alt Z</th>
@@ -349,6 +350,29 @@ export function ComplacencyPage() {
                       )}
                     </td>
                     <td className="px-2 py-1.5 text-right">{fmtPct(r.fcf_yield_ttm)}</td>
+                    <td
+                      className="px-2 py-1.5 text-right"
+                      title={
+                        r.ad_ratio_4q_avg == null
+                          ? 'No insider transactions in 12-month window'
+                          : r.ad_ratio_4q_avg === 0
+                            ? '0.00 = 100% insider sales, zero purchases (strong sell signal)'
+                            : r.ad_ratio_4q_avg < 0.2
+                              ? `${r.ad_ratio_4q_avg.toFixed(2)} = insiders mostly selling (< 0.20 strong flag)`
+                              : `${r.ad_ratio_4q_avg.toFixed(2)} = insider activity`
+                      }
+                    >
+                      {r.ad_ratio_4q_avg == null ? (
+                        <span className="text-muted-foreground/50 italic">n/a</span>
+                      ) : (
+                        <>
+                          {r.ad_ratio_4q_avg.toFixed(2)}
+                          {r.ad_ratio_4q_avg < 0.20 && (
+                            <span className="text-red-400 ml-1" title="< 0.20 = strong sell">▼</span>
+                          )}
+                        </>
+                      )}
+                    </td>
                     <td className="px-2 py-1.5 text-right">{r.rsi_weekly == null ? '—' : r.rsi_weekly.toFixed(0)}</td>
                     <td className="px-2 py-1.5 text-right">{fmtPct(r.sma200_extension, 0)}</td>
                     <td className="px-2 py-1.5 text-right">{r.altman_z == null ? '—' : r.altman_z.toFixed(1)}</td>
@@ -427,10 +451,39 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pillar scores</h2>
             <div className="grid grid-cols-4 gap-2 text-[11px]">
-              <Pillar label="Valuation"   score={ticker.val_score} />
-              <Pillar label="Behavioural" score={ticker.beh_score} />
-              <Pillar label="Technical"   score={ticker.tech_score} />
-              <Pillar label="Quality"     score={ticker.qual_score} />
+              <Pillar
+                label="Valuation"
+                score={ticker.val_score}
+                inputs={[
+                  ticker.ev_sales_relative != null ? `EV/S ${ticker.ev_sales_relative.toFixed(2)}× sector` : null,
+                  ticker.fcf_yield_ttm != null ? `FCF Y ${(ticker.fcf_yield_ttm * 100).toFixed(2)}%` : null,
+                ]}
+              />
+              <Pillar
+                label="Behavioural"
+                score={ticker.beh_score}
+                inputs={[
+                  ticker.ad_ratio_4q_avg != null ? `A/D ${ticker.ad_ratio_4q_avg.toFixed(2)}` : 'A/D n/a',
+                  ticker.range_position != null ? `range pos ${(ticker.range_position * 100).toFixed(0)}%` : null,
+                  ticker.eps_revision_yoy != null ? `EPS rev ${(ticker.eps_revision_yoy * 100).toFixed(0)}%` : null,
+                ]}
+              />
+              <Pillar
+                label="Technical"
+                score={ticker.tech_score}
+                inputs={[
+                  ticker.rsi_weekly != null ? `RSI ${ticker.rsi_weekly.toFixed(0)}` : null,
+                  ticker.sma200_extension != null ? `200x ${(ticker.sma200_extension * 100).toFixed(0)}%` : null,
+                ]}
+              />
+              <Pillar
+                label="Quality"
+                score={ticker.qual_score}
+                inputs={[
+                  ticker.altman_z != null ? `Z ${ticker.altman_z.toFixed(1)}` : null,
+                  ticker.piotroski != null ? `Pio ${ticker.piotroski}/9` : null,
+                ]}
+              />
             </div>
           </section>
 
@@ -485,13 +538,27 @@ function KV({ label, value, highlight = false }: { label: string; value: string;
   );
 }
 
-function Pillar({ label, score }: { label: string; score: number }) {
+function Pillar(
+  { label, score, inputs = [] }:
+  { label: string; score: number; inputs?: (string | null)[] }
+) {
+  const liveInputs = inputs.filter((x): x is string => Boolean(x));
   return (
     <div className="p-2 rounded border border-border bg-muted/30">
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={`mt-1 inline-block px-2 py-0.5 rounded text-xs font-bold ${pillarColor(score)}`}>
         {score} / 2
       </div>
+      {liveInputs.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {liveInputs.map((line, i) => (
+            <div key={i} className="text-[9px] text-muted-foreground leading-tight">{line}</div>
+          ))}
+        </div>
+      )}
+      {liveInputs.length === 0 && score === 0 && (
+        <div className="text-[9px] text-muted-foreground/60 italic mt-1">no inputs returned</div>
+      )}
     </div>
   );
 }
