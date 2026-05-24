@@ -1217,7 +1217,14 @@ INDICATORS: dict[str, dict] = {
 # Priority 3 escalation threshold: if the first-pass scorer returns confidence
 # at or below this, kick off a deep-research second pass via Qwen native web
 # search. Tunable per-indicator if needed.
-DEEP_RESEARCH_CONF_FLOOR = float(os.environ.get("COMPLACENCY_DEEP_RESEARCH_FLOOR", "0.50"))
+DEEP_RESEARCH_CONF_FLOOR = float(os.environ.get("COMPLACENCY_DEEP_RESEARCH_FLOOR", "0.45"))
+
+# Hard cap on deep-research escalations per assess_qualitative() run. Each
+# escalation costs ~$0.05 and 30-120s wall-clock. Without a cap, a ticker
+# with many low-conf first-pass scores could trigger 6 escalations × 120s
+# = 12 min just for deep research, on top of the 10 first-pass calls.
+# 3 is a tight budget that prioritises the lowest-conf indicators.
+DEEP_RESEARCH_MAX_PER_TICKER = int(os.environ.get("COMPLACENCY_DEEP_RESEARCH_MAX", "3"))
 
 # Indicators where deep research is most valuable. Skip for indicators that
 # are deterministically scored from numeric inputs (B3 pricing trends,
@@ -1231,6 +1238,40 @@ DEEP_RESEARCH_INDICATORS = {
     "C1_disclosure_deterioration",
     "D1_management_red_flags",
 }
+
+# Per-ticker shared counter for deep-research escalations. Has to be a
+# GLOBAL shared count (with lock) so the cap is enforced across the
+# ThreadPoolExecutor's 3 worker threads — threading.local would give each
+# worker its own budget, defeating the cap.
+#
+# Reset at the start of every assess_qualitative() call. Concurrent
+# assess_qualitative() calls (e.g. cohort refresh hitting multiple
+# Strong-Short tickers in parallel) WILL share this counter — that's a
+# minor over-application of the cap but harmless: worst case the cohort
+# refresh skips deep research on some indicators across the whole run.
+# For the user's actual force-rescore flow (1 ticker at a time), the cap
+# works as intended.
+import threading as _threading_mod
+_DEEP_RESEARCH_COUNT_LOCK = _threading_mod.Lock()
+_DEEP_RESEARCH_COUNT = 0
+
+
+def _deep_research_count_get() -> int:
+    with _DEEP_RESEARCH_COUNT_LOCK:
+        return _DEEP_RESEARCH_COUNT
+
+
+def _deep_research_count_inc() -> int:
+    global _DEEP_RESEARCH_COUNT
+    with _DEEP_RESEARCH_COUNT_LOCK:
+        _DEEP_RESEARCH_COUNT += 1
+        return _DEEP_RESEARCH_COUNT
+
+
+def _deep_research_count_reset() -> None:
+    global _DEEP_RESEARCH_COUNT
+    with _DEEP_RESEARCH_COUNT_LOCK:
+        _DEEP_RESEARCH_COUNT = 0
 
 
 def score_indicator(
@@ -1320,15 +1361,22 @@ def score_indicator(
     model_used = QUAL_MODEL_NAME
 
     # ── Priority 3: deep-research escalation for low-confidence outcomes ─
+    # Hard cap: skip if we've already done DEEP_RESEARCH_MAX_PER_TICKER
+    # escalations for this assess_qualitative() run. Without the cap, a
+    # ticker with many low-conf indicators (NVDA hit this) burns 10-15+ min
+    # cumulatively in deep research and ties up the parallel pool.
     if (
         enable_deep_research
         and indicator_code in DEEP_RESEARCH_INDICATORS
         and final_conf <= DEEP_RESEARCH_CONF_FLOOR
+        and _deep_research_count_get() < DEEP_RESEARCH_MAX_PER_TICKER
     ):
+        n = _deep_research_count_inc()
         logger.info(
             "Indicator %s/%s first-pass conf %.2f ≤ floor %.2f — escalating to "
-            "deep-research (Qwen native web search).",
+            "deep-research (Qwen web search) [budget %d/%d].",
             ticker, indicator_code, final_conf, DEEP_RESEARCH_CONF_FLOOR,
+            n, DEEP_RESEARCH_MAX_PER_TICKER,
         )
         try:
             deep = deep_research_indicator(
@@ -1420,8 +1468,8 @@ def assess_qualitative(
     quant_composite: float,
     indicators: Optional[list[str]] = None,
     force_refresh: bool = False,
-    max_workers: int = 3,
-    per_indicator_timeout_s: int = 360,   # 6 min — covers worst-case deep-research escalation
+    max_workers: int = 4,
+    per_indicator_timeout_s: int = 240,   # 4 min — first-pass (2 min) + 1 deep escalation (up to 3 min) capped
 ) -> QualitativeAssessment:
     """
     Score all (or a subset of) qualitative indicators for one ticker and
@@ -1435,6 +1483,11 @@ def assess_qualitative(
     import time as _time
     indicator_codes = indicators or list(INDICATORS.keys())
     started_at_ts = _time.time()
+
+    # Reset the per-ticker deep-research escalation counter at the start
+    # of every assessment, so DEEP_RESEARCH_MAX_PER_TICKER is enforced
+    # per-ticker rather than cumulatively across the process lifetime.
+    _deep_research_count_reset()
 
     scored: dict[str, QualIndicatorScore] = {}
     total_cost = 0.0
