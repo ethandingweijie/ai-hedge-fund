@@ -22,6 +22,24 @@ ComplacencyVerdict = Literal[
 ]
 
 
+class PutRecommendation(BaseModel):
+    """Suggested put-option contract for tickers flagged Strong-Short or Watch.
+    Sourced from yfinance option chain (v1; spec §10 calls for IV-percentile
+    filter in v2 via Polygon)."""
+    strike: float
+    strike_pct_otm: float          # negative; -0.12 == 12% OTM
+    expiry: str                    # ISO yyyy-mm-dd
+    days_to_expiry: int
+    bid: Optional[float] = None
+    ask: Optional[float] = None
+    mid: Optional[float] = None
+    implied_volatility: Optional[float] = None
+    open_interest: Optional[int] = None
+    volume: Optional[int] = None
+    rationale: str = ""
+    contract_symbol: Optional[str] = None
+
+
 class ComplacencyTickerResult(BaseModel):
     ticker: str
     name: str
@@ -55,6 +73,8 @@ class ComplacencyTickerResult(BaseModel):
     verdict: ComplacencyVerdict = "N/A"
     flag_notes: list[str] = Field(default_factory=list)    # human-readable signals fired
     justification: Optional[str] = None
+    put_recommendation: Optional[PutRecommendation] = None  # only when verdict in {Strong-Short, Watch}
+    options_data_freshness: Optional[str] = None     # ISO ts of put-rec fetch
     error: Optional[str] = None                       # set if calc failed
 
 

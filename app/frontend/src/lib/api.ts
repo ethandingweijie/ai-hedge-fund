@@ -501,6 +501,21 @@ export type ComplacencyVerdict =
   | 'Pass'
   | 'N/A';
 
+export interface PutRecommendation {
+  strike: number;
+  strike_pct_otm: number;       // negative; -0.12 == 12% OTM
+  expiry: string;               // ISO yyyy-mm-dd
+  days_to_expiry: number;
+  bid: number | null;
+  ask: number | null;
+  mid: number | null;
+  implied_volatility: number | null;
+  open_interest: number | null;
+  volume: number | null;
+  rationale: string;
+  contract_symbol: string | null;
+}
+
 export interface ComplacencyTickerResult {
   ticker: string;
   name: string;
@@ -531,6 +546,8 @@ export interface ComplacencyTickerResult {
   verdict: ComplacencyVerdict;
   flag_notes: string[];
   justification: string | null;
+  put_recommendation: PutRecommendation | null;
+  options_data_freshness: string | null;
   error?: string | null;
 }
 

@@ -358,6 +358,9 @@ export function ComplacencyPage() {
                     Quality
                   </th>
                   <th colSpan={1} className="px-2 py-1"></th>
+                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-purple-500/15 text-purple-300">
+                    Put rec
+                  </th>
                 </tr>
                 <tr>
                   <th className="px-2 py-2 w-10 text-right">#</th>
@@ -377,6 +380,7 @@ export function ComplacencyPage() {
                   <th className="px-2 py-2 text-right" title="Altman Z-Score">Alt Z</th>
                   <th className="px-2 py-2 text-right" title="Piotroski (0-9)">Pio</th>
                   <th className="px-2 py-2 text-right">Price</th>
+                  <th className="px-2 py-2 bg-purple-500/5" title="Put recommendation (Strong-Short / Watch only)">Strike · Exp</th>
                 </tr>
               </thead>
               <tbody>
@@ -468,6 +472,28 @@ export function ComplacencyPage() {
                     <td className="px-2 py-1.5 text-right">{r.altman_z == null ? '—' : r.altman_z.toFixed(1)}</td>
                     <td className="px-2 py-1.5 text-right">{r.piotroski == null ? '—' : `${r.piotroski}/9`}</td>
                     <td className="px-2 py-1.5 text-right">{fmtPrice(r.price)}</td>
+                    <td className="px-2 py-1.5 bg-purple-500/5">
+                      {r.put_recommendation ? (
+                        <span
+                          className="text-purple-300 font-semibold"
+                          title={[
+                            `Strike  ${fmtPrice(r.put_recommendation.strike)}  (${(r.put_recommendation.strike_pct_otm * 100).toFixed(0)}% OTM)`,
+                            `Expiry  ${r.put_recommendation.expiry}  (${r.put_recommendation.days_to_expiry} days)`,
+                            r.put_recommendation.mid != null ? `Mid     ${fmtPrice(r.put_recommendation.mid)}` : null,
+                            r.put_recommendation.implied_volatility != null ? `IV      ${(r.put_recommendation.implied_volatility * 100).toFixed(0)}%` : null,
+                            r.put_recommendation.open_interest != null ? `OI      ${r.put_recommendation.open_interest.toLocaleString()}` : null,
+                          ].filter(Boolean).join('\n')}
+                        >
+                          ${r.put_recommendation.strike.toFixed(0)}P · {r.put_recommendation.expiry.slice(5)}
+                        </span>
+                      ) : (
+                        (r.verdict === 'Strong-Short' || r.verdict === 'Watch') ? (
+                          <span className="text-muted-foreground/60 italic text-[10px]" title="No liquid put in target tenor band">illiquid</span>
+                        ) : (
+                          <span className="text-muted-foreground/40">—</span>
+                        )
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -576,6 +602,43 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
               />
             </div>
           </section>
+
+          {/* Put recommendation (only for Strong-Short / Watch) */}
+          {ticker.put_recommendation && (
+            <section className="border border-purple-500/30 rounded-md bg-purple-500/5 p-3">
+              <div className="flex items-baseline justify-between mb-2">
+                <h2 className="text-xs font-bold uppercase tracking-wider text-purple-300">Put Recommendation</h2>
+                <span className="text-[9px] text-muted-foreground italic">v1 · yfinance · no IV percentile</span>
+              </div>
+              <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
+                <FragmentRow row={{ label: 'Strike',  value: `${fmtPrice(ticker.put_recommendation.strike)}  (${(ticker.put_recommendation.strike_pct_otm * 100).toFixed(1)}% OTM)`, highlight: true }} />
+                <FragmentRow row={{ label: 'Expiry',  value: `${ticker.put_recommendation.expiry}  (${ticker.put_recommendation.days_to_expiry} days)` }} />
+                <FragmentRow row={{ label: 'Mid',     value: fmtPrice(ticker.put_recommendation.mid) }} />
+                <FragmentRow row={{ label: 'Bid / Ask',  value: `${fmtPrice(ticker.put_recommendation.bid)} / ${fmtPrice(ticker.put_recommendation.ask)}` }} />
+                <FragmentRow row={{ label: 'Implied volatility', value: ticker.put_recommendation.implied_volatility != null ? `${(ticker.put_recommendation.implied_volatility * 100).toFixed(1)}%` : '—' }} />
+                <FragmentRow row={{ label: 'Open interest',      value: ticker.put_recommendation.open_interest != null ? ticker.put_recommendation.open_interest.toLocaleString() : '—' }} />
+                <FragmentRow row={{ label: 'Volume today',       value: ticker.put_recommendation.volume != null ? ticker.put_recommendation.volume.toLocaleString() : '—' }} />
+              </div>
+              {ticker.put_recommendation.contract_symbol && (
+                <div className="mt-2 pt-2 border-t border-purple-500/20 font-mono text-[10px] text-muted-foreground">
+                  OCC: <span className="text-foreground">{ticker.put_recommendation.contract_symbol}</span>
+                </div>
+              )}
+              <p className="mt-2 text-[11px] text-foreground/80 leading-relaxed italic">
+                {ticker.put_recommendation.rationale}
+              </p>
+              <p className="mt-2 text-[9px] text-amber-500/70">
+                ⚠ Mechanical recommendation only. US options premiums are subject to 30% withholding for non-US residents.
+                Verify chain, liquidity, and earnings calendar before trading.
+              </p>
+            </section>
+          )}
+
+          {(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch') && !ticker.put_recommendation && (
+            <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
+              No liquid put contract found in the target tenor band. Chain may be illiquid or yfinance may be temporarily unavailable.
+            </section>
+          )}
 
           {/* Pillar inputs — grouped by pillar so it's obvious which input feeds which score */}
           <section>

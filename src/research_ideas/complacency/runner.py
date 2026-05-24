@@ -86,6 +86,39 @@ def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResul
 
         s = score_bundle(bundle)
 
+        # Put-option recommendation — only fire for Strong-Short / Watch
+        put_rec = None
+        put_rec_at = None
+        if s["verdict"] in ("Strong-Short", "Watch") and bundle.price:
+            try:
+                from src.research_ideas.complacency.options import select_put_recommendation
+                from datetime import datetime, timezone
+                pick = select_put_recommendation(
+                    ticker=ticker,
+                    composite=s["composite"],
+                    verdict=s["verdict"],
+                    current_price=bundle.price,
+                )
+                if pick:
+                    from src.research_ideas.complacency.schemas import PutRecommendation
+                    put_rec = PutRecommendation(
+                        strike=pick.strike,
+                        strike_pct_otm=pick.strike_pct_otm,
+                        expiry=pick.expiry,
+                        days_to_expiry=pick.days_to_expiry,
+                        bid=pick.bid,
+                        ask=pick.ask,
+                        mid=pick.mid,
+                        implied_volatility=pick.implied_volatility,
+                        open_interest=pick.open_interest,
+                        volume=pick.volume,
+                        rationale=pick.rationale,
+                        contract_symbol=pick.contract_symbol,
+                    )
+                    put_rec_at = datetime.now(timezone.utc).isoformat()
+            except Exception as exc:
+                logger.warning("Put-rec fetch for %s failed: %s", ticker, exc)
+
         return ComplacencyTickerResult(
             ticker=ticker,
             name=meta.get("name", ticker),
@@ -113,6 +146,8 @@ def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResul
             verdict=s["verdict"],
             flag_notes=s["flag_notes"],
             justification=s["justification"],
+            put_recommendation=put_rec,
+            options_data_freshness=put_rec_at,
         )
     except Exception as exc:
         logger.exception("Complacency ad-hoc %s failed: %s", ticker, exc)
