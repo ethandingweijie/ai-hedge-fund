@@ -639,7 +639,7 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
             && (!ticker.qualitative || Object.keys(ticker.qualitative.indicators ?? {}).length === 0) && (
             <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
               <span className="font-semibold not-italic">2 · Qualitative Thesis</span> — not yet scored.
-              The agent runs qwen3.6-max-preview on 10-K + transcript + news evidence for
+              The agent runs qwen3.6-plus on 10-K + transcript + news evidence for
               Strong-Short / Watch verdicts; this run may have been cached without it or
               the Qwen key (DEEP_RESEARCH_API_KEY) may not be set.
             </section>
@@ -917,7 +917,7 @@ function QualitativePanel(
         </p>
       )}
       <p className="mt-2 text-[9px] text-muted-foreground/60 italic">
-        Scored by {Object.values(qual.indicators)[0]?.model_used ?? 'qwen3.6-max'} on 10-K + transcripts + 90-day news.
+        Scored by {Object.values(qual.indicators)[0]?.model_used ?? 'qwen3.6-plus'} on 10-K + transcripts + 90-day news.
         {qual.assessed_at && ` Assessed ${qual.assessed_at.slice(0, 10)}.`}
       </p>
     </section>

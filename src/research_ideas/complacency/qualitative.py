@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Model config ──────────────────────────────────────────────────────────
 
-QUAL_MODEL_NAME = os.environ.get("COMPLACENCY_QUAL_MODEL", "qwen3.6-max-preview")
+QUAL_MODEL_NAME = os.environ.get("COMPLACENCY_QUAL_MODEL", "qwen3.6-plus")
 QUAL_MODEL_PROVIDER = ModelProvider.ALIBABA
 QUAL_TEMPERATURE = 0.2   # low — we want consistent, conservative scoring
 QUAL_CACHE_TTL_DAYS = 7
