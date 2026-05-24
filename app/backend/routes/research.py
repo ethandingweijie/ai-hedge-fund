@@ -77,6 +77,47 @@ def _spawn_background(coro):
     return task
 
 
+# ─── Heartbeat — pulses progress_msg every 30s while a job is running ────
+# Without this, the front-end toast text is frozen at the initial "scoring
+# NVDA (force_qual)" message for the entire 5-10 min job, and the user
+# can't tell if the backend is alive. The heartbeat thread writes
+# "scoring NVDA (force_qual) · 3m 15s elapsed" every 30s so the toast
+# updates live.
+import threading
+import time as _time
+
+
+def _with_heartbeat(job_id: str, base_msg: str, work_fn):
+    """
+    Run `work_fn()` synchronously while a daemon thread updates the job's
+    progress_msg with elapsed time every 30s. Returns the work_fn return
+    value. Exceptions propagate.
+    """
+    stop_flag = threading.Event()
+    start_ts = _time.time()
+
+    def _pulse():
+        while not stop_flag.wait(30):
+            elapsed_s = int(_time.time() - start_ts)
+            mm, ss = divmod(elapsed_s, 60)
+            try:
+                job_store.update_progress(
+                    job_id, "running",
+                    f"{base_msg} · {mm}m {ss}s elapsed",
+                )
+            except Exception:
+                pass
+
+    hb = threading.Thread(target=_pulse, name=f"hb-{job_id[:8]}", daemon=True)
+    hb.start()
+    try:
+        return work_fn()
+    finally:
+        stop_flag.set()
+        # Don't join hb; daemon will exit naturally. Joining adds latency
+        # on the happy-path completion.
+
+
 # â”€â”€â”€ Idea catalogue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
@@ -173,13 +214,17 @@ async def list_recent_ideas(limit: int = 10):
 
 def _execute_idea_gen_job(job_id: str) -> None:
     """Background worker for idea generation (~30-90s via Qwen web search)."""
-    job_store.update_progress(job_id, "running", "Qwen searching the web for contrarian opportunitiesâ€¦")
+    base_msg = "Qwen searching the web for contrarian opportunities"
+    job_store.update_progress(job_id, "running", base_msg)
     try:
         # Exclude tickers from the last 7 generated ideas to avoid same-day duplicates
         recent = contrarian_storage.list_ideas(limit=7, include_deleted=True)
         exclude = [r.get("ticker") for r in recent if r.get("ticker")]
 
-        idea = generate_idea_of_the_day(exclude_tickers=exclude)
+        idea = _with_heartbeat(
+            job_id, base_msg,
+            lambda: generate_idea_of_the_day(exclude_tickers=exclude),
+        )
         if not idea:
             job_store.fail_job(job_id, "generation returned empty (Qwen failed or invalid JSON)")
             return
@@ -479,9 +524,13 @@ async def get_complacency_ticker(ticker: str):
 
 def _execute_refresh_job(job_id: str, max_workers: int) -> None:
     """Backend worker for the refresh job (runs in asyncio.to_thread)."""
-    job_store.update_progress(job_id, "running", f"running cohort ({max_workers} workers)")
+    base_msg = f"running cohort ({max_workers} workers)"
+    job_store.update_progress(job_id, "running", base_msg)
     try:
-        cohort = run_complacency(max_workers=max_workers, save=True)
+        cohort = _with_heartbeat(
+            job_id, base_msg,
+            lambda: run_complacency(max_workers=max_workers, save=True),
+        )
         result = {
             "run_id": cohort.run_id,
             "created_at": cohort.created_at,
@@ -531,12 +580,13 @@ async def refresh_complacency(max_workers: int = 4):
 
 def _execute_score_job(job_id: str, ticker: str, force_qual: bool) -> None:
     """Backend worker for ad-hoc / force-qual scoring (runs in asyncio.to_thread)."""
-    job_store.update_progress(
-        job_id, "running",
-        f"scoring {ticker}{' (force_qual)' if force_qual else ''}",
-    )
+    base_msg = f"scoring {ticker}{' (force_qual)' if force_qual else ''}"
+    job_store.update_progress(job_id, "running", base_msg)
     try:
-        result = score_one_ticker(ticker, None, None, None, force_qual)
+        result = _with_heartbeat(
+            job_id, base_msg,
+            lambda: score_one_ticker(ticker, None, None, None, force_qual),
+        )
         if isinstance(result, dict) and result.get("reason"):
             job_store.fail_job(job_id, f"{ticker}: {result.get('reason')}")
             return

@@ -712,14 +712,12 @@ export async function pollComplacencyJob(
     if (Date.now() - start > timeoutMs) {
       throw new Error(`Job ${jobId} timed out after ${Math.round(timeoutMs / 1000)}s of polling`);
     }
+
+    // ── Fetch the current status (network errors retry, job-result errors propagate) ──
+    let status: ComplacencyJobStatus;
     try {
-      const status = await getComplacencyJob(jobId);
+      status = await getComplacencyJob(jobId);
       consecutiveFailures = 0;
-      opts.onProgress?.(status);
-      if (status.status === 'completed') return status;
-      if (status.status === 'failed') {
-        throw new Error(status.error || `Job ${jobId} failed`);
-      }
     } catch (e) {
       consecutiveFailures += 1;
       if (consecutiveFailures > maxFailures) {
@@ -727,8 +725,23 @@ export async function pollComplacencyJob(
           `Job ${jobId} polling failed ${consecutiveFailures} times in a row — giving up. Last error: ${(e as Error).message}`,
         );
       }
-      // Otherwise quiet retry on next tick
+      // Transient network error — wait and retry on next tick
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+      continue;
     }
+
+    // Report progress on every successful poll
+    opts.onProgress?.(status);
+
+    // Terminal states — propagate failures DIRECTLY (don't bury them in the
+    // network-error retry loop, which the original implementation did and
+    // surfaced legitimate job failures as misleading "polling failed N times".)
+    if (status.status === 'completed') return status;
+    if (status.status === 'failed') {
+      throw new Error(status.error || `Job ${jobId} failed (no error message)`);
+    }
+
+    // Still pending / running — wait then poll again
     await new Promise((r) => setTimeout(r, pollIntervalMs));
   }
 }
