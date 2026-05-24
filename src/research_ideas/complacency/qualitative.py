@@ -38,12 +38,19 @@ from src.research_ideas.complacency.evidence_sources import (
     fetch_sec_recent_8k, format_8k_filings_for_prompt,
     fetch_sec_def14a_excerpt,
     fetch_sec_recent_form144, format_form144_for_prompt,
+    fetch_sec_10q_diff, format_10q_diff_for_prompt,
     fetch_price_target_consensus,
     tavily_search,
     fetch_stock_news,
     fetch_press_releases,
     compute_financial_signals,
     format_financial_signals_for_prompt,
+    compute_quarterly_trends,
+    format_quarterly_trends_for_prompt,
+)
+from src.research_ideas.complacency.peer_benchmarks import (
+    get_peer_context,
+    format_peer_context_for_prompt,
 )
 from src.research_ideas.complacency.schemas import (
     QualitativeAssessment,
@@ -74,14 +81,48 @@ class _LLMEvidence(BaseModel):
     url: Optional[str] = Field(default=None, description="URL to the source if available")
 
 
+class _LLMExtractedFact(BaseModel):
+    """A single fact the LLM extracted from the evidence, mapped to a rubric anchor.
+
+    Forcing the LLM to enumerate facts BEFORE scoring (chain-of-thought
+    scaffold) gives most of the benefit of a two-stage extract→score flow
+    without paying for two LLM round-trips.
+    """
+    fact: str = Field(description="Concise factual statement extracted from the evidence (≤ 200 chars).")
+    rubric_anchor: str = Field(
+        description=(
+            "Which rubric score (0-5) this fact most directly supports, "
+            "e.g. 'score 3: Goodwill > 60% of equity' or 'score 0: clean accounting'."
+        )
+    )
+    source_tier: int = Field(
+        ge=1, le=3,
+        description="Source-quality tier (1=SEC/Bloomberg/WSJ, 2=sell-side/CNBC, 3=Tavily/Seeking Alpha).",
+    )
+
+
 class _LLMIndicatorOutput(BaseModel):
-    """JSON-mode output from the qualitative scorer agent."""
-    score: int = Field(ge=0, le=5, description="Score 0-5 per the rubric in the prompt")
-    confidence: float = Field(ge=0.0, le=1.0, description="0=no confidence, 1=certain. Use < 0.4 if evidence is thin.")
-    summary: str = Field(description="One-line takeaway, ≤ 200 chars")
+    """JSON-mode output from the qualitative scorer agent (with chain-of-thought scaffold)."""
+    extracted_facts: list[_LLMExtractedFact] = Field(
+        default_factory=list,
+        description=(
+            "Step 1: Before scoring, extract 3-5 relevant facts from the evidence "
+            "and tag each with the rubric anchor it supports and the source tier. "
+            "If you can't extract any facts, the score should be 0 with confidence < 0.4."
+        ),
+    )
+    score: int = Field(ge=0, le=5, description="Step 3: Final score 0-5 per the rubric, justified by the extracted_facts.")
+    confidence: float = Field(
+        ge=0.0, le=1.0,
+        description=(
+            "Step 4: 0=no confidence, 1=certain. Cap at 0.50 if all facts are "
+            "Tier-3 (Tavily blogs, opinion pieces). Use < 0.4 if extracted_facts is empty."
+        ),
+    )
+    summary: str = Field(description="Step 5: One-line takeaway, ≤ 200 chars")
     evidence: list[_LLMEvidence] = Field(
         default_factory=list,
-        description="Verbatim evidence supporting the score. Required unless score=0."
+        description="Step 2: Verbatim source quotes backing the extracted_facts. Required unless score=0."
     )
 
 
@@ -405,14 +446,39 @@ When evidence is exclusively Tier 3, cap confidence at 0.50 and add a
 "speculative — needs Tier-1 corroboration" note to your summary. When you
 have a Tier-1 source contradicting Tier-3 chatter, prefer the Tier-1 view.
 
+REASONING PROCESS (must follow this order — chain-of-thought scaffold):
+
+  Step 1 — EXTRACT 3-5 facts from the provided evidence into `extracted_facts`.
+           For each fact: state it concisely, tag the rubric score (0-5) it
+           most directly supports, AND tag its source tier (1/2/3).
+           If you cannot extract any facts → score = 0, confidence < 0.4.
+
+  Step 2 — Copy the VERBATIM source quote backing each fact into `evidence`.
+
+  Step 3 — Score 0-5 by selecting the rubric anchor that BEST matches the
+           weight of facts in `extracted_facts`. Use the strongest-supported
+           anchor; do not split the difference.
+
+  Step 4 — Set `confidence`:
+             • If every fact is Tier-1 and they corroborate → 0.80-0.95
+             • If mixed Tier-1 / Tier-2 → 0.60-0.80
+             • If only Tier-3 → cap at 0.50
+             • If facts contradict each other → 0.30-0.50
+             • If `extracted_facts` is empty → < 0.40
+
+  Step 5 — Write a one-line `summary` (≤ 200 chars).
+
 OUTPUT FORMAT (JSON only):
 {
-  "score": <0-5 integer>,
-  "confidence": <0-1 float>,
-  "summary": "<≤ 200 char takeaway>",
+  "extracted_facts": [
+    {"fact": "<≤ 200 chars>", "rubric_anchor": "score N: <reason>", "source_tier": 1|2|3}
+  ],
   "evidence": [
     {"source": "<source label>", "quote": "<verbatim ≤ 300 chars>", "date": "yyyy-mm-dd"}
-  ]
+  ],
+  "score": <0-5 integer>,
+  "confidence": <0-1 float>,
+  "summary": "<≤ 200 char takeaway>"
 }
 """
 
@@ -739,7 +805,8 @@ Score customer or revenue-segment concentration.
 
 
 def _gather_evidence_B1(ticker: str) -> list[dict]:
-    """Customer concentration: SEC 10-K Risk Factors disclose material customers."""
+    """Customer concentration: SEC 10-K Risk Factors + peer-context for deferred-rev
+    (high deferred-rev/revenue → customer stickiness; low → easier substitution)."""
     packs: list[dict] = []
     sec = fetch_sec_10k_sections(ticker)
     if sec.get("risk_factors"):
@@ -748,6 +815,16 @@ def _gather_evidence_B1(ticker: str) -> list[dict]:
             "date": sec.get("_filed_date", ""),
             "text": sec["risk_factors"][:6000],
         })
+    # 2B: Peer context — deferred-rev/revenue & revenue growth vs cohort
+    sig = compute_financial_signals(ticker)
+    if any(v is not None for v in sig.values()):
+        ctx = get_peer_context(ticker, sig)
+        if ctx:
+            packs.append({
+                "source": "Peer benchmark (complacency cohort medians)",
+                "date": date.today().isoformat(),
+                "text": format_peer_context_for_prompt(ctx),
+            })
     packs.extend(_tavily_packs(
         f'"{ticker}" largest customer OR customer concentration OR top customer OR loses contract',
         days=180, max_results=3,
@@ -771,7 +848,9 @@ Score competitive disintermediation risk (overlaps with AICT but more granular).
 
 
 def _gather_evidence_B2(ticker: str) -> list[dict]:
-    """Competitive disintermediation: SEC 10-K Risk Factors + Tavily on AI-native rivals."""
+    """Competitive disintermediation: SEC 10-K Risk Factors + peer-context (revenue
+    growth & gross margin trajectory vs peers reveals competitive pressure) +
+    Tavily on AI-native rivals."""
     packs: list[dict] = []
     sec = fetch_sec_10k_sections(ticker)
     if sec.get("risk_factors"):
@@ -780,6 +859,17 @@ def _gather_evidence_B2(ticker: str) -> list[dict]:
             "date": sec.get("_filed_date", ""),
             "text": sec["risk_factors"][:5000],
         })
+    # 2B: Peer context — revenue CAGR + gross margin vs cohort medians.
+    # Below-cohort growth + below-cohort GM is the disintermediation signature.
+    sig = compute_financial_signals(ticker)
+    if any(v is not None for v in sig.values()):
+        ctx = get_peer_context(ticker, sig)
+        if ctx:
+            packs.append({
+                "source": "Peer benchmark (complacency cohort medians)",
+                "date": date.today().isoformat(),
+                "text": format_peer_context_for_prompt(ctx),
+            })
     packs.extend(_tavily_packs(
         f'"{ticker}" competitor OR AI-native OR disrupt OR hyperscaler bundle OR open-source alternative',
         days=120, max_results=5,
@@ -803,7 +893,8 @@ Score pricing-power erosion signals.
 
 
 def _gather_evidence_B3(ticker: str) -> list[dict]:
-    """Pricing power erosion: computed financial signals (gross-margin trend, deferred-rev) + Tavily."""
+    """Pricing power erosion: annual signals + 8-quarter trend (catches consistent
+    deterioration vs single-quarter blip) + Tavily on NRR/ARR commentary."""
     packs: list[dict] = []
     sig = compute_financial_signals(ticker)
     if any(v is not None for v in sig.values()):
@@ -812,6 +903,26 @@ def _gather_evidence_B3(ticker: str) -> list[dict]:
             "date": date.today().isoformat(),
             "text": format_financial_signals_for_prompt(sig),
         })
+    # 2C: Quarter-by-quarter trajectory for the last 8 quarters.
+    # Differentiates "one weak quarter" (score 1-2) from "consistent
+    # deterioration over 4+ quarters" (score 3-5).
+    qt = compute_quarterly_trends(ticker, n_quarters=8)
+    if qt.get("quarters"):
+        packs.append({
+            "source": "Derived quarterly trends (FMP 8-quarter trajectory)",
+            "date": date.today().isoformat(),
+            "text": format_quarterly_trends_for_prompt(qt),
+        })
+    # 2B: Peer context — gross margin & DSO trends vs cohort medians.
+    # Below-cohort gross margin + above-cohort DSO is pricing-power erosion.
+    if any(v is not None for v in sig.values()):
+        ctx = get_peer_context(ticker, sig)
+        if ctx:
+            packs.append({
+                "source": "Peer benchmark (complacency cohort medians)",
+                "date": date.today().isoformat(),
+                "text": format_peer_context_for_prompt(ctx),
+            })
     packs.extend(_tavily_packs(
         f'"{ticker}" pricing power OR net retention OR NRR OR billings OR deferred revenue OR ARR',
         days=120, max_results=4,
@@ -838,6 +949,21 @@ def _gather_evidence_C1(ticker: str) -> list[dict]:
     """Disclosure deterioration: SEC 8-K (Item 4.01/4.02 = auditor change/restatement) +
     10-K Controls + KAM + Tavily for restatement/auditor news + press releases."""
     packs: list[dict] = []
+
+    # Tier 1: SEC 10-Q DIFF — new risk-factor language vs prior quarter.
+    # Companies rarely ADD risk factors unless something materially changed.
+    # This catches the C1 "Multiple KAMs added in last 10-K" rubric anchor
+    # at quarterly cadence (10-Q is 3x faster than 10-K cycle).
+    q_diff = fetch_sec_10q_diff(ticker)
+    if q_diff and ((q_diff.get("new_risk_factors") or []) or (q_diff.get("new_mda") or [])):
+        packs.append({
+            "source": (
+                f"SEC 10-Q diff (current {q_diff.get('_curr_filed_date','?')} "
+                f"vs prior {q_diff.get('_prev_filed_date','?')})"
+            ),
+            "date": q_diff.get("_curr_filed_date", ""),
+            "text": format_10q_diff_for_prompt(q_diff),
+        })
 
     # Tier 1: SEC 8-K — Item 4.01 (auditor change) and 4.02 (non-reliance / restatement)
     # are the GOLD-standard signals for disclosure deterioration.

@@ -650,6 +650,206 @@ def format_form144_for_prompt(filings: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# ─── 3e. SEC EDGAR — 10-Q section diff (new risk-factor language) ────────
+
+
+_10Q_SECTION_REGEX = {
+    "risk_factors": re.compile(
+        r"item\s*1a[\s\.\)]+risk\s+factors(.*?)(?:item\s*[2-6][\s\.\)]|signatures)",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    "mda": re.compile(
+        r"item\s*2[\s\.\)]+\s*management.{0,80}discussion(.*?)(?:item\s*3[\s\.\)]|item\s*4[\s\.\)])",
+        re.IGNORECASE | re.DOTALL,
+    ),
+}
+
+
+def _sec_recent_filings_of_type(
+    cik: str, form_type: str, limit: int = 5
+) -> list[tuple[str, str, str]]:
+    """Returns list of (accession, primary_doc_url, filed_date) for latest N filings of the given form."""
+    try:
+        r = requests.get(
+            f"https://data.sec.gov/submissions/CIK{cik}.json",
+            headers={"User-Agent": _SEC_USER_AGENT},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json()
+    except Exception:
+        return []
+
+    recent = data.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    accessions = recent.get("accessionNumber", [])
+    primary_docs = recent.get("primaryDocument", [])
+    dates = recent.get("filingDate", [])
+
+    out: list[tuple[str, str, str]] = []
+    for i, form in enumerate(forms):
+        if form != form_type:
+            continue
+        accession = accessions[i]
+        primary = primary_docs[i]
+        filed = dates[i]
+        acc_no_dashes = accession.replace("-", "")
+        url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_no_dashes}/{primary}"
+        out.append((accession, url, filed))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _fetch_10q_sections(doc_url: str, max_section_chars: int = 8000) -> dict[str, str]:
+    """Extract risk_factors and mda from a 10-Q HTML doc."""
+    try:
+        r = requests.get(
+            doc_url,
+            headers={"User-Agent": _SEC_USER_AGENT, "Accept-Encoding": "gzip, deflate"},
+            timeout=30,
+        )
+        if r.status_code != 200:
+            return {}
+        text = _strip_html(r.text)
+    except Exception:
+        return {}
+
+    sections: dict[str, str] = {}
+    for key, pat in _10Q_SECTION_REGEX.items():
+        m = pat.search(text)
+        if m:
+            snippet = m.group(1).strip()[:max_section_chars]
+            if len(snippet) > 200:
+                sections[key] = snippet
+    return sections
+
+
+def _paragraphize(text: str, min_chars: int = 80) -> list[str]:
+    """Split prose into paragraph-like chunks for diffing."""
+    if not text:
+        return []
+    # Heuristic: split on sentence terminators followed by capital-letter starts,
+    # and on common section delimiters. Then filter short fragments.
+    raw = re.split(r"(?<=[.!?])\s+(?=[A-Z(])", text)
+    return [p.strip() for p in raw if p and len(p.strip()) >= min_chars]
+
+
+def _shingle(p: str, n: int = 6) -> set[str]:
+    """Word-level n-gram shingle for near-duplicate detection."""
+    words = re.findall(r"[A-Za-z]+", p.lower())
+    if len(words) < n:
+        return {" ".join(words)} if words else set()
+    return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+
+def fetch_sec_10q_diff(
+    ticker: str,
+    max_new_chunks: int = 12,
+    overlap_threshold: float = 0.30,
+) -> Optional[dict]:
+    """
+    Compare the LATEST 10-Q's risk-factor + MD&A sections against the PRIOR
+    10-Q and return paragraphs that are substantively NEW (low n-gram
+    overlap with anything in the prior quarter).
+
+    New risk-factor language is one of the strongest leading indicators
+    of disclosure deterioration — companies don't usually ADD risk text
+    unless something materially changed.
+
+    Returns {
+      _curr_filed_date, _prev_filed_date, _curr_url, _prev_url,
+      new_risk_factors: [str], new_mda: [str]
+    } or None on failure / no prior filing.
+    """
+    cached = _10Q_DIFF_CACHE.get(ticker.upper())
+    if cached is not None:
+        return cached
+
+    cik = _sec_get_cik(ticker)
+    if not cik:
+        _10Q_DIFF_CACHE[ticker.upper()] = None
+        return None
+    time.sleep(0.15)
+
+    filings = _sec_recent_filings_of_type(cik, "10-Q", limit=3)
+    if len(filings) < 2:
+        _10Q_DIFF_CACHE[ticker.upper()] = None
+        return None
+
+    curr = filings[0]
+    prev = filings[1]
+    time.sleep(0.15)
+    curr_sec = _fetch_10q_sections(curr[1])
+    time.sleep(0.15)
+    prev_sec = _fetch_10q_sections(prev[1])
+
+    if not curr_sec or not prev_sec:
+        _10Q_DIFF_CACHE[ticker.upper()] = None
+        return None
+
+    result: dict = {
+        "_curr_filed_date": curr[2],
+        "_prev_filed_date": prev[2],
+        "_curr_url": curr[1],
+        "_prev_url": prev[1],
+    }
+
+    for sec_key, out_key in (("risk_factors", "new_risk_factors"), ("mda", "new_mda")):
+        curr_text = curr_sec.get(sec_key, "")
+        prev_text = prev_sec.get(sec_key, "")
+        if not curr_text or not prev_text:
+            result[out_key] = []
+            continue
+
+        prev_paras = _paragraphize(prev_text)
+        prev_shingles: set[str] = set()
+        for p in prev_paras:
+            prev_shingles |= _shingle(p)
+
+        new_chunks: list[str] = []
+        for p in _paragraphize(curr_text):
+            p_sh = _shingle(p)
+            if not p_sh:
+                continue
+            overlap = len(p_sh & prev_shingles) / max(len(p_sh), 1)
+            if overlap < overlap_threshold:
+                new_chunks.append(p[:400])  # cap each chunk
+            if len(new_chunks) >= max_new_chunks:
+                break
+        result[out_key] = new_chunks
+
+    _10Q_DIFF_CACHE[ticker.upper()] = result
+    return result
+
+
+_10Q_DIFF_CACHE: dict[str, Optional[dict]] = {}
+
+
+def format_10q_diff_for_prompt(diff: dict) -> str:
+    if not diff:
+        return ""
+    lines = [
+        f"10-Q DIFF — new language vs prior quarter:",
+        f"  current 10-Q  filed {diff.get('_curr_filed_date','?')}",
+        f"  prior 10-Q    filed {diff.get('_prev_filed_date','?')}",
+    ]
+    nrf = diff.get("new_risk_factors") or []
+    if nrf:
+        lines.append(f"  NEW RISK FACTORS ({len(nrf)} paragraphs):")
+        for p in nrf[:8]:
+            lines.append(f"    • {p}")
+    else:
+        lines.append(f"  NEW RISK FACTORS: (none detected)")
+    nmda = diff.get("new_mda") or []
+    if nmda:
+        lines.append(f"  NEW MD&A LANGUAGE ({len(nmda)} paragraphs):")
+        for p in nmda[:6]:
+            lines.append(f"    • {p}")
+    return "\n".join(lines)
+
+
 # ─── 6. FMP price-target consensus (dispersion for A3) ────────────────────
 
 
@@ -745,6 +945,129 @@ def fetch_press_releases(ticker: str, days: int = 270, limit: int = 8) -> list[d
             "text": (r.get("text") or "")[:1500],
         })
     return out
+
+
+def compute_quarterly_trends(ticker: str, n_quarters: int = 8) -> dict:
+    """
+    Quarter-by-quarter trajectory for the signals that matter to B3 (pricing
+    power erosion) and B1 (concentration). Catches "consistent deterioration"
+    that a single-period snapshot would miss.
+
+    Returns dict with:
+      quarters: list of {date, revenue, gross_margin_pct, dso_days,
+                         deferred_rev_to_revenue, cfo_to_ni_ratio}
+      trends: {gross_margin_delta_4q, dso_delta_4q, deferred_rev_delta_4q,
+               revenue_qoq_4q_pct} — change from 4 quarters ago to latest
+    """
+    income = _fmp_get(
+        f"{_STABLE}/income-statement",
+        {"symbol": ticker, "period": "quarter", "limit": n_quarters},
+        api_key=None, uncap=True,
+    ) or []
+    balance = _fmp_get(
+        f"{_STABLE}/balance-sheet-statement",
+        {"symbol": ticker, "period": "quarter", "limit": n_quarters},
+        api_key=None, uncap=True,
+    ) or []
+    cashflow = _fmp_get(
+        f"{_STABLE}/cash-flow-statement",
+        {"symbol": ticker, "period": "quarter", "limit": n_quarters},
+        api_key=None, uncap=True,
+    ) or []
+
+    if not income:
+        return {"quarters": [], "trends": {}}
+
+    income.sort(key=lambda r: r.get("date", ""))
+    balance.sort(key=lambda r: r.get("date", ""))
+    cashflow.sort(key=lambda r: r.get("date", ""))
+
+    # Index balance + cf by date for O(1) join
+    bal_by_date = {b.get("date"): b for b in balance if b.get("date")}
+    cf_by_date = {c.get("date"): c for c in cashflow if c.get("date")}
+
+    quarters: list[dict] = []
+    for inc in income:
+        d = inc.get("date")
+        if not d:
+            continue
+        bal = bal_by_date.get(d, {})
+        cf = cf_by_date.get(d, {})
+
+        revenue = _safe_float(inc.get("revenue"))
+        gp = _safe_float(inc.get("grossProfit"))
+        gm = (gp / revenue) if (gp is not None and revenue and revenue > 0) else None
+
+        recv = _safe_float(bal.get("accountsReceivables") or bal.get("netReceivables"))
+        # Quarterly DSO uses 90 days (not 365)
+        dso = (recv / revenue * 90) if (recv and revenue and revenue > 0) else None
+
+        deferred = _safe_float(bal.get("deferredRevenue") or bal.get("deferredRevenueNonCurrent"))
+        dr_to_rev = (deferred / revenue) if (deferred is not None and revenue and revenue > 0) else None
+
+        cfo = _safe_float(cf.get("operatingCashFlow") or cf.get("netCashProvidedByOperatingActivities"))
+        ni = _safe_float(inc.get("netIncome"))
+        cash_conv = (cfo / ni) if (cfo is not None and ni and ni != 0) else None
+
+        quarters.append({
+            "date": d,
+            "revenue": revenue,
+            "gross_margin_pct": gm,
+            "dso_days": dso,
+            "deferred_rev_to_revenue": dr_to_rev,
+            "cfo_to_ni_ratio": cash_conv,
+        })
+
+    trends: dict = {
+        "gross_margin_delta_4q": None,
+        "dso_delta_4q": None,
+        "deferred_rev_delta_4q": None,
+        "revenue_qoq_4q_pct": None,
+    }
+    if len(quarters) >= 5:
+        latest = quarters[-1]
+        prior4 = quarters[-5]
+        def _delta(k):
+            a, b = latest.get(k), prior4.get(k)
+            return (a - b) if (a is not None and b is not None) else None
+        trends["gross_margin_delta_4q"] = _delta("gross_margin_pct")
+        trends["dso_delta_4q"] = _delta("dso_days")
+        trends["deferred_rev_delta_4q"] = _delta("deferred_rev_to_revenue")
+        a_rev, b_rev = latest.get("revenue"), prior4.get("revenue")
+        if a_rev and b_rev and b_rev > 0:
+            trends["revenue_qoq_4q_pct"] = (a_rev / b_rev) - 1
+
+    return {"quarters": quarters, "trends": trends}
+
+
+def format_quarterly_trends_for_prompt(qt: dict) -> str:
+    """Compact quarterly-trend rendering for the LLM prompt (B3 pricing-power)."""
+    quarters = qt.get("quarters") or []
+    trends = qt.get("trends") or {}
+    if not quarters:
+        return ""
+    lines = [f"QUARTERLY TRENDS (last {len(quarters)} quarters):"]
+    lines.append(f"  {'date':<11s} {'rev($M)':>10s} {'GM%':>7s} {'DSO':>6s} {'DefRv/R':>8s} {'CFO/NI':>7s}")
+    for q in quarters:
+        rev_m = (q['revenue'] / 1e6) if q['revenue'] else None
+        def f(v, fmt):
+            return fmt.format(v) if v is not None else "n/a"
+        lines.append(
+            f"  {q['date']:<11s} {f(rev_m,'{:>10,.0f}')} "
+            f"{f(q['gross_margin_pct'],'{:>6.1%}')} "
+            f"{f(q['dso_days'],'{:>5.0f}d')} "
+            f"{f(q['deferred_rev_to_revenue'],'{:>7.1%}')} "
+            f"{f(q['cfo_to_ni_ratio'],'{:>6.2f}x')}"
+        )
+    lines.append("")
+    lines.append("  4-QUARTER DELTAS (latest minus 4Q ago):")
+    def _fd(v, fmt):
+        return fmt.format(v) if v is not None else "n/a"
+    lines.append(f"    Gross margin Δ 4Q          : {_fd(trends.get('gross_margin_delta_4q'), '{:+.1%}')}")
+    lines.append(f"    DSO Δ 4Q                   : {_fd(trends.get('dso_delta_4q'), '{:+.0f} days')}")
+    lines.append(f"    Deferred-rev/Revenue Δ 4Q  : {_fd(trends.get('deferred_rev_delta_4q'), '{:+.1%}')}")
+    lines.append(f"    Revenue growth 4Q YoY      : {_fd(trends.get('revenue_qoq_4q_pct'), '{:+.1%}')}")
+    return "\n".join(lines)
 
 
 def format_financial_signals_for_prompt(sig: dict) -> str:
