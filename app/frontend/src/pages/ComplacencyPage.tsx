@@ -164,8 +164,11 @@ export function ComplacencyPage() {
           </button>
           <h1 className="text-xl font-bold text-foreground">Complacency Detector</h1>
         </div>
-        <p className="text-xs text-muted-foreground mb-4 ml-7">
+        <p className="text-xs text-muted-foreground mb-1 ml-7">
           Ackman 4-pillar equity screen · Valuation / Behavioural / Technical / Quality · gate ≥ 6/8 & all pillars ≥ 1
+        </p>
+        <p className="text-[10px] text-muted-foreground/70 mb-4 ml-7">
+          Valuation pillar uses live S&P 500 sector medians (cached weekly). Hover EV/S column for per-row comparison.
         </p>
 
         {/* Cohort summary bar */}
@@ -320,7 +323,31 @@ export function ComplacencyPage() {
                     <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pillarColor(r.beh_score)}`}>{r.beh_score}</span></td>
                     <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pillarColor(r.tech_score)}`}>{r.tech_score}</span></td>
                     <td className="px-2 py-1.5 text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${pillarColor(r.qual_score)}`}>{r.qual_score}</span></td>
-                    <td className="px-2 py-1.5 text-right">{r.ev_sales == null ? '—' : `${r.ev_sales.toFixed(1)}×`}</td>
+                    <td
+                      className="px-2 py-1.5 text-right"
+                      title={
+                        r.ev_sales == null
+                          ? 'EV/Sales TTM unavailable'
+                          : [
+                              `EV/Sales (TTM): ${r.ev_sales.toFixed(2)}×`,
+                              r.ev_sales_sector_median != null
+                                ? `Sector median (live S&P 500): ${r.ev_sales_sector_median.toFixed(2)}×`
+                                : 'Sector median: not available',
+                              r.ev_sales_relative != null
+                                ? `→ ${r.ev_sales_relative.toFixed(2)}× sector median`
+                                : null,
+                            ].filter(Boolean).join('\n')
+                      }
+                    >
+                      {r.ev_sales == null ? '—' : (
+                        <>
+                          {r.ev_sales.toFixed(1)}×
+                          {r.ev_sales_relative != null && r.ev_sales_relative >= 2.5 && (
+                            <span className="text-red-400 ml-1" title="≥ 2.5× sector median (strong flag)">▲</span>
+                          )}
+                        </>
+                      )}
+                    </td>
                     <td className="px-2 py-1.5 text-right">{fmtPct(r.fcf_yield_ttm)}</td>
                     <td className="px-2 py-1.5 text-right">{r.rsi_weekly == null ? '—' : r.rsi_weekly.toFixed(0)}</td>
                     <td className="px-2 py-1.5 text-right">{fmtPct(r.sma200_extension, 0)}</td>
