@@ -235,7 +235,17 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
         if not api_key:
             print("API Key Error: Please make sure DEEP_RESEARCH_API_KEY is set in your .env file.")
             raise ValueError("Alibaba API key not found. Set DEEP_RESEARCH_API_KEY in your .env file.")
-        return ChatOpenAI(model=model_name, api_key=api_key, base_url=base_url)
+        # Explicit 120s timeout + 1 retry — without these LangChain's httpx
+        # client has essentially no upper bound on hangs, which compounds
+        # badly in the qualitative scorer's parallel pool: a single slow
+        # Qwen response can stall the entire 10-indicator run for hours.
+        return ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url=base_url,
+            timeout=120,
+            max_retries=1,
+        )
     elif model_provider == ModelProvider.AZURE_OPENAI:
         # Get and validate API key
         api_key = os.getenv("AZURE_OPENAI_API_KEY")

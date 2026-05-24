@@ -54,7 +54,13 @@ QWEN_RESEARCH_MODEL = os.environ.get(
 
 
 def _qwen_client():
-    """OpenAI-compatible client pointed at DashScope's search endpoint."""
+    """OpenAI-compatible client pointed at DashScope's search endpoint.
+
+    timeout=180s (down from 300s): web-search agent calls take 30-90s in
+    practice; 180s gives 2x headroom but caps single-call hangs at 3 min
+    instead of 5 min. Compounds with assess_qualitative's parallel pool
+    where each hung call previously blocked one of 3 worker slots.
+    """
     try:
         from openai import OpenAI
     except ImportError:
@@ -68,7 +74,7 @@ def _qwen_client():
         "DEEP_RESEARCH_SEARCH_BASE_URL",
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     )
-    return OpenAI(api_key=api_key, base_url=base_url, timeout=300)
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=180)
 
 
 def qwen_web_search(

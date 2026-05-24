@@ -1421,12 +1421,20 @@ def assess_qualitative(
     indicators: Optional[list[str]] = None,
     force_refresh: bool = False,
     max_workers: int = 3,
+    per_indicator_timeout_s: int = 360,   # 6 min — covers worst-case deep-research escalation
 ) -> QualitativeAssessment:
     """
     Score all (or a subset of) qualitative indicators for one ticker and
     derive the composite + conviction label.
+
+    Per-indicator timeout enforced via concurrent.futures.TimeoutError so
+    a single hung Qwen call can't stall the entire parallel pool. Per-
+    indicator INFO log emitted on each completion so the user can see
+    live progress (one log line per indicator).
     """
+    import time as _time
     indicator_codes = indicators or list(INDICATORS.keys())
+    started_at_ts = _time.time()
 
     scored: dict[str, QualIndicatorScore] = {}
     total_cost = 0.0
@@ -1437,18 +1445,48 @@ def assess_qualitative(
             ex.submit(score_indicator, ticker, name, sector, code, force_refresh): code
             for code in indicator_codes
         }
-        for fut in as_completed(futures):
-            code = futures[fut]
-            try:
-                result = fut.result()
-            except Exception as exc:
-                logger.exception("score_indicator %s failed: %s", code, exc)
-                incomplete = True
-                continue
-            if result is None:
-                incomplete = True
-                continue
-            scored[code] = result
+        try:
+            # Total cap = per_indicator_timeout_s * ceil(N / max_workers)
+            # i.e. 6 min × ceil(10/3) = 6 × 4 = 24 min worst case
+            total_timeout = per_indicator_timeout_s * (
+                (len(futures) + max_workers - 1) // max_workers
+            )
+            for fut in as_completed(futures, timeout=total_timeout):
+                code = futures[fut]
+                try:
+                    result = fut.result(timeout=per_indicator_timeout_s)
+                except Exception as exc:
+                    logger.exception(
+                        "score_indicator %s failed: %s", code, exc,
+                    )
+                    incomplete = True
+                    continue
+                if result is None:
+                    incomplete = True
+                    continue
+                scored[code] = result
+                elapsed_min = (_time.time() - started_at_ts) / 60
+                deep_marker = " ★DEEP" if "deep" in (result.model_used or "").lower() else ""
+                logger.info(
+                    "Indicator %d/%d done — %s/%s = %d/5 conf %.0f%%%s "
+                    "(elapsed %.1f min, %d remaining)",
+                    len(scored), len(indicator_codes),
+                    ticker, code,
+                    result.score, result.confidence * 100, deep_marker,
+                    elapsed_min,
+                    len(indicator_codes) - len(scored),
+                )
+        except Exception as exc:
+            # as_completed's outer timeout fires here. Any future not yet
+            # finished is abandoned (Python doesn't cancel running futures
+            # for non-daemon thread pools, but we stop waiting on them).
+            logger.warning(
+                "assess_qualitative for %s hit outer timeout after %.1f min "
+                "(%d/%d indicators scored): %s",
+                ticker, (_time.time() - started_at_ts) / 60,
+                len(scored), len(indicator_codes), exc,
+            )
+            incomplete = True
 
     if not scored:
         return QualitativeAssessment(
