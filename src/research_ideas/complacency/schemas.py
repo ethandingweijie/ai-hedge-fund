@@ -40,6 +40,46 @@ class PutRecommendation(BaseModel):
     contract_symbol: Optional[str] = None
 
 
+QualConvictionLabel = Literal[
+    "EXCEPTIONAL",   # both quant gate passed AND qual ≥ 35/50
+    "BOTH",          # quant gate passed AND qual 25-34
+    "QUANT-ONLY",    # quant gate passed but qual < 25 (could be value trap)
+    "QUAL-ONLY",     # qual ≥ 35 but quant < gate (early — narrative bearish, numbers haven't caught up)
+    "PASS",          # both low
+]
+
+
+class QualEvidence(BaseModel):
+    """One piece of evidence backing a qualitative score."""
+    source: str                  # e.g. "10-K 2024 risk factors" | "Q3 2024 earnings transcript"
+    quote: str                   # verbatim snippet (≤ 300 chars after trim)
+    date: Optional[str] = None   # ISO yyyy-mm-dd
+    url: Optional[str] = None
+
+
+class QualIndicatorScore(BaseModel):
+    """One indicator's score with evidence + confidence."""
+    indicator: str               # e.g. "A2_catalyst_proximity"
+    score: int                   # 0..5 per rubric
+    confidence: float            # 0..1 — agent's self-rated confidence
+    summary: str                 # 1-line takeaway
+    evidence: list[QualEvidence] = Field(default_factory=list)
+    scored_at: Optional[str] = None     # ISO ts
+    model_used: Optional[str] = None    # e.g. "qwen3.6-max"
+
+
+class QualitativeAssessment(BaseModel):
+    """Aggregate of all qualitative indicators for one ticker."""
+    indicators: dict[str, QualIndicatorScore] = Field(default_factory=dict)
+    composite: int = 0                       # sum of scores (max = 5 × N indicators)
+    max_possible: int = 0                    # 5 × number of indicators scored
+    composite_normalized: float = 0.0        # composite / max_possible
+    conviction_label: QualConvictionLabel = "PASS"
+    assessed_at: Optional[str] = None
+    cost_usd: float = 0.0                    # tracked for budget oversight
+    incomplete: bool = False                 # true if some indicators failed to score
+
+
 class ComplacencyTickerResult(BaseModel):
     ticker: str
     name: str
@@ -75,6 +115,7 @@ class ComplacencyTickerResult(BaseModel):
     justification: Optional[str] = None
     put_recommendation: Optional[PutRecommendation] = None  # only when verdict in {Strong-Short, Watch}
     options_data_freshness: Optional[str] = None     # ISO ts of put-rec fetch
+    qualitative: Optional[QualitativeAssessment] = None  # LLM-scored qualitative thesis (Strong-Short / Watch only)
     error: Optional[str] = None                       # set if calc failed
 
 

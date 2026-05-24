@@ -1,5 +1,10 @@
 [
   {
+    "display_name": "Qwen3.6-Max (Alibaba)",
+    "model_name": "qwen3.6-max",
+    "provider": "Alibaba"
+  },
+  {
     "display_name": "Qwen3.6-Plus (Alibaba)",
     "model_name": "qwen3.6-plus",
     "provider": "Alibaba"

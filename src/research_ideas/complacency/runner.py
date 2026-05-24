@@ -86,6 +86,22 @@ def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResul
 
         s = score_bundle(bundle)
 
+        # Qualitative LLM scoring — only fire for Strong-Short / Watch.
+        # Cached 7 days per (ticker, indicator) so re-running the cohort is cheap.
+        qual_assessment = None
+        if s["verdict"] in ("Strong-Short", "Watch"):
+            try:
+                from src.research_ideas.complacency.qualitative import assess_qualitative
+                qual_assessment = assess_qualitative(
+                    ticker=ticker,
+                    name=meta.get("name", ticker),
+                    sector=meta.get("sector"),
+                    quant_passes_gate=s["passes_gate"],
+                    quant_composite=s["composite"],
+                )
+            except Exception as exc:
+                logger.warning("Qualitative assessment for %s failed: %s", ticker, exc)
+
         # Put-option recommendation — only fire for Strong-Short / Watch
         put_rec = None
         put_rec_at = None
@@ -148,6 +164,7 @@ def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResul
             justification=s["justification"],
             put_recommendation=put_rec,
             options_data_freshness=put_rec_at,
+            qualitative=qual_assessment,
         )
     except Exception as exc:
         logger.exception("Complacency ad-hoc %s failed: %s", ticker, exc)

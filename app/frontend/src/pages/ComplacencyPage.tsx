@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   getComplacencyCohort, refreshComplacency, scoreComplacencyTickerAdhoc,
   type ComplacencyCohort, type ComplacencyTickerResult, type ComplacencyVerdict,
+  type QualitativeAssessment, type QualConvictionLabel,
 } from '@/lib/api';
 import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -543,6 +544,14 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
                 <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${VERDICT_COLOR[ticker.verdict]}`}>
                   {ticker.verdict}
                 </span>
+                {ticker.qualitative && Object.keys(ticker.qualitative.indicators).length > 0 && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[ticker.qualitative.conviction_label]}`}
+                    title={`Qual conviction · ${ticker.qualitative.composite}/${ticker.qualitative.max_possible}`}
+                  >
+                    {ticker.qualitative.conviction_label}
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground">Composite <strong className="text-foreground">{ticker.composite.toFixed(1)}</strong>/8</span>
                 {ticker.sector && <span className="text-xs text-muted-foreground">{ticker.sector}</span>}
               </div>
@@ -637,6 +646,19 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
           {(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch') && !ticker.put_recommendation && (
             <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
               No liquid put contract found in the target tenor band. Chain may be illiquid or yfinance may be temporarily unavailable.
+            </section>
+          )}
+
+          {/* Qualitative thesis (Strong-Short / Watch only; falls back gracefully) */}
+          {ticker.qualitative && Object.keys(ticker.qualitative.indicators).length > 0 && (
+            <QualitativePanel qual={ticker.qualitative} />
+          )}
+          {(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch')
+            && (!ticker.qualitative || Object.keys(ticker.qualitative.indicators ?? {}).length === 0) && (
+            <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
+              Qualitative thesis not yet scored. The agent runs qwen3.6-max on
+              10-K + transcript + news evidence for Strong-Short / Watch verdicts;
+              this run may have been cached without it or the Qwen key may not be set.
             </section>
           )}
 
@@ -737,6 +759,128 @@ function KV({ label, value, highlight = false }: { label: string; value: string;
     </>
   );
 }
+
+// ─── Qualitative panel (LLM-scored short thesis) ──────────────────────────
+
+const CONVICTION_COLOR: Record<QualConvictionLabel, string> = {
+  'EXCEPTIONAL': 'bg-red-600/30 text-red-200 border-red-700/40',
+  'BOTH':        'bg-orange-600/30 text-orange-200 border-orange-700/40',
+  'QUANT-ONLY':  'bg-amber-600/30 text-amber-200 border-amber-700/40',
+  'QUAL-ONLY':   'bg-blue-600/30 text-blue-200 border-blue-700/40',
+  'PASS':        'bg-muted text-muted-foreground border-border',
+};
+
+const CONVICTION_BLURB: Record<QualConvictionLabel, string> = {
+  'EXCEPTIONAL': 'Both quant and qualitative pillars at max conviction.',
+  'BOTH':        'Quant gate passed AND qualitative thesis confirms.',
+  'QUANT-ONLY':  'Quant numbers say short but narrative is thin — could be value trap.',
+  'QUAL-ONLY':   'Qualitative thesis bearish but quant hasn\'t caught up — too early.',
+  'PASS':        'No qualitative thesis.',
+};
+
+const QUAL_INDICATOR_THEME: Record<string, { theme: string; label: string; accent: string }> = {
+  'A2_catalyst_proximity':       { theme: 'A · Narrative',  label: 'Catalyst proximity',        accent: 'rose' },
+  'C2_accounting_aggressiveness':{ theme: 'C · Disclosure', label: 'Accounting aggressiveness', accent: 'amber' },
+  'D1_management_red_flags':     { theme: 'D · Mgmt',       label: 'Management red flags',      accent: 'orange' },
+  // Future indicators slot in here as v2 expands beyond 3
+};
+
+function scoreChipColor(score: number): string {
+  if (score >= 4) return 'bg-red-600/30 text-red-200';
+  if (score >= 3) return 'bg-orange-600/30 text-orange-200';
+  if (score >= 2) return 'bg-amber-600/30 text-amber-200';
+  if (score >= 1) return 'bg-yellow-600/20 text-yellow-200';
+  return 'bg-muted text-muted-foreground';
+}
+
+function QualitativePanel({ qual }: { qual: QualitativeAssessment }) {
+  const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
+  return (
+    <section className="border border-indigo-500/30 rounded-md bg-indigo-500/5 p-3">
+      <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-indigo-300">Qualitative Thesis</h2>
+        <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[qual.conviction_label]}`}>
+          {qual.conviction_label}
+        </span>
+      </div>
+      <p className="text-[10px] text-muted-foreground italic mb-3">{CONVICTION_BLURB[qual.conviction_label]}</p>
+
+      {/* Composite bar */}
+      <div className="mb-3">
+        <div className="flex items-baseline justify-between text-xs mb-1">
+          <span className="text-muted-foreground">Composite</span>
+          <span className="font-mono font-bold text-foreground">
+            {qual.composite} / {qual.max_possible}
+            <span className="text-muted-foreground/60 ml-2">({(qual.composite_normalized * 100).toFixed(0)}%)</span>
+          </span>
+        </div>
+        <div className="h-1.5 rounded overflow-hidden bg-muted/30">
+          <div
+            className="h-full bg-indigo-500/70"
+            style={{ width: `${qual.composite_normalized * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Per-indicator rows (click to expand evidence) */}
+      <div className="space-y-1.5">
+        {Object.values(qual.indicators).map((s) => {
+          const meta = QUAL_INDICATOR_THEME[s.indicator] ?? { theme: '?', label: s.indicator, accent: 'gray' };
+          const expanded = expandedIndicator === s.indicator;
+          return (
+            <div key={s.indicator} className="text-xs">
+              <button
+                className="w-full flex items-baseline gap-2 px-2 py-1.5 rounded hover:bg-muted/30 text-left"
+                onClick={() => setExpandedIndicator(expanded ? null : s.indicator)}
+              >
+                <span className="text-[9px] uppercase tracking-wider text-muted-foreground w-20 flex-shrink-0">{meta.theme}</span>
+                <span className="text-foreground flex-1 truncate">{meta.label}</span>
+                <span className="text-[10px] text-muted-foreground/60">
+                  conf {(s.confidence * 100).toFixed(0)}%
+                </span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${scoreChipColor(s.score)}`}>
+                  {s.score}/5
+                </span>
+              </button>
+              {expanded && (
+                <div className="pl-22 pr-2 py-2 bg-muted/20 rounded mb-1">
+                  <p className="text-[11px] italic text-foreground/80 mb-2">{s.summary}</p>
+                  {s.evidence.length === 0 ? (
+                    <p className="text-[10px] text-muted-foreground/60 italic">No evidence cited.</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {s.evidence.map((e, i) => (
+                        <li key={i} className="text-[10px] leading-relaxed">
+                          <div className="text-indigo-300 font-semibold">
+                            {e.source} {e.date && <span className="text-muted-foreground/60 font-normal">· {e.date}</span>}
+                          </div>
+                          <div className="text-foreground/80 italic pl-2 border-l border-indigo-500/30 mt-1">
+                            “{e.quote}”
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {qual.incomplete && (
+        <p className="mt-2 text-[10px] text-amber-500/80 italic">
+          ⚠ Partial assessment — some indicators failed to score (LLM/source unavailable).
+        </p>
+      )}
+      <p className="mt-2 text-[9px] text-muted-foreground/60 italic">
+        Scored by {Object.values(qual.indicators)[0]?.model_used ?? 'qwen3.6-max'} on 10-K + transcripts + 90-day news.
+        {qual.assessed_at && ` Assessed ${qual.assessed_at.slice(0, 10)}.`}
+      </p>
+    </section>
+  );
+}
+
 
 function Pillar(
   { label, score, inputs = [] }:

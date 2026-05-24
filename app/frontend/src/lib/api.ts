@@ -501,6 +501,36 @@ export type ComplacencyVerdict =
   | 'Pass'
   | 'N/A';
 
+export type QualConvictionLabel = 'EXCEPTIONAL' | 'BOTH' | 'QUANT-ONLY' | 'QUAL-ONLY' | 'PASS';
+
+export interface QualEvidence {
+  source: string;
+  quote: string;
+  date: string | null;
+  url: string | null;
+}
+
+export interface QualIndicatorScore {
+  indicator: string;
+  score: number;            // 0-5
+  confidence: number;       // 0-1
+  summary: string;
+  evidence: QualEvidence[];
+  scored_at: string | null;
+  model_used: string | null;
+}
+
+export interface QualitativeAssessment {
+  indicators: Record<string, QualIndicatorScore>;
+  composite: number;
+  max_possible: number;
+  composite_normalized: number;    // 0-1
+  conviction_label: QualConvictionLabel;
+  assessed_at: string | null;
+  cost_usd: number;
+  incomplete: boolean;
+}
+
 export interface PutRecommendation {
   strike: number;
   strike_pct_otm: number;       // negative; -0.12 == 12% OTM
@@ -548,6 +578,7 @@ export interface ComplacencyTickerResult {
   justification: string | null;
   put_recommendation: PutRecommendation | null;
   options_data_freshness: string | null;
+  qualitative: QualitativeAssessment | null;
   error?: string | null;
 }
 
