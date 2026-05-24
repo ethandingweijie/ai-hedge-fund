@@ -378,6 +378,312 @@ def compute_financial_signals(ticker: str) -> dict:
     return out
 
 
+# ─── 3b. SEC EDGAR — recent 8-K filings (current events) ─────────────────
+
+
+_8K_ITEM_DESCRIPTIONS = {
+    "1.01": "Material Definitive Agreement",
+    "1.02": "Termination of Material Agreement",
+    "1.03": "Bankruptcy or Receivership",
+    "2.01": "Acquisition or Disposition of Assets",
+    "2.04": "Triggering Events Acceleration / Direct Financial Obligation",
+    "2.05": "Material Costs from Exit / Disposal",
+    "2.06": "Material Impairments",
+    "3.01": "Notice of Delisting / Failure to Satisfy Listing Standard",
+    "4.01": "Auditor Change",
+    "4.02": "Non-Reliance on Previously Issued Financial Statements (RESTATEMENT)",
+    "5.02": "Departure / Election of Directors / Officers",
+    "5.03": "Amendments to Articles / Bylaws",
+    "7.01": "Regulation FD Disclosure",
+    "8.01": "Other Events",
+}
+
+
+def fetch_sec_recent_8k(ticker: str, days: int = 180, limit: int = 12) -> list[dict]:
+    """
+    Pull recent 8-K filings (current events) from SEC EDGAR. Each return
+    item is a dict with the items disclosed (e.g., Item 5.02 = exec
+    departure, Item 4.02 = restatement of prior financials).
+
+    Returns [] on fetch failure or no CIK match.
+    """
+    cik = _sec_get_cik(ticker)
+    if not cik:
+        return []
+    time.sleep(0.15)
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+
+    try:
+        r = requests.get(
+            f"https://data.sec.gov/submissions/CIK{cik}.json",
+            headers={"User-Agent": _SEC_USER_AGENT},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json()
+    except Exception as exc:
+        logger.warning("SEC 8-K fetch for %s failed: %s", ticker, exc)
+        return []
+
+    recent = data.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    accessions = recent.get("accessionNumber", [])
+    primary_docs = recent.get("primaryDocument", [])
+    dates = recent.get("filingDate", [])
+    items_list = recent.get("items", [])
+
+    out: list[dict] = []
+    for i, form in enumerate(forms):
+        if form != "8-K":
+            continue
+        filed = dates[i] if i < len(dates) else ""
+        if filed < cutoff:
+            continue
+        accession = accessions[i] if i < len(accessions) else ""
+        primary = primary_docs[i] if i < len(primary_docs) else ""
+        items_raw = items_list[i] if i < len(items_list) else ""
+
+        # Parse comma-separated item codes (e.g., "5.02,9.01")
+        items_parsed: list[dict] = []
+        for code in (items_raw or "").split(","):
+            code = code.strip()
+            if not code:
+                continue
+            label = _8K_ITEM_DESCRIPTIONS.get(code, code)
+            items_parsed.append({"code": code, "label": label})
+
+        acc_no_dashes = accession.replace("-", "")
+        url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_no_dashes}/{primary}" if primary else None
+        out.append({
+            "filed_date": filed,
+            "items": items_parsed,
+            "url": url,
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+def format_8k_filings_for_prompt(filings: list[dict]) -> str:
+    """Render 8-K list as a compact bullet pack for the LLM."""
+    if not filings:
+        return ""
+    lines = ["RECENT 8-K FILINGS (last ~6 months — SEC EDGAR):"]
+    for f in filings:
+        items_str = "; ".join(f"{it['code']} ({it['label']})" for it in f.get("items", [])) or "—"
+        lines.append(f"  {f['filed_date']}  items: {items_str}")
+    return "\n".join(lines)
+
+
+# ─── 3c. SEC EDGAR — DEF 14A proxy statement (compensation + governance) ──
+
+
+def fetch_sec_def14a_excerpt(ticker: str, max_chars: int = 8000) -> Optional[dict]:
+    """
+    Latest DEF 14A (annual proxy statement). Contains executive
+    compensation tables, CEO pay ratio, related-party transactions,
+    board independence — critical for D1.
+    """
+    cached = _DEF14A_CACHE.get(ticker.upper())
+    if cached is not None:
+        return cached
+
+    cik = _sec_get_cik(ticker)
+    if not cik:
+        _DEF14A_CACHE[ticker.upper()] = None
+        return None
+    time.sleep(0.15)
+
+    try:
+        r = requests.get(
+            f"https://data.sec.gov/submissions/CIK{cik}.json",
+            headers={"User-Agent": _SEC_USER_AGENT},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            _DEF14A_CACHE[ticker.upper()] = None
+            return None
+        data = r.json()
+    except Exception as exc:
+        logger.warning("SEC DEF 14A submissions for %s failed: %s", ticker, exc)
+        _DEF14A_CACHE[ticker.upper()] = None
+        return None
+
+    recent = data.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    accessions = recent.get("accessionNumber", [])
+    primary_docs = recent.get("primaryDocument", [])
+    dates = recent.get("filingDate", [])
+    target_idx = None
+    for i, form in enumerate(forms):
+        if form == "DEF 14A":
+            target_idx = i
+            break
+    if target_idx is None:
+        _DEF14A_CACHE[ticker.upper()] = None
+        return None
+
+    accession = accessions[target_idx]
+    primary = primary_docs[target_idx]
+    filed = dates[target_idx]
+    acc_no_dashes = accession.replace("-", "")
+    url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_no_dashes}/{primary}"
+    time.sleep(0.15)
+
+    try:
+        r = requests.get(
+            url,
+            headers={"User-Agent": _SEC_USER_AGENT, "Accept-Encoding": "gzip, deflate"},
+            timeout=30,
+        )
+        if r.status_code != 200:
+            _DEF14A_CACHE[ticker.upper()] = None
+            return None
+        text = _strip_html(r.text)
+    except Exception as exc:
+        logger.warning("SEC DEF 14A doc fetch %s failed: %s", url, exc)
+        _DEF14A_CACHE[ticker.upper()] = None
+        return None
+
+    # Extract sections of interest by keyword anchors.
+    sections: dict[str, str] = {}
+    for key, pat in {
+        "executive_compensation": re.compile(
+            r"(executive\s+compensation.{0,40}(?:overview|discussion|tables?))(.{0,8000})",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        "ceo_pay_ratio": re.compile(
+            r"(ceo\s+pay\s+ratio|chief\s+executive\s+officer\s+pay\s+ratio)(.{0,2500})",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        "related_party": re.compile(
+            r"(related[-\s]?party\s+transactions?|certain\s+relationships)(.{0,4000})",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        "board_independence": re.compile(
+            r"(director\s+independence|board\s+composition)(.{0,3000})",
+            re.IGNORECASE | re.DOTALL,
+        ),
+    }.items():
+        m = pat.search(text)
+        if m:
+            snippet = (m.group(1) + m.group(2)).strip()[:max_chars // 3]
+            if len(snippet) > 200:
+                sections[key] = snippet
+
+    result = {
+        "_filed_date": filed,
+        "_source_url": url,
+        "sections": sections,
+    }
+    _DEF14A_CACHE[ticker.upper()] = result
+    return result
+
+
+_DEF14A_CACHE: dict[str, Optional[dict]] = {}
+
+
+# ─── 3d. SEC EDGAR — Form 144 (proposed insider sales, leading indicator) ──
+
+
+def fetch_sec_recent_form144(ticker: str, days: int = 90, limit: int = 10) -> list[dict]:
+    """
+    Form 144 = NOTICE of proposed insider sale (filed BEFORE the sale).
+    Strong leading indicator vs Form 4 (post-trade). When CEO/CFO files
+    144 for a large dollar amount, that's the canary.
+
+    Note: Form 144 filings are filed under the INSIDER's own EDGAR entry,
+    not the company's. Per-issuer queries via EDGAR full-text search
+    are heavy. v1: pull from company submissions JSON where they appear
+    via 13F-related filings — typically empty for small/mid cap, useful
+    for mega caps. Returns [] gracefully when no 144s under the company CIK.
+    """
+    cik = _sec_get_cik(ticker)
+    if not cik:
+        return []
+    time.sleep(0.15)
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+
+    try:
+        r = requests.get(
+            f"https://data.sec.gov/submissions/CIK{cik}.json",
+            headers={"User-Agent": _SEC_USER_AGENT},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json()
+    except Exception as exc:
+        logger.warning("SEC Form 144 fetch for %s failed: %s", ticker, exc)
+        return []
+
+    recent = data.get("filings", {}).get("recent", {})
+    forms = recent.get("form", [])
+    accessions = recent.get("accessionNumber", [])
+    dates = recent.get("filingDate", [])
+    primary_docs = recent.get("primaryDocument", [])
+
+    out: list[dict] = []
+    for i, form in enumerate(forms):
+        if form != "144":
+            continue
+        filed = dates[i] if i < len(dates) else ""
+        if filed < cutoff:
+            continue
+        accession = accessions[i] if i < len(accessions) else ""
+        primary = primary_docs[i] if i < len(primary_docs) else ""
+        acc_no_dashes = accession.replace("-", "")
+        url = f"https://www.sec.gov/Archives/edgar/data/{int(cik)}/{acc_no_dashes}/{primary}" if primary else None
+        out.append({"filed_date": filed, "url": url})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def format_form144_for_prompt(filings: list[dict]) -> str:
+    if not filings:
+        return ""
+    lines = [f"FORM 144 (proposed insider sales, ~90 days, leading indicator over Form 4):"]
+    for f in filings:
+        lines.append(f"  {f['filed_date']}  url={f.get('url')}")
+    return "\n".join(lines)
+
+
+# ─── 6. FMP price-target consensus (dispersion for A3) ────────────────────
+
+
+def fetch_price_target_consensus(ticker: str) -> Optional[dict]:
+    """
+    /stable/price-target-consensus returns targetHigh / targetLow /
+    targetConsensus / targetMedian — lets us compute coefficient-of-
+    variation as a proxy for sell-side uniformity.
+    Lower CV = tighter consensus = more crowded long view = A3 flag.
+    """
+    data = _fmp_get(
+        f"{_STABLE}/price-target-consensus",
+        {"symbol": ticker},
+        api_key=None, uncap=True,
+    )
+    if not isinstance(data, list) or not data:
+        return None
+    r = data[0]
+    high = _safe_float(r.get("targetHigh"))
+    low = _safe_float(r.get("targetLow"))
+    avg = _safe_float(r.get("targetConsensus") or r.get("targetAverage"))
+    median = _safe_float(r.get("targetMedian"))
+    if not avg or avg <= 0:
+        return None
+    cv = None
+    if high is not None and low is not None and avg > 0:
+        # Rough proxy: (high - low) / (2 × avg) — half-range over mean.
+        cv = (high - low) / (2 * avg)
+    return {
+        "target_high": high, "target_low": low, "target_avg": avg, "target_median": median,
+        "cv_estimate": cv,
+    }
+
+
 # ─── 4. FMP Stock News (per-ticker, fuller text than legacy /news/stock) ──
 
 

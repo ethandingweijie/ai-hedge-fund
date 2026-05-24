@@ -35,6 +35,10 @@ from src.llm.models import ModelProvider, get_model
 from src.tools.api import _fmp_get, _safe_float, _STABLE
 from src.research_ideas.complacency.evidence_sources import (
     fetch_sec_10k_sections,
+    fetch_sec_recent_8k, format_8k_filings_for_prompt,
+    fetch_sec_def14a_excerpt,
+    fetch_sec_recent_form144, format_form144_for_prompt,
+    fetch_price_target_consensus,
     tavily_search,
     fetch_stock_news,
     fetch_press_releases,
@@ -381,10 +385,25 @@ You are a forensic short-seller scoring ONE qualitative indicator on a 0-5 scale
 STRICT RULES:
 1. Use ONLY the evidence provided to you. Do NOT make up facts.
 2. Score must be supported by at least one direct quote. If you cannot find evidence in the provided context, return score=0 with confidence < 0.4.
-3. Trust a single high-quality citation (10-K direct quote, transcript Q&A) at face value.
+3. Trust a single high-quality citation (10-K direct quote, 8-K filing, DEF 14A, official press release) at face value.
    Otherwise require 2 independent sources.
 4. Evidence quotes must be VERBATIM (copy-paste from the provided text).
 5. Be conservative — when in doubt, score lower and set lower confidence.
+
+SOURCE QUALITY TIERS (weight your confidence accordingly):
+  Tier 1 (high trust)  : SEC filings (10-K, 10-Q, 8-K, DEF 14A, Form 4/144),
+                          FMP /grades-consensus, official corporate press releases
+                          (PR Newsweek, BusinessWire from the company itself),
+                          WSJ, Bloomberg, Reuters, FT.
+  Tier 2 (medium trust): sell-side equity research, FMP earnings calendar,
+                          mainstream business news (CNBC, MarketWatch).
+  Tier 3 (low trust)   : Tavily web results from unknown blogs, Seeking Alpha
+                          opinion articles (NOT analyst-curated Seeking Alpha
+                          Pro), Instagram/X excerpts, market-commentary sites.
+
+When evidence is exclusively Tier 3, cap confidence at 0.50 and add a
+"speculative — needs Tier-1 corroboration" note to your summary. When you
+have a Tier-1 source contradicting Tier-3 chatter, prefer the Tier-1 view.
 
 OUTPUT FORMAT (JSON only):
 {
@@ -559,13 +578,52 @@ Score management-quality red flags.
 
 
 def _gather_evidence_D1(ticker: str) -> list[dict]:
-    """Management red flags: Tavily targeted query catches actual scandal/turnover news."""
+    """Management red flags: 8-K Item 5.02 (exec departures) + DEF 14A (comp + related-party)
+    + Tavily for scandal/turnover news + 10-K Controls (material weaknesses)."""
     packs: list[dict] = []
+
+    # Tier 1: SEC 8-K filings — Item 5.02 catches director/officer departures
+    # before the news cycle (CRWD has 2 such events in last 6 months).
+    filings_8k = fetch_sec_recent_8k(ticker, days=180, limit=12)
+    if filings_8k:
+        # Focus on 5.02 (exec change), 5.03 (bylaws), 1.01 (material agreements).
+        # items is a list[dict] with code/label keys.
+        relevant = [f for f in filings_8k if any(
+            (it.get("code", "") if isinstance(it, dict) else str(it)).startswith(
+                ("5.0", "5.1", "1.01")
+            )
+            for it in (f.get("items") or [])
+        )]
+        if relevant:
+            packs.append({
+                "source": "SEC 8-K filings (last 180 days, exec/governance items)",
+                "date": filings_8k[0].get("filed_date", ""),
+                "text": format_8k_filings_for_prompt(relevant),
+            })
+
+    # Tier 1: DEF 14A proxy — exec compensation, CEO pay ratio, related-party deals
+    proxy = fetch_sec_def14a_excerpt(ticker)
+    if proxy:
+        sections = proxy.get("sections") or {}
+        body_parts = []
+        for key in ("ceo_pay_ratio", "related_party", "executive_compensation"):
+            snip = sections.get(key)
+            if snip:
+                body_parts.append(f"## {key.upper()}\n{snip[:1500]}")
+        if body_parts:
+            packs.append({
+                "source": f"SEC DEF 14A proxy (filed {proxy.get('_filed_date','?')})",
+                "date": proxy.get("_filed_date", ""),
+                "text": "\n\n".join(body_parts),
+            })
+
+    # Tier 1/3 mix: Tavily targeted query
     packs.extend(_tavily_packs(
         f'"{ticker}" CEO OR CFO OR executive scandal OR departure OR investigation OR lawsuit OR resign',
         days=180, max_results=6,
     ))
-    # Plus SEC 10-K Controls section (catches material weaknesses)
+
+    # Tier 1: SEC 10-K Controls (material weaknesses, segregation-of-duties failures)
     sec = fetch_sec_10k_sections(ticker)
     if sec.get("controls"):
         packs.append({
@@ -623,7 +681,7 @@ Score how crowded / uniform the long view is on Wall Street.
 
 
 def _gather_evidence_A3(ticker: str) -> list[dict]:
-    """Consensus uniformity: analyst tally + Tavily for downgrade / price-target news."""
+    """Consensus uniformity: analyst tally + PT dispersion + Tavily for downgrade news."""
     packs: list[dict] = []
     recs = _fetch_analyst_recommendations(ticker)
     if recs:
@@ -635,6 +693,25 @@ def _gather_evidence_A3(ticker: str) -> list[dict]:
                 f"strongBuy={recs['strong_buy']} buy={recs['buy']} "
                 f"hold={recs['hold']} sell={recs['sell']} strongSell={recs['strong_sell']}. "
                 f"Total {recs['total']} analysts; {recs['pct_buy_or_strong']*100:.0f}% Buy+StrongBuy."
+            ),
+        })
+    pt = fetch_price_target_consensus(ticker)
+    if pt and pt.get("cv_estimate") is not None:
+        cv = pt["cv_estimate"]
+        crowded = (
+            "extremely uniform (≤ 10%)" if cv <= 0.10
+            else "uniform (10-20%)"        if cv <= 0.20
+            else "moderate dispersion (20-30%)" if cv <= 0.30
+            else "wide dispersion (> 30%)"
+        )
+        packs.append({
+            "source": "FMP price-target consensus (/price-target-consensus)",
+            "date": date.today().isoformat(),
+            "text": (
+                f"Sell-side price targets: high=${pt['target_high']}, low=${pt['target_low']}, "
+                f"avg=${pt['target_avg']:.2f}, median=${pt['target_median']}. "
+                f"Half-range / mean = {cv*100:.1f}% — {crowded}. "
+                f"(Low CV = tight target clustering = crowded long view)"
             ),
         })
     packs.extend(_tavily_packs(
@@ -758,8 +835,28 @@ Score disclosure-quality deterioration.
 
 
 def _gather_evidence_C1(ticker: str) -> list[dict]:
-    """Disclosure deterioration: SEC 10-K Controls + KAM + Tavily for restatement/auditor news."""
+    """Disclosure deterioration: SEC 8-K (Item 4.01/4.02 = auditor change/restatement) +
+    10-K Controls + KAM + Tavily for restatement/auditor news + press releases."""
     packs: list[dict] = []
+
+    # Tier 1: SEC 8-K — Item 4.01 (auditor change) and 4.02 (non-reliance / restatement)
+    # are the GOLD-standard signals for disclosure deterioration.
+    filings_8k = fetch_sec_recent_8k(ticker, days=270, limit=15)
+    if filings_8k:
+        # items is a list[dict] with code/label keys.
+        disclosure_relevant = [f for f in filings_8k if any(
+            (it.get("code", "") if isinstance(it, dict) else str(it)).startswith(
+                ("4.0", "8.01", "2.06")   # 4.01/4.02 + Item 8.01 other + 2.06 impairment
+            )
+            for it in (f.get("items") or [])
+        )]
+        if disclosure_relevant:
+            packs.append({
+                "source": "SEC 8-K filings (last 270 days, accounting/disclosure items)",
+                "date": filings_8k[0].get("filed_date", ""),
+                "text": format_8k_filings_for_prompt(disclosure_relevant),
+            })
+
     sec = fetch_sec_10k_sections(ticker)
     if sec.get("controls"):
         packs.append({
@@ -799,8 +896,20 @@ Score WHO is selling, not just the bulk A/D ratio.
 
 
 def _gather_evidence_D2(ticker: str) -> list[dict]:
-    """D2 — needs structured insider trade detail with owner role + transaction type."""
+    """D2 — needs structured insider trade detail with owner role + transaction type.
+    Adds SEC Form 144 (proposed sales, a LEADING indicator vs. Form 4 settled trades)."""
     packs: list[dict] = []
+
+    # Tier 1: SEC Form 144 — filed BEFORE the sale, so it's a leading indicator.
+    # CRWD has shown 10 such filings in 90 days = signal.
+    form144 = fetch_sec_recent_form144(ticker, days=90, limit=15)
+    if form144:
+        packs.append({
+            "source": "SEC Form 144 — proposed insider sales (last 90 days)",
+            "date": form144[0].get("filed_date", ""),
+            "text": format_form144_for_prompt(form144),
+        })
+
     trades = _fetch_insider_recent_trades(ticker, days=180, limit=40)
     if trades:
         # Summarize by owner type
