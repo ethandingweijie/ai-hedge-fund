@@ -1262,14 +1262,39 @@ def score_indicator(
     if not force_refresh:
         cached = get_latest_qualitative_score(ticker, indicator_code, QUAL_CACHE_TTL_DAYS)
         if cached:
-            return QualIndicatorScore(
-                indicator=indicator_code,
-                score=cached["score"],
-                confidence=cached["confidence"],
-                summary=cached["summary"],
-                evidence=[QualEvidence(**e) for e in cached["evidence"]],
-                scored_at=cached["scored_at"],
-                model_used=cached["model_used"],
+            # Auto-bypass cache for low-conf entries that NEVER ran through
+            # the deep-research path. Without this, scores cached BEFORE the
+            # deep-research feature shipped (or any low-conf miss) are
+            # returned as-is forever — defeating the new path entirely.
+            #
+            # Bypass conditions (ALL must hold):
+            #   1. Indicator is eligible for deep research
+            #   2. Cached confidence ≤ the deep-research floor
+            #   3. The cached score's model_used does NOT already record
+            #      a deep-research attempt (otherwise we'd loop forever
+            #      retrying when the deep path itself can't improve conf).
+            already_deep = "deep" in (cached.get("model_used") or "").lower()
+            eligible = (
+                enable_deep_research
+                and indicator_code in DEEP_RESEARCH_INDICATORS
+                and (cached.get("confidence") or 0.0) <= DEEP_RESEARCH_CONF_FLOOR
+                and not already_deep
+            )
+            if not eligible:
+                return QualIndicatorScore(
+                    indicator=indicator_code,
+                    score=cached["score"],
+                    confidence=cached["confidence"],
+                    summary=cached["summary"],
+                    evidence=[QualEvidence(**e) for e in cached["evidence"]],
+                    scored_at=cached["scored_at"],
+                    model_used=cached["model_used"],
+                )
+            logger.info(
+                "Cached %s/%s conf %.2f ≤ floor %.2f & no deep-attempt — "
+                "bypassing cache to fire deep-research path.",
+                ticker, indicator_code,
+                cached.get("confidence") or 0.0, DEEP_RESEARCH_CONF_FLOOR,
             )
 
     # Gather evidence

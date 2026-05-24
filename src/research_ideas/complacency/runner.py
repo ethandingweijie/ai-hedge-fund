@@ -118,6 +118,11 @@ def _process_ticker_with_meta(
         # Qualitative LLM scoring — fires for Strong-Short / Watch by default,
         # or for ANY ticker when force_qual=True (user-initiated via UI).
         # Cached 7 days per (ticker, indicator) so re-runs are cheap.
+        #
+        # When force_qual=True (UI "Generate Qualitative" button), also force
+        # a CACHE REFRESH — the user is explicitly asking for a fresh score,
+        # not a return-from-stale-cache. Otherwise the button feels broken
+        # for any ticker that ever had qualitative cached at any confidence.
         qual_assessment = None
         if force_qual or s["verdict"] in ("Strong-Short", "Watch"):
             try:
@@ -128,6 +133,7 @@ def _process_ticker_with_meta(
                     sector=meta.get("sector"),
                     quant_passes_gate=s["passes_gate"],
                     quant_composite=s["composite"],
+                    force_refresh=force_qual,
                 )
             except Exception as exc:
                 logger.warning("Qualitative assessment for %s failed: %s", ticker, exc)
