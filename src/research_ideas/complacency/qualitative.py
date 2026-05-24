@@ -53,6 +53,10 @@ from src.research_ideas.complacency.peer_benchmarks import (
     get_peer_context,
     format_peer_context_for_prompt,
 )
+from src.research_ideas.complacency.web_research import (
+    fetch_earnings_qa, format_earnings_qa_for_prompt,
+    deep_research_indicator,
+)
 from src.research_ideas.complacency.schemas import (
     QualitativeAssessment,
     QualIndicatorScore,
@@ -551,6 +555,33 @@ def _fmp_news_packs(rows: list[dict]) -> list[dict]:
     } for r in rows]
 
 
+def _earnings_qa_pack(ticker: str, focus_topics: set[str] | None = None) -> Optional[dict]:
+    """
+    Fetch earnings call Q&A via Qwen web search (no Tavily) and return
+    a single evidence pack. Cached 30 days.
+
+    If `focus_topics` is provided, prepend a one-line note that the
+    indicator cares about those topics — helps the LLM scoring focus.
+    """
+    qa = fetch_earnings_qa(ticker, n_quarters=2)
+    if not qa or not qa.get("digest"):
+        return None
+    text = format_earnings_qa_for_prompt(qa)
+    if focus_topics:
+        relevant_topics = focus_topics & set(qa.get("topics_flagged") or [])
+        if relevant_topics:
+            text = (
+                f"  [↑ This Q&A surfaced topics relevant to this indicator: "
+                f"{', '.join(sorted(relevant_topics))}]\n"
+                + text
+            )
+    return {
+        "source": f"Earnings-call Q&A (Qwen web search; {qa.get('source_hint','?')})",
+        "date": qa.get("fetched_at", "")[:10],
+        "text": text,
+    }
+
+
 def _gather_evidence_A2(ticker: str) -> list[dict]:
     """Catalyst proximity: earnings cal + Tavily query for upcoming-event hedge language."""
     packs: list[dict] = []
@@ -577,6 +608,11 @@ def _gather_evidence_A2(ticker: str) -> list[dict]:
     # FMP stock news + press releases — official corporate actions / earnings previews
     packs.extend(_fmp_news_packs(fetch_stock_news(ticker, days=45, limit=4)))
     packs.extend(_fmp_news_packs(fetch_press_releases(ticker, days=60, limit=3)))
+    # Priority 2: Earnings call Q&A — captures mgmt acknowledging downside
+    # risk on prior call (rubric anchor for score 5) or downgrade rhetoric.
+    qa_pack = _earnings_qa_pack(ticker, focus_topics={"guidance", "regulatory", "restatement"})
+    if qa_pack:
+        packs.append(qa_pack)
     return packs
 
 
@@ -698,6 +734,15 @@ def _gather_evidence_D1(ticker: str) -> list[dict]:
             "date": sec.get("_filed_date", ""),
             "text": sec["controls"][:3000],
         })
+    # Priority 2: Earnings call Q&A — analysts asking pointed questions about
+    # CEO/CFO turnover, exec-comp shifts, or board changes is a leading signal
+    # for D1. Targeted topic filter on exec_departure / restatement / regulatory.
+    qa_pack = _earnings_qa_pack(
+        ticker,
+        focus_topics={"exec_departure", "restatement", "regulatory"},
+    )
+    if qa_pack:
+        packs.append(qa_pack)
     return packs
 
 
@@ -722,13 +767,19 @@ Score how much the bull case depends on ONE assumption.
 
 
 def _gather_evidence_A1(ticker: str) -> list[dict]:
-    """Single-thesis: Tavily for thesis framing + FMP stock news for sell-side narrative."""
+    """Single-thesis: Tavily framing + FMP news + earnings-call Q&A (management
+    defending the bull narrative is the strongest signal of thesis fragility)."""
     packs: list[dict] = []
     packs.extend(_tavily_packs(
         f'"{ticker}" bull case OR investment thesis OR TAM OR AI moat OR hyperscaler',
         days=120, max_results=4,
     ))
     packs.extend(_fmp_news_packs(fetch_stock_news(ticker, days=90, limit=6)))
+    # Priority 2: Earnings call Q&A — analysts probing the bull thesis,
+    # mgmt rhetorical patterns when defending it, AI/TAM dependency.
+    qa_pack = _earnings_qa_pack(ticker, focus_topics={"ai_threat", "competition", "guidance"})
+    if qa_pack:
+        packs.append(qa_pack)
     return packs
 
 
@@ -914,6 +965,11 @@ def _gather_evidence_B2(ticker: str) -> list[dict]:
         f'"{ticker}" competitor OR AI-native OR disrupt OR hyperscaler bundle OR open-source alternative',
         days=120, max_results=5,
     ))
+    # Priority 2: Earnings Q&A — analyst questions on competition + mgmt's
+    # rebuttals reveal disintermediation pressure better than Tavily snippets.
+    qa_pack = _earnings_qa_pack(ticker, focus_topics={"competition", "ai_threat", "pricing"})
+    if qa_pack:
+        packs.append(qa_pack)
     return packs
 
 
@@ -1158,15 +1214,41 @@ INDICATORS: dict[str, dict] = {
 # ─── Single-indicator scorer (cache-aware) ────────────────────────────────
 
 
+# Priority 3 escalation threshold: if the first-pass scorer returns confidence
+# at or below this, kick off a deep-research second pass via Qwen native web
+# search. Tunable per-indicator if needed.
+DEEP_RESEARCH_CONF_FLOOR = float(os.environ.get("COMPLACENCY_DEEP_RESEARCH_FLOOR", "0.50"))
+
+# Indicators where deep research is most valuable. Skip for indicators that
+# are deterministically scored from numeric inputs (B3 pricing trends,
+# C2 goodwill ratio, D2 insider trade totals) — the floor doesn't help if the
+# answer is in the numbers already.
+DEEP_RESEARCH_INDICATORS = {
+    "A1_single_thesis_dependence",
+    "A2_catalyst_proximity",
+    "B1_customer_concentration",
+    "B2_competitive_disintermediation",
+    "C1_disclosure_deterioration",
+    "D1_management_red_flags",
+}
+
+
 def score_indicator(
     ticker: str,
     name: str,
     sector: str | None,
     indicator_code: str,
     force_refresh: bool = False,
+    enable_deep_research: bool = True,
 ) -> Optional[QualIndicatorScore]:
     """
     Score one indicator for one ticker. Uses 7-day cache unless force_refresh.
+
+    When the first-pass scorer returns confidence ≤ DEEP_RESEARCH_CONF_FLOOR
+    AND `enable_deep_research=True`, a second-pass deep-research call via Qwen
+    native web search runs. If it produces a higher-confidence finding, the
+    deep score replaces the first-pass — the cache stores the BETTER result.
+
     Returns None if the LLM is unavailable.
     """
     if indicator_code not in INDICATORS:
@@ -1198,7 +1280,7 @@ def score_indicator(
         logger.warning("Evidence gather for %s/%s failed: %s", ticker, indicator_code, exc)
         evidence_packs = []
 
-    # LLM call
+    # First-pass LLM call (Qwen, single-shot, no web search)
     user_prompt = _build_user_prompt(
         ticker, name, sector, indicator_code, cfg["rubric"], evidence_packs
     )
@@ -1206,17 +1288,85 @@ def score_indicator(
     if output is None:
         return None
 
+    final_score = output.score
+    final_conf = output.confidence
+    final_summary = output.summary
+    final_evidence = [e.model_dump() for e in output.evidence]
+    model_used = QUAL_MODEL_NAME
+
+    # ── Priority 3: deep-research escalation for low-confidence outcomes ─
+    if (
+        enable_deep_research
+        and indicator_code in DEEP_RESEARCH_INDICATORS
+        and final_conf <= DEEP_RESEARCH_CONF_FLOOR
+    ):
+        logger.info(
+            "Indicator %s/%s first-pass conf %.2f ≤ floor %.2f — escalating to "
+            "deep-research (Qwen native web search).",
+            ticker, indicator_code, final_conf, DEEP_RESEARCH_CONF_FLOOR,
+        )
+        try:
+            deep = deep_research_indicator(
+                ticker=ticker,
+                name=name,
+                sector=sector,
+                indicator_code=indicator_code,
+                indicator_label=cfg.get("label", indicator_code),
+                rubric=cfg["rubric"],
+                initial_score=final_score,
+                initial_confidence=final_conf,
+                initial_summary=final_summary,
+                initial_evidence=final_evidence,
+            )
+            if deep and deep.get("confidence", 0.0) > final_conf:
+                # Adopt the deeper finding (higher confidence)
+                logger.info(
+                    "Deep-research for %s/%s improved conf %.2f → %.2f "
+                    "(score %d → %d).",
+                    ticker, indicator_code, final_conf, deep["confidence"],
+                    final_score, deep["score"],
+                )
+                final_score = deep["score"]
+                final_conf = deep["confidence"]
+                final_summary = (
+                    f"{deep.get('summary','')} "
+                    f"[deep-research: {deep.get('reasoning','')[:120]}]"
+                ).strip()
+                # Convert deep evidence to the QualEvidence shape
+                final_evidence = [
+                    {
+                        "source": e.get("source", "web search"),
+                        "quote": e.get("quote", ""),
+                        "date": e.get("date"),
+                        "url": e.get("url"),
+                    }
+                    for e in (deep.get("evidence") or [])
+                ]
+                model_used = f"{QUAL_MODEL_NAME}+deep_web_search"
+                cost += 0.05  # rough Qwen deep-search call estimate
+            elif deep:
+                logger.info(
+                    "Deep-research for %s/%s did not improve conf "
+                    "(deep %.2f ≤ first-pass %.2f) — keeping first pass.",
+                    ticker, indicator_code, deep.get("confidence", 0.0), final_conf,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Deep-research escalation for %s/%s failed: %s — falling back.",
+                ticker, indicator_code, exc,
+            )
+
     scored_at = datetime.now(timezone.utc).isoformat()
-    # Persist to cache
+    # Persist to cache (always store the BEST result we have)
     try:
         save_qualitative_score(
             ticker=ticker,
             indicator=indicator_code,
-            score=output.score,
-            confidence=output.confidence,
-            summary=output.summary,
-            evidence=[e.model_dump() for e in output.evidence],
-            model_used=QUAL_MODEL_NAME,
+            score=final_score,
+            confidence=final_conf,
+            summary=final_summary,
+            evidence=final_evidence,
+            model_used=model_used,
             cost_usd=cost,
             scored_at=scored_at,
         )
@@ -1225,12 +1375,12 @@ def score_indicator(
 
     return QualIndicatorScore(
         indicator=indicator_code,
-        score=output.score,
-        confidence=output.confidence,
-        summary=output.summary,
-        evidence=[QualEvidence(**e.model_dump()) for e in output.evidence],
+        score=final_score,
+        confidence=final_conf,
+        summary=final_summary,
+        evidence=[QualEvidence(**e) for e in final_evidence],
         scored_at=scored_at,
-        model_used=QUAL_MODEL_NAME,
+        model_used=model_used,
     )
 
 
