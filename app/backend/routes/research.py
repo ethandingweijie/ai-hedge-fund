@@ -27,10 +27,13 @@ from fastapi import APIRouter, HTTPException
 
 from app.backend.services import sw46_storage, complacency_storage
 from app.backend.services import complacency_job_store as job_store
+from app.backend.services import contrarian_storage
 from src.research_ideas.sw46.runner import run_sw46
 from src.research_ideas.sw46.universe import list_tickers as sw46_list_tickers
 from src.research_ideas.complacency.runner import run_complacency, score_one_ticker
 from src.research_ideas.complacency.universe import list_tickers as complacency_list_tickers
+from src.research_ideas.contrarian.idea_generator import generate_idea_of_the_day
+from src.research_ideas.contrarian.chat_agent import chat_turn as contrarian_chat_turn
 
 
 logger = logging.getLogger(__name__)
@@ -76,7 +79,221 @@ async def list_research_ideas():
         "headline_metric_label": "Gate passers",
     }
 
-    return {"ideas": [sw46_meta, complacency_meta]}
+    # "Research Idea of the Day" — AI-generated contrarian deep-value
+    # hypothesis. v1 surfaces just the meta + the latest idea's headline.
+    latest_iotd = await asyncio.to_thread(contrarian_storage.get_latest_idea)
+    shortlist_count = len(await asyncio.to_thread(contrarian_storage.list_shortlist, 100))
+    iotd_meta = {
+        "id": "idea_of_the_day",
+        "name": "Research Idea of the Day",
+        "blurb": (
+            "AI-generated deep-value, asymmetric, contrarian hypothesis "
+            "with live web-search backing. Discuss with the agent to "
+            "stress-test, then add to your shortlist if it earns conviction."
+        ),
+        "ticker_count": shortlist_count,         # repurposed: # shortlisted
+        "headline_metric_label": "Shortlisted",
+        "is_ai_generated": True,
+        "last_run_at": latest_iotd.get("generated_at") if latest_iotd else None,
+        "latest_idea_ticker": latest_iotd.get("ticker") if latest_iotd else None,
+        "latest_idea_id": latest_iotd.get("idea_id") if latest_iotd else None,
+        "latest_idea_hypothesis": latest_iotd.get("hypothesis") if latest_iotd else None,
+        "latest_idea_conviction": latest_iotd.get("conviction_score") if latest_iotd else None,
+    }
+
+    return {"ideas": [iotd_meta, sw46_meta, complacency_meta]}
+
+
+# ─── Research Idea of the Day (contrarian deep-value) ────────────────────
+
+
+@router.get("/ideas/idea-of-the-day")
+async def get_idea_of_the_day():
+    """Latest non-deleted idea, or empty payload if none."""
+    try:
+        idea = await asyncio.to_thread(contrarian_storage.get_latest_idea)
+        if not idea:
+            return {"idea": None}
+        shortlisted = await asyncio.to_thread(contrarian_storage.is_shortlisted, idea["idea_id"])
+        idea["_shortlisted"] = shortlisted
+        return {"idea": idea}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_idea_of_the_day failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/idea-of-the-day/list")
+async def list_recent_ideas(limit: int = 10):
+    """Recent generated ideas (non-deleted), most-recent first."""
+    try:
+        ideas = await asyncio.to_thread(contrarian_storage.list_ideas, limit, False)
+        return {"ideas": ideas}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_recent_ideas failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+def _execute_idea_gen_job(job_id: str) -> None:
+    """Background worker for idea generation (~30-90s via Qwen web search)."""
+    job_store.update_progress(job_id, "running", "Qwen searching the web for contrarian opportunities…")
+    try:
+        # Exclude tickers from the last 7 generated ideas to avoid same-day duplicates
+        recent = contrarian_storage.list_ideas(limit=7, include_deleted=True)
+        exclude = [r.get("ticker") for r in recent if r.get("ticker")]
+
+        idea = generate_idea_of_the_day(exclude_tickers=exclude)
+        if not idea:
+            job_store.fail_job(job_id, "generation returned empty (Qwen failed or invalid JSON)")
+            return
+        contrarian_storage.save_idea(idea)
+        job_store.complete_job(job_id, idea)
+    except Exception as exc:
+        logger.exception("idea-of-the-day generation job %s failed: %s", job_id, exc)
+        job_store.fail_job(job_id, f"{type(exc).__name__}: {exc}")
+
+
+@router.post("/ideas/idea-of-the-day/generate")
+async def trigger_idea_generation():
+    """Kick off a new idea-of-the-day generation as a background job."""
+    in_flight = job_store.find_in_flight_job("idea_of_the_day_gen")
+    if in_flight:
+        return {**in_flight, "deduped": True}
+
+    job_id = job_store.create_job("idea_of_the_day_gen")
+
+    async def _run():
+        await asyncio.to_thread(_execute_idea_gen_job, job_id)
+
+    asyncio.create_task(_run())
+    return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False}
+
+
+@router.delete("/ideas/idea-of-the-day/{idea_id}")
+async def delete_idea(idea_id: str):
+    """Soft-delete (preserves chat history)."""
+    try:
+        ok = await asyncio.to_thread(contrarian_storage.soft_delete_idea, idea_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail=f"Idea {idea_id} not found or already deleted")
+        return {"deleted": True, "idea_id": idea_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("delete_idea(%s) failed: %s", idea_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/idea-of-the-day/{idea_id}")
+async def get_idea(idea_id: str):
+    try:
+        idea = await asyncio.to_thread(contrarian_storage.get_idea, idea_id)
+        if not idea:
+            raise HTTPException(status_code=404, detail=f"Idea {idea_id} not found")
+        idea["_shortlisted"] = await asyncio.to_thread(
+            contrarian_storage.is_shortlisted, idea_id,
+        )
+        return idea
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_idea(%s) failed: %s", idea_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/idea-of-the-day/{idea_id}/chat")
+async def get_chat(idea_id: str):
+    try:
+        messages = await asyncio.to_thread(contrarian_storage.list_chat_messages, idea_id)
+        return {"idea_id": idea_id, "messages": messages}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_chat(%s) failed: %s", idea_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/idea-of-the-day/{idea_id}/chat")
+async def post_chat(idea_id: str, body: dict):
+    """
+    Send a user message. Body: {"content": "..."}. Returns the appended
+    user message + assistant response (synchronous; chat is fast enough).
+    """
+    content = (body or {}).get("content", "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="empty message")
+
+    idea = await asyncio.to_thread(contrarian_storage.get_idea, idea_id)
+    if not idea:
+        raise HTTPException(status_code=404, detail=f"Idea {idea_id} not found")
+
+    history = await asyncio.to_thread(contrarian_storage.list_chat_messages, idea_id)
+    user_msg = await asyncio.to_thread(
+        contrarian_storage.append_chat_message, idea_id, "user", content, None,
+    )
+    try:
+        response = await asyncio.to_thread(contrarian_chat_turn, idea, history, content)
+    except Exception as exc:
+        logger.exception("chat_turn failed for %s: %s", idea_id, exc)
+        response = None
+
+    if not response or not response.get("content"):
+        assistant_msg = await asyncio.to_thread(
+            contrarian_storage.append_chat_message,
+            idea_id, "assistant",
+            "(agent unavailable — DEEP_RESEARCH_API_KEY missing or Qwen failed)",
+            None,
+        )
+    else:
+        assistant_msg = await asyncio.to_thread(
+            contrarian_storage.append_chat_message,
+            idea_id, "assistant", response["content"], response.get("cost_usd"),
+        )
+    return {"user_message": user_msg, "assistant_message": assistant_msg}
+
+
+@router.post("/ideas/idea-of-the-day/{idea_id}/shortlist")
+async def add_to_shortlist(idea_id: str, body: dict | None = None):
+    note = ((body or {}).get("user_note") or None)
+    try:
+        entry = await asyncio.to_thread(contrarian_storage.add_to_shortlist, idea_id, note)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Idea {idea_id} not found")
+        return entry
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("add_to_shortlist(%s) failed: %s", idea_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/idea-of-the-day/shortlist/all")
+async def list_shortlist(limit: int = 50):
+    try:
+        entries = await asyncio.to_thread(contrarian_storage.list_shortlist, limit)
+        return {"shortlist": entries}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_shortlist failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.delete("/ideas/idea-of-the-day/shortlist/{idea_id}")
+async def remove_from_shortlist(idea_id: str):
+    try:
+        ok = await asyncio.to_thread(contrarian_storage.remove_from_shortlist, idea_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail=f"Idea {idea_id} not in shortlist")
+        return {"removed": True, "idea_id": idea_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("remove_from_shortlist(%s) failed: %s", idea_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
 # ─── SW46 endpoints ────────────────────────────────────────────────────────

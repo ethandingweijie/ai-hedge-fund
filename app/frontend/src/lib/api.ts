@@ -352,6 +352,12 @@ export interface SW46IdeaMeta {
   last_pooled_delta_e?: number | null;
   // Complacency-specific:
   last_gate_passers?: number | null;
+  // Idea-of-the-Day specific:
+  is_ai_generated?: boolean;
+  latest_idea_ticker?: string | null;
+  latest_idea_id?: string | null;
+  latest_idea_hypothesis?: string | null;
+  latest_idea_conviction?: number | null;
 }
 
 export interface SW46TragicAlgebraYear {
@@ -765,4 +771,132 @@ export async function refreshComplacency(opts: {
 
 export function listComplacencyRuns(limit = 20): Promise<{ runs: ComplacencyRunHeader[] }> {
   return fetchJson(`${BASE}/research/ideas/complacency/runs?limit=${limit}`);
+}
+
+
+// ── Research Idea of the Day (contrarian deep-value) ─────────────────────
+
+export interface ContrarianSource {
+  title: string;
+  url: string | null;
+  date: string | null;
+}
+
+export interface ContrarianIdea {
+  idea_id: string;
+  ticker: string;
+  company_name: string;
+  sector: string | null;
+  industry: string | null;
+  market_cap_usd: number | null;
+  hypothesis: string;
+  deep_value_angle: string;
+  asymmetric_angle: string;
+  contrarian_angle: string;
+  primary_catalyst: string;
+  catalyst_timeline: string | null;
+  key_risks: string[];
+  conviction_score: number;
+  deep_value_score: number;
+  asymmetry_score: number;
+  contrarian_score: number;
+  sources: ContrarianSource[];
+  generated_at: string;
+  model_used: string;
+  cost_usd: number | null;
+  _shortlisted?: boolean;
+  _deleted_at?: string | null;
+}
+
+export interface ContrarianChatMessage {
+  message_id: string;
+  idea_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+  cost_usd: number | null;
+}
+
+export interface ContrarianShortlistEntry {
+  idea_id: string;
+  shortlisted_at: string;
+  user_note: string | null;
+  idea_snapshot: ContrarianIdea;
+}
+
+export function getIdeaOfTheDay(): Promise<{ idea: ContrarianIdea | null }> {
+  return fetchJson(`${BASE}/research/ideas/idea-of-the-day`);
+}
+
+export function getContrarianIdea(ideaId: string): Promise<ContrarianIdea> {
+  return fetchJson(`${BASE}/research/ideas/idea-of-the-day/${encodeURIComponent(ideaId)}`);
+}
+
+export function listRecentContrarianIdeas(limit = 10): Promise<{ ideas: ContrarianIdea[] }> {
+  return fetchJson(`${BASE}/research/ideas/idea-of-the-day/list?limit=${limit}`);
+}
+
+/**
+ * Kick off a fresh idea generation as a background job. Returns immediately
+ * with {job_id}; reuses the existing complacency_job_store + poll helper.
+ */
+export function startContrarianGeneration(): Promise<ComplacencyJobHandle> {
+  return fetchJson(`${BASE}/research/ideas/idea-of-the-day/generate`, { method: 'POST' });
+}
+
+export async function generateContrarianIdea(opts: {
+  onProgress?: (s: ComplacencyJobStatus) => void;
+} = {}): Promise<ContrarianIdea> {
+  const handle = await startContrarianGeneration();
+  const final = await pollComplacencyJob(handle.job_id, { onProgress: opts.onProgress });
+  return final.result as ContrarianIdea;
+}
+
+export function deleteContrarianIdea(ideaId: string): Promise<{ deleted: boolean; idea_id: string }> {
+  return fetchJson(`${BASE}/research/ideas/idea-of-the-day/${encodeURIComponent(ideaId)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function getContrarianChat(ideaId: string): Promise<{ idea_id: string; messages: ContrarianChatMessage[] }> {
+  return fetchJson(`${BASE}/research/ideas/idea-of-the-day/${encodeURIComponent(ideaId)}/chat`);
+}
+
+export function postContrarianChat(
+  ideaId: string,
+  content: string,
+): Promise<{ user_message: ContrarianChatMessage; assistant_message: ContrarianChatMessage }> {
+  return fetchJson(
+    `${BASE}/research/ideas/idea-of-the-day/${encodeURIComponent(ideaId)}/chat`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    },
+  );
+}
+
+export function addContrarianToShortlist(
+  ideaId: string,
+  userNote?: string,
+): Promise<ContrarianShortlistEntry> {
+  return fetchJson(
+    `${BASE}/research/ideas/idea-of-the-day/${encodeURIComponent(ideaId)}/shortlist`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_note: userNote ?? null }),
+    },
+  );
+}
+
+export function listContrarianShortlist(limit = 50): Promise<{ shortlist: ContrarianShortlistEntry[] }> {
+  return fetchJson(`${BASE}/research/ideas/idea-of-the-day/shortlist/all?limit=${limit}`);
+}
+
+export function removeContrarianFromShortlist(ideaId: string): Promise<{ removed: boolean; idea_id: string }> {
+  return fetchJson(
+    `${BASE}/research/ideas/idea-of-the-day/shortlist/${encodeURIComponent(ideaId)}`,
+    { method: 'DELETE' },
+  );
 }

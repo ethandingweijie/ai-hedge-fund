@@ -8,6 +8,8 @@ import { WatchlistPage } from './pages/WatchlistPage';
 import { ResearchIdeasPage } from './pages/ResearchIdeasPage';
 import { SW46Page } from './pages/SW46Page';
 import { ComplacencyPage } from './pages/ComplacencyPage';
+import { IdeaOfTheDayPage } from './pages/IdeaOfTheDayPage';
+import { ShortlistedIdeasPage } from './pages/ShortlistedIdeasPage';
 import { PricingPage } from './pages/PricingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DDAlertsPage } from './pages/DDAlertsPage';
@@ -59,6 +61,8 @@ export default function App() {
           <Route path="/research-ideas" element={<RequireAuth><ResearchIdeasPage /></RequireAuth>} />
           <Route path="/research-ideas/sw46" element={<RequireAuth><SW46Page /></RequireAuth>} />
           <Route path="/research-ideas/complacency" element={<RequireAuth><ComplacencyPage /></RequireAuth>} />
+          <Route path="/research-ideas/idea-of-the-day/:ideaId" element={<RequireAuth><IdeaOfTheDayPage /></RequireAuth>} />
+          <Route path="/research-ideas/shortlist" element={<RequireAuth><ShortlistedIdeasPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
 
           {/* Default: redirect to login (will redirect to /report after auth) */}
