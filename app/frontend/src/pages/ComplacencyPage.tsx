@@ -721,7 +721,30 @@ function ComplacencyDrawer({
               2. QUALITATIVE THESIS  (LLM-scored rationale)
              ════════════════════════════════════════════════════════════════ */}
           {hasQual && (
-            <QualitativePanel qual={ticker.qualitative!} headerPrefix="2 · " />
+            <div className="space-y-2">
+              <QualitativePanel qual={ticker.qualitative!} headerPrefix="2 · " />
+              {/* Re-score button — for gate-passers whose qual is already
+                  populated, allows forcing a fresh deep-research run.
+                  Without this, cached high-conf scores never re-trigger the
+                  deep-research path on subsequent refreshes. */}
+              <div className="flex items-center justify-end gap-2 px-3">
+                <span className="text-[10px] text-muted-foreground italic">
+                  Cached {ticker.qualitative!.indicators &&
+                    Object.values(ticker.qualitative!.indicators).filter(
+                      (i) => (i.model_used || '').includes('deep'),
+                    ).length}/{Object.keys(ticker.qualitative!.indicators).length} via deep-research.
+                </span>
+                <button
+                  onClick={handleGenerateQual}
+                  disabled={generatingQual}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-border bg-card text-foreground text-[10px] font-medium hover:bg-muted disabled:opacity-50"
+                  title="Force a fresh qualitative scoring run, invalidating the per-indicator cache. Re-fires evidence gathering (incl. earnings Q&A) and deep-research escalation for low-confidence indicators. Costs ~$0.05-0.10 in Qwen calls and ~4-5 min."
+                >
+                  {generatingQual ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+                  {generatingQual ? 'Re-scoring…' : 'Re-score (force fresh)'}
+                </button>
+              </div>
+            </div>
           )}
           {!hasQual && (
             <section
