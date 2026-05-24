@@ -279,23 +279,43 @@ export function ComplacencyPage() {
           <div className="overflow-x-auto border border-border rounded-md bg-card">
             <table className="w-full text-xs font-mono">
               <thead className="bg-muted/40 text-left text-muted-foreground">
+                {/* Pillar grouping band — visually segments downstream columns */}
+                <tr className="border-b border-border/50">
+                  <th colSpan={5} className="px-2 py-1"></th>
+                  <th colSpan={4} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
+                    Pillar scores
+                  </th>
+                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-rose-500/15 text-rose-300">
+                    Valuation
+                  </th>
+                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-orange-500/15 text-orange-300">
+                    Behav.
+                  </th>
+                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-300">
+                    Technical
+                  </th>
+                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-300">
+                    Quality
+                  </th>
+                  <th colSpan={1} className="px-2 py-1"></th>
+                </tr>
                 <tr>
                   <th className="px-2 py-2 w-10 text-right">#</th>
                   <th className="px-2 py-2">Ticker</th>
                   <th className="px-2 py-2">Sector</th>
                   <th className="px-2 py-2">Verdict</th>
                   <th className="px-2 py-2 text-right">Comp/8</th>
-                  <th className="px-2 py-2 text-right" title="Valuation (EV/S, FCF yield)">V</th>
+                  <th className="px-2 py-2 text-right border-l border-border/30" title="Valuation (EV/S, FCF yield)">V</th>
                   <th className="px-2 py-2 text-right" title="Behavioural (insider A/D, EPS rev, range)">B</th>
                   <th className="px-2 py-2 text-right" title="Technical (200DMA ext, weekly RSI)">T</th>
-                  <th className="px-2 py-2 text-right" title="Quality (Altman Z, Piotroski)">Q</th>
-                  <th className="px-2 py-2 text-right">EV/S</th>
+                  <th className="px-2 py-2 text-right border-r border-border/30" title="Quality (Altman Z, Piotroski)">Q</th>
+                  <th className="px-2 py-2 text-right" title="EV/Sales TTM">EV/S</th>
                   <th className="px-2 py-2 text-right" title="FCF Yield TTM">FCF Y</th>
                   <th className="px-2 py-2 text-right" title="Insider Acquired ÷ (Acquired + Disposed) 4Q avg. 0 = all sales (bearish), 1 = all buys (bullish), null = no transactions in window">A/D</th>
                   <th className="px-2 py-2 text-right" title="Weekly RSI(14)">RSI</th>
                   <th className="px-2 py-2 text-right" title="% above 200-day SMA">200x</th>
                   <th className="px-2 py-2 text-right" title="Altman Z-Score">Alt Z</th>
-                  <th className="px-2 py-2 text-right" title="Piotroski (0-9)">Piotroski</th>
+                  <th className="px-2 py-2 text-right" title="Piotroski (0-9)">Pio</th>
                   <th className="px-2 py-2 text-right">Price</th>
                 </tr>
               </thead>
@@ -487,22 +507,69 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
             </div>
           </section>
 
-          {/* Pillar inputs */}
+          {/* Pillar inputs — grouped by pillar so it's obvious which input feeds which score */}
           <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Inputs</h2>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              <KV label="EV/Sales (TTM)"          value={ticker.ev_sales == null ? '—' : `${ticker.ev_sales.toFixed(1)}×`} />
-              <KV label="… vs sector median"      value={ticker.ev_sales_relative == null ? '—' : `${ticker.ev_sales_relative.toFixed(2)}×`} />
-              <KV label="FCF Yield (TTM)"         value={fmtPct(ticker.fcf_yield_ttm, 2)} highlight />
-              <KV label="Altman Z"                value={ticker.altman_z == null ? '—' : ticker.altman_z.toFixed(2)} />
-              <KV label="Piotroski"               value={ticker.piotroski == null ? '—' : `${ticker.piotroski}/9`} />
-              <KV label="Insider A/D (4Q avg)"    value={fmtNum(ticker.ad_ratio_4q_avg, 2)} />
-              <KV label="EPS revision (Y/Y)"      value={fmtPct(ticker.eps_revision_yoy)} />
-              <KV label="52-w range position"     value={fmtPct(ticker.range_position, 0)} />
-              <KV label="% above 200DMA"          value={fmtPct(ticker.sma200_extension, 0)} />
-              <KV label="Weekly RSI(14)"          value={ticker.rsi_weekly == null ? '—' : ticker.rsi_weekly.toFixed(0)} />
-              <KV label="Price"                   value={fmtPrice(ticker.price)} />
-              <KV label="Market cap"              value={ticker.market_cap == null ? '—' : `$${(ticker.market_cap / 1e9).toFixed(1)}B`} />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Inputs by pillar</h2>
+
+            <InputGroup
+              title="Valuation"
+              accent="rose"
+              score={ticker.val_score}
+              rows={[
+                { label: "EV/Sales (TTM)",         value: ticker.ev_sales == null ? '—' : `${ticker.ev_sales.toFixed(2)}×`,
+                  threshold: "abs > 25× strong · > 15× weak" },
+                { label: "… vs S&P 500 sector median", value: ticker.ev_sales_relative == null ? '—' : `${ticker.ev_sales_relative.toFixed(2)}×`,
+                  threshold: "> 2.5× sector strong · > 1.5× weak" },
+                { label: "Sector median (live)",    value: ticker.ev_sales_sector_median == null ? '—' : `${ticker.ev_sales_sector_median.toFixed(2)}×` },
+                { label: "FCF Yield (TTM)",         value: fmtPct(ticker.fcf_yield_ttm, 2),
+                  threshold: "< -0.5% strong · < 1.5% weak", highlight: true },
+              ]}
+            />
+
+            <InputGroup
+              title="Behavioural"
+              accent="orange"
+              score={ticker.beh_score}
+              rows={[
+                { label: "Insider A/D (4Q avg)",   value: fmtNum(ticker.ad_ratio_4q_avg, 2),
+                  threshold: "< 0.20 strong · < 0.35 weak  (0 = all sales)" },
+                { label: "52-week range position", value: fmtPct(ticker.range_position, 0),
+                  threshold: "> 90% combined with EPS rev < 0 → strong" },
+                { label: "EPS revision (Y/Y)",     value: fmtPct(ticker.eps_revision_yoy) },
+              ]}
+            />
+
+            <InputGroup
+              title="Technical"
+              accent="cyan"
+              score={ticker.tech_score}
+              rows={[
+                { label: "% above 200DMA",         value: fmtPct(ticker.sma200_extension, 0),
+                  threshold: "> 40% strong · > 20% weak" },
+                { label: "Weekly RSI(14)",         value: ticker.rsi_weekly == null ? '—' : ticker.rsi_weekly.toFixed(0),
+                  threshold: "> 75 strong · > 65 weak" },
+              ]}
+            />
+
+            <InputGroup
+              title="Quality"
+              accent="emerald"
+              score={ticker.qual_score}
+              rows={[
+                { label: "Altman Z",               value: ticker.altman_z == null ? '—' : ticker.altman_z.toFixed(2),
+                  threshold: "< 1.81 distress · > 50 detached-mkt-cap = strong" },
+                { label: "Piotroski",              value: ticker.piotroski == null ? '—' : `${ticker.piotroski}/9`,
+                  threshold: "≤ 3 strong · ≤ 5 weak" },
+              ]}
+            />
+
+            {/* Meta — not pillar-scored */}
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Meta</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <KV label="Price"      value={fmtPrice(ticker.price)} />
+                <KV label="Market cap" value={ticker.market_cap == null ? '—' : `$${(ticker.market_cap / 1e9).toFixed(1)}B`} />
+              </div>
             </div>
           </section>
 
@@ -560,5 +627,65 @@ function Pillar(
         <div className="text-[9px] text-muted-foreground/60 italic mt-1">no inputs returned</div>
       )}
     </div>
+  );
+}
+
+
+// Pillar-grouped Inputs section in the drawer. Each group shows its score
+// chip, then the rows that feed it with their threshold legend, so it's
+// obvious which input drives which score.
+type Accent = 'rose' | 'orange' | 'cyan' | 'emerald';
+const ACCENT_BORDER: Record<Accent, string> = {
+  rose:     'border-l-rose-500/70',
+  orange:   'border-l-orange-500/70',
+  cyan:     'border-l-cyan-500/70',
+  emerald:  'border-l-emerald-500/70',
+};
+const ACCENT_BG: Record<Accent, string> = {
+  rose:    'bg-rose-500/10',
+  orange:  'bg-orange-500/10',
+  cyan:    'bg-cyan-500/10',
+  emerald: 'bg-emerald-500/10',
+};
+
+function InputGroup(
+  { title, score, accent, rows }:
+  {
+    title: string;
+    score: number;
+    accent: Accent;
+    rows: { label: string; value: string; threshold?: string; highlight?: boolean }[];
+  }
+) {
+  return (
+    <div className={`mt-3 border-l-2 ${ACCENT_BORDER[accent]} pl-3`}>
+      <div className={`flex items-center gap-2 px-2 py-1 rounded-t ${ACCENT_BG[accent]}`}>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-foreground">{title}</span>
+        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ml-auto ${pillarColor(score)}`}>
+          {score} / 2
+        </span>
+      </div>
+      <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs px-2 py-2">
+        {rows.map((r) => (
+          <FragmentRow key={r.label} row={r} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FragmentRow({ row }: { row: { label: string; value: string; threshold?: string; highlight?: boolean } }) {
+  return (
+    <>
+      <div>
+        <div className="text-muted-foreground">{row.label}</div>
+        {row.threshold && (
+          <div className="text-[9px] text-muted-foreground/60 italic">{row.threshold}</div>
+        )}
+      </div>
+      <div className={`text-right font-mono self-start ${row.highlight ? 'text-foreground font-bold' : 'text-foreground'}`}>
+        {row.value}
+      </div>
+    </>
   );
 }
