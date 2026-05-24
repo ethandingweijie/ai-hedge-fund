@@ -14,10 +14,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  getComplacencyCohort, refreshComplacency,
+  getComplacencyCohort, refreshComplacency, scoreComplacencyTickerAdhoc,
   type ComplacencyCohort, type ComplacencyTickerResult, type ComplacencyVerdict,
 } from '@/lib/api';
-import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 
@@ -98,6 +98,9 @@ export function ComplacencyPage() {
   const [verdictFilter, setVerdictFilter] = useState<ComplacencyVerdict | 'All'>('All');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ComplacencyTickerResult | null>(null);
+  // Ad-hoc scored tickers — appended to the displayed table but NOT persisted.
+  const [adhoc, setAdhoc] = useState<ComplacencyTickerResult[]>([]);
+  const [scoringAdhoc, setScoringAdhoc] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,12 +130,21 @@ export function ComplacencyPage() {
     }
   };
 
+  // Merge cohort results with ad-hoc scored tickers; ad-hoc overrides cohort
+  // for the same ticker (so re-scoring a cohort name in the search bar shows
+  // the fresh values).
+  const allResults = useMemo(() => {
+    const cohortRows = cohort?.results ?? [];
+    if (adhoc.length === 0) return cohortRows;
+    const adhocTickers = new Set(adhoc.map((r) => r.ticker));
+    return [...cohortRows.filter((r) => !adhocTickers.has(r.ticker)), ...adhoc];
+  }, [cohort, adhoc]);
+
   const rows = useMemo(() => {
-    if (!cohort?.results) return [];
     const asc = RANK_DEFS.find((r) => r.id === rankBy)?.asc ?? false;
     const q = search.trim().toUpperCase();
 
-    return cohort.results
+    return allResults
       .filter((r) => verdictFilter === 'All' ? true : r.verdict === verdictFilter)
       .filter((r) => !q || r.ticker.includes(q) || r.name.toUpperCase().includes(q))
       .slice()
@@ -146,9 +158,37 @@ export function ComplacencyPage() {
         }
         return asc ? (av as number) - (bv as number) : (bv as number) - (av as number);
       });
-  }, [cohort, rankBy, verdictFilter, search]);
+  }, [allResults, rankBy, verdictFilter, search]);
 
   const activeRank = RANK_DEFS.find((r) => r.id === rankBy)!;
+
+  // "Score X" handler — fires when the search query matches no row but looks
+  // like a valid ticker symbol (1-6 alphabetic chars, all upper or auto-cased).
+  const trimmedQuery = search.trim().toUpperCase();
+  const looksLikeTicker = /^[A-Z]{1,6}$/.test(trimmedQuery);
+  const noMatches = rows.length === 0 && trimmedQuery.length > 0;
+  const showScoreButton = noMatches && looksLikeTicker;
+
+  const handleScoreAdhoc = async () => {
+    if (!trimmedQuery) return;
+    setScoringAdhoc(true);
+    toast.info(`Scoring ${trimmedQuery} ad-hoc — ~10-15 sec.`);
+    try {
+      const result = await scoreComplacencyTickerAdhoc(trimmedQuery);
+      // Replace existing adhoc entry for this ticker if any
+      setAdhoc((prev) => [
+        ...prev.filter((r) => r.ticker !== result.ticker),
+        result,
+      ]);
+      // Open the drawer immediately so user sees the full breakdown
+      setSelected(result);
+      toast.success(`${result.ticker}: ${result.verdict} (${result.composite.toFixed(1)}/8)`);
+    } catch (e) {
+      toast.error(`Could not score ${trimmedQuery}: ${(e as Error).message}`);
+    } finally {
+      setScoringAdhoc(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pt-16 pb-20">
@@ -213,7 +253,7 @@ export function ComplacencyPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter by ticker or name"
+              placeholder="Filter / type a ticker to score ad-hoc"
               className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md border border-border bg-card focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </div>
@@ -270,8 +310,28 @@ export function ComplacencyPage() {
         )}
 
         {!loading && cohort && rows.length === 0 && cohort.results.length > 0 && (
-          <div className="p-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-md">
-            No tickers match your filters.
+          <div className="p-4 text-center border border-dashed border-border rounded-md">
+            <p className="text-xs text-muted-foreground mb-3">
+              No tickers in the cohort match your search.
+            </p>
+            {showScoreButton ? (
+              <button
+                onClick={handleScoreAdhoc}
+                disabled={scoringAdhoc}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50"
+              >
+                {scoringAdhoc ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Plus size={14} />
+                )}
+                {scoringAdhoc ? `Scoring ${trimmedQuery}…` : `Score ${trimmedQuery} on-the-fly`}
+              </button>
+            ) : (
+              <p className="text-[11px] text-muted-foreground/70">
+                Type a valid US ticker (1-6 letters) to score it ad-hoc.
+              </p>
+            )}
           </div>
         )}
 
@@ -328,7 +388,17 @@ export function ComplacencyPage() {
                   >
                     <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rank ?? '—'}</td>
                     <td className="px-2 py-1.5">
-                      <div className="font-bold text-foreground">{r.ticker}</div>
+                      <div className="font-bold text-foreground flex items-center gap-1">
+                        {r.ticker}
+                        {adhoc.some((a) => a.ticker === r.ticker) && (
+                          <span
+                            className="text-[8px] uppercase tracking-wider px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold"
+                            title="Ad-hoc — scored on-the-fly, not part of the persisted cohort"
+                          >
+                            ad-hoc
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-muted-foreground truncate max-w-[110px]">{r.name}</div>
                     </td>
                     <td className="px-2 py-1.5 text-[10px] text-muted-foreground truncate max-w-[120px]">{r.sector ?? '—'}</td>

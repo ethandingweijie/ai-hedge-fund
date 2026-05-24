@@ -28,7 +28,7 @@ from fastapi import APIRouter, HTTPException
 from app.backend.services import sw46_storage, complacency_storage
 from src.research_ideas.sw46.runner import run_sw46
 from src.research_ideas.sw46.universe import list_tickers as sw46_list_tickers
-from src.research_ideas.complacency.runner import run_complacency
+from src.research_ideas.complacency.runner import run_complacency, score_one_ticker
 from src.research_ideas.complacency.universe import list_tickers as complacency_list_tickers
 
 
@@ -235,6 +235,34 @@ async def refresh_complacency(max_workers: int = 4):
     except Exception as exc:
         tb = traceback.format_exc()
         logger.exception("refresh_complacency failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/complacency/score/{ticker}")
+async def score_complacency_adhoc(ticker: str):
+    """
+    Ad-hoc: score ONE ticker that isn't in the curated 50-name universe.
+    Sector / industry are auto-looked-up from FMP /profile. Result is
+    returned to the caller but NOT persisted to the cohort table.
+
+    Takes ~10-15 sec per ticker (multiple FMP endpoints).
+    """
+    ticker = ticker.strip().upper()
+    if not ticker or not ticker.isalnum() or len(ticker) > 6:
+        raise HTTPException(status_code=400, detail=f"Invalid ticker: {ticker!r}")
+    try:
+        result = await asyncio.to_thread(score_one_ticker, ticker)
+        if isinstance(result, dict) and result.get("reason"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"{ticker}: {result.get('reason')}"
+            )
+        return result.model_dump() if hasattr(result, "model_dump") else result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("score_complacency_adhoc(%s) failed: %s", ticker, exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 

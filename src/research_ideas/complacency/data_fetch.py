@@ -67,6 +67,24 @@ def _fetch_quote(ticker: str) -> Optional[dict]:
     return None
 
 
+def fetch_profile(ticker: str) -> Optional[dict]:
+    """
+    /stable/profile — returns {symbol, companyName, sector, industry, ...}.
+    Used by ad-hoc ticker scoring so the user doesn't have to hand-supply
+    sector/industry. Returns None for unknown tickers.
+    """
+    data = _fmp_get(f"{_STABLE}/profile", {"symbol": ticker}, api_key=None, uncap=True)
+    if isinstance(data, list) and data:
+        r = data[0]
+        return {
+            "ticker": ticker.upper(),
+            "name": r.get("companyName") or ticker.upper(),
+            "sector": r.get("sector"),
+            "industry": r.get("industry"),
+        }
+    return None
+
+
 def _fetch_key_metrics_ttm(ticker: str) -> Optional[dict]:
     data = _fmp_get(
         f"{_STABLE}/key-metrics-ttm",

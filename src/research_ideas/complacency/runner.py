@@ -36,9 +36,50 @@ from src.research_ideas.complacency.universe import (
 logger = logging.getLogger(__name__)
 
 
-def _process_ticker(ticker: str) -> ComplacencyTickerResult | dict:
+def score_one_ticker(
+    ticker: str,
+    name: str | None = None,
+    sector: str | None = None,
+    industry: str | None = None,
+) -> ComplacencyTickerResult | dict:
+    """
+    Score ONE ticker ad-hoc (not part of the curated cohort).
+
+    If sector / industry aren't supplied, they're auto-looked-up from FMP's
+    /profile endpoint so the sector-median benchmark fires correctly.
+
+    Returns a ComplacencyTickerResult on success or a dict {ticker, reason}
+    on failure. Does NOT persist to the cohort table — caller decides what
+    to do with the result.
+    """
+    ticker = ticker.strip().upper()
+    if not ticker:
+        return {"ticker": ticker, "reason": "empty_ticker"}
+
+    # Auto-fill missing meta from /profile
+    if not sector or not name:
+        try:
+            from src.research_ideas.complacency.data_fetch import fetch_profile
+            profile = fetch_profile(ticker)
+            if profile:
+                name = name or profile.get("name", ticker)
+                sector = sector or profile.get("sector")
+                industry = industry or profile.get("industry")
+        except Exception as exc:
+            logger.warning("Profile lookup failed for %s: %s", ticker, exc)
+
+    meta = {
+        "ticker": ticker,
+        "name": name or ticker,
+        "sector": sector,
+        "industry": industry,
+    }
+    return _process_ticker_with_meta(ticker, meta)
+
+
+def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResult | dict:
+    """Score one ticker given pre-resolved meta (sector/name/industry)."""
     try:
-        meta = get_ticker_metadata(ticker)
         bundle = fetch_ticker_bundle(ticker, meta)
         if bundle is None:
             return {"ticker": ticker, "reason": "fetch_returned_none"}
@@ -74,12 +115,14 @@ def _process_ticker(ticker: str) -> ComplacencyTickerResult | dict:
             justification=s["justification"],
         )
     except Exception as exc:
-        logger.exception("Complacency ticker %s failed: %s", ticker, exc)
-        return {
-            "ticker": ticker,
-            "reason": f"{type(exc).__name__}: {exc}",
-            "trace": traceback.format_exc(),
-        }
+        logger.exception("Complacency ad-hoc %s failed: %s", ticker, exc)
+        return {"ticker": ticker, "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def _process_ticker(ticker: str) -> ComplacencyTickerResult | dict:
+    """Cohort run path — looks up meta from the curated universe JSON."""
+    meta = get_ticker_metadata(ticker)
+    return _process_ticker_with_meta(ticker, meta)
 
 
 def _auto_refresh_sector_medians_if_stale(max_age_days: int = 7) -> None:

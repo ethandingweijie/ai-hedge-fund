@@ -561,6 +561,18 @@ export function getComplacencyTicker(ticker: string): Promise<ComplacencyTickerR
   return fetchJson(`${BASE}/research/ideas/complacency/${encodeURIComponent(ticker.toUpperCase())}`);
 }
 
+/**
+ * Score one ticker ad-hoc — for arbitrary symbols outside the curated
+ * 50-name universe. Sector is auto-resolved from FMP /profile. NOT
+ * persisted to the cohort table; caller decides how to display.
+ * Takes ~10-15 sec per ticker.
+ */
+export function scoreComplacencyTickerAdhoc(ticker: string): Promise<ComplacencyTickerResult> {
+  return fetchJson(`${BASE}/research/ideas/complacency/score/${encodeURIComponent(ticker.toUpperCase())}`, {
+    method: 'POST',
+  });
+}
+
 export function refreshComplacency(opts: { maxWorkers?: number } = {}): Promise<{
   run_id: string;
   created_at: string;
