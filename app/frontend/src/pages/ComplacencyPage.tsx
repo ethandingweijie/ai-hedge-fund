@@ -161,7 +161,24 @@ export function ComplacencyPage() {
       },
     );
     try {
-      await refreshComplacency({ maxWorkers: 4 });
+      // refreshComplacency now uses async-job pattern: backend returns a job_id,
+      // we poll until done. iOS Safari can drop the polling fetch on backgrounding;
+      // the job continues server-side and the next successful poll picks it up.
+      await refreshComplacency({
+        maxWorkers: 4,
+        onProgress: (s) => {
+          if (s.progress_msg) {
+            toast.loading(
+              `Refresh In Progress · ${s.progress_msg}`,
+              {
+                id: toastId,
+                duration: Infinity,
+                style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
+              },
+            );
+          }
+        },
+      });
       await load();
       toast.dismiss(toastId);
       toast.success('Refresh of Complacency Detector Completed', {

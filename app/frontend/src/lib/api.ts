@@ -612,22 +612,45 @@ export function getComplacencyTicker(ticker: string): Promise<ComplacencyTickerR
   return fetchJson(`${BASE}/research/ideas/complacency/${encodeURIComponent(ticker.toUpperCase())}`);
 }
 
+// ─── Async-job pattern for long-running Complacency ops ─────────────────
+// Cohort refresh and force-qual re-scoring can take 5-10 minutes. iOS
+// Safari kills synchronous fetches that long. So the backend now returns
+// a job_id immediately; we poll for completion.
+
+export interface ComplacencyJobHandle {
+  job_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string | null;
+  deduped?: boolean;   // true if existing in-flight job was returned
+}
+
+export interface ComplacencyJobStatus {
+  job_id: string;
+  kind: 'refresh' | 'score_adhoc';
+  ticker: string | null;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string;
+  finished_at: string | null;
+  progress_msg: string | null;
+  result: unknown;       // refresh: cohort summary; score_adhoc: ComplacencyTickerResult
+  error: string | null;
+}
+
 /**
- * Score one ticker ad-hoc — for arbitrary symbols outside the curated
- * 50-name universe. Sector is auto-resolved from FMP /profile.
+ * Kick off ad-hoc scoring (with optional forceQual) as a background job.
+ * Returns immediately with {job_id}; poll getComplacencyJob() to await result.
  *
- * When opts.forceQual is true, the qualitative LLM scorer fires even
- * if the verdict isn't Strong-Short / Watch (otherwise gated). If the
- * ticker is already in the latest cohort run, the patched row (with
- * recomputed aggregate) is persisted back so the change survives a
- * page refresh. The response carries `_persisted_to_cohort: boolean`.
+ * Used for:
+ *   1. Brand-new ticker not in the curated universe (full fresh score)
+ *   2. Existing-cohort ticker with forceQual=true (re-runs qualitative,
+ *      patches cohort row, recomputes aggregate)
  *
- * Takes ~10-15 sec quant-only; ~4-5 min with forceQual.
+ * Takes ~10-15 sec quant-only; ~4-6 min with forceQual + deep research.
  */
-export function scoreComplacencyTickerAdhoc(
+export function startComplacencyAdhocScore(
   ticker: string,
   opts: { forceQual?: boolean } = {},
-): Promise<ComplacencyTickerResult & { _persisted_to_cohort?: boolean }> {
+): Promise<ComplacencyJobHandle> {
   const q = new URLSearchParams();
   if (opts.forceQual) q.set('force_qual', 'true');
   const qs = q.toString() ? `?${q.toString()}` : '';
@@ -637,7 +660,90 @@ export function scoreComplacencyTickerAdhoc(
   );
 }
 
-export function refreshComplacency(opts: { maxWorkers?: number } = {}): Promise<{
+/** Kick off a full cohort refresh as a background job. */
+export function startComplacencyRefresh(opts: { maxWorkers?: number } = {}): Promise<ComplacencyJobHandle> {
+  const q = new URLSearchParams();
+  if (opts.maxWorkers != null) q.set('max_workers', String(opts.maxWorkers));
+  return fetchJson(
+    `${BASE}/research/ideas/complacency/refresh?${q}`,
+    { method: 'POST' },
+  );
+}
+
+/** Poll status for a background job (one shot). */
+export function getComplacencyJob(jobId: string): Promise<ComplacencyJobStatus> {
+  return fetchJson(`${BASE}/research/ideas/complacency/jobs/${encodeURIComponent(jobId)}`);
+}
+
+/**
+ * Poll the job until it reaches a terminal state (completed | failed).
+ *
+ *   • Polls every `pollIntervalMs` (default 5s).
+ *   • Calls `onProgress(status)` on every poll so the UI can update.
+ *   • Tolerates transient network errors (logs but keeps polling) up to
+ *     `maxFailures` consecutive (default 6 = ~30s downtime tolerance).
+ *   • Hard-fails after `timeoutMs` total (default 15 min).
+ *
+ * iOS-friendly: when Safari kills the polling fetch on backgrounding,
+ * the next successful poll picks up wherever the job actually is.
+ */
+export async function pollComplacencyJob(
+  jobId: string,
+  opts: {
+    pollIntervalMs?: number;
+    timeoutMs?: number;
+    maxFailures?: number;
+    onProgress?: (status: ComplacencyJobStatus) => void;
+  } = {},
+): Promise<ComplacencyJobStatus> {
+  const pollIntervalMs = opts.pollIntervalMs ?? 5000;
+  const timeoutMs = opts.timeoutMs ?? 15 * 60 * 1000;
+  const maxFailures = opts.maxFailures ?? 6;
+  const start = Date.now();
+  let consecutiveFailures = 0;
+
+  while (true) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`Job ${jobId} timed out after ${Math.round(timeoutMs / 1000)}s of polling`);
+    }
+    try {
+      const status = await getComplacencyJob(jobId);
+      consecutiveFailures = 0;
+      opts.onProgress?.(status);
+      if (status.status === 'completed') return status;
+      if (status.status === 'failed') {
+        throw new Error(status.error || `Job ${jobId} failed`);
+      }
+    } catch (e) {
+      consecutiveFailures += 1;
+      if (consecutiveFailures > maxFailures) {
+        throw new Error(
+          `Job ${jobId} polling failed ${consecutiveFailures} times in a row — giving up. Last error: ${(e as Error).message}`,
+        );
+      }
+      // Otherwise quiet retry on next tick
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+}
+
+// ─── Legacy compatibility shims ─────────────────────────────────────────
+// Kept so existing callers that expect a promise-of-result still work; they
+// now go through the async-job pattern internally.
+
+export async function scoreComplacencyTickerAdhoc(
+  ticker: string,
+  opts: { forceQual?: boolean; onProgress?: (s: ComplacencyJobStatus) => void } = {},
+): Promise<ComplacencyTickerResult & { _persisted_to_cohort?: boolean }> {
+  const handle = await startComplacencyAdhocScore(ticker, { forceQual: opts.forceQual });
+  const final = await pollComplacencyJob(handle.job_id, { onProgress: opts.onProgress });
+  return final.result as ComplacencyTickerResult & { _persisted_to_cohort?: boolean };
+}
+
+export async function refreshComplacency(opts: {
+  maxWorkers?: number;
+  onProgress?: (s: ComplacencyJobStatus) => void;
+} = {}): Promise<{
   run_id: string;
   created_at: string;
   universe: string;
@@ -645,9 +751,16 @@ export function refreshComplacency(opts: { maxWorkers?: number } = {}): Promise<
   gate_passers: number;
   failed_tickers: Array<{ ticker: string; reason: string }>;
 }> {
-  const q = new URLSearchParams();
-  if (opts.maxWorkers != null) q.set('max_workers', String(opts.maxWorkers));
-  return fetchJson(`${BASE}/research/ideas/complacency/refresh?${q}`, { method: 'POST' });
+  const handle = await startComplacencyRefresh({ maxWorkers: opts.maxWorkers });
+  const final = await pollComplacencyJob(handle.job_id, { onProgress: opts.onProgress });
+  return final.result as {
+    run_id: string;
+    created_at: string;
+    universe: string;
+    ticker_count: number;
+    gate_passers: number;
+    failed_tickers: Array<{ ticker: string; reason: string }>;
+  };
 }
 
 export function listComplacencyRuns(limit = 20): Promise<{ runs: ComplacencyRunHeader[] }> {

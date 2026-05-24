@@ -26,6 +26,7 @@ import traceback
 from fastapi import APIRouter, HTTPException
 
 from app.backend.services import sw46_storage, complacency_storage
+from app.backend.services import complacency_job_store as job_store
 from src.research_ideas.sw46.runner import run_sw46
 from src.research_ideas.sw46.universe import list_tickers as sw46_list_tickers
 from src.research_ideas.complacency.runner import run_complacency, score_one_ticker
@@ -216,15 +217,19 @@ async def get_complacency_ticker(ticker: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-@router.post("/ideas/complacency/refresh")
-async def refresh_complacency(max_workers: int = 4):
+# ─── Long-running ops use async-job pattern ─────────────────────────────
+# Cohort refresh + force-qual re-scoring can take 5-10 min when deep-
+# research escalates for multiple indicators. Synchronous HTTP fails on
+# iOS Safari (kills fetches on backgrounding / cellular flakes). So we
+# return a job_id immediately and let the frontend poll GET /jobs/{id}.
+
+
+def _execute_refresh_job(job_id: str, max_workers: int) -> None:
+    """Backend worker for the refresh job (runs in asyncio.to_thread)."""
+    job_store.update_progress(job_id, "running", f"running cohort ({max_workers} workers)")
     try:
-        cohort = await asyncio.to_thread(
-            run_complacency,
-            max_workers=max_workers,
-            save=True,
-        )
-        return {
+        cohort = run_complacency(max_workers=max_workers, save=True)
+        result = {
             "run_id": cohort.run_id,
             "created_at": cohort.created_at,
             "universe": cohort.universe,
@@ -232,63 +237,139 @@ async def refresh_complacency(max_workers: int = 4):
             "gate_passers": cohort.gate_passers,
             "failed_tickers": cohort.failed_tickers,
         }
+        job_store.complete_job(job_id, result)
+        logger.info("Complacency refresh job %s completed", job_id)
     except Exception as exc:
-        tb = traceback.format_exc()
-        logger.exception("refresh_complacency failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+        logger.exception("Complacency refresh job %s failed: %s", job_id, exc)
+        job_store.fail_job(job_id, f"{type(exc).__name__}: {exc}")
+
+
+@router.post("/ideas/complacency/refresh")
+async def refresh_complacency(max_workers: int = 4):
+    """
+    Kicks off a full cohort refresh as a BACKGROUND task. Returns immediately
+    with {job_id, status: 'pending'}. Frontend polls
+    GET /research/ideas/complacency/jobs/{job_id} for completion.
+
+    If a refresh is already in flight, returns its existing job_id (dedupes).
+    """
+    in_flight = job_store.find_in_flight_job("refresh")
+    if in_flight:
+        return {
+            "job_id":    in_flight["job_id"],
+            "status":    in_flight["status"],
+            "started_at": in_flight["started_at"],
+            "deduped":   True,
+        }
+
+    job_id = job_store.create_job("refresh")
+
+    async def _run():
+        await asyncio.to_thread(_execute_refresh_job, job_id, max_workers)
+
+    asyncio.create_task(_run())
+    return {
+        "job_id":    job_id,
+        "status":    "pending",
+        "started_at": None,
+        "deduped":   False,
+    }
+
+
+def _execute_score_job(job_id: str, ticker: str, force_qual: bool) -> None:
+    """Backend worker for ad-hoc / force-qual scoring (runs in asyncio.to_thread)."""
+    job_store.update_progress(
+        job_id, "running",
+        f"scoring {ticker}{' (force_qual)' if force_qual else ''}",
+    )
+    try:
+        result = score_one_ticker(ticker, None, None, None, force_qual)
+        if isinstance(result, dict) and result.get("reason"):
+            job_store.fail_job(job_id, f"{ticker}: {result.get('reason')}")
+            return
+        payload = result.model_dump() if hasattr(result, "model_dump") else result
+
+        persisted = False
+        if force_qual:
+            try:
+                persisted = complacency_storage.update_ticker_in_latest_cohort(payload)
+            except Exception as exc:
+                logger.warning("Cohort patch for %s after force_qual failed: %s", ticker, exc)
+        if isinstance(payload, dict):
+            payload["_persisted_to_cohort"] = persisted
+        job_store.complete_job(job_id, payload)
+    except Exception as exc:
+        logger.exception("score_one_ticker job %s for %s failed: %s", job_id, ticker, exc)
+        job_store.fail_job(job_id, f"{type(exc).__name__}: {exc}")
 
 
 @router.post("/ideas/complacency/score/{ticker}")
 async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
     """
-    Ad-hoc: score ONE ticker. Used for two flows:
+    Kicks off ad-hoc scoring (with optional force_qual) as a BACKGROUND task.
+    Returns {job_id, status: 'pending'} immediately. Frontend polls
+    GET /research/ideas/complacency/jobs/{job_id} for completion.
 
+    Used for two flows:
       1. Brand-new ticker not in the curated universe — full fresh score.
-         Sector / industry auto-looked-up via FMP /profile. NOT persisted
-         to the cohort table.
+      2. Existing-cohort ticker with force_qual=true — runs qualitative
+         regardless of verdict; patched back into cohort storage.
 
-      2. Existing-cohort ticker with `force_qual=true` — the user clicked
-         "Generate Qualitative" on a row whose verdict is Borderline / Pass
-         (auto-qual normally fires only for Strong-Short / Watch). The
-         qualitative LLM runs regardless of verdict, the aggregate is
-         recomputed, and the updated row is patched back into the latest
-         cohort run so a page-refresh shows the new score.
-
-    Takes ~10-15 sec quant-only; ~4-5 min with qual.
+    If a job is already in flight for this (ticker, force_qual=any), returns
+    its existing job_id (dedupes).
     """
     ticker = ticker.strip().upper()
     if not ticker or not ticker.isalnum() or len(ticker) > 6:
         raise HTTPException(status_code=400, detail=f"Invalid ticker: {ticker!r}")
-    try:
-        result = await asyncio.to_thread(score_one_ticker, ticker, None, None, None, force_qual)
-        if isinstance(result, dict) and result.get("reason"):
-            raise HTTPException(
-                status_code=422,
-                detail=f"{ticker}: {result.get('reason')}"
-            )
-        payload = result.model_dump() if hasattr(result, "model_dump") else result
 
-        # If force_qual was requested AND this ticker is in the latest cohort,
-        # patch the cohort storage so the updated aggregate persists.
-        persisted = False
-        if force_qual:
-            try:
-                persisted = await asyncio.to_thread(
-                    complacency_storage.update_ticker_in_latest_cohort,
-                    payload,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "Cohort patch for %s after force_qual failed: %s", ticker, exc
-                )
-        if isinstance(payload, dict):
-            payload["_persisted_to_cohort"] = persisted
-        return payload
+    in_flight = job_store.find_in_flight_job("score_adhoc", ticker=ticker)
+    if in_flight:
+        return {
+            "job_id":    in_flight["job_id"],
+            "status":    in_flight["status"],
+            "started_at": in_flight["started_at"],
+            "deduped":   True,
+        }
+
+    job_id = job_store.create_job("score_adhoc", ticker=ticker)
+
+    async def _run():
+        await asyncio.to_thread(_execute_score_job, job_id, ticker, force_qual)
+
+    asyncio.create_task(_run())
+    return {
+        "job_id":    job_id,
+        "status":    "pending",
+        "started_at": None,
+        "deduped":   False,
+    }
+
+
+@router.get("/ideas/complacency/jobs/{job_id}")
+async def get_complacency_job(job_id: str):
+    """Return current state of a complacency background job."""
+    try:
+        job = await asyncio.to_thread(job_store.get_job, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        return job
     except HTTPException:
         raise
     except Exception as exc:
         tb = traceback.format_exc()
-        logger.exception("score_complacency_adhoc(%s) failed: %s", ticker, exc)
+        logger.exception("get_complacency_job(%s) failed: %s", job_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/complacency/jobs")
+async def list_complacency_jobs(limit: int = 20):
+    """List recent complacency jobs across all kinds."""
+    try:
+        jobs = await asyncio.to_thread(job_store.list_recent_jobs, limit)
+        return {"jobs": jobs}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_complacency_jobs failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
