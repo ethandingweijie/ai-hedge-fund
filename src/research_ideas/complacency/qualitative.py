@@ -1493,14 +1493,21 @@ def assess_qualitative(
     total_cost = 0.0
     incomplete = False
 
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+    # Use explicit try/finally instead of `with ThreadPoolExecutor() as ex`
+    # — the context manager's __exit__ calls shutdown(wait=True) which
+    # blocks until all RUNNING futures complete. With force_qual hitting
+    # the per-indicator timeout, we want to return PARTIAL results
+    # immediately, not wait an extra 2-3 min for stragglers to fail
+    # their own internal timeouts.
+    ex = ThreadPoolExecutor(max_workers=max_workers)
+    try:
         futures = {
             ex.submit(score_indicator, ticker, name, sector, code, force_refresh): code
             for code in indicator_codes
         }
         try:
             # Total cap = per_indicator_timeout_s * ceil(N / max_workers)
-            # i.e. 6 min × ceil(10/3) = 6 × 4 = 24 min worst case
+            # i.e. 240s × ceil(10/4) = 240 × 3 = 720s = 12 min worst case
             total_timeout = per_indicator_timeout_s * (
                 (len(futures) + max_workers - 1) // max_workers
             )
@@ -1530,16 +1537,24 @@ def assess_qualitative(
                     len(indicator_codes) - len(scored),
                 )
         except Exception as exc:
-            # as_completed's outer timeout fires here. Any future not yet
-            # finished is abandoned (Python doesn't cancel running futures
-            # for non-daemon thread pools, but we stop waiting on them).
             logger.warning(
                 "assess_qualitative for %s hit outer timeout after %.1f min "
-                "(%d/%d indicators scored): %s",
+                "(%d/%d indicators scored): %s — abandoning unfinished",
                 ticker, (_time.time() - started_at_ts) / 60,
                 len(scored), len(indicator_codes), exc,
             )
             incomplete = True
+    finally:
+        # cancel_futures cancels PENDING futures (not yet picked up).
+        # wait=False returns immediately; orphaned worker threads finish
+        # on their own and write to the cache when their internal call-
+        # level timeout fires (120s ChatOpenAI / 180s OpenAI client).
+        # Those late writes are harmless — they just populate the cache
+        # for the next force-rescore.
+        try:
+            ex.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            ex.shutdown(wait=False)  # pre-3.9 fallback
 
     if not scored:
         return QualitativeAssessment(
