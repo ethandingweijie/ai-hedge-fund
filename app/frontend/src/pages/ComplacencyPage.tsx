@@ -1122,13 +1122,33 @@ function QualitativePanel(
   { qual: QualitativeAssessment; headerPrefix?: string }
 ) {
   const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
+
+  // Count of indicators that escalated to deep-research web search.
+  // model_used == "qwen3.6-plus+deep_web_search" marks deep escalation;
+  // == "qwen3.6-plus" marks first-pass only (which is correct when
+  // first-pass conf already > 0.50 — deep research wasn't needed).
+  const deepCount = Object.values(qual.indicators ?? {}).filter(
+    (i) => (i.model_used || '').includes('deep'),
+  ).length;
+  const totalIndicators = Object.keys(qual.indicators ?? {}).length;
+
   return (
     <section className="border border-indigo-500/30 rounded-md bg-indigo-500/5 p-3">
       <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
         <h2 className="text-xs font-bold uppercase tracking-wider text-indigo-300">{headerPrefix}Qualitative Thesis</h2>
-        <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[qual.conviction_label]}`}>
-          {qual.conviction_label}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {deepCount > 0 && (
+            <span
+              className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-900 dark:text-purple-100 text-[9px] font-bold uppercase tracking-wider"
+              title="Indicators that escalated to Qwen native web search after a low-confidence first-pass score."
+            >
+              ★ {deepCount}/{totalIndicators} deep-research
+            </span>
+          )}
+          <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[qual.conviction_label]}`}>
+            {qual.conviction_label}
+          </span>
+        </div>
       </div>
       <p className="text-[10px] text-muted-foreground italic mb-3">{CONVICTION_BLURB[qual.conviction_label]}</p>
 
@@ -1162,6 +1182,14 @@ function QualitativePanel(
               >
                 <span className="text-[9px] uppercase tracking-wider text-muted-foreground w-20 flex-shrink-0">{meta.theme}</span>
                 <span className="text-foreground flex-1 truncate">{meta.label}</span>
+                {(s.model_used || '').includes('deep') && (
+                  <span
+                    className="px-1 py-0.5 rounded bg-purple-500/25 text-purple-900 dark:text-purple-100 text-[8px] font-bold tracking-wider"
+                    title="This indicator escalated to deep-research (Qwen native web search) after a low-confidence first-pass score."
+                  >
+                    ★ DEEP
+                  </span>
+                )}
                 <span className="text-[10px] text-muted-foreground/60">
                   conf {(s.confidence * 100).toFixed(0)}%
                 </span>
