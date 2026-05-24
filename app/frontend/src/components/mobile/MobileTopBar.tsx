@@ -60,8 +60,15 @@ export function MobileTopBar() {
 
   return (
     <>
-      {/* Hamburger menu — top-left, fixed below iOS status bar */}
-      <div className="fixed left-3 z-[60]" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}>
+      {/* Hamburger menu — top-left, fixed below iOS status bar.
+          z-[10000] so it floats ABOVE the persistent sonner toaster
+          (which uses z-9999) — otherwise the long-running Refresh /
+          Re-score toasts cover the hamburger and the user can't navigate
+          away while a job is running. */}
+      <div
+        className="fixed left-3 z-[10000]"
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+      >
         <button
           onClick={() => setMenuOpen(true)}
           className="w-9 h-9 rounded-full flex items-center justify-center shadow-md bg-white/90 dark:bg-card border border-border"
@@ -72,9 +79,11 @@ export function MobileTopBar() {
 
       {/* Profile icon removed — settings moved to hamburger menu */}
 
-      {/* Navigation drawer — slides from left */}
+      {/* Navigation drawer — slides from left.
+          z-[10001] so it sits above both the hamburger button (z-10000)
+          and any active toaster (z-9999). */}
       {menuOpen && (
-        <div className="fixed inset-0 z-[70]" onClick={() => setMenuOpen(false)}>
+        <div className="fixed inset-0 z-[10001]" onClick={() => setMenuOpen(false)}>
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/50 animate-in fade-in duration-200" />
 
