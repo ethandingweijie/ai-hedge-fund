@@ -218,6 +218,72 @@ def _fetch_10k_risk_factors(ticker: str) -> Optional[dict]:
     return None
 
 
+def _fetch_analyst_recommendations(ticker: str) -> Optional[dict]:
+    """
+    FMP /grades-consensus returns aggregate sell-side rating tallies
+    (strongBuy / buy / hold / sell / strongSell). Used by A3 (consensus
+    uniformity). Returns None when the endpoint is plan-gated or empty.
+    """
+    data = _fmp_get(
+        f"{_STABLE}/grades-consensus",
+        {"symbol": ticker},
+        api_key=None,
+        uncap=True,
+    )
+    if not isinstance(data, list) or not data:
+        return None
+    r = data[0]
+    total = sum([
+        int(r.get("strongBuy") or 0), int(r.get("buy") or 0),
+        int(r.get("hold") or 0), int(r.get("sell") or 0),
+        int(r.get("strongSell") or 0),
+    ])
+    if total == 0:
+        return None
+    return {
+        "strong_buy": int(r.get("strongBuy") or 0),
+        "buy": int(r.get("buy") or 0),
+        "hold": int(r.get("hold") or 0),
+        "sell": int(r.get("sell") or 0),
+        "strong_sell": int(r.get("strongSell") or 0),
+        "total": total,
+        "pct_buy_or_strong": (int(r.get("strongBuy") or 0) + int(r.get("buy") or 0)) / total,
+    }
+
+
+def _fetch_insider_recent_trades(ticker: str, days: int = 180, limit: int = 40) -> list[dict]:
+    """
+    Recent Form 4 insider transactions with owner type (CEO/CFO/Director).
+    Used by D2 (insider behavior depth — WHO is selling, not just A/D ratio).
+    """
+    today = date.today()
+    since = today - timedelta(days=days)
+    data = _fmp_get(
+        f"{_STABLE}/insider-trading/search",
+        {"symbol": ticker, "page": 0, "limit": limit},
+        api_key=None,
+        uncap=True,
+    )
+    if not isinstance(data, list):
+        return []
+    out: list[dict] = []
+    for r in data:
+        trans_date = (r.get("transactionDate") or "")[:10]
+        if trans_date and trans_date < since.isoformat():
+            continue
+        out.append({
+            "date": trans_date,
+            "owner_name": r.get("reportingName") or "",
+            "owner_type": r.get("typeOfOwner") or "",
+            "transaction_type": r.get("transactionType") or "",
+            "acq_disp": r.get("acquisitionOrDisposition") or "",
+            "shares": _safe_float(r.get("securitiesTransacted")) or 0,
+            "price": _safe_float(r.get("price")) or 0,
+            "value": (_safe_float(r.get("securitiesTransacted")) or 0) * (_safe_float(r.get("price")) or 0),
+        })
+    return out
+
+
 def _fetch_earnings_calendar(ticker: str) -> Optional[dict]:
     """Next earnings date — proxy for catalyst proximity."""
     data = _fmp_get(
@@ -495,27 +561,312 @@ def _gather_evidence_D1(ticker: str) -> list[dict]:
     return packs
 
 
-# ── Indicator registry ────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════
+# v2 indicators (7 more — completing themes A/B/C/D per the spec)
+# ══════════════════════════════════════════════════════════════════════════
+
+
+# ── A1 — Single-thesis dependence ────────────────────────────────────────
+
+
+A1_RUBRIC = """
+Score how much the bull case depends on ONE assumption.
+
+0  Multi-driver business with diversified bull narratives (3+ independent drivers).
+1  Two clear bull drivers; loss of one would not collapse the thesis.
+2  One dominant bull driver but supported by tangible secondary drivers.
+3  Single dominant assumption (e.g., 'TAM is infinite', 'hyperscaler capex never stops').
+4  Single dominant assumption AND that assumption is itself contested in news / analyst notes.
+5  Single high-conviction narrative AND mounting evidence the assumption is breaking.
+"""
+
+
+def _gather_evidence_A1(ticker: str) -> list[dict]:
+    """Single-thesis: news (sell-side narrative quotes) + transcript if available."""
+    packs: list[dict] = []
+    for n in _fetch_recent_news(ticker, days=90, limit=8):
+        packs.append({
+            "source": n["source"], "date": n["date"],
+            "text": f"{n['title']}\n\n{n['text_snippet']}",
+        })
+    return packs
+
+
+# ── A3 — Consensus uniformity ────────────────────────────────────────────
+
+
+A3_RUBRIC = """
+Score how crowded / uniform the long view is on Wall Street.
+
+0  Mixed coverage (Buy ≤ 50%, balanced Sell/Hold tails).
+1  Buy 50-65% of analysts.
+2  Buy 65-80% of analysts.
+3  Buy > 80% of analysts AND price-target dispersion compressed.
+4  Buy > 90% AND zero Sell ratings AND retail/news sentiment uniformly bullish.
+5  Sell-side unanimity + retail euphoria + meme-stock-style price-target chasing.
+"""
+
+
+def _gather_evidence_A3(ticker: str) -> list[dict]:
+    packs: list[dict] = []
+    recs = _fetch_analyst_recommendations(ticker)
+    if recs:
+        packs.append({
+            "source": "FMP analyst consensus (/grades-consensus)",
+            "date": date.today().isoformat(),
+            "text": (
+                f"Sell-side ratings tally: "
+                f"strongBuy={recs['strong_buy']} buy={recs['buy']} "
+                f"hold={recs['hold']} sell={recs['sell']} strongSell={recs['strong_sell']}. "
+                f"Total {recs['total']} analysts; {recs['pct_buy_or_strong']*100:.0f}% Buy+StrongBuy."
+            ),
+        })
+    for n in _fetch_recent_news(ticker, days=60, limit=4):
+        packs.append({
+            "source": n["source"], "date": n["date"],
+            "text": f"{n['title']}\n\n{n['text_snippet']}",
+        })
+    return packs
+
+
+# ── B1 — Customer / revenue concentration ────────────────────────────────
+
+
+B1_RUBRIC = """
+Score customer or revenue-segment concentration.
+
+0  Diversified revenue, no top-3 dependency disclosed.
+1  Top-3 < 35% of revenue.
+2  Top-3 35-50% OR single platform dependency (AWS/Apple/Google ecosystem).
+3  Top-3 50-70% OR one customer > 30%.
+4  Top-3 > 70% OR one customer > 30% AND that customer is publicly evaluating alternatives.
+5  Top-1 > 50% AND that customer is mid-RFP for replacement.
+"""
+
+
+def _gather_evidence_B1(ticker: str) -> list[dict]:
+    """B1 — risk-factor section often discloses material customers; news fills gaps."""
+    packs: list[dict] = []
+    risk = _fetch_10k_risk_factors(ticker)
+    if risk:
+        packs.append({
+            "source": risk["source"], "date": risk["date"],
+            "text": risk["content_snippet"],
+        })
+    for n in _fetch_recent_news(ticker, days=90, limit=4):
+        body = (n["title"] + " " + n["text_snippet"]).lower()
+        if any(k in body for k in ("customer", "client", "concentration", "contract", "rfp", "renewal", "churn")):
+            packs.append({
+                "source": n["source"], "date": n["date"],
+                "text": f"{n['title']}\n\n{n['text_snippet']}",
+            })
+    return packs
+
+
+# ── B2 — Competitive disintermediation ───────────────────────────────────
+
+
+B2_RUBRIC = """
+Score competitive disintermediation risk (overlaps with AICT but more granular).
+
+0  Defensible product moat; no credible AI-native / vertical-integration competitor.
+1  Emerging competitors in narrow segments; core business unchanged.
+2  AI-native competitor exists at scale; product overlap < 30%.
+3  AI-native or hyperscaler competitor with material product overlap (30-60%).
+4  Hyperscaler bundles the product for free / near-free; customer migration evidence emerging.
+5  Existential disintermediation in progress (e.g., Snowflake displacing Teradata, AI agents displacing per-seat SaaS).
+"""
+
+
+def _gather_evidence_B2(ticker: str) -> list[dict]:
+    """B2 — news (competitor mentions) + 10-K Competition section if present."""
+    packs: list[dict] = []
+    for n in _fetch_recent_news(ticker, days=120, limit=8):
+        body = (n["title"] + " " + n["text_snippet"]).lower()
+        if any(k in body for k in (
+            "competitor", "competition", "ai-native", "disrupt", "replac",
+            "alternative", "open-source", "open source", "hyperscaler",
+            "agent", "automat",
+        )):
+            packs.append({
+                "source": n["source"], "date": n["date"],
+                "text": f"{n['title']}\n\n{n['text_snippet']}",
+            })
+    risk = _fetch_10k_risk_factors(ticker)
+    if risk:
+        packs.append({
+            "source": risk["source"], "date": risk["date"],
+            "text": risk["content_snippet"][:4000],
+        })
+    return packs
+
+
+# ── B3 — Pricing power erosion ───────────────────────────────────────────
+
+
+B3_RUBRIC = """
+Score pricing-power erosion signals.
+
+0  Pricing power intact: rising ASP, NRR > 110%, expanding deferred revenue.
+1  NRR steady (100-110%) but ASP flat; deferred revenue normalising.
+2  NRR slipping toward 100%; ASP compression in some segments.
+3  NRR < 100% (net contraction) OR persistent ASP discounting in earnings notes.
+4  Multi-quarter NRR < 95% AND deferred revenue growth lagging billings.
+5  Active pricing war (free / freemium pressure) AND management has cut take-rate guidance.
+"""
+
+
+def _gather_evidence_B3(ticker: str) -> list[dict]:
+    packs: list[dict] = []
+    for n in _fetch_recent_news(ticker, days=120, limit=6):
+        body = (n["title"] + " " + n["text_snippet"]).lower()
+        if any(k in body for k in (
+            "pricing", "price cut", "discount", "nrr", "net retention",
+            "renewal", "guidance", "billings", "deferred revenue", "ARR",
+        )):
+            packs.append({
+                "source": n["source"], "date": n["date"],
+                "text": f"{n['title']}\n\n{n['text_snippet']}",
+            })
+    risk = _fetch_10k_risk_factors(ticker)
+    if risk:
+        packs.append({
+            "source": risk["source"], "date": risk["date"],
+            "text": risk["content_snippet"][:4000],
+        })
+    return packs
+
+
+# ── C1 — Disclosure deterioration ────────────────────────────────────────
+
+
+C1_RUBRIC = """
+Score disclosure-quality deterioration.
+
+0  Stable disclosure: same KAMs YoY, no restatements, long-tenured auditor + CFO.
+1  Minor disclosure change (one new KAM added, segment definition tweaked).
+2  Recent CFO change (last 18 months) OR auditor change OR one restatement in last 2 years.
+3  Multiple KAMs added in last 10-K AND aggressive non-GAAP adjustments.
+4  Auditor change + CFO turnover within 24 months + new KAMs flagging valuation risk.
+5  Active restatement, SEC comment letter, or KAM explicitly flagging going-concern uncertainty.
+"""
+
+
+def _gather_evidence_C1(ticker: str) -> list[dict]:
+    packs: list[dict] = []
+    risk = _fetch_10k_risk_factors(ticker)
+    if risk:
+        packs.append({
+            "source": risk["source"], "date": risk["date"],
+            "text": risk["content_snippet"],
+        })
+    for n in _fetch_recent_news(ticker, days=270, limit=6):
+        body = (n["title"] + " " + n["text_snippet"]).lower()
+        if any(k in body for k in (
+            "restat", "auditor", "10-k", "kam", "going concern",
+            "sec inquiry", "sec subpoena", "subpoena", "cfo",
+            "non-gaap", "segment reporting", "material weakness",
+        )):
+            packs.append({
+                "source": n["source"], "date": n["date"],
+                "text": f"{n['title']}\n\n{n['text_snippet']}",
+            })
+    return packs
+
+
+# ── D2 — Insider behavior depth ──────────────────────────────────────────
+
+
+D2_RUBRIC = """
+Score WHO is selling, not just the bulk A/D ratio.
+
+0  Insiders are net buyers OR sales are exclusively automated 10b5-1 schedules at small sizes.
+1  Routine 10b5-1 sales; no CEO/CFO discretionary activity.
+2  Modest discretionary sales by VP/Director-level insiders.
+3  CEO or CFO sold > $5M outside 10b5-1 in last 180 days.
+4  CEO AND CFO both sold > $10M discretionary in last 180 days.
+5  C-suite cluster-selling (3+ executives) > $25M total in last 90 days, with recent 10b5-1 modifications increasing sale rate.
+"""
+
+
+def _gather_evidence_D2(ticker: str) -> list[dict]:
+    """D2 — needs structured insider trade detail with owner role + transaction type."""
+    packs: list[dict] = []
+    trades = _fetch_insider_recent_trades(ticker, days=180, limit=40)
+    if trades:
+        # Summarize by owner type
+        ceo_cfo = [t for t in trades if any(k in (t["owner_type"] or "").lower() for k in (
+            "chief executive", "chief financial", "ceo", "cfo",
+        ))]
+        directors = [t for t in trades if "director" in (t["owner_type"] or "").lower()]
+        plan_marker = sum(1 for t in trades if "10b5-1" in (t.get("transaction_type") or "").lower())
+        total_value_disp = sum(t["value"] for t in trades if t["acq_disp"] == "D")
+        total_value_acq = sum(t["value"] for t in trades if t["acq_disp"] == "A")
+        text = (
+            f"Last 180 days insider trades for {ticker}:\n"
+            f"  total transactions: {len(trades)} (CEO/CFO: {len(ceo_cfo)}, Directors: {len(directors)})\n"
+            f"  total Disposition $: ${total_value_disp:,.0f}\n"
+            f"  total Acquisition $: ${total_value_acq:,.0f}\n"
+            f"  10b5-1 flagged: {plan_marker}\n\n"
+            f"Top 10 transactions by value:\n"
+        )
+        top = sorted(trades, key=lambda t: t["value"], reverse=True)[:10]
+        for t in top:
+            text += (
+                f"  {t['date']:<11s} {t['owner_name'][:25]:<25s} ({t['owner_type'][:25]:<25s}) "
+                f"{t['acq_disp']} {t['shares']:>10,.0f} @ ${t['price']:.2f} = ${t['value']:,.0f}\n"
+            )
+        packs.append({
+            "source": "FMP /insider-trading/search (180-day window)",
+            "date": date.today().isoformat(),
+            "text": text,
+        })
+    return packs
+
+
+# ── Indicator registry (all 10) ────────────────────────────────────────────
 
 
 INDICATORS: dict[str, dict] = {
+    "A1_single_thesis_dependence": {
+        "rubric": A1_RUBRIC, "gather": _gather_evidence_A1,
+        "theme": "A — Narrative fragility", "label": "Single-thesis dependence",
+    },
     "A2_catalyst_proximity": {
-        "rubric": A2_RUBRIC,
-        "gather": _gather_evidence_A2,
-        "theme": "A — Narrative fragility",
-        "label": "Catalyst proximity",
+        "rubric": A2_RUBRIC, "gather": _gather_evidence_A2,
+        "theme": "A — Narrative fragility", "label": "Catalyst proximity",
+    },
+    "A3_consensus_uniformity": {
+        "rubric": A3_RUBRIC, "gather": _gather_evidence_A3,
+        "theme": "A — Narrative fragility", "label": "Consensus uniformity",
+    },
+    "B1_customer_concentration": {
+        "rubric": B1_RUBRIC, "gather": _gather_evidence_B1,
+        "theme": "B — Business-model fragility", "label": "Customer concentration",
+    },
+    "B2_competitive_disintermediation": {
+        "rubric": B2_RUBRIC, "gather": _gather_evidence_B2,
+        "theme": "B — Business-model fragility", "label": "Competitive disintermediation",
+    },
+    "B3_pricing_power_erosion": {
+        "rubric": B3_RUBRIC, "gather": _gather_evidence_B3,
+        "theme": "B — Business-model fragility", "label": "Pricing power erosion",
+    },
+    "C1_disclosure_deterioration": {
+        "rubric": C1_RUBRIC, "gather": _gather_evidence_C1,
+        "theme": "C — Disclosure & accounting", "label": "Disclosure deterioration",
     },
     "C2_accounting_aggressiveness": {
-        "rubric": C2_RUBRIC,
-        "gather": _gather_evidence_C2,
-        "theme": "C — Disclosure & accounting",
-        "label": "Accounting aggressiveness",
+        "rubric": C2_RUBRIC, "gather": _gather_evidence_C2,
+        "theme": "C — Disclosure & accounting", "label": "Accounting aggressiveness",
     },
     "D1_management_red_flags": {
-        "rubric": D1_RUBRIC,
-        "gather": _gather_evidence_D1,
-        "theme": "D — Management & insider",
-        "label": "Management red flags",
+        "rubric": D1_RUBRIC, "gather": _gather_evidence_D1,
+        "theme": "D — Management & insider", "label": "Management red flags",
+    },
+    "D2_insider_behavior_depth": {
+        "rubric": D2_RUBRIC, "gather": _gather_evidence_D2,
+        "theme": "D — Management & insider", "label": "Insider behavior depth",
     },
 }
 

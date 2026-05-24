@@ -819,10 +819,20 @@ const CONVICTION_BLURB: Record<QualConvictionLabel, string> = {
 };
 
 const QUAL_INDICATOR_THEME: Record<string, { theme: string; label: string; accent: string }> = {
-  'A2_catalyst_proximity':       { theme: 'A · Narrative',  label: 'Catalyst proximity',        accent: 'rose' },
-  'C2_accounting_aggressiveness':{ theme: 'C · Disclosure', label: 'Accounting aggressiveness', accent: 'amber' },
-  'D1_management_red_flags':     { theme: 'D · Mgmt',       label: 'Management red flags',      accent: 'orange' },
-  // Future indicators slot in here as v2 expands beyond 3
+  // Theme A — Narrative fragility
+  'A1_single_thesis_dependence':   { theme: 'A · Narrative',  label: 'Single-thesis dependence',  accent: 'rose' },
+  'A2_catalyst_proximity':         { theme: 'A · Narrative',  label: 'Catalyst proximity',        accent: 'rose' },
+  'A3_consensus_uniformity':       { theme: 'A · Narrative',  label: 'Consensus uniformity',      accent: 'rose' },
+  // Theme B — Business-model fragility
+  'B1_customer_concentration':     { theme: 'B · Biz model',  label: 'Customer concentration',    accent: 'orange' },
+  'B2_competitive_disintermediation': { theme: 'B · Biz model', label: 'Competitive disintermediation', accent: 'orange' },
+  'B3_pricing_power_erosion':      { theme: 'B · Biz model',  label: 'Pricing power erosion',     accent: 'orange' },
+  // Theme C — Disclosure & accounting
+  'C1_disclosure_deterioration':   { theme: 'C · Disclosure', label: 'Disclosure deterioration',  accent: 'amber' },
+  'C2_accounting_aggressiveness':  { theme: 'C · Disclosure', label: 'Accounting aggressiveness', accent: 'amber' },
+  // Theme D — Management & insider
+  'D1_management_red_flags':       { theme: 'D · Mgmt',       label: 'Management red flags',      accent: 'red' },
+  'D2_insider_behavior_depth':     { theme: 'D · Mgmt',       label: 'Insider behavior depth',    accent: 'red' },
 };
 
 function scoreChipColor(score: number): string {
