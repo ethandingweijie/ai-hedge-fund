@@ -30,7 +30,10 @@ def _qwen_client():
         "DEEP_RESEARCH_SEARCH_BASE_URL",
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     )
-    return OpenAI(api_key=api_key, base_url=base_url, timeout=180)
+    # max_retries=3 matches the qualitative scorer's Qwen client config —
+    # IoTD chat shares DashScope's "limit_burst_rate" throttle with the
+    # complacency force-rescore path when both fire close together.
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=180, max_retries=3)
 
 
 _SYSTEM_PROMPT = """\

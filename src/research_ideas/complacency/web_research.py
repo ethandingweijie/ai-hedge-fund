@@ -74,7 +74,13 @@ def _qwen_client():
         "DEEP_RESEARCH_SEARCH_BASE_URL",
         "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
     )
-    return OpenAI(api_key=api_key, base_url=base_url, timeout=180)
+    # max_retries=3 (vs openai-python default 2): DashScope hits clients
+    # with HTTP 429 "limit_burst_rate" when 3-4 Qwen calls fire in parallel
+    # from the qualitative scorer's worker pool + concurrent deep-research
+    # escalations. The openai-python retry layer uses exponential backoff
+    # (~1s, 2s, 4s, ~7s total) which clears DashScope's burst window —
+    # without this, force-rescore cascading-failed at ~7-9/10 indicators.
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=180, max_retries=3)
 
 
 def qwen_web_search(
