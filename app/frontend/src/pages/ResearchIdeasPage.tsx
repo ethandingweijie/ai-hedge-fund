@@ -10,9 +10,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  listResearchIdeas, getSW46Cohort,
+  listResearchIdeas, getSW46Cohort, getComplacencyCohort,
   deleteContrarianIdea, generateContrarianIdea,
-  type SW46IdeaMeta, type SW46TickerResult,
+  type SW46IdeaMeta, type SW46TickerResult, type ComplacencyTickerResult,
 } from '@/lib/api';
 import { Lightbulb, ChevronRight, Loader2, Sparkles, X, Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,12 +37,22 @@ function verdictColor(score: number): string {
   return 'bg-red-600/30 text-red-200';
 }
 
+// Aggregate-score color (0-100 scale, INVERTED — high = bearish short signal)
+function aggColor(score: number | null | undefined): string {
+  if (score == null) return 'bg-muted text-muted-foreground';
+  if (score >= 70) return 'bg-red-600/30 text-red-900 dark:text-red-200';
+  if (score >= 50) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
+  if (score >= 30) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
+  return 'bg-emerald-600/20 text-emerald-900 dark:text-emerald-300';
+}
+
 
 export function ResearchIdeasPage() {
   const navigate = useNavigate();
   const [ideas, setIdeas] = useState<SW46IdeaMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [topPicks, setTopPicks] = useState<SW46TickerResult[]>([]);
+  const [gatePassers, setGatePassers] = useState<ComplacencyTickerResult[]>([]);
   const [generatingIdea, setGeneratingIdea] = useState(false);
 
   const load = () => {
@@ -50,11 +60,19 @@ export function ResearchIdeasPage() {
     Promise.all([
       listResearchIdeas(),
       getSW46Cohort().catch(() => null),
+      getComplacencyCohort().catch(() => null),
     ])
-      .then(([ideasRes, cohort]) => {
+      .then(([ideasRes, sw46Cohort, complCohort]) => {
         setIdeas(ideasRes.ideas);
-        if (cohort && cohort.results.length > 0) {
-          setTopPicks(cohort.results.slice(0, 3));
+        if (sw46Cohort && sw46Cohort.results.length > 0) {
+          setTopPicks(sw46Cohort.results.slice(0, 3));
+        }
+        if (complCohort && complCohort.results.length > 0) {
+          // Gate passers, ranked by aggregate_score desc (most bearish first)
+          const passers = complCohort.results
+            .filter((r) => r.passes_gate)
+            .sort((a, b) => (b.aggregate_score ?? 0) - (a.aggregate_score ?? 0));
+          setGatePassers(passers);
         }
       })
       .catch((e) => toast.error((e as Error).message))
@@ -244,6 +262,46 @@ export function ResearchIdeasPage() {
                               </span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Complacency gate-passers preview — ticker + aggregate score */}
+                    {idea.id === 'complacency' && gatePassers.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border">
+                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                          Gate passers ({gatePassers.length}) · ticker + aggregate score (0-100)
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {gatePassers.slice(0, 8).map((t) => (
+                            <div
+                              key={t.ticker}
+                              className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 text-[11px]"
+                              title={[
+                                `${t.ticker} — ${t.name}`,
+                                `Verdict: ${t.verdict}  ·  Composite ${t.composite.toFixed(1)}/8`,
+                                t.aggregate_score != null
+                                  ? `Aggregate ${t.aggregate_score.toFixed(1)}/100  (quant ${t.aggregate_quant_pts?.toFixed(1) ?? '—'} + qual ${t.aggregate_qual_pts?.toFixed(1) ?? '—'})`
+                                  : 'Aggregate not yet computed',
+                              ].join('\n')}
+                            >
+                              <span className="font-mono font-bold text-foreground">{t.ticker}</span>
+                              {t.aggregate_score != null ? (
+                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${aggColor(t.aggregate_score)}`}>
+                                  {t.aggregate_score.toFixed(0)}
+                                </span>
+                              ) : (
+                                <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-muted text-muted-foreground italic">
+                                  —
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                          {gatePassers.length > 8 && (
+                            <span className="px-2 py-1 text-[10px] text-muted-foreground italic">
+                              +{gatePassers.length - 8} more
+                            </span>
+                          )}
                         </div>
                       </div>
                     )}

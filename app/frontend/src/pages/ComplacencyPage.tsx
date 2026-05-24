@@ -668,15 +668,73 @@ function ComplacencyDrawer({
   const handleGenerateQual = async () => {
     if (generatingQual) return;
     setGeneratingQual(true);
-    toast.info(`Generating qualitative for ${ticker.ticker} — ~4-5 min (10 indicators on qwen3.6-plus).`);
+
+    // Proactively request notification permission so completion alert can
+    // fire even if user has switched apps during the 4-10 min wait.
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        if (Notification.permission === 'default') await Notification.requestPermission();
+      } catch { /* ignore */ }
+    }
+
+    // Persistent loading toast — replaces the disappearing toast.info that
+    // made users think nothing was happening during the long backend run.
+    const toastId = toast.loading(
+      `Generating Qualitative for ${ticker.ticker}. This will take 4-10 mins.`,
+      {
+        duration: Infinity,
+        style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
+      },
+    );
+
     try {
-      const updated = await scoreComplacencyTickerAdhoc(ticker.ticker, { forceQual: true });
+      const updated = await scoreComplacencyTickerAdhoc(ticker.ticker, {
+        forceQual: true,
+        onProgress: (s) => {
+          // Live job progress from the backend job_store
+          if (s.progress_msg) {
+            toast.loading(
+              `Generating Qualitative · ${ticker.ticker} · ${s.progress_msg}`,
+              {
+                id: toastId, duration: Infinity,
+                style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
+              },
+            );
+          }
+        },
+      });
+      toast.dismiss(toastId);
+      const qualSummary = updated.qualitative
+        ? `${updated.qualitative.composite}/${updated.qualitative.max_possible} qual`
+        : 'no qual returned';
+      const aggSummary = updated.aggregate_score != null
+        ? `agg ${updated.aggregate_score.toFixed(1)}/100`
+        : 'agg —';
       toast.success(
-        `${updated.ticker}: ${updated.qualitative?.composite ?? 0}/${updated.qualitative?.max_possible ?? 50} qual · aggregate ${updated.aggregate_score?.toFixed(1) ?? '—'}/100`,
+        `${updated.ticker} re-scored: ${qualSummary} · ${aggSummary}`,
+        {
+          duration: 10000,
+          style: { fontSize: '15px', padding: '16px 20px', fontWeight: 600 },
+        },
       );
+      // Browser push notification (fires even if user switched apps)
+      if (typeof window !== 'undefined' && 'Notification' in window
+          && Notification.permission === 'granted') {
+        try {
+          new Notification('Complacency Detector', {
+            body: `${updated.ticker} qualitative re-score complete · aggregate ${updated.aggregate_score?.toFixed(0) ?? '—'}/100`,
+            icon: '/favicon.ico',
+            tag: `complacency-qual-${updated.ticker}`,
+          });
+        } catch { /* ignore */ }
+      }
       onQualGenerated?.(updated);
     } catch (e) {
-      toast.error(`Qual generation failed for ${ticker.ticker}: ${(e as Error).message}`);
+      toast.dismiss(toastId);
+      toast.error(`Qual generation failed for ${ticker.ticker}: ${(e as Error).message}`, {
+        duration: 12000,
+        style: { fontSize: '15px', padding: '16px 20px' },
+      });
     } finally {
       setGeneratingQual(false);
     }

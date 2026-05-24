@@ -742,7 +742,14 @@ export async function scoreComplacencyTickerAdhoc(
   opts: { forceQual?: boolean; onProgress?: (s: ComplacencyJobStatus) => void } = {},
 ): Promise<ComplacencyTickerResult & { _persisted_to_cohort?: boolean }> {
   const handle = await startComplacencyAdhocScore(ticker, { forceQual: opts.forceQual });
-  const final = await pollComplacencyJob(handle.job_id, { onProgress: opts.onProgress });
+  // Force-qual with deep-research escalation can take 10-15+ min in the worst
+  // case (4-5 indicators each running 60-90s of Qwen web search). Bump the
+  // poll timeout from the 15-min default to 25 min when forceQual is set.
+  const timeoutMs = opts.forceQual ? 25 * 60 * 1000 : 15 * 60 * 1000;
+  const final = await pollComplacencyJob(handle.job_id, {
+    onProgress: opts.onProgress,
+    timeoutMs,
+  });
   return final.result as ComplacencyTickerResult & { _persisted_to_cohort?: boolean };
 }
 
