@@ -116,6 +116,10 @@ class ComplacencyTickerResult(BaseModel):
     put_recommendation: Optional[PutRecommendation] = None  # only when verdict in {Strong-Short, Watch}
     options_data_freshness: Optional[str] = None     # ISO ts of put-rec fetch
     qualitative: Optional[QualitativeAssessment] = None  # LLM-scored qualitative thesis (Strong-Short / Watch only)
+    # ── Aggregate (quant + qual) — 0-100 scale ───────────────────────────
+    aggregate_score: Optional[float] = None          # quant 0-50 + qual 0-50 = 0-100
+    aggregate_quant_pts: Optional[float] = None      # (quant_composite / 8) * 50
+    aggregate_qual_pts: Optional[float] = None       # (qual_composite / qual_max) * 50
     error: Optional[str] = None                       # set if calc failed
 
 

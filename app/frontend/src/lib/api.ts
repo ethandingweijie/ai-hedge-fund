@@ -579,6 +579,9 @@ export interface ComplacencyTickerResult {
   put_recommendation: PutRecommendation | null;
   options_data_freshness: string | null;
   qualitative: QualitativeAssessment | null;
+  aggregate_score: number | null;
+  aggregate_quant_pts: number | null;
+  aggregate_qual_pts: number | null;
   error?: string | null;
 }
 

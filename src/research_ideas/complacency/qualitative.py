@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 # ─── Model config ──────────────────────────────────────────────────────────
 
-QUAL_MODEL_NAME = os.environ.get("COMPLACENCY_QUAL_MODEL", "qwen3.6-max")
+QUAL_MODEL_NAME = os.environ.get("COMPLACENCY_QUAL_MODEL", "qwen3.6-max-preview")
 QUAL_MODEL_PROVIDER = ModelProvider.ALIBABA
 QUAL_TEMPERATURE = 0.2   # low — we want consistent, conservative scoring
 QUAL_CACHE_TTL_DAYS = 7
@@ -101,27 +101,57 @@ def _fetch_recent_news(ticker: str, days: int = 90, limit: int = 8) -> list[dict
 
 
 def _fetch_latest_transcript(ticker: str) -> Optional[dict]:
-    """Most recent earnings call transcript."""
+    """
+    Most recent earnings call transcript. FMP's transcript endpoint requires
+    year + quarter, so we first hit /earning-call-transcript-dates to find
+    the latest available, then fetch that quarter's transcript.
+    """
+    # 1) Find the latest transcript date
+    dates = _fmp_get(
+        f"{_STABLE}/earning-call-transcript-dates",
+        {"symbol": ticker},
+        api_key=None,
+        uncap=True,
+    )
+    if not isinstance(dates, list) or not dates:
+        return None
+    # Endpoint returns [{date, year, quarter, ...}] — pick the latest by date
+    rows_with_date = [r for r in dates if r.get("date")]
+    if not rows_with_date:
+        return None
+    latest = sorted(rows_with_date, key=lambda r: r["date"], reverse=True)[0]
+    year = latest.get("year")
+    quarter = latest.get("quarter")
+    if year is None or quarter is None:
+        return None
+
+    # 2) Fetch the transcript content
     data = _fmp_get(
         f"{_STABLE}/earning-call-transcript",
-        {"symbol": ticker, "limit": 1},
+        {"symbol": ticker, "year": year, "quarter": quarter},
         api_key=None,
         uncap=True,
     )
     if not isinstance(data, list) or not data:
         return None
     r = data[0]
+    content = r.get("content") or ""
+    if not content:
+        return None
     return {
-        "source": f"Q{r.get('quarter') or '?'} {r.get('year') or '?'} earnings transcript",
-        "date": (r.get("date") or "")[:10],
-        "content_snippet": (r.get("content") or "")[:8000],   # cap to avoid huge prompts
+        "source": f"Q{quarter} {year} earnings transcript",
+        "date": (r.get("date") or latest.get("date") or "")[:10],
+        "content_snippet": content[:8000],
     }
 
 
 def _fetch_10k_risk_factors(ticker: str) -> Optional[dict]:
     """
-    Pulls the most recent 10-K via /financial-reports-json. Returns a
-    snippet of the Risk Factors section (truncated) or None if unavailable.
+    Pulls the most recent 10-K via /financial-reports-json and returns a
+    text snippet of the MD&A / Risk Factors / Critical Audit Matters
+    sections — anything containing meaningful narrative prose. Falls back
+    to scanning ALL sections and stitching long-text content if specific
+    section names aren't present (FMP truncates section keys to ~32 chars).
     """
     today_year = date.today().year
     for try_year in (today_year, today_year - 1, today_year - 2):
@@ -131,33 +161,60 @@ def _fetch_10k_risk_factors(ticker: str) -> Optional[dict]:
             api_key=None,
             uncap=True,
         )
-        if not isinstance(report, list) or not report:
-            continue
-        r = report[0]
+        # FMP started returning a dict instead of a single-item list around
+        # mid-2026; normalise both shapes.
+        if isinstance(report, list):
+            r = report[0] if report else None
+        elif isinstance(report, dict):
+            r = report
+        else:
+            r = None
         if not r or not isinstance(r, dict):
             continue
-        # Find a section that looks like Risk Factors
+
+        # Try to find sections by keyword match in the truncated section name.
+        # FMP truncates names like "Risk Factors (Tables)" to 32 chars max.
+        candidates: list[tuple[str, list]] = []
         for section_name, rows in r.items():
             if not isinstance(rows, list):
                 continue
             name_lc = str(section_name).lower()
-            if "risk" not in name_lc:
-                continue
-            # Stitch text content from rows
-            text_parts: list[str] = []
+            if any(k in name_lc for k in (
+                "risk", "critical", "going concern", "mda", "management",
+                "litigation", "contingenc", "subseq", "going-concern",
+            )):
+                candidates.append((section_name, rows))
+
+        # If no keyword match (financial-reports-json sometimes only exposes
+        # statement sections), fall back to ALL sections — we'll still get
+        # the income-statement / balance-sheet / cash-flow rows which the
+        # LLM can use to spot accounting irregularities.
+        if not candidates:
+            candidates = [(s, rows) for s, rows in r.items() if isinstance(rows, list)]
+
+        text_parts: list[str] = []
+        for section_name, rows in candidates[:10]:   # cap depth so prompt stays small
+            text_parts.append(f"## SECTION: {section_name}")
             for row in rows:
                 if isinstance(row, dict):
                     for k, v in row.items():
+                        # Stitch in any string-valued lines OR list values
                         if isinstance(v, list):
                             for x in v:
-                                if isinstance(x, str) and len(x) > 80:
-                                    text_parts.append(x)
-            if text_parts:
-                return {
-                    "source": f"10-K FY{try_year} — {section_name}",
-                    "date": f"{try_year}-12-31",
-                    "content_snippet": "\n\n".join(text_parts)[:8000],
-                }
+                                if isinstance(x, str) and 30 < len(x) < 1500:
+                                    text_parts.append(f"  {k}: {x}")
+                                elif isinstance(x, (int, float)):
+                                    text_parts.append(f"  {k}: {x:,.0f}" if isinstance(x, (int, float)) else f"  {k}: {x}")
+                        elif isinstance(v, str) and len(v) > 30:
+                            text_parts.append(f"  {k}: {v}")
+
+        if not text_parts:
+            continue
+        return {
+            "source": f"10-K FY{try_year}",
+            "date": f"{try_year}-12-31",
+            "content_snippet": "\n".join(text_parts)[:8000],
+        }
     return None
 
 
@@ -314,7 +371,8 @@ Score the proximity of a near-term catalyst that could re-rate the stock down.
 
 
 def _gather_evidence_A2(ticker: str) -> list[dict]:
-    """Catalyst proximity needs: next earnings date, recent transcript Q&A, recent news."""
+    """Catalyst proximity needs: next earnings date, recent transcript Q&A (if available),
+    recent news. Transcript endpoint is plan-gated; degrades to more news."""
     packs: list[dict] = []
     cal = _fetch_earnings_calendar(ticker)
     if cal:
@@ -338,7 +396,11 @@ def _gather_evidence_A2(ticker: str) -> list[dict]:
             "date": transcript["date"],
             "text": transcript["content_snippet"],
         })
-    news = _fetch_recent_news(ticker, days=90, limit=4)
+        news_limit = 4
+    else:
+        # Compensate for missing transcript with more news context.
+        news_limit = 8
+    news = _fetch_recent_news(ticker, days=90, limit=news_limit)
     for n in news:
         packs.append({
             "source": n["source"],
@@ -364,6 +426,7 @@ Score how aggressive the company's accounting / disclosure practices are.
 
 
 def _gather_evidence_C2(ticker: str) -> list[dict]:
+    """Accounting aggressiveness: 10-K sections + transcript (if available) + news fallback."""
     packs: list[dict] = []
     risk = _fetch_10k_risk_factors(ticker)
     if risk:
@@ -379,6 +442,19 @@ def _gather_evidence_C2(ticker: str) -> list[dict]:
             "date": transcript["date"],
             "text": transcript["content_snippet"],
         })
+    # Fallback: filtered news with accounting keywords.
+    if not risk and not transcript:
+        for n in _fetch_recent_news(ticker, days=180, limit=10):
+            body = (n["title"] + " " + n["text_snippet"]).lower()
+            if any(k in body for k in (
+                "restat", "audit", "goodwill", "impair", "guidance",
+                "deferred", "channel stuffing", "sec inquiry", "accounting",
+                "cfo", "10-k", "non-gaap", "revenue recogn",
+            )):
+                packs.append({
+                    "source": n["source"], "date": n["date"],
+                    "text": f"{n['title']}\n\n{n['text_snippet']}",
+                })
     return packs
 
 

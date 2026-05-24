@@ -36,6 +36,25 @@ from src.research_ideas.complacency.universe import (
 logger = logging.getLogger(__name__)
 
 
+def _compute_aggregate(quant_composite: float, qual_assessment) -> dict:
+    """
+    Combine quant (0-8) and qualitative (0-N) into a single 0-100 aggregate.
+    Quant contributes 0-50, qual contributes 0-50. Returns a dict ready for
+    Pydantic kwargs:
+      {aggregate_score, aggregate_quant_pts, aggregate_qual_pts}
+    Defaults to quant-only (qual_pts = 0) when no qualitative assessment.
+    """
+    quant_pts = (max(0.0, min(quant_composite, 8.0)) / 8.0) * 50.0
+    qual_pts = 0.0
+    if qual_assessment is not None and qual_assessment.max_possible > 0:
+        qual_pts = (qual_assessment.composite / qual_assessment.max_possible) * 50.0
+    return {
+        "aggregate_score": round(quant_pts + qual_pts, 1),
+        "aggregate_quant_pts": round(quant_pts, 1),
+        "aggregate_qual_pts": round(qual_pts, 1),
+    }
+
+
 def score_one_ticker(
     ticker: str,
     name: str | None = None,
@@ -165,6 +184,7 @@ def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResul
             put_recommendation=put_rec,
             options_data_freshness=put_rec_at,
             qualitative=qual_assessment,
+            **_compute_aggregate(s["composite"], qual_assessment),
         )
     except Exception as exc:
         logger.exception("Complacency ad-hoc %s failed: %s", ticker, exc)

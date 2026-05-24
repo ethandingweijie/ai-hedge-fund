@@ -572,9 +572,26 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
         </div>
 
         <div className="p-4 space-y-6">
-          {/* Pillar grid */}
-          <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Pillar scores</h2>
+          {/* ════════════════════════════════════════════════════════════════
+              1. QUANTITATIVE SCORE  (initial 4-pillar Ackman scoring)
+             ════════════════════════════════════════════════════════════════ */}
+          <section className="border border-cyan-500/20 rounded-md bg-cyan-500/5 p-3">
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                1 · Quantitative Score
+              </h2>
+              <span className="text-[10px] font-mono font-bold text-foreground">
+                {ticker.composite.toFixed(1)} / 8
+                {ticker.passes_gate && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded bg-cyan-500/30 text-cyan-200 text-[9px] uppercase">
+                    Gate passed
+                  </span>
+                )}
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground italic mb-2">
+              Initial Ackman 4-pillar scoring against FMP fundamentals + live S&P 500 sector medians.
+            </p>
             <div className="grid grid-cols-4 gap-2 text-[11px]">
               <Pillar
                 label="Valuation"
@@ -612,7 +629,43 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
             </div>
           </section>
 
-          {/* Put recommendation (only for Strong-Short / Watch) */}
+          {/* ════════════════════════════════════════════════════════════════
+              2. QUALITATIVE THESIS  (LLM-scored rationale)
+             ════════════════════════════════════════════════════════════════ */}
+          {ticker.qualitative && Object.keys(ticker.qualitative.indicators).length > 0 && (
+            <QualitativePanel qual={ticker.qualitative} headerPrefix="2 · " />
+          )}
+          {(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch')
+            && (!ticker.qualitative || Object.keys(ticker.qualitative.indicators ?? {}).length === 0) && (
+            <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
+              <span className="font-semibold not-italic">2 · Qualitative Thesis</span> — not yet scored.
+              The agent runs qwen3.6-max-preview on 10-K + transcript + news evidence for
+              Strong-Short / Watch verdicts; this run may have been cached without it or
+              the Qwen key (DEEP_RESEARCH_API_KEY) may not be set.
+            </section>
+          )}
+          {!(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch') && (
+            <section className="border border-dashed border-border/50 rounded-md p-3 text-xs text-muted-foreground/60 italic">
+              <span className="font-semibold not-italic">2 · Qualitative Thesis</span> —
+              not generated. Qualitative scoring only fires for Strong-Short / Watch verdicts
+              (composite ≥ 6/8 with all pillars ≥ 1).
+            </section>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════════
+              3. AGGREGATE SCORE  (quant + qual combined 0-100)
+             ════════════════════════════════════════════════════════════════ */}
+          {ticker.aggregate_score != null && (
+            <AggregateScorePanel
+              total={ticker.aggregate_score}
+              quantPts={ticker.aggregate_quant_pts ?? 0}
+              qualPts={ticker.aggregate_qual_pts ?? 0}
+              convictionLabel={ticker.qualitative?.conviction_label ?? null}
+              hasQual={!!ticker.qualitative && Object.keys(ticker.qualitative.indicators ?? {}).length > 0}
+            />
+          )}
+
+          {/* Put recommendation (Strong-Short / Watch only — actionable layer) */}
           {ticker.put_recommendation && (
             <section className="border border-purple-500/30 rounded-md bg-purple-500/5 p-3">
               <div className="flex items-baseline justify-between mb-2">
@@ -646,19 +699,6 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
           {(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch') && !ticker.put_recommendation && (
             <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
               No liquid put contract found in the target tenor band. Chain may be illiquid or yfinance may be temporarily unavailable.
-            </section>
-          )}
-
-          {/* Qualitative thesis (Strong-Short / Watch only; falls back gracefully) */}
-          {ticker.qualitative && Object.keys(ticker.qualitative.indicators).length > 0 && (
-            <QualitativePanel qual={ticker.qualitative} />
-          )}
-          {(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch')
-            && (!ticker.qualitative || Object.keys(ticker.qualitative.indicators ?? {}).length === 0) && (
-            <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
-              Qualitative thesis not yet scored. The agent runs qwen3.6-max on
-              10-K + transcript + news evidence for Strong-Short / Watch verdicts;
-              this run may have been cached without it or the Qwen key may not be set.
             </section>
           )}
 
@@ -793,12 +833,15 @@ function scoreChipColor(score: number): string {
   return 'bg-muted text-muted-foreground';
 }
 
-function QualitativePanel({ qual }: { qual: QualitativeAssessment }) {
+function QualitativePanel(
+  { qual, headerPrefix = '' }:
+  { qual: QualitativeAssessment; headerPrefix?: string }
+) {
   const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
   return (
     <section className="border border-indigo-500/30 rounded-md bg-indigo-500/5 p-3">
       <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-indigo-300">Qualitative Thesis</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-indigo-300">{headerPrefix}Qualitative Thesis</h2>
         <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[qual.conviction_label]}`}>
           {qual.conviction_label}
         </span>
@@ -877,6 +920,80 @@ function QualitativePanel({ qual }: { qual: QualitativeAssessment }) {
         Scored by {Object.values(qual.indicators)[0]?.model_used ?? 'qwen3.6-max'} on 10-K + transcripts + 90-day news.
         {qual.assessed_at && ` Assessed ${qual.assessed_at.slice(0, 10)}.`}
       </p>
+    </section>
+  );
+}
+
+
+// ─── Aggregate score panel (quant + qual combined 0-100) ─────────────────
+
+function aggregateTier(score: number): { label: string; color: string; blurb: string } {
+  if (score >= 75) return { label: 'EXCEPTIONAL', color: 'bg-red-600/30 text-red-200 border-red-700/40',          blurb: 'Both quant and qualitative pillars at max conviction — textbook short setup' };
+  if (score >= 55) return { label: 'HIGH',        color: 'bg-orange-600/30 text-orange-200 border-orange-700/40', blurb: 'Strong combined signal — actionable short candidate' };
+  if (score >= 40) return { label: 'MODERATE',    color: 'bg-amber-600/30 text-amber-200 border-amber-700/40',    blurb: 'Mixed signal — track for confirmation before sizing' };
+  if (score >= 25) return { label: 'WEAK',        color: 'bg-yellow-600/20 text-yellow-200 border-yellow-700/40', blurb: 'Limited setup — qualitative or quant pillar missing' };
+  return { label: 'PASS', color: 'bg-emerald-600/20 text-emerald-300 border-emerald-700/40', blurb: 'No actionable short signal' };
+}
+
+function AggregateScorePanel(
+  { total, quantPts, qualPts, convictionLabel, hasQual }:
+  {
+    total: number;
+    quantPts: number;
+    qualPts: number;
+    convictionLabel: QualConvictionLabel | null;
+    hasQual: boolean;
+  }
+) {
+  const tier = aggregateTier(total);
+  return (
+    <section className="border border-emerald-500/30 rounded-md bg-gradient-to-br from-emerald-500/5 to-amber-500/5 p-3">
+      <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
+        <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
+          3 · Aggregate Score
+        </h2>
+        <span className={`px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${tier.color}`}>
+          {tier.label}
+        </span>
+      </div>
+      <p className="text-[10px] text-muted-foreground italic mb-3">
+        Quant (0-50) + Qual (0-50) = combined 0-100 conviction.
+      </p>
+
+      {/* Big headline number */}
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="text-3xl font-bold font-mono text-foreground">{total.toFixed(0)}</span>
+        <span className="text-base font-mono text-muted-foreground">/ 100</span>
+        {convictionLabel && hasQual && (
+          <span className={`ml-auto px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider ${CONVICTION_COLOR[convictionLabel]}`}>
+            {convictionLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Stacked bar showing quant vs qual contribution */}
+      <div className="h-3 rounded overflow-hidden bg-muted/30 flex">
+        <div
+          className="h-full bg-cyan-500/70"
+          style={{ width: `${quantPts}%` }}
+          title={`Quant: ${quantPts.toFixed(1)} / 50`}
+        />
+        <div
+          className="h-full bg-indigo-500/70"
+          style={{ width: `${qualPts}%` }}
+          title={`Qual: ${qualPts.toFixed(1)} / 50`}
+        />
+      </div>
+      <div className="flex justify-between text-[10px] mt-1">
+        <span className="text-cyan-300">
+          ● Quant {quantPts.toFixed(1)} / 50
+        </span>
+        <span className="text-indigo-300">
+          ● Qual {qualPts.toFixed(1)} / 50 {!hasQual && '(not scored)'}
+        </span>
+      </div>
+
+      <p className="mt-2 text-[10px] text-foreground/80 italic">{tier.blurb}</p>
     </section>
   );
 }
