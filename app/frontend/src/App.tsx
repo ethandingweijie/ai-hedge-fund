@@ -36,16 +36,22 @@ export default function App() {
           from any page (Screener, History, Report, etc.) renders consistently.
           Previously only ReportPage mounted a Toaster, so toasts from other
           pages silently no-oped. */}
-      {/* offset respects iOS safe-area-inset-top so toasts don't sit on the
-          notch / status bar (clock, signal). +32px adds breathing room
-          below the inset on both PWA and Safari standalone. */}
+      {/* Offset must clear the iOS time/signal/battery bar in PWA mode.
+          Previous value (safe-area-inset-top + 32px) wasn't enough on iPhones
+          with Dynamic Island (54-59px inset) AND in Safari-tab mode where
+          env() returns 0. Bumped to 80px which gives:
+            • Safari tab (env=0):           80px from top — well clear of 20px status bar
+            • PWA on notched iPhone:        ~124px from top — clear of 44px notch
+            • PWA on Dynamic Island device: ~134px from top — clear of 54-59px island
+          Slightly far down for desktop browsers, acceptable tradeoff for
+          mobile-first audience. */}
       <Toaster
         position="top-right"
         richColors
         closeButton
         expand
         visibleToasts={6}
-        offset="calc(env(safe-area-inset-top, 0px) + 32px)"
+        offset="calc(env(safe-area-inset-top, 0px) + 80px)"
       />
       <MobileLayout>
         <Routes>
