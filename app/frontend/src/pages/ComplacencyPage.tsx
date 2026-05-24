@@ -131,13 +131,70 @@ export function ComplacencyPage() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    toast.info('Refreshing Complacency cohort — ~1-2 min on FMP.');
+
+    // Proactively request browser-notification permission so the completion
+    // alert can fire even if the user has switched tabs/apps. Safe no-op on
+    // browsers that don't support Notification (e.g. iOS Safari < 16.4
+    // outside PWA mode).
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        if (Notification.permission === 'default') {
+          await Notification.requestPermission();
+        }
+      } catch {
+        // ignore — permission can be denied or unavailable
+      }
+    }
+
+    // Persistent loading toast: duration Infinity so it stays on screen for
+    // the entire refresh; manually dismissed in the finally block. Larger
+    // padding + font-size so it's readable on mobile.
+    const toastId = toast.loading(
+      'Refresh In Progress. This will take 1-2 mins.',
+      {
+        duration: Infinity,
+        style: {
+          fontSize: '15px',
+          padding: '16px 20px',
+          fontWeight: 500,
+        },
+      },
+    );
     try {
       await refreshComplacency({ maxWorkers: 4 });
       await load();
-      toast.success('Complacency cohort refreshed.');
+      toast.dismiss(toastId);
+      toast.success('Refresh of Complacency Detector Completed', {
+        duration: 8000,
+        style: {
+          fontSize: '15px',
+          padding: '16px 20px',
+          fontWeight: 600,
+        },
+      });
+      // Push notification — fires even if the user has switched away from
+      // the tab. Requires permission granted above.
+      if (
+        typeof window !== 'undefined'
+        && 'Notification' in window
+        && Notification.permission === 'granted'
+      ) {
+        try {
+          new Notification('Complacency Detector', {
+            body: 'Refresh of Complacency Detector Completed',
+            icon: '/favicon.ico',
+            tag: 'complacency-refresh',  // collapses duplicate notifications
+          });
+        } catch {
+          // ignore — some browsers throw if not in a secure context
+        }
+      }
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.dismiss(toastId);
+      toast.error((e as Error).message, {
+        duration: 10000,
+        style: { fontSize: '15px', padding: '16px 20px' },
+      });
     } finally {
       setRefreshing(false);
     }

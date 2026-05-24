@@ -34,7 +34,17 @@ export default function App() {
           from any page (Screener, History, Report, etc.) renders consistently.
           Previously only ReportPage mounted a Toaster, so toasts from other
           pages silently no-oped. */}
-      <Toaster position="top-right" richColors closeButton expand visibleToasts={6} />
+      {/* offset respects iOS safe-area-inset-top so toasts don't sit on the
+          notch / status bar (clock, signal). +32px adds breathing room
+          below the inset on both PWA and Safari standalone. */}
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        expand
+        visibleToasts={6}
+        offset="calc(env(safe-area-inset-top, 0px) + 32px)"
+      />
       <MobileLayout>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
