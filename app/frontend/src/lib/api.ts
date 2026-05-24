@@ -614,14 +614,27 @@ export function getComplacencyTicker(ticker: string): Promise<ComplacencyTickerR
 
 /**
  * Score one ticker ad-hoc — for arbitrary symbols outside the curated
- * 50-name universe. Sector is auto-resolved from FMP /profile. NOT
- * persisted to the cohort table; caller decides how to display.
- * Takes ~10-15 sec per ticker.
+ * 50-name universe. Sector is auto-resolved from FMP /profile.
+ *
+ * When opts.forceQual is true, the qualitative LLM scorer fires even
+ * if the verdict isn't Strong-Short / Watch (otherwise gated). If the
+ * ticker is already in the latest cohort run, the patched row (with
+ * recomputed aggregate) is persisted back so the change survives a
+ * page refresh. The response carries `_persisted_to_cohort: boolean`.
+ *
+ * Takes ~10-15 sec quant-only; ~4-5 min with forceQual.
  */
-export function scoreComplacencyTickerAdhoc(ticker: string): Promise<ComplacencyTickerResult> {
-  return fetchJson(`${BASE}/research/ideas/complacency/score/${encodeURIComponent(ticker.toUpperCase())}`, {
-    method: 'POST',
-  });
+export function scoreComplacencyTickerAdhoc(
+  ticker: string,
+  opts: { forceQual?: boolean } = {},
+): Promise<ComplacencyTickerResult & { _persisted_to_cohort?: boolean }> {
+  const q = new URLSearchParams();
+  if (opts.forceQual) q.set('force_qual', 'true');
+  const qs = q.toString() ? `?${q.toString()}` : '';
+  return fetchJson(
+    `${BASE}/research/ideas/complacency/score/${encodeURIComponent(ticker.toUpperCase())}${qs}`,
+    { method: 'POST' },
+  );
 }
 
 export function refreshComplacency(opts: { maxWorkers?: number } = {}): Promise<{

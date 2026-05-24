@@ -166,6 +166,61 @@ def list_complacency_runs(limit: int = 20) -> list[dict]:
     ]
 
 
+def update_ticker_in_latest_cohort(updated_result: dict) -> bool:
+    """
+    Patch the latest cohort run's results JSON to replace a single ticker's
+    row with `updated_result`. Used when the user generates qualitative
+    on-the-fly for a non-gate ticker — we want the new aggregate to PERSIST
+    so a page-refresh shows it.
+
+    Returns True if a row was replaced, False if the ticker isn't in the
+    latest cohort or no cohort exists. Does not create a new run row.
+    """
+    if not updated_result or not updated_result.get("ticker"):
+        return False
+    ticker = str(updated_result["ticker"]).upper()
+
+    _ensure_table()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT run_id, results FROM complacency_runs "
+            "ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return False
+        run_id = row[0]
+        try:
+            results = json.loads(row[1] or "[]")
+        except Exception:
+            return False
+
+        replaced = False
+        for i, r in enumerate(results):
+            if (r.get("ticker") or "").upper() == ticker:
+                # Preserve rank from existing row (the on-the-fly score won't
+                # have a sensible rank — and the cohort ordering shouldn't
+                # change just because qual was added).
+                existing_rank = r.get("rank")
+                merged = _sanitize(updated_result)
+                if existing_rank is not None and merged.get("rank") is None:
+                    merged["rank"] = existing_rank
+                results[i] = merged
+                replaced = True
+                break
+        if not replaced:
+            return False
+
+        conn.execute(
+            "UPDATE complacency_runs SET results = ? WHERE run_id = ?",
+            (json.dumps(results), run_id),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
 def _row_to_dict(row: tuple) -> dict:
     return {
         "run_id": row[0],

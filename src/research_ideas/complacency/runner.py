@@ -60,12 +60,18 @@ def score_one_ticker(
     name: str | None = None,
     sector: str | None = None,
     industry: str | None = None,
+    force_qual: bool = False,
 ) -> ComplacencyTickerResult | dict:
     """
     Score ONE ticker ad-hoc (not part of the curated cohort).
 
     If sector / industry aren't supplied, they're auto-looked-up from FMP's
     /profile endpoint so the sector-median benchmark fires correctly.
+
+    When `force_qual=True`, the qualitative LLM scorer fires regardless of
+    verdict (default behavior gates qual behind Strong-Short / Watch). Use
+    this when the user explicitly requests qual generation for a non-gate
+    ticker via the UI.
 
     Returns a ComplacencyTickerResult on success or a dict {ticker, reason}
     on failure. Does NOT persist to the cohort table — caller decides what
@@ -93,10 +99,14 @@ def score_one_ticker(
         "sector": sector,
         "industry": industry,
     }
-    return _process_ticker_with_meta(ticker, meta)
+    return _process_ticker_with_meta(ticker, meta, force_qual=force_qual)
 
 
-def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResult | dict:
+def _process_ticker_with_meta(
+    ticker: str,
+    meta: dict,
+    force_qual: bool = False,
+) -> ComplacencyTickerResult | dict:
     """Score one ticker given pre-resolved meta (sector/name/industry)."""
     try:
         bundle = fetch_ticker_bundle(ticker, meta)
@@ -105,10 +115,11 @@ def _process_ticker_with_meta(ticker: str, meta: dict) -> ComplacencyTickerResul
 
         s = score_bundle(bundle)
 
-        # Qualitative LLM scoring — only fire for Strong-Short / Watch.
-        # Cached 7 days per (ticker, indicator) so re-running the cohort is cheap.
+        # Qualitative LLM scoring — fires for Strong-Short / Watch by default,
+        # or for ANY ticker when force_qual=True (user-initiated via UI).
+        # Cached 7 days per (ticker, indicator) so re-runs are cheap.
         qual_assessment = None
-        if s["verdict"] in ("Strong-Short", "Watch"):
+        if force_qual or s["verdict"] in ("Strong-Short", "Watch"):
             try:
                 from src.research_ideas.complacency.qualitative import assess_qualitative
                 qual_assessment = assess_qualitative(

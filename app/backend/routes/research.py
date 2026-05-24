@@ -239,25 +239,51 @@ async def refresh_complacency(max_workers: int = 4):
 
 
 @router.post("/ideas/complacency/score/{ticker}")
-async def score_complacency_adhoc(ticker: str):
+async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
     """
-    Ad-hoc: score ONE ticker that isn't in the curated 50-name universe.
-    Sector / industry are auto-looked-up from FMP /profile. Result is
-    returned to the caller but NOT persisted to the cohort table.
+    Ad-hoc: score ONE ticker. Used for two flows:
 
-    Takes ~10-15 sec per ticker (multiple FMP endpoints).
+      1. Brand-new ticker not in the curated universe — full fresh score.
+         Sector / industry auto-looked-up via FMP /profile. NOT persisted
+         to the cohort table.
+
+      2. Existing-cohort ticker with `force_qual=true` — the user clicked
+         "Generate Qualitative" on a row whose verdict is Borderline / Pass
+         (auto-qual normally fires only for Strong-Short / Watch). The
+         qualitative LLM runs regardless of verdict, the aggregate is
+         recomputed, and the updated row is patched back into the latest
+         cohort run so a page-refresh shows the new score.
+
+    Takes ~10-15 sec quant-only; ~4-5 min with qual.
     """
     ticker = ticker.strip().upper()
     if not ticker or not ticker.isalnum() or len(ticker) > 6:
         raise HTTPException(status_code=400, detail=f"Invalid ticker: {ticker!r}")
     try:
-        result = await asyncio.to_thread(score_one_ticker, ticker)
+        result = await asyncio.to_thread(score_one_ticker, ticker, None, None, None, force_qual)
         if isinstance(result, dict) and result.get("reason"):
             raise HTTPException(
                 status_code=422,
                 detail=f"{ticker}: {result.get('reason')}"
             )
-        return result.model_dump() if hasattr(result, "model_dump") else result
+        payload = result.model_dump() if hasattr(result, "model_dump") else result
+
+        # If force_qual was requested AND this ticker is in the latest cohort,
+        # patch the cohort storage so the updated aggregate persists.
+        persisted = False
+        if force_qual:
+            try:
+                persisted = await asyncio.to_thread(
+                    complacency_storage.update_ticker_in_latest_cohort,
+                    payload,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Cohort patch for %s after force_qual failed: %s", ticker, exc
+                )
+        if isinstance(payload, dict):
+            payload["_persisted_to_cohort"] = persisted
+        return payload
     except HTTPException:
         raise
     except Exception as exc:

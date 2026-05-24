@@ -47,18 +47,30 @@ const formatRunTime = (iso: string | null): string => {
 
 // ─── Verdict / pillar colour chips ────────────────────────────────────────
 
+// Light-mode: text is BLACK (per user request) so it stays legible on the
+// lightly-tinted chip backgrounds. Dark-mode keeps the existing pastel hues.
 const VERDICT_COLOR: Record<ComplacencyVerdict, string> = {
-  'Strong-Short': 'bg-red-600/30 text-red-200 border-red-700/40',
-  'Watch':        'bg-orange-600/30 text-orange-200 border-orange-700/40',
-  'Borderline':   'bg-amber-600/30 text-amber-200 border-amber-700/40',
-  'Pass':         'bg-emerald-600/20 text-emerald-300 border-emerald-700/40',
+  'Strong-Short': 'bg-red-600/30 text-black dark:text-red-200 border-red-700/40',
+  'Watch':        'bg-orange-600/30 text-black dark:text-orange-200 border-orange-700/40',
+  'Borderline':   'bg-amber-600/30 text-black dark:text-amber-200 border-amber-700/40',
+  'Pass':         'bg-emerald-600/20 text-black dark:text-emerald-300 border-emerald-700/40',
   'N/A':          'bg-muted text-muted-foreground border-border',
 };
 
 function pillarColor(score: number): string {
-  if (score >= 2) return 'bg-red-600/30 text-red-200';
-  if (score >= 1) return 'bg-amber-600/30 text-amber-200';
+  if (score >= 2) return 'bg-red-600/30 text-black dark:text-red-200';
+  if (score >= 1) return 'bg-amber-600/30 text-black dark:text-amber-200';
   return 'bg-muted text-muted-foreground';
+}
+
+// Aggregate-score chip color: rank by total 0-100. Used in the new table
+// column AND the drawer header. Dark mode keeps current vibrancy.
+function aggregateColor(score: number | null | undefined): string {
+  if (score == null) return 'bg-muted text-muted-foreground';
+  if (score >= 70) return 'bg-red-600/30 text-black dark:text-red-200';
+  if (score >= 50) return 'bg-orange-600/30 text-black dark:text-orange-200';
+  if (score >= 30) return 'bg-amber-600/30 text-black dark:text-amber-200';
+  return 'bg-emerald-600/20 text-black dark:text-emerald-300';
 }
 
 
@@ -340,26 +352,31 @@ export function ComplacencyPage() {
           <div className="overflow-x-auto border border-border rounded-md bg-card">
             <table className="w-full text-xs font-mono">
               <thead className="bg-muted/40 text-left text-muted-foreground">
-                {/* Pillar grouping band — visually segments downstream columns */}
+                {/* Pillar grouping band — visually segments downstream columns.
+                    Light-mode: deepened text hues so the band labels stay legible
+                    on white. Dark-mode keeps the pastel softness via `dark:`. */}
                 <tr className="border-b border-border/50">
                   <th colSpan={5} className="px-2 py-1"></th>
+                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-violet-500/15 text-violet-900 dark:text-violet-300">
+                    Aggregate
+                  </th>
                   <th colSpan={4} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
                     Pillar scores
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-rose-500/15 text-rose-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-rose-500/15 text-rose-900 dark:text-rose-300">
                     Valuation
                   </th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-orange-500/15 text-orange-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-orange-500/15 text-orange-900 dark:text-orange-300">
                     Behav.
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-900 dark:text-cyan-300">
                     Technical
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-900 dark:text-emerald-300">
                     Quality
                   </th>
                   <th colSpan={1} className="px-2 py-1"></th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-purple-500/15 text-purple-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-purple-500/15 text-purple-900 dark:text-purple-300">
                     Put rec
                   </th>
                 </tr>
@@ -368,6 +385,7 @@ export function ComplacencyPage() {
                   <th className="px-2 py-2">Ticker</th>
                   <th className="px-2 py-2">Sector</th>
                   <th className="px-2 py-2">Verdict</th>
+                  <th className="px-2 py-2 text-right bg-violet-500/5" title="Aggregate 0-100 (quant 0-50 + qual 0-50)">Agg/100</th>
                   <th className="px-2 py-2 text-right">Comp/8</th>
                   <th className="px-2 py-2 text-right border-l border-border/30" title="Valuation (EV/S, FCF yield)">V</th>
                   <th className="px-2 py-2 text-right" title="Behavioural (insider A/D, EPS rev, range)">B</th>
@@ -411,6 +429,22 @@ export function ComplacencyPage() {
                       <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${VERDICT_COLOR[r.verdict]}`}>
                         {r.verdict}
                       </span>
+                    </td>
+                    <td className="px-2 py-1.5 text-right bg-violet-500/5">
+                      {r.aggregate_score != null ? (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${aggregateColor(r.aggregate_score)}`}
+                          title={[
+                            `Aggregate ${r.aggregate_score.toFixed(1)} / 100`,
+                            `quant ${(r.aggregate_quant_pts ?? 0).toFixed(1)} + qual ${(r.aggregate_qual_pts ?? 0).toFixed(1)}`,
+                            (r.aggregate_qual_pts ?? 0) === 0 ? '(qual not yet scored — click row to generate)' : null,
+                          ].filter(Boolean).join('\n')}
+                        >
+                          {r.aggregate_score.toFixed(0)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/50 italic">—</span>
+                      )}
                     </td>
                     <td className="px-2 py-1.5 text-right">
                       <span className="font-bold text-foreground">{r.composite.toFixed(1)}</span>
@@ -510,7 +544,30 @@ export function ComplacencyPage() {
 
       {/* Detail drawer */}
       {selected && (
-        <ComplacencyDrawer ticker={selected} onClose={() => setSelected(null)} />
+        <ComplacencyDrawer
+          ticker={selected}
+          onClose={() => setSelected(null)}
+          onQualGenerated={(updated) => {
+            // Replace the row in adhoc OR re-bind the cohort row in-place so
+            // both the table and the open drawer reflect the new aggregate.
+            setSelected(updated);
+            setAdhoc((prev) => {
+              const others = prev.filter((r) => r.ticker !== updated.ticker);
+              // If the ticker was in the cohort, the backend has persisted
+              // the patched row server-side — refresh the cohort cache too.
+              return [...others, updated];
+            });
+            // If this ticker is in the persisted cohort, the server already
+            // patched it. Re-fetch the cohort so a hard reload would also
+            // show the same numbers, and so other rows pick up the change.
+            const inCohort = (cohort?.results ?? []).some(
+              (r) => r.ticker === updated.ticker,
+            );
+            if (inCohort) {
+              load();
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -519,7 +576,38 @@ export function ComplacencyPage() {
 
 // ─── Detail drawer ─────────────────────────────────────────────────────────
 
-function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResult; onClose: () => void }) {
+function ComplacencyDrawer({
+  ticker,
+  onClose,
+  onQualGenerated,
+}: {
+  ticker: ComplacencyTickerResult;
+  onClose: () => void;
+  onQualGenerated?: (updated: ComplacencyTickerResult) => void;
+}) {
+  const [generatingQual, setGeneratingQual] = useState(false);
+
+  const isGate = ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch';
+  const hasQual = !!ticker.qualitative
+    && Object.keys(ticker.qualitative.indicators ?? {}).length > 0;
+
+  const handleGenerateQual = async () => {
+    if (generatingQual) return;
+    setGeneratingQual(true);
+    toast.info(`Generating qualitative for ${ticker.ticker} — ~4-5 min (10 indicators on qwen3.6-plus).`);
+    try {
+      const updated = await scoreComplacencyTickerAdhoc(ticker.ticker, { forceQual: true });
+      toast.success(
+        `${updated.ticker}: ${updated.qualitative?.composite ?? 0}/${updated.qualitative?.max_possible ?? 50} qual · aggregate ${updated.aggregate_score?.toFixed(1) ?? '—'}/100`,
+      );
+      onQualGenerated?.(updated);
+    } catch (e) {
+      toast.error(`Qual generation failed for ${ticker.ticker}: ${(e as Error).message}`);
+    } finally {
+      setGeneratingQual(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[80] flex" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 animate-in fade-in duration-150" />
@@ -632,23 +720,35 @@ function ComplacencyDrawer({ ticker, onClose }: { ticker: ComplacencyTickerResul
           {/* ════════════════════════════════════════════════════════════════
               2. QUALITATIVE THESIS  (LLM-scored rationale)
              ════════════════════════════════════════════════════════════════ */}
-          {ticker.qualitative && Object.keys(ticker.qualitative.indicators).length > 0 && (
-            <QualitativePanel qual={ticker.qualitative} headerPrefix="2 · " />
+          {hasQual && (
+            <QualitativePanel qual={ticker.qualitative!} headerPrefix="2 · " />
           )}
-          {(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch')
-            && (!ticker.qualitative || Object.keys(ticker.qualitative.indicators ?? {}).length === 0) && (
-            <section className="border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground italic">
-              <span className="font-semibold not-italic">2 · Qualitative Thesis</span> — not yet scored.
-              The agent runs qwen3.6-plus on 10-K + transcript + news evidence for
-              Strong-Short / Watch verdicts; this run may have been cached without it or
-              the Qwen key (DEEP_RESEARCH_API_KEY) may not be set.
-            </section>
-          )}
-          {!(ticker.verdict === 'Strong-Short' || ticker.verdict === 'Watch') && (
-            <section className="border border-dashed border-border/50 rounded-md p-3 text-xs text-muted-foreground/60 italic">
-              <span className="font-semibold not-italic">2 · Qualitative Thesis</span> —
-              not generated. Qualitative scoring only fires for Strong-Short / Watch verdicts
-              (composite ≥ 6/8 with all pillars ≥ 1).
+          {!hasQual && (
+            <section
+              className={`border border-dashed rounded-md p-3 text-xs italic ${
+                isGate ? 'border-border text-muted-foreground' : 'border-border/50 text-muted-foreground/70'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3 flex-wrap not-italic">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold mb-1">2 · Qualitative Thesis</div>
+                  <p className="text-[11px] italic leading-snug">
+                    {isGate
+                      ? <>Not yet scored. The agent runs qwen3.6-plus on 10-K, 10-Q diff, 8-K, DEF 14A, Form 144 and Tavily evidence. This run may have been cached without it or the Qwen key (<code className="text-[10px]">DEEP_RESEARCH_API_KEY</code>) may not be set.</>
+                      : <>Not auto-generated for {ticker.verdict.toLowerCase()} verdicts (auto-qual only fires for Strong-Short / Watch). You can still trigger it manually — the aggregate score will be recomputed.</>
+                    }
+                  </p>
+                </div>
+                <button
+                  onClick={handleGenerateQual}
+                  disabled={generatingQual}
+                  className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground text-[11px] font-medium hover:opacity-90 disabled:opacity-50 not-italic"
+                  title="Run the 10-indicator qualitative scorer on this ticker. Costs ~$0.02 in Qwen calls and ~4-5 min wall clock."
+                >
+                  {generatingQual ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                  {generatingQual ? 'Generating…' : 'Generate Qualitative'}
+                </button>
+              </div>
             </section>
           )}
 
@@ -803,10 +903,10 @@ function KV({ label, value, highlight = false }: { label: string; value: string;
 // ─── Qualitative panel (LLM-scored short thesis) ──────────────────────────
 
 const CONVICTION_COLOR: Record<QualConvictionLabel, string> = {
-  'EXCEPTIONAL': 'bg-red-600/30 text-red-200 border-red-700/40',
-  'BOTH':        'bg-orange-600/30 text-orange-200 border-orange-700/40',
-  'QUANT-ONLY':  'bg-amber-600/30 text-amber-200 border-amber-700/40',
-  'QUAL-ONLY':   'bg-blue-600/30 text-blue-200 border-blue-700/40',
+  'EXCEPTIONAL': 'bg-red-600/30 text-black dark:text-red-200 border-red-700/40',
+  'BOTH':        'bg-orange-600/30 text-black dark:text-orange-200 border-orange-700/40',
+  'QUANT-ONLY':  'bg-amber-600/30 text-black dark:text-amber-200 border-amber-700/40',
+  'QUAL-ONLY':   'bg-blue-600/30 text-black dark:text-blue-200 border-blue-700/40',
   'PASS':        'bg-muted text-muted-foreground border-border',
 };
 
