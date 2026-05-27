@@ -158,6 +158,10 @@ def chat_turn(
 
     text = ""
     last_exc_msg: Optional[str] = None
+    # Process-wide throttle: coordinates with qualitative scorer + deep
+    # research. weight=2 for chat-with-search (heavy), 1 for plain chat.
+    from src.research_ideas.complacency import qwen_throttle
+    qwen_throttle.acquire(weight=2.0 if enable_search else 1.0)
     try:
         stream = client.chat.completions.create(
             model=os.environ.get("CONTRARIAN_CHAT_MODEL", "qwen3.6-plus"),
@@ -176,6 +180,7 @@ def chat_turn(
         else:
             text = (stream.choices[0].message.content or "").strip()
     except Exception as exc:
+        qwen_throttle.report_429_from_exception(exc)
         logger.exception("chat_turn LLM call failed: %s", exc)
         last_exc_msg = f"{type(exc).__name__}: {str(exc)[:300]}"
 
@@ -185,6 +190,7 @@ def chat_turn(
         if enable_search:
             logger.warning("chat_turn: empty stream — retrying without web search")
             try:
+                qwen_throttle.acquire(weight=1.0)
                 resp = client.chat.completions.create(
                     model=os.environ.get("CONTRARIAN_CHAT_MODEL", "qwen3.6-plus"),
                     messages=messages,
@@ -193,6 +199,7 @@ def chat_turn(
                 )
                 text = (resp.choices[0].message.content or "").strip()
             except Exception as exc:
+                qwen_throttle.report_429_from_exception(exc)
                 logger.exception("chat_turn fallback failed: %s", exc)
                 last_exc_msg = (
                     last_exc_msg or

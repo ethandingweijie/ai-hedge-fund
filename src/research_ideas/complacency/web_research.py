@@ -99,7 +99,12 @@ def qwen_web_search(
         return None
 
     last_exc: Exception | None = None
+    from src.research_ideas.complacency import qwen_throttle
     for attempt in range(retries + 1):
+        # Process-wide throttle: blocks if 429-cooldown active or
+        # bucket empty. weight=2 because web-search calls are heavier
+        # than plain chat completions (longer + more API surface).
+        qwen_throttle.acquire(weight=2.0)
         try:
             stream = client.chat.completions.create(
                 model=QWEN_RESEARCH_MODEL,
@@ -163,6 +168,8 @@ def qwen_web_search(
 
         except Exception as exc:
             last_exc = exc
+            # If this was a 429, notify the throttle so siblings back off.
+            qwen_throttle.report_429_from_exception(exc)
             logger.warning("Qwen web-search attempt %d failed: %s", attempt + 1, exc)
             time.sleep(1.5)
 

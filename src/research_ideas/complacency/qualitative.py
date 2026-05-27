@@ -393,12 +393,23 @@ def _call_qwen_indicator(
         ("system", system_prompt),
         ("human", user_prompt),
     ]
+
+    # Process-wide throttle: blocks until a token is available + waits
+    # out any active cooldown from a prior 429. Shared with the deep-
+    # research and IoTD chat paths so concurrent paths don't blow past
+    # DashScope's burst threshold.
+    from src.research_ideas.complacency import qwen_throttle
+    qwen_throttle.acquire(weight=1.0)
+
     try:
         result = structured.invoke(messages)
     except Exception as exc:
+        # If this was a 429, notify the throttle so siblings back off.
+        qwen_throttle.report_429_from_exception(exc)
         # Qwen DashScope returns flat JSON; try second attempt with non-structured
         logger.warning("Qwen structured-output failed (%s); retrying raw.", exc)
         try:
+            qwen_throttle.acquire(weight=1.0)
             raw = llm.invoke(messages)
             text = raw.content if hasattr(raw, "content") else str(raw)
             # Try to extract a JSON block
@@ -410,6 +421,7 @@ def _call_qwen_indicator(
             else:
                 return None, 0.0
         except Exception as exc2:
+            qwen_throttle.report_429_from_exception(exc2)
             logger.exception("Qwen JSON extraction failed: %s", exc2)
             return None, 0.0
 

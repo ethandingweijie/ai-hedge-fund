@@ -355,9 +355,17 @@ async def diag_llm_health():
     except Exception as exc:
         qwen_test["error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
 
+    # Throttle stats — visibility into rate-limit coordination
+    try:
+        from src.research_ideas.complacency import qwen_throttle
+        throttle_stats = qwen_throttle.stats()
+    except Exception as exc:
+        throttle_stats = {"error": str(exc)}
+
     return {
         "env": env_state,
         "qwen_test": qwen_test,
+        "qwen_throttle": throttle_stats,
         "summary": (
             "ALL OK" if (env_state["DEEP_RESEARCH_API_KEY"]["set"] and qwen_test["ok"])
             else "FAILED — see env_state['DEEP_RESEARCH_API_KEY']['set'] and qwen_test['error']"
