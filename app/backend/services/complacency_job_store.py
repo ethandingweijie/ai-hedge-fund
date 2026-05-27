@@ -124,6 +124,28 @@ def update_progress(job_id: str, status: str, message: str) -> None:
         conn.close()
 
 
+def update_running_result(job_id: str, partial_result: dict) -> None:
+    """
+    Patch result_json on a running job mid-flight. Used by the two-phase
+    score worker to publish quant-only result after Phase 1, then update
+    again as qualitative indicators stream in.
+
+    Frontend polling reads result_json on every successful GET /jobs/{id},
+    so live updates surface immediately. The job status STAYS 'running'
+    until complete_job() or fail_job() is called.
+    """
+    _ensure_table()
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE complacency_jobs SET result_json = ? WHERE job_id = ?",
+            (json.dumps(partial_result) if partial_result is not None else None, job_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def complete_job(job_id: str, result: dict | None = None) -> None:
     """Mark job as completed with optional result payload."""
     _ensure_table()

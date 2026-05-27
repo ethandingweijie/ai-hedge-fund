@@ -221,6 +221,99 @@ def update_ticker_in_latest_cohort(updated_result: dict) -> bool:
         conn.close()
 
 
+def update_ticker_in_latest_cohort_partial_qual(
+    ticker: str,
+    indicator_code: str,
+    indicator_score: dict,
+) -> bool:
+    """
+    Two-phase architecture per-indicator patcher.
+
+    Patches ONE indicator into the latest cohort row's qualitative
+    dict, then recomputes:
+      • qual_assessment.composite (sum of all indicator scores so far)
+      • qual_assessment.max_possible (5 × number scored)
+      • qual_assessment.composite_normalized
+      • aggregate_score (quant + qual / max * 50)
+      • aggregate_qual_pts
+
+    Called by assess_qualitative's on_indicator_done callback each
+    time ONE indicator scores. Result: if a force-rescore 429-cascades
+    at 7/10, those 7 are already persisted in the cohort row with a
+    proportional aggregate. The drawer shows them live.
+
+    Returns True if patched, False if ticker not in cohort.
+    """
+    ticker_u = ticker.upper()
+    _ensure_table()
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT run_id, results FROM complacency_runs "
+            "ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return False
+        run_id = row[0]
+        try:
+            results = json.loads(row[1] or "[]")
+        except Exception:
+            return False
+
+        for i, r in enumerate(results):
+            if (r.get("ticker") or "").upper() != ticker_u:
+                continue
+            # Ensure qualitative dict exists
+            qual = r.get("qualitative") or {
+                "indicators": {},
+                "composite": 0,
+                "max_possible": 0,
+                "composite_normalized": 0.0,
+                "conviction_label": "PASS",
+                "assessed_at": None,
+                "cost_usd": 0.0,
+                "incomplete": True,  # incomplete while streaming
+            }
+            indicators = qual.get("indicators") or {}
+            indicators[indicator_code] = _sanitize(indicator_score)
+            qual["indicators"] = indicators
+
+            # Recompute composite + aggregate
+            composite = sum(int(v.get("score") or 0) for v in indicators.values())
+            max_possible = 5 * len(indicators)
+            qual["composite"] = composite
+            qual["max_possible"] = max_possible
+            qual["composite_normalized"] = (
+                composite / max_possible if max_possible else 0.0
+            )
+
+            # Recompute aggregate based on current quant + partial qual
+            from datetime import datetime, timezone
+            quant_composite = float(r.get("composite") or 0.0)
+            quant_pts = (max(0.0, min(quant_composite, 8.0)) / 8.0) * 50.0
+            qual_pts = 0.0
+            if max_possible > 0:
+                qual_pts = (composite / max_possible) * 50.0
+
+            r["qualitative"] = qual
+            r["aggregate_score"] = round(quant_pts + qual_pts, 1)
+            r["aggregate_quant_pts"] = round(quant_pts, 1)
+            r["aggregate_qual_pts"] = round(qual_pts, 1)
+            qual["assessed_at"] = datetime.now(timezone.utc).isoformat()
+
+            results[i] = r
+
+            conn.execute(
+                "UPDATE complacency_runs SET results = ? WHERE run_id = ?",
+                (json.dumps(results), run_id),
+            )
+            conn.commit()
+            return True
+        return False
+    finally:
+        conn.close()
+
+
 def _row_to_dict(row: tuple) -> dict:
     return {
         "run_id": row[0],

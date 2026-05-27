@@ -618,27 +618,171 @@ async def get_complacency_ticker(ticker: str):
 
 
 def _execute_refresh_job(job_id: str, max_workers: int) -> None:
-    """Backend worker for the refresh job (runs in asyncio.to_thread)."""
-    base_msg = f"running cohort ({max_workers} workers)"
-    job_store.update_progress(job_id, "running", base_msg)
-    try:
-        cohort = _with_heartbeat(
-            job_id, base_msg,
-            lambda: run_complacency(max_workers=max_workers, save=True),
+    """
+    Two-phase master refresh worker.
+
+      PHASE 1 — ALL 50 tickers quant-only, parallel (~30-60s):
+        Each ticker → score_one_ticker_quant. Assemble cohort.
+        save_complacency_run → FULL COHORT PERSISTED HERE.
+        Frontend table immediately shows new verdicts + composites.
+
+      PHASE 2 — Gate-passers (Strong-Short / Watch) only, SEQUENTIAL:
+        Run assess_qualitative per ticker, one at a time, to keep the
+        Qwen token bucket happy. Per-indicator callback patches the
+        cohort row live so users opening the drawer mid-refresh see
+        indicators landing in real time.
+
+        Sequential (not parallel) because each gate ticker fires up to
+        3 concurrent Qwen calls; running 5 gate tickers in parallel
+        would mean 15 concurrent Qwen calls → guaranteed 429 cascade.
+    """
+    from src.research_ideas.complacency.runner import (
+        score_one_ticker_quant, _compute_aggregate,
+    )
+    from src.research_ideas.complacency.universe import list_tickers, get_ticker_metadata
+    from src.research_ideas.complacency.schemas import (
+        ComplacencyCohortResult, ComplacencyTickerResult,
+    )
+    from src.research_ideas.complacency.qualitative import assess_qualitative
+    from datetime import datetime, timezone
+    import uuid
+
+    # ── PHASE 1: quant only for all tickers, parallel ────────────────
+    job_store.update_progress(
+        job_id, "running",
+        f"phase 1: quant scoring all tickers (parallel)",
+    )
+    tickers = list_tickers()
+    quant_results: dict = {}
+
+    def _quant_one(ticker):
+        meta = get_ticker_metadata(ticker)
+        return score_one_ticker_quant(
+            ticker,
+            name=meta.get("name"),
+            sector=meta.get("sector"),
+            industry=meta.get("industry"),
         )
-        result = {
+
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            futures = {ex.submit(_quant_one, t): t for t in tickers}
+            for fut in as_completed(futures, timeout=300):
+                t = futures[fut]
+                try:
+                    out = fut.result(timeout=60)
+                    quant_results[t] = out
+                except Exception as exc:
+                    logger.warning("Phase 1 quant for %s failed: %s", t, exc)
+                    quant_results[t] = {"ticker": t, "reason": str(exc)}
+    except Exception as exc:
+        logger.exception("Phase 1 (quant) timed out: %s", exc)
+
+    # Assemble cohort + persist
+    results_list = []
+    failed_tickers = []
+    for t in tickers:
+        r = quant_results.get(t)
+        if isinstance(r, ComplacencyTickerResult):
+            results_list.append(r)
+        elif isinstance(r, dict) and r.get("reason"):
+            failed_tickers.append({"ticker": t, "reason": r["reason"]})
+    results_list.sort(key=lambda r: (-(r.composite or 0.0), r.ticker))
+    for i, r in enumerate(results_list, 1):
+        r.rank = i
+    gate_passers = sum(1 for r in results_list if r.passes_gate)
+    cohort = ComplacencyCohortResult(
+        run_id=uuid.uuid4().hex[:12],
+        created_at=datetime.now(timezone.utc).isoformat(),
+        ticker_count=len(results_list),
+        gate_passers=gate_passers,
+        failed_tickers=failed_tickers,
+        results=results_list,
+    )
+    complacency_storage.save_complacency_run(cohort)
+
+    job_store.update_progress(
+        job_id, "running",
+        f"phase 1 done · {len(results_list)} tickers · "
+        f"{gate_passers} gate passers · starting phase 2 qual...",
+    )
+    job_store.update_running_result(job_id, {
+        "phase": "phase1_done",
+        "run_id": cohort.run_id,
+        "ticker_count": cohort.ticker_count,
+        "gate_passers": cohort.gate_passers,
+    })
+
+    # ── PHASE 2: qualitative for gate passers, SEQUENTIAL ────────────
+    import os as _os
+    if not _os.environ.get("DEEP_RESEARCH_API_KEY"):
+        logger.warning("Phase 2 skipped: DEEP_RESEARCH_API_KEY missing")
+        job_store.complete_job(job_id, {
             "run_id": cohort.run_id,
             "created_at": cohort.created_at,
-            "universe": cohort.universe,
             "ticker_count": cohort.ticker_count,
             "gate_passers": cohort.gate_passers,
             "failed_tickers": cohort.failed_tickers,
-        }
-        job_store.complete_job(job_id, result)
-        logger.info("Complacency refresh job %s completed", job_id)
-    except Exception as exc:
-        logger.exception("Complacency refresh job %s failed: %s", job_id, exc)
-        job_store.fail_job(job_id, f"{type(exc).__name__}: {exc}")
+            "phase2_skipped": "DEEP_RESEARCH_API_KEY missing",
+        })
+        return
+
+    gate_tickers = [r for r in results_list if r.verdict in ("Strong-Short", "Watch")]
+    for i, gate_result in enumerate(gate_tickers, 1):
+        tkr = gate_result.ticker
+
+        def _patch_partial(code, indicator_score, ticker=tkr):
+            try:
+                complacency_storage.update_ticker_in_latest_cohort_partial_qual(
+                    ticker, code, indicator_score.model_dump(),
+                )
+            except Exception as exc:
+                logger.warning("Partial qual patch %s/%s: %s", ticker, code, exc)
+
+        job_store.update_progress(
+            job_id, "running",
+            f"phase 2: qual {i}/{len(gate_tickers)} · {tkr}",
+        )
+
+        try:
+            qual = assess_qualitative(
+                ticker=tkr,
+                name=gate_result.name,
+                sector=gate_result.sector,
+                quant_passes_gate=gate_result.passes_gate,
+                quant_composite=gate_result.composite,
+                # force_refresh=False for master refresh: honor 7-day cache.
+                # Idempotent restart's high-conf preservation handles the
+                # force-rescore case separately.
+                force_refresh=False,
+                on_indicator_done=_patch_partial,
+            )
+            # Final patch with full qual + recomputed aggregate
+            final_payload = gate_result.model_dump()
+            if qual:
+                final_payload["qualitative"] = qual.model_dump()
+                final_payload.update(_compute_aggregate(gate_result.composite, qual))
+            try:
+                complacency_storage.update_ticker_in_latest_cohort(final_payload)
+            except Exception as exc:
+                logger.warning("Final qual patch for %s: %s", tkr, exc)
+        except Exception as exc:
+            logger.warning(
+                "Phase 2 qual for %s threw — keeping quant + partial qual: %s",
+                tkr, exc,
+            )
+
+    job_store.complete_job(job_id, {
+        "run_id": cohort.run_id,
+        "created_at": cohort.created_at,
+        "universe": cohort.universe,
+        "ticker_count": cohort.ticker_count,
+        "gate_passers": cohort.gate_passers,
+        "failed_tickers": cohort.failed_tickers,
+        "phase2_tickers_processed": len(gate_tickers),
+    })
+    logger.info("Master refresh job %s complete: %d tickers, %d gate passers",
+                job_id, cohort.ticker_count, gate_passers)
 
 
 @router.post("/ideas/complacency/refresh")
@@ -674,31 +818,159 @@ async def refresh_complacency(max_workers: int = 4):
 
 
 def _execute_score_job(job_id: str, ticker: str, force_qual: bool) -> None:
-    """Backend worker for ad-hoc / force-qual scoring (runs in asyncio.to_thread)."""
-    base_msg = f"scoring {ticker}{' (force_qual)' if force_qual else ''}"
-    job_store.update_progress(job_id, "running", base_msg)
-    try:
-        result = _with_heartbeat(
-            job_id, base_msg,
-            lambda: score_one_ticker(ticker, None, None, None, force_qual),
-        )
-        if isinstance(result, dict) and result.get("reason"):
-            job_store.fail_job(job_id, f"{ticker}: {result.get('reason')}")
-            return
-        payload = result.model_dump() if hasattr(result, "model_dump") else result
+    """
+    Two-phase score job worker.
 
-        persisted = False
-        if force_qual:
-            try:
-                persisted = complacency_storage.update_ticker_in_latest_cohort(payload)
-            except Exception as exc:
-                logger.warning("Cohort patch for %s after force_qual failed: %s", ticker, exc)
-        if isinstance(payload, dict):
-            payload["_persisted_to_cohort"] = persisted
-        job_store.complete_job(job_id, payload)
+      PHASE 1 — Quant only (~5-15s):
+        score_one_ticker_quant → cohort patch → publish running:quant_done
+        Even if Phase 2 fails, the new quant verdict + pillars are saved.
+
+      PHASE 2 — Qualitative (~5-12 min, if force_qual or gate verdict):
+        assess_qualitative with on_indicator_done callback.
+        Each indicator's completion → cohort patch + job result update.
+        If we hit the 12-min outer timeout, partial qual is preserved.
+    """
+    from src.research_ideas.complacency.runner import score_one_ticker_quant
+
+    # ── PHASE 1: quant only ──────────────────────────────────────────
+    job_store.update_progress(
+        job_id, "running",
+        f"phase 1: quant scoring {ticker}",
+    )
+    try:
+        quant_result = score_one_ticker_quant(ticker)
     except Exception as exc:
-        logger.exception("score_one_ticker job %s for %s failed: %s", job_id, ticker, exc)
-        job_store.fail_job(job_id, f"{type(exc).__name__}: {exc}")
+        logger.exception("Phase 1 (quant) for %s failed: %s", ticker, exc)
+        job_store.fail_job(job_id, f"phase 1 failed: {type(exc).__name__}: {exc}")
+        return
+
+    if isinstance(quant_result, dict) and quant_result.get("reason"):
+        job_store.fail_job(job_id, f"phase 1: {ticker}: {quant_result.get('reason')}")
+        return
+
+    quant_payload = (
+        quant_result.model_dump() if hasattr(quant_result, "model_dump") else quant_result
+    )
+
+    # Patch cohort with quant result (if ticker is in cohort)
+    try:
+        persisted_quant = complacency_storage.update_ticker_in_latest_cohort(quant_payload)
+    except Exception as exc:
+        logger.warning("Cohort patch (quant) for %s failed: %s", ticker, exc)
+        persisted_quant = False
+
+    quant_payload["_persisted_to_cohort"] = persisted_quant
+    job_store.update_running_result(job_id, quant_payload)
+    job_store.update_progress(
+        job_id, "running",
+        f"phase 1 done · {ticker} {quant_result.verdict} · composite "
+        f"{quant_result.composite:.1f}/8 · agg {quant_result.aggregate_score or 0}/100",
+    )
+
+    # ── PHASE 2: qualitative (conditional) ───────────────────────────
+    should_qual = force_qual or quant_result.verdict in ("Strong-Short", "Watch")
+    if not should_qual:
+        # Pure ad-hoc on Borderline/Pass without force_qual — done after quant
+        job_store.complete_job(job_id, quant_payload)
+        return
+
+    import os as _os
+    if not _os.environ.get("DEEP_RESEARCH_API_KEY"):
+        quant_payload["error"] = (
+            "DEEP_RESEARCH_API_KEY is not set on this deployment. "
+            "Quant saved; qualitative skipped."
+        )
+        try:
+            complacency_storage.update_ticker_in_latest_cohort(quant_payload)
+        except Exception:
+            pass
+        job_store.complete_job(job_id, quant_payload)
+        return
+
+    from src.research_ideas.complacency.qualitative import assess_qualitative
+
+    # Callback fires per-indicator: patches cohort row + job result
+    indicators_done_count = {"n": 0}
+    base_qual_msg = f"phase 2: qual {ticker}"
+
+    def _on_indicator_done(code, indicator_score):
+        indicators_done_count["n"] += 1
+        n = indicators_done_count["n"]
+        # Patch cohort with this single indicator
+        try:
+            complacency_storage.update_ticker_in_latest_cohort_partial_qual(
+                ticker, code, indicator_score.model_dump(),
+            )
+        except Exception as exc:
+            logger.warning(
+                "Partial-qual cohort patch for %s/%s failed: %s",
+                ticker, code, exc,
+            )
+        # Update job state with progress
+        deep = " ★DEEP" if "deep" in (indicator_score.model_used or "").lower() else ""
+        job_store.update_progress(
+            job_id, "running",
+            f"{base_qual_msg} {n}/10 · {code} = {indicator_score.score}/5 "
+            f"conf {indicator_score.confidence:.0%}{deep}",
+        )
+        # Also update running result so frontend's drawer can pick up the
+        # incremental qualitative state without a cohort poll
+        try:
+            from app.backend.services.complacency_storage import get_latest_complacency_run
+            latest = get_latest_complacency_run()
+            if latest:
+                for r in latest.get("results", []):
+                    if (r.get("ticker") or "").upper() == ticker.upper():
+                        job_store.update_running_result(job_id, r)
+                        break
+        except Exception:
+            pass
+
+    try:
+        qual_assessment = _with_heartbeat(
+            job_id, base_qual_msg,
+            lambda: assess_qualitative(
+                ticker=ticker,
+                name=quant_result.name,
+                sector=quant_result.sector,
+                quant_passes_gate=quant_result.passes_gate,
+                quant_composite=quant_result.composite,
+                force_refresh=force_qual,
+                on_indicator_done=_on_indicator_done,
+            ),
+        )
+    except Exception as exc:
+        logger.exception("Phase 2 (qual) for %s failed: %s", ticker, exc)
+        # Quant + whatever qual streamed is already in cohort. Complete
+        # the job with the latest cohort row state.
+        quant_payload["error"] = (
+            f"phase 2 raised {type(exc).__name__}: {str(exc)[:200]} — "
+            f"quant + partial qual preserved"
+        )
+        job_store.complete_job(job_id, quant_payload)
+        return
+
+    # Phase 2 complete (possibly with some indicators incomplete due to
+    # outer timeout). Final cohort row update with full assessment.
+    final_payload = quant_payload
+    if qual_assessment:
+        final_payload["qualitative"] = qual_assessment.model_dump()
+        # Recompute aggregate with full assessment
+        from src.research_ideas.complacency.runner import _compute_aggregate
+        agg = _compute_aggregate(quant_result.composite, qual_assessment)
+        final_payload.update(agg)
+        if qual_assessment.incomplete:
+            final_payload["error"] = (
+                f"qualitative completed {len(qual_assessment.indicators)}/10 indicators "
+                "(some hit timeout or rate limit) — try Re-score again to fill the gaps "
+                "(only failed indicators re-run, high-conf ones preserved)"
+            )
+    try:
+        complacency_storage.update_ticker_in_latest_cohort(final_payload)
+    except Exception as exc:
+        logger.warning("Final cohort patch for %s failed: %s", ticker, exc)
+
+    job_store.complete_job(job_id, final_payload)
 
 
 @router.post("/ideas/complacency/score/{ticker}")

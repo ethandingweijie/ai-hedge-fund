@@ -55,6 +55,101 @@ def _compute_aggregate(quant_composite: float, qual_assessment) -> dict:
     }
 
 
+def score_one_ticker_quant(
+    ticker: str,
+    name: str | None = None,
+    sector: str | None = None,
+    industry: str | None = None,
+) -> ComplacencyTickerResult | dict:
+    """
+    PHASE 1 entry point — quant-only scoring. Fast (~5-15s), no Qwen
+    calls. Returns ComplacencyTickerResult with qualitative=None and
+    aggregate_score reflecting quant-only (qual_pts=0).
+
+    Two-phase architecture: the caller persists this result IMMEDIATELY
+    via update_ticker_in_latest_cohort(). Even if Phase 2 (qualitative)
+    later fails, quant data is preserved.
+
+    Returns {ticker, reason} dict on failure.
+    """
+    ticker = ticker.strip().upper()
+    if not ticker:
+        return {"ticker": ticker, "reason": "empty_ticker"}
+
+    # Auto-fill missing meta from /profile
+    if not sector or not name:
+        try:
+            from src.research_ideas.complacency.data_fetch import fetch_profile
+            profile = fetch_profile(ticker)
+            if profile:
+                name = name or profile.get("name", ticker)
+                sector = sector or profile.get("sector")
+                industry = industry or profile.get("industry")
+        except Exception as exc:
+            logger.warning("Profile lookup failed for %s: %s", ticker, exc)
+
+    meta = {
+        "ticker": ticker,
+        "name": name or ticker,
+        "sector": sector,
+        "industry": industry,
+    }
+    try:
+        bundle = fetch_ticker_bundle(ticker, meta)
+        if bundle is None:
+            return {"ticker": ticker, "reason": "fetch_returned_none"}
+        s = score_bundle(bundle)
+
+        # Put-option rec is bundled with quant since it's not qual-dependent
+        put_rec = None
+        put_rec_at = None
+        if s["verdict"] in ("Strong-Short", "Watch") and bundle.price:
+            try:
+                from src.research_ideas.complacency.options import select_put_recommendation
+                from datetime import datetime, timezone
+                pick = select_put_recommendation(
+                    ticker=ticker, composite=s["composite"],
+                    verdict=s["verdict"], current_price=bundle.price,
+                )
+                if pick:
+                    from src.research_ideas.complacency.schemas import PutRecommendation
+                    put_rec = PutRecommendation(
+                        strike=pick.strike, strike_pct_otm=pick.strike_pct_otm,
+                        expiry=pick.expiry, days_to_expiry=pick.days_to_expiry,
+                        bid=pick.bid, ask=pick.ask, mid=pick.mid,
+                        implied_volatility=pick.implied_volatility,
+                        open_interest=pick.open_interest, volume=pick.volume,
+                        rationale=pick.rationale, contract_symbol=pick.contract_symbol,
+                    )
+                    put_rec_at = datetime.now(timezone.utc).isoformat()
+            except Exception as exc:
+                logger.warning("Put-rec fetch for %s failed: %s", ticker, exc)
+
+        return ComplacencyTickerResult(
+            ticker=ticker, name=meta.get("name", ticker),
+            sector=meta.get("sector"), industry=meta.get("industry"),
+            price=bundle.price, market_cap=bundle.market_cap,
+            ev_sales=s["ev_sales"], ev_sales_sector_median=s["ev_sales_sector_median"],
+            ev_sales_relative=s["ev_sales_relative"], fcf_yield_ttm=s["fcf_yield_ttm"],
+            altman_z=s["altman_z"], piotroski=s["piotroski"],
+            ad_ratio_4q_avg=s["ad_ratio_4q_avg"], eps_revision_yoy=s["eps_revision_yoy"],
+            sma200_extension=s["sma200_extension"], rsi_weekly=s["rsi_weekly"],
+            range_position=s["range_position"],
+            val_score=s["val_score"], beh_score=s["beh_score"],
+            tech_score=s["tech_score"], qual_score=s["qual_score"],
+            composite=s["composite"], passes_gate=s["passes_gate"],
+            verdict=s["verdict"], flag_notes=s["flag_notes"],
+            justification=s["justification"],
+            put_recommendation=put_rec, options_data_freshness=put_rec_at,
+            qualitative=None,
+            error=None,
+            **_compute_aggregate(s["composite"], None),  # quant-only aggregate
+        )
+    except Exception as exc:
+        logger.exception("score_one_ticker_quant %s failed: %s", ticker, exc)
+        return {"ticker": ticker, "reason": f"{type(exc).__name__}: {exc}"}
+
+
 def score_one_ticker(
     ticker: str,
     name: str | None = None,

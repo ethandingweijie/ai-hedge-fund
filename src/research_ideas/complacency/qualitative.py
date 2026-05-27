@@ -1480,9 +1480,12 @@ def assess_qualitative(
     quant_composite: float,
     indicators: Optional[list[str]] = None,
     force_refresh: bool = False,
-    max_workers: int = 3,                  # 3 (not 4): burst of 4 parallel Qwen calls trips DashScope's
-                                            # "limit_burst_rate" 429 throttle. 3 stays under the threshold.
-    per_indicator_timeout_s: int = 240,   # 4 min — first-pass (2 min) + 1 deep escalation (up to 3 min) capped
+    max_workers: int = 3,
+    per_indicator_timeout_s: int = 240,
+    on_indicator_done: Optional[
+        "callable"  # Callable[[str, QualIndicatorScore], None]
+    ] = None,
+    keep_high_conf_on_force: bool = True,
 ) -> QualitativeAssessment:
     """
     Score all (or a subset of) qualitative indicators for one ticker and
@@ -1505,6 +1508,61 @@ def assess_qualitative(
     scored: dict[str, QualIndicatorScore] = {}
     total_cost = 0.0
     incomplete = False
+
+    # ── IDEMPOTENT RESTART ────────────────────────────────────────────
+    # When force_refresh=True (user-triggered re-rescore), DON'T blindly
+    # invalidate every cached indicator. PRESERVE indicators that
+    # previously scored at high confidence — re-running them would just
+    # burn Qwen tokens to get similar scores.
+    #
+    # The result: if a previous force-rescore got 7/10 done and then
+    # 429-cascaded, the NEXT click only needs to re-run the 3 that
+    # failed. The ratchet effect — practical confidence approaches
+    # 100% within 2-3 clicks.
+    #
+    # Threshold: keep indicators with confidence >= 0.70 (well above
+    # the deep-research floor of 0.45). Indicators below that benefit
+    # from re-running because they're already candidates for upgrade.
+    HIGH_CONF_KEEP_THRESHOLD = 0.70
+    preloaded_from_cache: dict[str, QualIndicatorScore] = {}
+    if force_refresh and keep_high_conf_on_force:
+        from app.backend.services.qualitative_storage import get_latest_qualitative_score
+        for code in list(indicator_codes):
+            cached = get_latest_qualitative_score(ticker, code, QUAL_CACHE_TTL_DAYS)
+            if cached and (cached.get("confidence") or 0.0) >= HIGH_CONF_KEEP_THRESHOLD:
+                # Preserve this score — don't re-run
+                preloaded = QualIndicatorScore(
+                    indicator=code,
+                    score=cached["score"],
+                    confidence=cached["confidence"],
+                    summary=cached["summary"],
+                    evidence=[QualEvidence(**e) for e in cached["evidence"]],
+                    scored_at=cached["scored_at"],
+                    model_used=cached["model_used"],
+                )
+                preloaded_from_cache[code] = preloaded
+                scored[code] = preloaded
+                # Fire callback as if it just completed
+                if on_indicator_done:
+                    try:
+                        on_indicator_done(code, preloaded)
+                    except Exception as exc:
+                        logger.warning("on_indicator_done callback failed for %s: %s", code, exc)
+        if preloaded_from_cache:
+            logger.info(
+                "Idempotent restart for %s: preserving %d high-conf cached "
+                "indicators (≥%.0f%% conf), re-running %d",
+                ticker, len(preloaded_from_cache),
+                HIGH_CONF_KEEP_THRESHOLD * 100,
+                len(indicator_codes) - len(preloaded_from_cache),
+            )
+        # Restrict the codes to re-run to those NOT preserved
+        indicator_codes = [c for c in indicator_codes if c not in preloaded_from_cache]
+        if not indicator_codes:
+            logger.info(
+                "All indicators for %s are high-conf cached — nothing to re-run",
+                ticker,
+            )
 
     # Use explicit try/finally instead of `with ThreadPoolExecutor() as ex`
     # — the context manager's __exit__ calls shutdown(wait=True) which
@@ -1549,12 +1607,24 @@ def assess_qualitative(
                 logger.info(
                     "Indicator %d/%d done — %s/%s = %d/5 conf %.0f%%%s "
                     "(elapsed %.1f min, %d remaining)",
-                    len(scored), len(indicator_codes),
+                    len(scored), len(INDICATORS),
                     ticker, code,
                     result.score, result.confidence * 100, deep_marker,
                     elapsed_min,
-                    len(indicator_codes) - len(scored),
+                    len(INDICATORS) - len(scored),
                 )
+                # Two-phase architecture: fire callback so caller can
+                # persist incremental progress (patch cohort row with
+                # the newly scored indicator). If callback throws,
+                # don't kill the whole assessment — just log.
+                if on_indicator_done:
+                    try:
+                        on_indicator_done(code, result)
+                    except Exception as exc:
+                        logger.warning(
+                            "on_indicator_done callback failed for %s/%s: %s",
+                            ticker, code, exc,
+                        )
         except Exception as exc:
             logger.warning(
                 "assess_qualitative for %s hit outer timeout after %.1f min "
