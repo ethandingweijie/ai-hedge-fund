@@ -74,10 +74,11 @@ function aggregateColor(score: number | null | undefined): string {
 }
 
 
-type RankKey = 'composite' | 'val' | 'beh' | 'tech' | 'qual' | 'ticker';
+type RankKey = 'aggregate' | 'composite' | 'val' | 'beh' | 'tech' | 'qual' | 'ticker';
 
 const RANK_DEFS: { id: RankKey; label: string; tooltip: string; asc: boolean }[] = [
-  { id: 'composite', label: 'Overall',     tooltip: 'Composite 0-8 score', asc: false },
+  { id: 'aggregate', label: 'Aggregate',   tooltip: 'Aggregate 0-100 (quant 0-50 + qual 0-50); falls back to composite × 12.5 when no qual yet', asc: false },
+  { id: 'composite', label: 'Composite',   tooltip: 'Composite 0-8 quant-only score', asc: false },
   { id: 'val',       label: 'Valuation',   tooltip: 'Valuation pillar (0-2)', asc: false },
   { id: 'beh',       label: 'Behavioural', tooltip: 'Behavioural pillar (0-2)', asc: false },
   { id: 'tech',      label: 'Technical',   tooltip: 'Technical pillar (0-2)', asc: false },
@@ -91,6 +92,14 @@ const VERDICT_FILTERS: Array<ComplacencyVerdict | 'All'> = [
 
 function rankValue(row: ComplacencyTickerResult, key: RankKey): number | string {
   switch (key) {
+    case 'aggregate':
+      // Use aggregate_score when computed (reflects force-rescores
+      // / latest qualitative). Fall back to composite × 12.5 (the
+      // quant-only equivalent: 8/8 composite = 50pts quant = 50/100
+      // aggregate). This keeps tickers that haven't had qual yet
+      // ranked consistently with those that have.
+      if (row.aggregate_score != null) return row.aggregate_score;
+      return (row.composite ?? 0) * 12.5;
     case 'composite': return row.composite ?? -1;
     case 'val':       return row.val_score ?? -1;
     case 'beh':       return row.beh_score ?? -1;
@@ -107,7 +116,11 @@ export function ComplacencyPage() {
   const [cohort, setCohort] = useState<ComplacencyCohort | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [rankBy, setRankBy] = useState<RankKey>('composite');
+  // Default rank by aggregate score (0-100) so manually-rescored tickers
+  // with fresh qualitative + recomputed aggregate float to the right
+  // position immediately. Falls back to composite × 12.5 for tickers
+  // that haven't had qualitative computed yet.
+  const [rankBy, setRankBy] = useState<RankKey>('aggregate');
   const [verdictFilter, setVerdictFilter] = useState<ComplacencyVerdict | 'All'>('All');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<ComplacencyTickerResult | null>(null);
@@ -501,13 +514,25 @@ export function ComplacencyPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {rows.map((r, displayIdx) => (
                   <tr
                     key={r.ticker}
                     onClick={() => setSelected(r)}
                     className="border-t border-border hover:bg-muted/30 cursor-pointer"
                   >
-                    <td className="px-2 py-1.5 text-right text-muted-foreground">{r.rank ?? '—'}</td>
+                    <td
+                      className="px-2 py-1.5 text-right text-muted-foreground"
+                      title={
+                        r.rank != null && r.rank !== (displayIdx + 1)
+                          ? `Persisted rank #${r.rank} (by composite); current display rank reflects the active sort: ${activeRank.label}`
+                          : undefined
+                      }
+                    >
+                      {/* Show CURRENT sort position, not stored r.rank — otherwise
+                          re-scoring a ticker changes its aggregate but the row
+                          stays at the same # which is confusing. */}
+                      {displayIdx + 1}
+                    </td>
                     <td className="px-2 py-1.5">
                       <div className="font-bold text-foreground flex items-center gap-1">
                         {r.ticker}
