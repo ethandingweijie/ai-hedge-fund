@@ -146,11 +146,12 @@ export function ComplacencyPage() {
       }
     }
 
-    // Persistent loading toast: duration Infinity so it stays on screen for
-    // the entire refresh; manually dismissed in the finally block. Larger
-    // padding + font-size so it's readable on mobile.
+    // Persistent loading toast for the entire two-phase refresh.
+    // Phase 1 (quant for all 50): ~30-60s. Phase 2 (qual for gate
+    // passers, sequential): 5-15 min depending on how many gate
+    // passers there are and whether their qual cache is fresh.
     const toastId = toast.loading(
-      'Refresh In Progress. This will take 1-2 mins.',
+      'Refresh In Progress. This will take 1-15 mins.',
       {
         duration: Infinity,
         style: {
@@ -160,22 +161,45 @@ export function ComplacencyPage() {
         },
       },
     );
+
+    // Live cohort reload during Phase 2 so the table picks up incremental
+    // qualitative indicator landings on each gate ticker. Without this, the
+    // user would see the table update only after Phase 2 fully completes.
+    let phase1DoneObserved = false;
+    let lastReload = 0;
+    const reloadCohortDebounced = async () => {
+      const now = Date.now();
+      if (now - lastReload < 5000) return;  // 5s debounce
+      lastReload = now;
+      try { await load(); } catch { /* swallow — toast still shows */ }
+    };
+
     try {
-      // refreshComplacency now uses async-job pattern: backend returns a job_id,
-      // we poll until done. iOS Safari can drop the polling fetch on backgrounding;
-      // the job continues server-side and the next successful poll picks it up.
       await refreshComplacency({
         maxWorkers: 4,
         onProgress: (s) => {
           if (s.progress_msg) {
             toast.loading(
-              `Refresh In Progress · ${s.progress_msg}`,
+              `Refresh · ${s.progress_msg}`,
               {
                 id: toastId,
                 duration: Infinity,
                 style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
               },
             );
+          }
+          // Phase 1 → Phase 2 transition: cohort has just been saved with
+          // all-50 quant data. Trigger an immediate reload so the table
+          // refreshes with the new verdicts/composites/aggregates BEFORE
+          // Phase 2 (qualitative) starts.
+          if (!phase1DoneObserved && s.progress_msg?.includes('phase 1 done')) {
+            phase1DoneObserved = true;
+            void reloadCohortDebounced();
+          }
+          // Phase 2 indicator landings → debounced cohort reload so the
+          // gate ticker rows pick up new qualitative state.
+          if (s.progress_msg?.includes('phase 2:') || s.progress_msg?.includes('qual ')) {
+            void reloadCohortDebounced();
           }
         },
       });
@@ -691,29 +715,55 @@ function ComplacencyDrawer({
       const updated = await scoreComplacencyTickerAdhoc(ticker.ticker, {
         forceQual: true,
         onProgress: (s) => {
-          // Live job progress from the backend job_store
+          // Live job progress from backend two-phase worker.
+          // Toast text reflects current phase:
+          //   "phase 1: quant scoring NVDA"
+          //   "phase 1 done · NVDA Strong-Short · composite 8.0/8 · agg 50/100"
+          //   "phase 2: qual NVDA 3/10 · A2_catalyst_proximity = 4/5 conf 75%"
+          //   "...elapsed Xm Ys"
           if (s.progress_msg) {
             toast.loading(
-              `Generating Qualitative · ${ticker.ticker} · ${s.progress_msg}`,
+              `Re-score · ${s.progress_msg}`,
               {
                 id: toastId, duration: Infinity,
                 style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
               },
             );
           }
+          // CRITICAL — live drawer updates:
+          // The backend publishes partial results via update_running_result()
+          // after Phase 1 (quant) completes AND after each Phase 2 indicator
+          // lands. Pushing those into the drawer here makes the qualitative
+          // panel + aggregate score tick up in real time instead of waiting
+          // 5-10 min for the final completion.
+          if (s.result && typeof s.result === 'object') {
+            const partial = s.result as ComplacencyTickerResult & { _persisted_to_cohort?: boolean };
+            // Only push if it has the shape we expect (a ticker row, not a job summary)
+            if (partial.ticker && partial.composite != null) {
+              onQualGenerated?.(partial);
+            }
+          }
         },
       });
       toast.dismiss(toastId);
 
-      // If the backend surfaced an error (e.g. DEEP_RESEARCH_API_KEY missing,
-      // every Qwen call failed, etc.) show it as an error toast rather than
-      // pretending the run succeeded. The error field is populated by the
-      // runner's preflight check or post-assessment validation.
+      // Three outcomes possible from the two-phase backend:
+      //   A) PURE SUCCESS — all 10 indicators scored, no backend error
+      //   B) PARTIAL — quant done, qualitative incomplete (e.g. 7/10).
+      //              Show informational toast + hint that next click only
+      //              re-runs failed indicators (idempotent restart).
+      //   C) FAILURE — no qualitative scored at all (e.g. API key missing,
+      //              every Qwen call failed).
       const backendError = (updated as { error?: string | null }).error;
-      const hasIndicators = !!updated.qualitative
-        && Object.keys(updated.qualitative.indicators ?? {}).length > 0;
+      const indicatorCount = Object.keys(updated.qualitative?.indicators ?? {}).length;
+      const expectedTotal = updated.qualitative?.max_possible
+        ? Math.round(updated.qualitative.max_possible / 5)
+        : 10;
+      const isIncomplete = updated.qualitative?.incomplete ?? false;
+      const isPartial = indicatorCount > 0 && (isIncomplete || indicatorCount < expectedTotal);
 
-      if (backendError || !hasIndicators) {
+      if (indicatorCount === 0) {
+        // C — failure
         const reason = backendError
           || 'no qualitative indicators were scored — see /research/diag/llm-health';
         toast.error(
@@ -723,7 +773,29 @@ function ComplacencyDrawer({
             style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
           },
         );
+      } else if (isPartial) {
+        // B — partial success, hint idempotent restart
+        const qualSummary = `${updated.qualitative!.composite}/${updated.qualitative!.max_possible} qual`;
+        const aggSummary = updated.aggregate_score != null
+          ? `agg ${updated.aggregate_score.toFixed(1)}/100`
+          : 'agg —';
+        toast(
+          `${updated.ticker} partial · ${indicatorCount}/${expectedTotal} indicators · `
+          + `${qualSummary} · ${aggSummary}\n`
+          + `Click Re-score again — only the ${expectedTotal - indicatorCount} unfinished `
+          + `indicators will re-run (high-conf ones preserved).`,
+          {
+            duration: 18000,
+            style: {
+              fontSize: '15px', padding: '16px 20px', fontWeight: 500,
+              background: 'rgb(252 211 77 / 0.15)',
+              border: '1px solid rgb(217 119 6 / 0.5)',
+            },
+            icon: '⚠',
+          },
+        );
       } else {
+        // A — pure success
         const qualSummary = `${updated.qualitative!.composite}/${updated.qualitative!.max_possible} qual`;
         const aggSummary = updated.aggregate_score != null
           ? `agg ${updated.aggregate_score.toFixed(1)}/100`
@@ -1224,9 +1296,16 @@ function QualitativePanel(
       </div>
 
       {qual.incomplete && (
-        <p className="mt-2 text-[10px] text-amber-500/80 italic">
-          ⚠ Partial assessment — some indicators failed to score (LLM/source unavailable).
-        </p>
+        <div className="mt-2 p-2 rounded border border-amber-500/30 bg-amber-500/10">
+          <p className="text-[11px] text-amber-900 dark:text-amber-200 font-semibold not-italic">
+            ⚠ Partial assessment — {Object.keys(qual.indicators).length}/{Math.round(qual.max_possible / 5)} indicators scored
+          </p>
+          <p className="text-[10px] text-amber-900/80 dark:text-amber-200/80 italic mt-0.5">
+            Click <strong className="not-italic">Re-score (force fresh)</strong> below to fill the gaps —
+            high-confidence indicators are preserved, only the unfinished ones re-run.
+            Cost ≈ ${(0.01 * (Math.round(qual.max_possible / 5) - Object.keys(qual.indicators).length)).toFixed(2)} this time.
+          </p>
+        </div>
       )}
       <p className="mt-2 text-[9px] text-muted-foreground/60 italic">
         Scored by {Object.values(qual.indicators)[0]?.model_used ?? 'qwen3.6-plus'} on 10-K + transcripts + 90-day news.
