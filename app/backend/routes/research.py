@@ -664,21 +664,23 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
             industry=meta.get("industry"),
         )
 
+    # Phase 1 generous timeout: 50 tickers × ~15-20s ÷ max_workers, plus
+    # FMP-latency headroom on Railway. 600s (was 300s).
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = {ex.submit(_quant_one, t): t for t in tickers}
-            for fut in as_completed(futures, timeout=300):
+            for fut in as_completed(futures, timeout=600):
                 t = futures[fut]
                 try:
-                    out = fut.result(timeout=60)
+                    out = fut.result(timeout=90)
                     quant_results[t] = out
                 except Exception as exc:
                     logger.warning("Phase 1 quant for %s failed: %s", t, exc)
                     quant_results[t] = {"ticker": t, "reason": str(exc)}
     except Exception as exc:
-        logger.exception("Phase 1 (quant) timed out: %s", exc)
+        logger.exception("Phase 1 (quant) outer timeout/error: %s", exc)
 
-    # Assemble cohort + persist
+    # Assemble cohort
     results_list = []
     failed_tickers = []
     for t in tickers:
@@ -687,6 +689,27 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
             results_list.append(r)
         elif isinstance(r, dict) and r.get("reason"):
             failed_tickers.append({"ticker": t, "reason": r["reason"]})
+
+    # ── EMPTY-COHORT GUARD ────────────────────────────────────────────
+    # CRITICAL: never overwrite a good persisted cohort with an empty
+    # one. If Phase 1 produced zero valid tickers (FMP outage, rate-limit
+    # cascade, all timeouts), the previous run is far more valuable than
+    # a blank table. Fail the job WITHOUT saving, preserving the prior
+    # cohort.
+    if not results_list:
+        logger.error(
+            "Master refresh job %s: Phase 1 produced 0 valid tickers "
+            "(%d failed). NOT overwriting existing cohort.",
+            job_id, len(failed_tickers),
+        )
+        job_store.fail_job(
+            job_id,
+            f"Refresh produced 0 valid tickers ({len(failed_tickers)} failed — "
+            "likely FMP rate-limit or outage). Previous cohort preserved. "
+            "Wait a minute and retry.",
+        )
+        return
+
     results_list.sort(key=lambda r: (-(r.composite or 0.0), r.ticker))
     for i, r in enumerate(results_list, 1):
         r.rank = i

@@ -168,44 +168,85 @@ def score_one_ticker_quant(
         return {"ticker": ticker, "reason": f"{type(exc).__name__}: {exc}"}
 
 
-def _rehydrate_qual_from_cache(ticker: str):
+def _rehydrate_qual_from_cache(ticker: str, max_age_days: int = 7):
     """
     Build a QualitativeAssessment from per-indicator cache (the
     complacency_qualitative SQLite table) so Phase 1 can ship the
     cohort row with the previously-computed qualitative state. Avoids
     the "Phase 1 stomps the aggregate" race during Master Refresh.
 
-    Returns None if no cached indicators exist for the ticker.
+    Uses a SINGLE connection + SINGLE query (window function to pick the
+    latest row per indicator). This matters: the old version opened
+    10 connections per ticker, and during a 50-ticker parallel Master
+    Refresh that's 500 concurrent SQLite opens contending with the
+    job_store's progress writes — which could stall every ticker past
+    the per-future timeout, fail them all, and (pre-guard) save an
+    empty cohort.
+
+    Returns None if no fresh cached indicators exist for the ticker.
     """
-    from app.backend.services.qualitative_storage import get_latest_qualitative_score
+    import sqlite3
+    from datetime import datetime, timezone
     from src.research_ideas.complacency.schemas import (
         QualitativeAssessment, QualIndicatorScore, QualEvidence,
     )
-    from datetime import datetime, timezone
+    from app.backend.services.qualitative_storage import _get_db_path
 
-    # We don't know which indicators have cached scores without scanning;
-    # try the 10 known indicator codes. get_latest_qualitative_score
-    # returns None for missing entries (or stale > 7 days).
-    INDICATOR_CODES = [
-        "A1_single_thesis_dependence", "A2_catalyst_proximity", "A3_consensus_uniformity",
-        "B1_customer_concentration", "B2_competitive_disintermediation",
-        "B3_pricing_power_erosion",
-        "C1_disclosure_deterioration", "C2_accounting_aggressiveness",
-        "D1_management_red_flags", "D2_insider_behavior_depth",
-    ]
+    cutoff = (datetime.now(timezone.utc).timestamp() - max_age_days * 86400)
+
+    conn = sqlite3.connect(_get_db_path())
+    conn.execute("PRAGMA busy_timeout=5000")
+    try:
+        # One query: latest row per indicator for this ticker.
+        rows = conn.execute(
+            """
+            SELECT q.indicator, q.score, q.confidence, q.summary,
+                   q.evidence_json, q.model_used, q.scored_at
+            FROM complacency_qualitative q
+            INNER JOIN (
+                SELECT indicator, MAX(scored_at) AS latest
+                FROM complacency_qualitative
+                WHERE ticker = ?
+                GROUP BY indicator
+            ) m ON q.indicator = m.indicator AND q.scored_at = m.latest
+            WHERE q.ticker = ?
+            """,
+            (ticker.upper(), ticker.upper()),
+        ).fetchall()
+    except Exception:
+        return None
+    finally:
+        conn.close()
+
+    if not rows:
+        return None
+
+    import json as _json
     cached_scores: dict[str, QualIndicatorScore] = {}
-    for code in INDICATOR_CODES:
-        cached = get_latest_qualitative_score(ticker, code, max_age_days=7)
-        if cached:
-            cached_scores[code] = QualIndicatorScore(
-                indicator=code,
-                score=cached["score"],
-                confidence=cached["confidence"],
-                summary=cached["summary"],
-                evidence=[QualEvidence(**e) for e in cached["evidence"]],
-                scored_at=cached["scored_at"],
-                model_used=cached["model_used"],
-            )
+    for indicator, score, confidence, summary, evidence_json, model_used, scored_at in rows:
+        # Freshness filter
+        try:
+            dt = datetime.fromisoformat(str(scored_at).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if dt.timestamp() < cutoff:
+                continue
+        except Exception:
+            continue
+        try:
+            evidence = [QualEvidence(**e) for e in _json.loads(evidence_json or "[]")]
+        except Exception:
+            evidence = []
+        cached_scores[indicator] = QualIndicatorScore(
+            indicator=indicator,
+            score=score,
+            confidence=confidence,
+            summary=summary,
+            evidence=evidence,
+            scored_at=scored_at,
+            model_used=model_used,
+        )
+
     if not cached_scores:
         return None
 
@@ -217,10 +258,10 @@ def _rehydrate_qual_from_cache(ticker: str):
         composite=composite,
         max_possible=max_possible,
         composite_normalized=normalized,
-        conviction_label="PASS",   # will be re-derived if Phase 2 runs
+        conviction_label="PASS",   # re-derived if Phase 2 runs
         assessed_at=datetime.now(timezone.utc).isoformat(),
         cost_usd=0.0,
-        incomplete=(len(cached_scores) < len(INDICATOR_CODES)),
+        incomplete=(len(cached_scores) < 10),
     )
 
 
