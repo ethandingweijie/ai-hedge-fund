@@ -52,7 +52,8 @@ export function ResearchIdeasPage() {
   const [ideas, setIdeas] = useState<SW46IdeaMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [topPicks, setTopPicks] = useState<SW46TickerResult[]>([]);
-  const [gatePassers, setGatePassers] = useState<ComplacencyTickerResult[]>([]);
+  const [topComplacency, setTopComplacency] = useState<ComplacencyTickerResult[]>([]);
+  const [complacencyCohortSize, setComplacencyCohortSize] = useState(0);
   const [generatingIdea, setGeneratingIdea] = useState(false);
 
   const load = () => {
@@ -68,11 +69,22 @@ export function ResearchIdeasPage() {
           setTopPicks(sw46Cohort.results.slice(0, 3));
         }
         if (complCohort && complCohort.results.length > 0) {
-          // Gate passers, ranked by aggregate_score desc (most bearish first)
-          const passers = complCohort.results
-            .filter((r) => r.passes_gate)
-            .sort((a, b) => (b.aggregate_score ?? 0) - (a.aggregate_score ?? 0));
-          setGatePassers(passers);
+          setComplacencyCohortSize(complCohort.results.length);
+          // Top 5 by aggregate score (0-100) across the WHOLE cohort, not
+          // just gate passers. Force-rescored tickers with new aggregates
+          // float to the top immediately. For tickers without aggregate yet,
+          // fall back to composite × 12.5 (mathematically equivalent to
+          // quant-only ranking on the same 0-100 scale) so they're
+          // positioned consistently with rescored ones.
+          const scored = complCohort.results
+            .map((r) => ({
+              row: r,
+              rankScore: r.aggregate_score ?? (r.composite ?? 0) * 12.5,
+            }))
+            .sort((a, b) => b.rankScore - a.rankScore)
+            .slice(0, 5)
+            .map((x) => x.row);
+          setTopComplacency(scored);
         }
       })
       .catch((e) => toast.error((e as Error).message))
@@ -266,43 +278,47 @@ export function ResearchIdeasPage() {
                       </div>
                     )}
 
-                    {/* Complacency gate-passers preview — ticker + aggregate score */}
-                    {idea.id === 'complacency' && gatePassers.length > 0 && (
+                    {/* Complacency top-5 preview — ranked by aggregate score (0-100).
+                        Aggregate reflects the latest force-rescore / qualitative refresh.
+                        Falls back to composite × 12.5 for tickers without qual yet (same scale). */}
+                    {idea.id === 'complacency' && topComplacency.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-border">
                         <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">
-                          Gate passers ({gatePassers.length}) · ticker + aggregate score (0-100)
+                          Top {topComplacency.length} by aggregate score
+                          <span className="ml-1 normal-case text-muted-foreground/70">
+                            (of {complacencyCohortSize})
+                          </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
-                          {gatePassers.slice(0, 8).map((t) => (
-                            <div
-                              key={t.ticker}
-                              className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 text-[11px]"
-                              title={[
-                                `${t.ticker} — ${t.name}`,
-                                `Verdict: ${t.verdict}  ·  Composite ${t.composite.toFixed(1)}/8`,
-                                t.aggregate_score != null
-                                  ? `Aggregate ${t.aggregate_score.toFixed(1)}/100  (quant ${t.aggregate_quant_pts?.toFixed(1) ?? '—'} + qual ${t.aggregate_qual_pts?.toFixed(1) ?? '—'})`
-                                  : 'Aggregate not yet computed',
-                              ].join('\n')}
-                            >
-                              <span className="font-mono font-bold text-foreground">{t.ticker}</span>
-                              {t.aggregate_score != null ? (
-                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${aggColor(t.aggregate_score)}`}>
-                                  {t.aggregate_score.toFixed(0)}
+                          {topComplacency.map((t) => {
+                            const rankScore = t.aggregate_score ?? (t.composite ?? 0) * 12.5;
+                            const hasQual = t.aggregate_score != null;
+                            return (
+                              <div
+                                key={t.ticker}
+                                className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 text-[11px]"
+                                title={[
+                                  `${t.ticker} — ${t.name}`,
+                                  `Verdict: ${t.verdict}  ·  Composite ${t.composite.toFixed(1)}/8`,
+                                  hasQual
+                                    ? `Aggregate ${t.aggregate_score!.toFixed(1)}/100  (quant ${t.aggregate_quant_pts?.toFixed(1) ?? '—'} + qual ${t.aggregate_qual_pts?.toFixed(1) ?? '—'})`
+                                    : `Aggregate ${rankScore.toFixed(0)}/100 (quant-only — qualitative not yet scored)`,
+                                ].join('\n')}
+                              >
+                                <span className="font-mono font-bold text-foreground">{t.ticker}</span>
+                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${aggColor(rankScore)}`}>
+                                  {rankScore.toFixed(0)}
+                                  {!hasQual && <span className="ml-0.5 opacity-60">*</span>}
                                 </span>
-                              ) : (
-                                <span className="px-1 py-0.5 rounded text-[9px] font-semibold bg-muted text-muted-foreground italic">
-                                  —
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                          {gatePassers.length > 8 && (
-                            <span className="px-2 py-1 text-[10px] text-muted-foreground italic">
-                              +{gatePassers.length - 8} more
-                            </span>
-                          )}
+                              </div>
+                            );
+                          })}
                         </div>
+                        {topComplacency.some((t) => t.aggregate_score == null) && (
+                          <p className="mt-1 text-[9px] text-muted-foreground/70 italic">
+                            * quant-only score (qual not yet computed)
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
