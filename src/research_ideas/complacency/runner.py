@@ -125,6 +125,24 @@ def score_one_ticker_quant(
             except Exception as exc:
                 logger.warning("Put-rec fetch for %s failed: %s", ticker, exc)
 
+        # ── REHYDRATE FROM PER-INDICATOR CACHE ────────────────────────
+        # If the per-indicator qualitative cache has scored entries for
+        # this ticker, build a partial QualitativeAssessment from them
+        # so Phase 1 doesn't ship a quant-only aggregate that erases
+        # the user's prior force-rescore work.
+        #
+        # Without this: Master Refresh's Phase 1 saves the cohort with
+        # qualitative=None / aggregate_score=null, briefly stomping the
+        # ticker's aggregate before Phase 2 fills it back from cache.
+        # Users browsing the Research Ideas card during that window see
+        # the quant-only fallback (composite × 12.5) instead of the
+        # real aggregate they just computed.
+        rehydrated_qual = None
+        try:
+            rehydrated_qual = _rehydrate_qual_from_cache(ticker)
+        except Exception as exc:
+            logger.warning("Qual rehydrate from cache for %s failed: %s", ticker, exc)
+
         return ComplacencyTickerResult(
             ticker=ticker, name=meta.get("name", ticker),
             sector=meta.get("sector"), industry=meta.get("industry"),
@@ -141,13 +159,69 @@ def score_one_ticker_quant(
             verdict=s["verdict"], flag_notes=s["flag_notes"],
             justification=s["justification"],
             put_recommendation=put_rec, options_data_freshness=put_rec_at,
-            qualitative=None,
+            qualitative=rehydrated_qual,
             error=None,
-            **_compute_aggregate(s["composite"], None),  # quant-only aggregate
+            **_compute_aggregate(s["composite"], rehydrated_qual),
         )
     except Exception as exc:
         logger.exception("score_one_ticker_quant %s failed: %s", ticker, exc)
         return {"ticker": ticker, "reason": f"{type(exc).__name__}: {exc}"}
+
+
+def _rehydrate_qual_from_cache(ticker: str):
+    """
+    Build a QualitativeAssessment from per-indicator cache (the
+    complacency_qualitative SQLite table) so Phase 1 can ship the
+    cohort row with the previously-computed qualitative state. Avoids
+    the "Phase 1 stomps the aggregate" race during Master Refresh.
+
+    Returns None if no cached indicators exist for the ticker.
+    """
+    from app.backend.services.qualitative_storage import get_latest_qualitative_score
+    from src.research_ideas.complacency.schemas import (
+        QualitativeAssessment, QualIndicatorScore, QualEvidence,
+    )
+    from datetime import datetime, timezone
+
+    # We don't know which indicators have cached scores without scanning;
+    # try the 10 known indicator codes. get_latest_qualitative_score
+    # returns None for missing entries (or stale > 7 days).
+    INDICATOR_CODES = [
+        "A1_single_thesis_dependence", "A2_catalyst_proximity", "A3_consensus_uniformity",
+        "B1_customer_concentration", "B2_competitive_disintermediation",
+        "B3_pricing_power_erosion",
+        "C1_disclosure_deterioration", "C2_accounting_aggressiveness",
+        "D1_management_red_flags", "D2_insider_behavior_depth",
+    ]
+    cached_scores: dict[str, QualIndicatorScore] = {}
+    for code in INDICATOR_CODES:
+        cached = get_latest_qualitative_score(ticker, code, max_age_days=7)
+        if cached:
+            cached_scores[code] = QualIndicatorScore(
+                indicator=code,
+                score=cached["score"],
+                confidence=cached["confidence"],
+                summary=cached["summary"],
+                evidence=[QualEvidence(**e) for e in cached["evidence"]],
+                scored_at=cached["scored_at"],
+                model_used=cached["model_used"],
+            )
+    if not cached_scores:
+        return None
+
+    composite = sum(s.score for s in cached_scores.values())
+    max_possible = 5 * len(cached_scores)
+    normalized = composite / max_possible if max_possible else 0.0
+    return QualitativeAssessment(
+        indicators=cached_scores,
+        composite=composite,
+        max_possible=max_possible,
+        composite_normalized=normalized,
+        conviction_label="PASS",   # will be re-derived if Phase 2 runs
+        assessed_at=datetime.now(timezone.utc).isoformat(),
+        cost_usd=0.0,
+        incomplete=(len(cached_scores) < len(INDICATOR_CODES)),
+    )
 
 
 def score_one_ticker(

@@ -14,7 +14,7 @@ import {
   deleteContrarianIdea, generateContrarianIdea,
   type SW46IdeaMeta, type SW46TickerResult, type ComplacencyTickerResult,
 } from '@/lib/api';
-import { Lightbulb, ChevronRight, Loader2, Sparkles, X, Plus } from 'lucide-react';
+import { Lightbulb, ChevronRight, Loader2, Sparkles, X, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 
@@ -93,6 +93,40 @@ export function ResearchIdeasPage() {
 
   useEffect(() => { load(); }, []);
 
+  // Auto-refresh on window focus / tab visibility change. Without this,
+  // a user who clicks Research Ideas → Complacency Detector → force-
+  // rescores a ticker → navigates back, sees STALE state because
+  // useEffect([]) only fires on mount and the back-nav reuses the
+  // cached component (depending on router config).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !loading) {
+        // Lightweight refresh: only re-fetch the cohort that's likely
+        // to have changed. SW46 doesn't auto-update so skip it.
+        getComplacencyCohort().then((complCohort) => {
+          if (complCohort && complCohort.results.length > 0) {
+            setComplacencyCohortSize(complCohort.results.length);
+            const scored = complCohort.results
+              .map((r) => ({
+                row: r,
+                rankScore: r.aggregate_score ?? (r.composite ?? 0) * 12.5,
+              }))
+              .sort((a, b) => b.rankScore - a.rankScore)
+              .slice(0, 5)
+              .map((x) => x.row);
+            setTopComplacency(scored);
+          }
+        }).catch(() => { /* silent — initial load handles toasts */ });
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [loading]);
+
   const handleClick = (idea: SW46IdeaMeta) => {
     if (idea.id === 'sw46') navigate('/research-ideas/sw46');
     else if (idea.id === 'complacency') navigate('/research-ideas/complacency');
@@ -152,6 +186,15 @@ export function ResearchIdeasPage() {
         <div className="flex items-center gap-3 mb-2">
           <Lightbulb className="text-amber-500" size={22} />
           <h1 className="text-xl font-bold text-foreground">Research Ideas</h1>
+          <button
+            onClick={() => { if (!loading) load(); }}
+            disabled={loading}
+            className="ml-auto p-1.5 rounded-full hover:bg-muted disabled:opacity-50"
+            title="Re-fetch latest cohorts (auto-fires on tab focus too)"
+            aria-label="Refresh"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} className="text-muted-foreground" />}
+          </button>
         </div>
         <p className="text-xs text-muted-foreground mb-6">
           Standalone valuation cohorts. Each idea lives outside the main DCF pipeline.
@@ -316,7 +359,9 @@ export function ResearchIdeasPage() {
                         </div>
                         {topComplacency.some((t) => t.aggregate_score == null) && (
                           <p className="mt-1 text-[9px] text-muted-foreground/70 italic">
-                            * quant-only score (qual not yet computed)
+                            * quant-only score (qual not yet computed —
+                            cohort row's aggregate_score is null;
+                            force-rescore the ticker to populate it)
                           </p>
                         )}
                       </div>
