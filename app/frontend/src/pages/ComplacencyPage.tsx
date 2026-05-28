@@ -188,7 +188,7 @@ export function ComplacencyPage() {
     };
 
     try {
-      await refreshComplacency({
+      const refreshResult = await refreshComplacency({
         // 3 workers (not 4): gentler FMP burst — Railway's shared IP
         // rate-limits the 50-ticker × 8-call fetch storm more readily
         // than local. 3 keeps the instantaneous call rate under FMP's
@@ -222,16 +222,35 @@ export function ComplacencyPage() {
       });
       await load();
       toast.dismiss(toastId);
-      toast.success('Refresh of Complacency Detector Completed', {
-        duration: 8000,
-        style: {
-          fontSize: '15px',
-          padding: '16px 20px',
-          fontWeight: 600,
-        },
+
+      // Verification summary — tells the user EXACTLY what the refresh did
+      // so "did it re-score / run deep research?" is answerable from the
+      // completion toast instead of guessing.
+      const summary = (refreshResult as {
+        phase2_summary?: {
+          qual_scored?: string[];
+          total_deep_escalations?: number;
+          fully_cached?: string[];
+        };
+        gate_passers?: number;
+        ticker_count?: number;
       });
-      // Push notification — fires even if the user has switched away from
-      // the tab. Requires permission granted above.
+      const p2 = summary.phase2_summary;
+      const deepN = p2?.total_deep_escalations ?? 0;
+      const qualN = p2?.qual_scored?.length ?? 0;
+      const cachedN = p2?.fully_cached?.length ?? 0;
+      const completionMsg =
+        `Refresh complete · ${summary.ticker_count ?? '?'} tickers re-scored, `
+        + `${summary.gate_passers ?? 0} gate passers. `
+        + `Qualitative: ${qualN} tickers (${deepN} deep-research escalations`
+        + (cachedN > 0 ? `, ${cachedN} reused cache` : '')
+        + `). Force fresh deep research via a ticker's "Re-score" button.`;
+
+      toast.success(completionMsg, {
+        duration: 14000,
+        style: { fontSize: '14px', padding: '16px 20px', fontWeight: 500 },
+      });
+      // Push notification — fires even if the user has switched away.
       if (
         typeof window !== 'undefined'
         && 'Notification' in window
@@ -239,9 +258,9 @@ export function ComplacencyPage() {
       ) {
         try {
           new Notification('Complacency Detector', {
-            body: 'Refresh of Complacency Detector Completed',
+            body: `Refresh complete · ${qualN} qual-scored · ${deepN} deep-research escalations`,
             icon: '/favicon.ico',
-            tag: 'complacency-refresh',  // collapses duplicate notifications
+            tag: 'complacency-refresh',
           });
         } catch {
           // ignore — some browsers throw if not in a secure context

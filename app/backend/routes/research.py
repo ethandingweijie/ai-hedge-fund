@@ -776,6 +776,16 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
         return
 
     gate_tickers = [r for r in results_list if r.verdict in ("Strong-Short", "Watch")]
+    # Verification accounting — surfaced in the completion result so the
+    # user can see EXACTLY what Phase 2 did (was deep research run, or
+    # cache reused, etc.) without guessing.
+    phase2_summary = {
+        "gate_tickers": [t.ticker for t in gate_tickers],
+        "qual_scored": [],            # tickers that got a qual assessment
+        "deep_research_by_ticker": {},  # ticker -> # indicators that used deep web search
+        "total_deep_escalations": 0,
+        "fully_cached": [],           # tickers where qual came entirely from cache (no deep)
+    }
     for i, gate_result in enumerate(gate_tickers, 1):
         tkr = gate_result.ticker
 
@@ -800,8 +810,9 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
                 quant_passes_gate=gate_result.passes_gate,
                 quant_composite=gate_result.composite,
                 # force_refresh=False for master refresh: honor 7-day cache.
-                # Idempotent restart's high-conf preservation handles the
-                # force-rescore case separately.
+                # Deep research only RE-RUNS for tickers whose cache is
+                # missing/stale. Use per-ticker "Re-score (force fresh)"
+                # to force fresh deep research.
                 force_refresh=False,
                 on_indicator_done=_patch_partial,
             )
@@ -810,6 +821,16 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
             if qual:
                 final_payload["qualitative"] = qual.model_dump()
                 final_payload.update(_compute_aggregate(gate_result.composite, qual))
+                # Count deep-research escalations for this ticker
+                n_deep = sum(
+                    1 for s in qual.indicators.values()
+                    if "deep" in (s.model_used or "").lower()
+                )
+                phase2_summary["qual_scored"].append(tkr)
+                phase2_summary["deep_research_by_ticker"][tkr] = n_deep
+                phase2_summary["total_deep_escalations"] += n_deep
+                if n_deep == 0:
+                    phase2_summary["fully_cached"].append(tkr)
             try:
                 complacency_storage.update_ticker_in_latest_cohort(final_payload)
             except Exception as exc:
@@ -828,9 +849,15 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
         "gate_passers": cohort.gate_passers,
         "failed_tickers": cohort.failed_tickers,
         "phase2_tickers_processed": len(gate_tickers),
+        "phase2_summary": phase2_summary,
     })
-    logger.info("Master refresh job %s complete: %d tickers, %d gate passers",
-                job_id, cohort.ticker_count, gate_passers)
+    logger.info(
+        "Master refresh job %s complete: %d tickers, %d gate passers, "
+        "%d qual-scored, %d total deep-research escalations",
+        job_id, cohort.ticker_count, gate_passers,
+        len(phase2_summary["qual_scored"]),
+        phase2_summary["total_deep_escalations"],
+    )
 
 
 @router.post("/ideas/complacency/refresh")
