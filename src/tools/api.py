@@ -255,6 +255,47 @@ def _make_api_request(
     return response
 
 
+# ── FMP request throttle ──────────────────────────────────────────────────
+# Prevents the burst that triggers FMP's rate limiter (HTTP 429). Without
+# this, the Complacency master refresh fires ~400 calls (50 tickers × 8)
+# in a tight window; on rate-limited egress IPs (e.g. Railway shared) FMP
+# 429s, and _fmp_get's 60s-per-429 sleeps stack up across 8 calls/ticker
+# (up to 180s each) — stalling worker threads far past their timeout and
+# producing the "did not complete (outer timeout)" empty-cohort failure.
+#
+# A simple token bucket smooths the call rate below FMP's threshold so
+# 429s rarely fire. Tunable:
+#   FMP_MAX_RPS            — refill rate (default 5 req/s; FMP premium is
+#                            ~300/min = 5/s, higher tiers more)
+#   FMP_BURST              — bucket capacity (default 10)
+#   FMP_THROTTLE_DISABLED  — set "true" to bypass entirely
+import threading as _fmp_threading
+
+_FMP_THROTTLE_DISABLED = os.environ.get("FMP_THROTTLE_DISABLED", "false").lower() == "true"
+_FMP_MAX_RPS = float(os.environ.get("FMP_MAX_RPS", "5"))
+_FMP_BURST = float(os.environ.get("FMP_BURST", "10"))
+_fmp_throttle_lock = _fmp_threading.Lock()
+_fmp_tokens = _FMP_BURST
+_fmp_last_refill = time.monotonic()
+
+
+def _fmp_acquire() -> None:
+    """Block until an FMP token is available (token-bucket rate limit)."""
+    if _FMP_THROTTLE_DISABLED:
+        return
+    global _fmp_tokens, _fmp_last_refill
+    while True:
+        with _fmp_throttle_lock:
+            now = time.monotonic()
+            _fmp_tokens = min(_FMP_BURST, _fmp_tokens + (now - _fmp_last_refill) * _FMP_MAX_RPS)
+            _fmp_last_refill = now
+            if _fmp_tokens >= 1.0:
+                _fmp_tokens -= 1.0
+                return
+            wait = (1.0 - _fmp_tokens) / _FMP_MAX_RPS
+        time.sleep(min(wait, 1.0))
+
+
 def _fmp_get(path: str, params: dict, api_key: str | None, uncap: bool = False) -> list | dict | None:
     """
     GET from FMP stable API, appending apikey to every request.
@@ -278,6 +319,7 @@ def _fmp_get(path: str, params: dict, api_key: str | None, uncap: bool = False) 
     key_status = "key=OK" if key else "key=MISSING"
 
     for attempt in range(3):
+        _fmp_acquire()  # token-bucket throttle — smooths burst below FMP's rate limit
         try:
             resp = requests.get(path, params=full_params, timeout=15)
         except requests.RequestException as exc:
@@ -296,8 +338,15 @@ def _fmp_get(path: str, params: dict, api_key: str | None, uncap: bool = False) 
                 return None
 
         if resp.status_code == 429:
-            print(f"  [FMP] {endpoint} ({symbol}) — 429 rate-limited, waiting 60s...")
-            time.sleep(60)
+            # Shorter sleep (was 60s). With the token-bucket throttle now
+            # smoothing the call rate, a 429 should be rare; when it does
+            # fire, a 20s backoff is enough for FMP's window to clear
+            # WITHOUT stalling worker threads past their per-future timeout
+            # (the old 60s × 3-attempt = 180s/call was the cause of the
+            # "did not complete (outer timeout)" master-refresh failure).
+            delay = 20 * (attempt + 1)  # 20s, 40s, 60s
+            print(f"  [FMP] {endpoint} ({symbol}) — 429 rate-limited, waiting {delay}s (attempt {attempt+1}/3)...")
+            time.sleep(delay)
             continue
 
         if resp.status_code == 402:
