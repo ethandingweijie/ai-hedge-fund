@@ -111,14 +111,32 @@ def save_complacency_run(cohort: ComplacencyCohortResult) -> None:
 
 
 def get_latest_complacency_run() -> Optional[dict]:
+    """
+    Latest cohort run with at least one ticker. Skips EMPTY cohorts —
+    a refresh that produced zero tickers (FMP outage / rate-limit
+    cascade) should never hide the previous good run. Combined with the
+    empty-cohort save guard in the refresh worker, this makes a failed
+    refresh a non-event: the prior populated cohort stays visible.
+
+    Falls back to the absolute-latest (even if empty) only when NO
+    non-empty cohort exists at all (fresh install).
+    """
     _ensure_table()
     conn = _connect()
     try:
         row = conn.execute(
             "SELECT run_id, created_at, universe, ticker_count, gate_passers, "
             "failed_tickers, results FROM complacency_runs "
+            "WHERE ticker_count > 0 "
             "ORDER BY created_at DESC LIMIT 1"
         ).fetchone()
+        if not row:
+            # No non-empty cohort — fall back to absolute latest (may be empty)
+            row = conn.execute(
+                "SELECT run_id, created_at, universe, ticker_count, gate_passers, "
+                "failed_tickers, results FROM complacency_runs "
+                "ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
     finally:
         conn.close()
     if not row:
