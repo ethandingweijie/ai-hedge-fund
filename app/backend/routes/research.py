@@ -664,19 +664,36 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
             industry=meta.get("industry"),
         )
 
-    # Phase 1 generous timeout: 50 tickers × ~15-20s ÷ max_workers, plus
-    # FMP-latency headroom on Railway. 600s (was 300s).
+    # Phase 1 timeouts tuned for Railway FMP rate-limiting resilience:
+    #  • per-future 240s: a single FMP 429 triggers a 60s sleep in
+    #    _fmp_get (up to 3 attempts = 180s). 240s lets a ticker survive
+    #    one or two 429 retries instead of being killed mid-sleep.
+    #  • outer 1200s (20 min): 50 tickers ÷ 3 workers, with FMP
+    #    rate-limit sleeps factored in. Generous because it's a
+    #    background job — Phase 1 cohort saves as soon as the slowest
+    #    ticker finishes or times out.
     try:
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = {ex.submit(_quant_one, t): t for t in tickers}
-            for fut in as_completed(futures, timeout=600):
+            done_n = 0
+            for fut in as_completed(futures, timeout=1200):
                 t = futures[fut]
                 try:
-                    out = fut.result(timeout=90)
+                    out = fut.result(timeout=240)
                     quant_results[t] = out
                 except Exception as exc:
                     logger.warning("Phase 1 quant for %s failed: %s", t, exc)
-                    quant_results[t] = {"ticker": t, "reason": str(exc)}
+                    quant_results[t] = {"ticker": t, "reason": str(exc)[:200]}
+                done_n += 1
+                # Progress heartbeat every 5 tickers so the toast shows
+                # Phase-1 advancement on Railway (long-running fetch).
+                if done_n % 5 == 0 or done_n == len(tickers):
+                    n_ok = sum(1 for r in quant_results.values()
+                               if isinstance(r, ComplacencyTickerResult))
+                    job_store.update_progress(
+                        job_id, "running",
+                        f"phase 1: quant {done_n}/{len(tickers)} fetched ({n_ok} ok)",
+                    )
     except Exception as exc:
         logger.exception("Phase 1 (quant) outer timeout/error: %s", exc)
 
@@ -689,24 +706,31 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
             results_list.append(r)
         elif isinstance(r, dict) and r.get("reason"):
             failed_tickers.append({"ticker": t, "reason": r["reason"]})
+        else:
+            # Future never completed (outer timeout) — record so the
+            # failure is visible rather than silently dropped.
+            failed_tickers.append({"ticker": t, "reason": "did not complete (outer timeout)"})
 
     # ── EMPTY-COHORT GUARD ────────────────────────────────────────────
     # CRITICAL: never overwrite a good persisted cohort with an empty
     # one. If Phase 1 produced zero valid tickers (FMP outage, rate-limit
     # cascade, all timeouts), the previous run is far more valuable than
     # a blank table. Fail the job WITHOUT saving, preserving the prior
-    # cohort.
+    # cohort. Surface a SAMPLE of failure reasons so the cause is
+    # diagnosable from the error toast / job record.
     if not results_list:
+        reason_sample = "; ".join(
+            f"{f['ticker']}: {f['reason']}" for f in failed_tickers[:3]
+        )
         logger.error(
             "Master refresh job %s: Phase 1 produced 0 valid tickers "
-            "(%d failed). NOT overwriting existing cohort.",
-            job_id, len(failed_tickers),
+            "(%d failed). NOT overwriting existing cohort. Sample: %s",
+            job_id, len(failed_tickers), reason_sample,
         )
         job_store.fail_job(
             job_id,
-            f"Refresh produced 0 valid tickers ({len(failed_tickers)} failed — "
-            "likely FMP rate-limit or outage). Previous cohort preserved. "
-            "Wait a minute and retry.",
+            f"Refresh produced 0 valid tickers ({len(failed_tickers)} failed). "
+            f"Previous cohort preserved. Sample failures: {reason_sample[:300]}",
         )
         return
 
@@ -809,7 +833,7 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
 
 
 @router.post("/ideas/complacency/refresh")
-async def refresh_complacency(max_workers: int = 4):
+async def refresh_complacency(max_workers: int = 3):
     """
     Kicks off a full cohort refresh as a BACKGROUND task. Returns immediately
     with {job_id, status: 'pending'}. Frontend polls

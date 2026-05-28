@@ -189,7 +189,11 @@ export function ComplacencyPage() {
 
     try {
       await refreshComplacency({
-        maxWorkers: 4,
+        // 3 workers (not 4): gentler FMP burst — Railway's shared IP
+        // rate-limits the 50-ticker × 8-call fetch storm more readily
+        // than local. 3 keeps the instantaneous call rate under FMP's
+        // burst threshold while Phase 1 still finishes in ~3-5 min.
+        maxWorkers: 3,
         onProgress: (s) => {
           if (s.progress_msg) {
             toast.loading(
