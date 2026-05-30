@@ -681,6 +681,22 @@ export function getHK50Job(jobId: string): Promise<HK50QualJob> {
   return fetchJson(`${BASE}/research/ideas/hk50/jobs/${encodeURIComponent(jobId)}`);
 }
 
+// Manual Policy+Moat deep-research for ONE cohort name (drill-in drawer). Runs
+// the same LLM pass as the batch, scoped to a single ticker, as a background
+// job. Polls via getHK50Job(); the cohort row is patched live.
+export function runHK50TickerQual(
+  ticker: string,
+  opts: { forceRefresh?: boolean } = {},
+): Promise<{ job_id: string; status: string; started_at: string | null; deduped: boolean }> {
+  const q = new URLSearchParams();
+  if (opts.forceRefresh != null) q.set('force_refresh', String(opts.forceRefresh));
+  const qs = q.toString();
+  return fetchJson(
+    `${BASE}/research/ideas/hk50/qual/${encodeURIComponent(ticker)}${qs ? `?${qs}` : ''}`,
+    { method: 'POST' },
+  );
+}
+
 // ── Complacency Detector (Ackman 4-pillar equity screener) ──────────────────
 
 export type ComplacencyVerdict =

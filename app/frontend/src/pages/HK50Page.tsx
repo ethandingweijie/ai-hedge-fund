@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  getHK50Cohort, refreshHK50, runHK50DeepResearch, getHK50Job,
+  getHK50Cohort, refreshHK50, runHK50DeepResearch, runHK50TickerQual, getHK50Job,
   type HK50Cohort, type HK50TickerResult, type HK50Qualitative,
   type HK50QualDimension, type HK50QualJob,
 } from '@/lib/api';
@@ -175,8 +175,12 @@ export function HK50Page() {
   const [screen, setScreen]   = useState<Screen>('Growth');
   const [search, setSearch]   = useState('');
   const [selected, setSelected] = useState<HK50TickerResult | null>(null);
+  // Conviction popover — elaborates the Policy × Moat breakdown for one row.
+  const [convDetail, setConvDetail] = useState<HK50TickerResult | null>(null);
   const [deepJob, setDeepJob] = useState<HK50QualJob | null>(null);
   const [deepRunning, setDeepRunning] = useState(false);
+  // Per-ticker manual research (drill-in drawer). Tracks one in-flight ticker job.
+  const [tickerJob, setTickerJob] = useState<HK50QualJob | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -268,11 +272,82 @@ export function HK50Page() {
     return () => { cancelled = true; if (timer) clearInterval(timer); };
   }, [deepJob?.job_id, deepJob?.status]);
 
+  // Manual deep-research for ONE name (the open drawer). Same LLM pass as the
+  // batch, scoped to a single ticker; the row is patched live so the drawer
+  // fills in as sub-metrics stream. Separate job-id from the batch job so both
+  // can run independently.
+  const handleTickerResearch = async (r: HK50TickerResult) => {
+    try {
+      const { job_id, deduped } = await runHK50TickerQual(r.ticker, { forceRefresh: false });
+      toast.info(
+        deduped
+          ? `Research already in flight for ${r.name} — attaching.`
+          : `Generating Policy + Moat research for ${r.name}… (~2-5 min). Card updates live.`,
+      );
+      setTickerJob({
+        job_id, kind: 'hk50_qual_ticker', ticker: r.ticker, status: 'pending',
+        started_at: null, finished_at: null, progress_msg: null, result: null, error: null,
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
+
+  // Poll the per-ticker job + live-reload the cohort while it runs (mirrors the
+  // batch poller). Keyed on job_id + status so transitions don't churn the timer.
+  useEffect(() => {
+    if (!tickerJob?.job_id) return;
+    if (tickerJob.status === 'completed' || tickerJob.status === 'failed') return;
+    const jobId = tickerJob.job_id;
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const tick = async () => {
+      try {
+        const j = await getHK50Job(jobId);
+        if (cancelled) return;
+        setTickerJob(j);
+        try { setCohort(await getHK50Cohort()); } catch { /* keep last cohort */ }
+        if (j.status === 'completed' || j.status === 'failed') {
+          cancelled = true;
+          if (timer) clearInterval(timer);
+          if (j.status === 'completed') {
+            const conv = (j.result?.conviction as string | undefined) ?? null;
+            const n = (j.result?.deep_escalations as number | undefined) ?? 0;
+            toast.success(
+              `Research complete for ${j.ticker ?? 'ticker'}` +
+              (conv ? ` — ${conv}` : '') + (n ? ` · ${n} deep escalations` : '') + '.',
+            );
+          } else {
+            toast.error(`Research failed: ${j.error ?? 'unknown error'}`);
+          }
+        }
+      } catch { /* transient — keep polling */ }
+    };
+    timer = setInterval(tick, 4000);
+    tick();
+    return () => { cancelled = true; if (timer) clearInterval(timer); };
+  }, [tickerJob?.job_id, tickerJob?.status]);
+
   // Live row for the open drawer (reflects mid-job patches without reopening).
   const selectedLive = useMemo(() => {
     if (!selected) return null;
     return cohort?.results.find((r) => r.ticker === selected.ticker) ?? selected;
   }, [selected, cohort]);
+
+  // Live row behind the conviction popover (fills in as research streams).
+  const convDetailLive = useMemo(() => {
+    if (!convDetail) return null;
+    return cohort?.results.find((r) => r.ticker === convDetail.ticker) ?? convDetail;
+  }, [convDetail, cohort]);
+
+  // Is a per-ticker research job in flight for the currently-open drawer name?
+  const drawerResearching = useMemo(() => {
+    if (!selectedLive || !tickerJob) return false;
+    return (
+      tickerJob.ticker === selectedLive.ticker &&
+      (tickerJob.status === 'pending' || tickerJob.status === 'running')
+    );
+  }, [selectedLive, tickerJob]);
 
   // Top-5 of each screen for the hero strip.
   const top5Growth = useMemo(
@@ -447,13 +522,13 @@ export function HK50Page() {
                 <tr>
                   <th className="px-2 py-2 w-10 text-right">S/N</th>
                   <th className="px-2 py-2">Stock</th>
+                  <th className="px-2 py-2" title="Policy × Moat qualitative overlay (parallel to the quant screens). Click a cell to elaborate on the moat breakdown; run deep research to populate.">Conviction</th>
                   <th className="px-2 py-2 text-right text-foreground">{screen} Score</th>
+                  <th className="px-2 py-2">AICT</th>
                   <th className="px-2 py-2 text-right">Other</th>
                   <th className="px-2 py-2 text-right">IV15</th>
                   <th className="px-2 py-2 text-right">Price</th>
                   <th className="px-2 py-2 text-right">P/IV15</th>
-                  <th className="px-2 py-2">AICT</th>
-                  <th className="px-2 py-2" title="Policy × Moat qualitative overlay (parallel to the quant screens). Run deep research to populate.">Conviction</th>
                   <th className="px-2 py-2">Key {screen} Metrics</th>
                 </tr>
               </thead>
@@ -478,9 +553,17 @@ export function HK50Page() {
                           {r.ticker}{r.ticker !== r.hk_ticker ? ` · ${r.hk_ticker}` : ''}
                         </div>
                       </td>
+                      <td className="px-2 py-1.5">
+                        <QualCell q={r.qualitative} onClick={() => setConvDetail(r)} />
+                      </td>
                       <td className="px-2 py-1.5 text-right">
                         <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${scoreColor(screenScore(r, screen))}`}>
                           {screenScore(r, screen).toFixed(1)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${aictClass(r.aict_tier)}`}>
+                          {r.aict_tier}
                         </span>
                       </td>
                       <td className="px-2 py-1.5 text-right text-muted-foreground" title={`${other} score`}>
@@ -489,14 +572,6 @@ export function HK50Page() {
                       <td className="px-2 py-1.5 text-right">{fmtPrice(r.iv15)}</td>
                       <td className="px-2 py-1.5 text-right">{fmtPrice(r.price)}</td>
                       <td className="px-2 py-1.5 text-right">{r.p_iv15 == null ? '—' : `${r.p_iv15.toFixed(2)}×`}</td>
-                      <td className="px-2 py-1.5">
-                        <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${aictClass(r.aict_tier)}`}>
-                          {r.aict_tier}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <QualCell q={r.qualitative} />
-                      </td>
                       <td className="px-2 py-1.5">
                         <div className="flex flex-wrap gap-1">
                           {metricKeys.map((m) => (
@@ -527,7 +602,22 @@ export function HK50Page() {
       </div>
 
       {selectedLive && (
-        <DetailDrawer ticker={selectedLive} initialScreen={screen} onClose={() => setSelected(null)} />
+        <DetailDrawer
+          ticker={selectedLive}
+          initialScreen={screen}
+          onClose={() => setSelected(null)}
+          onGenerateResearch={() => handleTickerResearch(selectedLive)}
+          researching={drawerResearching}
+          researchMsg={drawerResearching ? tickerJob?.progress_msg : null}
+        />
+      )}
+
+      {convDetailLive && (
+        <ConvictionPopover
+          row={convDetailLive}
+          onClose={() => setConvDetail(null)}
+          onOpenDetail={() => { setSelected(convDetailLive); setConvDetail(null); }}
+        />
       )}
     </div>
   );
@@ -589,7 +679,14 @@ function Stat({ label, value, tone, mono = true, title }: { label: string; value
 
 // ─── Detail drawer ───────────────────────────────────────────────────────────
 
-function DetailDrawer({ ticker, initialScreen, onClose }: { ticker: HK50TickerResult; initialScreen: Screen; onClose: () => void }) {
+function DetailDrawer({ ticker, initialScreen, onClose, onGenerateResearch, researching, researchMsg }: {
+  ticker: HK50TickerResult;
+  initialScreen: Screen;
+  onClose: () => void;
+  onGenerateResearch: () => void;
+  researching: boolean;
+  researchMsg?: string | null;
+}) {
   const d = ticker.iv15_detail;
   return (
     <div className="fixed inset-0 z-[80] flex" onClick={onClose}>
@@ -671,8 +768,14 @@ function DetailDrawer({ ticker, initialScreen, onClose }: { ticker: HK50TickerRe
             </p>
           </section>
 
-          {/* Qualitative overlay (Policy + Moat) */}
-          {ticker.qualitative && <QualitativeSection q={ticker.qualitative} />}
+          {/* Qualitative overlay (Policy + Moat) — always shown so the user can
+              generate research on demand even when the name is unscored. */}
+          <QualitativeBlock
+            q={ticker.qualitative}
+            onGenerate={onGenerateResearch}
+            researching={researching}
+            researchMsg={researchMsg}
+          />
         </div>
       </div>
     </div>
@@ -682,21 +785,34 @@ function DetailDrawer({ ticker, initialScreen, onClose }: { ticker: HK50TickerRe
 
 // ─── Compact qualitative cell (table) ────────────────────────────────────────
 
-function QualCell({ q }: { q?: HK50Qualitative | null }) {
+function QualCell({ q, onClick }: { q?: HK50Qualitative | null; onClick?: () => void }) {
+  const handle = onClick
+    ? (e: React.MouseEvent) => { e.stopPropagation(); onClick(); }
+    : undefined;
+
   if (!q || q.conviction === 'UNSCORED') {
-    return <span className="text-[10px] text-muted-foreground/40">—</span>;
+    return (
+      <button
+        onClick={handle}
+        title="No qualitative research yet — click to view / generate the Policy × Moat overlay"
+        className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground"
+      >
+        —
+      </button>
+    );
   }
   const pol = q.policy?.tier ?? '—';
   const moat = q.moat?.tier ?? '—';
-  const title = [
+  const lines = [
     `Conviction: ${q.conviction}`,
     `Policy: ${pol}`,
     `Moat: ${moat}`,
     `Source: ${q.source}${q.incomplete ? ' (streaming…)' : ''}`,
     q.flags?.length ? `Flags: ${q.flags.join(' · ')}` : '',
-  ].filter(Boolean).join('\n');
+  ].filter(Boolean);
+  const title = `${lines.join('\n')}\n\n(click to elaborate on the moat breakdown)`;
   return (
-    <div className="flex flex-col gap-0.5" title={title}>
+    <button onClick={handle} className="flex flex-col gap-0.5 text-left hover:opacity-80 cursor-pointer" title={title}>
       <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold w-fit ${convictionClass(q.conviction)}`}>
         {q.incomplete && <Loader2 size={8} className="animate-spin" />}
         {CONVICTION_SHORT[q.conviction] ?? q.conviction}
@@ -706,6 +822,77 @@ function QualCell({ q }: { q?: HK50Qualitative | null }) {
         <span className="text-muted-foreground/40"> · </span>
         <span className={MOAT_TEXT[moat] ?? 'text-muted-foreground'}>M:{moat}</span>
       </span>
+    </button>
+  );
+}
+
+
+// ─── Conviction popover (table click → elaborate on Policy × Moat) ──────────
+
+function ConvictionPopover({ row, onClose, onOpenDetail }: {
+  row: HK50TickerResult;
+  onClose: () => void;
+  onOpenDetail: () => void;
+}) {
+  const q = row.qualitative;
+  const scored = !!q && q.conviction !== 'UNSCORED';
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 animate-in fade-in duration-150" />
+      <div
+        className="relative w-full max-w-lg bg-background border border-border rounded-lg shadow-2xl max-h-[85vh] overflow-y-auto animate-in zoom-in-95 duration-150"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-background border-b border-border px-4 py-3 flex items-center justify-between gap-2 z-10">
+          <div className="flex items-center gap-2 flex-wrap min-w-0">
+            <span className="text-sm font-bold text-foreground truncate">{row.name}</span>
+            <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">{row.ticker}</span>
+            {scored && (
+              <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold flex-shrink-0 ${convictionClass(q!.conviction)}`}>
+                {q!.incomplete && <Loader2 size={8} className="inline animate-spin mr-1" />}
+                {q!.conviction}
+              </span>
+            )}
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-muted flex-shrink-0" aria-label="Close">
+            <X size={16} className="text-foreground" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {!scored ? (
+            <p className="text-xs text-muted-foreground">
+              No qualitative research yet for this name. Open the full detail to generate the
+              Policy × Moat overlay on demand.
+            </p>
+          ) : (
+            <>
+              <p className="text-[10px] text-muted-foreground">
+                Conviction blends the <strong>Policy posture</strong> and <strong>competitive-moat</strong> tiers
+                (parallel to the quant screens — <strong>never</strong> summed into Growth / Dividend). Each card
+                below breaks the dimension into its scored sub-metrics.
+              </p>
+              {q!.flags && q!.flags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {q!.flags.map((f, i) => (
+                    <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-[10px] border border-amber-700/30">{f}</span>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-3">
+                <QualDimensionCard dim={q!.policy} title="Policy posture" tierColors={POLICY_TEXT} />
+                <QualDimensionCard dim={q!.moat} title="Competitive moat" tierColors={MOAT_TEXT} />
+              </div>
+            </>
+          )}
+          <button
+            onClick={onOpenDetail}
+            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-foreground text-xs font-medium hover:bg-muted"
+          >
+            {scored ? 'Full details' : 'Open details · generate research'} →
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -713,31 +900,65 @@ function QualCell({ q }: { q?: HK50Qualitative | null }) {
 
 // ─── Qualitative overlay section (drawer) ────────────────────────────────────
 
-function QualitativeSection({ q }: { q: HK50Qualitative }) {
+function QualitativeBlock({ q, onGenerate, researching, researchMsg }: {
+  q?: HK50Qualitative | null;
+  onGenerate: () => void;
+  researching: boolean;
+  researchMsg?: string | null;
+}) {
+  const scored = !!q && q.conviction !== 'UNSCORED';
   return (
     <section>
       <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2 flex-wrap">
         Qualitative overlay
-        <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass(q.conviction)}`}>{q.conviction}</span>
-        <span className="text-[9px] text-muted-foreground/70 normal-case">
-          source: {q.source}{q.incomplete ? ' · streaming…' : ''}
-        </span>
+        {scored && (
+          <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass(q!.conviction)}`}>{q!.conviction}</span>
+        )}
+        {q && (
+          <span className="text-[9px] text-muted-foreground/70 normal-case">
+            source: {q.source}{q.incomplete ? ' · streaming…' : ''}
+          </span>
+        )}
+        <button
+          onClick={onGenerate}
+          disabled={researching}
+          title="Run the LLM Policy + Moat deep-research for THIS name only. Patches the card live; ~2-5 min. Runs independently of the cohort-wide deep research."
+          className="ml-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-violet-700/40 bg-violet-600/10 text-violet-200 text-[10px] font-medium hover:bg-violet-600/20 disabled:opacity-50"
+        >
+          {researching ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} className="text-violet-400" />}
+          {researching ? 'Researching…' : scored ? 'Re-run research' : 'Generate research'}
+        </button>
       </h2>
       <p className="text-[10px] text-muted-foreground mb-2">
         Parallel to the two quant screens — <strong>never</strong> summed into Growth / Dividend. Policy posture
         (state tailwind ↔ crackdown) × competitive moat, confidence-weighted.
       </p>
-      {q.flags && q.flags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-2">
-          {q.flags.map((f, i) => (
-            <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-[10px] border border-amber-700/30">{f}</span>
-          ))}
+      {researching && (
+        <div className="mb-2 flex items-center gap-2 px-2 py-1.5 rounded border border-violet-700/40 bg-violet-600/10 text-[10px] text-violet-200">
+          <Loader2 size={10} className="animate-spin flex-shrink-0" />
+          <span className="truncate">{researchMsg || 'Starting research…'}</span>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <QualDimensionCard dim={q.policy} title="Policy posture" tierColors={POLICY_TEXT} />
-        <QualDimensionCard dim={q.moat} title="Competitive moat" tierColors={MOAT_TEXT} />
-      </div>
+      {!scored ? (
+        <p className="text-[11px] text-muted-foreground">
+          No qualitative research yet for this name. Click <strong>Generate research</strong> to run the
+          Policy × Moat overlay on demand.
+        </p>
+      ) : (
+        <>
+          {q!.flags && q!.flags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {q!.flags.map((f, i) => (
+                <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-[10px] border border-amber-700/30">{f}</span>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <QualDimensionCard dim={q!.policy} title="Policy posture" tierColors={POLICY_TEXT} />
+            <QualDimensionCard dim={q!.moat} title="Competitive moat" tierColors={MOAT_TEXT} />
+          </div>
+        </>
+      )}
     </section>
   );
 }

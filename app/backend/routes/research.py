@@ -892,6 +892,177 @@ async def get_hk50_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
+def _execute_hk50_ticker_qual_job(job_id: str, ticker: str, force_refresh: bool) -> None:
+    """
+    Manual Phase-2 LLM qualitative worker for ONE HK50 name. Mirrors the cohort
+    batch worker (_execute_hk50_qual_job) but targets a single ticker the user
+    drilled into, so they can deep-research a name on demand without re-running
+    the whole top-N gate. Patches the row live; final-stamps when done.
+    """
+    import os as _os
+    from src.research_ideas.hk50.hk50_qualitative import assess_hk50_qualitative
+
+    latest = hk50_storage.get_latest_hk50_run()
+    if not latest or not latest.get("results"):
+        job_store.fail_job(
+            job_id,
+            "No HK50 cohort yet — run POST /ideas/hk50/refresh first so the "
+            "quant card exists before deep research.",
+        )
+        return
+
+    if not _os.environ.get("DEEP_RESEARCH_API_KEY"):
+        job_store.fail_job(
+            job_id,
+            "DEEP_RESEARCH_API_KEY is not set on this deployment — cannot run "
+            "manual qualitative research.",
+        )
+        return
+
+    needle = (ticker or "").strip().upper()
+    results = latest.get("results") or []
+    row = None
+    for r in results:
+        if (r.get("ticker") or "").upper() == needle or (r.get("hk_ticker") or "").upper() == needle:
+            row = r
+            break
+    if row is None:
+        job_store.fail_job(
+            job_id,
+            f"{needle} is not in the latest HK50 cohort — only cohort names can "
+            "be deep-researched.",
+        )
+        return
+
+    hk_ticker = row.get("hk_ticker") or row.get("ticker")
+    rep = row.get("ticker") or hk_ticker
+    nm = row.get("name") or hk_ticker
+    lead = max(
+        float(row.get("growth_score") or 0.0),
+        float(row.get("dividend_score") or 0.0),
+    )
+
+    def _push_live_row():
+        """Surface the freshly-patched cohort row into the job result so the
+        drawer can fill in even before the next cohort poll lands."""
+        try:
+            fresh = hk50_storage.get_latest_hk50_run()
+            if not fresh:
+                return
+            for rr in fresh.get("results", []):
+                if (rr.get("hk_ticker") or "").upper() == (hk_ticker or "").upper():
+                    job_store.update_running_result(job_id, rr)
+                    break
+        except Exception:
+            pass
+
+    def _patch_partial(code, indicator_score, needle=hk_ticker):
+        try:
+            hk50_storage.update_ticker_in_latest_cohort_partial_qual(
+                needle, code, indicator_score.model_dump(),
+            )
+        except Exception as exc:
+            logger.warning("HK50 partial qual patch %s/%s: %s", needle, code, exc)
+        job_store.update_progress(
+            job_id, "running",
+            f"manual qual · {nm} ({hk_ticker}) · {code}",
+        )
+        _push_live_row()
+
+    job_store.update_progress(job_id, "running", f"manual qual · {nm} ({hk_ticker})")
+
+    try:
+        qual = assess_hk50_qualitative(
+            hk_ticker,
+            report_ticker=rep,
+            name=nm,
+            quant_lead_score=lead,
+            use_llm=True,
+            force_refresh=force_refresh,
+            on_indicator_done=_patch_partial,
+        )
+    except Exception as exc:
+        logger.exception("HK50 manual qual for %s threw: %s", hk_ticker, exc)
+        job_store.fail_job(
+            job_id,
+            f"qualitative raised {type(exc).__name__}: {str(exc)[:200]} — "
+            "curated/partial preserved",
+        )
+        return
+
+    n_deep = 0
+    if qual:
+        qual.incomplete = qual.incomplete or False
+        try:
+            hk50_storage.set_ticker_qualitative_in_latest_cohort(hk_ticker, qual.model_dump())
+        except Exception as exc:
+            logger.warning("HK50 final qual stamp for %s failed: %s", hk_ticker, exc)
+        for dim in (qual.policy, qual.moat):
+            if not dim:
+                continue
+            for s in (dim.indicators or {}).values():
+                if "deep" in (getattr(s, "model_used", "") or "").lower():
+                    n_deep += 1
+
+    # Final job result carries the freshly-patched row for the drawer.
+    final_row = row
+    try:
+        fresh = hk50_storage.get_latest_hk50_run()
+        if fresh:
+            for rr in fresh.get("results", []):
+                if (rr.get("hk_ticker") or "").upper() == (hk_ticker or "").upper():
+                    final_row = rr
+                    break
+    except Exception:
+        pass
+
+    job_store.complete_job(job_id, {
+        "run_id": latest.get("run_id"),
+        "hk_ticker": hk_ticker,
+        "ticker": rep,
+        "conviction": (qual.conviction if qual else None),
+        "deep_escalations": n_deep,
+        "result": final_row,
+    })
+    logger.info(
+        "HK50 manual qual job %s complete: %s · %d deep escalations",
+        job_id, hk_ticker, n_deep,
+    )
+
+
+@router.post("/ideas/hk50/qual/{ticker}")
+async def hk50_qual_one_ticker(ticker: str, force_refresh: bool = False):
+    """
+    Manual deep-research for ONE HK50 cohort name. Runs the LLM Policy + Moat
+    overlay for a single ticker as a BACKGROUND job, patching the cohort row
+    live. Returns {job_id, status} immediately; poll GET /ideas/hk50/jobs/{job_id}
+    (shared job store with the batch deep-research).
+
+    Dedupes per-ticker: a second click while one is in flight returns the
+    existing job.
+    """
+    needle = (ticker or "").strip().upper()
+    if not needle:
+        raise HTTPException(status_code=400, detail="ticker required")
+
+    in_flight = job_store.find_in_flight_job("hk50_qual_ticker", ticker=needle)
+    if in_flight:
+        return {
+            "job_id": in_flight["job_id"],
+            "status": in_flight["status"],
+            "started_at": in_flight["started_at"],
+            "deduped": True,
+        }
+
+    job_id = job_store.create_job("hk50_qual_ticker", ticker=needle)
+
+    async def _run():
+        await asyncio.to_thread(_execute_hk50_ticker_qual_job, job_id, needle, force_refresh)
+
+    _spawn_background(_run())
+    return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False}
+
+
 # â”€â”€â”€ Complacency endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
