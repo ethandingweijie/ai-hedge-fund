@@ -21,10 +21,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  getHK50Cohort, refreshHK50,
-  type HK50Cohort, type HK50TickerResult,
+  getHK50Cohort, refreshHK50, runHK50DeepResearch, getHK50Job,
+  type HK50Cohort, type HK50TickerResult, type HK50Qualitative,
+  type HK50QualDimension, type HK50QualJob,
 } from '@/lib/api';
-import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, TrendingUp, Coins } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, TrendingUp, Coins, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 
@@ -111,6 +112,50 @@ function scoreColor(score: number): string {
 }
 
 
+// ─── Qualitative overlay colours (parallel to the two quant screens) ─────────
+// Combined conviction badge — QUANT-RICH / POLICY-RISK flag the traps the two
+// pure quant screens can't see.
+const CONVICTION_COLOR: Record<string, string> = {
+  'HIGH-CONVICTION': 'bg-emerald-600/30 text-emerald-200 border-emerald-700/40',
+  'SOLID':           'bg-blue-600/30 text-blue-200 border-blue-700/40',
+  'QUANT-RICH':      'bg-amber-600/30 text-amber-200 border-amber-700/40',
+  'QUAL-SUPPORT':    'bg-cyan-600/30 text-cyan-200 border-cyan-700/40',
+  'WATCH':           'bg-muted text-muted-foreground border-border',
+  'POLICY-RISK':     'bg-red-600/30 text-red-200 border-red-700/40',
+  'UNSCORED':        'bg-muted/30 text-muted-foreground/70 border-border border-dashed',
+};
+const convictionClass = (c: string): string =>
+  CONVICTION_COLOR[c] ?? CONVICTION_COLOR.UNSCORED;
+
+// Short badge labels for the narrow table cell (full label in the title attr).
+const CONVICTION_SHORT: Record<string, string> = {
+  'HIGH-CONVICTION': 'HIGH',
+  'SOLID':           'SOLID',
+  'QUANT-RICH':      'TRAP?',
+  'QUAL-SUPPORT':    'QUAL',
+  'WATCH':           'WATCH',
+  'POLICY-RISK':     'RISK',
+  'UNSCORED':        '—',
+};
+
+// Policy ladder: Tailwind > Favorable > Neutral > Headwind > Crackdown.
+const POLICY_TEXT: Record<string, string> = {
+  Tailwind:  'text-emerald-300',
+  Favorable: 'text-blue-300',
+  Neutral:   'text-muted-foreground',
+  Headwind:  'text-orange-300',
+  Crackdown: 'text-red-300',
+};
+// Moat ladder reuses the AICT names generalised to every sector.
+const MOAT_TEXT: Record<string, string> = {
+  Fortress: 'text-emerald-300',
+  Castle:   'text-blue-300',
+  Chapel:   'text-amber-300',
+  Stone:    'text-orange-300',
+  Wood:     'text-red-300',
+};
+
+
 // ─── Per-screen accessors ────────────────────────────────────────────────────
 
 const screenScore = (r: HK50TickerResult, s: Screen): number =>
@@ -130,6 +175,8 @@ export function HK50Page() {
   const [screen, setScreen]   = useState<Screen>('Growth');
   const [search, setSearch]   = useState('');
   const [selected, setSelected] = useState<HK50TickerResult | null>(null);
+  const [deepJob, setDeepJob] = useState<HK50QualJob | null>(null);
+  const [deepRunning, setDeepRunning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,6 +204,75 @@ export function HK50Page() {
       setRefreshing(false);
     }
   };
+
+  // Phase 2 — LLM Policy + Moat deep-research over the top-20 names. The quant
+  // cards (this cohort) must already exist; rows are patched live as each name
+  // streams in, so we re-pull the cohort on every poll.
+  const handleDeepResearch = async () => {
+    if (!cohort || cohort.results.length === 0) {
+      toast.error('Run the cohort (Refresh) first — quant cards must exist before deep research.');
+      return;
+    }
+    setDeepRunning(true);
+    try {
+      const { job_id, deduped } = await runHK50DeepResearch({ topN: 20 });
+      toast.info(
+        deduped
+          ? 'Deep research already in flight — attaching to it.'
+          : 'Deep research started · top-20 by lead score · runs sequentially (~10-20 min). Cards update live.',
+      );
+      setDeepJob({
+        job_id, kind: 'hk50_qual', ticker: null, status: 'pending',
+        started_at: null, finished_at: null, progress_msg: null, result: null, error: null,
+      });
+    } catch (e) {
+      toast.error((e as Error).message);
+      setDeepRunning(false);
+    }
+  };
+
+  // Poll the job + live-reload the cohort while it runs. Keyed on job_id only so
+  // status transitions don't churn the interval; terminal states stop it inside.
+  useEffect(() => {
+    if (!deepJob?.job_id) return;
+    if (deepJob.status === 'completed' || deepJob.status === 'failed') return;
+    const jobId = deepJob.job_id;
+    let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const tick = async () => {
+      try {
+        const j = await getHK50Job(jobId);
+        if (cancelled) return;
+        setDeepJob(j);
+        try { setCohort(await getHK50Cohort()); } catch { /* keep last cohort */ }
+        if (j.status === 'completed' || j.status === 'failed') {
+          cancelled = true;
+          if (timer) clearInterval(timer);
+          setDeepRunning(false);
+          if (j.status === 'completed') {
+            const s = (j.result?.phase2_summary ?? {}) as {
+              qual_scored?: string[]; total_deep_escalations?: number;
+            };
+            toast.success(
+              `Deep research complete — ${s.qual_scored?.length ?? 0} names scored, ` +
+              `${s.total_deep_escalations ?? 0} deep escalations.`,
+            );
+          } else {
+            toast.error(`Deep research failed: ${j.error ?? 'unknown error'}`);
+          }
+        }
+      } catch { /* transient — keep polling */ }
+    };
+    timer = setInterval(tick, 4000);
+    tick();
+    return () => { cancelled = true; if (timer) clearInterval(timer); };
+  }, [deepJob?.job_id, deepJob?.status]);
+
+  // Live row for the open drawer (reflects mid-job patches without reopening).
+  const selectedLive = useMemo(() => {
+    if (!selected) return null;
+    return cohort?.results.find((r) => r.ticker === selected.ticker) ?? selected;
+  }, [selected, cohort]);
 
   // Top-5 of each screen for the hero strip.
   const top5Growth = useMemo(
@@ -219,7 +335,16 @@ export function HK50Page() {
             />
           )}
           <Stat label="Last run" value={formatRunTime(cohort?.created_at ?? null)} mono={false} />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleDeepResearch}
+              disabled={deepRunning || !cohort || cohort.results.length === 0}
+              title="LLM Policy + Moat deep-research over the top-20 names by lead score. Quant cards must exist first; runs sequentially to avoid rate limits and patches rows live."
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card text-foreground text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              {deepRunning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-violet-400" />}
+              {deepRunning ? 'Researching…' : 'Deep research'}
+            </button>
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -230,6 +355,17 @@ export function HK50Page() {
             </button>
           </div>
         </div>
+
+        {/* ── Deep-research live progress strip ───────────────────────────── */}
+        {deepJob && (deepJob.status === 'pending' || deepJob.status === 'running') && (
+          <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-md border border-violet-700/40 bg-violet-600/10 text-xs text-violet-200">
+            <Loader2 size={12} className="animate-spin flex-shrink-0" />
+            <span className="truncate">{deepJob.progress_msg || 'Starting deep research…'}</span>
+            <span className="ml-auto text-violet-300/70 hidden sm:inline flex-shrink-0">
+              Policy + Moat · cards update live · sequential to avoid 429s
+            </span>
+          </div>
+        )}
 
         {/* ── Hero strip: top-5 of each screen ────────────────────────────── */}
         {!loading && cohort && cohort.results.length > 0 && (
@@ -317,6 +453,7 @@ export function HK50Page() {
                   <th className="px-2 py-2 text-right">Price</th>
                   <th className="px-2 py-2 text-right">P/IV15</th>
                   <th className="px-2 py-2">AICT</th>
+                  <th className="px-2 py-2" title="Policy × Moat qualitative overlay (parallel to the quant screens). Run deep research to populate.">Conviction</th>
                   <th className="px-2 py-2">Key {screen} Metrics</th>
                 </tr>
               </thead>
@@ -358,6 +495,9 @@ export function HK50Page() {
                         </span>
                       </td>
                       <td className="px-2 py-1.5">
+                        <QualCell q={r.qualitative} />
+                      </td>
+                      <td className="px-2 py-1.5">
                         <div className="flex flex-wrap gap-1">
                           {metricKeys.map((m) => (
                             <span
@@ -386,8 +526,8 @@ export function HK50Page() {
         )}
       </div>
 
-      {selected && (
-        <DetailDrawer ticker={selected} initialScreen={screen} onClose={() => setSelected(null)} />
+      {selectedLive && (
+        <DetailDrawer ticker={selectedLive} initialScreen={screen} onClose={() => setSelected(null)} />
       )}
     </div>
   );
@@ -530,8 +670,119 @@ function DetailDrawer({ ticker, initialScreen, onClose }: { ticker: HK50TickerRe
               {d.aict === '—' && ' AICT is not applicable to this name (non-software / non-internet).'}
             </p>
           </section>
+
+          {/* Qualitative overlay (Policy + Moat) */}
+          {ticker.qualitative && <QualitativeSection q={ticker.qualitative} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// ─── Compact qualitative cell (table) ────────────────────────────────────────
+
+function QualCell({ q }: { q?: HK50Qualitative | null }) {
+  if (!q || q.conviction === 'UNSCORED') {
+    return <span className="text-[10px] text-muted-foreground/40">—</span>;
+  }
+  const pol = q.policy?.tier ?? '—';
+  const moat = q.moat?.tier ?? '—';
+  const title = [
+    `Conviction: ${q.conviction}`,
+    `Policy: ${pol}`,
+    `Moat: ${moat}`,
+    `Source: ${q.source}${q.incomplete ? ' (streaming…)' : ''}`,
+    q.flags?.length ? `Flags: ${q.flags.join(' · ')}` : '',
+  ].filter(Boolean).join('\n');
+  return (
+    <div className="flex flex-col gap-0.5" title={title}>
+      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold w-fit ${convictionClass(q.conviction)}`}>
+        {q.incomplete && <Loader2 size={8} className="animate-spin" />}
+        {CONVICTION_SHORT[q.conviction] ?? q.conviction}
+      </span>
+      <span className="text-[9px] leading-tight whitespace-nowrap">
+        <span className={POLICY_TEXT[pol] ?? 'text-muted-foreground'}>P:{pol}</span>
+        <span className="text-muted-foreground/40"> · </span>
+        <span className={MOAT_TEXT[moat] ?? 'text-muted-foreground'}>M:{moat}</span>
+      </span>
+    </div>
+  );
+}
+
+
+// ─── Qualitative overlay section (drawer) ────────────────────────────────────
+
+function QualitativeSection({ q }: { q: HK50Qualitative }) {
+  return (
+    <section>
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2 flex-wrap">
+        Qualitative overlay
+        <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass(q.conviction)}`}>{q.conviction}</span>
+        <span className="text-[9px] text-muted-foreground/70 normal-case">
+          source: {q.source}{q.incomplete ? ' · streaming…' : ''}
+        </span>
+      </h2>
+      <p className="text-[10px] text-muted-foreground mb-2">
+        Parallel to the two quant screens — <strong>never</strong> summed into Growth / Dividend. Policy posture
+        (state tailwind ↔ crackdown) × competitive moat, confidence-weighted.
+      </p>
+      {q.flags && q.flags.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {q.flags.map((f, i) => (
+            <span key={i} className="px-1.5 py-0.5 rounded bg-amber-600/15 text-amber-300 text-[10px] border border-amber-700/30">{f}</span>
+          ))}
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <QualDimensionCard dim={q.policy} title="Policy posture" tierColors={POLICY_TEXT} />
+        <QualDimensionCard dim={q.moat} title="Competitive moat" tierColors={MOAT_TEXT} />
+      </div>
+    </section>
+  );
+}
+
+function QualDimensionCard({ dim, title, tierColors }: {
+  dim: HK50QualDimension | null | undefined;
+  title: string;
+  tierColors: Record<string, string>;
+}) {
+  if (!dim) {
+    return (
+      <div className="rounded border border-border bg-muted/20 p-2">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{title}</div>
+        <div className="text-xs text-muted-foreground mt-1">Not scored</div>
+      </div>
+    );
+  }
+  const indicators = Object.values(dim.indicators ?? {});
+  return (
+    <div className="rounded border border-border bg-muted/20 p-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{title}</span>
+        <span className={`text-xs font-bold ${tierColors[dim.tier] ?? 'text-foreground'}`}>{dim.tier}</span>
+      </div>
+      <div className="flex items-center flex-wrap gap-x-2 mt-1 text-[10px] text-muted-foreground">
+        <span>score {dim.score_0_100 == null ? '—' : dim.score_0_100.toFixed(0)}/100</span>
+        <span>· {dim.n_scored} scored</span>
+        <span>· conf {(dim.mean_confidence * 100).toFixed(0)}%</span>
+      </div>
+      {dim.summary && <p className="text-[10px] text-foreground/80 mt-1">{dim.summary}</p>}
+      {indicators.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {indicators.map((ind) => (
+            <div key={ind.indicator} className="text-[10px] border-t border-border/40 pt-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground truncate" title={ind.indicator}>{ind.indicator}</span>
+                <span className="font-mono text-foreground flex-shrink-0">
+                  {ind.score}/5 · {(ind.confidence * 100).toFixed(0)}%
+                </span>
+              </div>
+              {ind.summary && <div className="text-foreground/70 mt-0.5">{ind.summary}</div>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -105,6 +105,23 @@ def _process_ticker(hk_ticker: str) -> HK50TickerResult | dict:
         }
         lead = "Growth" if g >= d else "Dividend"
 
+        # Qualitative overlay (Policy + Moat) — curated seed path: free,
+        # deterministic, no LLM. Surfaced as a PARALLEL column + conviction
+        # gate; never summed into the two pure quant screens. The LLM deep-
+        # research run (assess_hk50_qualitative(use_llm=True)) can override
+        # the seed tiers on demand.
+        qualitative = None
+        try:
+            from src.research_ideas.hk50.hk50_qualitative import (
+                assess_hk50_qualitative,
+            )
+            qualitative = assess_hk50_qualitative(
+                hk_ticker, report_ticker=rep, name=md["name"],
+                quant_lead_score=float(max(g, d)), use_llm=False,
+            )
+        except Exception as exc:
+            logger.warning("HK50 qual overlay %s skipped: %s", hk_ticker, exc)
+
         return HK50TickerResult(
             ticker=rep,
             hk_ticker=hk_ticker,
@@ -120,6 +137,7 @@ def _process_ticker(hk_ticker: str) -> HK50TickerResult | dict:
             p_iv15=detail.p_iv15,
             metrics=metrics,
             iv15_detail=detail,
+            qualitative=qualitative,
         )
     except Exception as exc:
         tb = traceback.format_exc()

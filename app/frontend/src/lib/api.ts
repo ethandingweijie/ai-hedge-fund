@@ -539,6 +539,44 @@ export interface HK50IV15Detail {
   valuation_points: number | null;
 }
 
+// Qualitative overlay (dimensions 1 Policy + 5 Moat) — PARALLEL to the two
+// pure quant screens; never summed into growth_score / dividend_score. Filled
+// by a curated seed at cohort-build time, then upgraded in place by the
+// Phase-2 LLM deep-research background job (source flips curated → hybrid/llm).
+export type HK50PolicyTier = 'Tailwind' | 'Favorable' | 'Neutral' | 'Headwind' | 'Crackdown' | '—';
+export type HK50MoatTier   = 'Fortress' | 'Castle' | 'Chapel' | 'Stone' | 'Wood' | '—';
+export type HK50Conviction =
+  | 'HIGH-CONVICTION'
+  | 'SOLID'
+  | 'QUANT-RICH'      // great screen masking a policy/moat trap
+  | 'QUAL-SUPPORT'
+  | 'WATCH'
+  | 'POLICY-RISK'     // active crackdown / Wood moat hard-override
+  | 'UNSCORED';
+
+export interface HK50QualDimension {
+  dimension: 'policy' | 'moat';
+  score_0_100: number | null;
+  tier: string;                     // PolicyTier or MoatTier label
+  n_scored: number;
+  mean_confidence: number;
+  summary: string;
+  indicators: Record<string, QualIndicatorScore>;
+}
+
+export interface HK50Qualitative {
+  hk_ticker: string;
+  sector: string;
+  policy: HK50QualDimension | null;
+  moat: HK50QualDimension | null;
+  conviction: HK50Conviction;
+  source: 'unscored' | 'curated' | 'llm' | 'hybrid';
+  flags: string[];
+  assessed_at: string | null;
+  cost_usd: number;
+  incomplete: boolean;              // true while the LLM pass is mid-stream
+}
+
 export interface HK50TickerResult {
   ticker: string;                   // reported ticker (ADR or HK)
   hk_ticker: string;                // canonical HK ticker (or native ADR)
@@ -556,6 +594,7 @@ export interface HK50TickerResult {
   iv15_detail: HK50IV15Detail;
   growth_rank: number | null;
   dividend_rank: number | null;
+  qualitative?: HK50Qualitative | null;
   error?: string | null;
 }
 
@@ -607,6 +646,39 @@ export function refreshHK50(opts: { maxWorkers?: number } = {}): Promise<{
 
 export function listHK50Runs(limit = 20): Promise<{ runs: HK50RunHeader[] }> {
   return fetchJson(`${BASE}/research/ideas/hk50/runs?limit=${limit}`);
+}
+
+// ── HK50 Phase-2 qualitative deep-research (background job) ──────────────────
+//
+// Kicks off the LLM Policy+Moat pass over the top-N names by lead screen score.
+// The quant cards must already exist (run refreshHK50 first). Returns a job id;
+// poll getHK50Job() until status is 'completed' | 'failed'. Rows are patched
+// live in the cohort payload as each name's sub-metrics stream in, so a plain
+// getHK50Cohort() re-fetch mid-job shows the overlay filling in.
+
+export interface HK50QualJob {
+  job_id: string;
+  kind: string;
+  ticker: string | null;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string | null;
+  finished_at: string | null;
+  progress_msg: string | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+}
+
+export function runHK50DeepResearch(
+  opts: { topN?: number; forceRefresh?: boolean } = {},
+): Promise<{ job_id: string; status: string; started_at: string | null; deduped: boolean }> {
+  const q = new URLSearchParams();
+  if (opts.topN != null) q.set('top_n', String(opts.topN));
+  if (opts.forceRefresh != null) q.set('force_refresh', String(opts.forceRefresh));
+  return fetchJson(`${BASE}/research/ideas/hk50/qual-deep-research?${q}`, { method: 'POST' });
+}
+
+export function getHK50Job(jobId: string): Promise<HK50QualJob> {
+  return fetchJson(`${BASE}/research/ideas/hk50/jobs/${encodeURIComponent(jobId)}`);
 }
 
 // ── Complacency Detector (Ackman 4-pillar equity screener) ──────────────────

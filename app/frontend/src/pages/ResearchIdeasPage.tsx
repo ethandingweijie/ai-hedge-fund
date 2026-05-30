@@ -109,24 +109,36 @@ export function ResearchIdeasPage() {
   // cached component (depending on router config).
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && !loading) {
-        // Lightweight refresh: only re-fetch the cohort that's likely
-        // to have changed. SW46 doesn't auto-update so skip it.
-        getComplacencyCohort().then((complCohort) => {
-          if (complCohort && complCohort.results.length > 0) {
-            setComplacencyCohortSize(complCohort.results.length);
-            const scored = complCohort.results
-              .map((r) => ({
-                row: r,
-                rankScore: r.aggregate_score ?? (r.composite ?? 0) * 12.5,
-              }))
-              .sort((a, b) => b.rankScore - a.rankScore)
-              .slice(0, 5)
-              .map((x) => x.row);
-            setTopComplacency(scored);
-          }
-        }).catch(() => { /* silent — initial load handles toasts */ });
-      }
+      if (document.visibilityState !== 'visible' || loading) return;
+      // Silent refresh (no spinner / no toast) so EVERY hero card re-ranks
+      // after the user refreshed a cohort or rescored a ticker on a detail
+      // page and navigated back. Mirrors the table-rerank contract:
+      //   • Complacency top-5 — re-rank by latest aggregate (quant+qual).
+      //   • HK50 top-5 G/D    — re-pull catalogue meta (top5_growth /
+      //                          top5_dividend reflect the latest cohort run).
+      //   • SW46 top-3        — re-rank by latest composite.
+      listResearchIdeas()
+        .then((res) => setIdeas(res.ideas))
+        .catch(() => { /* silent */ });
+      getSW46Cohort().then((sw46Cohort) => {
+        if (sw46Cohort && sw46Cohort.results.length > 0) {
+          setTopPicks(sw46Cohort.results.slice(0, 3));
+        }
+      }).catch(() => { /* silent */ });
+      getComplacencyCohort().then((complCohort) => {
+        if (complCohort && complCohort.results.length > 0) {
+          setComplacencyCohortSize(complCohort.results.length);
+          const scored = complCohort.results
+            .map((r) => ({
+              row: r,
+              rankScore: r.aggregate_score ?? (r.composite ?? 0) * 12.5,
+            }))
+            .sort((a, b) => b.rankScore - a.rankScore)
+            .slice(0, 5)
+            .map((x) => x.row);
+          setTopComplacency(scored);
+        }
+      }).catch(() => { /* silent — initial load handles toasts */ });
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);

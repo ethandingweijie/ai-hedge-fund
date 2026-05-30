@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -183,6 +184,155 @@ def list_hk50_runs(limit: int = 20) -> list[dict]:
         }
         for r in rows
     ]
+
+
+def _match_row(r: dict, needle_u: str) -> bool:
+    """A cohort row matches if the reported OR canonical HK ticker matches."""
+    return (
+        (r.get("ticker") or "").upper() == needle_u
+        or (r.get("hk_ticker") or "").upper() == needle_u
+    )
+
+
+def update_ticker_in_latest_cohort_partial_qual(
+    needle: str,
+    code: str,
+    indicator_score: dict,
+) -> bool:
+    """
+    Two-phase architecture per-sub-metric patcher (mirrors the Complacency
+    screener). Patches ONE qualitative sub-metric into the latest HK50 cohort
+    row, then RE-AGGREGATES both dimensions + the combined conviction so a
+    page-refresh mid-run shows the overlay filling in live.
+
+    The two PURE quant screens (growth_score / dividend_score) are never
+    touched — only the parallel `qualitative` overlay is recomputed. Math is
+    single-sourced from hk50_qualitative (aggregate_dimension + combined_
+    conviction), so there is no risk of drift between the live patch and a
+    full assess_hk50_qualitative() pass.
+
+    `needle` matches the reported (ADR/HK) ticker OR the canonical HK ticker.
+    Returns True if a row was patched, False otherwise.
+    """
+    from src.research_ideas.hk50.hk50_qualitative import (
+        aggregate_dimension, combined_conviction, load_seed, _seed_default,
+        sector_of,
+    )
+    from src.research_ideas.hk50.schemas import QualIndicatorScore
+
+    needle_u = (needle or "").upper()
+    _ensure_table()
+    conn = _connect()
+    try:
+        row_db = conn.execute(
+            "SELECT run_id, results FROM hk50_runs ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if not row_db:
+            return False
+        run_id = row_db[0]
+        try:
+            results = json.loads(row_db[1] or "[]")
+        except Exception:
+            return False
+
+        for i, r in enumerate(results):
+            if not _match_row(r, needle_u):
+                continue
+            hk_ticker = r.get("hk_ticker") or r.get("ticker") or needle
+
+            # Rebuild the full scored set from whatever's already persisted
+            # (curated baseline starts empty), then add/replace the new one.
+            qual = r.get("qualitative") or {}
+            scored: dict[str, QualIndicatorScore] = {}
+            for dim_key in ("policy", "moat"):
+                dim = qual.get(dim_key) or {}
+                for c, sdict in (dim.get("indicators") or {}).items():
+                    try:
+                        scored[c] = QualIndicatorScore(**sdict)
+                    except Exception:
+                        pass
+            try:
+                scored[code] = QualIndicatorScore(**_sanitize(indicator_score))
+            except Exception:
+                return False
+
+            seed = load_seed().get(hk_ticker) or _seed_default()
+            policy_dim = aggregate_dimension("policy", scored, seed_tier=seed.get("policy_tier"))
+            moat_dim = aggregate_dimension("moat", scored, seed_tier=seed.get("moat_tier"))
+
+            quant_lead = max(
+                float(r.get("growth_score") or 0.0),
+                float(r.get("dividend_score") or 0.0),
+            )
+            conv, flags = combined_conviction(quant_lead, policy_dim.tier, moat_dim.tier)
+            if seed.get("note"):
+                flags = [seed["note"]] + flags
+
+            used_seed_fallback = (policy_dim.n_scored == 0) or (moat_dim.n_scored == 0)
+            r["qualitative"] = _sanitize({
+                "hk_ticker": hk_ticker,
+                "sector": sector_of(hk_ticker),
+                "policy": policy_dim.model_dump(),
+                "moat": moat_dim.model_dump(),
+                "conviction": conv,
+                "source": "hybrid" if used_seed_fallback else "llm",
+                "flags": flags,
+                "assessed_at": datetime.now(timezone.utc).isoformat(),
+                "cost_usd": qual.get("cost_usd", 0.0),
+                "incomplete": True,  # still streaming
+            })
+            results[i] = r
+
+            conn.execute(
+                "UPDATE hk50_runs SET results = ? WHERE run_id = ?",
+                (json.dumps(results), run_id),
+            )
+            conn.commit()
+            return True
+        return False
+    finally:
+        conn.close()
+
+
+def set_ticker_qualitative_in_latest_cohort(
+    needle: str,
+    qualitative_dict: dict,
+) -> bool:
+    """
+    Replace the WHOLE `qualitative` overlay on the latest cohort's matching
+    row with a finished assessment (source=llm/hybrid, incomplete=False). Used
+    for the final stamp after all sub-metrics for a name have streamed in.
+
+    Returns True if patched, False if the ticker isn't in the latest cohort.
+    """
+    needle_u = (needle or "").upper()
+    _ensure_table()
+    conn = _connect()
+    try:
+        row_db = conn.execute(
+            "SELECT run_id, results FROM hk50_runs ORDER BY created_at DESC LIMIT 1"
+        ).fetchone()
+        if not row_db:
+            return False
+        run_id = row_db[0]
+        try:
+            results = json.loads(row_db[1] or "[]")
+        except Exception:
+            return False
+        for i, r in enumerate(results):
+            if not _match_row(r, needle_u):
+                continue
+            r["qualitative"] = _sanitize(qualitative_dict)
+            results[i] = r
+            conn.execute(
+                "UPDATE hk50_runs SET results = ? WHERE run_id = ?",
+                (json.dumps(results), run_id),
+            )
+            conn.commit()
+            return True
+        return False
+    finally:
+        conn.close()
 
 
 def _row_to_dict(row: tuple) -> dict:

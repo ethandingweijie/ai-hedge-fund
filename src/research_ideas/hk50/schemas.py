@@ -14,10 +14,39 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# Reuse the Complacency qualitative evidence/score shapes verbatim — one
+# per-(ticker, indicator) score with confidence + verbatim evidence. The
+# HK50 overlay scores its sub-metrics on the SAME 0-5 rubric scaffold, so
+# there is no reason to re-type these.
+from src.research_ideas.complacency.schemas import (  # noqa: F401  (re-exported)
+    QualEvidence,
+    QualIndicatorScore,
+)
+
 
 # AICT tier is "—" for every non-software/internet name (AICT not applicable).
 AICTLabel = str
 LeadScreen = Literal["Growth", "Dividend"]
+
+# ─── Qualitative-overlay tier ladders ─────────────────────────────────────
+# Policy posture (dimension 1): higher = stronger state tailwind for a LONG.
+PolicyTier = Literal["Tailwind", "Favorable", "Neutral", "Headwind", "Crackdown", "—"]
+# Moat / competitive position (dimension 5): AICT names generalised to every
+# sector (banks / energy / consumer / pharma / insurers), higher = wider moat.
+MoatTier = Literal["Fortress", "Castle", "Chapel", "Stone", "Wood", "—"]
+QualDimensionName = Literal["policy", "moat"]
+QualSource = Literal["unscored", "curated", "llm", "hybrid"]
+# Combined quant×qualitative conviction overlay — NEVER blended into the two
+# pure 0-100 quant screens; surfaced as a parallel column + optional gate.
+HK50Conviction = Literal[
+    "HIGH-CONVICTION",   # strong screen score AND favorable policy AND wide moat
+    "SOLID",             # screen + qual both supportive, not top-decile
+    "QUANT-RICH",        # screen looks great but policy/moat is a red flag (trap)
+    "QUAL-SUPPORT",      # policy/moat strong but screen is middling
+    "WATCH",             # mixed / nothing decisive
+    "POLICY-RISK",       # active crackdown / Wood moat overrides a good screen
+    "UNSCORED",          # qualitative not yet run
+]
 
 
 class MetricResult(BaseModel):
@@ -43,6 +72,42 @@ class IV15Detail(BaseModel):
     valuation_points: Optional[int] = None   # Vpts on the P/IV15 ladder (max 35)
 
 
+class HK50QualDimension(BaseModel):
+    """One rolled-up qualitative dimension (policy OR moat) for a ticker.
+
+    score_0_100 is the confidence-aware weighted average of the dimension's
+    sub-metrics (each 0-5), renormalised over whichever sub-metrics were
+    actually scored, then scaled to 0-100. tier is the named ladder bucket.
+    """
+    dimension: QualDimensionName
+    score_0_100: Optional[float] = None
+    tier: str = "—"                          # PolicyTier or MoatTier label
+    n_scored: int = 0                        # how many sub-metrics resolved
+    mean_confidence: float = 0.0             # avg LLM self-confidence across sub-metrics
+    summary: str = ""                        # one-line dimension takeaway
+    indicators: dict[str, QualIndicatorScore] = Field(default_factory=dict)
+
+
+class HK50Qualitative(BaseModel):
+    """The two-dimension qualitative overlay for one HK50 name.
+
+    Deliberately PARALLEL to the two quant screens — it is surfaced as its own
+    column + an optional conviction gate, and is NEVER summed into growth_score
+    / dividend_score (mirrors how AICT modulates IV15 transparently rather than
+    silently moving the composite).
+    """
+    hk_ticker: str
+    sector: str = "?"
+    policy: Optional[HK50QualDimension] = None
+    moat: Optional[HK50QualDimension] = None
+    conviction: HK50Conviction = "UNSCORED"
+    source: QualSource = "unscored"          # curated seed | LLM deep-research | hybrid
+    flags: list[str] = Field(default_factory=list)  # human-readable risk/edge notes
+    assessed_at: Optional[str] = None
+    cost_usd: float = 0.0
+    incomplete: bool = False
+
+
 class HK50TickerResult(BaseModel):
     ticker: str                              # the REPORTED ticker (ADR or HK)
     hk_ticker: str                           # canonical HK ticker (or native ADR)
@@ -64,6 +129,10 @@ class HK50TickerResult(BaseModel):
 
     growth_rank: Optional[int] = None        # 1..N within the Growth screen
     dividend_rank: Optional[int] = None      # 1..N within the Dividend screen
+
+    # Qualitative overlay (dimensions 1 Policy + 5 Moat) — parallel to the two
+    # pure quant screens, populated by curated seed and/or LLM deep-research.
+    qualitative: Optional[HK50Qualitative] = None
     error: Optional[str] = None
 
 

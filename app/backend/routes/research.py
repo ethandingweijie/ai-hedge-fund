@@ -727,6 +727,171 @@ async def refresh_hk50(max_workers: int = 6):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
+# ─── HK50 qualitative deep-research (two-phase, background job) ───────────
+# Phase 1 (quant + curated overlay) is ALREADY persisted by /ideas/hk50/refresh
+# — the cards show growth/dividend/IV15 + curated policy/moat tiers
+# immediately. This job is Phase 2: it runs the LLM web-research qualitative
+# pass over the top-N names by lead score, SEQUENTIALLY (one name at a time),
+# patching each cohort row's `qualitative` overlay live as sub-metrics land.
+#
+# SEQUENTIAL at the cohort level is the core 429 defense: each name fires up
+# to `max_workers` (3) concurrent Qwen calls; running N names in parallel
+# would mean 3×N concurrent calls → guaranteed DashScope 429 cascade. On top
+# of that, hk50_qualitative adds the shared qwen_throttle bucket, a 1.5s
+# submission stagger, and a per-name deep-research cap.
+
+
+def _execute_hk50_qual_job(job_id: str, top_n: int, force_refresh: bool) -> None:
+    """Phase-2 LLM qualitative worker for the HK50 cohort (see module note)."""
+    import os as _os
+    from src.research_ideas.hk50.hk50_qualitative import assess_hk50_qualitative
+
+    latest = hk50_storage.get_latest_hk50_run()
+    if not latest or not latest.get("results"):
+        job_store.fail_job(
+            job_id,
+            "No HK50 cohort yet — run POST /ideas/hk50/refresh first so the "
+            "quant cards exist before deep research.",
+        )
+        return
+
+    if not _os.environ.get("DEEP_RESEARCH_API_KEY"):
+        job_store.complete_job(job_id, {
+            "phase2_skipped": "DEEP_RESEARCH_API_KEY missing",
+            "ticker_count": latest.get("ticker_count"),
+        })
+        return
+
+    results = latest.get("results") or []
+
+    def _lead(r: dict) -> float:
+        return max(
+            float(r.get("growth_score") or 0.0),
+            float(r.get("dividend_score") or 0.0),
+        )
+
+    # Gate: the top-N names by lead screen score. These are exactly where a
+    # great screen can mask a policy/moat trap (the WuXi Bio / QUANT-RICH
+    # case), so they earn the deep-research spend first.
+    gate = sorted(results, key=_lead, reverse=True)
+    if top_n and top_n > 0:
+        gate = gate[:top_n]
+
+    summary = {
+        "gate_tickers": [r.get("hk_ticker") or r.get("ticker") for r in gate],
+        "qual_scored": [],
+        "deep_by_ticker": {},
+        "total_deep_escalations": 0,
+        "failed": [],
+    }
+
+    for idx, r in enumerate(gate, 1):
+        hk_ticker = r.get("hk_ticker") or r.get("ticker")
+        rep = r.get("ticker") or hk_ticker
+        nm = r.get("name") or hk_ticker
+        lead = _lead(r)
+
+        def _patch_partial(code, indicator_score, needle=hk_ticker):
+            try:
+                hk50_storage.update_ticker_in_latest_cohort_partial_qual(
+                    needle, code, indicator_score.model_dump(),
+                )
+            except Exception as exc:
+                logger.warning("HK50 partial qual patch %s/%s: %s", needle, code, exc)
+
+        job_store.update_progress(
+            job_id, "running",
+            f"phase 2: qual {idx}/{len(gate)} · {nm} ({hk_ticker})",
+        )
+
+        try:
+            qual = assess_hk50_qualitative(
+                hk_ticker,
+                report_ticker=rep,
+                name=nm,
+                quant_lead_score=lead,
+                use_llm=True,
+                force_refresh=force_refresh,
+                on_indicator_done=_patch_partial,
+            )
+            if qual:
+                qual.incomplete = qual.incomplete or False
+                hk50_storage.set_ticker_qualitative_in_latest_cohort(
+                    hk_ticker, qual.model_dump(),
+                )
+                n_deep = 0
+                for dim in (qual.policy, qual.moat):
+                    if not dim:
+                        continue
+                    for s in (dim.indicators or {}).values():
+                        if "deep" in (getattr(s, "model_used", "") or "").lower():
+                            n_deep += 1
+                summary["qual_scored"].append(hk_ticker)
+                summary["deep_by_ticker"][hk_ticker] = n_deep
+                summary["total_deep_escalations"] += n_deep
+        except Exception as exc:
+            logger.warning(
+                "HK50 phase-2 qual for %s threw — keeping curated/partial: %s",
+                hk_ticker, exc,
+            )
+            summary["failed"].append({"ticker": hk_ticker, "reason": str(exc)[:200]})
+
+    job_store.complete_job(job_id, {
+        "run_id": latest.get("run_id"),
+        "ticker_count": latest.get("ticker_count"),
+        "gate_count": len(gate),
+        "phase2_summary": summary,
+    })
+    logger.info(
+        "HK50 qual job %s complete: %d gate names, %d scored, %d deep escalations",
+        job_id, len(gate), len(summary["qual_scored"]),
+        summary["total_deep_escalations"],
+    )
+
+
+@router.post("/ideas/hk50/qual-deep-research")
+async def hk50_qual_deep_research(top_n: int = 20, force_refresh: bool = False):
+    """
+    Kick off the Phase-2 LLM qualitative (Policy + Moat) deep-research pass as
+    a BACKGROUND job. The quant cards must already exist (run /refresh first).
+    Returns {job_id, status} immediately; poll GET /ideas/hk50/jobs/{job_id}.
+
+    Dedupes: a second click while one is in flight returns the existing job.
+    """
+    in_flight = job_store.find_in_flight_job("hk50_qual")
+    if in_flight:
+        return {
+            "job_id": in_flight["job_id"],
+            "status": in_flight["status"],
+            "started_at": in_flight["started_at"],
+            "deduped": True,
+        }
+
+    job_id = job_store.create_job("hk50_qual")
+
+    async def _run():
+        await asyncio.to_thread(_execute_hk50_qual_job, job_id, top_n, force_refresh)
+
+    _spawn_background(_run())
+    return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False}
+
+
+@router.get("/ideas/hk50/jobs/{job_id}")
+async def get_hk50_job(job_id: str):
+    """Current state of an HK50 background job (shared job store)."""
+    try:
+        job = await asyncio.to_thread(job_store.get_job, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        return job
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hk50_job(%s) failed: %s", job_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
 # â”€â”€â”€ Complacency endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 
