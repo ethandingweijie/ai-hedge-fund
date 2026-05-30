@@ -172,6 +172,8 @@ def get_hk_financial_metrics(
         book_value_per_share=bvps,
         free_cash_flow_per_share=None,
         payout_ratio=payout,
+        # Dividend — AKShare provides 股息率TTM(%) / 派息比率(%)
+        dividend_yield=div_yield,
     )
 
     return [metrics]

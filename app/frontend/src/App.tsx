@@ -7,6 +7,7 @@ import { ScreenerPage } from './pages/ScreenerPage';
 import { WatchlistPage } from './pages/WatchlistPage';
 import { ResearchIdeasPage } from './pages/ResearchIdeasPage';
 import { SW46Page } from './pages/SW46Page';
+import { HK50Page } from './pages/HK50Page';
 import { ComplacencyPage } from './pages/ComplacencyPage';
 import { IdeaOfTheDayPage } from './pages/IdeaOfTheDayPage';
 import { ShortlistedIdeasPage } from './pages/ShortlistedIdeasPage';
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="/dd-alerts" element={<RequireAuth><DDAlertsPage /></RequireAuth>} />
           <Route path="/research-ideas" element={<RequireAuth><ResearchIdeasPage /></RequireAuth>} />
           <Route path="/research-ideas/sw46" element={<RequireAuth><SW46Page /></RequireAuth>} />
+          <Route path="/research-ideas/hk50" element={<RequireAuth><HK50Page /></RequireAuth>} />
           <Route path="/research-ideas/complacency" element={<RequireAuth><ComplacencyPage /></RequireAuth>} />
           <Route path="/research-ideas/idea-of-the-day/:ideaId" element={<RequireAuth><IdeaOfTheDayPage /></RequireAuth>} />
           <Route path="/research-ideas/shortlist" element={<RequireAuth><ShortlistedIdeasPage /></RequireAuth>} />

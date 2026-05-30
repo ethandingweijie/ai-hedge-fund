@@ -46,6 +46,15 @@ function aggColor(score: number | null | undefined): string {
   return 'bg-emerald-600/20 text-emerald-900 dark:text-emerald-300';
 }
 
+// Screen-score color (0-100, NORMAL — high = strong screen fit)
+function screenScoreColor(score: number | null | undefined): string {
+  if (score == null) return 'bg-muted text-muted-foreground';
+  if (score >= 75) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
+  if (score >= 55) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
+  if (score >= 35) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
+  return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
+}
+
 
 export function ResearchIdeasPage() {
   const navigate = useNavigate();
@@ -129,6 +138,7 @@ export function ResearchIdeasPage() {
 
   const handleClick = (idea: SW46IdeaMeta) => {
     if (idea.id === 'sw46') navigate('/research-ideas/sw46');
+    else if (idea.id === 'hk50') navigate('/research-ideas/hk50');
     else if (idea.id === 'complacency') navigate('/research-ideas/complacency');
     else if (idea.id === 'idea_of_the_day' && idea.latest_idea_id) {
       navigate(`/research-ideas/idea-of-the-day/${idea.latest_idea_id}`);
@@ -265,6 +275,9 @@ export function ResearchIdeasPage() {
                       {idea.last_gate_passers != null && (
                         <span>Gate passers: <span className="font-mono font-semibold text-foreground">{idea.last_gate_passers}</span></span>
                       )}
+                      {idea.id === 'hk50' && idea.last_avg_growth != null && (
+                        <span>Avg G / D: <span className="font-mono font-semibold text-foreground">{idea.last_avg_growth.toFixed(1)} / {idea.last_avg_dividend != null ? idea.last_avg_dividend.toFixed(1) : '—'}</span></span>
+                      )}
                       {isAi && idea.latest_idea_conviction != null && (
                         <span>
                           Conviction:{' '}
@@ -374,6 +387,44 @@ export function ResearchIdeasPage() {
                               </span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* HK50 dual top-5 preview — Growth + Dividend side by side.
+                        Both lists ship inline in the catalogue meta (top5_growth /
+                        top5_dividend), so no extra fetch is needed. This realises
+                        the hero-card spec: "indicate the top 5 for growth and top
+                        5 for dividend" under the main card. */}
+                    {idea.id === 'hk50' && ((idea.top5_growth?.length ?? 0) > 0 || (idea.top5_dividend?.length ?? 0) > 0) && (
+                      <div className="mt-2 pt-2 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5">Top 5 · Growth</div>
+                          <div className="space-y-1">
+                            {(idea.top5_growth ?? []).map((t, i) => (
+                              <div key={t.ticker} className="flex items-center gap-1.5 text-[11px]">
+                                <span className="text-muted-foreground w-3 text-right">{i + 1}</span>
+                                <span className="font-semibold text-foreground flex-1 truncate">{t.name}</span>
+                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold font-mono ${screenScoreColor(t.score)}`}>
+                                  {t.score != null ? t.score.toFixed(1) : '—'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1.5">Top 5 · Dividend</div>
+                          <div className="space-y-1">
+                            {(idea.top5_dividend ?? []).map((t, i) => (
+                              <div key={t.ticker} className="flex items-center gap-1.5 text-[11px]">
+                                <span className="text-muted-foreground w-3 text-right">{i + 1}</span>
+                                <span className="font-semibold text-foreground flex-1 truncate">{t.name}</span>
+                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold font-mono ${screenScoreColor(t.score)}`}>
+                                  {t.score != null ? t.score.toFixed(1) : '—'}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     )}

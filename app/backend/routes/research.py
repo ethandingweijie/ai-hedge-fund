@@ -29,8 +29,11 @@ from fastapi import APIRouter, HTTPException
 from app.backend.services import sw46_storage, complacency_storage
 from app.backend.services import complacency_job_store as job_store
 from app.backend.services import contrarian_storage
+from app.backend.services import hk50_storage
 from src.research_ideas.sw46.runner import run_sw46
 from src.research_ideas.sw46.universe import list_tickers as sw46_list_tickers
+from src.research_ideas.hk50.runner import run_hk50
+from src.research_ideas.hk50.universe import list_tickers as hk50_list_tickers
 from src.research_ideas.complacency.runner import run_complacency, score_one_ticker
 from src.research_ideas.complacency.universe import list_tickers as complacency_list_tickers
 from src.research_ideas.contrarian.idea_generator import generate_idea_of_the_day
@@ -127,6 +130,7 @@ async def list_research_ideas():
     """Catalogue of research ideas. v1: SW46 + Complacency."""
     latest_sw46 = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
     latest_compl = await asyncio.to_thread(complacency_storage.get_latest_complacency_run)
+    latest_hk50 = await asyncio.to_thread(hk50_storage.get_latest_hk50_run)
 
     sw46_meta = {
         "id": "sw46",
@@ -192,7 +196,39 @@ async def list_research_ideas():
         "latest_idea_vehicle": latest_iotd.get("expression_vehicle") if latest_iotd else None,
     }
 
-    return {"ideas": [iotd_meta, sw46_meta, complacency_meta]}
+    # HK50 — "Long China / HK" two-screener cohort. The hero card shows the
+    # top-5 of each screen, so build those preview lists from the latest run.
+    def _top5(results: list, key: str) -> list[dict]:
+        ranked = sorted(results, key=lambda r: (r.get(key) or 0.0), reverse=True)[:5]
+        return [
+            {
+                "ticker": r.get("ticker"),
+                "name": r.get("name"),
+                "score": r.get(key),
+            }
+            for r in ranked
+        ]
+
+    hk50_results = (latest_hk50.get("results") or []) if latest_hk50 else []
+    hk50_meta = {
+        "id": "hk50",
+        "name": "Long China / HK — Growth & Dividend Screeners",
+        "blurb": (
+            "A 50-name China/Hong Kong universe scored by two independent "
+            "0-100 screens — High Growth and High Dividend — and valued with "
+            "the IV15 engine (AICT-modulated for software / internet names). "
+            "Toggle between the Growth and Dividend rankings."
+        ),
+        "ticker_count": len(hk50_list_tickers()),
+        "last_run_at": latest_hk50.get("created_at") if latest_hk50 else None,
+        "last_avg_growth": latest_hk50.get("avg_growth") if latest_hk50 else None,
+        "last_avg_dividend": latest_hk50.get("avg_dividend") if latest_hk50 else None,
+        "headline_metric_label": "Avg Growth / Dividend",
+        "top5_growth": _top5(hk50_results, "growth_score"),
+        "top5_dividend": _top5(hk50_results, "dividend_score"),
+    }
+
+    return {"ideas": [iotd_meta, sw46_meta, complacency_meta, hk50_meta]}
 
 
 # â”€â”€â”€ Research Idea of the Day (contrarian deep-value) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -599,6 +635,95 @@ async def refresh_sw46(history_years: int = 7, max_workers: int = 6):
     except Exception as exc:
         tb = traceback.format_exc()
         logger.exception("refresh_sw46 failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+# ─── HK50 ("Long China / HK") endpoints ──────────────────────────────────
+
+
+@router.get("/ideas/hk50")
+async def get_hk50_cohort():
+    """Most-recent persisted HK50 cohort snapshot (both screen scores per row)."""
+    try:
+        latest = await asyncio.to_thread(hk50_storage.get_latest_hk50_run)
+        if not latest:
+            return {
+                "run_id": None,
+                "created_at": None,
+                "ticker_count": 0,
+                "avg_growth": None,
+                "avg_dividend": None,
+                "median_p_iv15": None,
+                "lead_growth_count": 0,
+                "failed_tickers": [],
+                "results": [],
+            }
+        return latest
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hk50_cohort failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/hk50/runs")
+async def list_hk50_runs(limit: int = 20):
+    """Historical HK50 cohort runs (header-only — no results JSON)."""
+    try:
+        runs = await asyncio.to_thread(hk50_storage.list_hk50_runs, limit)
+        return {"runs": runs}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_hk50_runs failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/hk50/{ticker}")
+async def get_hk50_ticker(ticker: str):
+    """Per-ticker detail — pulls from the latest cohort run. `ticker` matches
+    either the reported (ADR/HK) ticker or the canonical HK ticker."""
+    needle = ticker.upper()
+    try:
+        latest = await asyncio.to_thread(hk50_storage.get_latest_hk50_run)
+        if not latest:
+            raise HTTPException(status_code=404, detail="No HK50 cohort run yet — refresh first")
+        for r in latest.get("results", []):
+            if (r.get("ticker") or "").upper() == needle or (r.get("hk_ticker") or "").upper() == needle:
+                return r
+        raise HTTPException(status_code=404, detail=f"{ticker} not in HK50 universe")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hk50_ticker(%s) failed: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/hk50/refresh")
+async def refresh_hk50(max_workers: int = 6):
+    """
+    Trigger a fresh HK50 cohort run. Synchronous (returns once persisted) —
+    a full run takes ~2-3 min for 50 names across FMP (ADRs) + AKShare/yfinance
+    (native HK). Frontend should display a spinner.
+    """
+    try:
+        cohort = await asyncio.to_thread(
+            run_hk50,
+            max_workers=max_workers,
+            save=True,
+        )
+        return {
+            "run_id": cohort.run_id,
+            "created_at": cohort.created_at,
+            "ticker_count": cohort.ticker_count,
+            "avg_growth": cohort.avg_growth,
+            "avg_dividend": cohort.avg_dividend,
+            "median_p_iv15": cohort.median_p_iv15,
+            "lead_growth_count": cohort.lead_growth_count,
+            "failed_tickers": cohort.failed_tickers,
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("refresh_hk50 failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 

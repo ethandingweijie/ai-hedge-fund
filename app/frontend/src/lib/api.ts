@@ -366,6 +366,11 @@ export interface SW46IdeaMeta {
   latest_idea_theme?: string | null;
   latest_idea_catalyst?: string | null;
   latest_idea_vehicle?: string | null;
+  // HK50-specific:
+  last_avg_growth?: number | null;
+  last_avg_dividend?: number | null;
+  top5_growth?: Array<{ ticker: string; name: string; score: number | null }>;
+  top5_dividend?: Array<{ ticker: string; name: string; score: number | null }>;
 }
 
 export interface SW46TragicAlgebraYear {
@@ -504,6 +509,104 @@ export function refreshSW46(opts: { historyYears?: number; maxWorkers?: number }
 
 export function listSW46Runs(limit = 20): Promise<{ runs: SW46RunHeader[] }> {
   return fetchJson(`${BASE}/research/ideas/sw46/runs?limit=${limit}`);
+}
+
+// ── HK50 ("Long China / HK") two-screener cohort ────────────────────────────
+//
+// One 50-name China/HK universe scored by TWO independent 0-100 screens
+// (High Growth + High Dividend). A single payload carries both scores per row;
+// the UI derives the Growth ranking, the Dividend ranking, and the top-5 of
+// each client-side. IV15 is AICT-modulated only for software / internet names.
+
+export interface HK50MetricResult {
+  value: number | null;
+  source: string;   // primary | yfinance | fmp_growth | compute | structural | missing
+}
+
+export interface HK50IV15Detail {
+  aict: string;                     // "—" for non-software/internet names
+  currency: string;
+  haircut: number | null;
+  terminal_multiple: number | null;
+  blend_weight_a: number | null;
+  base_eps: number | null;
+  stage1_growth: number | null;
+  iv_gordon: number | null;
+  iv_buffett: number | null;
+  iv15: number | null;
+  price: number | null;
+  p_iv15: number | null;
+  valuation_points: number | null;
+}
+
+export interface HK50TickerResult {
+  ticker: string;                   // reported ticker (ADR or HK)
+  hk_ticker: string;                // canonical HK ticker (or native ADR)
+  name: string;
+  route_label: string;              // "ADR/FMP" | "HK/AKShare+yf"
+  currency: string;
+  growth_score: number;
+  dividend_score: number;
+  lead: 'Growth' | 'Dividend';
+  aict_tier: string;
+  price: number | null;
+  iv15: number | null;
+  p_iv15: number | null;
+  metrics: Record<string, HK50MetricResult>;
+  iv15_detail: HK50IV15Detail;
+  growth_rank: number | null;
+  dividend_rank: number | null;
+  error?: string | null;
+}
+
+export interface HK50Cohort {
+  run_id: string | null;
+  created_at: string | null;
+  ticker_count: number;
+  avg_growth: number | null;
+  avg_dividend: number | null;
+  median_p_iv15: number | null;
+  lead_growth_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+  results: HK50TickerResult[];
+}
+
+export interface HK50RunHeader {
+  run_id: string;
+  created_at: string;
+  ticker_count: number;
+  avg_growth: number | null;
+  avg_dividend: number | null;
+  median_p_iv15: number | null;
+  lead_growth_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}
+
+export function getHK50Cohort(): Promise<HK50Cohort> {
+  return fetchJson(`${BASE}/research/ideas/hk50`);
+}
+
+export function getHK50Ticker(ticker: string): Promise<HK50TickerResult> {
+  return fetchJson(`${BASE}/research/ideas/hk50/${encodeURIComponent(ticker.toUpperCase())}`);
+}
+
+export function refreshHK50(opts: { maxWorkers?: number } = {}): Promise<{
+  run_id: string;
+  created_at: string;
+  ticker_count: number;
+  avg_growth: number | null;
+  avg_dividend: number | null;
+  median_p_iv15: number | null;
+  lead_growth_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}> {
+  const q = new URLSearchParams();
+  if (opts.maxWorkers != null) q.set('max_workers', String(opts.maxWorkers));
+  return fetchJson(`${BASE}/research/ideas/hk50/refresh?${q}`, { method: 'POST' });
+}
+
+export function listHK50Runs(limit = 20): Promise<{ runs: HK50RunHeader[] }> {
+  return fetchJson(`${BASE}/research/ideas/hk50/runs?limit=${limit}`);
 }
 
 // ── Complacency Detector (Ackman 4-pillar equity screener) ──────────────────

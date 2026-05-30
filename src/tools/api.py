@@ -222,6 +222,12 @@ _RATIOS_TTM_MAP: dict[str, str] = {
     "cashRatioTTM":                      "cash_ratio",
     "interestCoverageRatioTTM":          "interest_coverage",
     "dividendPayoutRatioTTM":            "payout_ratio",
+    # Dimensionless ratios — currency-safe for ADRs (the per-share fields below
+    # are in reporting currency, but yield/PEG are unitless so they're safe to
+    # map directly). dividendYieldTTM previously unmapped → dividend_yield was
+    # always None for every FMP/ADR ticker, silently breaking dividend screens.
+    "dividendYieldTTM":                  "dividend_yield",
+    "priceToEarningsGrowthRatioTTM":     "peg_ratio",
     "bookValuePerShareTTM":              "book_value_per_share",
     "freeCashFlowPerShareTTM":           "free_cash_flow_per_share",
     "receivablesTurnoverTTM":            "receivables_turnover",
