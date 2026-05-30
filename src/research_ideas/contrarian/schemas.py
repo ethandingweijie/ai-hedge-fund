@@ -21,11 +21,46 @@ class ContrarianIdea(BaseModel):
     citations — generic prose gets flagged.
     """
     idea_id: str = Field(description="UUID for this idea")
-    ticker: str = Field(description="Primary ticker (US listing)")
+    ticker: str = Field(description="Primary ticker. US-listed preferred (incl. ADRs).")
     company_name: str = Field(description="Full company name")
     sector: Optional[str] = Field(default=None)
     industry: Optional[str] = Field(default=None)
     market_cap_usd: Optional[float] = Field(default=None, description="Current market cap in USD")
+
+    # ── Mode + thematic context (new) ─────────────────────────────────
+    # Lets the agent generate top-down ideas (geographic / sectoral)
+    # alongside the current bottom-up contrarian picks. All optional so
+    # ideas generated before this addition still validate.
+    idea_mode: Optional[str] = Field(
+        default="deep_value",
+        description=(
+            "Generation methodology. One of: "
+            "'deep_value' (current bottom-up contrarian US pick), "
+            "'thematic_geographic' (country/region rotation → stock pick), "
+            "'thematic_sector' (industry trend → stock pick), "
+            "'special_situation' (spin-off / M&A arb / restructuring)."
+        ),
+    )
+    theme: Optional[str] = Field(
+        default=None,
+        description=(
+            "Top-down thesis for thematic ideas (≤300 chars). E.g. "
+            "'China consumption recovery as PBOC pivots dovish + property "
+            "stabilization' or 'US small-cap biotech FDA approval cycle'."
+        ),
+    )
+    region: Optional[str] = Field(
+        default=None,
+        description="Geographic region: 'US', 'China', 'Japan', 'Europe', 'EM', 'Korea', etc.",
+    )
+    industry_theme: Optional[str] = Field(
+        default=None,
+        description="Industry-level theme description for thematic_sector mode.",
+    )
+    expression_vehicle: Optional[str] = Field(
+        default="stock",
+        description="How the user expresses the thesis: 'stock' (default), 'adr', 'etf'.",
+    )
 
     # ── Headline / hypothesis ─────────────────────────────────────────
     hypothesis: str = Field(

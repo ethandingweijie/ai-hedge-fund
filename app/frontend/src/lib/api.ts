@@ -358,6 +358,14 @@ export interface SW46IdeaMeta {
   latest_idea_id?: string | null;
   latest_idea_hypothesis?: string | null;
   latest_idea_conviction?: number | null;
+  // Richer hero-card fields (thematic context)
+  latest_idea_mode?: ContrarianIdeaMode | string | null;
+  latest_idea_region?: string | null;
+  latest_idea_sector?: string | null;
+  latest_idea_company?: string | null;
+  latest_idea_theme?: string | null;
+  latest_idea_catalyst?: string | null;
+  latest_idea_vehicle?: string | null;
 }
 
 export interface SW46TragicAlgebraYear {
@@ -802,6 +810,12 @@ export interface ContrarianSource {
   date: string | null;
 }
 
+export type ContrarianIdeaMode =
+  | 'deep_value'
+  | 'thematic_geographic'
+  | 'thematic_sector'
+  | 'special_situation';
+
 export interface ContrarianIdea {
   idea_id: string;
   ticker: string;
@@ -809,6 +823,13 @@ export interface ContrarianIdea {
   sector: string | null;
   industry: string | null;
   market_cap_usd: number | null;
+  // Thematic / methodology fields (new — backwards-compatible)
+  idea_mode?: ContrarianIdeaMode | null;
+  theme?: string | null;
+  region?: string | null;
+  industry_theme?: string | null;
+  expression_vehicle?: 'stock' | 'adr' | 'etf' | string | null;
+  // Core thesis fields
   hypothesis: string;
   deep_value_angle: string;
   asymmetric_angle: string;
@@ -860,14 +881,21 @@ export function listRecentContrarianIdeas(limit = 10): Promise<{ ideas: Contrari
  * Kick off a fresh idea generation as a background job. Returns immediately
  * with {job_id}; reuses the existing complacency_job_store + poll helper.
  */
-export function startContrarianGeneration(): Promise<ComplacencyJobHandle> {
-  return fetchJson(`${BASE}/research/ideas/idea-of-the-day/generate`, { method: 'POST' });
+export function startContrarianGeneration(
+  opts: { mode?: ContrarianIdeaMode } = {},
+): Promise<ComplacencyJobHandle> {
+  const q = opts.mode ? `?mode=${encodeURIComponent(opts.mode)}` : '';
+  return fetchJson(
+    `${BASE}/research/ideas/idea-of-the-day/generate${q}`,
+    { method: 'POST' },
+  );
 }
 
 export async function generateContrarianIdea(opts: {
   onProgress?: (s: ComplacencyJobStatus) => void;
+  mode?: ContrarianIdeaMode;
 } = {}): Promise<ContrarianIdea> {
-  const handle = await startContrarianGeneration();
+  const handle = await startContrarianGeneration({ mode: opts.mode });
   const final = await pollComplacencyJob(handle.job_id, { onProgress: opts.onProgress });
   return final.result as ContrarianIdea;
 }

@@ -177,6 +177,19 @@ async def list_research_ideas():
         "latest_idea_id": latest_iotd.get("idea_id") if latest_iotd else None,
         "latest_idea_hypothesis": latest_iotd.get("hypothesis") if latest_iotd else None,
         "latest_idea_conviction": latest_iotd.get("conviction_score") if latest_iotd else None,
+        # Richer fields for the hero-card excerpt (mode + thematic context
+        # + catalyst preview). All optional — frontend renders gracefully
+        # if any are null.
+        "latest_idea_mode": latest_iotd.get("idea_mode") if latest_iotd else None,
+        "latest_idea_region": latest_iotd.get("region") if latest_iotd else None,
+        "latest_idea_sector": latest_iotd.get("sector") if latest_iotd else None,
+        "latest_idea_company": latest_iotd.get("company_name") if latest_iotd else None,
+        "latest_idea_theme": (
+            (latest_iotd.get("theme") or latest_iotd.get("industry_theme"))
+            if latest_iotd else None
+        ),
+        "latest_idea_catalyst": latest_iotd.get("primary_catalyst") if latest_iotd else None,
+        "latest_idea_vehicle": latest_iotd.get("expression_vehicle") if latest_iotd else None,
     }
 
     return {"ideas": [iotd_meta, sw46_meta, complacency_meta]}
@@ -213,9 +226,13 @@ async def list_recent_ideas(limit: int = 10):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
-def _execute_idea_gen_job(job_id: str) -> None:
+def _execute_idea_gen_job(job_id: str, mode: str | None = None) -> None:
     """Background worker for idea generation (~30-90s via Qwen web search)."""
-    base_msg = "Qwen searching the web for contrarian opportunities"
+    base_msg = (
+        f"Qwen searching the web for contrarian opportunities (mode: {mode})"
+        if mode else
+        "Qwen searching the web for contrarian opportunities"
+    )
     job_store.update_progress(job_id, "running", base_msg)
     try:
         # Exclude tickers from the last 7 generated ideas to avoid same-day duplicates
@@ -224,12 +241,23 @@ def _execute_idea_gen_job(job_id: str) -> None:
 
         idea = _with_heartbeat(
             job_id, base_msg,
-            lambda: generate_idea_of_the_day(exclude_tickers=exclude),
+            lambda: generate_idea_of_the_day(exclude_tickers=exclude, mode=mode),
         )
         if not idea:
             job_store.fail_job(job_id, "generation returned empty (Qwen failed or invalid JSON)")
             return
         contrarian_storage.save_idea(idea)
+
+        # Best-effort Slack push (no-op if SLACK_WEBHOOK_URL not set).
+        # Manual generation triggers Slack same as the daily scheduler so
+        # users can opt to fire ad-hoc ideas to the channel.
+        try:
+            import os as _os
+            from src.research_ideas.contrarian.notifier import notify_slack
+            notify_slack(idea, app_base_url=_os.environ.get("APP_BASE_URL"))
+        except Exception as exc:
+            logger.warning("Slack notify failed for idea %s: %s", idea.get("idea_id"), exc)
+
         job_store.complete_job(job_id, idea)
     except Exception as exc:
         logger.exception("idea-of-the-day generation job %s failed: %s", job_id, exc)
@@ -237,8 +265,25 @@ def _execute_idea_gen_job(job_id: str) -> None:
 
 
 @router.post("/ideas/idea-of-the-day/generate")
-async def trigger_idea_generation():
-    """Kick off a new idea-of-the-day generation as a background job."""
+async def trigger_idea_generation(mode: str | None = None):
+    """
+    Kick off a new idea-of-the-day generation as a background job.
+
+    Optional `mode` query param forces a specific generation methodology:
+      'deep_value'           — bottom-up contrarian US single-stock pick
+      'thematic_geographic'  — top-down country/region thesis → stock
+      'thematic_sector'      — top-down industry trend → stock
+      'special_situation'    — spin-off, M&A arb, restructuring
+
+    If omitted, rotates daily based on date.
+    """
+    valid_modes = {"deep_value", "thematic_geographic", "thematic_sector", "special_situation"}
+    if mode is not None and mode not in valid_modes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mode: {mode!r}. Valid: {sorted(valid_modes)}",
+        )
+
     in_flight = job_store.find_in_flight_job("idea_of_the_day_gen")
     if in_flight:
         return {**in_flight, "deduped": True}
@@ -246,10 +291,10 @@ async def trigger_idea_generation():
     job_id = job_store.create_job("idea_of_the_day_gen")
 
     async def _run():
-        await asyncio.to_thread(_execute_idea_gen_job, job_id)
+        await asyncio.to_thread(_execute_idea_gen_job, job_id, mode)
 
     _spawn_background(_run())
-    return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False}
+    return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False, "mode": mode}
 
 
 @router.delete("/ideas/idea-of-the-day/{idea_id}")

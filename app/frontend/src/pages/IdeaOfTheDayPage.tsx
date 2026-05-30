@@ -181,11 +181,64 @@ export function IdeaOfTheDayPage() {
                 conviction {idea.conviction_score}/10
               </span>
             </div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">
-              {idea.sector || '—'} · {idea.market_cap_usd ? `$${(idea.market_cap_usd / 1e9).toFixed(1)}B mcap` : ''} · generated {formatTime(idea.generated_at)}
+            <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+              {/* Mode badge — tells the user HOW this idea was generated
+                  (bottom-up deep value vs top-down thematic) so they know
+                  what kind of research to expect. */}
+              {idea.idea_mode && (
+                <span
+                  className={
+                    'px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ' +
+                    (idea.idea_mode === 'thematic_geographic'
+                      ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200'
+                      : idea.idea_mode === 'thematic_sector'
+                      ? 'bg-cyan-500/20 text-cyan-900 dark:text-cyan-200'
+                      : idea.idea_mode === 'special_situation'
+                      ? 'bg-rose-500/20 text-rose-900 dark:text-rose-200'
+                      : 'bg-emerald-500/20 text-emerald-900 dark:text-emerald-200')
+                  }
+                  title={
+                    idea.idea_mode === 'thematic_geographic' ? 'Top-down country/region thesis → stock' :
+                    idea.idea_mode === 'thematic_sector'     ? 'Top-down industry trend → stock' :
+                    idea.idea_mode === 'special_situation'   ? 'Spin-off / M&A arb / restructuring' :
+                                                                'Bottom-up contrarian deep-value pick'
+                  }
+                >
+                  {idea.idea_mode.replace('_', ' ')}
+                </span>
+              )}
+              {idea.region && (
+                <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 text-[10px] font-semibold">
+                  {idea.region}
+                </span>
+              )}
+              {idea.expression_vehicle && idea.expression_vehicle !== 'stock' && (
+                <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 text-[10px] font-semibold uppercase">
+                  {idea.expression_vehicle}
+                </span>
+              )}
+              <span>{idea.sector || '—'}</span>
+              {idea.market_cap_usd != null && (
+                <span>· ${(idea.market_cap_usd / 1e9).toFixed(1)}B mcap</span>
+              )}
+              <span>· generated {formatTime(idea.generated_at)}</span>
             </div>
           </div>
         </div>
+
+        {/* Theme card — shown only for thematic modes (geographic / sector).
+            Renders ABOVE the stock hypothesis so the macro framing comes
+            first, then the stock as the expression vehicle. */}
+        {(idea.theme || idea.industry_theme) && (
+          <div className="p-3 rounded-lg border border-amber-400/40 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-900/10 mb-3">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-amber-800 dark:text-amber-300 mb-1">
+              {idea.idea_mode === 'thematic_geographic' ? 'Geographic theme' : 'Sector theme'}
+            </div>
+            <p className="text-xs text-foreground/90 leading-relaxed">
+              {idea.theme || idea.industry_theme}
+            </p>
+          </div>
+        )}
 
         {/* Hypothesis card */}
         <div className="p-4 rounded-lg border-2 border-purple-400/40 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-900/15 mb-4">

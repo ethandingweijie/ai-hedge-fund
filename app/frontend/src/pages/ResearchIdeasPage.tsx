@@ -275,20 +275,77 @@ export function ResearchIdeasPage() {
                       )}
                     </div>
 
-                    {/* IoTD preview: latest ticker + hypothesis */}
+                    {/* IoTD preview: richer hero-card excerpt with mode
+                        badge, theme (for thematic modes), ticker, hypothesis,
+                        catalyst preview. Mirrors the detail-page format so
+                        the card meaningfully summarises the idea at a glance. */}
                     {isAi && idea.latest_idea_ticker && (
-                      <div className="mt-2 pt-2 border-t border-purple-300/40 dark:border-purple-500/20">
-                        <div className="flex items-baseline gap-2 mb-1">
+                      <div className="mt-2 pt-2 border-t border-purple-300/40 dark:border-purple-500/20 space-y-1.5">
+                        {/* Mode + region + vehicle badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {idea.latest_idea_mode && (
+                            <span
+                              className={
+                                'px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ' +
+                                (idea.latest_idea_mode === 'thematic_geographic'
+                                  ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200'
+                                  : idea.latest_idea_mode === 'thematic_sector'
+                                  ? 'bg-cyan-500/20 text-cyan-900 dark:text-cyan-200'
+                                  : idea.latest_idea_mode === 'special_situation'
+                                  ? 'bg-rose-500/20 text-rose-900 dark:text-rose-200'
+                                  : 'bg-emerald-500/20 text-emerald-900 dark:text-emerald-200')
+                              }
+                            >
+                              {idea.latest_idea_mode.replace('_', ' ')}
+                            </span>
+                          )}
+                          {idea.latest_idea_region && (
+                            <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 text-[9px] font-semibold">
+                              {idea.latest_idea_region}
+                            </span>
+                          )}
+                          {idea.latest_idea_vehicle && idea.latest_idea_vehicle !== 'stock' && (
+                            <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 text-[9px] font-semibold uppercase">
+                              {idea.latest_idea_vehicle}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Ticker + company line */}
+                        <div className="flex items-baseline gap-2 flex-wrap">
                           <span className="font-mono text-sm font-bold text-purple-900 dark:text-purple-100">
                             {idea.latest_idea_ticker}
                           </span>
-                          <span className="text-[10px] uppercase tracking-wider text-purple-700/70 dark:text-purple-300/70">
+                          {idea.latest_idea_company && (
+                            <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">
+                              {idea.latest_idea_company}
+                            </span>
+                          )}
+                          <span className="text-[10px] uppercase tracking-wider text-purple-700/70 dark:text-purple-300/70 ml-auto">
                             Today's hypothesis
                           </span>
                         </div>
+
+                        {/* Theme line for thematic modes */}
+                        {idea.latest_idea_theme && (
+                          <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-snug line-clamp-2">
+                            <span className="font-semibold">Theme:</span>{' '}
+                            {idea.latest_idea_theme}
+                          </p>
+                        )}
+
+                        {/* Hypothesis */}
                         <p className="text-[11px] text-foreground/80 italic leading-snug line-clamp-3">
                           {idea.latest_idea_hypothesis}
                         </p>
+
+                        {/* Catalyst preview */}
+                        {idea.latest_idea_catalyst && (
+                          <p className="text-[10px] text-cyan-800 dark:text-cyan-300 leading-snug line-clamp-2">
+                            <span className="font-semibold">Catalyst:</span>{' '}
+                            {idea.latest_idea_catalyst}
+                          </p>
+                        )}
                       </div>
                     )}
 

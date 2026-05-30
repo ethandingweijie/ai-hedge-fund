@@ -50,6 +50,17 @@ async def startup_event():
     t = threading.Thread(target=_backfill_scheduler, daemon=True)
     t.start()
 
+    # Start "Research Idea of the Day" scheduler — fires daily at
+    # SGT 08:00 (= UTC 00:00). Idempotent: skips today's slot if an
+    # idea was already generated in the last 20 hours. Disable via
+    # IDEA_SCHEDULER_DISABLED=true.
+    try:
+        from src.research_ideas.contrarian.scheduler import start_scheduler
+        start_scheduler()
+        logger.info("Idea-of-the-day daily scheduler started")
+    except Exception as exc:
+        logger.warning("Idea-of-the-day scheduler failed to start: %s", exc)
+
 
 async def _check_ollama():
     try:
