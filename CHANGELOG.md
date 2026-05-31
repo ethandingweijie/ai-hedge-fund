@@ -1,5 +1,110 @@
 # Equitable — Changelog
 
+## v2.0.0 — 2026-05-31 (Research Ideas — Long China / HK + Complacency Detector)
+
+New top-level **Research Ideas** side tab housing two independent, parallel
+research modules. Both run *outside* the main DCF/pipeline so they can iterate
+freely without touching the live agent path. Both lean on a shared LLM
+rate-limit-prevention layer (see "429-rate-limit prevention" below).
+
+### Long China / HK — HK50 two-screener cohort with Policy × Moat overlay
+A 50-name Hong Kong / China cohort scored through **two parallel quant screens**
+(Growth and Dividend) with an LLM qualitative overlay layered on top.
+
+- **Two-phase build.** Phase 1 = deterministic quant composite + curated
+  overlay produces the ranked cohort table. Phase 2 = LLM deep-research fills a
+  **Policy × Moat** qualitative assessment per name (batch top-N or per-ticker),
+  patching rows live as each completes, then final-stamping the cohort.
+- **Qualitative is strictly parallel to quant — never summed.** Unlike the
+  Complacency Detector, HK50 rankings stay *pure quant*: the qual pass only
+  fills the **Conviction** column; row order never moves. This keeps the screen
+  honest about what is a quant signal vs. a narrative judgment.
+- **Conviction ladder.** HIGH-CONVICTION · SOLID · QUANT-RICH (trap) ·
+  QUAL-SUPPORT · WATCH · POLICY-RISK · UNSCORED — derived from a Policy posture
+  tier (Tailwind > Favorable > Neutral > Headwind > Crackdown) crossed with a
+  Moat tier (Fortress > Castle > Chapel > Stone > Wood). QUANT-RICH flags names
+  that screen well on quant but carry a policy/moat trap.
+- **Clickable Conviction cell.** Each Conviction badge opens a popover
+  elaborating the Policy-posture and Competitive-moat sub-metrics with flags,
+  plus a "Open details · generate research" hand-off into the detail drawer.
+- **Per-ticker manual research.** A "Generate / Re-run research" action on any
+  row (and inside the drawer) fires an on-demand qualitative deep-research job
+  for a single name — `POST /research/ideas/hk50/qual/{ticker}` — which dedupes
+  in-flight jobs, runs the same Policy × Moat assessment, live-patches the row,
+  and final-stamps the cohort. Verified end-to-end against Innovent (1801.HK →
+  QUANT-RICH, trap correctly flagged) and CMB (3968.HK → SOLID).
+- **Table layout.** Column order: S/N · Stock · **Conviction** · {screen} Score ·
+  AICT · Other · IV15 · Price · P/IV15 · Key Metrics (Conviction sits left of
+  Score; AICT sits right of Score).
+
+### Complacency Detector
+A blended quant + qual screen that surfaces names where the market may be
+under-pricing risk.
+
+- **`aggregate_score = quant (0–50) + qual (0–50)`** — here the qualitative
+  assessment *is* summed into the score (the deliberate opposite of HK50). Quant
+  contributes `(min(composite, 8) / 8) × 50`; qual contributes
+  `(qual.composite / qual.max_possible) × 50`.
+- Multi-indicator LLM deep-research per ticker, with live progress and an
+  idempotent re-score path.
+
+### 429-rate-limit prevention
+Both modules drive concurrent LLM (Qwen / DashScope) calls, which aggressively
+rate-limits bursts (3–4 concurrent calls trip a `limit_burst_rate` 429). Because
+each worker retries independently, naive per-client retries *amplify* the
+problem (3 workers × 3 retries = 9 calls in the recovery window, re-tripping the
+limit). The fix is a cooperative, process-wide throttle plus per-module
+concurrency discipline.
+
+- **Shared token bucket** — `src/research_ideas/complacency/qwen_throttle.py`
+  (`_QwenThrottle`). A single bucket shared across all Qwen worker threads in the
+  process. Workers must `acquire()` a token before any call; the bucket refills
+  at `QWEN_MAX_RPS` (default **0.5** = 1 call / 2 s) up to a capacity of
+  `QWEN_BURST_SIZE` (default **3**). `acquire(weight, max_wait_s=60)` blocks on
+  an empty bucket with a safety cap so a stuck throttle can never deadlock a run.
+- **Cooperative 429 drain.** On an observed 429, `report_429()` /
+  `report_429_from_exception()` (duck-types the `Retry-After` header off an
+  `openai.RateLimitError`) **drains the bucket to zero** and sets a cooldown of
+  `Retry-After` seconds (or `QWEN_BACKOFF_ON_429`, default **30 s**). Every other
+  worker's `acquire()` then waits out the cooldown before competing for tokens —
+  so one worker's 429 backs *all* workers off together instead of each retrying
+  blindly. Disable entirely with `QWEN_THROTTLE_DISABLED=true`; live telemetry
+  (tokens, cooldown remaining, 429s in last 5 min) via `stats()`.
+- **HK50 concurrency discipline** — `max_workers=3`, a **1.5 s stagger** on the
+  first 3 submissions so they don't all hit the API on the same tick, a
+  per-ticker deep-escalation cap (`_HK50_DEEP_MAX_PER_TICKER=3`, lock-guarded
+  process-global counter), a per-sub-metric timeout, and **sequential** cohort
+  processing (names run one at a time, not all 50 fanned out at once). Only
+  news-sensitive sub-metrics (policy codes + moat share-trajectory) are eligible
+  for deep escalation.
+- **Idempotent-restart ratchet.** A run interrupted by a 429 cascade preserves
+  cached sub-metrics scored at high confidence (`≥ 0.70`) and only re-fires the
+  failures on restart — e.g. an 8/12 partial run re-fires just the 4 misses
+  rather than the whole ticker, so retries shrink the API load instead of
+  repeating it.
+
+### Commits & deployment
+Shipped to `myfork/main` (Railway auto-deploys the web service from
+`railway.toml` → `docker/Dockerfile.web`, healthcheck `/`).
+
+- **HK50 / Long China / HK:** `2a99988` (two-screener cohort) →
+  `72f9abe` (qualitative Policy + Moat overlay, two-phase deep-research +
+  conviction column) → `7309dd7` (per-ticker manual deep-research + clickable
+  conviction popover).
+- **429 / throttle:** `a8f9b84` (handle DashScope 429 burst-rate — the real
+  root cause) → `97252c8` (`max_retries=3` on all Qwen entry points) →
+  `6b310b2` (process-wide token-bucket coordinating all Qwen calls) →
+  `c7b3bf7` (FMP token-bucket + shorter 429 backoff) → `8ce16af` (hard cap on
+  deep-research escalations + tighter timeouts).
+- **Complacency Detector:** `ee1fe77` (all 10 indicators v2) → `2e914e9`
+  (two-phase + idempotent restart) → `c8f5b01` (live drawer + cohort updates)
+  → `1b1b7f6` / `03ae1db` (rank by 0–100 aggregate score) → `b9818c2`
+  (refresh verification summary: deep-research count + cache reuse).
+- **Operational knobs (env):** `QWEN_MAX_RPS` (0.5), `QWEN_BURST_SIZE` (3),
+  `QWEN_BACKOFF_ON_429` (30 s), `QWEN_THROTTLE_DISABLED` (false).
+
+---
+
 ## v1.9.2 — 2026-04-24 (Sector-Aware Deep-Research Prompt Architecture)
 
 ### Architecture shift — (sector, profile_name) drives the Section 2F prompt
