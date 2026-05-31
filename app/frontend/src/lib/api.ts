@@ -371,6 +371,31 @@ export interface SW46IdeaMeta {
   last_avg_dividend?: number | null;
   top5_growth?: Array<{ ticker: string; name: string; score: number | null }>;
   top5_dividend?: Array<{ ticker: string; name: string; score: number | null }>;
+  // Momentum-specific (dual-direction long + short):
+  as_of?: string | null;
+  long_count?: number | null;
+  short_count?: number | null;
+  is_dual_direction?: boolean;
+  top_long_sectors?: MomentumSectorPreview[];
+  top_short_sectors?: MomentumSectorPreview[];
+  lead_long_tickers?: MomentumTickerPreview[];
+  lead_short_tickers?: MomentumTickerPreview[];
+}
+
+export interface MomentumSectorPreview {
+  etf: string;
+  label: string | null;
+  composite: number | null;
+  verdict: string | null;
+}
+
+export interface MomentumTickerPreview {
+  ticker: string;
+  name: string | null;
+  verdict: string | null;
+  composite: number | null;
+  sector_aligned: boolean | null;
+  sector: string | null;
 }
 
 export interface SW46TragicAlgebraYear {
@@ -1009,6 +1034,142 @@ export async function refreshComplacency(opts: {
 
 export function listComplacencyRuns(limit = 20): Promise<{ runs: ComplacencyRunHeader[] }> {
   return fetchJson(`${BASE}/research/ideas/complacency/runs?limit=${limit}`);
+}
+
+
+// ── Momentum (turning & accelerating, long + short) ─────────────────────────
+//
+// Two-layer signed-momentum screen. The SAME scorer runs on sector ETFs and
+// tickers, producing three signed pillars (STATE / TURN / ACCELERATION) that
+// sum to a -6..+6 composite. Positive => long, negative => short. The ticker
+// layer carries a sector-alignment overlay flagging the highest-conviction
+// names (direction agrees with its sector ETF).
+
+export type MomentumVerdict =
+  | 'Accelerating-Long'
+  | 'Turning-Long'
+  | 'Neutral'
+  | 'Turning-Short'
+  | 'Accelerating-Short';
+
+export type MomentumDirection = 'LONG' | 'SHORT' | 'NEUTRAL';
+
+// Shared scored shape (returned by score_series for both sectors and tickers).
+export interface MomentumScore {
+  r_5d: number | null;
+  r_21d: number | null;
+  r_63d: number | null;
+  r_126d: number | null;
+  r_252d: number | null;
+  r_12_1: number | null;
+  ma_stack: number;                 // +1 / 0 / -1
+  macd_hist: number | null;
+  rsi: number | null;
+  adx: number | null;
+  accel_roc: number | null;
+  return_slope: number | null;
+  volume_ratio: number | null;
+  days_since_turn: number | null;
+  state_score: number;
+  turn_score: number;
+  accel_score: number;
+  composite: number;                // -6..+6
+  signal_strength: number;          // 0-100 = |composite|/6
+  verdict: MomentumVerdict;
+  direction: MomentumDirection;
+  passes_gate: boolean;
+  flag_notes: string[];
+  justification: string | null;
+}
+
+export interface MomentumSectorResult extends MomentumScore {
+  etf: string;
+  sector: string | null;
+  label: string | null;
+  group: string | null;             // "macro" | "thematic"
+  bars: number;
+  composite_1m: number | null;      // composite ~1 month ago (rank a month ago)
+  composite_3m: number | null;      // composite ~3 months ago (rank a quarter ago)
+}
+
+export interface MomentumTickerResult extends MomentumScore {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  sector_etf: string | null;
+  price: number | null;
+  rank: number | null;
+  bars: number;
+  sector_aligned: boolean | null;
+  sector_direction: MomentumDirection | null;
+  sector_composite: number | null;
+  error?: string | null;
+}
+
+export interface MomentumCohort {
+  run_id: string | null;
+  created_at: string | null;
+  as_of: string | null;
+  universe: string;
+  ticker_count: number;
+  long_count: number;
+  short_count: number;
+  sectors: MomentumSectorResult[];
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+  results: MomentumTickerResult[];
+}
+
+export interface MomentumRunHeader {
+  run_id: string;
+  created_at: string;
+  as_of: string | null;
+  universe: string;
+  ticker_count: number;
+  long_count: number;
+  short_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}
+
+export function getMomentumCohort(): Promise<MomentumCohort> {
+  return fetchJson(`${BASE}/research/ideas/momentum`);
+}
+
+export function getMomentumTicker(ticker: string): Promise<MomentumTickerResult> {
+  return fetchJson(`${BASE}/research/ideas/momentum/${encodeURIComponent(ticker.toUpperCase())}`);
+}
+
+export function getMomentumSectors(): Promise<{
+  as_of: string | null;
+  created_at: string | null;
+  sectors: MomentumSectorResult[];
+}> {
+  return fetchJson(`${BASE}/research/ideas/momentum/sectors`);
+}
+
+/**
+ * Trigger a fresh momentum cohort run. Synchronous (returns once persisted) —
+ * no LLM calls, so a full ~75-ticker + sector run completes in well under a
+ * minute. `asOf` (ISO yyyy-mm-dd) points the screen at a historical date for
+ * validation (e.g. inside the software sell-down window).
+ */
+export function refreshMomentum(opts: { asOf?: string; maxWorkers?: number } = {}): Promise<{
+  run_id: string;
+  created_at: string;
+  as_of: string | null;
+  ticker_count: number;
+  long_count: number;
+  short_count: number;
+  failed_tickers: Array<{ ticker: string; reason: string }>;
+}> {
+  const q = new URLSearchParams();
+  if (opts.asOf) q.set('as_of', opts.asOf);
+  if (opts.maxWorkers != null) q.set('max_workers', String(opts.maxWorkers));
+  const qs = q.toString();
+  return fetchJson(`${BASE}/research/ideas/momentum/refresh${qs ? `?${qs}` : ''}`, { method: 'POST' });
+}
+
+export function listMomentumRuns(limit = 20): Promise<{ runs: MomentumRunHeader[] }> {
+  return fetchJson(`${BASE}/research/ideas/momentum/runs?limit=${limit}`);
 }
 
 

@@ -100,6 +100,121 @@ def _is_empty_value(v: Any) -> bool:
     return False
 
 
+# ── Phase 4: value-sanity bounds ────────────────────────────────────────────
+#
+# Plausibility ceilings per display `format`, expressed in the SAME unit the
+# value is stored in (see _FORMAT_META in sector_kpi_framework). These catch
+# PRESENT-BUT-WRONG values — unit errors, format-tag drift, garbage extractions
+# — that the empty-field walk is structurally blind to (a populated field
+# passes it regardless of magnitude). This is the safety net for the
+# 16600%-take-rate / 4570%-margin class.
+#
+# Bands are deliberately GENEROUS: a flag means "a human should glance at this",
+# not "this is definitely broken". Formats absent from this map (usd, usd_b,
+# int, string) have no defensible universal ceiling and are skipped.
+_SANE_ABS_MAX: dict[str, float] = {
+    "pct":    3.0,        # 0–1 contract, ×100 on render → 3.0 == 300%
+    "pct100": 300.0,      # already 0–100 on the wire
+    "bps":    200_000.0,  # 200k bps == 2000%
+    "x":      100.0,      # a 100× multiple is already extreme
+}
+
+
+def _value_sanity_flags(state: dict, ticker: str) -> list[dict]:
+    """Walk the ticker's rendered KPI card and flag values whose magnitude is
+    implausible for their declared format. Advisory only — emits
+    human_review_flags, never a hard fail. Returns [] when there's no card to
+    render (no profile, legacy profile, unresolved profile).
+
+    Drives off the explicit `format` Phase 1 added, so the check knows the
+    intended unit. Would have flagged PYPL (take_rate 16600%), FRSH
+    (profitability 4570%), and rule-of-40 (4500%)."""
+    flags: list[dict] = []
+    data = state.get("data") if isinstance(state.get("data"), dict) else {}
+    profile_name = ((data.get("profile_names") or {}).get(ticker) or "")
+    if not profile_name:
+        return flags
+    try:
+        # Lazy import: keeps the heavy sector framework off the audit module's
+        # import path and avoids any circular-import risk at load time.
+        from src.data.sector_kpi_framework import render_card_payload
+        payload = render_card_payload(profile_name, state, ticker)
+    except Exception as exc:
+        logger.warning(
+            "card_qa_agent[%s]: value-sanity render_card_payload failed: %s",
+            ticker, exc,
+        )
+        return flags
+    if not isinstance(payload, dict):
+        return flags
+    for group in payload.get("groups") or []:
+        for kpi in (group.get("kpis") or []):
+            value = kpi.get("value")
+            # Reject non-numerics and bools (bool is an int subclass).
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            if value != value:  # NaN
+                continue
+            limit = _SANE_ABS_MAX.get(kpi.get("format"))
+            if limit is None:
+                continue
+            if abs(value) > limit:
+                flags.append({
+                    "card":           "sector_valuation_card",
+                    "field":          kpi.get("key"),
+                    "reason":         "value_out_of_sane_range",
+                    "context": (
+                        f"{kpi.get('key')}={value} exceeds the plausible range "
+                        f"for format {kpi.get('format')!r} (|value| > {limit}); "
+                        f"likely a unit / format error."
+                    ),
+                    "evidence_quote": "",
+                })
+    return flags
+
+
+def _per_row_completeness_flags(
+    state: dict, ticker: str, card_name: str, schema: CardSchema,
+) -> list[dict]:
+    """For a card whose mandatory data is a LIST of row dicts, flag each row
+    missing a required sub-field. Closes the MRNA blind spot: a non-empty
+    pipeline_assets list passes the empty-field walk even though every row is
+    missing peak_sales_usd. Flag-and-report only (no auto-fix — _set_path can't
+    write into list elements). Returns [] for cards without a row contract or
+    when the list itself is empty (that's the mandatory-path walk's job)."""
+    flags: list[dict] = []
+    if not schema.row_path or not schema.row_required_keys:
+        return flags
+    rows = _get_path(state, schema.row_path, ticker)
+    if not isinstance(rows, list) or not rows:
+        return flags
+    base = schema.row_path.replace("{ticker}", ticker)
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            flags.append({
+                "card":           card_name,
+                "field":          f"{base}[{idx}]",
+                "reason":         "pipeline_row_not_a_dict",
+                "context":        f"row {idx} is {type(row).__name__}, expected dict",
+                "evidence_quote": "",
+            })
+            continue
+        for key in schema.row_required_keys:
+            if _is_empty_value(row.get(key)):
+                row_label = row.get("name") or f"row[{idx}]"
+                flags.append({
+                    "card":           card_name,
+                    "field":          f"{base}[{idx}].{key}",
+                    "reason":         "pipeline_row_missing_field",
+                    "context": (
+                        f"pipeline asset {row_label!r} (row {idx}) is missing "
+                        f"required field {key!r}"
+                    ),
+                    "evidence_quote": "",
+                })
+    return flags
+
+
 # ── Per-card audit (Phase 10.5b inner loop) ────────────────────────────────
 
 
@@ -141,8 +256,13 @@ def _audit_one_card(
         "remediation_success":   None,
     }
 
+    # Phase 4: per-row completeness. Runs REGARDLESS of the mandatory-walk
+    # result — the list can be non-empty (so the mandatory path passes) yet
+    # individual rows can be missing required sub-fields (the MRNA case).
+    flags.extend(_per_row_completeness_flags(state, ticker, card_name, schema))
+
     if not missing_mandatory:
-        # Clean — no judge call needed. Saves budget.
+        # Clean (mandatory-wise) — no judge call needed. Saves budget.
         return card_entry, remediations, flags
 
     # Step 2: invoke judge on the FIRST missing field. (Multiple missing
@@ -311,6 +431,10 @@ def run_card_qa_agent(
             "cards_inspected":      [],
             "auto_remediations":    [],
             "human_review_flags":   [flag],
+            # Card audits are short-circuited when Meta-Check fails, so the
+            # Phase 4 sweeps never run on a suspect classification → 0/0.
+            "kpis_out_of_sane_range": 0,
+            "rows_missing_subfields": 0,
             "qa_cost_estimate_usd": cost_cap.accumulated_usd,
             "qa_budget_hit":        False,
         }
@@ -368,6 +492,26 @@ def run_card_qa_agent(
         auto_remediations.extend(remediations)
         human_review_flags.extend(flags)
 
+    # Phase 4: value-sanity sweep — once per ticker over the rendered sector
+    # card (not per CardSchema). Advisory flags; the empty-field walk can't
+    # see these present-but-wrong magnitudes.
+    human_review_flags.extend(_value_sanity_flags(state, ticker))
+
+    # Phase 4 observability counters — surface "N out-of-range / N rows missing
+    # sub-fields" per run so regressions are visible without re-opening cards.
+    kpis_out_of_sane_range = sum(
+        1 for f in human_review_flags if f.get("reason") == "value_out_of_sane_range"
+    )
+    rows_missing_subfields = sum(
+        1 for f in human_review_flags
+        if f.get("reason") in ("pipeline_row_missing_field", "pipeline_row_not_a_dict")
+    )
+    if kpis_out_of_sane_range or rows_missing_subfields:
+        logger.warning(
+            "card_qa_agent[%s]: %d KPI(s) out-of-sane-range, %d pipeline row(s) "
+            "missing sub-fields", ticker, kpis_out_of_sane_range, rows_missing_subfields,
+        )
+
     qa_budget_hit = not cost_cap.check_headroom()
     return {
         "qa_version":           QA_VERSION,
@@ -378,6 +522,8 @@ def run_card_qa_agent(
         "cards_inspected":      cards_inspected,
         "auto_remediations":    auto_remediations,
         "human_review_flags":   human_review_flags,
+        "kpis_out_of_sane_range": kpis_out_of_sane_range,
+        "rows_missing_subfields": rows_missing_subfields,
         "qa_cost_estimate_usd": round(cost_cap.accumulated_usd, 4),
         "qa_budget_hit":        qa_budget_hit,
     }

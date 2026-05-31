@@ -1686,6 +1686,79 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
     },
 
+    # ── HEALTHCARE SERVICES ─────────────────────────────────────────────────
+    # Distinct sector from Biopharma. Without this block, Tier-1 profile
+    # verification (strategic_router) silently failed for every HealthcareServices
+    # ticker — INDUSTRY_VALUATION_PROFILES had no "HealthcareServices" key, so
+    # the lookup returned None and the ticker fell through to the sector default
+    # ("Managed Care"), giving animal-health / providers / distributors insurer
+    # KPIs. These sub-profile keys mirror SECTOR_KPI_FRAMEWORK exactly.
+    "HealthcareServices": {
+        "Managed Care": {
+            "methods": [
+                {"name": "P/E (Ops)",  "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",  "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",        "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EPV",        "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": "Regulated margins (Medical Loss Ratio) make operational EPS a reliable proxy.",
+        },
+        "Healthcare Providers / Services": {
+            "methods": [
+                {"name": "EV/EBITDA",  "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "P/E (Ops)",  "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",        "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue"],
+            "rationale": (
+                "Hospitals, dialysis, labs and care-delivery (HCA, THC, UHS, DVA, LH, DGX). "
+                "Capital-intensive, leverage-sensitive — EV/EBITDA anchors; DCF captures "
+                "same-facility volume + reimbursement. This is the SAFE GENERIC default for "
+                "HealthcareServices names without a more specific sub-profile."
+            ),
+        },
+        "Medical Devices": {
+            "methods": [
+                {"name": "EV/Revenue",   "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "P/E",          "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF (5-yr)",   "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "ROIC vs WACC", "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": (
+                "MedTech routed to HealthcareServices. High R&D + recurring consumables "
+                "(razor-blade) drive premium revenue multiples and long-cycle growth."
+            ),
+        },
+        "Animal Health": {
+            "methods": [
+                {"name": "P/E",        "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",  "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",        "weight": 0.30, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["rNPV", "EV/R&D"],
+            "rationale": (
+                "Animal-health pharma & diagnostics (ZTS, IDXX, ELAN). High-margin, "
+                "companion-animal-mix driven, with NO human clinical pipeline — so rNPV / "
+                "EV/R&D (Biopharma anchors) are excluded; steady EPS + DCF apply."
+            ),
+        },
+        "Pharma Distribution": {
+            "methods": [
+                {"name": "P/E (Ops)",  "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",  "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",  "weight": 0.30, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue", "P/BV"],
+            "rationale": (
+                "Drug distributors (MCK, COR/Cencora, CAH). Razor-thin operating margins "
+                "(~1-2%) on enormous revenue make EV/Revenue meaningless; P/E + FCF yield + "
+                "ROIC anchor. Leverage and customer concentration are the key risk levers."
+            ),
+        },
+    },
+
     # ── CONSUMER ──────────────────────────────────────────────────────────────
     "Consumer": {
         "Food & Beverage": {
@@ -3728,6 +3801,15 @@ REIT_VGPM_WEIGHTS = {
 # ── SGX TICKER_SECTOR_LOOKUP ─────────────────────────────────────────────────
 # Format: "CODE.SI": (sector, profile_hint, industry, company_name)
 # Imported by screener_service and analysis routes for sector classification.
+#
+# NB: `profile_hint` (field [1], e.g. "AssetMgmt", "Exchange", "Airline") is
+# screener-display metadata, NOT a SECTOR_KPI_FRAMEWORK / INDUSTRY_VALUATION_PROFILES
+# key — many hints have no registered profile. The card pipeline never uses this
+# field as a profile_name (its consumers read only field [3] notes for REIT
+# subtype); an unrecognised hint therefore falls through to the LLM profile
+# classifier rather than resolving to a bogus card. render_card_payload()
+# additionally returns None (and logs) for any profile string it cannot resolve,
+# so a stray hint degrades gracefully + visibly instead of mis-rendering.
 SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     # Banks
     "D05.SI":  ("Financials", "Money Center Bank", "Banks",           "DBS Group — SG money-center bank"),

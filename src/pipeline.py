@@ -412,6 +412,24 @@ def run_advanced_pipeline(
         progress.update_status("dcf_engine", primary_ticker, "✓ DCF complete",
                                partial_data={"dcf_range": state["data"].get("dcf_range")})
 
+        # ── Sector valuation card — FIRST mid-run emit ────────────────────────
+        # By this point profile_names (Phase 3), the metric extractors (Phase 3),
+        # and the DCF multiples (just now) are all in state, so the card renders
+        # substantially complete. Emit it as partial_data so the frontend's
+        # SectorValuationCard populates DURING the run instead of only after the
+        # whole pipeline finishes. The authoritative final render still happens
+        # later (Phase 10) and flows to the archive. Wrapped in try/except so a
+        # render failure never breaks this phase emit (mirrors the final render's
+        # defensive guard below).
+        try:
+            from src.data.sector_kpi_framework import render_card_payloads_for_run as _render_sc
+            _sc_partial = _render_sc(state) or {}
+            if _sc_partial:
+                progress.update_status("dcf_engine", primary_ticker, "✓ DCF complete",
+                                       partial_data={"sector_card": _sc_partial})
+        except Exception as _sc_e:
+            print(f"  [sector_card] mid-run render failed (non-fatal): {_sc_e!r}")
+
         # ----------------------------------------------------------------
         # PHASE 4.6 — Peer Comparison Engine (deterministic, no LLM)
         # ----------------------------------------------------------------
@@ -803,6 +821,18 @@ def run_advanced_pipeline(
             print(f"  [sector_card] render failed: {_e!r} — frontend will hide card")
             _sector_card = {}
         state["data"]["sector_card"] = _sector_card
+
+        # SECOND mid-run emit — the now-fully-correct card (includes any KPIs
+        # that only landed after the DCF emit, e.g. z-score composite inputs).
+        # Streams it BEFORE the Card-QA phase (which can run up to ~$0.50/ticker
+        # of LLM time) + save_run, so the user sees the final card without
+        # waiting for the run to fully complete.
+        if _sector_card:
+            try:
+                progress.update_status("sector_card", primary_ticker, "✓ Sector card complete",
+                                       partial_data={"sector_card": _sector_card})
+            except Exception as _sc_emit_e:
+                print(f"  [sector_card] final emit failed (non-fatal): {_sc_emit_e!r}")
 
         # ----------------------------------------------------------------
         # PHASE 10.5 — Card QA Agent (Layer A self-healing audit)

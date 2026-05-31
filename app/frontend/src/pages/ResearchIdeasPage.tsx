@@ -60,14 +60,34 @@ function screenScoreColor(score: number | null | undefined): string {
 
 // Long vs short framing for each cohort idea. SW46 (cheap-quality software)
 // and HK50 (growth/dividend China-HK) are long screens; the Complacency
-// Detector flags structurally complacent names to SHORT. The AI idea-of-the-
-// day is neither (it carries its own per-idea direction).
-function ideaSide(id: string): { label: string; cls: string } | null {
+// Detector flags structurally complacent names to SHORT. Momentum is
+// dual-direction — it surfaces BOTH long and short ideas, so it gets two
+// badges. The AI idea-of-the-day is neither (it carries its own per-idea
+// direction).
+const LONG_BADGE = 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-600/40';
+const SHORT_BADGE = 'bg-red-600/20 text-red-700 dark:text-red-300 border border-red-600/40';
+
+function ideaSides(id: string): Array<{ label: string; cls: string }> {
   if (id === 'sw46' || id === 'hk50')
-    return { label: 'Long Ideas', cls: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-600/40' };
+    return [{ label: 'Long Ideas', cls: LONG_BADGE }];
   if (id === 'complacency')
-    return { label: 'Short Ideas', cls: 'bg-red-600/20 text-red-700 dark:text-red-300 border border-red-600/40' };
-  return null;
+    return [{ label: 'Short Ideas', cls: SHORT_BADGE }];
+  if (id === 'momentum')
+    return [
+      { label: 'Long Ideas', cls: LONG_BADGE },
+      { label: 'Short Ideas', cls: SHORT_BADGE },
+    ];
+  return [];
+}
+
+// Signed-composite chip color for the momentum preview (-6..+6).
+function momentumColor(composite: number | null | undefined): string {
+  if (composite == null) return 'bg-muted text-muted-foreground';
+  if (composite >= 4) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
+  if (composite >= 1) return 'bg-emerald-600/15 text-emerald-800 dark:text-emerald-300';
+  if (composite <= -4) return 'bg-red-600/30 text-red-900 dark:text-red-200';
+  if (composite <= -1) return 'bg-red-600/15 text-red-800 dark:text-red-300';
+  return 'bg-muted text-muted-foreground';
 }
 
 
@@ -180,6 +200,7 @@ export function ResearchIdeasPage() {
     if (idea.id === 'sw46') navigate('/research-ideas/sw46');
     else if (idea.id === 'hk50') navigate('/research-ideas/hk50');
     else if (idea.id === 'complacency') navigate('/research-ideas/complacency');
+    else if (idea.id === 'momentum') navigate('/research-ideas/momentum');
     else if (idea.id === 'idea_of_the_day' && idea.latest_idea_id) {
       navigate(`/research-ideas/idea-of-the-day/${idea.latest_idea_id}`);
     }
@@ -271,7 +292,7 @@ export function ResearchIdeasPage() {
         <div className={isDesktop ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch' : 'space-y-3'}>
           {ideas.map((idea) => {
             const isAi = idea.id === 'idea_of_the_day';
-            const side = ideaSide(idea.id);
+            const sides = ideaSides(idea.id);
             return (
               <button
                 key={idea.id}
@@ -312,11 +333,11 @@ export function ResearchIdeasPage() {
                         (mobile and desktop alike). */}
                     {!isAi && (
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        {side && (
-                          <span className={`${sz.badge} px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${side.cls}`}>
-                            {side.label}
+                        {sides.map((s) => (
+                          <span key={s.label} className={`${sz.badge} px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${s.cls}`}>
+                            {s.label}
                           </span>
-                        )}
+                        ))}
                         <span className={`${sz.badge} px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold uppercase tracking-wider`}>
                           {idea.ticker_count} stocks
                         </span>
@@ -336,6 +357,17 @@ export function ResearchIdeasPage() {
                       )}
                       {idea.id === 'hk50' && idea.last_avg_growth != null && (
                         <span>Avg G / D: <span className="font-mono font-semibold text-foreground">{idea.last_avg_growth.toFixed(1)} / {idea.last_avg_dividend != null ? idea.last_avg_dividend.toFixed(1) : '—'}</span></span>
+                      )}
+                      {idea.id === 'momentum' && (idea.long_count != null || idea.short_count != null) && (
+                        <span>
+                          Long / Short:{' '}
+                          <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">{idea.long_count ?? 0}</span>
+                          {' / '}
+                          <span className="font-mono font-semibold text-red-700 dark:text-red-300">{idea.short_count ?? 0}</span>
+                        </span>
+                      )}
+                      {idea.id === 'momentum' && idea.as_of && (
+                        <span>As of: <span className="font-mono font-semibold text-foreground">{idea.as_of}</span></span>
                       )}
                       {isAi && idea.latest_idea_conviction != null && (
                         <span>
@@ -530,6 +562,86 @@ export function ResearchIdeasPage() {
                             cohort row's aggregate_score is null;
                             force-rescore the ticker to populate it)
                           </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Momentum preview — dual-direction. Sector tailwinds (top
+                        accelerating-up = long tailwinds; accelerating-down =
+                        short tailwinds) + the lead long/short tickers. Realises
+                        "see momentum turning & accelerating at both the sector
+                        and ticker level" for long AND short. */}
+                    {idea.id === 'momentum' &&
+                      ((idea.top_long_sectors?.length ?? 0) > 0 ||
+                       (idea.top_short_sectors?.length ?? 0) > 0 ||
+                       (idea.lead_long_tickers?.length ?? 0) > 0 ||
+                       (idea.lead_short_tickers?.length ?? 0) > 0) && (
+                      <div className="mt-2 pt-2 border-t border-border space-y-2.5">
+                        {/* Sector tailwinds */}
+                        {((idea.top_long_sectors?.length ?? 0) > 0 || (idea.top_short_sectors?.length ?? 0) > 0) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Long sector tailwinds</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(idea.top_long_sectors ?? []).map((s) => (
+                                  <div key={s.etf} className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
+                                    <span className="font-mono font-bold text-foreground">{s.etf}</span>
+                                    <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${momentumColor(s.composite)}`}>
+                                      {s.composite != null ? (s.composite > 0 ? `+${s.composite.toFixed(0)}` : s.composite.toFixed(0)) : '—'}
+                                    </span>
+                                  </div>
+                                ))}
+                                {(idea.top_long_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[10px] italic">none</span>}
+                              </div>
+                            </div>
+                            <div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-red-600 dark:text-red-400 mb-1.5`}>Short sector tailwinds</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(idea.top_short_sectors ?? []).map((s) => (
+                                  <div key={s.etf} className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
+                                    <span className="font-mono font-bold text-foreground">{s.etf}</span>
+                                    <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${momentumColor(s.composite)}`}>
+                                      {s.composite != null ? s.composite.toFixed(0) : '—'}
+                                    </span>
+                                  </div>
+                                ))}
+                                {(idea.top_short_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[10px] italic">none</span>}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {/* Lead long / short tickers */}
+                        {((idea.lead_long_tickers?.length ?? 0) > 0 || (idea.lead_short_tickers?.length ?? 0) > 0) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Lead longs</div>
+                              <div className="space-y-1">
+                                {(idea.lead_long_tickers ?? []).map((t) => (
+                                  <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
+                                    <span className="font-mono font-bold text-foreground w-12">{t.ticker}</span>
+                                    {t.sector && <span className={`text-[10px] truncate ${t.sector_aligned ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
+                                    <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ml-auto ${momentumColor(t.composite)}`}>
+                                      {t.composite != null ? (t.composite > 0 ? `+${t.composite.toFixed(0)}` : t.composite.toFixed(0)) : '—'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-red-600 dark:text-red-400 mb-1.5`}>Lead shorts</div>
+                              <div className="space-y-1">
+                                {(idea.lead_short_tickers ?? []).map((t) => (
+                                  <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
+                                    <span className="font-mono font-bold text-foreground w-12">{t.ticker}</span>
+                                    {t.sector && <span className={`text-[10px] truncate ${t.sector_aligned ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
+                                    <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ml-auto ${momentumColor(t.composite)}`}>
+                                      {t.composite != null ? t.composite.toFixed(0) : '—'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
                         )}
                       </div>
                     )}

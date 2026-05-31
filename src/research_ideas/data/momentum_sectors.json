@@ -1,0 +1,20 @@
+{
+  "macro": [
+    { "etf": "XLK",  "sector": "Technology",             "label": "Technology" },
+    { "etf": "XLC",  "sector": "Communication Services", "label": "Communication Services" },
+    { "etf": "XLY",  "sector": "Consumer Cyclical",      "label": "Consumer Discretionary" },
+    { "etf": "XLP",  "sector": "Consumer Defensive",     "label": "Consumer Staples" },
+    { "etf": "XLE",  "sector": "Energy",                 "label": "Energy" },
+    { "etf": "XLF",  "sector": "Financial Services",     "label": "Financials" },
+    { "etf": "XLV",  "sector": "Healthcare",             "label": "Health Care" },
+    { "etf": "XLI",  "sector": "Industrials",            "label": "Industrials" },
+    { "etf": "XLB",  "sector": "Materials",              "label": "Materials" },
+    { "etf": "XLRE", "sector": "Real Estate",            "label": "Real Estate" },
+    { "etf": "XLU",  "sector": "Utilities",              "label": "Utilities" }
+  ],
+  "thematic": [
+    { "etf": "IGV",  "sector": "Software",               "label": "Software (IGV)" },
+    { "etf": "WCLD", "sector": "Cloud Software",         "label": "Cloud Software (WCLD)" },
+    { "etf": "SMH",  "sector": "Semiconductors",         "label": "Semiconductors (SMH)" }
+  ]
+}

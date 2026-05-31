@@ -137,9 +137,19 @@ function posForAsset(asset: BiopharmaPipelineAsset): number {
   return Math.min(1.0, basePos * taMult);
 }
 
+// Peak sales in $billions, tolerating both the new backend field
+// (`peak_sales_usd`, raw dollars from _extract_pipeline_assets) and the older
+// `peak_sales_bn`. Without this fallback the Peak column + Total rNPV render
+// "—" for every asset (the INDV/MRNA bug).
+function peakBn(asset: BiopharmaPipelineAsset): number | null {
+  if (asset.peak_sales_bn != null) return asset.peak_sales_bn;
+  if (asset.peak_sales_usd != null) return asset.peak_sales_usd / 1e9;
+  return null;
+}
+
 // Per-asset rNPV contribution estimate (mirrors backend 2-stage rNPV formula)
 function riskAdjNpvBn(asset: BiopharmaPipelineAsset): number {
-  const peak = asset.peak_sales_bn ?? 0;
+  const peak = peakBn(asset) ?? 0;
   if (peak <= 0) return 0;
   const pos = posForAsset(asset);
   // Heuristic: op_margin 0.35 × ramp_profile_integral ≈ 0.30 (bell-shaped
@@ -281,7 +291,7 @@ function PipelineTable({ assets, sym }: {
                     </span>
                   </td>
                   <td className="py-2 pr-2 text-right font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
-                    {asset.peak_sales_bn != null ? `${sym}${asset.peak_sales_bn.toFixed(1)}B` : '—'}
+                    {(() => { const pk = peakBn(asset); return pk != null ? `${sym}${pk.toFixed(1)}B` : '—'; })()}
                   </td>
                   <td className="py-2 pr-2 text-right font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
                     {(pos * 100).toFixed(0)}%
@@ -336,7 +346,7 @@ function deriveCatalysts(assets: BiopharmaPipelineAsset[]): CatalystItem[] {
     .sort((a, b) => {
       // Order by priority, then peak sales (larger first within priority)
       if (a.priority !== b.priority) return a.priority - b.priority;
-      return (b.asset.peak_sales_bn ?? 0) - (a.asset.peak_sales_bn ?? 0);
+      return (peakBn(b.asset) ?? 0) - (peakBn(a.asset) ?? 0);
     })
     .slice(0, 6);   // show top 6
 }
@@ -366,6 +376,7 @@ function CatalystsTimeline({ assets, sym }: {
       <ol className="relative border-l-2 border-zinc-200 dark:border-zinc-800 ml-2">
         {catalysts.map((c, i) => {
           const rnpv_bn = riskAdjNpvBn(c.asset);
+          const peak_bn = peakBn(c.asset);
           return (
             <li key={`${c.asset.name}-${i}`} className="ml-4 pb-4 relative">
               <div
@@ -383,9 +394,9 @@ function CatalystsTimeline({ assets, sym }: {
                 <span className="font-semibold">{c.asset.name}</span>
                 {c.asset.indication && ` — ${c.asset.indication}`}
               </p>
-              {c.asset.peak_sales_bn != null && (
+              {peak_bn != null && (
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Peak {sym}{c.asset.peak_sales_bn.toFixed(1)}B · driving {sym}{rnpv_bn.toFixed(2)}B rNPV
+                  Peak {sym}{peak_bn.toFixed(1)}B · driving {sym}{rnpv_bn.toFixed(2)}B rNPV
                   {c.asset.partner && ` · w/ ${c.asset.partner}`}
                 </p>
               )}
@@ -519,7 +530,7 @@ export function BiopharmaValuationPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {dcfRange && <RNPVHeader dcfRange={dcfRange} currentPrice={currentPrice} sym={sym} />}
+      {dcfRange?.base?.intrinsic_value != null && <RNPVHeader dcfRange={dcfRange} currentPrice={currentPrice} sym={sym} />}
       <PipelineTable assets={assets} sym={sym} />
       <CatalystsTimeline assets={assets} sym={sym} />
 

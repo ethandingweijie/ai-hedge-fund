@@ -35,8 +35,11 @@ Migration policy (PR #1 = Option B — low risk):
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
+
+_LOG = logging.getLogger("sector_kpi_framework")
 
 # V4-β Z-Score Engine — peer-cohort normalisation. Imported lazily in
 # multiplier functions; module-level import is just to register the symbol so
@@ -1660,11 +1663,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         ],
     },
 
-    # ── Biopharma: Managed Care (UNH, ELV, HUM, CI, CVS) ──────────────────
-    # NOTE: Currently routed to Biopharma sector in TICKER_SECTOR_LOOKUP but
-    # may need a HealthcareServices sector creation in a follow-up PR.
+    # ── HealthcareServices: Managed Care (UNH, ELV, HUM, CI, CVS) ──────────
+    # Sector is HealthcareServices (matches TICKER_SECTOR_LOOKUP). Previously
+    # registered under "Biopharma", which caused the card header to render
+    # "BIOPHARMA · MANAGED CARE" and made Managed Care the ONLY candidate
+    # profile for the HealthcareServices sector — so any health-services name
+    # without a hardcoded override (e.g. animal-health ZTS) inherited insurer
+    # KPIs. See sibling HealthcareServices profiles below.
     "Managed Care": {
-        "sector":         "Biopharma",
+        "sector":         "HealthcareServices",
         "anchor_methods": ["DCF", "P/E (ops)", "EV/EBITDA"],
         "quality_tiers": {
             "kpi_bands": [
@@ -1739,6 +1746,374 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             "Q4 earnings call + CMS Final Notice analysis",
             "Latest 10-K",
             "CMS rate-update letters (annual)",
+        ],
+    },
+
+    # ── HealthcareServices: Healthcare Providers / Services ───────────────
+    # Hospitals, dialysis, labs, services (HCA, THC, UHS, DVA, LH, DGX).
+    # This is the SAFE GENERIC default for the HealthcareServices sector —
+    # margin + leverage driven, no insurance-specific KPIs.
+    "Healthcare Providers / Services": {
+        "sector":         "HealthcareServices",
+        "anchor_methods": ["EV/EBITDA", "P/E (ops)", "DCF"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "ebitda_margin_pct", "direction": "higher_better",
+                 "bands": [{"min": 0.20, "mult": 1.25, "label": "elite"},
+                           {"min": 0.15, "mult": 1.10, "label": "strong"},
+                           {"min": 0.10, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,  "mult": 0.90, "label": "weak"}]}
+            ],
+            "cap": [0.7, 1.4],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 3.0,  "mult": 1.10, "label": "fortress"},
+                      {"max": 5.0,  "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "same_facility_revenue_growth_pct",
+                "mandatory":       True,
+                "search_phrases":  ["same-facility revenue growth", "same-store revenue",
+                                    "organic revenue growth", "same-facility net revenue"],
+                "compute_hint":    "Same-facility (organic) revenue growth YoY (decimal)",
+                "clamp":           (-0.10, 0.25),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "admissions_growth_yoy_pct",
+                "mandatory":       False,
+                "search_phrases":  ["admissions growth", "adjusted admissions",
+                                    "patient volume growth", "same-facility admissions"],
+                "compute_hint":    "Adjusted admissions / patient volume growth YoY (decimal)",
+                "clamp":           (-0.15, 0.20),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "ebitda_margin_pct",
+                "mandatory":       True,
+                "search_phrases":  ["EBITDA margin", "adjusted EBITDA margin"],
+                "compute_hint":    "Adjusted EBITDA / revenue (decimal)",
+                "clamp":           (0.0, 0.40),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "ebitdaMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "bad_debt_pct",
+                "mandatory":       False,
+                "search_phrases":  ["bad debt", "uncompensated care",
+                                    "provision for doubtful accounts"],
+                "compute_hint":    "Bad debt / uncompensated care as % of revenue (decimal)",
+                "clamp":           (0.0, 0.25),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "occupancy_rate_pct",
+                "mandatory":       False,
+                "search_phrases":  ["occupancy rate", "bed occupancy", "utilization rate"],
+                "compute_hint":    "Facility occupancy / utilization rate (decimal)",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented",
+                "clamp":           (-1.0, 12.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K + Q earnings (same-facility metrics)",
+            "Investor day volume + margin guidance",
+        ],
+    },
+
+    # ── HealthcareServices: Medical Devices ───────────────────────────────
+    # MedTech in the HealthcareServices sector (distinct from Biopharma's
+    # "MedTech / Devices"). Premium revenue multiples; gross-margin + leverage
+    # driven (ISRG, EW, ZBH-style names that route as HealthcareServices).
+    "Medical Devices": {
+        "sector":         "HealthcareServices",
+        "anchor_methods": ["EV/Revenue", "P/E (ops)", "DCF"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "gross_margin_pct", "direction": "higher_better",
+                 "bands": [{"min": 0.70, "mult": 1.25, "label": "elite"},
+                           {"min": 0.60, "mult": 1.10, "label": "strong"},
+                           {"min": 0.50, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,  "mult": 0.90, "label": "weak"}]}
+            ],
+            "cap": [0.7, 1.5],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 2.5,  "mult": 1.10, "label": "fortress"},
+                      {"max": 4.0,  "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "organic_revenue_growth_pct",
+                "mandatory":       True,
+                "search_phrases":  ["organic revenue growth", "constant-currency revenue growth",
+                                    "underlying revenue growth"],
+                "compute_hint":    "Organic (constant-currency) revenue growth YoY (decimal)",
+                "clamp":           (-0.15, 0.40),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "gross_margin_pct",
+                "mandatory":       True,
+                "search_phrases":  ["gross margin", "adjusted gross margin"],
+                "compute_hint":    "Gross profit / revenue (decimal)",
+                "clamp":           (0.0, 0.90),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "grossProfitMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "operating_margin_pct",
+                "mandatory":       False,
+                "search_phrases":  ["operating margin", "adjusted operating margin"],
+                "compute_hint":    "Operating income / revenue (decimal)",
+                "clamp":           (-0.20, 0.45),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "operatingProfitMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "rd_intensity_pct",
+                "mandatory":       False,
+                "search_phrases":  ["R&D as % of revenue", "research and development intensity"],
+                "compute_hint":    "R&D expense / revenue (decimal)",
+                "clamp":           (0.0, 0.30),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "recurring_revenue_pct",
+                "mandatory":       False,
+                "search_phrases":  ["recurring revenue", "consumables revenue mix",
+                                    "razor-blade revenue"],
+                "compute_hint":    "Recurring / consumables revenue as % of total (decimal)",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented",
+                "clamp":           (-1.0, 10.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K + Q earnings (organic growth + margin)",
+            "Investor day pipeline + recurring-revenue mix",
+        ],
+    },
+
+    # ── HealthcareServices: Animal Health ─────────────────────────────────
+    # Animal-health pharma & diagnostics (ZTS, IDXX, ELAN). High-margin,
+    # companion-animal-mix driven; NO human clinical pipeline. This profile
+    # exists so animal-health names no longer inherit Managed Care insurer
+    # KPIs when routed to HealthcareServices.
+    "Animal Health": {
+        "sector":         "HealthcareServices",
+        "anchor_methods": ["P/E (ops)", "EV/EBITDA", "DCF"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "operating_margin_pct", "direction": "higher_better",
+                 "bands": [{"min": 0.35, "mult": 1.25, "label": "elite"},
+                           {"min": 0.28, "mult": 1.10, "label": "strong"},
+                           {"min": 0.20, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,  "mult": 0.90, "label": "weak"}]}
+            ],
+            "cap": [0.7, 1.5],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 2.0,  "mult": 1.10, "label": "fortress"},
+                      {"max": 3.5,  "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "organic_revenue_growth_pct",
+                "mandatory":       True,
+                "search_phrases":  ["organic revenue growth", "constant-currency revenue growth",
+                                    "operational revenue growth"],
+                "compute_hint":    "Organic (constant-currency) revenue growth YoY (decimal)",
+                "clamp":           (-0.10, 0.30),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "companion_animal_mix_pct",
+                "mandatory":       False,
+                "search_phrases":  ["companion animal mix", "companion animal revenue",
+                                    "pet vs livestock mix"],
+                "compute_hint":    "Companion-animal (higher-margin) revenue as % of total (decimal)",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "operating_margin_pct",
+                "mandatory":       True,
+                "search_phrases":  ["operating margin", "adjusted operating margin"],
+                "compute_hint":    "Operating income / revenue (decimal)",
+                "clamp":           (0.0, 0.50),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "operatingProfitMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "gross_margin_pct",
+                "mandatory":       False,
+                "search_phrases":  ["gross margin", "adjusted gross margin"],
+                "compute_hint":    "Gross profit / revenue (decimal)",
+                "clamp":           (0.0, 0.90),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "grossProfitMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "rd_intensity_pct",
+                "mandatory":       False,
+                "search_phrases":  ["R&D as % of revenue", "research and development intensity"],
+                "compute_hint":    "R&D expense / revenue (decimal)",
+                "clamp":           (0.0, 0.20),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented",
+                "clamp":           (-1.0, 8.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K + Q earnings (organic growth + margin)",
+            "Investor day companion-animal mix + pipeline",
+        ],
+    },
+
+    # ── HealthcareServices: Pharma Distribution ───────────────────────────
+    # Drug distributors / PBMs-distribution (MCK, COR/Cencora, CAH). Razor-thin
+    # operating margins (~1-2%) on enormous revenue; ROIC + leverage matter
+    # more than margin level.
+    "Pharma Distribution": {
+        "sector":         "HealthcareServices",
+        "anchor_methods": ["P/E (ops)", "EV/EBITDA", "FCF Yield"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "operating_margin_pct", "direction": "higher_better",
+                 "bands": [{"min": 0.020, "mult": 1.25, "label": "elite"},
+                           {"min": 0.012, "mult": 1.10, "label": "strong"},
+                           {"min": 0.008, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,   "mult": 0.90, "label": "weak"}]}
+            ],
+            "cap": [0.8, 1.3],
+        },
+        "risk_adjustment": {
+            "kpi": "net_debt_to_ebitda", "direction": "lower_better",
+            "bands": [{"max": 2.0,  "mult": 1.10, "label": "fortress"},
+                      {"max": 3.5,  "mult": 1.00, "label": "in-band"},
+                      {"max": 99.0, "mult": 0.85, "label": "weak"}],
+        },
+        "kpis": [
+            {
+                "key":             "revenue_growth_pct",
+                "mandatory":       True,
+                "search_phrases":  ["revenue growth", "total revenue YoY", "TTM revenue growth"],
+                "compute_hint":    "Consolidated revenue growth YoY (decimal)",
+                "clamp":           (-0.20, 0.40),
+                "source":          "F",
+                "extractor_only":  False,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "operating_margin_pct",
+                "mandatory":       True,
+                "search_phrases":  ["operating margin", "adjusted operating margin"],
+                "compute_hint":    "Operating income / revenue (decimal — distributors run ~1-2%)",
+                "clamp":           (0.0, 0.10),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "operatingProfitMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "gross_margin_pct",
+                "mandatory":       False,
+                "search_phrases":  ["gross margin", "gross profit margin"],
+                "compute_hint":    "Gross profit / revenue (decimal)",
+                "clamp":           (0.0, 0.20),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "grossProfitMarginTTM",
+                "decimal_format":  True,
+            },
+            {
+                "key":             "distribution_segment_growth_pct",
+                "mandatory":       False,
+                "search_phrases":  ["distribution segment growth", "pharmaceutical distribution growth",
+                                    "drug distribution revenue growth"],
+                "compute_hint":    "Core pharmaceutical-distribution segment revenue growth YoY (decimal)",
+                "clamp":           (-0.15, 0.30),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "roic_pct",
+                "mandatory":       False,
+                "search_phrases":  ["return on invested capital", "ROIC"],
+                "compute_hint":    "Return on invested capital (decimal)",
+                "clamp":           (0.0, 0.60),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "net_debt_to_ebitda",
+                "mandatory":       True,
+                "search_phrases":  ["net debt to EBITDA", "leverage ratio", "net debt / EBITDA"],
+                "compute_hint":    "(total_debt - cash) / TTM EBITDA — FMP-augmented",
+                "clamp":           (-1.0, 8.0),
+                "source":          "F",
+                "extractor_only":  False,
+                "fmp_field":       "netDebtToEBITDATTM",
+            },
+        ],
+        "source_priority": [
+            "Latest 10-K + Q earnings (segment revenue + margin)",
+            "Distribution contract renewal cadence (large-customer concentration)",
         ],
     },
 
@@ -7279,26 +7654,143 @@ def is_legacy_profile(profile_name: str | None) -> bool:
     return bool(profile_name) and profile_name in _LEGACY_PROFILES
 
 
-# Heuristic format inference for KPI values. Keyed on substrings in `key` —
-# the framework spec doesn't store an explicit format so we derive it.
+# ── KPI display-format contract ──────────────────────────────────────────────
+# Display formats understood by the frontend `fmt()` (SectorValuationCard.tsx):
+#   pct     — value is a 0–1 ratio, rendered "× 100 = N%"   (e.g. 0.12 → "12.0%")
+#   pct100  — value is ALREADY 0–100, rendered "N%"          (no ×100)
+#   bps     — basis points, rendered "N bps"                 (e.g. 166 → "166 bps")
+#   usd     — absolute dollars, rendered "$N"                (toLocaleString)
+#   usd_b   — value already in $billions, rendered "$N.NB"
+#   x       — a multiple / ratio / score, rendered "N×"
+#   int     — a count / duration, rendered as a plain integer
+#   string  — opaque text (dates, free-form) rendered verbatim
+#
+# Format resolution order (see _infer_kpi_format): an explicit per-KPI "fmt"
+# wins; then the curated key→format map below (covers EVERY instance of a key,
+# e.g. all 30 net_debt_to_ebitda defs at once); then suffix-anchored heuristics.
+_KPI_FORMAT_OVERRIDES: dict[str, str] = {
+    # ── multiples / leverage / coverage / unitless scores → "×" ──
+    # (these carry NO decimal_format flag and are NOT percentages; the old
+    #  substring heuristic mis-rendered them as % → e.g. ltv_cac 8 → "800%")
+    "net_debt_to_ebitda":      "x",   # was raw float "-0.4326732673" (30 profiles)
+    "net_debt_to_fre_ebitda":  "x",
+    "debt_to_ebitda":          "x",
+    "magic_number":            "x",
+    "ltv_cac_ratio":           "x",
+    "unit_econ_ratio":         "x",
+    "unit_economics_ratio":    "x",
+    "backlog_coverage_ratio":  "x",
+    "book_to_bill_ratio":      "x",
+    "rule_of_40_score":        "x",   # was "%" → 4500%; a unitless score
+    "token_velocity":          "x",
+    # ── ratios conventionally quoted as % — pinned so they don't depend on a
+    #    per-instance decimal_format flag (some defs of the same key omit it,
+    #    which silently regressed them to a raw "string" before this map) ──
+    "reserve_replacement_ratio": "pct",
+    "solvency_ratio_scr":        "pct",
+    "tier_1_capital_ratio":      "pct",
+    "provision_coverage_ratio":  "pct",
+    "leverage_ratio_delegated":  "pct",
+    "leverage_ratio":            "pct",
+    "dividend_payout_ratio":     "pct",
+    "loan_to_deposit_ratio":     "pct",
+    "cet1_ratio":                "pct",
+    "efficiency_ratio":          "pct",
+    "combined_ratio":            "pct",
+    "compensation_ratio":        "pct",
+    "expense_ratio":             "pct",
+    "loss_ratio":                "pct",
+    "medical_loss_ratio":        "pct",
+    "npl_ratio":                 "pct",
+    "liquidity_coverage_ratio":  "pct",
+    "btc_ltv_ratio":             "pct",
+    "personnel_cost_to_revenue": "pct",
+    # ── value already expressed in $billions ──
+    "ai_revenue_run_rate_usd_b": "usd_b",   # was "%" → 15000%
+    # ── absolute USD the suffix rules don't catch ──
+    "casm_ex_fuel":        "usd",
+    "realized_spark_spread": "usd",
+    "dpu_cents":           "usd",
+    "yield_per_pax_mile":  "usd",
+    "net_new_billings":    "usd",
+    "sales_per_sq_ft":     "usd",
+    # ── counts / durations / capacities ──
+    "inventory_days_sales":       "int",
+    "payback_period_months":      "int",
+    "cac_payback_months":         "int",
+    "cash_and_btc_runway_months": "int",
+    "cash_runway_qtrs":           "int",
+    "postpaid_net_adds_qtr":      "int",
+    "avg_daily_volume_adv":       "int",
+    "weighted_avg_contract_life": "int",
+    "generation_output_mwh":      "int",
+    "mkt_penetration_per_region": "int",
+    # ── intentionally textual (year / date) — exclude from numeric-string lint ──
+    "loe_year_top_drug":  "string",
+    "next_catalyst_date": "string",
+}
+
+# format → (default decimals, display unit). Emitted in render_card_payload so
+# the frontend can format without re-deriving. Frontend may override decimals.
+_FORMAT_META: dict[str, tuple[int | None, str | None]] = {
+    "pct":    (1, "%"),
+    "pct100": (1, "%"),
+    "bps":    (0, "bps"),
+    "usd":    (2, "$"),
+    "usd_b":  (1, "$B"),
+    "x":      (2, "×"),
+    "int":    (0, None),
+    "string": (None, None),
+}
+
+
 def _infer_kpi_format(kpi: dict) -> str:
+    """Resolve a KPI's display format. Explicit `fmt` > curated override map >
+    suffix-anchored heuristics. Suffix matching (not naive substring) avoids the
+    `gene*ratio*n` / `penet*ratio*n` / `_rate`-in-`burn_rate` collisions."""
+    # 1) explicit per-KPI override
+    explicit = kpi.get("fmt")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    key = (kpi.get("key") or "").lower()
+    # 2) curated key→format map (one entry covers all instances of a key)
+    if key in _KPI_FORMAT_OVERRIDES:
+        return _KPI_FORMAT_OVERRIDES[key]
+    label = (kpi.get("compute_hint") or "").lower()
+    # 3) basis points — BEFORE any _rate/ratio/pct logic
+    if key.endswith("_bps"):
+        return "bps"
+    # 4) explicit decimal (0–1) values are percentages by contract
     if kpi.get("decimal_format"):
         return "pct"
-    key = kpi.get("key", "").lower()
-    label = (kpi.get("compute_hint") or "").lower()
-    blob = key + " " + label
-    if any(t in key for t in ("_pct", "ratio", "_rate", "yield", "margin", "_yoy")):
-        return "pct"
-    if any(t in key for t in ("per_share", "per_oz", "per_unit", "price", "_aisc", "value")):
+    # 5) billions, then absolute USD / per-unit prices
+    if key.endswith("_usd_b") or key.endswith("_usd_bn") or key.endswith("_bn"):
+        return "usd_b"
+    if (key.endswith("_usd") or key.endswith("_cents")
+            or key.endswith("_per_boe") or key.endswith("_per_tonne")
+            or key.endswith("_per_user") or key.endswith("_per_vehicle")
+            or key.endswith("_per_contract") or key.endswith("_aisc")
+            or any(t in key for t in ("per_share", "per_oz", "per_unit",
+                                      "per_btc", "price", "value"))):
         return "usd"
-    if any(t in key for t in ("_x", "coverage", "leverage", "multiple", "turnover")):
+    # 6) multiples / coverage / turnover (NON-decimal) → "×"
+    if key.endswith(("_coverage", "_turnover", "_multiple", "_x")):
         return "x"
-    if any(t in key for t in ("count", "quartile", "weeks", "years", "_qty")):
-        return "int"
-    if "$" in label:
-        return "usd"
-    if "%" in label:
+    # 7) percentage families — suffix / word-anchored
+    if (key.endswith(("_pct", "_yoy", "_qoq", "_growth", "_margin", "_yield",
+                      "_rate", "_mix", "_delta"))
+            or "_pct_" in key or "_margin" in key or "margin" in key):
         return "pct"
+    # 8) counts / durations / capacities
+    if key.endswith(("_count", "_quartile", "_weeks", "_years", "_qty",
+                     "_months", "_qtrs", "_mwh", "_gw", "_kwspm")):
+        return "int"
+    # 9) label-based last resort (NB: no "% in label → pct"; that mis-scaled
+    #    unitless scores like rule_of_40 into "4500%")
+    if "$" in label or " usd" in label:
+        return "usd"
+    if "basis point" in label or " bps" in label:
+        return "bps"
     return "string"
 
 
@@ -7401,6 +7893,41 @@ def _kpi_label(kpi: dict) -> str:
     return label
 
 
+# Normalised (strip + casefold) index over SECTOR_KPI_FRAMEWORK keys so the
+# card lookup tolerates whitespace / case drift between the router's
+# profile_name string and the framework key (de-fragilizes exact-string match).
+# Built once at import; collisions are vanishingly unlikely given the curated
+# key set, and on collision the first registered key wins.
+_FRAMEWORK_KEY_NORM: dict[str, str] = {}
+for _pn in SECTOR_KPI_FRAMEWORK:
+    _norm = " ".join(_pn.split()).casefold()
+    _FRAMEWORK_KEY_NORM.setdefault(_norm, _pn)
+del _pn, _norm  # keep module namespace clean
+
+
+def _resolve_profile_spec(profile_name: str) -> tuple[str | None, dict | None]:
+    """Resolve a (possibly noisy) profile_name to its canonical framework key
+    and spec. Returns (canonical_key, spec) or (None, None) if unresolvable.
+
+    Tries exact match first, then a whitespace/case-normalised match. Logs a
+    structured warning when a normalised match was needed (signals upstream
+    profile-string drift) or when the profile is unknown entirely."""
+    if not profile_name:
+        return None, None
+    spec = SECTOR_KPI_FRAMEWORK.get(profile_name)
+    if spec is not None:
+        return profile_name, spec
+    norm = " ".join(profile_name.split()).casefold()
+    canon = _FRAMEWORK_KEY_NORM.get(norm)
+    if canon is not None:
+        _LOG.warning(
+            "render_card_payload: profile_name %r matched %r only after "
+            "normalisation — upstream profile string drift", profile_name, canon,
+        )
+        return canon, SECTOR_KPI_FRAMEWORK[canon]
+    return None, None
+
+
 def render_card_payload(
     profile_name: str,
     state: dict,
@@ -7445,12 +7972,22 @@ def render_card_payload(
           "source_priority": list[str],
         }
     """
-    if not profile_name or is_legacy_profile(profile_name):
+    if not profile_name:
+        _LOG.info("render_card_payload(%s): empty profile_name → None", ticker)
+        return None
+    if is_legacy_profile(profile_name):
+        # Expected path — legacy sub-profiles use their bespoke frontend card.
         return None
 
-    spec = SECTOR_KPI_FRAMEWORK.get(profile_name)
+    canonical, spec = _resolve_profile_spec(profile_name)
     if not spec:
+        _LOG.warning(
+            "render_card_payload(%s): profile_name %r not in SECTOR_KPI_FRAMEWORK "
+            "→ None (frontend will fall back / render nothing)", ticker, profile_name,
+        )
         return None
+    # Use the canonical key downstream so the payload reports the registered name.
+    profile_name = canonical or profile_name
 
     # Read all extracted KPI values for this ticker
     values = _collect_kpi_values(state, ticker)
@@ -7481,11 +8018,15 @@ def render_card_payload(
                     value = None
             except Exception:
                 value = None
+        fmt = _infer_kpi_format(kpi)
+        decimals, unit = _FORMAT_META.get(fmt, (None, None))
         buckets[title]["kpis"].append({
             "key":       kpi["key"],
             "label":     _kpi_label(kpi),
             "value":     value,
-            "format":    _infer_kpi_format(kpi),
+            "format":    fmt,
+            "decimals":  decimals,
+            "unit":      unit,
             "mandatory": bool(kpi.get("mandatory")),
             "clamp_low":  clamp_low,
             "clamp_high": clamp_high,

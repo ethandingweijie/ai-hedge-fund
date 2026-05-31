@@ -324,11 +324,30 @@ def test_em_bank_matches_bank_card():
 # ── Schema-shape sanity ────────────────────────────────────────────────────
 
 
+# Cards whose contract was intentionally revised after Phase 7, with the
+# version they were bumped TO. Phase 8 Pattern Analysis filters audits by
+# schema_version, so each contract change MUST bump the version (per the
+# CardSchema docstring). Add an entry here when you deliberately change a
+# schema's fields; the guard below still catches *accidental* drift.
+_INTENTIONAL_SCHEMA_VERSIONS: dict[str, int] = {
+    # Phase 4: added row_path + row_required_keys (per-row completeness) so the
+    # MRNA blind spot (rows present but peak_sales_usd missing) is caught.
+    "biopharma_pipeline_table": 2,
+    # 2026-06: fixed a guaranteed false positive — mandatory path changed from
+    # the never-resolving "data.raw_financials.{ticker}" (raw_financials is
+    # FY-keyed, not ticker-keyed) to "data.raw_financials" (non-emptiness).
+    "financial_statements_card": 2,
+}
+
+
 def test_all_schemas_have_version_one():
-    """Phase 7 introduces new schemas. All should ship at version 1."""
+    """Phase 7 schemas ship at v1; documented contract revisions bump per
+    _INTENTIONAL_SCHEMA_VERSIONS. Catches accidental version drift."""
     for name, schema in CARD_SCHEMAS.items():
-        assert schema.schema_version == 1, (
-            f"Card {name} has schema_version={schema.schema_version}, expected 1"
+        expected = _INTENTIONAL_SCHEMA_VERSIONS.get(name, 1)
+        assert schema.schema_version == expected, (
+            f"Card {name} has schema_version={schema.schema_version}, "
+            f"expected {expected}"
         )
 
 

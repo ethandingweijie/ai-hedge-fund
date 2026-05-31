@@ -27,6 +27,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, HTTPException
 
 from app.backend.services import sw46_storage, complacency_storage
+from app.backend.services import momentum_storage
 from app.backend.services import complacency_job_store as job_store
 from app.backend.services import contrarian_storage
 from app.backend.services import hk50_storage
@@ -36,6 +37,8 @@ from src.research_ideas.hk50.runner import run_hk50
 from src.research_ideas.hk50.universe import list_tickers as hk50_list_tickers
 from src.research_ideas.complacency.runner import run_complacency, score_one_ticker
 from src.research_ideas.complacency.universe import list_tickers as complacency_list_tickers
+from src.research_ideas.momentum.runner import run_momentum
+from src.research_ideas.momentum.universe import list_tickers as momentum_list_tickers
 from src.research_ideas.contrarian.idea_generator import generate_idea_of_the_day
 from src.research_ideas.contrarian.chat_agent import chat_turn as contrarian_chat_turn
 
@@ -131,10 +134,11 @@ async def list_research_ideas():
     latest_sw46 = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
     latest_compl = await asyncio.to_thread(complacency_storage.get_latest_complacency_run)
     latest_hk50 = await asyncio.to_thread(hk50_storage.get_latest_hk50_run)
+    latest_momentum = await asyncio.to_thread(momentum_storage.get_latest_momentum_run)
 
     sw46_meta = {
         "id": "sw46",
-        "name": "SW46 — Software Cohort Valuation",
+        "name": "Burry - SW46 Screener",
         "blurb": (
             "Cassandra Unchained / Scion methodology: Tragic Algebra owner "
             "earnings, fully-adjusted ROIC, AI Competitive Threat tiering, "
@@ -148,7 +152,7 @@ async def list_research_ideas():
 
     complacency_meta = {
         "id": "complacency",
-        "name": "Complacency Detector — Ackman 4-Pillar",
+        "name": "Ackman - Retail Complacency",
         "blurb": (
             "Bill Ackman-style equity screener: detects when price has "
             "decoupled from fundamentals across Valuation, Behavioral, "
@@ -212,7 +216,7 @@ async def list_research_ideas():
     hk50_results = (latest_hk50.get("results") or []) if latest_hk50 else []
     hk50_meta = {
         "id": "hk50",
-        "name": "Long China / HK — Growth & Dividend Screeners",
+        "name": "Long China / Hong Kong",
         "blurb": (
             "A 50-name China/Hong Kong universe scored by two independent "
             "0-100 screens — High Growth and High Dividend — and valued with "
@@ -228,7 +232,68 @@ async def list_research_ideas():
         "top5_dividend": _top5(hk50_results, "dividend_score"),
     }
 
-    return {"ideas": [iotd_meta, sw46_meta, complacency_meta, hk50_meta]}
+    # Momentum — dual-direction (LONG + SHORT) sector + ticker screen. The
+    # hero card shows the top accelerating-up sectors (long tailwinds) and
+    # accelerating-down sectors (short tailwinds), plus lead long/short names.
+    def _sector_preview(sectors: list, want_long: bool) -> list[dict]:
+        sign = 1 if want_long else -1
+        picked = [
+            s for s in sectors
+            if (s.get("composite") or 0.0) * sign > 0
+        ]
+        picked.sort(key=lambda s: (s.get("composite") or 0.0), reverse=want_long)
+        return [
+            {
+                "etf": s.get("etf"),
+                "label": s.get("label") or s.get("sector"),
+                "composite": s.get("composite"),
+                "verdict": s.get("verdict"),
+            }
+            for s in picked[:4]
+        ]
+
+    def _lead_tickers(results: list, direction: str) -> list[dict]:
+        picked = [r for r in results if r.get("direction") == direction]
+        picked.sort(key=lambda r: (r.get("rank") or 9999))
+        return [
+            {
+                "ticker": r.get("ticker"),
+                "name": r.get("name"),
+                "verdict": r.get("verdict"),
+                "composite": r.get("composite"),
+                "sector_aligned": r.get("sector_aligned"),
+                "sector": r.get("sector") or r.get("sector_etf"),
+            }
+            for r in picked[:5]
+        ]
+
+    mom_sectors = (latest_momentum.get("sectors") or []) if latest_momentum else []
+    mom_results = (latest_momentum.get("results") or []) if latest_momentum else []
+    momentum_meta = {
+        "id": "momentum",
+        "name": "Momentum Indicator (US Stocks)",
+        "blurb": (
+            "Two-layer signed-momentum screen across US sector ETFs and "
+            "tickers. Three pillars — STATE (trend), TURN (MACD/SMA/RSI "
+            "inflection), ACCELERATION (ROC-of-ROC, ADX, volume) — combine "
+            "into a -6..+6 composite. Surfaces both LONG (turning/accelerating "
+            "up) and SHORT (turning/accelerating down) ideas, with a "
+            "sector-alignment overlay flagging the highest-conviction names."
+        ),
+        "ticker_count": len(momentum_list_tickers()),
+        "last_run_at": latest_momentum.get("created_at") if latest_momentum else None,
+        "as_of": latest_momentum.get("as_of") if latest_momentum else None,
+        "long_count": latest_momentum.get("long_count") if latest_momentum else None,
+        "short_count": latest_momentum.get("short_count") if latest_momentum else None,
+        "headline_metric_label": "Long / Short",
+        "is_dual_direction": True,
+        "top_long_sectors": _sector_preview(mom_sectors, want_long=True),
+        "top_short_sectors": _sector_preview(mom_sectors, want_long=False),
+        "lead_long_tickers": _lead_tickers(mom_results, "LONG"),
+        "lead_short_tickers": _lead_tickers(mom_results, "SHORT"),
+    }
+
+    return {"ideas": [iotd_meta, sw46_meta, complacency_meta, hk50_meta, momentum_meta]}
 
 
 # ─── Research Idea of the Day (contrarian deep-value) ────────────────────
@@ -1674,6 +1739,114 @@ async def list_complacency_sector_medians(metric: str = "ev_sales"):
     except Exception as exc:
         tb = traceback.format_exc()
         logger.exception("list_complacency_sector_medians failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+# ─── Momentum (turning & accelerating, long + short) endpoints ───────────
+
+
+@router.get("/ideas/momentum")
+async def get_momentum_cohort():
+    """Most-recent persisted momentum cohort snapshot."""
+    try:
+        latest = await asyncio.to_thread(momentum_storage.get_latest_momentum_run)
+        if not latest:
+            return {
+                "run_id": None,
+                "created_at": None,
+                "as_of": None,
+                "universe": "momentum-default",
+                "ticker_count": 0,
+                "long_count": 0,
+                "short_count": 0,
+                "sectors": [],
+                "failed_tickers": [],
+                "results": [],
+            }
+        return latest
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_momentum_cohort failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/momentum/runs")
+async def list_momentum_runs(limit: int = 20):
+    """Historical momentum cohort runs (header-only — no results JSON)."""
+    try:
+        runs = await asyncio.to_thread(momentum_storage.list_momentum_runs, limit)
+        return {"runs": runs}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_momentum_runs failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/momentum/sectors")
+async def get_momentum_sectors():
+    """Just the sector-momentum map from the latest cohort run."""
+    try:
+        latest = await asyncio.to_thread(momentum_storage.get_latest_momentum_run)
+        if not latest:
+            return {"as_of": None, "created_at": None, "sectors": []}
+        return {
+            "as_of": latest.get("as_of"),
+            "created_at": latest.get("created_at"),
+            "sectors": latest.get("sectors", []),
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_momentum_sectors failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/momentum/{ticker}")
+async def get_momentum_ticker(ticker: str):
+    """Per-ticker detail — pulls from the latest cohort run."""
+    ticker = ticker.upper()
+    try:
+        latest = await asyncio.to_thread(momentum_storage.get_latest_momentum_run)
+        if not latest:
+            raise HTTPException(status_code=404, detail="No momentum cohort run yet — refresh first")
+        for r in latest.get("results", []):
+            if r.get("ticker") == ticker:
+                return r
+        raise HTTPException(status_code=404, detail=f"{ticker} not in momentum universe")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_momentum_ticker(%s) failed: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/momentum/refresh")
+async def refresh_momentum(as_of: str | None = None, max_workers: int = 6):
+    """
+    Trigger a fresh momentum cohort run. Synchronous (returns once persisted)
+    — no LLM calls, so a full ~75-ticker + sector run completes in well under
+    a minute on FMP. `as_of` (ISO yyyy-mm-dd) points the screen at a
+    historical date (e.g. inside the software sell-down) for validation.
+    """
+    try:
+        cohort = await asyncio.to_thread(
+            run_momentum,
+            as_of=as_of,
+            max_workers=max_workers,
+            save=True,
+        )
+        return {
+            "run_id": cohort.run_id,
+            "created_at": cohort.created_at,
+            "as_of": cohort.as_of,
+            "ticker_count": cohort.ticker_count,
+            "long_count": cohort.long_count,
+            "short_count": cohort.short_count,
+            "failed_tickers": cohort.failed_tickers,
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("refresh_momentum failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 

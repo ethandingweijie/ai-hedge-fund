@@ -238,7 +238,8 @@ export interface BankBreakdown {
 export interface BiopharmaPipelineAsset {
   name: string;
   phase?: string;                    // "preclinical" | "Ph1" | "Ph2" | "Ph3" | "Filed" | "Approved"
-  peak_sales_bn?: number | null;     // $ billions
+  peak_sales_usd?: number | null;    // raw $ (backend `_extract_pipeline_assets` field)
+  peak_sales_bn?: number | null;     // $ billions (legacy field; peakBn() falls back to peak_sales_usd/1e9)
   launch_year?: number | null;
   indication?: string | null;
   therapeutic_area?: string | null;  // oncology | cns | rare | metabolic | cv | immunology | infectious_disease | other
@@ -315,7 +316,15 @@ export interface RiskManagerOutput {
 // payload — the existing bespoke cards remain authoritative for them.
 // ═══════════════════════════════════════════════════════════════════════════
 export type SectorKpiAccent = 'blue' | 'green' | 'amber' | 'rose' | 'violet';
-export type SectorKpiFormat = 'pct' | 'usd' | 'x' | 'int' | 'string';
+export type SectorKpiFormat =
+  | 'pct'      // value is a 0–1 ratio, rendered × 100 (0.12 → "12.0%")
+  | 'pct100'   // value already 0–100, rendered as-is ("12.0%")
+  | 'bps'      // basis points, rendered "166 bps"
+  | 'usd'      // absolute dollars, rendered "$N"
+  | 'usd_b'    // value already in $billions, rendered "$N.NB"
+  | 'x'        // multiple / ratio / score, rendered "N×"
+  | 'int'      // count / duration, rendered as integer
+  | 'string';  // opaque text rendered verbatim
 
 export interface SectorKpi {
   key: string;

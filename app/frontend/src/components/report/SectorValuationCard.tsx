@@ -41,16 +41,22 @@ const accentText: Record<SectorKpiAccent, string> = {
 
 function fmt(k: SectorKpi): string {
   if (k.value == null || k.value === '') return '—';
-  if (k.format === 'string') return String(k.value);
   const v = Number(k.value);
+  // Non-numeric `string` values (dates, free text) render verbatim. A numeric
+  // value tagged `string` still gets rounded below rather than dumped raw
+  // (guards against the historic "-0.4326732673" leak).
+  if (k.format === 'string' && !Number.isFinite(v)) return String(k.value);
   if (!Number.isFinite(v)) return '—';
-  const d = k.decimals ?? (k.format === 'pct' ? 1 : 2);
+  const d = k.decimals ?? (k.format === 'pct' || k.format === 'pct100' ? 1 : 2);
   switch (k.format) {
-    case 'pct': return `${(v * 100).toFixed(d)}%`;
-    case 'usd': return `$${v.toLocaleString(undefined, { maximumFractionDigits: d })}`;
-    case 'x':   return `${v.toFixed(d)}×`;
-    case 'int': return v.toLocaleString();
-    default:    return String(v);
+    case 'pct':    return `${(v * 100).toFixed(d)}%`;
+    case 'pct100': return `${v.toFixed(d)}%`;
+    case 'bps':    return `${v.toFixed(0)} bps`;
+    case 'usd':    return `$${v.toLocaleString(undefined, { maximumFractionDigits: d })}`;
+    case 'usd_b':  return `$${v.toFixed(d)}B`;
+    case 'x':      return `${v.toFixed(d)}×`;
+    case 'int':    return v.toLocaleString();
+    default:       return v.toFixed(d);   // numeric fallback — never raw float
   }
 }
 

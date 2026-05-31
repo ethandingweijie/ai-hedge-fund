@@ -21,7 +21,7 @@ Base.metadata.create_all(bind=engine)
 _dev_origins = [
     f"http://{host}:{port}"
     for host in ("localhost", "127.0.0.1")
-    for port in range(5173, 5180)
+    for port in range(5173, 5181)
 ]
 _extra_origins = [
     o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()

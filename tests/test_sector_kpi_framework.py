@@ -713,8 +713,9 @@ def test_render_card_payload_smoke_all_non_legacy_profiles(profile_name):
         for k in g["kpis"]:
             assert k["key"], f"{profile_name}: KPI missing key"
             assert k["label"], f"{profile_name}: KPI missing label"
-            assert k["format"] in ("pct", "usd", "x", "int", "string"), \
-                f"{profile_name}/{k['key']}: invalid format {k['format']!r}"
+            assert k["format"] in (
+                "pct", "pct100", "bps", "usd", "usd_b", "x", "int", "string"
+            ), f"{profile_name}/{k['key']}: invalid format {k['format']!r}"
             assert isinstance(k["mandatory"], bool)
 
 
@@ -733,3 +734,188 @@ def test_render_card_payload_payload_is_json_serializable():
     assert reloaded["ticker"] == "PGR"
     # Key fields survive the roundtrip with same shape
     assert reloaded["groups"] == payload["groups"]
+
+
+# ── Guardrail 8: KPI display-format / unit contract (Phase 1 QA) ─────────────
+# Regression net for the silent unit bugs found in live runs:
+#   PYPL  take_rate_bps 166  → rendered "16600%"  (bps mis-tagged pct)
+#   FRSH  rule_of_40 45      → rendered "4500%"   ("% in hint" → pct)
+#   ZTS   net_debt_to_ebitda → raw float "-0.4326732673" (numeric `string`)
+#   *     ltv_cac 8          → "800%"             (ratio mis-tagged pct)
+# All of these are *present-but-wrong* values that self-healing can't see, so
+# the contract is enforced statically here instead.
+
+from src.data.sector_kpi_framework import (  # noqa: E402
+    _infer_kpi_format,
+    _FORMAT_META,
+    _KPI_FORMAT_OVERRIDES,
+)
+
+_VALID_FORMATS = {"pct", "pct100", "bps", "usd", "usd_b", "x", "int", "string"}
+
+# KPI keys that are legitimately opaque text (a year, a free-form date) and are
+# therefore allowed to resolve to the `string` format.
+_INTENTIONAL_STRING_KEYS = {"loe_year_top_drug", "next_catalyst_date"}
+
+
+def _all_kpis():
+    """Yield (profile_name, kpi_dict) for every KPI instance in the framework."""
+    for profile, spec in SECTOR_KPI_FRAMEWORK.items():
+        if not isinstance(spec, dict):
+            continue
+        for kpi in spec.get("kpis", []):
+            if isinstance(kpi, dict) and kpi.get("key"):
+                yield profile, kpi
+
+
+def test_every_kpi_resolves_to_a_known_format():
+    """No KPI may resolve to an unknown format token, and _FORMAT_META must
+    carry an entry for each format so render_card_payload can emit decimals/unit."""
+    for profile, kpi in _all_kpis():
+        fmt = _infer_kpi_format(kpi)
+        assert fmt in _VALID_FORMATS, f"{profile}/{kpi['key']}: unknown format {fmt!r}"
+        assert fmt in _FORMAT_META, f"format {fmt!r} missing from _FORMAT_META"
+
+
+def test_no_bps_key_renders_as_percent():
+    """A `*_bps` KPI sent through the pct path multiplies by 100 → 16600%."""
+    for profile, kpi in _all_kpis():
+        key = kpi["key"].lower()
+        if key.endswith("_bps"):
+            assert _infer_kpi_format(kpi) == "bps", (
+                f"{profile}/{key}: bps KPI resolved to "
+                f"{_infer_kpi_format(kpi)!r} (would mis-scale ×100)"
+            )
+
+
+def test_known_multiples_render_as_x_not_pct_or_string():
+    """Leverage / coverage / unit-economics multiples and unitless scores must
+    render as '×', never as a percentage or a raw float."""
+    multiples = {k for k, v in _KPI_FORMAT_OVERRIDES.items() if v == "x"}
+    # sanity: the headline offenders are covered
+    assert {"net_debt_to_ebitda", "ltv_cac_ratio", "rule_of_40_score"} <= multiples
+    for profile, kpi in _all_kpis():
+        if kpi["key"] in multiples:
+            assert _infer_kpi_format(kpi) == "x", (
+                f"{profile}/{kpi['key']}: multiple resolved to "
+                f"{_infer_kpi_format(kpi)!r}, expected 'x'"
+            )
+
+
+def test_no_unintended_numeric_string_format():
+    """The `string` format dumps the value verbatim. Only the curated textual
+    keys are allowed to use it; everything else must carry a numeric unit."""
+    for profile, kpi in _all_kpis():
+        fmt = _infer_kpi_format(kpi)
+        if fmt == "string":
+            assert kpi["key"] in _INTENTIONAL_STRING_KEYS, (
+                f"{profile}/{kpi['key']}: numeric KPI fell through to 'string' "
+                f"(would render an unrounded raw float)"
+            )
+
+
+def test_headline_offenders_resolve_correctly():
+    """Point checks mirroring the exact live-report defects."""
+    expected = {
+        "take_rate_bps": "bps",
+        "take_rate_stability_bps": "bps",
+        "g_fee_rate_bps": "bps",
+        "cost_of_risk_bps": "bps",
+        "rule_of_40_score": "x",
+        "net_debt_to_ebitda": "x",
+        "ltv_cac_ratio": "x",
+        "magic_number": "x",
+        "ai_revenue_run_rate_usd_b": "usd_b",
+    }
+    seen = {}
+    for _profile, kpi in _all_kpis():
+        if kpi["key"] in expected:
+            seen[kpi["key"]] = _infer_kpi_format(kpi)
+    for key, want in expected.items():
+        assert seen.get(key) == want, f"{key}: got {seen.get(key)!r}, want {want!r}"
+
+
+def test_explicit_fmt_key_overrides_heuristic():
+    """An explicit `fmt` on a KPI dict always wins over the heuristic."""
+    assert _infer_kpi_format({"key": "take_rate_bps", "fmt": "pct100"}) == "pct100"
+    assert _infer_kpi_format({"key": "anything_at_all", "fmt": "usd_b"}) == "usd_b"
+
+
+# ── Guardrail 9: HealthcareServices sub-sector mapping (Phase 3) ──────────────
+# Regression guard for the ZTS "BIOPHARMA · MANAGED CARE + insurer KPIs" defect.
+# Root cause: HealthcareServices had NO key in INDUSTRY_VALUATION_PROFILES and
+# no SECTOR_KPI_FRAMEWORK profile carried sector="HealthcareServices", so every
+# health-services name fell to the sector default ("Managed Care" insurer KPIs).
+
+_HEALTHCARE_SERVICES_PROFILES = {
+    "Managed Care",
+    "Healthcare Providers / Services",
+    "Medical Devices",
+    "Animal Health",
+    "Pharma Distribution",
+}
+
+
+def test_healthcareservices_profiles_registered_in_framework():
+    """Every HealthcareServices sub-profile must be in SECTOR_KPI_FRAMEWORK with
+    sector='HealthcareServices' (so the router lists them as candidates)."""
+    hs = {p for p, s in SECTOR_KPI_FRAMEWORK.items()
+          if s.get("sector") == "HealthcareServices"}
+    assert hs == _HEALTHCARE_SERVICES_PROFILES, (
+        f"SECTOR_KPI_FRAMEWORK HealthcareServices set {hs} != "
+        f"{_HEALTHCARE_SERVICES_PROFILES}"
+    )
+
+
+def test_healthcareservices_profiles_match_valuation_profiles():
+    """The SECTOR_KPI_FRAMEWORK HealthcareServices keys must mirror
+    INDUSTRY_VALUATION_PROFILES['HealthcareServices'] EXACTLY — Tier-1 profile
+    verification (strategic_router) does an exact-string lookup across both."""
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as _IVP
+    ivp_keys = set(_IVP.get("HealthcareServices", {}).keys())
+    assert ivp_keys == _HEALTHCARE_SERVICES_PROFILES, (
+        f"INDUSTRY_VALUATION_PROFILES['HealthcareServices'] keys {ivp_keys} != "
+        f"SECTOR_KPI_FRAMEWORK HealthcareServices set {_HEALTHCARE_SERVICES_PROFILES} "
+        f"— the two tables MUST agree or Tier-1 verification silently fails"
+    )
+
+
+def test_healthcareservices_default_resolves_to_a_real_profile():
+    """The per-sector default must be a registered profile (not 'Managed Care',
+    which gave un-overridden health names insurer KPIs)."""
+    from src.agents.routing.strategic_router import _SECTOR_PROFILE_DEFAULT
+    default = _SECTOR_PROFILE_DEFAULT["HealthcareServices"]
+    assert default != "Managed Care", (
+        "HealthcareServices default must not be the insurer profile"
+    )
+    assert default in SECTOR_KPI_FRAMEWORK
+    assert SECTOR_KPI_FRAMEWORK[default]["sector"] == "HealthcareServices"
+
+
+def test_resolve_profile_spec_normalises_whitespace_and_case():
+    """The card lookup must tolerate whitespace / case drift in profile_name,
+    and return (None, None) for genuinely unknown profiles."""
+    from src.data.sector_kpi_framework import _resolve_profile_spec
+    assert _resolve_profile_spec("Animal Health")[0] == "Animal Health"
+    assert _resolve_profile_spec("  Animal   Health ")[0] == "Animal Health"
+    assert _resolve_profile_spec("animal health")[0] == "Animal Health"
+    assert _resolve_profile_spec("Totally Bogus Profile") == (None, None)
+    assert _resolve_profile_spec("") == (None, None)
+
+
+def test_render_card_payload_healthcareservices_reports_correct_sector():
+    """An Animal Health card must render sector='HealthcareServices' (not the
+    old 'Biopharma'), proving the Managed Care sector move + sibling profiles."""
+    state = {"data": {"framework_metrics_all": {"ZTS": {
+        "organic_revenue_growth_pct": 0.08,
+        "operating_margin_pct": 0.36,
+        "net_debt_to_ebitda": 2.1,
+    }}}}
+    payload = render_card_payload("Animal Health", state, "ZTS")
+    assert payload is not None
+    assert payload["sector"] == "HealthcareServices"
+    assert payload["profile_name"] == "Animal Health"
+    # No insurer KPIs leaked in
+    all_keys = {kp["key"] for g in payload["groups"] for kp in g["kpis"]}
+    assert "medical_loss_ratio" not in all_keys
+    assert "medicare_advantage_mix_pct" not in all_keys

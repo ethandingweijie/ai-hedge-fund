@@ -131,6 +131,13 @@ const TICKER_KEYED_FIELDS = new Set<string>([
   'vgpm',
   'decisions',
   'analyst_signals',
+  // Sector valuation card — emitted mid-run from pipeline.py (after the DCF
+  // engine, then again after the final render). Already ticker-keyed
+  // ({ticker: payload}), so normalisePartialData passes it through and
+  // mergeDataPreserve inner-merges per ticker. Listing it here also engages
+  // the empty-{} clobber guard so a legacy/unknown profile emitting
+  // `sector_card: {}` can't wipe a populated card.
+  'sector_card',
 ]);
 
 /**

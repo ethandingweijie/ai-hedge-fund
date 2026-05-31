@@ -50,7 +50,11 @@ _SECTOR_PROFILE_DEFAULT: dict[str, str] = {
     "ProfessionalServices": "IT Services",
     "Transportation":       "Rail / Logistics",
     "Crypto":               "Pre-Revenue Tech",
-    "HealthcareServices":   "Managed Care",
+    # Safe generic for HealthcareServices — was "Managed Care", which gave any
+    # un-overridden health name (animal health, distributors, providers) insurer
+    # KPIs. "Healthcare Providers / Services" is margin/leverage-driven with no
+    # insurance-specific KPIs, so a misroute degrades gracefully.
+    "HealthcareServices":   "Healthcare Providers / Services",
 }
 
 
@@ -89,6 +93,11 @@ def _classify_unknown_profiles_with_llm(
                 _default = _SECTOR_PROFILE_DEFAULT.get(t_sector)
                 if _default:
                     existing_profile_names[t] = _default
+                    _log.warning(
+                        "[strategic_router] profile fallback (%s): no candidate "
+                        "profiles for sector %r → sector-default %r",
+                        t, t_sector, _default,
+                    )
                     print(f"  Profile ({t}): {_default} [sector-default for {t_sector!r}]")
                 continue
 
@@ -130,6 +139,12 @@ def _classify_unknown_profiles_with_llm(
             _final = _picked or _SECTOR_PROFILE_DEFAULT.get(t_sector) or candidates[0]
             existing_profile_names[t] = _final
             _src = "LLM" if _picked else "sector-default-fallback"
+            if not _picked:
+                _log.warning(
+                    "[strategic_router] profile fallback (%s): LLM classifier "
+                    "returned no valid candidate for sector %r → %r",
+                    t, t_sector, _final,
+                )
             print(f"  Profile ({t}): {_final} [{_src}]")
 
         if existing_profile_names:

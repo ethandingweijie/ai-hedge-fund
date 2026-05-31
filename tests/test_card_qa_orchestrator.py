@@ -404,3 +404,128 @@ def test_passed_card_no_judge_call_no_cost():
         )
     assert spy["calls"] == 0
     assert audit["qa_cost_estimate_usd"] == 0.0
+
+
+# ── Phase 4: value-sanity bounds ────────────────────────────────────────────
+
+
+import src.data.sector_kpi_framework as _skf  # noqa: E402
+from src.agents.audit.card_qa_agent import (  # noqa: E402
+    _per_row_completeness_flags,
+    _value_sanity_flags,
+)
+from src.agents.audit.card_schemas import CARD_SCHEMAS  # noqa: E402
+
+
+def _patch_card(monkeypatch, kpis: list[dict]) -> None:
+    """Make render_card_payload return a synthetic single-group card so the
+    band logic can be tested without coupling to a specific real profile."""
+    payload = {"groups": [{"title": "Profitability", "kpis": kpis}]}
+    monkeypatch.setattr(_skf, "render_card_payload", lambda *a, **k: payload)
+
+
+def _state_with_profile(ticker: str = "FRSH", profile: str = "Growth SaaS") -> dict:
+    return {"data": {"profile_names": {ticker: profile}}}
+
+
+def test_value_sanity_flags_insane_pct(monkeypatch):
+    """A pct (0–1 contract) value of 45.7 would render 4570% — the FRSH bug.
+    It is PRESENT, so the empty-field walk passes it; value-sanity must flag it."""
+    _patch_card(monkeypatch, [
+        {"key": "profitability_pct", "value": 45.7, "format": "pct"},  # 4570% — insane
+        {"key": "gross_margin_pct",  "value": 0.62, "format": "pct"},  # 62% — fine
+    ])
+    flags = _value_sanity_flags(_state_with_profile(), "FRSH")
+    fields = {f["field"] for f in flags}
+    assert "profitability_pct" in fields
+    assert "gross_margin_pct" not in fields
+    assert all(f["reason"] == "value_out_of_sane_range" for f in flags)
+
+
+def test_value_sanity_flags_bps_band(monkeypatch):
+    """take_rate_bps=166 is fine in bps; a 300k-bps value is out of band."""
+    _patch_card(monkeypatch, [
+        {"key": "take_rate_bps",      "value": 166.0,     "format": "bps"},  # fine
+        {"key": "blown_rate_bps",     "value": 300_000.0, "format": "bps"},  # insane
+    ])
+    flags = _value_sanity_flags(_state_with_profile(), "FRSH")
+    fields = {f["field"] for f in flags}
+    assert fields == {"blown_rate_bps"}
+
+
+def test_value_sanity_flags_multiple_band(monkeypatch):
+    """net_debt_to_ebitda=-0.43 is fine (×); an 800× multiple is the ltv_cac bug."""
+    _patch_card(monkeypatch, [
+        {"key": "net_debt_to_ebitda", "value": -0.4326, "format": "x"},  # fine
+        {"key": "ltv_cac_ratio",      "value": 800.0,   "format": "x"},  # insane
+    ])
+    flags = _value_sanity_flags(_state_with_profile(), "FRSH")
+    fields = {f["field"] for f in flags}
+    assert fields == {"ltv_cac_ratio"}
+
+
+def test_value_sanity_ignores_unbounded_formats_and_nonnumerics(monkeypatch):
+    """usd / int / string have no universal ceiling; None / NaN / bool are skipped."""
+    _patch_card(monkeypatch, [
+        {"key": "peak_sales_usd",    "value": 5.0e10, "format": "usd"},     # huge but valid $
+        {"key": "headcount",         "value": 999999, "format": "int"},     # huge but valid count
+        {"key": "next_catalyst",     "value": "2027", "format": "string"},  # textual
+        {"key": "missing_kpi",       "value": None,   "format": "pct"},     # absent
+        {"key": "flag_kpi",          "value": True,   "format": "x"},       # bool, not a real multiple
+    ])
+    assert _value_sanity_flags(_state_with_profile(), "FRSH") == []
+
+
+def test_value_sanity_no_profile_returns_empty(monkeypatch):
+    """No profile_name → no card to render → no flags (don't even import skf)."""
+    assert _value_sanity_flags({"data": {}}, "FRSH") == []
+
+
+# ── Phase 4: per-row list completeness ──────────────────────────────────────
+
+
+_PIPELINE_SCHEMA = CARD_SCHEMAS["biopharma_pipeline_table"]
+
+
+def test_per_row_completeness_flags_missing_peak():
+    """The MRNA case: list non-empty (mandatory passes) but one row missing
+    peak_sales_usd → renders '—' for that row's Peak cell. Must be flagged."""
+    state = {"data": {"pipeline_assets": {"MRNA": [
+        {"name": "mRNA-1010", "phase": "ph3", "peak_sales_usd": 2.0e9},
+        {"name": "mRNA-1345", "phase": "ph3"},  # missing peak_sales_usd
+    ]}}}
+    flags = _per_row_completeness_flags(state, "MRNA", "biopharma_pipeline_table", _PIPELINE_SCHEMA)
+    assert len(flags) == 1
+    assert flags[0]["reason"] == "pipeline_row_missing_field"
+    assert flags[0]["field"].endswith("[1].peak_sales_usd")
+
+
+def test_per_row_completeness_flags_all_complete():
+    state = {"data": {"pipeline_assets": {"MRNA": [
+        {"name": "X", "phase": "ph3", "peak_sales_usd": 1.0e9},
+    ]}}}
+    assert _per_row_completeness_flags(
+        state, "MRNA", "biopharma_pipeline_table", _PIPELINE_SCHEMA) == []
+
+
+def test_per_row_completeness_empty_list_is_not_our_job():
+    """An empty list is the mandatory-path walk's responsibility, not the
+    per-row walk's — return [] so we don't double-flag."""
+    state = {"data": {"pipeline_assets": {"MRNA": []}}}
+    assert _per_row_completeness_flags(
+        state, "MRNA", "biopharma_pipeline_table", _PIPELINE_SCHEMA) == []
+
+
+def test_per_row_completeness_flags_non_dict_row():
+    state = {"data": {"pipeline_assets": {"MRNA": ["not-a-dict"]}}}
+    flags = _per_row_completeness_flags(state, "MRNA", "biopharma_pipeline_table", _PIPELINE_SCHEMA)
+    assert len(flags) == 1
+    assert flags[0]["reason"] == "pipeline_row_not_a_dict"
+
+
+def test_per_row_completeness_no_contract_returns_empty():
+    """A card without row_path/row_required_keys is a no-op for this walk."""
+    schema = CARD_SCHEMAS["biopharma_pipeline_rnpv"]  # has no row contract
+    state = {"data": {"pipeline_assets": {"MRNA": [{"name": "X"}]}}}
+    assert _per_row_completeness_flags(
+        state, "MRNA", "biopharma_pipeline_rnpv", schema) == []

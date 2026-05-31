@@ -38,6 +38,21 @@ class CardSchema:
     opportunistic_state_paths: tuple[str, ...]
     qa_prompt_hint: str
 
+    # ── Phase 4 (per-row list completeness) ──────────────────────────────
+    # When a mandatory path resolves to a LIST of row dicts (e.g.
+    # data.pipeline_assets.{ticker}), the deterministic walk can only assert
+    # the list is non-empty — it can't see that EVERY row carries its required
+    # sub-fields. This was the MRNA blind spot: 9 assets present, every one
+    # missing peak_sales_usd → the card rendered "—" for every Peak/rNPV cell,
+    # yet the list was non-empty so the audit passed it as healthy.
+    #
+    # Declaring row_path + row_required_keys lets the walker iterate the rows
+    # and emit a human_review_flag per row missing a required key. NB: _set_path
+    # cannot write into list elements, so this is flag-and-report only (no
+    # auto-remediation).
+    row_path: str | None = None
+    row_required_keys: tuple[str, ...] = ()
+
 
 # ── Predicate helpers ───────────────────────────────────────────────────────
 
@@ -241,17 +256,24 @@ CARD_SCHEMAS: dict[str, CardSchema] = {
     ),
 
     "biopharma_pipeline_table": CardSchema(
-        schema_version=1,
+        schema_version=2,
         applies_when=_is_biopharma_any,
         # The MRNA bug: 9 pipeline assets extracted but each one missing
         # peak_sales_usd. The card needs the LIST to be non-empty AND every
-        # row's peak_sales_usd populated. We can only check the LIST here;
-        # per-row peak_sales is judged by the LLM (path indexing into a
-        # list is Phase 8+ territory).
+        # row's peak_sales_usd populated. The mandatory path below only checks
+        # list non-emptiness; the row_path/row_required_keys below close the
+        # blind spot by walking each row for its required sub-fields (Phase 4).
         mandatory_state_paths=(
             "data.pipeline_assets.{ticker}",
         ),
         opportunistic_state_paths=(),
+        # Phase 4 — per-row completeness. _extract_pipeline_assets emits
+        # {name, phase, peak_sales_usd, launch_year, indication, evidence};
+        # PoS is derived frontend-side (posForAsset), so it is NOT required
+        # here. peak_sales_usd is the field whose absence caused the MRNA
+        # "—" cells. Flag-and-report only: _set_path can't write into lists.
+        row_path="data.pipeline_assets.{ticker}",
+        row_required_keys=("name", "phase", "peak_sales_usd"),
         qa_prompt_hint=(
             "Pipeline Assets table for Biopharma. Each pipeline asset row "
             "should include name, indication, phase, AND peak_sales_usd. "
@@ -503,10 +525,16 @@ CARD_SCHEMAS: dict[str, CardSchema] = {
     ),
 
     "financial_statements_card": CardSchema(
-        schema_version=1,
+        # v2 (2026-06): fixed a guaranteed false positive. raw_financials is
+        # FY-keyed for the PRIMARY ticker ({"FY2021": {...}, ...}) — there is
+        # NO per-ticker key — so the old "data.raw_financials.{ticker}" path
+        # never resolved and the card was flagged GENUINELY_ABSENT on EVERY
+        # run. The correct presence signal is non-emptiness of the FY-keyed
+        # dict itself: non-empty ⇒ FMP historicals were fetched.
+        schema_version=2,
         applies_when=_applies_always,
         mandatory_state_paths=(
-            "data.raw_financials.{ticker}",
+            "data.raw_financials",
         ),
         opportunistic_state_paths=(),
         qa_prompt_hint=(
