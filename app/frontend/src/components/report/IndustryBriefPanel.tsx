@@ -85,10 +85,11 @@ const mdComponents: Components = {
     );
   },
 
-  // Paragraph
+  // Paragraph — capped at a comfortable reading measure so long-form brief
+  // prose doesn't stretch the full desktop column width.
   p({ children }) {
     return (
-      <p className="text-sm text-foreground/80 leading-relaxed mb-3">{children}</p>
+      <p className="text-sm text-foreground/80 leading-relaxed mb-3 max-w-[78ch]">{children}</p>
     );
   },
 

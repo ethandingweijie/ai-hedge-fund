@@ -16,6 +16,8 @@ import type { DdAlert, DdDigest, DdDirection } from '@/lib/reportTypes';
 import { AlertCard } from '@/components/dd/AlertCard';
 import { DigestPanel } from '@/components/dd/DigestPanel';
 import { PerformanceFooter } from '@/components/dd/PerformanceFooter';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const REFRESH_MS = 5 * 60 * 1000;   // 5 min auto-refresh
 
@@ -82,28 +84,24 @@ export function DDAlertsPage() {
   }, [filtered, todayIso]);
 
   return (
-    <div className="px-4 py-4 max-w-3xl mx-auto space-y-4">
-      {/* Header */}
-      <header className="flex items-end justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Auto Due-D</h1>
-          <p className="text-[11px] text-muted-foreground">
-            Bidirectional ±10% movement detection · directional cooldown ·
-            real-time Slack push + persistent dashboard
-          </p>
-        </div>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border bg-muted/30"
-        >
-          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-          {lastRefreshed
-            ? `${lastRefreshed.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
-            : 'Refresh'}
-        </button>
-      </header>
-
+    <PageContainer size="default">
+      <PageHeader
+        title="Auto Due-D"
+        subtitle="Bidirectional ±10% movement detection · directional cooldown · real-time Slack push + persistent dashboard"
+        actions={
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border bg-muted/30"
+          >
+            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+            {lastRefreshed
+              ? `${lastRefreshed.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+              : 'Refresh'}
+          </button>
+        }
+      />
+      <div className="space-y-4">
       {/* Error banner */}
       {error && (
         <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-400">
@@ -171,7 +169,8 @@ export function DDAlertsPage() {
           with subsequent forward returns. Renders nothing if no graded
           alerts in the last 30d; otherwise shows hit rate + alpha vs naive. */}
       <PerformanceFooter sinceDays={30} />
-    </div>
+      </div>
+    </PageContainer>
   );
 }
 

@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 // removed, so ReportPage doesn't fire toasts directly. Global <Toaster>
 // mount is in App.tsx; other pages (Screener, History) still use toast
 // from 'sonner' as needed.
-import { ResearchNav } from '@/components/layout/ResearchNav';
 import { getActiveTier, STARTER_ALLOWED_AGENTS } from '@/lib/tier';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
@@ -15,7 +14,7 @@ import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechS
 import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun, mergeDataPreserve } from '@/contexts/active-run-context';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useLayoutMode } from '@/contexts/layout-mode-context';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
 // MobileReportView removed — replaced by V2ReportView (dead legacy mobile fallback gated on `if (false && ...)` removed 2026-04).
 import type { ProgressEvent } from '@/lib/reportTypes';
@@ -345,7 +344,7 @@ function SectionCompleteBadge() {
 export function ReportPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const isMobile = useIsMobile();
+  const { mode } = useLayoutMode();
 
   // ── Navigation flags from hamburger menu ────────────────────────────────────
   const locState = location.state as { fresh?: boolean; resume?: boolean } | null;
@@ -929,7 +928,7 @@ export function ReportPage() {
   }, [isComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mobile layout: reimagined V2ReportView with 6 tabs ───────────────────
-  if (isMobile && liveMode) {
+  if (mode === 'mobile' && liveMode) {
     // CRITICAL: always MERGE liveData (SSE partial_data) with liveResult.data
     // (getRunResult fetch). Previous logic `displayResult = liveResult ?? {...}`
     // discarded liveData entirely once liveResult arrived — if stored run was
@@ -1296,10 +1295,8 @@ export function ReportPage() {
   // (Screener, History, Report, etc.) render consistently.
   return (
     <div className="min-h-screen bg-background">
-      <ResearchNav />
-
       {/* ── Top running bar ─────────────────────────────────────────────────── */}
-      <div className="sticky top-[45px] z-30 bg-background/98 backdrop-blur border-b">
+      <div className="sticky top-0 z-30 bg-background/98 backdrop-blur border-b">
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-5 flex items-center gap-5">
 
           {/* Spinner / done indicator */}

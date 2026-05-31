@@ -62,7 +62,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
 
         {/* Centre: Position / Target / Current / Regime + VGPM below */}
         <div className="flex flex-col flex-1 items-center gap-3">
-          <div className="flex items-start gap-6">
+          <div className="flex items-start gap-5">
             {decision?.position_size_pct != null && (
               <div className="text-center">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Position</p>
@@ -93,7 +93,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           </div>
 
           {vgpm && (
-            <div className="flex items-start gap-5">
+            <div className="flex items-start gap-2.5">
               {VGPM_DIMS.map(({ key }) => {
                 const dim = vgpm[key];
                 if (!dim) return null;
@@ -113,8 +113,12 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
       </div>
 
       {/* ── Rationale ── */}
+      {/* Cap line length to a comfortable reading measure (~72ch). `ch` units
+          track the element's font-size, so this stays optimal even when the
+          desktop root font scales up on large screens — without it the thesis
+          stretched the full card width and lines got hard to track. */}
       {decision?.rationale && (
-        <p className="mt-4 text-lg text-muted-foreground pt-4 leading-relaxed">
+        <p className="mt-4 text-lg text-muted-foreground pt-4 leading-relaxed max-w-[72ch]">
           {decision.rationale}
         </p>
       )}

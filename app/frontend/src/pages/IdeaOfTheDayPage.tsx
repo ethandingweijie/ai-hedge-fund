@@ -22,6 +22,7 @@ import {
   AlertTriangle, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 
 function formatTime(iso: string | null | undefined): string {
@@ -144,25 +145,26 @@ export function IdeaOfTheDayPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background pt-16 pb-20 flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-muted-foreground" />
-      </div>
+      <PageContainer size="default">
+        <div className="flex items-center justify-center py-16">
+          <Loader2 size={20} className="animate-spin text-muted-foreground" />
+        </div>
+      </PageContainer>
     );
   }
 
   if (!idea) {
     return (
-      <div className="min-h-screen bg-background pt-16 pb-20 px-4">
-        <div className="max-w-2xl mx-auto p-6 border border-border rounded-md text-sm text-muted-foreground">
+      <PageContainer size="default">
+        <div className="p-6 border border-border rounded-md text-sm text-muted-foreground">
           Idea not found.
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pt-16 pb-20">
-      <div className="px-4 max-w-3xl mx-auto">
+    <PageContainer size="default">
         {/* Header */}
         <div className="flex items-center gap-3 mb-3">
           <button
@@ -392,8 +394,7 @@ export function IdeaOfTheDayPage() {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </PageContainer>
   );
 }
 

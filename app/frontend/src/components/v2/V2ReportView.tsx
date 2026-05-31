@@ -485,14 +485,14 @@ function SummaryBody({
           </div>
           <div className="flex items-baseline gap-3 flex-wrap">
             <ActionPill action={decision.action} size="lg" />
+            {/* Portfolio weight (position size). The PM's `confidence` field is
+                deliberately NOT shown — it was misread as a probability/quality
+                signal when the meaningful number here is the recommended
+                portfolio weight. Labelled "weight" to remove that ambiguity. */}
             {typeof decision.position_size_pct === 'number' && (
               <span className="text-[15px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
                 {(decision.position_size_pct * 100).toFixed(1)}%
-              </span>
-            )}
-            {typeof decision.confidence === 'number' && (
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                Confidence {Math.round(decision.confidence * 100)}%
+                <span className="ml-1 text-[11px] font-normal text-zinc-500 dark:text-zinc-400">weight</span>
               </span>
             )}
           </div>

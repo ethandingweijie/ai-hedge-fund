@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Menu, X, User, Plus, BarChart2, Filter, BookMarked, History, Sun, Moon, Monitor, LogOut, Zap, BellRing, Lightbulb } from 'lucide-react';
+import { Menu, X, User, LogOut, Zap } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
-import { useTheme, type Theme } from '@/contexts/theme-context';
 import { getHistory } from '@/lib/api';
 import { parseBackendIso } from '@/lib/utils';
 import type { RunSummary } from '@/lib/reportTypes';
+import { NAV_ITEMS, useAppNav } from '@/components/nav-config';
+import { LayoutModeToggle } from '@/components/LayoutModeToggle';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const ACTION_COLORS: Record<string, string> = {
   BUY:   'bg-green-600 text-white',
@@ -15,23 +17,13 @@ const ACTION_COLORS: Record<string, string> = {
   HOLD:  'bg-yellow-500 text-white',
 };
 
-const NAV_ITEMS = [
-  { label: 'New Ticker',       icon: Plus,       path: '/report'          },
-  { label: 'Ticker Research',  icon: BarChart2,  path: '/report'          },
-  { label: 'Screener',         icon: Filter,     path: '/screener'        },
-  { label: 'Watchlist',        icon: BookMarked, path: '/watchlist'       },
-  { label: 'Research Ideas',   icon: Lightbulb,  path: '/research-ideas'  },
-  { label: 'Auto Due-D',       icon: BellRing,   path: '/dd-alerts'       },
-  { label: 'History',          icon: History,    path: '/history'         },
-] as const;
-
 export function MobileTopBar() {
   const { user, logout } = useAuth();
-  const { theme, setTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const [recentRuns, setRecentRuns] = useState<RunSummary[]>([]);
   const location = useLocation();
   const navigate = useNavigate();
+  const handleNav = useAppNav(() => setMenuOpen(false));
 
   // Fetch last 5 runs when menu opens
   useEffect(() => {
@@ -40,18 +32,6 @@ export function MobileTopBar() {
       .then((res) => setRecentRuns(res.items.slice(0, 5)))
       .catch(() => {});
   }, [menuOpen]);
-
-  const handleNav = (label: string, path: string) => {
-    setMenuOpen(false);
-    if (label === 'New Ticker') {
-      // Unique query param forces React Router to remount ReportPage even if already on /report
-      navigate(`${path}?new=${Date.now()}`, { state: { fresh: true } });
-    } else if (label === 'Ticker Research') {
-      navigate(path, { state: { resume: true } });
-    } else {
-      navigate(path);
-    }
-  };
 
   const handleRecentClick = (runId: string) => {
     setMenuOpen(false);
@@ -109,19 +89,21 @@ export function MobileTopBar() {
 
             {/* Nav items */}
             <div className="flex-1 overflow-y-auto py-2">
-              {NAV_ITEMS.map(({ label, icon: Icon, path }) => {
-                const isActive = location.pathname === path && label !== 'New Ticker';
+              {NAV_ITEMS.map((item) => {
+                const { label, icon: Icon, path } = item;
+                const isActive = location.pathname === path && item.action !== 'new';
                 const isHistory = label === 'History';
                 return (
                   <div key={label}>
                     <button
-                      onClick={() => handleNav(label, path)}
+                      onClick={() => handleNav(item)}
+                      title={item.hint}
                       className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors
                         ${isActive
                           ? 'bg-primary/10 text-primary border-l-2 border-primary'
                           : 'text-foreground hover:bg-muted border-l-2 border-transparent'
                         }
-                        ${label === 'New Ticker' ? 'border-b border-border mb-1' : ''}`}
+                        ${item.action === 'new' ? 'border-b border-border mb-1' : ''}`}
                     >
                       <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
                       <span className={`text-sm font-medium ${isActive ? 'text-primary' : ''}`}>{label}</span>
@@ -157,26 +139,17 @@ export function MobileTopBar() {
 
             {/* Settings section at bottom */}
             <div className="border-t border-border">
+              {/* Layout mode (Mobile / Desktop) — lets the user switch to the
+                  desktop/iPad sidebar shell and back. */}
+              <div className="px-4 py-3 border-b border-border/60">
+                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
+                <LayoutModeToggle onChange={() => setMenuOpen(false)} />
+              </div>
+
               {/* Theme toggle */}
               <div className="px-4 py-3">
                 <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
-                <div className="flex gap-1.5">
-                  {([
-                    { value: 'light' as Theme, icon: Sun, label: 'Light' },
-                    { value: 'dark' as Theme, icon: Moon, label: 'Dark' },
-                    { value: 'auto' as Theme, icon: Monitor, label: 'Auto' },
-                  ]).map(({ value, icon: Icon, label }) => (
-                    <button
-                      key={value}
-                      onClick={() => setTheme(value)}
-                      className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-md transition-colors text-[10px] font-medium
-                        ${theme === value ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}
-                    >
-                      <Icon size={14} />
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                <ThemeToggle />
               </div>
 
               {/* Pricing link */}

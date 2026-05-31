@@ -17,7 +17,8 @@ import { DDAlertsPage } from './pages/DDAlertsPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
 import { ThemeProvider } from './contexts/theme-context';
 import { AuthProvider, useAuth } from './contexts/auth-context';
-import { MobileLayout } from './components/mobile/MobileLayout';
+import { LayoutModeProvider } from './contexts/layout-mode-context';
+import { AppShell } from './components/AppShell';
 
 /** Redirect to /login if not authenticated */
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,7 @@ export default function App() {
     <ThemeProvider>
     <AuthProvider>
     <ActiveRunProvider>
+    <LayoutModeProvider>
     <HashRouter>
       {/* Global toast mount point — one per app, so toast.success()/.error()
           from any page (Screener, History, Report, etc.) renders consistently.
@@ -54,7 +56,7 @@ export default function App() {
         visibleToasts={6}
         offset="calc(env(safe-area-inset-top, 0px) + 80px)"
       />
-      <MobileLayout>
+      <AppShell>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
@@ -76,8 +78,9 @@ export default function App() {
           {/* Default: redirect to login (will redirect to /report after auth) */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </MobileLayout>
+      </AppShell>
     </HashRouter>
+    </LayoutModeProvider>
     </ActiveRunProvider>
     </AuthProvider>
     </ThemeProvider>

@@ -14,6 +14,8 @@ import {
 } from '@/lib/api';
 import { ArrowLeft, Loader2, Bookmark, X, Sparkles, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 
 function fmtDate(iso: string | null): string {
@@ -66,22 +68,22 @@ export function ShortlistedIdeasPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-16 pb-20">
-      <div className="px-4 max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-2">
+    <PageContainer size="default">
+      <PageHeader
+        leading={
           <button
             onClick={() => navigate('/research-ideas')}
-            className="p-1 rounded hover:bg-muted text-muted-foreground"
+            className="mt-0.5 p-1 rounded hover:bg-muted text-muted-foreground"
             aria-label="Back"
           >
             <ArrowLeft size={18} />
           </button>
-          <Bookmark size={20} className="text-emerald-500" />
-          <h1 className="text-xl font-bold text-foreground">Shortlisted Ideas</h1>
-        </div>
-        <p className="text-xs text-muted-foreground mb-6 ml-7">
-          Contrarian deep-value hypotheses you've saved. Snapshot preserved at shortlist time.
-        </p>
+        }
+        icon={Bookmark}
+        iconClassName="text-emerald-500"
+        title="Shortlisted Ideas"
+        subtitle="Contrarian deep-value hypotheses you've saved. Snapshot preserved at shortlist time."
+      />
 
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -145,7 +147,6 @@ export function ShortlistedIdeasPage() {
             );
           })}
         </div>
-      </div>
-    </div>
+    </PageContainer>
   );
 }

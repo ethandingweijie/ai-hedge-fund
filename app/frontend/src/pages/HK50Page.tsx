@@ -27,6 +27,7 @@ import {
 } from '@/lib/api';
 import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, TrendingUp, Coins, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 
 // ─── Screen definitions ─────────────────────────────────────────────────────
@@ -395,8 +396,7 @@ export function HK50Page() {
   const metricKeys = screenMetrics(screen);
 
   return (
-    <div className="min-h-screen bg-background pt-16 pb-20">
-      <div className="px-4 max-w-7xl mx-auto">
+    <PageContainer size="wide">
         {/* ── Title bar ───────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 mb-2">
           <button
@@ -693,7 +693,6 @@ export function HK50Page() {
             </div>
           </div>
         )}
-      </div>
 
       {selectedLive && (
         <DetailDrawer
@@ -713,7 +712,7 @@ export function HK50Page() {
           onOpenDetail={() => { setSelected(convDetailLive); setConvDetail(null); }}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

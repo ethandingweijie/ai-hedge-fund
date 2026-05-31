@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { getHistory, getCompanyNames, deleteRun } from '@/lib/api';
 import type { HistoryResponse, RunSummary } from '@/lib/reportTypes';
 import { useActiveRun } from '@/contexts/active-run-context';
+import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { parseBackendIso } from '@/lib/utils';
 import {
   Search,
@@ -97,6 +98,12 @@ function daysAgo(iso: string): string {
 export function HistoryPage() {
   const navigate = useNavigate();
   const { activeRuns, recentlyCompleted, clearCompleted, byTicker } = useActiveRun();
+  // Gate "wider + denser" desktop layout on the layout MODE (not raw viewport
+  // width) so the 430px mobile phone-frame preview a desktop user can render
+  // stays single-column. Combined with Tailwind `lg:` below, iPad-portrait in
+  // desktop mode (768–1023px) also stays single-column.
+  const { mode } = useLayoutMode();
+  const isDesktop = mode === 'desktop';
 
   const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
@@ -242,6 +249,11 @@ export function HistoryPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
+      {/* Desktop: constrain to a centered column. Wider on desktop (max-w-7xl)
+          to host the 2-column run grid below; narrower (max-w-5xl) otherwise.
+          On mobile the max-width exceeds the 430px frame, so it no-ops and the
+          content fills the phone width as before. */}
+      <div className={`w-full mx-auto flex flex-1 flex-col ${isDesktop ? 'max-w-7xl' : 'max-w-5xl'}`}>
       {/* Search */}
       <div className="px-3 pt-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
         <div className="relative">
@@ -320,13 +332,21 @@ export function HistoryPage() {
           </span>
         </div>
 
-        {/* History list */}
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
+        {/* History list. Desktop: 2-column grid of self-contained run cards
+            (denser, uses the wider column). Mobile: single bordered card with
+            hairline row separators, as before. */}
+        <div className={isDesktop
+          ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-start'
+          : 'rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm'}>
           {loading && !history ? (
-            <div className="px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500">Loading…</div>
+            <div className={`px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500 ${isDesktop ? 'lg:col-span-2' : ''}`}>Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500">
-              {q ? 'No matches. Clear search to see all runs.' : 'No analysis runs yet. Run your first one from Home.'}
+            <div className={`px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500 ${isDesktop ? 'lg:col-span-2' : ''}`}>
+              {(history?.total ?? 0) === 0
+                ? 'No analysis runs yet. Run your first one from Home.'
+                : q
+                  ? 'No matches. Clear search to see all runs.'
+                  : 'No runs match the current filters. Try a wider time range or clearing filters.'}
             </div>
           ) : (
             rows.map((r, i) => <HistoryRow
@@ -334,7 +354,9 @@ export function HistoryPage() {
               row={r}
               name={names[r.ticker]}
               isNew={recentlyCompleted?.runId === r.run_id}
-              className={i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : ''}
+              className={isDesktop
+                ? 'rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm'
+                : (i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : '')}
               onOpen={() => navigate(`/report/${r.run_id}`)}
               onDelete={() => handleDelete(r.run_id)}
             />)
@@ -365,6 +387,7 @@ export function HistoryPage() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

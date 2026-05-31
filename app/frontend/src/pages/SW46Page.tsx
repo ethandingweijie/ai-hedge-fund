@@ -22,6 +22,7 @@ import {
 } from '@/lib/api';
 import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 
 // ─── Formatters ────────────────────────────────────────────────────────────
@@ -189,8 +190,7 @@ export function SW46Page() {
   const activeRank = RANK_DEFS.find((r) => r.id === rankBy)!;
 
   return (
-    <div className="min-h-screen bg-background pt-16 pb-20">
-      <div className="px-4 max-w-7xl mx-auto">
+    <PageContainer size="wide">
         {/* ── Title bar ───────────────────────────────────────────────────── */}
         <div className="flex items-center gap-3 mb-2">
           <button
@@ -377,13 +377,12 @@ export function SW46Page() {
             </div>
           </div>
         )}
-      </div>
 
       {/* ── Detail drawer ───────────────────────────────────────────────── */}
       {selected && (
         <DetailDrawer ticker={selected} onClose={() => setSelected(null)} />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

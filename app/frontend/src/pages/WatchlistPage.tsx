@@ -8,13 +8,14 @@ import {
 import { getWatchlist, addToWatchlist, removeFromWatchlist, searchCompanies, getScreenerPrices } from '@/lib/api';
 import type { WatchlistItem } from '@/lib/reportTypes';
 import type { CompanySearchResult } from '@/lib/api';
-import { ResearchNav } from '@/components/layout/ResearchNav';
 import { getProfile } from '@/lib/tier';
 import { gradeColorClass } from '@/lib/gradeColors';
 import { AgentOrbIcon } from '@/components/report/AgentOrbIcon';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { SwipeableCard } from '@/components/mobile/SwipeableCard';
 import { GradeChip } from '@/components/v2/shared';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 // ── Grade pill ────────────────────────────────────────────────────────────────
 function GradePill({ grade }: { grade?: string }) {
@@ -31,7 +32,7 @@ const VGPM_DIMS = ['valuation', 'growth', 'profitability', 'momentum'] as const;
 
 export function WatchlistPage() {
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
+  const { mode } = useLayoutMode();
   const [items, setItems]           = useState<WatchlistItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -203,7 +204,7 @@ export function WatchlistPage() {
   // ── MOBILE LAYOUT ─────────────────────────────────────────────────────────────
   // Aligned with HistoryPage / ScreenerPage: neutral zinc background (white in light,
   // zinc-900 in dark), neutral cards, shared GradeChip for VGPM.
-  if (isMobile) {
+  if (mode === 'mobile') {
     return (
       <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
         {/* Hero — kept minimal, matches HistoryPage top bar spacing */}
@@ -329,16 +330,14 @@ export function WatchlistPage() {
 
   // ── DESKTOP LAYOUT ──────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background">
-      <ResearchNav />
-      <div className="p-4 md:p-8">
-        <div className="max-w-screen-xl mx-auto">
-
-          {lastRefreshed && (
-            <div className="mb-4">
-              <span className="text-xs text-green-500/70">· prices updated {lastRefreshed.toLocaleTimeString()}</span>
-            </div>
-          )}
+    <PageContainer size="wide">
+      <PageHeader
+        title="Watchlist"
+        subtitle="Live prices refresh every 15s · click any row to open the full report."
+        actions={lastRefreshed
+          ? <span className="text-xs text-muted-foreground whitespace-nowrap">Prices updated {lastRefreshed.toLocaleTimeString()}</span>
+          : undefined}
+      />
 
           {/* Add ticker */}
           <Card className="p-4 mb-6">
@@ -515,8 +514,6 @@ export function WatchlistPage() {
               </Table>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </PageContainer>
   );
 }

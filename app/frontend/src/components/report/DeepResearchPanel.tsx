@@ -169,16 +169,16 @@ export function DeepResearchPanel({
           .deep-research-body h2 { font-size: 1.1rem;  font-weight: 700; margin: 1rem 0 0.5rem; }
           .deep-research-body h3 { font-size: 1rem;    font-weight: 600; margin: 0.75rem 0 0.4rem; }
           .deep-research-body h4 { font-size: 0.9rem;  font-weight: 600; margin: 0.6rem 0 0.3rem; }
-          .deep-research-body p  { margin-bottom: 0.6rem; line-height: 1.65; font-size: 0.875rem; }
-          .deep-research-body ul { list-style: disc;   padding-left: 1.4rem; margin-bottom: 0.6rem; }
-          .deep-research-body ol { list-style: decimal; padding-left: 1.4rem; margin-bottom: 0.6rem; }
+          .deep-research-body p  { margin-bottom: 0.6rem; line-height: 1.65; font-size: 0.875rem; max-width: 78ch; }
+          .deep-research-body ul { list-style: disc;   padding-left: 1.4rem; margin-bottom: 0.6rem; max-width: 78ch; }
+          .deep-research-body ol { list-style: decimal; padding-left: 1.4rem; margin-bottom: 0.6rem; max-width: 78ch; }
           .deep-research-body li { margin-bottom: 0.25rem; font-size: 0.875rem; line-height: 1.55; }
           .deep-research-body strong { font-weight: 600; }
           .deep-research-body em { font-style: italic; }
           .deep-research-body table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 0.8rem; }
           .deep-research-body th { background: hsl(var(--muted)); text-align: left; padding: 6px 10px; font-weight: 600; border-bottom: 1px solid hsl(var(--border)); }
           .deep-research-body td { padding: 5px 10px; border-bottom: 1px solid hsl(var(--border)/0.5); vertical-align: top; }
-          .deep-research-body blockquote { border-left: 3px solid hsl(var(--border)); padding-left: 1rem; margin: 0.5rem 0; color: hsl(var(--muted-foreground)); font-style: italic; }
+          .deep-research-body blockquote { border-left: 3px solid hsl(var(--border)); padding-left: 1rem; margin: 0.5rem 0; color: hsl(var(--muted-foreground)); font-style: italic; max-width: 78ch; }
           .deep-research-body code { font-family: monospace; font-size: 0.8rem; background: hsl(var(--muted)); padding: 1px 4px; border-radius: 3px; }
           .deep-research-body pre  { background: hsl(var(--muted)); padding: 0.75rem 1rem; border-radius: 6px; overflow-x: auto; margin-bottom: 0.75rem; }
           .deep-research-body pre code { background: none; padding: 0; }

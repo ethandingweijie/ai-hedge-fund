@@ -399,3 +399,28 @@ html, body {
 .react-flow__controls .react-flow__controls-button + .react-flow__controls-button {
   border-left: none !important;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Desktop / iPad font scale-up
+   ---------------------------------------------------------------------------
+   The base 16px root font is tuned for a phone held ~30cm away; on an iPad or
+   desktop monitor viewed further back it reads small. Bump the root font-size
+   progressively so all rem-based Tailwind text (text-sm/base/lg …) scales up.
+
+   Scoped to html[data-layout="desktop"] (set by layout-mode-context) so it
+   ONLY applies when the desktop shell is active — never to the 430px mobile
+   phone-frame preview, which a desktop user can render at the same viewport
+   width. Steps align with Tailwind's lg (1024) and 2xl (1536) breakpoints:
+     • ≥1024px (iPad landscape / laptops) → 17px
+     • ≥1536px (large monitors)           → 18px
+   ────────────────────────────────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  html[data-layout="desktop"] {
+    font-size: 17px;
+  }
+}
+@media (min-width: 1536px) {
+  html[data-layout="desktop"] {
+    font-size: 18px;
+  }
+}

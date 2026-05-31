@@ -4,11 +4,10 @@ import { Button } from '@/components/ui/button';
 import { getRunResult } from '@/lib/api';
 import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 import type { RunResult } from '@/lib/reportTypes';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useLayoutMode } from '@/contexts/layout-mode-context';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
 import { V2ReportView } from '@/components/v2/V2ReportView';
 
-import { ResearchNav } from '@/components/layout/ResearchNav';
 import { ReportHeader } from '@/components/report/ReportHeader';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import { ScenarioChart } from '@/components/report/ScenarioChart';
@@ -66,7 +65,7 @@ export function ReportViewPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>('valuation');
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const isMobile = useIsMobile();
+  const { mode } = useLayoutMode();
 
   useEffect(() => {
     if (!runId) return;
@@ -109,7 +108,6 @@ export function ReportViewPage() {
   if (error || !result) {
     return (
       <div className="min-h-screen bg-background">
-        <ResearchNav />
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <p className="text-red-500">{error ?? 'Run not found.'}</p>
           <Button onClick={() => navigate('/report')}>New Analysis</Button>
@@ -149,7 +147,7 @@ export function ReportViewPage() {
   const currentPrice = scenarioAnalysis?.current_price;
 
   // Mobile layout — reimagined v2 tab view (Summary/Valuation/Investors/Risk/Research/Financials)
-  if (isMobile) {
+  if (mode === 'mobile') {
     return (
       <V2ReportView
         result={result}
@@ -166,9 +164,8 @@ export function ReportViewPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <ResearchNav />
       {/* ── Sticky section nav ─────────────────────────────────────────────── */}
-      <div className="sticky top-[57px] z-20 bg-background/95 backdrop-blur border-b">
+      <div className="sticky top-0 z-20 bg-background/95 backdrop-blur border-b">
         <div className="max-w-6xl mx-auto px-4 md:px-8">
           <div className="flex items-center justify-center gap-2 py-2">
             {SECTIONS.map(s => (

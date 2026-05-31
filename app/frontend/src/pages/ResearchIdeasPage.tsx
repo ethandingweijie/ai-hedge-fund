@@ -16,6 +16,9 @@ import {
 } from '@/lib/api';
 import { Lightbulb, ChevronRight, Loader2, Sparkles, X, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { useLayoutMode } from '@/contexts/layout-mode-context';
 
 
 function formatRunTime(iso: string | null): string {
@@ -58,6 +61,8 @@ function screenScoreColor(score: number | null | undefined): string {
 
 export function ResearchIdeasPage() {
   const navigate = useNavigate();
+  const { mode } = useLayoutMode();
+  const isDesktop = mode === 'desktop';
   const [ideas, setIdeas] = useState<SW46IdeaMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [topPicks, setTopPicks] = useState<SW46TickerResult[]>([]);
@@ -203,24 +208,24 @@ export function ResearchIdeasPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-16 pb-20">
-      <div className="px-4 max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-2">
-          <Lightbulb className="text-amber-500" size={22} />
-          <h1 className="text-xl font-bold text-foreground">Research Ideas</h1>
+    <PageContainer size={isDesktop ? 'wide' : 'default'}>
+      <PageHeader
+        icon={Lightbulb}
+        iconClassName="text-amber-500"
+        title="Research Ideas"
+        subtitle="Standalone valuation cohorts. Each idea lives outside the main DCF pipeline."
+        actions={
           <button
             onClick={() => { if (!loading) load(); }}
             disabled={loading}
-            className="ml-auto p-1.5 rounded-full hover:bg-muted disabled:opacity-50"
+            className="p-1.5 rounded-full hover:bg-muted disabled:opacity-50"
             title="Re-fetch latest cohorts (auto-fires on tab focus too)"
             aria-label="Refresh"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} className="text-muted-foreground" />}
           </button>
-        </div>
-        <p className="text-xs text-muted-foreground mb-6">
-          Standalone valuation cohorts. Each idea lives outside the main DCF pipeline.
-        </p>
+        }
+      />
 
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -235,7 +240,11 @@ export function ResearchIdeasPage() {
           </div>
         )}
 
-        <div className="space-y-3">
+        {/* Desktop: 2-column card grid (gated on layout MODE, not viewport, so
+            the 430px mobile phone-frame preview stays single-column). The AI
+            "Idea of the Day" hero card spans both columns. `items-start` keeps
+            cards at natural height instead of stretching to the tallest peer. */}
+        <div className={isDesktop ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-start' : 'space-y-3'}>
           {ideas.map((idea) => {
             const isAi = idea.id === 'idea_of_the_day';
             return (
@@ -243,9 +252,10 @@ export function ResearchIdeasPage() {
                 key={idea.id}
                 onClick={() => handleClick(idea)}
                 className={
-                  isAi
+                  (isAi
                     ? 'w-full text-left p-4 rounded-lg border-2 border-purple-400/40 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-900/15 hover:bg-purple-100 dark:hover:bg-purple-900/25 transition-colors group relative'
-                    : 'w-full text-left p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group'
+                    : 'w-full text-left p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group')
+                  + (isDesktop && isAi ? ' lg:col-span-2' : '')
                 }
               >
                 <div className="flex items-start justify-between gap-3">
@@ -522,7 +532,6 @@ export function ResearchIdeasPage() {
             );
           })}
         </div>
-      </div>
-    </div>
+    </PageContainer>
   );
 }
