@@ -69,7 +69,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
 
   return (
     <aside
-      className={`shrink-0 sticky top-0 h-screen flex flex-col border-r border-border bg-card/40
+      className={`shrink-0 h-full flex flex-col border-r border-border bg-card/40
         transition-[width] duration-200 ${collapsed ? 'w-16' : 'w-60'}`}
     >
       {/* ── Header: logo + collapse toggle ─────────────────────────────────── */}

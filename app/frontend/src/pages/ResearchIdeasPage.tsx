@@ -265,9 +265,10 @@ export function ResearchIdeasPage() {
 
         {/* Desktop: 2-column card grid (gated on layout MODE, not viewport, so
             the 430px mobile phone-frame preview stays single-column). The AI
-            "Idea of the Day" hero card spans both columns. `items-start` keeps
-            cards at natural height instead of stretching to the tallest peer. */}
-        <div className={isDesktop ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-start' : 'space-y-3'}>
+            "Idea of the Day" hero card spans both columns. `items-stretch` makes
+            the two cards in a row share the tallest height so their outlines
+            line up (matters at iPad widths where titles wrap to two lines). */}
+        <div className={isDesktop ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch' : 'space-y-3'}>
           {ideas.map((idea) => {
             const isAi = idea.id === 'idea_of_the_day';
             const side = ideaSide(idea.id);
@@ -279,6 +280,7 @@ export function ResearchIdeasPage() {
                   (isAi
                     ? `w-full text-left ${sz.pad} rounded-lg border-2 border-purple-400/40 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-900/15 hover:bg-purple-100 dark:hover:bg-purple-900/25 transition-colors group relative`
                     : `w-full text-left ${sz.pad} rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group`)
+                  + (isDesktop ? ' h-full' : '')
                   + (isDesktop && isAi ? ' lg:col-span-2' : '')
                 }
               >

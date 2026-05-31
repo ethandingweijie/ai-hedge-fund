@@ -34,7 +34,18 @@ export function DesktopLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    // Safe-area insets: when launched as a standalone home-screen app on iPad,
+    // iOS draws content edge-to-edge under the translucent status bar
+    // (viewport-fit=cover). Padding the shell by env(safe-area-inset-*) keeps
+    // the sidebar header + page content clear of the clock/battery and the
+    // bottom home indicator. No-ops to 0 in a normal browser tab.
+    <div
+      className="flex h-screen overflow-hidden bg-background"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
       <DesktopSidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
       <main className="flex-1 min-w-0 overflow-y-auto">
         {children}
