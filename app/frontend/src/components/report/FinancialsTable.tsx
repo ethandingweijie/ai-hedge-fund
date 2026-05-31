@@ -7,7 +7,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { currencySymbol } from '@/lib/utils';
 
 interface FinancialsTableProps {
   rawFinancials?: Record<string, unknown>;
@@ -184,7 +183,6 @@ function FlatTable({ rows }: { rows: { key: string; value: unknown }[] }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function FinancialsTable({ rawFinancials, ticker }: FinancialsTableProps) {
-  const fmt = makeFmt(currencySymbol(ticker));
   if (!rawFinancials || Object.keys(rawFinancials).length === 0) {
     return (
       <Card className="p-4">

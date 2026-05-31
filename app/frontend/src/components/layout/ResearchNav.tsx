@@ -1,9 +1,6 @@
-import { useState } from 'react';
-import { BarChart2, Filter, History, BookMarked, Zap, Sun, Moon, Monitor, User } from 'lucide-react';
+import { BarChart2, Filter, History, BookMarked, Zap, Sun, Moon, Monitor } from 'lucide-react';
 import { useTheme, type Theme } from '@/contexts/theme-context';
-import { useAuth } from '@/contexts/auth-context';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { MobileProfileDrawer } from '@/components/mobile/MobileProfileDrawer';
 
 const TABS = [
   { label: 'Ticker Research', icon: BarChart2,   href: '#/report'    },
@@ -21,9 +18,7 @@ export function ResearchNav() {
   const active = TABS.find(t => hash.startsWith(t.href)) ?? TABS[0];
   const { theme, setTheme } = useTheme();
   const ThemeIcon = THEME_ICONS[theme];
-  const { user, logout } = useAuth();
   const isMobile = useIsMobile();
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Mobile: top bar handled by MobileTopBar in MobileLayout — hide desktop nav
   if (isMobile) {

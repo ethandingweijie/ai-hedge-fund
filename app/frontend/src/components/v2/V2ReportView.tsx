@@ -587,7 +587,6 @@ function ValuationBody({
   const bullIV = dcfRange?.bull?.intrinsic_value ?? scenarioAnalysis?.bull?.fair_value ?? null;
   const baseIV = dcfRange?.base?.intrinsic_value ?? scenarioAnalysis?.base?.fair_value ?? null;
   const bearIV = dcfRange?.bear?.intrinsic_value ?? scenarioAnalysis?.bear?.fair_value ?? null;
-  const bullDelta = (bullIV != null && current != null && current > 0) ? ((bullIV - current) / current) * 100 : null;
   const bearDelta = (bearIV != null && current != null && current > 0) ? ((bearIV - current) / current) * 100 : null;
   const baseDelta = (baseIV != null && current != null && current > 0) ? ((baseIV - current) / current) * 100 : null;
   const wacc = dcfRange?.wacc ?? null;
@@ -1183,7 +1182,7 @@ function DebateRow({ side, who, point }: { side: 'bull' | 'bear'; who: string; p
 
 /* ───────── Risk Tab — v2 native (Power Law + Value Trap + Scenario Mix) ─── */
 function RiskBody({
-  powerLaw, valueTrap, scenarioAnalysis, isRunning,
+  powerLaw, valueTrap, scenarioAnalysis,
 }: {
   powerLaw: PowerLawAnalysis | undefined;
   valueTrap: ValueTrapAnalysis | undefined;
@@ -1422,7 +1421,7 @@ function PowerLawPentagon({ dims }: { dims: { label: string; score?: number }[] 
         <circle key={i} cx={x} cy={y} r={2.5} fill={BRAND} />
       ))}
       {/* Labels */}
-      {outer.map(([x, y], i) => {
+      {outer.map((_, i) => {
         const label = dims[i].label.length > 14 ? dims[i].label.slice(0, 14) + '…' : dims[i].label;
         const lx = cx + (r + 20) * Math.cos(angles[i]);
         const ly = cy + (r + 12) * Math.sin(angles[i]);
@@ -2032,11 +2031,3 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
   );
 }
 
-/* ───────── Empty state ───────── */
-function EmptyTab({ label = 'Not yet available' }: { label?: string }) {
-  return (
-    <div className="px-4 py-12 text-center text-[12.5px] text-zinc-400 dark:text-zinc-500">
-      {label}
-    </div>
-  );
-}

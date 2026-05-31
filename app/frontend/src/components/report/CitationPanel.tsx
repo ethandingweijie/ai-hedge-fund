@@ -38,7 +38,7 @@ export function CitationPanel({ data, ticker }: CitationPanelProps) {
       <Card className="p-4">
         <h3 className="text-sm font-semibold mb-3">Citation Audit — {ticker}</h3>
         <pre className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed bg-muted/30 p-3 rounded">
-          {raw}
+          {raw as string}
         </pre>
       </Card>
     );

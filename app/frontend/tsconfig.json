@@ -32,6 +32,15 @@
   "include": [
     "src"
   ],
+  /* secure-storage.ts is Capacitor-iOS scaffolding: it imports @capacitor/*
+     (native-only deps, not installed for the web build) and is currently
+     imported by no module. Excluded from type-checking until the iOS app
+     wires it up — at which point the @capacitor packages get installed and
+     this line should be removed. (include:["src"] already keeps node_modules
+     out, so an explicit exclude here is safe.) */
+  "exclude": [
+    "src/lib/secure-storage.ts"
+  ],
   "references": [
     {
       "path": "./tsconfig.node.json"

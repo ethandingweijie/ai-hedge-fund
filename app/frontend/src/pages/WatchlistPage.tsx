@@ -29,11 +29,6 @@ function GradePill({ grade }: { grade?: string }) {
 
 const VGPM_DIMS = ['valuation', 'growth', 'profitability', 'momentum'] as const;
 
-function fmt(n: number | null | undefined, prefix = '$') {
-  if (n == null) return '—';
-  return `${prefix}${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 export function WatchlistPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();

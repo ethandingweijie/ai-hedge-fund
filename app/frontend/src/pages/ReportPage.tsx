@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useTheme } from '@/contexts/theme-context';
 // `toast` / `Toaster` imports removed — section-completion toasts were
 // removed, so ReportPage doesn't fire toasts directly. Global <Toaster>
 // mount is in App.tsx; other pages (Screener, History) still use toast
@@ -51,21 +50,6 @@ const ALL_AGENTS = [
   'burry', 'pabrai', 'lynch', 'fisher', 'jhunjhunwala',
   'druckenmiller', 'buffett',
 ];
-
-const AGENT_LABELS: Record<string, string> = {
-  damodaran:     'Damodaran',
-  graham:        'Graham',
-  ackman:        'Ackman',
-  cathie_wood:   'Cathie Wood',
-  munger:        'Munger',
-  burry:         'Burry',
-  pabrai:        'Pabrai',
-  lynch:         'Lynch',
-  fisher:        'Fisher',
-  jhunjhunwala:  'Jhunjhunwala',
-  druckenmiller: 'Druckenmiller',
-  buffett:       'Buffett',
-};
 
 interface Profile { label: string; description: string; agents: string[]; }
 
@@ -361,8 +345,6 @@ function SectionCompleteBadge() {
 export function ReportPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const isMobile = useIsMobile();
 
   // ── Navigation flags from hamburger menu ────────────────────────────────────
@@ -382,7 +364,6 @@ export function ReportPage() {
     streamEvents: legacyEvents,
     phaseMap: legacyPhaseMap,
     liveData: legacyLiveData,
-    streamTotalPhases,
     streamRunId: legacyRunId,
     streamError: legacyError,
     liveResult, setLiveResult,
@@ -397,18 +378,15 @@ export function ReportPage() {
 
   // ── Form state ───────────────────────────────────────────────────────────────
   const [ticker, setTicker]           = useState(activeRun?.ticker ?? '');
-  const [model, setModel]             = useState('qwen3.6-plus');
+  const [model]                       = useState('qwen3.6-plus');
   const [profileIdx, setProfileIdx]   = useState(1); // default: Deep Value (skip Full Committee)
-  const [customAgents, setCustomAgents] = useState<string[]>([]);
-  const [agentSearch, setAgentSearch] = useState('');
-  const [showAdvanced, setShowAdvanced]   = useState(false);
+  const [customAgents]                = useState<string[]>([]);
   const [showArchetype, setShowArchetype] = useState(false);
-  const [expandCustom, setExpandCustom]   = useState(false);
   const [suggestions, setSuggestions]     = useState<CompanySearchResult[]>([]);
   const [showSugg, setShowSugg]           = useState(false);
   const [v2Popular, setV2Popular]         = useState<PopularTicker[]>([]);
-  const [suggLoading, setSuggLoading]     = useState(false);
-  const [searchNoMatch, setSearchNoMatch] = useState(false);
+  const [, setSuggLoading]                = useState(false);
+  const [, setSearchNoMatch]              = useState(false);
   const searchDebounceRef                 = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchReqIdRef                    = useRef(0); // increments on every search; stale responses are ignored
   const searchBarRef                      = useRef<HTMLDivElement>(null);
@@ -681,10 +659,6 @@ export function ReportPage() {
     setLivePrice(null);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const toggleCustomAgent = (agent: string) => {
-    setCustomAgents(prev => prev.includes(agent) ? prev.filter(a => a !== agent) : [...prev, agent]);
-  };
-
   // ── Section readiness — true as soon as the required data key arrives ────────
   // Uses pre-derived per-ticker values (powerLaw, valueTrap, etc.) which already
   // handle canonical HK ticker key mismatches via _byTicker().
@@ -732,7 +706,10 @@ export function ReportPage() {
   // ── Derive data — liveData accumulates partial_data from SSE; liveResult wins ─
   // When running/reconnecting, always use the ticker we're analyzing (not stale liveResult).
   // Only use liveResult.ticker when analysis is complete (result confirmed for that ticker).
-  const liveTicker    = (isRunning || state === 'reconnecting')
+  // isRunning already covers both 'running' and 'reconnecting' (see its
+  // definition above), so a separate `state === 'reconnecting'` check here is
+  // redundant — and TS flags it as unreachable inside the `||` right operand.
+  const liveTicker    = isRunning
     ? (ticker || liveResult?.ticker || '')
     : (liveResult?.ticker ?? ticker);
 
@@ -819,8 +796,6 @@ export function ReportPage() {
       : phaseDone === 0
         ? Math.min(5, phaseSeen)
         : Math.min(99, Math.round((1 - Math.pow(1 - phaseDone / totalPhases, 1.5)) * 100));
-  // Keep doneCount alias so any other references still compile
-  const doneCount = phaseDone;
 
   // ── Prompt for notification permission on first visit (PWA home screen) ─────
   // iOS PWA shows the prompt on first interaction. We trigger on any user tap
@@ -1022,14 +997,6 @@ export function ReportPage() {
     const isProfileLocked = (agents: string[]) =>
       isStarterTier && agents.length > 0 &&
       agents.some(a => !(STARTER_ALLOWED_AGENTS as readonly string[]).includes(a));
-    // An agent is locked for Starter if it's not in the allowed set
-    const isAgentLocked = (agent: string) =>
-      isStarterTier && !(STARTER_ALLOWED_AGENTS as readonly string[]).includes(agent);
-
-    const filteredAgents = ALL_AGENTS.filter(a =>
-      AGENT_LABELS[a].toLowerCase().includes(agentSearch.toLowerCase())
-    );
-
     // Selected archetype label for the icon tooltip
     const archetypeLabel  = PROFILES[profileIdx].label;
     const hasCustomAgents = isCustom && customAgents.length > 0;
@@ -1037,7 +1004,7 @@ export function ReportPage() {
     // profileIdx starts at 1 (Deep Value default) — treat as "chosen" once user has opened the panel
     // or when it's non-default. We always allow submit since Deep Value is a sensible default.
     const canSubmit       = !!ticker.trim() && archetypeReady;
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
 
     return (
       <div className="min-h-screen flex flex-col bg-white dark:bg-zinc-900 relative overflow-hidden">

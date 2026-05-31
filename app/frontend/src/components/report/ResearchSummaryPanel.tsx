@@ -7,7 +7,7 @@
  * — rendered with their original components (tables, layout intact).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
 
