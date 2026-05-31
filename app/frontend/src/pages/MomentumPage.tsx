@@ -152,7 +152,7 @@ export function MomentumPage() {
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-foreground truncate">Momentum — Turning &amp; Accelerating</h1>
+            <h1 className="text-xl font-semibold text-foreground truncate">Momentum (US)</h1>
             <p className="text-xs text-muted-foreground">
               Last run {formatRunTime(cohort?.created_at ?? null)}
               {cohort?.as_of ? ` · as of ${cohort.as_of}` : ' · live'}
