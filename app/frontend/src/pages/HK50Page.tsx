@@ -82,12 +82,14 @@ const formatRunTime = (iso: string | null): string => {
 
 // ─── AICT colour (software / internet names only; "—" otherwise) ────────────
 
+// Light mode: dark text (700) for legibility on the pale `/20` badge.
+// Dark mode (`dark:`): keep the original light-300 text.
 const AICT_COLOR: Record<string, string> = {
-  Fortress: 'bg-emerald-600/20 text-emerald-300 border-emerald-700/40',
-  Castle:   'bg-blue-600/20 text-blue-300 border-blue-700/40',
-  Chapel:   'bg-amber-600/20 text-amber-300 border-amber-700/40',
-  Stone:    'bg-orange-600/20 text-orange-300 border-orange-700/40',
-  Wood:     'bg-red-600/20 text-red-300 border-red-700/40',
+  Fortress: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
+  Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
+  Stone:    'bg-orange-600/20 text-orange-700 dark:text-orange-300 border-orange-700/40',
+  Wood:     'bg-red-600/20 text-red-700 dark:text-red-300 border-red-700/40',
 };
 const aictClass = (tier: string): string =>
   AICT_COLOR[tier] ?? 'bg-muted text-muted-foreground border-border';
@@ -631,7 +633,7 @@ export function HK50Page() {
                             <span className="text-[8px] px-1 rounded bg-primary/20 text-primary uppercase tracking-wide">lead</span>
                           )}
                           {r.membership === 'promoted' && (
-                            <span title="Newly promoted into the cohort this run" className="text-[8px] px-1 rounded bg-emerald-600/25 text-emerald-300 uppercase tracking-wide">new</span>
+                            <span title="Newly promoted into the cohort this run" className="text-[8px] px-1 rounded bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">new</span>
                           )}
                           {benched && (
                             <span title="Bench — below the membership line (not in the displayed cohort)" className="text-[8px] px-1 rounded bg-muted text-muted-foreground uppercase tracking-wide">bench</span>
