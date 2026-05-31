@@ -51,8 +51,8 @@ const SECTOR_OPTIONS = [
 type MarketOption = 'All markets' | 'US' | 'HK' | 'SG';
 const MARKET_OPTIONS: readonly MarketOption[] = ['All markets', 'US', 'HK', 'SG'];
 
-type TimeOption = 'Last 30 days' | 'Last 10 days' | 'Last 5 days' | 'Yesterday';
-const TIME_OPTIONS: readonly TimeOption[] = ['Last 30 days', 'Last 10 days', 'Last 5 days', 'Yesterday'];
+type TimeOption = 'All time' | 'Last 30 days' | 'Last 10 days' | 'Last 5 days' | 'Yesterday';
+const TIME_OPTIONS: readonly TimeOption[] = ['All time', 'Last 30 days', 'Last 10 days', 'Last 5 days', 'Yesterday'];
 
 type ActionOption = 'Any action' | 'BUY' | 'HOLD' | 'SELL' | 'SHORT';
 const ACTION_OPTIONS: readonly ActionOption[] = ['Any action', 'BUY', 'HOLD', 'SELL', 'SHORT'];
@@ -70,6 +70,8 @@ function timeCutoff(opt: TimeOption): Date {
   const now = new Date();
   const d = new Date(now);
   switch (opt) {
+    case 'All time':
+      return new Date(0); // epoch — never filters anything out
     case 'Yesterday':
       d.setDate(d.getDate() - 1); d.setHours(0, 0, 0, 0); return d;
     case 'Last 5 days':
@@ -112,7 +114,7 @@ export function HistoryPage() {
   // ── Filter state ──────────────────────────────────────────────────────────
   const [sectorFilter, setSectorFilter] = useState<string>('All sectors');
   const [marketFilter, setMarketFilter] = useState<MarketOption>('All markets');
-  const [timeFilter, setTimeFilter]     = useState<TimeOption>('Last 30 days');
+  const [timeFilter, setTimeFilter]     = useState<TimeOption>('All time');
   const [actionFilter, setActionFilter] = useState<ActionOption>('Any action');
   const [page, setPage] = useState(1);
   const deleteGuard = useRef<Set<string>>(new Set());
@@ -283,11 +285,11 @@ export function HistoryPage() {
           active={marketFilter !== 'All markets'}
         />
         <FilterPill
-          label="Last search"
+          label={timeFilter === 'All time' ? 'Any time' : 'Last search'}
           value={timeFilter}
           options={TIME_OPTIONS as readonly string[]}
           onChange={v => setTimeFilter(v as TimeOption)}
-          active={timeFilter !== 'Last 30 days'}
+          active={timeFilter !== 'All time'}
         />
         <FilterPill
           value={actionFilter}
