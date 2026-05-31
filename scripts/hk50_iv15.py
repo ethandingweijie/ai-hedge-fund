@@ -174,10 +174,24 @@ def build_inputs(ticker):
 
     is_hk = is_hk_ticker(ticker)
     if not is_hk and pe and pe > 0 and mkt_price:
-        # ADR / US: FMP P/E is quote-consistent → derive EPS in quote currency.
+        # ADR / US: FMP P/E is *usually* quote-consistent → derive EPS in quote
+        # currency from price / P/E.
         E0 = mkt_price / pe
         price = mkt_price
         currency = yi.get("currency") or currency
+        # GUARD — FMP occasionally ships a CURRENCY-MIXED P/E for ADRs whose
+        # reporting currency differs from the quote currency (e.g. BABA: USD
+        # ADR price ÷ CNY-denominated EPS → P/E ~2.5 vs the real ~19). That
+        # makes E0 the foreign-currency EPS and inflates IV15 ~FX-fold (BABA
+        # showed IV15 $474 / P-IV15 0.26 when the true figures were ~$61 /
+        # ~2.0). yfinance's trailingEps is already quote-consistent, so when
+        # the FMP-implied EPS diverges from it by >2.5x, trust yfinance.
+        yf_eps = yi.get("trailingEps")
+        if yf_eps and yf_eps > 0 and E0 > 0:
+            divergence = max(E0 / yf_eps, yf_eps / E0)
+            if divergence > 2.5:
+                E0 = yf_eps
+                pe = mkt_price / yf_eps  # keep pe quote-consistent for downstream
     else:
         # HK (AKShare) or missing P/E: AKShare EPS is reliable & in listing ccy.
         E0 = fmg("earnings_per_share") or yi.get("trailingEps")
