@@ -61,6 +61,20 @@ async def startup_event():
     except Exception as exc:
         logger.warning("Idea-of-the-day scheduler failed to start: %s", exc)
 
+    # Start the IV15 "price reached fair value" sweep — fires daily at
+    # SGT 08:00 (= UTC 00:00). Compares a fresh live quote for every
+    # SW46 + HK50 name against its stored per-share IV15 and pushes a
+    # Slack alert for any name that has fallen to/below fair value
+    # (P/IV15 <= 1.00), with hysteresis so each name alerts once per
+    # downward cross. Idempotent: skips today's slot if a sweep already
+    # ran in the last 20 hours. Disable via IV15_ALERT_DISABLED=true.
+    try:
+        from src.research_ideas.alerts.iv15_scheduler import start_iv15_scheduler
+        start_iv15_scheduler()
+        logger.info("IV15 alert daily scheduler started")
+    except Exception as exc:
+        logger.warning("IV15 alert scheduler failed to start: %s", exc)
+
 
 async def _check_ollama():
     try:

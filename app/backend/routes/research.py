@@ -1663,3 +1663,67 @@ async def list_complacency_sector_medians(metric: str = "ev_sales"):
         tb = traceback.format_exc()
         logger.exception("list_complacency_sector_medians failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+# ─── IV15 "price reached fair value" alert sweep ──────────────────────────
+# A daily scheduler (src/research_ideas/alerts/iv15_scheduler.py) fires this
+# at SGT 08:00. These endpoints let you run it on-demand (dry-run to preview
+# without persisting/posting, or live to post to Slack) and inspect state.
+
+
+@router.post("/ideas/iv15-alerts/run")
+async def run_iv15_alerts(dry_run: bool = True):
+    """Run one IV15 cross sweep across SW46 + HK50.
+
+    dry_run=True (default) computes crossings WITHOUT persisting hysteresis
+    state or posting to Slack — safe to call repeatedly to preview. Pass
+    dry_run=false to actually persist + push the consolidated Slack alert.
+    """
+    try:
+        from src.research_ideas.alerts.iv15_monitor import run_iv15_sweep
+        result = await asyncio.to_thread(run_iv15_sweep, dry_run=dry_run)
+        return {
+            "dry_run": dry_run,
+            "checked": result.checked,
+            "fired": [
+                {
+                    "cohort": a.cohort,
+                    "ticker": a.display_ticker,
+                    "name": a.name,
+                    "live_price": a.live_price,
+                    "iv15": a.iv15,
+                    "p_iv15": a.live_p_iv15,
+                    "currency": a.currency,
+                    "aict": a.aict,
+                    "conviction": a.conviction,
+                }
+                for a in result.fired
+            ],
+            "rearmed": result.rearmed,
+            "skipped_no_quote": result.skipped_no_quote,
+            "errors": result.errors[:20],
+            "posted_to_slack": result.posted_to_slack,
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("run_iv15_alerts failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/iv15-alerts/state")
+async def get_iv15_alert_state():
+    """Current per-(cohort, ticker) hysteresis state + last sweep timestamp."""
+    try:
+        from app.backend.services import iv15_alert_store as store
+        sw46_states = await asyncio.to_thread(store.get_all_states, "sw46")
+        hk50_states = await asyncio.to_thread(store.get_all_states, "hk50")
+        last_at = await asyncio.to_thread(store.last_sweep_at)
+        return {
+            "last_sweep_at": last_at,
+            "sw46": list(sw46_states.values()),
+            "hk50": list(hk50_states.values()),
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_iv15_alert_state failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
