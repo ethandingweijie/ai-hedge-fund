@@ -27,6 +27,13 @@ from src.research_ideas.complacency.schemas import (  # noqa: F401  (re-exported
 # AICT tier is "—" for every non-software/internet name (AICT not applicable).
 AICTLabel = str
 LeadScreen = Literal["Growth", "Dividend"]
+# Dynamic-universe membership status (decided by lead_score threshold + hysteresis
+# in src/research_ideas/hk50/selection.py — see HK50TickerResult.in_cohort):
+#   member    — in the displayed cohort and was in the prior run
+#   promoted  — in the displayed cohort, newly added this run (cleared ENTER)
+#   relegated — NOT in the cohort now, but was in the prior run
+#   bench     — scored in the eligible pool but below the displayed line
+MembershipStatus = Literal["member", "promoted", "relegated", "bench"]
 
 # ─── Qualitative-overlay tier ladders ─────────────────────────────────────
 # Policy posture (dimension 1): higher = stronger state tailwind for a LONG.
@@ -118,7 +125,13 @@ class HK50TickerResult(BaseModel):
     growth_score: float = 0.0                # High-Growth screen (0-100)
     dividend_score: float = 0.0              # High-Dividend screen (0-100)
     lead: LeadScreen = "Growth"              # which screen leads (max of the two)
+    lead_score: float = 0.0                  # max(growth_score, dividend_score) — ranks the pool
     aict_tier: AICTLabel = "—"
+
+    # ── Dynamic-universe membership (output of the screen, NOT hand-curated) ──
+    in_cohort: bool = False                  # True = inside the displayed top-50
+    cohort_rank: Optional[int] = None        # 1..N within the displayed cohort (None on bench)
+    membership: MembershipStatus = "bench"   # member | promoted | relegated | bench
 
     price: Optional[float] = None
     iv15: Optional[float] = None             # per-share IV15 (quote ccy)
@@ -139,10 +152,19 @@ class HK50TickerResult(BaseModel):
 class HK50CohortResult(BaseModel):
     run_id: str
     created_at: str
-    ticker_count: int = 0
-    avg_growth: Optional[float] = None
-    avg_dividend: Optional[float] = None
-    median_p_iv15: Optional[float] = None
-    lead_growth_count: int = 0               # how many names lead on Growth
+    ticker_count: int = 0                    # = displayed_count (back-compat for list views)
+    avg_growth: Optional[float] = None       # averaged over the DISPLAYED cohort only
+    avg_dividend: Optional[float] = None      # averaged over the DISPLAYED cohort only
+    median_p_iv15: Optional[float] = None     # median over the DISPLAYED cohort only
+    lead_growth_count: int = 0               # how many DISPLAYED names lead on Growth
+
+    # ── Dynamic-universe membership summary ──────────────────────────────────
+    eligible_count: int = 0                  # names scored this run (the full pool, ~100)
+    displayed_count: int = 0                 # names in the cohort (<= 50)
+    enter_threshold: float = 0.0             # lead_score a NON-member must clear to join
+    stay_threshold: float = 0.0             # lead_score a member must hold to stay
+    promoted: list[dict] = Field(default_factory=list)   # [{ticker, name, lead_score}]
+    relegated: list[dict] = Field(default_factory=list)  # [{ticker, name, lead_score, reason}]
+
     failed_tickers: list[dict] = Field(default_factory=list)  # [{ticker, reason}]
-    results: list[HK50TickerResult] = Field(default_factory=list)
+    results: list[HK50TickerResult] = Field(default_factory=list)  # ALL scored names, ranked

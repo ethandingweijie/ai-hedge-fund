@@ -55,12 +55,23 @@ CREATE TABLE IF NOT EXISTS hk50_runs (
     median_p_iv15     REAL,
     lead_growth_count INTEGER,
     failed_tickers    TEXT,
-    results           TEXT NOT NULL
+    results           TEXT NOT NULL,
+    cohort_meta       TEXT
 )
 """
 
 _HK50_INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_hk50_runs_created_at ON hk50_runs(created_at DESC)",
+]
+
+# Columns added after the table's first ship — auto-migrated on every connect so
+# an existing run_archive.db gains them without a manual migration step. The
+# dynamic-universe summary (displayed/eligible counts, ENTER/STAY thresholds,
+# promoted/relegated deltas) lives in one JSON blob: the promotion/relegation
+# deltas are computed per run vs the prior run and CANNOT be re-derived from a
+# single stored snapshot, so they must be persisted here.
+_HK50_MIGRATIONS = [
+    ("cohort_meta", "ALTER TABLE hk50_runs ADD COLUMN cohort_meta TEXT"),
 ]
 
 
@@ -72,6 +83,10 @@ def _ensure_table() -> None:
     conn = _connect(db_path)
     try:
         conn.execute(_HK50_DDL)
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(hk50_runs)")}
+        for col, ddl in _HK50_MIGRATIONS:
+            if col not in existing:
+                conn.execute(ddl)
         for idx in _HK50_INDEXES:
             conn.execute(idx)
         conn.commit()
@@ -100,14 +115,24 @@ def save_hk50_run(cohort: HK50CohortResult) -> None:
     payload = _sanitize(cohort.model_dump())
     results_json = json.dumps(payload.get("results", []))
     failed_json = json.dumps(payload.get("failed_tickers", []))
+    meta_json = json.dumps(
+        {
+            "eligible_count": payload.get("eligible_count", 0),
+            "displayed_count": payload.get("displayed_count", 0),
+            "enter_threshold": payload.get("enter_threshold", 0.0),
+            "stay_threshold": payload.get("stay_threshold", 0.0),
+            "promoted": payload.get("promoted", []),
+            "relegated": payload.get("relegated", []),
+        }
+    )
     conn = _connect()
     try:
         conn.execute(
             """
             INSERT OR REPLACE INTO hk50_runs
                 (run_id, created_at, ticker_count, avg_growth, avg_dividend,
-                 median_p_iv15, lead_growth_count, failed_tickers, results)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 median_p_iv15, lead_growth_count, failed_tickers, results, cohort_meta)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 cohort.run_id,
@@ -119,6 +144,7 @@ def save_hk50_run(cohort: HK50CohortResult) -> None:
                 cohort.lead_growth_count,
                 failed_json,
                 results_json,
+                meta_json,
             ),
         )
         conn.commit()
@@ -132,7 +158,7 @@ def get_latest_hk50_run() -> Optional[dict]:
     try:
         row = conn.execute(
             "SELECT run_id, created_at, ticker_count, avg_growth, avg_dividend, "
-            "median_p_iv15, lead_growth_count, failed_tickers, results "
+            "median_p_iv15, lead_growth_count, failed_tickers, results, cohort_meta "
             "FROM hk50_runs ORDER BY created_at DESC LIMIT 1"
         ).fetchone()
     finally:
@@ -142,13 +168,42 @@ def get_latest_hk50_run() -> Optional[dict]:
     return _row_to_dict(row)
 
 
+def get_latest_membership() -> set[str]:
+    """Set of hk_ticker that were in the DISPLAYED cohort (in_cohort) in the
+    latest stored run. Feeds the hysteresis bands in selection.select_cohort so
+    membership doesn't flicker run-to-run. Returns an empty set on cold start
+    (no prior run) or any read error — the runner then evaluates every name
+    against the ENTER threshold, which is the correct cold-start behavior.
+    """
+    try:
+        _ensure_table()
+        conn = _connect()
+        try:
+            row = conn.execute(
+                "SELECT results FROM hk50_runs ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            return set()
+        results = json.loads(row[0] or "[]")
+        return {
+            r["hk_ticker"]
+            for r in results
+            if r.get("in_cohort") and r.get("hk_ticker")
+        }
+    except Exception:
+        logger.warning("HK50: get_latest_membership failed — treating as cold start")
+        return set()
+
+
 def get_hk50_run(run_id: str) -> Optional[dict]:
     _ensure_table()
     conn = _connect()
     try:
         row = conn.execute(
             "SELECT run_id, created_at, ticker_count, avg_growth, avg_dividend, "
-            "median_p_iv15, lead_growth_count, failed_tickers, results "
+            "median_p_iv15, lead_growth_count, failed_tickers, results, cohort_meta "
             "FROM hk50_runs WHERE run_id = ?",
             (run_id,),
         ).fetchone()
@@ -336,7 +391,7 @@ def set_ticker_qualitative_in_latest_cohort(
 
 
 def _row_to_dict(row: tuple) -> dict:
-    return {
+    out = {
         "run_id": row[0],
         "created_at": row[1],
         "ticker_count": row[2],
@@ -347,3 +402,23 @@ def _row_to_dict(row: tuple) -> dict:
         "failed_tickers": json.loads(row[7] or "[]"),
         "results": json.loads(row[8] or "[]"),
     }
+    # Dynamic-universe summary (added post-ship via cohort_meta). Pre-migration
+    # rows have no meta → fall back to values derivable from `results` so the
+    # frontend always has displayed/eligible counts. promoted/relegated cannot
+    # be reconstructed from one snapshot, so they default to empty.
+    meta = {}
+    if len(row) > 9 and row[9]:
+        try:
+            meta = json.loads(row[9])
+        except Exception:
+            meta = {}
+    results = out["results"]
+    out["eligible_count"] = meta.get("eligible_count", len(results))
+    out["displayed_count"] = meta.get(
+        "displayed_count", sum(1 for r in results if r.get("in_cohort"))
+    )
+    out["enter_threshold"] = meta.get("enter_threshold", 0.0)
+    out["stay_threshold"] = meta.get("stay_threshold", 0.0)
+    out["promoted"] = meta.get("promoted", [])
+    out["relegated"] = meta.get("relegated", [])
+    return out

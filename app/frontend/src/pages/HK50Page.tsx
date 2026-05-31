@@ -173,6 +173,9 @@ export function HK50Page() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [screen, setScreen]   = useState<Screen>('Growth');
+  // Pool view: the displayed cohort only (default) vs the full eligible pool
+  // with the bench greyed. Membership is decided server-side; this is display.
+  const [poolView, setPoolView] = useState<'cohort' | 'all'>('cohort');
   const [search, setSearch]   = useState('');
   const [selected, setSelected] = useState<HK50TickerResult | null>(null);
   // Conviction popover — elaborates the Policy × Moat breakdown for one row.
@@ -359,11 +362,13 @@ export function HK50Page() {
     [cohort],
   );
 
-  // Active-screen ranked + filtered rows.
+  // Active-screen ranked + filtered rows. In "cohort" view we show only the
+  // displayed members; in "all" view the full pool with bench rows greyed.
   const rows = useMemo(() => {
     if (!cohort?.results) return [];
     const q = search.trim().toUpperCase();
     return cohort.results
+      .filter((r) => poolView === 'all' || r.in_cohort)
       .filter((r) =>
         !q ||
         r.ticker.toUpperCase().includes(q) ||
@@ -372,7 +377,12 @@ export function HK50Page() {
       )
       .slice()
       .sort((a, b) => screenScore(b, screen) - screenScore(a, screen));
-  }, [cohort, screen, search]);
+  }, [cohort, screen, search, poolView]);
+
+  const benchCount = useMemo(
+    () => (cohort?.results ?? []).filter((r) => !r.in_cohort).length,
+    [cohort],
+  );
 
   const metricKeys = screenMetrics(screen);
 
@@ -391,7 +401,8 @@ export function HK50Page() {
           <h1 className="text-xl font-bold text-foreground">Long China / HK — Growth &amp; Dividend</h1>
         </div>
         <p className="text-xs text-muted-foreground mb-4 ml-7">
-          50-name China / Hong Kong universe · two independent 0-100 screens · IV15 (AICT-modulated for software / internet) · toggle the ranking
+          ~100-name eligible pool · the displayed <strong>top 50</strong> is an output of the screen (lead-score threshold + hysteresis) ·
+          two independent 0-100 screens · IV15 (AICT-modulated for software / internet)
         </p>
 
         {/* ── Cohort summary bar ──────────────────────────────────────────── */}
@@ -399,8 +410,17 @@ export function HK50Page() {
           <Stat label="Avg Growth" value={cohort?.avg_growth != null ? cohort.avg_growth.toFixed(1) : '—'} />
           <Stat label="Avg Dividend" value={cohort?.avg_dividend != null ? cohort.avg_dividend.toFixed(1) : '—'} />
           <Stat label="Median P/IV15" value={cohort?.median_p_iv15 != null ? `${cohort.median_p_iv15.toFixed(2)}×` : '—'} />
-          <Stat label="Lead split" value={cohort?.ticker_count ? `${cohort.lead_growth_count}G / ${cohort.ticker_count - cohort.lead_growth_count}D` : '—'} />
-          <Stat label="Tickers" value={String(cohort?.ticker_count ?? 0)} />
+          <Stat label="Lead split" value={cohort?.displayed_count ? `${cohort.lead_growth_count}G / ${cohort.displayed_count - cohort.lead_growth_count}D` : '—'} />
+          <Stat
+            label="Displayed / Pool"
+            value={`${cohort?.displayed_count ?? 0} / ${cohort?.eligible_count ?? 0}`}
+            title="Names in the displayed cohort vs the full eligible pool scored this run."
+          />
+          <Stat
+            label="ENTER / STAY"
+            value={cohort?.enter_threshold ? `${cohort.enter_threshold.toFixed(0)} / ${cohort.stay_threshold.toFixed(0)}` : '—'}
+            title="Hysteresis bands on lead score = max(Growth, Dividend). A non-member joins at ENTER; a member is kept down to STAY. Cap 50."
+          />
           {cohort?.failed_tickers && cohort.failed_tickers.length > 0 && (
             <Stat
               label="Failed"
@@ -442,6 +462,33 @@ export function HK50Page() {
           </div>
         )}
 
+        {/* ── Membership changes since last run ───────────────────────────── */}
+        {!loading && cohort && ((cohort.promoted?.length ?? 0) > 0 || (cohort.relegated?.length ?? 0) > 0) && (
+          <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-2 px-3 py-2 rounded-md border border-border bg-card">
+            <span className="text-[9px] uppercase tracking-wider text-muted-foreground pt-1">Changes since last run</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(cohort.promoted ?? []).map((p) => (
+                <span
+                  key={`up-${p.ticker}`}
+                  title={`Promoted into the cohort · lead score ${p.lead_score.toFixed(1)} (cleared ENTER ${cohort.enter_threshold.toFixed(0)})`}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-600/15 text-emerald-300 border border-emerald-700/30"
+                >
+                  ▲ {p.name} <span className="font-mono opacity-70">{p.lead_score.toFixed(0)}</span>
+                </span>
+              ))}
+              {(cohort.relegated ?? []).map((r) => (
+                <span
+                  key={`down-${r.ticker}`}
+                  title={`Relegated · lead score ${r.lead_score.toFixed(1)} · ${r.reason ?? ''}`}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-600/15 text-amber-300 border border-amber-700/30"
+                >
+                  ▼ {r.name} <span className="font-mono opacity-70">{r.lead_score.toFixed(0)}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Hero strip: top-5 of each screen ────────────────────────────── */}
         {!loading && cohort && cohort.results.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
@@ -479,6 +526,28 @@ export function HK50Page() {
               >
                 {s === 'Growth' ? <TrendingUp size={14} /> : <Coins size={14} />}
                 {s} Screener
+              </button>
+            ))}
+          </div>
+          {/* Cohort-only vs full-pool view */}
+          <div className="inline-flex rounded-md border border-border overflow-hidden">
+            {([
+              ['cohort', `Cohort (${cohort?.displayed_count ?? 0})`],
+              ['all', `Full pool (${cohort?.eligible_count ?? 0})`],
+            ] as [typeof poolView, string][]).map(([v, label]) => (
+              <button
+                key={v}
+                onClick={() => setPoolView(v)}
+                title={v === 'cohort'
+                  ? 'Show only the displayed cohort (names above the membership line).'
+                  : `Show the full eligible pool — ${benchCount} bench names greyed below the line.`}
+                className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  poolView === v
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {label}
               </button>
             ))}
           </div>
@@ -533,20 +602,33 @@ export function HK50Page() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, i) => {
+                {rows.map((r) => {
                   const other: Screen = screen === 'Growth' ? 'Dividend' : 'Growth';
+                  const benched = !r.in_cohort;
                   return (
                     <tr
                       key={r.ticker}
                       onClick={() => setSelected(r)}
-                      className="border-t border-border hover:bg-muted/30 cursor-pointer"
+                      className={`border-t border-border hover:bg-muted/30 cursor-pointer ${
+                        r.membership === 'promoted' ? 'bg-emerald-600/5' : ''
+                      } ${benched ? 'opacity-50' : ''}`}
                     >
-                      <td className="px-2 py-1.5 text-right text-muted-foreground">{i + 1}</td>
+                      <td className="px-2 py-1.5 text-right text-muted-foreground">
+                        {r.in_cohort && r.cohort_rank != null
+                          ? <span className="text-foreground font-semibold">{r.cohort_rank}</span>
+                          : <span className="text-muted-foreground/50">·</span>}
+                      </td>
                       <td className="px-2 py-1.5">
-                        <div className="font-bold text-foreground flex items-center gap-1">
+                        <div className="font-bold text-foreground flex items-center gap-1 flex-wrap">
                           {r.name}
                           {r.lead === screen && (
                             <span className="text-[8px] px-1 rounded bg-primary/20 text-primary uppercase tracking-wide">lead</span>
+                          )}
+                          {r.membership === 'promoted' && (
+                            <span title="Newly promoted into the cohort this run" className="text-[8px] px-1 rounded bg-emerald-600/25 text-emerald-300 uppercase tracking-wide">new</span>
+                          )}
+                          {benched && (
+                            <span title="Bench — below the membership line (not in the displayed cohort)" className="text-[8px] px-1 rounded bg-muted text-muted-foreground uppercase tracking-wide">bench</span>
                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">

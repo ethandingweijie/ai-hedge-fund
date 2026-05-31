@@ -62,6 +62,16 @@ AICT_TIER = {
     "9618.HK": "Chapel",   # JD.com — e-commerce platform
     "9626.HK": "Chapel",   # Bilibili — video / content platform
     "TCOM":    "Chapel",   # Trip.com — online-travel platform
+    # ── expansion batch (50→100): SW/Internet names only (keyed by HK ticker,
+    #    matching runner._compute_iv15). Non-software adds use the neutral path.
+    "9698.HK": "Stone",    # GDS — data-center infra (picks-and-shovels)
+    "0780.HK": "Chapel",   # Tongcheng — OTA platform
+    "3888.HK": "Chapel",   # Kingsoft — WPS office + games
+    "0268.HK": "Stone",    # Kingdee — cloud ERP
+    "2400.HK": "Stone",    # XD Inc — game platform/publisher
+    "0772.HK": "Stone",    # China Literature — online content / IP
+    "6060.HK": "Stone",    # ZhongAn — insurtech platform
+    "0241.HK": "Chapel",   # Alibaba Health — healthcare e-commerce platform
 }
 DEFAULT_TIER = "Chapel"   # fallback for an AICT-eligible name lacking an explicit tier
 # Neutral (non-AICT) terminal: no haircut, pure Gordon, no Buffett multiple.

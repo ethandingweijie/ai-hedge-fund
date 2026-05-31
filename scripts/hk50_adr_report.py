@@ -39,13 +39,21 @@ END_DATE = "2026-05-30"
 ADR_MAP = {
     "0700.HK": "TCEHY", "9988.HK": "BABA",  "3690.HK": "MPNGY", "1810.HK": "XIACY",
     "1024.HK": "KSHTY", "9618.HK": "JD",    "9999.HK": "NTES",  "9626.HK": "BILI",  "0992.HK": "LNVGY",
-    "1211.HK": "BYDDY", "0175.HK": "GELYY", "2015.HK": "LI",    "9868.HK": "XPEV",
+    "1211.HK": "BYDDY", "2015.HK": "LI",    "9868.HK": "XPEV",
     "6690.HK": "HSHCY", "2020.HK": "ANPDY", "2331.HK": "LNNGY", "0288.HK": "WHGLY",
     "2269.HK": "WXIBF", "1177.HK": "SBHMY", "0005.HK": "HSBC",  "2888.HK": "SCBFF",
     "1398.HK": "IDCBY", "0939.HK": "CICHY", "3988.HK": "BACHY", "3968.HK": "CIHKY",
-    "2388.HK": "BHKLY", "2318.HK": "PNGAY", "2628.HK": "LFC",   "1299.HK": "AAGIY",
+    "2388.HK": "BHKLY", "2318.HK": "PNGAY", "1299.HK": "AAGIY",
     "0857.HK": "PCCYF", "1088.HK": "CSUAY", "0002.HK": "CLPHY", "0006.HK": "HGKGY",
-    "0003.HK": "HOKCY", "1109.HK": "CRBJY", "0823.HK": "LKREF", "0011.HK": "HSNGY",
+    "0003.HK": "HOKCY", "1109.HK": "CRBJY", "0823.HK": "LKREF",
+    # ── expansion batch (50→100): only names with a LIQUID US ADR are mapped;
+    #    everything else stays on the HK/AKShare+yf path via route()'s default.
+    "9698.HK": "GDS",
+    # NB: 0175.HK Geely (GELYY) and 2628.HK China Life (LFC) were REMOVED from this
+    #     map — those US ADRs are delisted and 404 on yfinance, which zeroed both
+    #     blue-chips; they now route to HK/AKShare+yf and resolve cleanly.
+    #     0011.HK Hang Seng Bank was dropped from the universe entirely — HSBC took it
+    #     private, so it is delisted from HKEX and unresolvable on every source.
 }
 # Already-ADR tickers in the universe (kept on FMP as-is)
 NATIVE_ADRS = {"CHA", "EH", "YUMC", "TCOM"}
@@ -65,12 +73,50 @@ HK50 = [
     ("2269.HK", "WuXi Bio"), ("1093.HK", "CSPC"), ("1177.HK", "Sino Biopharm"),
     ("0005.HK", "HSBC"), ("2888.HK", "StanChart"), ("1398.HK", "ICBC"),
     ("0939.HK", "CCB"), ("3988.HK", "BoC"), ("3968.HK", "CMB"),
-    ("0011.HK", "Hang Seng Bank"), ("2388.HK", "BOCHK"), ("2318.HK", "Ping An"),
+    ("2388.HK", "BOCHK"), ("2318.HK", "Ping An"),
     ("2628.HK", "China Life"), ("1299.HK", "AIA"), ("0941.HK", "China Mobile"),
     ("0762.HK", "China Unicom"), ("0728.HK", "China Telecom"), ("0883.HK", "CNOOC"),
     ("0857.HK", "PetroChina"), ("0386.HK", "Sinopec"), ("1088.HK", "Shenhua"),
     ("0002.HK", "CLP"), ("0006.HK", "Power Assets"), ("0003.HK", "HK&China Gas"),
     ("1109.HK", "CR Land"), ("0823.HK", "Link REIT"),
+    # ── expansion batch (50→100): broadens the eligible POOL. Displayed
+    #    membership is now an OUTPUT of the screen (lead_score threshold +
+    #    hysteresis in src/research_ideas/hk50/selection.py), not this list.
+    # Internet / software / tech
+    ("9698.HK", "GDS Holdings"), ("0780.HK", "Tongcheng"), ("3888.HK", "Kingsoft"),
+    ("0268.HK", "Kingdee"), ("2400.HK", "XD Inc"), ("0772.HK", "China Literature"),
+    ("6060.HK", "ZhongAn Online"), ("0241.HK", "Alibaba Health"),
+    ("0285.HK", "BYD Electronic"), ("1347.HK", "Hua Hong Semi"),
+    # EV / autos / industrials
+    #   NB: 0489.HK Dongfeng dropped — invisible to both yfinance (404) and AKShare
+    #   (empty), and its US ADR DNFGY resolves only ~50% with lead_score 0. A genuine
+    #   data desert, not an integration fault; honest-threshold means we don't backfill
+    #   to exactly 100. Substitute a liquid auto/industrial here if 100 is desired.
+    ("2333.HK", "Great Wall Motor"), ("2238.HK", "GAC Group"),
+    ("0788.HK", "China Tower"), ("0968.HK", "Xinyi Solar"), ("0916.HK", "Longyuan Power"),
+    ("3800.HK", "GCL Tech"), ("0669.HK", "Techtronic"),
+    # Financials
+    ("0998.HK", "CITIC Bank"), ("3328.HK", "Bank of Comm"), ("6030.HK", "CITIC Sec"),
+    ("1336.HK", "New China Life"), ("0966.HK", "China Taiping"), ("1359.HK", "China Cinda"),
+    ("6818.HK", "Everbright Bank"), ("2601.HK", "China Pacific Ins"),
+    # Consumer / healthcare
+    ("1929.HK", "Chow Tai Fook"), ("9633.HK", "Nongfu Spring"), ("1876.HK", "Budweiser APAC"),
+    ("0151.HK", "Want Want"), ("9922.HK", "Jiumaojiu"), ("3759.HK", "Pharmaron"),
+    ("2382.HK", "Sunny Optical"), ("0322.HK", "Tingyi"), ("2319.HK", "Mengniu"),
+    ("0291.HK", "CR Beer"), ("1044.HK", "Hengan"), ("6160.HK", "BeiGene"),
+    # Energy / materials / property / utilities
+    ("0902.HK", "Huaneng Power"), ("0836.HK", "CR Power"), ("0358.HK", "Jiangxi Copper"),
+    ("0914.HK", "Anhui Conch"), ("3323.HK", "CNBM"), ("0016.HK", "SHK Properties"),
+    ("0001.HK", "CK Hutchison"), ("1972.HK", "Swire Properties"), ("2007.HK", "Country Garden"),
+    ("0688.HK", "China Overseas"), ("1099.HK", "Sinopharm"), ("0019.HK", "Swire Pacific"),
+    # ── refresh batch (new-economy / AI tilt; pool 99→106) ──────────────────
+    #   The three Jan-2026 HK AI IPOs (Knowledge Atlas/Zhipu, MiniMax, Biren) have
+    #   only months of trading history — expect LOW coverage (no 3-5y CAGRs, non-
+    #   payers, thin analyst PEG); they correctly bench on lead_score until financials
+    #   accrue. All seven route to HK/AKShare+yf (no liquid US ADR; Baidu via 9888.HK).
+    ("2513.HK", "Knowledge Atlas"), ("0100.HK", "MiniMax"), ("6082.HK", "Biren Tech"),
+    ("3750.HK", "CATL"), ("9992.HK", "Pop Mart"), ("1816.HK", "CGN Power"),
+    ("9888.HK", "Baidu"),
 ]
 
 # Structurally-N/A patterns: metrics that don't exist for a business model, so a
@@ -83,8 +129,11 @@ DIV_5Y_HISTORY = {"dividend_5y_cagr", "yield_vs_5yr_avg"}
 # Banks + insurers — "free cash flow" is not a meaningful concept for them, so
 # fcf_coverage is structurally N/A (FMP may still return a junk FCF yield).
 FINANCIALS = {
-    "0005.HK", "2888.HK", "1398.HK", "0939.HK", "3988.HK", "3968.HK", "0011.HK",
+    "0005.HK", "2888.HK", "1398.HK", "0939.HK", "3988.HK", "3968.HK",
     "2388.HK", "2318.HK", "2628.HK", "1299.HK",
+    # ── expansion batch (50→100): new banks / insurers / brokers / asset-mgrs.
+    "0998.HK", "3328.HK", "6030.HK", "1336.HK", "0966.HK", "1359.HK", "6818.HK",
+    "2601.HK",
 }
 
 
@@ -120,11 +169,19 @@ def is_payer(r: dict) -> bool:
 
 def applicable_metrics(hk_ticker: str, r: dict) -> set[str]:
     """The metrics that genuinely apply to this name. Excludes structural-N/A:
+      * bank / insurer / broker -> op_income_growth N/A (no clean operating-income
+                                    line: net interest income / underwriting dominate)
       * non-payer            -> all 5 dividend metrics N/A
       * bank / insurer       -> fcf_coverage N/A (FCF not a meaningful concept)
       * payer w/o 5y history -> dividend_5y_cagr + yield_vs_5yr_avg N/A
     A 'missing' inside the applicable set is a TRUE data gap; outside it isn't."""
     applicable = set(GROWTH_METRICS)
+    # Financials have no clean "operating income" line the way industrials do, so its
+    # YoY growth is structurally N/A — same rationale as the fcf_coverage exclusion.
+    # (Score is unaffected: _prorate already drops a missing/None comp; this only
+    # corrects the coverage denominator so a never-real gap isn't counted against us.)
+    if hk_ticker in FINANCIALS:
+        applicable.discard("op_income_growth")
     if is_payer(r):
         applicable |= set(DIV_METRICS)
         if hk_ticker in FINANCIALS:
@@ -165,8 +222,9 @@ def main():
     _wrap_stdout_utf8()
     print("=" * 132)
     print(f"HK50 TWO-SCREENER REPORT  |  ADR-prioritized routing  |  end={END_DATE}")
-    print(f"  ADR/FMP: {len(ADR_MAP) + len(NATIVE_ADRS)} names (BABA, JD, NTES ...)   "
-          f"HK/AKShare+yf: {50 - len(ADR_MAP) - len(NATIVE_ADRS)} names (no/thin ADR)")
+    n_adr = sum(1 for hk, _ in HK50 if hk in NATIVE_ADRS or hk in ADR_MAP)
+    print(f"  ADR/FMP: {n_adr} names (BABA, JD, NTES ...)   "
+          f"HK/AKShare+yf: {len(HK50) - n_adr} names (no/thin ADR)")
     print("=" * 132)
     hdr = (f"{'Report':<7} {'(was)':<9} {'Name':<15} {'route':<14} {'cur':<7} "
            f"{'Growth':>7} {'cov':>5} {'Dividend':>8} {'cov':>5} {'data%':>6} {'appl%':>6}  gaps")

@@ -36,6 +36,9 @@ from scripts.hk50_iv15 import (
 from src.research_ideas.hk50.schemas import (
     HK50CohortResult, HK50TickerResult, IV15Detail, MetricResult,
 )
+from src.research_ideas.hk50.selection import (
+    ENTER_THRESHOLD, STAY_THRESHOLD, select_cohort,
+)
 from src.research_ideas.hk50.universe import get_ticker_metadata, list_tickers
 
 
@@ -163,6 +166,11 @@ def run_hk50(
             elif isinstance(out, dict):
                 failed.append({k: v for k, v in out.items() if k != "trace"})
 
+    # Per-name leading score = max of the two ABSOLUTE screens. This is the
+    # single ranking metric for the dynamic universe (quant-only, by design).
+    for r in results:
+        r.lead_score = round(max(r.growth_score, r.dividend_score), 1)
+
     # Independent per-screen rankings (the UI toggles between these two orders).
     for i, r in enumerate(
         sorted(results, key=lambda x: x.growth_score, reverse=True), 1
@@ -173,26 +181,46 @@ def run_hk50(
     ):
         r.dividend_rank = i
 
-    # Default stored order: leading (max) score desc, ties by ticker.
-    results.sort(
-        key=lambda x: (-(max(x.growth_score, x.dividend_score)), x.ticker)
-    )
+    # Default stored order: leading score desc, ties by ticker — so the UI can
+    # render the full ranked POOL with the displayed cohort highlighted.
+    results.sort(key=lambda x: (-(x.lead_score or 0.0), x.ticker))
 
-    n = len(results)
-    avg_g = sum(x.growth_score for x in results) / n if n else None
-    avg_d = sum(x.dividend_score for x in results) / n if n else None
-    pivs = sorted(x.p_iv15 for x in results if x.p_iv15)
+    # ── Dynamic-universe selection ────────────────────────────────────────────
+    # Read the prior run's membership for the hysteresis bands, then tag each
+    # result's in_cohort / cohort_rank / membership and compute promotion deltas.
+    prev_in: set[str] = set()
+    try:
+        from app.backend.services.hk50_storage import get_latest_membership
+        prev_in = get_latest_membership()
+    except Exception as exc:
+        logger.warning("HK50: prior membership unavailable (cold start?) — %s", exc)
+
+    displayed_count, promoted, relegated = select_cohort(results, prev_in)
+
+    # Aggregates describe the DISPLAYED cohort (the actual recommendation), not
+    # the whole eligible pool.
+    shown = [x for x in results if x.in_cohort]
+    nshown = len(shown)
+    avg_g = sum(x.growth_score for x in shown) / nshown if nshown else None
+    avg_d = sum(x.dividend_score for x in shown) / nshown if nshown else None
+    pivs = sorted(x.p_iv15 for x in shown if x.p_iv15)
     med_piv = pivs[len(pivs) // 2] if pivs else None
-    lead_growth = sum(1 for x in results if x.lead == "Growth")
+    lead_growth = sum(1 for x in shown if x.lead == "Growth")
 
     cohort = HK50CohortResult(
         run_id=run_id or uuid.uuid4().hex[:12],
         created_at=datetime.now(timezone.utc).isoformat(),
-        ticker_count=n,
+        ticker_count=displayed_count,           # = displayed (back-compat list views)
         avg_growth=round(avg_g, 1) if avg_g is not None else None,
         avg_dividend=round(avg_d, 1) if avg_d is not None else None,
         median_p_iv15=med_piv,
         lead_growth_count=lead_growth,
+        eligible_count=len(results),
+        displayed_count=displayed_count,
+        enter_threshold=ENTER_THRESHOLD,
+        stay_threshold=STAY_THRESHOLD,
+        promoted=promoted,
+        relegated=relegated,
         failed_tickers=failed,
         results=results,
     )
@@ -212,12 +240,18 @@ if __name__ == "__main__":
     #   .venv\Scripts\python.exe -m src.research_ideas.hk50.runner
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     res = run_hk50(max_workers=6, save=False)
-    print(f"\nHK50 cohort run_id={res.run_id}  n={res.ticker_count}  failed={len(res.failed_tickers)}")
-    print(f"avg Growth={res.avg_growth}  avg Dividend={res.avg_dividend}  "
+    print(f"\nHK50 cohort run_id={res.run_id}  failed={len(res.failed_tickers)}")
+    print(f"eligible={res.eligible_count}  displayed={res.displayed_count}  "
+          f"ENTER={res.enter_threshold} STAY={res.stay_threshold}")
+    print(f"displayed avg Growth={res.avg_growth}  avg Dividend={res.avg_dividend}  "
           f"median P/IV15={res.median_p_iv15}  lead split {res.lead_growth_count}G")
-    top_g = sorted(res.results, key=lambda x: x.growth_score, reverse=True)[:5]
-    top_d = sorted(res.results, key=lambda x: x.dividend_score, reverse=True)[:5]
-    print("Top 5 Growth :", [(x.name, x.growth_score) for x in top_g])
-    print("Top 5 Dividend:", [(x.name, x.dividend_score) for x in top_d])
+    print(f"promoted={len(res.promoted)}  relegated={len(res.relegated)}")
+    shown = [x for x in res.results if x.in_cohort]
+    print("Cohort top 10 by lead_score:",
+          [(x.cohort_rank, x.name, x.lead_score) for x in shown[:10]])
+    min_lead = min((x.lead_score for x in shown), default=None)
+    print(f"lowest displayed lead_score={min_lead}  (must be >= STAY {res.stay_threshold})")
+    bench = [x for x in res.results if x.membership == "bench"]
+    print("First 5 on bench:", [(x.name, x.lead_score) for x in bench[:5]])
     if res.failed_tickers:
-        print("Failures:", res.failed_tickers)
+        print("Failures:", [f.get("ticker") for f in res.failed_tickers])

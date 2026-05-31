@@ -655,6 +655,12 @@ async def get_hk50_cohort():
                 "avg_dividend": None,
                 "median_p_iv15": None,
                 "lead_growth_count": 0,
+                "eligible_count": 0,
+                "displayed_count": 0,
+                "enter_threshold": 0.0,
+                "stay_threshold": 0.0,
+                "promoted": [],
+                "relegated": [],
                 "failed_tickers": [],
                 "results": [],
             }
@@ -770,12 +776,18 @@ def _execute_hk50_qual_job(job_id: str, top_n: int, force_refresh: bool) -> None
             float(r.get("dividend_score") or 0.0),
         )
 
-    # Gate: the top-N names by lead screen score. These are exactly where a
-    # great screen can mask a policy/moat trap (the WuXi Bio / QUANT-RICH
-    # case), so they earn the deep-research spend first.
-    gate = sorted(results, key=_lead, reverse=True)
-    if top_n and top_n > 0:
-        gate = gate[:top_n]
+    # Gate: the DISPLAYED cohort (in_cohort) — the dynamic top-50. These are
+    # exactly where a great screen can mask a policy/moat trap (the WuXi Bio /
+    # QUANT-RICH case), so they earn the deep-research spend first; bench names
+    # below the membership line don't. This also caps LLM cost at <=50 names
+    # regardless of how large the eligible pool grows.
+    gate = [r for r in results if r.get("in_cohort")]
+    if not gate:
+        # Back-compat for runs persisted before the dynamic-universe migration
+        # (no in_cohort flag): fall back to the old top-N-by-lead behavior.
+        gate = sorted(results, key=_lead, reverse=True)[: (top_n or 50)]
+    elif top_n and top_n > 0:
+        gate = sorted(gate, key=_lead, reverse=True)[:top_n]
 
     summary = {
         "gate_tickers": [r.get("hk_ticker") or r.get("ticker") for r in gate],

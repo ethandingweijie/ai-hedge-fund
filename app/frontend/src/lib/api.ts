@@ -586,6 +586,7 @@ export interface HK50TickerResult {
   growth_score: number;
   dividend_score: number;
   lead: 'Growth' | 'Dividend';
+  lead_score: number;               // max(growth_score, dividend_score) — ranks the pool
   aict_tier: string;
   price: number | null;
   iv15: number | null;
@@ -594,20 +595,38 @@ export interface HK50TickerResult {
   iv15_detail: HK50IV15Detail;
   growth_rank: number | null;
   dividend_rank: number | null;
+  // Dynamic-universe membership (output of the screen, not hand-curated):
+  in_cohort: boolean;               // true = inside the displayed top-50
+  cohort_rank: number | null;       // 1..N within the displayed cohort (null on bench)
+  membership: 'member' | 'promoted' | 'relegated' | 'bench';
   qualitative?: HK50Qualitative | null;
   error?: string | null;
+}
+
+export interface HK50CohortDelta {
+  ticker: string;
+  name: string;
+  lead_score: number;
+  reason?: string;                  // present on relegated entries
 }
 
 export interface HK50Cohort {
   run_id: string | null;
   created_at: string | null;
-  ticker_count: number;
+  ticker_count: number;             // = displayed_count (back-compat)
   avg_growth: number | null;
   avg_dividend: number | null;
   median_p_iv15: number | null;
   lead_growth_count: number;
+  // Dynamic-universe membership summary:
+  eligible_count: number;           // names scored this run (the full pool, ~100)
+  displayed_count: number;          // names in the cohort (<= 50)
+  enter_threshold: number;
+  stay_threshold: number;
+  promoted: HK50CohortDelta[];
+  relegated: HK50CohortDelta[];
   failed_tickers: Array<{ ticker: string; reason: string }>;
-  results: HK50TickerResult[];
+  results: HK50TickerResult[];      // ALL scored names, ranked by lead_score desc
 }
 
 export interface HK50RunHeader {
