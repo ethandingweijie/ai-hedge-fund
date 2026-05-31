@@ -58,11 +58,34 @@ function screenScoreColor(score: number | null | undefined): string {
   return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
 }
 
+// Long vs short framing for each cohort idea. SW46 (cheap-quality software)
+// and HK50 (growth/dividend China-HK) are long screens; the Complacency
+// Detector flags structurally complacent names to SHORT. The AI idea-of-the-
+// day is neither (it carries its own per-idea direction).
+function ideaSide(id: string): { label: string; cls: string } | null {
+  if (id === 'sw46' || id === 'hk50')
+    return { label: 'Long Ideas', cls: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-600/40' };
+  if (id === 'complacency')
+    return { label: 'Short Ideas', cls: 'bg-red-600/20 text-red-700 dark:text-red-300 border border-red-600/40' };
+  return null;
+}
+
 
 export function ResearchIdeasPage() {
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
   const isDesktop = mode === 'desktop';
+  // Desktop/iPad size tokens — larger cards + fonts (mobile phone-frame unchanged).
+  const sz = {
+    pad: isDesktop ? 'p-6' : 'p-4',
+    title: isDesktop ? 'text-2xl' : 'text-base',
+    blurb: isDesktop ? 'text-[15px] leading-relaxed' : 'text-xs leading-relaxed',
+    meta: isDesktop ? 'text-[13px]' : 'text-[11px]',
+    badge: isDesktop ? 'text-[11px]' : 'text-[10px]',
+    preview: isDesktop ? 'text-[14px]' : 'text-[11px]',
+    previewLabel: isDesktop ? 'text-[11px]' : 'text-[9px]',
+    chip: isDesktop ? 'text-[11px]' : 'text-[9px]',
+  };
   const [ideas, setIdeas] = useState<SW46IdeaMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [topPicks, setTopPicks] = useState<SW46TickerResult[]>([]);
@@ -247,14 +270,15 @@ export function ResearchIdeasPage() {
         <div className={isDesktop ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-start' : 'space-y-3'}>
           {ideas.map((idea) => {
             const isAi = idea.id === 'idea_of_the_day';
+            const side = ideaSide(idea.id);
             return (
               <button
                 key={idea.id}
                 onClick={() => handleClick(idea)}
                 className={
                   (isAi
-                    ? 'w-full text-left p-4 rounded-lg border-2 border-purple-400/40 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-900/15 hover:bg-purple-100 dark:hover:bg-purple-900/25 transition-colors group relative'
-                    : 'w-full text-left p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group')
+                    ? `w-full text-left ${sz.pad} rounded-lg border-2 border-purple-400/40 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-900/15 hover:bg-purple-100 dark:hover:bg-purple-900/25 transition-colors group relative`
+                    : `w-full text-left ${sz.pad} rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group`)
                   + (isDesktop && isAi ? ' lg:col-span-2' : '')
                 }
               >
@@ -270,23 +294,34 @@ export function ResearchIdeasPage() {
                           AI
                         </span>
                       )}
-                      <span className="text-base font-semibold text-foreground">{idea.name}</span>
-                      {!isAi && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold uppercase tracking-wider">
-                          {idea.ticker_count} stocks
-                        </span>
-                      )}
+                      <span className={`${sz.title} font-semibold text-foreground`}>{idea.name}</span>
                       {isAi && (idea.ticker_count ?? 0) > 0 && (
                         <span
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-800 dark:text-purple-200 font-semibold uppercase tracking-wider"
+                          className={`${sz.badge} px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-800 dark:text-purple-200 font-semibold uppercase tracking-wider`}
                           title="Number of ideas you've shortlisted"
                         >
                           {idea.ticker_count} shortlisted
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed mb-2">{idea.blurb}</p>
-                    <div className="flex items-center gap-4 text-[11px] text-muted-foreground mb-2 flex-wrap">
+                    {/* Direction tag + stock count share one line, below the
+                        title, so the LONG/SHORT badge always sits beside the
+                        stock count regardless of how long the title wraps
+                        (mobile and desktop alike). */}
+                    {!isAi && (
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        {side && (
+                          <span className={`${sz.badge} px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${side.cls}`}>
+                            {side.label}
+                          </span>
+                        )}
+                        <span className={`${sz.badge} px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold uppercase tracking-wider`}>
+                          {idea.ticker_count} stocks
+                        </span>
+                      </div>
+                    )}
+                    <p className={`${sz.blurb} text-muted-foreground mb-2`}>{idea.blurb}</p>
+                    <div className={`flex items-center gap-4 ${sz.meta} text-muted-foreground mb-2 flex-wrap`}>
                       <span>
                         {isAi ? 'Last idea: ' : 'Last run: '}
                         <span className="font-mono">{formatRunTime(idea.last_run_at)}</span>
@@ -395,16 +430,16 @@ export function ResearchIdeasPage() {
                     {/* SW46 top-3 picks preview */}
                     {idea.id === 'sw46' && topPicks.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-border">
-                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">Top 3 ranked</div>
+                        <div className={`${sz.previewLabel} uppercase tracking-wider text-muted-foreground mb-1.5`}>Top 3 ranked</div>
                         <div className="flex flex-wrap gap-1.5">
                           {topPicks.map((t) => (
                             <div
                               key={t.ticker}
-                              className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 text-[11px]"
+                              className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`}
                               title={t.justification ?? ''}
                             >
                               <span className="font-mono font-bold text-foreground">{t.ticker}</span>
-                              <span className={`px-1 py-0.5 rounded text-[9px] font-semibold ${verdictColor(t.composite.total)}`}>
+                              <span className={`px-1 py-0.5 rounded ${sz.chip} font-semibold ${verdictColor(t.composite.total)}`}>
                                 {t.composite.total.toFixed(0)}
                               </span>
                             </div>
@@ -421,13 +456,13 @@ export function ResearchIdeasPage() {
                     {idea.id === 'hk50' && ((idea.top5_growth?.length ?? 0) > 0 || (idea.top5_dividend?.length ?? 0) > 0) && (
                       <div className="mt-2 pt-2 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5">Top 5 · Growth</div>
+                          <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Top 5 · Growth</div>
                           <div className="space-y-1">
                             {(idea.top5_growth ?? []).map((t, i) => (
-                              <div key={t.ticker} className="flex items-center gap-1.5 text-[11px]">
+                              <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`}>
                                 <span className="text-muted-foreground w-3 text-right">{i + 1}</span>
                                 <span className="font-semibold text-foreground flex-1 truncate">{t.name}</span>
-                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold font-mono ${screenScoreColor(t.score)}`}>
+                                <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${screenScoreColor(t.score)}`}>
                                   {t.score != null ? t.score.toFixed(1) : '—'}
                                 </span>
                               </div>
@@ -435,13 +470,13 @@ export function ResearchIdeasPage() {
                           </div>
                         </div>
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1.5">Top 5 · Dividend</div>
+                          <div className={`${sz.previewLabel} uppercase tracking-wider text-amber-600 dark:text-amber-400 mb-1.5`}>Top 5 · Dividend</div>
                           <div className="space-y-1">
                             {(idea.top5_dividend ?? []).map((t, i) => (
-                              <div key={t.ticker} className="flex items-center gap-1.5 text-[11px]">
+                              <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`}>
                                 <span className="text-muted-foreground w-3 text-right">{i + 1}</span>
                                 <span className="font-semibold text-foreground flex-1 truncate">{t.name}</span>
-                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold font-mono ${screenScoreColor(t.score)}`}>
+                                <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${screenScoreColor(t.score)}`}>
                                   {t.score != null ? t.score.toFixed(1) : '—'}
                                 </span>
                               </div>
@@ -456,7 +491,7 @@ export function ResearchIdeasPage() {
                         Falls back to composite × 12.5 for tickers without qual yet (same scale). */}
                     {idea.id === 'complacency' && topComplacency.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-border">
-                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                        <div className={`${sz.previewLabel} uppercase tracking-wider text-muted-foreground mb-1.5`}>
                           Top {topComplacency.length} by aggregate score
                           <span className="ml-1 normal-case text-muted-foreground/70">
                             (of {complacencyCohortSize})
@@ -469,7 +504,7 @@ export function ResearchIdeasPage() {
                             return (
                               <div
                                 key={t.ticker}
-                                className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 text-[11px]"
+                                className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`}
                                 title={[
                                   `${t.ticker} — ${t.name}`,
                                   `Verdict: ${t.verdict}  ·  Composite ${t.composite.toFixed(1)}/8`,
@@ -479,7 +514,7 @@ export function ResearchIdeasPage() {
                                 ].join('\n')}
                               >
                                 <span className="font-mono font-bold text-foreground">{t.ticker}</span>
-                                <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${aggColor(rankScore)}`}>
+                                <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold ${aggColor(rankScore)}`}>
                                   {rankScore.toFixed(0)}
                                   {!hasQual && <span className="ml-0.5 opacity-60">*</span>}
                                 </span>
