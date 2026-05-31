@@ -356,6 +356,7 @@ export function HistoryPage() {
               row={r}
               name={names[r.ticker]}
               isNew={recentlyCompleted?.runId === r.run_id}
+              isDesktop={isDesktop}
               className={isDesktop
                 ? 'rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm'
                 : (i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : '')}
@@ -400,6 +401,7 @@ function HistoryRow({
   row,
   name,
   isNew,
+  isDesktop = false,
   className = '',
   onOpen,
   onDelete,
@@ -407,6 +409,7 @@ function HistoryRow({
   row: RunSummary;
   name?: string;
   isNew?: boolean;
+  isDesktop?: boolean;
   className?: string;
   onOpen: () => void;
   onDelete: () => void;
@@ -427,14 +430,18 @@ function HistoryRow({
       ]}
     >
       <div
-        className={`w-full text-left p-3 flex items-center gap-3 transition-colors ${isNew ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/10' : ''}`}
+        className={`w-full text-left flex items-center transition-colors ${isDesktop ? 'px-4 py-2.5 gap-5' : 'p-3 gap-3'} ${isNew ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/10' : ''}`}
       >
         {/* Only the ticker column triggers the open action — price + VGPM
             cells sit outside the data-tap="open" subtree. Swipe-to-delete
-            still works anywhere on the row. */}
-        <div data-tap="open" className="min-w-0 w-[40%] active:bg-zinc-50 dark:active:bg-zinc-800 rounded-md -m-1 p-1 cursor-pointer">
+            still works anywhere on the row.
+            Desktop: identity grows (flex-1) and the price+grades cluster on
+            the right (right-aligned price) — this kills the dead middle gap
+            the mobile fixed-% columns leave on the wider 2-col cards, and
+            bumps fonts up so the cards don't read as sparse. */}
+        <div data-tap="open" className={`min-w-0 active:bg-zinc-50 dark:active:bg-zinc-800 rounded-md -m-1 p-1 cursor-pointer ${isDesktop ? 'flex-1' : 'w-[40%]'}`}>
           <div className="flex items-center gap-1.5">
-            <span className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight">
+            <span className={`font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight ${isDesktop ? 'text-[15px]' : 'text-[13px]'}`}>
               {row.ticker}
             </span>
             {isNew && (
@@ -443,26 +450,26 @@ function HistoryRow({
               </span>
             )}
           </div>
-          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+          <div className={`text-zinc-500 dark:text-zinc-400 truncate ${isDesktop ? 'text-[12.5px]' : 'text-[11px]'}`}>
             {name || row.sector || '—'}
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <ActionPill action={row.final_action || null} />
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+            <span className={`text-zinc-400 dark:text-zinc-500 ${isDesktop ? 'text-[11px]' : 'text-[10px]'}`}>
               {daysAgo(row.run_at)}
             </span>
           </div>
         </div>
-        <div className="w-[24%]">
+        <div className={isDesktop ? 'shrink-0 w-24 text-right' : 'w-[24%]'}>
           {row.price_target != null ? (
             <>
-              <div className="text-[12px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">
+              <div className={`font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums ${isDesktop ? 'text-[15px]' : 'text-[12px]'}`}>
                 ${row.price_target.toLocaleString(undefined, {
                   maximumFractionDigits: row.price_target < 10 ? 2 : 0,
                 })}
               </div>
-              <div className="text-[10px]"><Delta v={upside}/></div>
-              <div className="text-[9px] text-zinc-400 dark:text-zinc-500 mt-0.5 uppercase tracking-wider">
+              <div className={isDesktop ? 'text-[12px]' : 'text-[10px]'}><Delta v={upside}/></div>
+              <div className={`text-zinc-400 dark:text-zinc-500 mt-0.5 uppercase tracking-wider ${isDesktop ? 'text-[10px]' : 'text-[9px]'}`}>
                 Target
               </div>
             </>
@@ -470,7 +477,7 @@ function HistoryRow({
             <div className="text-[10px] text-zinc-400 dark:text-zinc-500">—</div>
           )}
         </div>
-        <div className="flex items-center gap-2 ml-auto">
+        <div className={`flex items-center ${isDesktop ? 'gap-2.5 shrink-0' : 'gap-2 ml-auto'}`}>
           <GradeChip grade={row.vgpm_grades?.valuation}     label="V"/>
           <GradeChip grade={row.vgpm_grades?.growth}        label="G"/>
           <GradeChip grade={row.vgpm_grades?.profitability} label="P"/>
