@@ -104,11 +104,13 @@ const SOURCE_DOT: Record<string, string> = {
 
 
 function scoreColor(score: number): string {
-  if (score >= 75) return 'bg-emerald-600/30 text-emerald-200';
-  if (score >= 55) return 'bg-blue-600/30 text-blue-200';
-  if (score >= 35) return 'bg-amber-600/30 text-amber-200';
-  if (score >= 15) return 'bg-orange-600/30 text-orange-200';
-  return 'bg-red-600/30 text-red-200';
+  // Light mode: dark text (700/800) for legibility on the pale `/30` pill.
+  // Dark mode (`dark:`): keep the original light-200 text.
+  if (score >= 75) return 'bg-emerald-600/30 text-emerald-800 dark:text-emerald-200';
+  if (score >= 55) return 'bg-blue-600/30 text-blue-800 dark:text-blue-200';
+  if (score >= 35) return 'bg-amber-600/30 text-amber-800 dark:text-amber-200';
+  if (score >= 15) return 'bg-orange-600/30 text-orange-800 dark:text-orange-200';
+  return 'bg-red-600/30 text-red-800 dark:text-red-200';
 }
 
 
@@ -116,12 +118,14 @@ function scoreColor(score: number): string {
 // Combined conviction badge — QUANT-RICH / POLICY-RISK flag the traps the two
 // pure quant screens can't see.
 const CONVICTION_COLOR: Record<string, string> = {
-  'HIGH-CONVICTION': 'bg-emerald-600/30 text-emerald-200 border-emerald-700/40',
-  'SOLID':           'bg-blue-600/30 text-blue-200 border-blue-700/40',
-  'QUANT-RICH':      'bg-amber-600/30 text-amber-200 border-amber-700/40',
-  'QUAL-SUPPORT':    'bg-cyan-600/30 text-cyan-200 border-cyan-700/40',
+  // Light mode: dark text (800) for legibility on the pale `/30` badge.
+  // Dark mode (`dark:`): keep the original light-200 text.
+  'HIGH-CONVICTION': 'bg-emerald-600/30 text-emerald-800 dark:text-emerald-200 border-emerald-700/40',
+  'SOLID':           'bg-blue-600/30 text-blue-800 dark:text-blue-200 border-blue-700/40',
+  'QUANT-RICH':      'bg-amber-600/30 text-amber-800 dark:text-amber-200 border-amber-700/40',
+  'QUAL-SUPPORT':    'bg-cyan-600/30 text-cyan-800 dark:text-cyan-200 border-cyan-700/40',
   'WATCH':           'bg-muted text-muted-foreground border-border',
-  'POLICY-RISK':     'bg-red-600/30 text-red-200 border-red-700/40',
+  'POLICY-RISK':     'bg-red-600/30 text-red-800 dark:text-red-200 border-red-700/40',
   'UNSCORED':        'bg-muted/30 text-muted-foreground/70 border-border border-dashed',
 };
 const convictionClass = (c: string): string =>
@@ -139,20 +143,22 @@ const CONVICTION_SHORT: Record<string, string> = {
 };
 
 // Policy ladder: Tailwind > Favorable > Neutral > Headwind > Crackdown.
+// Light mode: dark text (700) for legibility on the white card.
+// Dark mode (`dark:`): keep the original light-300 text.
 const POLICY_TEXT: Record<string, string> = {
-  Tailwind:  'text-emerald-300',
-  Favorable: 'text-blue-300',
+  Tailwind:  'text-emerald-700 dark:text-emerald-300',
+  Favorable: 'text-blue-700 dark:text-blue-300',
   Neutral:   'text-muted-foreground',
-  Headwind:  'text-orange-300',
-  Crackdown: 'text-red-300',
+  Headwind:  'text-orange-700 dark:text-orange-300',
+  Crackdown: 'text-red-700 dark:text-red-300',
 };
 // Moat ladder reuses the AICT names generalised to every sector.
 const MOAT_TEXT: Record<string, string> = {
-  Fortress: 'text-emerald-300',
-  Castle:   'text-blue-300',
-  Chapel:   'text-amber-300',
-  Stone:    'text-orange-300',
-  Wood:     'text-red-300',
+  Fortress: 'text-emerald-700 dark:text-emerald-300',
+  Castle:   'text-blue-700 dark:text-blue-300',
+  Chapel:   'text-amber-700 dark:text-amber-300',
+  Stone:    'text-orange-700 dark:text-orange-300',
+  Wood:     'text-red-700 dark:text-red-300',
 };
 
 
@@ -471,7 +477,7 @@ export function HK50Page() {
                 <span
                   key={`up-${p.ticker}`}
                   title={`Promoted into the cohort · lead score ${p.lead_score.toFixed(1)} (cleared ENTER ${cohort.enter_threshold.toFixed(0)})`}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-600/15 text-emerald-300 border border-emerald-700/30"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border border-emerald-700/30"
                 >
                   ▲ {p.name} <span className="font-mono opacity-70">{p.lead_score.toFixed(0)}</span>
                 </span>
@@ -480,7 +486,7 @@ export function HK50Page() {
                 <span
                   key={`down-${r.ticker}`}
                   title={`Relegated · lead score ${r.lead_score.toFixed(1)} · ${r.reason ?? ''}`}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-600/15 text-amber-300 border border-amber-700/30"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-600/15 text-amber-700 dark:text-amber-300 border border-amber-700/30"
                 >
                   ▼ {r.name} <span className="font-mono opacity-70">{r.lead_score.toFixed(0)}</span>
                 </span>
@@ -619,7 +625,7 @@ export function HK50Page() {
                           : <span className="text-muted-foreground/50">·</span>}
                       </td>
                       <td className="px-2 py-1.5">
-                        <div className="font-bold text-foreground flex items-center gap-1 flex-wrap">
+                        <div className="font-bold text-foreground flex items-center gap-1 whitespace-nowrap">
                           {r.name}
                           {r.lead === screen && (
                             <span className="text-[8px] px-1 rounded bg-primary/20 text-primary uppercase tracking-wide">lead</span>
@@ -655,11 +661,15 @@ export function HK50Page() {
                       <td className="px-2 py-1.5 text-right">{fmtPrice(r.price)}</td>
                       <td className="px-2 py-1.5 text-right">{r.p_iv15 == null ? '—' : `${r.p_iv15.toFixed(2)}×`}</td>
                       <td className="px-2 py-1.5">
-                        <div className="flex flex-wrap gap-1">
+                        {/* nowrap: keep all metric chips on ONE line (extends the
+                            column horizontally with the rest of the wide table)
+                            instead of wrapping to ~5 lines and stretching every
+                            row tall. Matches the SW46 / Complacency row height. */}
+                        <div className="flex flex-nowrap gap-1">
                           {metricKeys.map((m) => (
                             <span
                               key={m}
-                              className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-muted/40 text-[10px]"
+                              className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-muted/40 text-[10px] whitespace-nowrap"
                               title={`${METRIC_META[m]?.label ?? m} · source: ${r.metrics[m]?.source ?? 'missing'}`}
                             >
                               <span className={`w-1 h-1 rounded-full ${SOURCE_DOT[r.metrics[m]?.source ?? 'missing'] ?? SOURCE_DOT.missing}`} />
