@@ -18,6 +18,9 @@ Base OE resolution (priority order):
                              OE margin — for companies still in losses but with
                              a credible margin runway, per article's "Growth
                              Companies Inflecting to Profitability" section)
+                             NOT YET IMPLEMENTED — see _resolve_base_oe "Known
+                             limitation" below. The enum value is reserved
+                             (schemas.py) but the code never emits it.
   4. None                   (true negative — IV undefined)
 
 IVB: binary-search for the required return r such that IV_total(r) equals
@@ -120,6 +123,22 @@ def _resolve_base_oe(
       3. Median of positive-OE years (smooths inflection).
       4. Forward NI × retention even if smaller (last-resort positive).
       5. None.
+
+    Known limitation (deeply unprofitable / early-inflection names):
+      When a name has no positive trailing OE, the only positive source left
+      is `forward_ni × owner_retention`. For these names forward NI is a thin
+      consensus Y+1 number (data_fetch.py: estimates[0].net_income_avg,
+      non-GAAP) and owner_retention is the TIGHT TT*/Wood floor (0.10–0.20 via
+      _TT_RETENTION) because they're flagged SBC-heavy / Tragic-Tier. Thin NI ×
+      a 0.10–0.20 floor → a tiny base_oe, which the multi-stage DDM turns into
+      an implausibly small per-share IV15 anchor (observed: AI ≈ $0.27,
+      ASAN ≈ $0.72, U ≈ $0.80). This is a METHODOLOGY GAP, not an arithmetic /
+      units bug — profitable large-caps scale correctly (e.g. MSFT ≈ $537).
+      Treat sub-$1 anchors on loss-making names as "IV not meaningful," not as
+      a literal fair value. The intended fix is the priority-3 `forward_margin`
+      path (revenue × (1 + fwd growth) × tier-target OE margin; see module
+      docstring), which is reserved in the schema enum but NOT implemented here
+      — left as-is by decision (2026-06-03); engine intentionally unchanged.
     """
     fwd_ni = bundle.forward_net_income
     retention = _owner_retention(ta, aict)
