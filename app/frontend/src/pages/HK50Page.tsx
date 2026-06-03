@@ -691,6 +691,36 @@ export function HK50Page() {
               ranked by <strong className="text-foreground">{screen}</strong> score (desc) ·
               click any row for both screens + the IV15 build-up
             </div>
+            <div className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border leading-relaxed">
+              <span className="font-semibold text-foreground">Conviction</span> — a qualitative
+              Policy&nbsp;×&nbsp;Moat overlay, <em>never</em> summed into the {screen} score:
+              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('HIGH-CONVICTION')}`}>HIGH</span>
+                  strong screen + favourable policy + wide moat
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('SOLID')}`}>SOLID</span>
+                  decent screen, adequate policy &amp; moat
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('QUAL-SUPPORT')}`}>QUAL</span>
+                  weak screen but strong policy &amp; moat — await catalyst
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('WATCH')}`}>WATCH</span>
+                  mixed signals — no dimension decisive
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('QUANT-RICH')}`}>TRAP?</span>
+                  top screen undercut by policy headwind / thin moat — verify it isn&apos;t a value trap
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('POLICY-RISK')}`}>RISK</span>
+                  active crackdown or eroding moat — overrides screen rank
+                </span>
+              </div>
+            </div>
           </div>
         )}
 
