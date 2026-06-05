@@ -1,25 +1,39 @@
 """
 src/research_ideas/sw46/tragic_algebra.py
 ==========================================
-Cassandra Unchained "Tragic Algebra" — the true cost of SBC.
+Cassandra Unchained "Tragic Algebra" — the true cost of SBC (Method E).
 
-  Omega    = G + C + B + dS * P
-  OE       = N + G - Omega
+  Omega    = SBC + C + max(0, SBC - B)
+  OE       = N + SBC - Omega   =   N - C - max(0, SBC - B)
   dE       = OE / N
   pooled   = sum(OE) / sum(N)
 
-  N  = GAAP net income
-  G  = GAAP stock-based-compensation expense (added back, since OE rebases)
-  C  = Cash paid to IRS for RSU/ISO/PSU tax withholding (financing CF)
-  B  = Buyback dollars (financing CF, common-stock-repurchased)
-  dS = End-period diluted shares minus start-period diluted shares
-       (sign convention: positive dS = dilution, negative dS = retirement)
-  P  = Annual average share price
+  N   = GAAP net income
+  SBC = GAAP stock-based-compensation expense (added back, since OE rebases
+        onto a cash-comp basis)
+  C   = Cash paid to IRS for RSU/ISO/PSU tax withholding (financing CF)
+  B   = Buyback dollars (financing CF, common-stock-repurchased)
+
+Owner earnings = GAAP net income, minus the cash tax on vesting, minus the
+stock comp that buybacks did NOT fund ("unfunded_comp" = max(0, SBC - B)):
+  * Net buyers (B >= SBC): unfunded_comp = 0 -> OE = N - C. Buybacks at least
+    offset comp, so there is no dilution charge; the excess buyback is genuine
+    capital return and is NOT charged against owner earnings.
+  * Net diluters (B < SBC): charge the comp buybacks left unfunded (SBC - B).
+
+This reproduces Burry / Cassandra-Unchained's published pooled-dE (validated
+live at his 10yr window: ADBE Omega = SBC + C = $16.0B -> dE 88.2% vs his 88.3%;
+NOW net-diluter -> negative). It deliberately does NOT use gross buybacks alone
+or the year-over-year diluted-share delta (dS*P) — that delta is noisy and is
+contaminated by non-comp issuance (convertibles, secondaries, M&A), which
+over-charges serial acquirers. Only clean dollar inputs are used.
+
+`share_change` and `avg_share_price` are still recorded per year for display,
+but no longer enter Omega.
 
 If FMP doesn't surface a clean RSU-tax line we fall back to
-  C_estimate = (issued_shares_for_RSU_year * P * 0.37)
-which we approximate from the cash-flow statement's common_stock_issued
-field. Flagged as `cash_tax_withholding_estimated=True` for UI display.
+  C_estimate = SBC * 0.37
+Flagged as `cash_tax_withholding_estimated=True` for UI display.
 """
 from __future__ import annotations
 
@@ -126,16 +140,23 @@ def compute_tragic_algebra(bundle: TickerBundle) -> TragicAlgebraResult:
             else 0.0
         )
 
-        # Omega = G + C + B + dS * P
+        # Method E — Omega = SBC + C + max(0, SBC - B). Charge the cash tax on
+        # vesting plus the stock comp buybacks left unfunded. Gross buybacks and
+        # the noisy/M&A-contaminated dS*P term are NOT used.
         omega: Optional[float] = None
+        unfunded_comp: Optional[float] = None
+        genuine_return: Optional[float] = None
+        is_diluter: Optional[bool] = None
         if y.sbc_expense is not None:
-            omega = y.sbc_expense
+            sbc = y.sbc_expense
+            unfunded_comp = max(0.0, sbc - b_val)
+            genuine_return = max(0.0, b_val - sbc)
+            is_diluter = b_val < sbc
+            omega = sbc
             omega += c_val if c_val is not None else 0.0
-            omega += b_val
-            if share_change is not None and y.avg_share_price is not None:
-                omega += share_change * y.avg_share_price
+            omega += unfunded_comp
 
-        # OE = N + G - Omega
+        # OE = N + SBC - Omega = N - C - max(0, SBC - B)
         oe: Optional[float] = None
         if (
             y.net_income is not None
@@ -164,13 +185,23 @@ def compute_tragic_algebra(bundle: TickerBundle) -> TragicAlgebraResult:
                 buybacks=b_val,
                 share_change=share_change,
                 avg_share_price=y.avg_share_price,
+                unfunded_comp=unfunded_comp,
+                genuine_buyback_return=genuine_return,
+                is_net_diluter=is_diluter,
                 omega=omega,
                 owner_earnings=oe,
                 delta_e=de,
             )
         )
 
-    pooled = (sum_oe / sum_n) if (has_any_year and sum_n != 0) else None
+    pooled = (sum_oe / sum_n) if (has_any_year and sum_n > 0) else None
+    # Stability guard: pooled ΔE = ΣOE/ΣN is only meaningful for solidly
+    # profitable windows. It sign-flips when ΣN < 0 and explodes when ΣN is a
+    # tiny positive (e.g. DOCU −1464%, CRWD +555%). Burry reports ΔE only for
+    # profitable names and marks the rest N/A — mirror that by nulling ΣN ≤ 0
+    # (above) and any out-of-band ratio. NOW (−1.15) and ADSK/ADBE stay in band.
+    if pooled is not None and abs(pooled) > 2.0:
+        pooled = None
     avg_oe = (sum_oe / max(1, sum(1 for y in out_years if y.owner_earnings is not None))) if has_any_year else None
     latest_oe = next(
         (y.owner_earnings for y in reversed(out_years) if y.owner_earnings is not None),

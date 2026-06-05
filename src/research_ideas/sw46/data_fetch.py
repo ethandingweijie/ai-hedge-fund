@@ -569,10 +569,11 @@ def _extract_lt_operating_leases(bal_row: dict) -> Optional[float]:
 # ─── Public bundler ────────────────────────────────────────────────────────
 
 
-def fetch_ticker_bundle(ticker: str, history_years: int = 7) -> Optional[TickerBundle]:
+def fetch_ticker_bundle(ticker: str, history_years: int = 10) -> Optional[TickerBundle]:
     """
     Fetch everything one SW46 ticker needs. history_years in [4, 11] per
-    the article. Returns None on hard failure (e.g., FMP 404).
+    the article (default 10 to match Burry's pooled-ΔE window). Returns None on
+    hard failure (e.g., FMP 404).
     """
     limit = max(4, min(history_years, 11))
 

@@ -407,6 +407,9 @@ export interface SW46TragicAlgebraYear {
   buybacks: number | null;
   share_change: number | null;
   avg_share_price: number | null;
+  unfunded_comp: number | null;
+  genuine_buyback_return: number | null;
+  is_net_diluter: boolean | null;
   omega: number | null;
   owner_earnings: number | null;
   delta_e: number | null;

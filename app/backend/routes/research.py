@@ -138,7 +138,7 @@ async def list_research_ideas():
 
     sw46_meta = {
         "id": "sw46",
-        "name": "Burry - SW46 Screener",
+        "name": "Burry - SW50 Screener",
         "blurb": (
             "Cassandra Unchained / Scion methodology: Tragic Algebra owner "
             "earnings, fully-adjusted ROIC, AI Competitive Threat tiering, "
@@ -663,11 +663,11 @@ async def get_sw46_ticker(ticker: str):
     try:
         latest = await asyncio.to_thread(sw46_storage.get_latest_sw46_run)
         if not latest:
-            raise HTTPException(status_code=404, detail="No SW46 cohort run yet — refresh first")
+            raise HTTPException(status_code=404, detail="No SW50 cohort run yet — refresh first")
         for r in latest.get("results", []):
             if r.get("ticker") == ticker:
                 return r
-        raise HTTPException(status_code=404, detail=f"{ticker} not in SW46 universe")
+        raise HTTPException(status_code=404, detail=f"{ticker} not in SW50 universe")
     except HTTPException:
         raise
     except Exception as exc:
@@ -677,7 +677,7 @@ async def get_sw46_ticker(ticker: str):
 
 
 @router.post("/ideas/sw46/refresh")
-async def refresh_sw46(history_years: int = 7, max_workers: int = 6):
+async def refresh_sw46(history_years: int = 10, max_workers: int = 6):
     """
     Trigger a fresh cohort run. Synchronous (returns once persisted) —
     full run takes ~2-3 min for 46 tickers on FMP free tier due to per-year

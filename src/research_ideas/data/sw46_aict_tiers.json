@@ -1,11 +1,11 @@
 {
-  "_comment": "Hand-curated AICT (AI Competitive Threat) tiers. Tiers: Fortress, Castle, Chapel, Stone, Wood. Recalibrated against Cassandra Unchained published rankings (2026-05-13).",
+  "_comment": "Hand-curated AICT (AI Competitive Threat) tiers. Tiers: Fortress, Castle, Chapel, Stone, Wood. Recalibrated against Cassandra Unchained published rankings (2026-06-04: INTU->Castle, ADSK->Chapel, U->Castle per Burry write-ups; added FROG/IOT=Castle for SW50).",
   "MSFT": "Fortress",
   "ORCL": "Castle",
   "ADBE": "Chapel",
   "CRM":  "Chapel",
   "NOW":  "Chapel",
-  "INTU": "Chapel",
+  "INTU": "Castle",
   "WDAY": "Stone",
   "PANW": "Castle",
   "FTNT": "Castle",
@@ -18,13 +18,13 @@
   "SNOW": "Chapel",
   "TEAM": "Chapel",
   "NTAP": "Stone",
-  "ADSK": "Castle",
+  "ADSK": "Chapel",
   "ANSS": "Castle",
   "CDNS": "Fortress",
   "SNPS": "Fortress",
   "PTC":  "Stone",
   "PLTR": "Castle",
-  "U":    "Stone",
+  "U":    "Castle",
   "GTLB": "Chapel",
   "DT":   "Chapel",
   "ESTC": "Stone",
@@ -46,5 +46,7 @@
   "ASAN": "Wood",
   "AI":   "Wood",
   "PATH": "Wood",
-  "FRSH": "Chapel"
+  "FRSH": "Chapel",
+  "FROG": "Castle",
+  "IOT":  "Castle"
 }

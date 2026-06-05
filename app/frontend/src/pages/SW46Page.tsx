@@ -158,11 +158,11 @@ export function SW46Page() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    toast.info('Refreshing SW46 cohort — this takes ~2-3 minutes.');
+    toast.info('Refreshing SW50 cohort — this takes ~2-3 minutes.');
     try {
-      await refreshSW46({ historyYears: 7 });
+      await refreshSW46({ historyYears: 10 });
       await load();
-      toast.success('SW46 cohort refreshed.');
+      toast.success('SW50 cohort refreshed.');
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -200,7 +200,7 @@ export function SW46Page() {
           >
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-xl font-bold text-foreground">SW46 — Software Screener</h1>
+          <h1 className="text-xl font-bold text-foreground">SW50 — Software Screener</h1>
         </div>
         <p className="text-xs text-muted-foreground mb-4 ml-7">
           Cassandra Unchained / Scion · Tragic Algebra · AICT · IV15 · re-rank by any dimension
@@ -284,14 +284,14 @@ export function SW46Page() {
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 size={20} className="animate-spin mr-2" />
-            Loading SW46…
+            Loading SW50…
           </div>
         )}
 
         {!loading && (!cohort || cohort.results.length === 0) && !refreshing && (
           <div className="p-6 border border-dashed border-border rounded-md text-center">
             <AlertTriangle className="mx-auto mb-2 text-amber-500" size={20} />
-            <p className="text-sm text-muted-foreground">No SW46 cohort run yet. Click <strong>Refresh</strong> to run the first one.</p>
+            <p className="text-sm text-muted-foreground">No SW50 cohort run yet. Click <strong>Refresh</strong> to run the first one.</p>
           </div>
         )}
 
@@ -306,7 +306,7 @@ export function SW46Page() {
             <table className="w-full text-xs font-mono">
               <thead className="bg-muted/40 text-left text-muted-foreground">
                 <tr>
-                  <th className="px-2 py-2 w-10 text-right">SW46 #</th>
+                  <th className="px-2 py-2 w-10 text-right">SW50 #</th>
                   <th className="px-2 py-2">Ticker</th>
                   <th className="px-2 py-2">AICT</th>
                   <th className="px-2 py-2">TA</th>
@@ -375,6 +375,56 @@ export function SW46Page() {
               ranked by <strong className="text-foreground">{activeRank.label}</strong> ({activeRank.asc ? 'asc' : 'desc'}) ·
               click any row for the full Tragic Algebra / ROIC / IV15 breakdown
             </div>
+            <div className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border leading-relaxed space-y-2">
+              <div>
+                <span className="font-semibold text-foreground">AICT</span> — AI Competitive Threat:
+                business-model survival outlook in the AI era (best&nbsp;→&nbsp;worst):
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Fortress}`}>Fortress</span>
+                    minimal AI threat
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Castle}`}>Castle</span>
+                    defensible against AI
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Chapel}`}>Chapel</span>
+                    acute AI threat but real R&amp;D
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Stone}`}>Stone</span>
+                    moderate threat, shallower moat
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${AICT_COLOR.Wood}`}>Wood</span>
+                    AI strategy fully borrowed
+                  </span>
+                </div>
+              </div>
+              <div>
+                <span className="font-semibold text-foreground">Tragic Algebra</span> — true cost of
+                stock-based comp: share of earnings shareholders keep after SBC drag &amp; dilution (ΔE):
+                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['Not-TT']}`}>Not-TT</span>
+                    clean SBC discipline (keeps&nbsp;≥85%)
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['Near-TT']}`}>Near-TT</span>
+                    borderline retention (60–84%)
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['TT*']}`}>TT*</span>
+                    Tragic-Tier SBC abuser (keeps&nbsp;&lt;60%)
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${TA_COLOR['N/A']}`}>N/A</span>
+                    inflecting from losses — ΔE math unstable
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -404,6 +454,10 @@ function Stat({ label, value, tone, mono = true, title }: { label: string; value
 // ─── Detail drawer (unchanged from v1; deep dive into the math) ────────────
 
 function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: () => void }) {
+  const taYears = ticker.tragic_algebra.years;
+  const sumUnfunded = taYears.reduce((a, y) => a + (y.unfunded_comp ?? 0), 0);
+  const sumGenuineReturn = taYears.reduce((a, y) => a + (y.genuine_buyback_return ?? 0), 0);
+  const netDiluter = sumUnfunded > sumGenuineReturn;
   return (
     <div className="fixed inset-0 z-[80] flex" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 animate-in fade-in duration-150" />
@@ -421,7 +475,7 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                 <span className="text-lg font-bold text-foreground">{ticker.ticker}</span>
                 <span className="text-sm text-muted-foreground">{ticker.name}</span>
                 {ticker.rank && (
-                  <span className="text-[10px] text-muted-foreground ml-auto">SW46 #{ticker.rank}</span>
+                  <span className="text-[10px] text-muted-foreground ml-auto">SW50 #{ticker.rank}</span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -512,7 +566,12 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
 
           {/* Tragic Algebra year-by-year */}
           <section>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Tragic Algebra · year-by-year</h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tragic Algebra · year-by-year</h2>
+              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${netDiluter ? 'text-rose-400 border-rose-500/40 bg-rose-500/10' : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10'}`}>
+                {netDiluter ? 'Net diluter' : 'Net buyer'}
+              </span>
+            </div>
             {ticker.tragic_algebra.estimated_c_years > 0 && (
               <p className="text-[10px] text-amber-500 mb-2">
                 <AlertTriangle size={10} className="inline mb-0.5" /> C estimated for {ticker.tragic_algebra.estimated_c_years} year(s) — FMP /stable/ does not break out RSU tax withholding.
@@ -527,6 +586,7 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                     <th className="px-1 py-1 text-right">G</th>
                     <th className="px-1 py-1 text-right">C</th>
                     <th className="px-1 py-1 text-right">B</th>
+                    <th className="px-1 py-1 text-right" title="Unfunded comp = max(0, SBC − B)">Unf</th>
                     <th className="px-1 py-1 text-right">ΔS</th>
                     <th className="px-1 py-1 text-right">P</th>
                     <th className="px-1 py-1 text-right">Ω</th>
@@ -545,7 +605,8 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                         {y.cash_tax_withholding_estimated && <span className="text-amber-500 ml-0.5">*</span>}
                       </td>
                       <td className="px-1 py-1 text-right">{fmtMoney(y.buybacks)}</td>
-                      <td className="px-1 py-1 text-right">{y.share_change == null ? '—' : `${(y.share_change / 1e6).toFixed(1)}M`}</td>
+                      <td className={`px-1 py-1 text-right ${y.is_net_diluter ? 'text-rose-400' : 'text-muted-foreground'}`}>{fmtMoney(y.unfunded_comp)}</td>
+                      <td className="px-1 py-1 text-right text-muted-foreground">{y.share_change == null ? '—' : `${(y.share_change / 1e6).toFixed(1)}M`}</td>
                       <td className="px-1 py-1 text-right">{fmtPrice(y.avg_share_price)}</td>
                       <td className="px-1 py-1 text-right">{fmtMoney(y.omega)}</td>
                       <td className="px-1 py-1 text-right">{fmtMoney(y.owner_earnings)}</td>
@@ -554,9 +615,12 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                   ))}
                 </tbody>
               </table>
-              <p className="text-[10px] text-muted-foreground mt-2">
+              <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
+                Ω = SBC + C + Unf, where <strong className="text-foreground">Unf</strong> = max(0, SBC − B) is the comp buybacks didn't fund;
+                OE = N − C − Unf. ΔS and P are informational (no longer in Ω).
                 Pooled ΔE = <strong className="text-foreground">{fmtPct(ticker.tragic_algebra.pooled_delta_e)}</strong>;
-                SBC trend slope = {fmtNum(ticker.tragic_algebra.sbc_trend ? ticker.tragic_algebra.sbc_trend * 100 : null, 3)}% per yr
+                SBC trend slope = {fmtNum(ticker.tragic_algebra.sbc_trend ? ticker.tragic_algebra.sbc_trend * 100 : null, 3)}% per yr.
+                {taYears.length > 0 && ` Cumulative genuine buyback return = ${fmtMoney(sumGenuineReturn)}.`}
               </p>
             </div>
           </section>

@@ -44,5 +44,8 @@
   { "ticker": "MNDY",  "name": "monday.com",           "tax_rate_normalized": 0.22,  "notes": "" },
   { "ticker": "ASAN",  "name": "Asana",                "tax_rate_normalized": 0.22,  "notes": "" },
   { "ticker": "AI",    "name": "C3.ai",                "tax_rate_normalized": 0.22,  "notes": "" },
-  { "ticker": "PATH",  "name": "UiPath",               "tax_rate_normalized": 0.22,  "notes": "" }
+  { "ticker": "PATH",  "name": "UiPath",               "tax_rate_normalized": 0.22,  "notes": "" },
+  { "ticker": "FRSH",  "name": "Freshworks",           "tax_rate_normalized": 0.22,  "notes": "Added 2026-06 (SW50): Cassandra Office-SaaS ref name; had AICT tier but was missing from universe" },
+  { "ticker": "FROG",  "name": "JFrog",                "tax_rate_normalized": 0.22,  "notes": "Added 2026-06 (SW50): DevOps artifact mgmt" },
+  { "ticker": "IOT",   "name": "Samsara",              "tax_rate_normalized": 0.22,  "notes": "Added 2026-06 (SW50): connected operations cloud" }
 ]

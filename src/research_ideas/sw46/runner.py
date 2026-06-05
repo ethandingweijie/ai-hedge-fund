@@ -3,7 +3,7 @@ src/research_ideas/sw46/runner.py
 ==================================
 SW46 cohort orchestrator.
 
-  run_sw46(history_years=7, max_workers=6, save=True) -> SW46CohortResult
+  run_sw46(history_years=10, max_workers=6, save=True) -> SW46CohortResult
 
 For each ticker in src/research_ideas/data/sw46_universe.json:
   fetch -> tragic_algebra -> roic -> aict -> iv15 -> composite_score
@@ -217,7 +217,7 @@ def _process_ticker(ticker: str, history_years: int) -> SW46TickerResult | dict:
 
 
 def run_sw46(
-    history_years: int = 7,
+    history_years: int = 10,
     max_workers: int = 6,
     save: bool = True,
     run_id: str | None = None,

@@ -23,10 +23,13 @@ class TragicAlgebraYear(BaseModel):
     cash_tax_withholding: Optional[float] = None  # C
     cash_tax_withholding_estimated: bool = False
     buybacks: Optional[float] = None         # B
-    share_change: Optional[float] = None     # dS (end - start)
-    avg_share_price: Optional[float] = None  # P
-    omega: Optional[float] = None            # Omega = G + C + B + dS*P
-    owner_earnings: Optional[float] = None   # OE = N + G - Omega
+    share_change: Optional[float] = None     # dS (end - start) — informational only
+    avg_share_price: Optional[float] = None  # P — informational only
+    unfunded_comp: Optional[float] = None    # max(0, SBC - B): comp NOT funded by buybacks
+    genuine_buyback_return: Optional[float] = None  # max(0, B - SBC): real capital return
+    is_net_diluter: Optional[bool] = None    # True if buybacks < SBC (dilution charged)
+    omega: Optional[float] = None            # Omega = SBC + C + max(0, SBC - B)  (Method E)
+    owner_earnings: Optional[float] = None   # OE = N + SBC - Omega = N - C - max(0, SBC - B)
     delta_e: Optional[float] = None          # dE = OE / N
 
 
