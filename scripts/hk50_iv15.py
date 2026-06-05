@@ -17,7 +17,10 @@ AICT scope (per directive):
     (wA = 1.0). AICT column shows "—" for these.
 
 Adaptations for HK50 (flagged):
-  * Owner Earnings proxied by trailing EPS (HK names carry little SBC).
+  * Owner Earnings proxied by trailing EPS, then haircut by a Method-E
+    owner-earnings retention ratio for ADR/FMP names with material SBC (charges
+    the stock comp that buybacks did NOT fund). Native-HK names keep raw EPS
+    (FMP SBC data is sparse on the AKShare path). See _owner_earnings_retention.
 
 Run: .venv\\Scripts\\python.exe scripts/hk50_iv15.py [EXTRA_TICKER ...]
 """
@@ -40,6 +43,19 @@ END_DATE = "2026-05-30"
 R = 0.15           # required return
 G_TERM = 0.03      # base terminal growth
 G_CAP = 0.25       # cap stage-1 growth to avoid absurd extrapolation
+
+# ── Method-E owner-earnings adjustment (ported from SW46/SW50) ────────────────
+# Charge the stock comp that buybacks did NOT fund against the owner-earnings
+# base E0:  retention = (N - C - max(0, SBC - B)) / N ; adjusted_E0 = E0 * retention.
+# Applied to ADR/FMP names only (FMP serves SBC/buybacks even for OTC ADRs);
+# native-HK names keep raw EPS. C (cash tax on vesting) defaults to 0 for HK —
+# there is no Burry anchor for China names and the SBC*0.37 rate is a US IRS
+# assumption that would unfairly ding disciplined net buyers (JD, Tencent).
+OE_CASH_TAX_MODE     = "unfunded_only"  # "unfunded_only" (C=0, China-aware) | "estimate" (C=SBC*0.37, SW46 parity)
+SBC_WITHHOLDING_RATE = 0.37             # C estimate rate when mode == "estimate"
+OE_RETENTION_FLOOR   = 0.30             # clamp floor — a noisy print can't gut IV15
+OE_RETENTION_CEIL    = 1.00             # net buyers cap at 1.0 (no credit for excess buyback)
+SBC_PCT_NI_MIN       = 0.03             # skip adjustment when SBC < 3% of NI (immaterial)
 
 # AICT tier -> (growth_haircut, terminal_multiple, blend_weight_on_ValA)
 TIER_PARAMS = {
@@ -154,6 +170,45 @@ def piv_score(piv):
     return -2
 
 
+def _owner_earnings_retention(ticker):
+    """Method-E owner-earnings retention from a TTM FMP snapshot.
+
+    retention = (N - C - max(0, SBC - B)) / N, where N=net income, SBC=stock
+    comp, B=buybacks, and C is the cash tax on vesting (SBC*0.37 in 'estimate'
+    mode, else 0). Returns a dict of transparency fields, or None when not
+    applicable (NI<=0, SBC missing or immaterial). ADR/FMP names only — callers
+    must gate on `not is_hk` (native-HK lacks clean FMP SBC data).
+    """
+    from src.tools.api import search_line_items  # local import (mirrors is_hk_ticker)
+
+    rows = search_line_items(
+        ticker, ["net_income", "stock_based_compensation", "share_buyback", "revenue"],
+        END_DATE, period="ttm", limit=1,
+    )
+    li = rows[0] if rows else None
+    if li is None:
+        return None
+    N = getattr(li, "net_income", None)
+    sbc = getattr(li, "stock_based_compensation", None)
+    B = abs(getattr(li, "share_buyback", None) or 0.0)   # buyback reported as negative CF
+    # Data gate: need positive cumulative NI and material SBC.
+    if not (N and N > 0) or not (sbc and sbc > 0):
+        return None
+    if (sbc / N) < SBC_PCT_NI_MIN:
+        return None
+    C = 0.0 if OE_CASH_TAX_MODE == "unfunded_only" else sbc * SBC_WITHHOLDING_RATE
+    unfunded = max(0.0, sbc - B)
+    retention = (N - C - unfunded) / N
+    retention = max(OE_RETENTION_FLOOR, min(OE_RETENTION_CEIL, retention))
+    return {
+        "retention": retention,
+        "unfunded_comp": unfunded,
+        "sbc_pct_ni": sbc / N,
+        "is_net_diluter": B < sbc,
+        "cash_tax_estimated": OE_CASH_TAX_MODE == "estimate",
+    }
+
+
 def build_inputs(ticker):
     """Return dict with E0, roe, payout, g_signal, pe, currency (multi-source).
 
@@ -219,8 +274,26 @@ def build_inputs(ticker):
         cands.append(rg)
     g_signal = min(cands) if cands else None
 
-    return {"E0": E0, "roe": roe, "payout": payout, "pe": pe,
-            "currency": currency, "g_signal": g_signal, "price": price}
+    # ── Method-E owner-earnings adjustment (ADR/FMP names only) ──────────────
+    # Multiply E0 by the retention ratio; dimensionless → currency-preserving.
+    # Runs AFTER the BABA mixed-P/E guard above, so it adjusts the corrected E0.
+    oe_adj = None
+    e0_raw = E0
+    if (not is_hk) and E0 and E0 > 0:
+        try:
+            oe_adj = _owner_earnings_retention(ticker)
+        except Exception:
+            oe_adj = None
+        if oe_adj is not None:
+            E0 = E0 * oe_adj["retention"]
+
+    return {"E0": E0, "e0_raw": e0_raw, "roe": roe, "payout": payout, "pe": pe,
+            "currency": currency, "g_signal": g_signal, "price": price,
+            "oe_retention":  oe_adj["retention"]      if oe_adj else None,
+            "unfunded_comp": oe_adj["unfunded_comp"]  if oe_adj else None,
+            "sbc_pct_ni":    oe_adj["sbc_pct_ni"]     if oe_adj else None,
+            "is_net_diluter": oe_adj["is_net_diluter"] if oe_adj else None,
+            "oe_cash_tax_estimated": oe_adj["cash_tax_estimated"] if oe_adj else None}
 
 
 def stage1_growth(inp):
@@ -276,11 +349,14 @@ def main():
                 "fair" if piv and piv <= 1.5 else
                 "rich" if piv and piv <= 3.0 else
                 "expensive" if piv else "n/a")
+        oe_ret = inp.get("oe_retention")
+        oe_tag = (f"  OE×{oe_ret:.2f}{'(dil)' if inp.get('is_net_diluter') else ''}"
+                  if oe_ret is not None else "")
         rows.append((ticker, name, tier_label, iv, price, piv, vpts))
         ps = f"{price:9.2f}" if price else f"{'n/a':>9}"
         pv = f"{piv:7.2f}" if piv else f"{'n/a':>7}"
         print(f"{ticker:<9} {name:<16} {tier_label:<8} {inp['currency']:<4} {E0:8.2f} {g1*100:5.1f}% "
-              f"{ivA:9.2f} {ivB:9.2f} {iv:9.2f} {ps} {pv} {vpts:>5}  {read}")
+              f"{ivA:9.2f} {ivB:9.2f} {iv:9.2f} {ps} {pv} {vpts:>5}  {read}{oe_tag}")
 
     print("=" * 122)
     ranked = [r for r in rows if r[5] is not None]

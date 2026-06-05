@@ -557,7 +557,13 @@ export interface HK50IV15Detail {
   haircut: number | null;
   terminal_multiple: number | null;
   blend_weight_a: number | null;
-  base_eps: number | null;
+  base_eps: number | null;          // E0 fed to IV15 (Method-E adjusted for ADR/FMP names)
+  e0_raw: number | null;            // E0 before the SBC retention haircut
+  oe_retention: number | null;      // (N - C - max(0, SBC - B)) / N, clamped [0.30, 1.00]
+  unfunded_comp: number | null;     // max(0, SBC - B), reporting currency
+  sbc_pct_ni: number | null;        // SBC / NI
+  is_net_diluter: boolean | null;   // buybacks < SBC
+  oe_cash_tax_estimated: boolean | null;
   stage1_growth: number | null;
   iv_gordon: number | null;
   iv_buffett: number | null;

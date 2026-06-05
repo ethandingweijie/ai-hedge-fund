@@ -884,6 +884,24 @@ function DetailDrawer({ ticker, initialScreen, onClose, onGenerateResearch, rese
               <KV label="Terminal multiple" value={d.terminal_multiple == null ? '—' : `${d.terminal_multiple.toFixed(0)}×`} />
               <KV label="Blend weight (Gordon)" value={d.blend_weight_a == null ? '—' : fmtPct(d.blend_weight_a)} />
             </div>
+            {d.oe_retention != null && (
+              <div className="mt-3 pt-2 border-t border-border/40">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                  Owner-earnings adjustment (Method E) {d.is_net_diluter ? '· net diluter' : '· net buyer'}
+                </h3>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <KV label="Raw EPS (pre-adj)" value={fmtNum(d.e0_raw)} />
+                  <KV label="OE retention" value={fmtPct(d.oe_retention)} highlight />
+                  <KV label="SBC % of NI" value={fmtPct(d.sbc_pct_ni)} />
+                  <KV label="Unfunded comp ($M)" value={d.unfunded_comp == null ? '—' : fmtNum(d.unfunded_comp / 1e6, 0)} />
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  E₀ is charged for the stock comp buybacks did not fund: retention = (NI − cash-tax
+                  {d.oe_cash_tax_estimated ? ' (est. SBC×0.37)' : ''} − max(0, SBC − buybacks)) ÷ NI, clamped 30–100%.
+                  Net buyers carry no charge; SOEs/banks (sparse SBC) and native-HK names are not adjusted.
+                </p>
+              </div>
+            )}
             <p className="text-[10px] text-muted-foreground mt-2">
               IV15 = 15-year owner-earnings discount @ 15% required return; blended between a Gordon-terminal valuation
               and {d.terminal_multiple == null ? 'no Buffett-multiple leg (pure Gordon)' : 'a Buffett terminal-multiple leg'}.

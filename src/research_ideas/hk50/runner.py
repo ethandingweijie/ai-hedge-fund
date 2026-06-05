@@ -76,6 +76,13 @@ def _compute_iv15(hk_ticker: str, rep: str) -> IV15Detail:
     piv = (price / iv) if (price and iv and iv > 0) else None
 
     detail.base_eps = E0
+    # Method-E owner-earnings adjustment transparency (ADR/FMP names only; None otherwise)
+    detail.e0_raw = inp.get("e0_raw")
+    detail.oe_retention = inp.get("oe_retention")
+    detail.unfunded_comp = inp.get("unfunded_comp")
+    detail.sbc_pct_ni = inp.get("sbc_pct_ni")
+    detail.is_net_diluter = inp.get("is_net_diluter")
+    detail.oe_cash_tax_estimated = inp.get("oe_cash_tax_estimated")
     detail.stage1_growth = g1
     detail.iv_gordon = ivA
     detail.iv_buffett = ivB

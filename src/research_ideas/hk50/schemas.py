@@ -69,7 +69,14 @@ class IV15Detail(BaseModel):
     haircut: Optional[float] = None          # growth haircut (AICT names only)
     terminal_multiple: Optional[float] = None  # Buffett terminal multiple (None = Gordon-only)
     blend_weight_a: Optional[float] = None   # wA — weight on Valuation A (Gordon)
-    base_eps: Optional[float] = None         # E0 (owner-earnings proxy)
+    base_eps: Optional[float] = None         # E0 fed to IV15 (Method-E adjusted for ADR/FMP names)
+    # ── Method-E owner-earnings adjustment (ADR/FMP names with material SBC) ──
+    e0_raw: Optional[float] = None           # E0 before the SBC retention haircut
+    oe_retention: Optional[float] = None     # (N - C - max(0, SBC - B)) / N, clamped [0.30, 1.00]
+    unfunded_comp: Optional[float] = None     # max(0, SBC - B), reporting currency ($)
+    sbc_pct_ni: Optional[float] = None       # SBC / NI (materiality)
+    is_net_diluter: Optional[bool] = None    # buybacks < SBC
+    oe_cash_tax_estimated: Optional[bool] = None  # True = C used SBC*0.37 estimate
     stage1_growth: Optional[float] = None    # g1
     iv_gordon: Optional[float] = None        # IV_A
     iv_buffett: Optional[float] = None       # IV_B
