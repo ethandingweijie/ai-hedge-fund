@@ -66,12 +66,15 @@ _TT_RETENTION = {  # used when pooled ΔE ≤ 0 (Tragic Tier — known SBC abuse
 }
 
 # Extra growth haircut layered ON TOP of AICT haircut, keyed by TA tier.
-# TT* names get a deep growth cut — Cassandra docks them for SBC abuse
-# trajectories that imply margins won't actually arrive.
+# NOTE (2026-06): Method E now charges unfunded SBC directly in the owner-earnings
+# base, so this is only a RESIDUAL margin-trajectory haircut — NOT the primary SBC
+# penalty. The TT* cut was halved 0.50 -> 0.25 to stop double-penalising SBC, which
+# had suppressed the TT* cluster ~25-40% below Burry's published IV15
+# (PANW/PCTY/CRM/NOW). Not-TT/N/A names are unaffected by this lever.
 _TA_GROWTH_HAIRCUT = {
     "Not-TT": 0.00,
     "Near-TT": 0.20,
-    "TT*":    0.50,
+    "TT*":    0.25,
     "N/A":    0.10,
 }
 

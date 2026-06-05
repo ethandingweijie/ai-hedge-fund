@@ -668,14 +668,21 @@ def fetch_ticker_bundle(ticker: str, history_years: int = 10) -> Optional[Ticker
         time.sleep(0.15)
 
     # Forward revenue growth + forward NI from analyst consensus (used by IV15).
+    # NOTE: FMP's /stable/analyst-estimates returns fiscal years FURTHEST-first
+    # and truncates to the API `limit`. A small limit (e.g. 2) therefore returns
+    # only the Y+4 / Y+5 rows, so estimates[0] (even after get_analyst_estimates'
+    # ascending re-sort) is a multi-year-out year, not Y+1. That made fwd_rev a
+    # cumulative multi-year growth (ADBE 41%, NOW 99%) and fwd_ni a far-future
+    # figure — both massively inflating IV15. Fetch a generous window so the
+    # ascending-sorted estimates[0] is the genuine NEXT fiscal year (Y+1).
     fwd_rev = None
     fwd_ni = None
     try:
         today = _dt.date.today().isoformat()
-        estimates = get_analyst_estimates(ticker, end_date=today, period="annual", limit=2)
+        estimates = get_analyst_estimates(ticker, end_date=today, period="annual", limit=12)
         if estimates and len(estimates) >= 1 and years:
             last_rev = years[-1].revenue or 0
-            yr1 = estimates[0].revenue_avg
+            yr1 = estimates[0].revenue_avg   # nearest forward year (ascending-sorted)
             if last_rev and yr1 and last_rev > 0:
                 fwd_rev = (yr1 / last_rev) - 1.0
             fwd_ni = estimates[0].net_income_avg
