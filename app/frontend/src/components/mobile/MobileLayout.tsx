@@ -11,7 +11,11 @@ export function MobileLayout({ children }: MobileLayoutProps) {
       <div className="w-full max-w-[430px] min-h-screen bg-background relative shadow-2xl flex flex-col"
         style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <MobileTopBar />
-        <div className="flex-1 overflow-y-auto">
+        {/* NOTE: no overflow-y-auto here — the frame is min-h-screen so this
+            div never scrolls itself (the WINDOW scrolls). An overflow ancestor
+            that doesn't scroll captures position:sticky and silently breaks
+            every sticky header (TabHero, V2 ticker bar) on mobile. */}
+        <div className="flex-1">
           {children}
         </div>
       </div>
