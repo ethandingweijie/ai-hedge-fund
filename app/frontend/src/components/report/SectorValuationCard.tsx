@@ -84,7 +84,7 @@ export function SectorValuationCard({ payload }: Props) {
   return (
     <Card className="overflow-hidden">
       {/* Hero strip */}
-      <div className="bg-gradient-to-br from-zinc-100 via-zinc-50 to-white dark:from-zinc-900 dark:via-zinc-950 dark:to-black px-5 py-4 border-b border-border">
+      <div className="bg-gradient-to-br from-muted via-muted/50 to-card px-5 py-4 border-b border-border">
         <div className="text-xs uppercase tracking-widest text-muted-foreground">
           {payload.sector} · {payload.profile_name}
           {payload.sub_profile && (
@@ -157,7 +157,7 @@ export function SectorValuationCard({ payload }: Props) {
                       <div className="mt-0.5 flex items-baseline gap-1.5">
                         <span className={cn(
                           'text-base font-semibold tabular-nums',
-                          missing && 'text-zinc-500',
+                          missing && 'text-muted-foreground',
                         )}>
                           {fmt(k)}
                         </span>
@@ -247,7 +247,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
       ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
       : z < 0
         ? 'border-rose-500/40 text-rose-500 bg-rose-500/10'
-        : 'border-zinc-500/30 text-muted-foreground bg-zinc-500/10';
+        : 'border-border text-muted-foreground bg-muted/50';
     return (
       <span
         className={cn(
@@ -424,7 +424,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
                   ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : bridge.tier_label === 'haircut'
                     ? 'border-rose-500/40 bg-rose-500/10 text-rose-500'
-                    : 'border-zinc-500/30 bg-zinc-500/10 text-muted-foreground',
+                    : 'border-border bg-muted/50 text-muted-foreground',
               )}
             >
               {bridge.tier_label}

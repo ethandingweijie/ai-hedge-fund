@@ -305,7 +305,7 @@ export function MobileReportView({ result, runId }: MobileReportViewProps) {
             title="Intelligence Signals"
             priority="medium"
             badge={
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-medium">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-medium">
                 {agentSignals ? Object.keys(agentSignals).length : 0} agents
               </span>
             }

@@ -52,11 +52,11 @@ export function MobilePipelineSheet({
           onClick={() => setMinimized(false)}
           className="w-full bg-card border border-border rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-lg"
         >
-          <Loader2 size={16} className="animate-spin text-blue-500 shrink-0" />
+          <Loader2 size={16} className="animate-spin text-brand shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="h-1.5 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                className="h-full bg-brand rounded-full transition-all duration-500"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -74,7 +74,7 @@ export function MobilePipelineSheet({
         {/* Header */}
         <div className="sticky top-0 bg-card border-b border-border/50 px-4 py-3 flex items-center justify-between rounded-t-2xl">
           <div className="flex items-center gap-2">
-            <Loader2 size={16} className="animate-spin text-blue-500" />
+            <Loader2 size={16} className="animate-spin text-brand" />
             <span className="text-sm font-semibold">Analysis Pipeline</span>
             <span className="text-xs text-muted-foreground">{pct}%</span>
           </div>
@@ -100,7 +100,7 @@ export function MobilePipelineSheet({
         <div className="px-4 pt-3">
           <div className="h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-500 rounded-full transition-all duration-500"
+              className="h-full bg-brand rounded-full transition-all duration-500"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -119,7 +119,7 @@ export function MobilePipelineSheet({
                     </svg>
                   </div>
                 ) : status === 'running' ? (
-                  <Loader2 size={16} className="animate-spin text-blue-500" />
+                  <Loader2 size={16} className="animate-spin text-brand" />
                 ) : (
                   <div className="w-4 h-4 rounded-full border-2 border-border" />
                 )}

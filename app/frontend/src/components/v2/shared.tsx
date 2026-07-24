@@ -1,16 +1,16 @@
 /**
  * v2/shared.tsx — Shared UI kit for the reimagined Equitable UI
  *
- * Minimal-fintech Linear/Stripe aesthetic. Zinc-neutral palette, 1px borders,
- * Inter with tabular numerics. Equitable green (#2e7d32) reserved for logo,
- * primary CTAs, positive deltas, ongoing-run state, deep-research accents.
+ * Wise-inspired aesthetic: token-driven cream/forest palette, 1px borders,
+ * Inter with tabular numerics. Brand green reserved for logo, primary CTAs,
+ * positive deltas, ongoing-run state, deep-research accents.
  *
  * Exports: Icons, Leaf, Divider, ActionPill, GradeChip, Delta, Card
  */
 
 import React, { useRef, useState } from 'react';
 
-export const BRAND = '#2e7d32';
+export const BRAND = '#297A4B';
 
 /* ───────── Icons ───────── */
 const I = (p: React.SVGProps<SVGSVGElement>) => (
@@ -76,31 +76,31 @@ export function Leaf({ size = 22 }: { size?: number }) {
 
 /* ───────── Primitives ───────── */
 export const Divider = ({ className = '' }: { className?: string }) =>
-  <div className={`h-px bg-zinc-100 dark:bg-zinc-800 ${className}`} />;
+  <div className={`h-px bg-border/60 ${className}`} />;
 
 export const ACTION_STYLES: Record<string, string> = {
-  BUY:   'text-[#2e7d32] dark:text-[#4ea354] bg-[#ecf5ed] dark:bg-[#2e7d32]/15 border-[#d0e7d2] dark:border-[#2e7d32]/40',
+  BUY:   'text-brand bg-brand/10 border-brand/25',
   SELL:  'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20',
   SHORT: 'text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20',
   HOLD:  'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20',
 };
 
 export function ActionPill({ action, size = 'sm' }: { action?: string | null; size?: 'sm' | 'lg' }) {
-  const base = (action && ACTION_STYLES[action]) || 'text-zinc-700 dark:text-zinc-300 bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-800';
+  const base = (action && ACTION_STYLES[action]) || 'text-foreground/80 bg-muted/60 border-border';
   const sz = size === 'lg' ? 'text-[11px] px-2.5 py-1' : 'text-[10px] px-1.5 py-0.5';
   return <span className={`inline-flex items-center rounded-md border font-semibold tracking-wide ${sz} ${base}`}>{action || '—'}</span>;
 }
 
 function gradeStyle(grade?: string | null) {
-  if (!grade) return { text: 'text-zinc-400 dark:text-zinc-500', bg: 'bg-zinc-50 dark:bg-zinc-800/60' };
+  if (!grade) return { text: 'text-muted-foreground/70', bg: 'bg-muted/60' };
   const L = grade[0];
   const mod = grade.slice(1);
   if (L === 'A') {
     return {
-      text: 'text-[#1b5e20] dark:text-[#9fd6a4]',
-      bg: mod === '+' ? 'bg-[#2e7d32]/30 dark:bg-[#2e7d32]/40'
-        : mod === '-' ? 'bg-[#2e7d32]/10 dark:bg-[#2e7d32]/20'
-        :               'bg-[#2e7d32]/20 dark:bg-[#2e7d32]/30',
+      text: 'text-brand',
+      bg: mod === '+' ? 'bg-brand/30 dark:bg-brand/40'
+        : mod === '-' ? 'bg-brand/10 dark:bg-brand/20'
+        :               'bg-brand/20 dark:bg-brand/30',
     };
   }
   if (L === 'B') {
@@ -129,7 +129,7 @@ export function GradeChip({ grade, label }: { grade?: string | null; label?: str
   const s = gradeStyle(grade);
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
-      {label && <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">{label}</span>}
+      {label && <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
       <span className={`inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md text-[11.5px] font-bold tabular-nums ${s.text} ${s.bg}`}>
         {grade || '—'}
       </span>
@@ -138,10 +138,10 @@ export function GradeChip({ grade, label }: { grade?: string | null; label?: str
 }
 
 export function Delta({ v, unit = '%' }: { v: number | null | undefined; unit?: string }) {
-  if (v == null) return <span className="text-zinc-400 dark:text-zinc-500">—</span>;
+  if (v == null) return <span className="text-muted-foreground/70">—</span>;
   const up = v >= 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 font-medium tabular-nums ${up ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+    <span className={`inline-flex items-center gap-0.5 font-medium tabular-nums ${up ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
       {up ? <ArrowUp width={11} height={11} strokeWidth={2.2}/> : <ArrowDown width={11} height={11} strokeWidth={2.2}/>}
       {Math.abs(v).toFixed(1)}{unit}
     </span>
@@ -150,7 +150,7 @@ export function Delta({ v, unit = '%' }: { v: number | null | undefined; unit?: 
 
 export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 ${className}`}>
+    <div className={`rounded-lg border border-border bg-card ${className}`}>
       {children}
     </div>
   );
@@ -159,11 +159,11 @@ export function Card({ children, className = '' }: { children: React.ReactNode; 
 /* ───────── TopBar (hamburger only) ───────── */
 export function TopBar({ onMenu }: { onMenu: () => void }) {
   return (
-    <div className="sticky top-0 z-30 h-12 px-3 flex items-center bg-white/85 dark:bg-zinc-900/85 backdrop-blur border-b border-zinc-100 dark:border-zinc-800">
+    <div className="sticky top-0 z-30 h-12 px-3 flex items-center bg-background/85 backdrop-blur border-b border-border/60">
       <button
         onClick={onMenu}
         aria-label="Open menu"
-        className="w-9 h-9 -ml-1 rounded-lg active:bg-zinc-100 dark:active:bg-zinc-800 flex items-center justify-center text-zinc-700 dark:text-zinc-300"
+        className="w-9 h-9 -ml-1 rounded-lg active:bg-muted flex items-center justify-center text-foreground/80"
       >
         <Menu />
       </button>
@@ -254,7 +254,7 @@ export function SwipeRow({
           transition: start.current == null ? 'transform 0.24s ease' : 'none',
           touchAction: 'pan-y',
         }}
-        className="bg-white dark:bg-zinc-900 relative"
+        className="bg-card relative"
       >
         {children}
       </div>

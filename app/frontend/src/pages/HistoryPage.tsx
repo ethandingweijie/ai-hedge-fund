@@ -250,7 +250,7 @@ export function HistoryPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
+    <div className="min-h-full flex flex-col bg-background">
       {/* Desktop: constrain to a centered column. Wider on desktop (max-w-7xl)
           to host the 2-column run grid below; narrower (max-w-5xl) otherwise.
           On mobile the max-width exceeds the 430px frame, so it no-ops and the
@@ -259,12 +259,12 @@ export function HistoryPage() {
       {/* Search */}
       <div className="px-3 pt-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" width={15} height={15}/>
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={15} height={15}/>
           <input
             value={q}
             onChange={e => setQ(e.target.value)}
             placeholder="Search ticker or company"
-            className="w-full h-10 pl-8 pr-3 text-[13px] rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 focus:bg-white dark:focus:bg-zinc-900 focus:border-zinc-300 dark:focus:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#2e7d32]/10 placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-50"
+            className="w-full h-10 pl-8 pr-3 text-[13px] rounded-lg bg-muted/60 border border-border focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground"
           />
         </div>
       </div>
@@ -305,31 +305,31 @@ export function HistoryPage() {
           <button
             key={r.ticker}
             onClick={() => handleOpenOngoing(r.ticker)}
-            className="w-full mb-3 p-3 rounded-xl border border-[#d0e7d2] dark:border-[#2e7d32]/40 bg-[#ecf5ed]/70 dark:bg-[#2e7d32]/10 active:bg-[#ecf5ed] text-left flex items-center gap-2.5 transition-colors"
+            className="w-full mb-3 p-3 rounded-lg border border-brand/25 bg-brand/10 active:bg-brand/20 text-left flex items-center gap-2.5 transition-colors"
           >
-            <div className="relative w-8 h-8 rounded-md bg-white dark:bg-zinc-900 border border-[#d0e7d2] dark:border-[#2e7d32]/40 flex items-center justify-center">
-              <span className="absolute inset-0 rounded-md border-2 border-[#2e7d32] border-t-transparent animate-spin" />
-              <Clock width={12} height={12} className="text-[#2e7d32] dark:text-[#4ea354]" />
+            <div className="relative w-8 h-8 rounded-md bg-card border border-brand/25 flex items-center justify-center">
+              <span className="absolute inset-0 rounded-md border-2 border-brand border-t-transparent animate-spin" />
+              <Clock width={12} height={12} className="text-brand" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">{r.ticker}</span>
-                <span className="text-[10px] font-medium uppercase tracking-wider text-[#2e7d32] dark:text-[#4ea354]">Ongoing</span>
+                <span className="text-[13px] font-semibold text-foreground tabular-nums">{r.ticker}</span>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-brand">Ongoing</span>
               </div>
-              <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+              <div className="text-[11px] text-muted-foreground truncate">
                 started {daysAgo(r.startedAt)}
               </div>
             </div>
-            <ChevRight width={14} height={14} className="text-[#2e7d32] dark:text-[#4ea354]" />
+            <ChevRight width={14} height={14} className="text-brand" />
           </button>
         ))}
 
         {/* Recent analyses header */}
         <div className="flex items-center justify-between px-1 mb-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400 dark:text-zinc-500">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
             Recent analyses
           </span>
-          <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+          <span className="text-[10px] text-muted-foreground/70">
             {history?.total ?? 0} total
           </span>
         </div>
@@ -339,11 +339,11 @@ export function HistoryPage() {
             hairline row separators, as before. */}
         <div className={isDesktop
           ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-start'
-          : 'rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm'}>
+          : 'rounded-lg border border-border bg-card overflow-hidden shadow-sm'}>
           {loading && !history ? (
-            <div className={`px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500 ${isDesktop ? 'lg:col-span-2' : ''}`}>Loading…</div>
+            <div className={`px-3 py-10 text-center text-[12px] text-muted-foreground/70 ${isDesktop ? 'lg:col-span-2' : ''}`}>Loading…</div>
           ) : rows.length === 0 ? (
-            <div className={`px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500 ${isDesktop ? 'lg:col-span-2' : ''}`}>
+            <div className={`px-3 py-10 text-center text-[12px] text-muted-foreground/70 ${isDesktop ? 'lg:col-span-2' : ''}`}>
               {(history?.total ?? 0) === 0
                 ? 'No analysis runs yet. Run your first one from Home.'
                 : q
@@ -358,8 +358,8 @@ export function HistoryPage() {
               isNew={recentlyCompleted?.runId === r.run_id}
               isDesktop={isDesktop}
               className={isDesktop
-                ? 'rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm'
-                : (i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : '')}
+                ? 'rounded-lg border border-border shadow-sm'
+                : (i > 0 ? 'border-t border-border/60' : '')}
               onOpen={() => navigate(`/report/${r.run_id}`)}
               onDelete={() => handleDelete(r.run_id)}
             />)
@@ -369,21 +369,21 @@ export function HistoryPage() {
         {/* Pagination */}
         {history && history.total > 50 && (
           <div className="flex items-center justify-between mt-4 px-1">
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[11px] text-muted-foreground/70">
               Page {history.page} · {history.items.length} of {history.total}
             </span>
             <div className="flex gap-1">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="h-8 px-3 text-[11px] rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 active:bg-zinc-50 dark:active:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-8 px-3 text-[11px] rounded-md border border-border text-muted-foreground active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
               <button
                 onClick={() => setPage(p => p + 1)}
                 disabled={page * 50 >= history.total}
-                className="h-8 px-3 text-[11px] rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 active:bg-zinc-50 dark:active:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-8 px-3 text-[11px] rounded-md border border-border text-foreground/80 active:bg-muted/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Next
               </button>
@@ -430,7 +430,7 @@ function HistoryRow({
       ]}
     >
       <div
-        className={`w-full text-left flex items-center transition-colors ${isDesktop ? 'px-4 py-2.5 gap-5' : 'p-3 gap-3'} ${isNew ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/10' : ''}`}
+        className={`w-full text-left flex items-center transition-colors ${isDesktop ? 'px-4 py-2.5 gap-5' : 'p-3 gap-3'} ${isNew ? 'bg-brand/10' : ''}`}
       >
         {/* Only the ticker column triggers the open action — price + VGPM
             cells sit outside the data-tap="open" subtree. Swipe-to-delete
@@ -439,23 +439,23 @@ function HistoryRow({
             the right (right-aligned price) — this kills the dead middle gap
             the mobile fixed-% columns leave on the wider 2-col cards, and
             bumps fonts up so the cards don't read as sparse. */}
-        <div data-tap="open" className={`min-w-0 active:bg-zinc-50 dark:active:bg-zinc-800 rounded-md -m-1 p-1 cursor-pointer ${isDesktop ? 'flex-1' : 'w-[40%]'}`}>
+        <div data-tap="open" className={`min-w-0 active:bg-muted/60 rounded-md -m-1 p-1 cursor-pointer ${isDesktop ? 'flex-1' : 'w-[40%]'}`}>
           <div className="flex items-center gap-1.5">
-            <span className={`font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight ${isDesktop ? 'text-[15px]' : 'text-[13px]'}`}>
+            <span className={`font-semibold text-foreground tabular-nums tracking-tight ${isDesktop ? 'text-[15px]' : 'text-[13px]'}`}>
               {row.ticker}
             </span>
             {isNew && (
-              <span className="text-[9px] font-bold uppercase tracking-wider text-[#2e7d32] dark:text-[#4ea354]">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-brand">
                 new
               </span>
             )}
           </div>
-          <div className={`text-zinc-500 dark:text-zinc-400 truncate ${isDesktop ? 'text-[12.5px]' : 'text-[11px]'}`}>
+          <div className={`text-muted-foreground truncate ${isDesktop ? 'text-[12.5px]' : 'text-[11px]'}`}>
             {name || row.sector || '—'}
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <ActionPill action={row.final_action || null} />
-            <span className={`text-zinc-400 dark:text-zinc-500 ${isDesktop ? 'text-[11px]' : 'text-[10px]'}`}>
+            <span className={`text-muted-foreground/70 ${isDesktop ? 'text-[11px]' : 'text-[10px]'}`}>
               {daysAgo(row.run_at)}
             </span>
           </div>
@@ -463,18 +463,18 @@ function HistoryRow({
         <div className={isDesktop ? 'shrink-0 w-24 text-right' : 'w-[24%]'}>
           {row.price_target != null ? (
             <>
-              <div className={`font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums ${isDesktop ? 'text-[15px]' : 'text-[12px]'}`}>
+              <div className={`font-semibold text-foreground tabular-nums ${isDesktop ? 'text-[15px]' : 'text-[12px]'}`}>
                 ${row.price_target.toLocaleString(undefined, {
                   maximumFractionDigits: row.price_target < 10 ? 2 : 0,
                 })}
               </div>
               <div className={isDesktop ? 'text-[12px]' : 'text-[10px]'}><Delta v={upside}/></div>
-              <div className={`text-zinc-400 dark:text-zinc-500 mt-0.5 uppercase tracking-wider ${isDesktop ? 'text-[10px]' : 'text-[9px]'}`}>
+              <div className={`text-muted-foreground/70 mt-0.5 uppercase tracking-wider ${isDesktop ? 'text-[10px]' : 'text-[9px]'}`}>
                 Target
               </div>
             </>
           ) : (
-            <div className="text-[10px] text-zinc-400 dark:text-zinc-500">—</div>
+            <div className="text-[10px] text-muted-foreground/70">—</div>
           )}
         </div>
         <div className={`flex items-center ${isDesktop ? 'gap-2.5 shrink-0' : 'gap-2 ml-auto'}`}>
@@ -562,8 +562,8 @@ function FilterPill({
         onClick={() => setOpen(o => !o)}
         className={`h-8 pl-2.5 pr-1.5 text-[11px] rounded-lg border flex items-center gap-1 shrink-0 transition-colors ${
           active
-            ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 border-[#d0e7d2] dark:border-[#2e7d32]/50 text-[#2e7d32] dark:text-[#4ea354]'
-            : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 active:bg-zinc-50 dark:active:bg-zinc-800'
+            ? 'bg-brand/10 border-brand/25 text-brand'
+            : 'bg-card border-border text-muted-foreground active:bg-muted/60'
         }`}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -577,7 +577,7 @@ function FilterPill({
           ref={popoverRef}
           role="listbox"
           style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.minWidth, maxHeight: '60vh' }}
-          className="overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-xl z-[200] py-1"
+          className="overflow-y-auto bg-card border border-border rounded-lg shadow-xl z-[200] py-1"
         >
           {options.map(opt => {
             const selected = opt === value;
@@ -590,8 +590,8 @@ function FilterPill({
                 onClick={() => { onChange(opt); setOpen(false); }}
                 className={`w-full text-left px-3 py-1.5 text-[12px] flex items-center justify-between gap-2 transition-colors ${
                   selected
-                    ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 text-[#2e7d32] dark:text-[#4ea354] font-medium'
-                    : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                    ? 'bg-brand/10 text-brand font-medium'
+                    : 'text-foreground/80 hover:bg-muted/60'
                 }`}
               >
                 <span>{opt}</span>

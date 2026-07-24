@@ -84,7 +84,7 @@ export function ValueTrapChecklist({ analysis, ticker }: ValueTrapChecklistProps
                 className={`w-full flex items-center gap-2.5 px-1 py-2 text-left transition-colors rounded-sm ${rowTint[rating] ?? ''}`}
               >
                 {/* Traffic-light dot */}
-                <span className={`shrink-0 w-2 h-2 rounded-full ${dotClass[rating] ?? 'bg-gray-400'}`} />
+                <span className={`shrink-0 w-2 h-2 rounded-full ${dotClass[rating] ?? 'bg-muted-foreground/50'}`} />
 
                 {/* Label */}
                 <span className="flex-1 text-xs font-medium text-foreground">

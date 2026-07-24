@@ -6,8 +6,8 @@
  * (backend emits it only for Financials / Bank / Mortgage profiles).
  *
  * Design DNA exactly matches REITValuationPanel:
- *   - uppercase `tracking-[0.2em]` section headings in zinc-500/400
- *   - `rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5`
+ *   - uppercase `tracking-[0.2em]` section headings in muted-foreground
+ *   - `rounded-2xl border border-border bg-card p-5`
  *   - `text-5xl font-bold tabular-nums` hero values centered
  *   - Bull / bear tinted tiles: bg-green-50 dark:bg-green-950/40 /
  *     bg-red-50 dark:bg-red-950/40
@@ -54,7 +54,7 @@ const fmtBps = (v: number | null | undefined, decimals = 0): string => {
 };
 
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400';
+  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 // ── 1. P/TBV Fair Value Hero ──────────────────────────────────────────────
 
@@ -65,9 +65,9 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
   const upside = (fairValue && price) ? (fairValue - price) / price : null;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 text-center">
+    <div className="rounded-2xl border border-border bg-card p-5 text-center">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>P/TBV Fair Value — {ticker}</p>
-      <p className="text-5xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+      <p className="text-5xl font-bold tabular-nums text-foreground">
         {fmtMoney(fairValue, sym)}
       </p>
       {upside != null && (
@@ -75,22 +75,22 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
           {upside >= 0 ? '+' : ''}{(upside * 100).toFixed(1)}% vs price
         </p>
       )}
-      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+      <p className="text-xs text-muted-foreground mt-0.5">
         {bb.profile ?? 'Bank'} · Target ROE {fmtPct(bb.target_roe, 1)} · CoE {fmtPct(bb.coe, 1)}
       </p>
 
       {/* Quad: TBV/sh · BVPS · ROE · CET1 buffer */}
       <div className="grid grid-cols-2 gap-3 mt-5 text-left">
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
+        <div className="rounded-xl border border-border bg-card p-3.5">
           <p className={`${SECTION_HEADING_CLS} mb-1`}>TBV / share</p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <p className="text-xl font-bold tabular-nums text-foreground">
             {fmtMoney(bb.tbv_per_share, sym)}
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">Equity − goodwill − intangibles</p>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">Equity − goodwill − intangibles</p>
         </div>
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
+        <div className="rounded-xl border border-border bg-card p-3.5">
           <p className={`${SECTION_HEADING_CLS} mb-1`}>BVPS</p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <p className="text-xl font-bold tabular-nums text-foreground">
             {fmtMoney(bb.bvps, sym)}
           </p>
         </div>
@@ -98,19 +98,19 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
         <div className={`rounded-xl border p-3.5 ${
           bb.roe != null && bb.target_roe != null && bb.roe >= bb.target_roe
             ? 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40'
-            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+            : 'border-border bg-card'
         }`}>
           <p className={`${SECTION_HEADING_CLS} mb-1 ${
             bb.roe != null && bb.target_roe != null && bb.roe >= bb.target_roe ? 'text-green-600' : ''
           }`}>ROE</p>
           <p className={`text-xl font-bold tabular-nums ${
             bb.roe != null && bb.target_roe != null && bb.roe >= bb.target_roe
-              ? 'text-green-700 dark:text-green-400' : 'text-zinc-900 dark:text-zinc-50'
+              ? 'text-green-700 dark:text-green-400' : 'text-foreground'
           }`}>
             {fmtPct(bb.roe, 1)}
           </p>
           {bb.target_roe != null && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">
+            <p className="text-xs text-muted-foreground mt-0.5 font-mono">
               vs target {fmtPct(bb.target_roe, 0)}
             </p>
           )}
@@ -121,7 +121,7 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
             ? 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40'
             : bb.cet1_buffer_bps != null && bb.cet1_buffer_bps < 0
               ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40'
-              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+              : 'border-border bg-card'
         }`}>
           <p className={`${SECTION_HEADING_CLS} mb-1 ${
             bb.cet1_buffer_bps != null && bb.cet1_buffer_bps >= 0 ? 'text-green-600' :
@@ -132,12 +132,12 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
               ? 'text-green-700 dark:text-green-400'
               : bb.cet1_buffer_bps != null && bb.cet1_buffer_bps < 0
                 ? 'text-red-700 dark:text-red-400'
-                : 'text-zinc-900 dark:text-zinc-50'
+                : 'text-foreground'
           }`}>
             {bb.cet1_buffer_bps != null ? fmtBps(bb.cet1_buffer_bps) : '—'}
           </p>
           {bb.cet1_ratio != null && bb.target_cet1 != null && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">
+            <p className="text-xs text-muted-foreground mt-0.5 font-mono">
               {fmtPct(bb.cet1_ratio, 1)} vs {fmtPct(bb.target_cet1, 0)} target
             </p>
           )}
@@ -145,7 +145,7 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
       </div>
 
       {bb.fair_p_tbv != null && bb.tbv_per_share != null && (
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-4 font-mono">
+        <p className="text-[11px] text-muted-foreground mt-4 font-mono">
           Fair = TBV × (1 + (ROE−CoE) / CoE) = {fmtMoney(bb.tbv_per_share, sym)} × {bb.fair_p_tbv.toFixed(2)}x
         </p>
       )}
@@ -189,21 +189,21 @@ function BankKeyStats({ bb, sym }: { bb: BankBreakdown; sym: string }) {
   ];
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between mb-4">
         <p className={SECTION_HEADING_CLS}>Bank Key Stats</p>
         {bb.profile && (
-          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{bb.profile}</span>
+          <span className="text-xs font-medium text-muted-foreground">{bb.profile}</span>
         )}
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
         {stats.map(s => {
           const valCls =
             s.color === 'green' ? 'text-green-600' :
-            s.color === 'red'   ? 'text-red-500'   : 'text-zinc-900 dark:text-zinc-50';
+            s.color === 'red'   ? 'text-red-500'   : 'text-foreground';
           return (
             <div key={s.label} className="flex items-center justify-between">
-              <span className="text-zinc-500 dark:text-zinc-400">{s.label}</span>
+              <span className="text-muted-foreground">{s.label}</span>
               <span className={`font-semibold tabular-nums ${valCls}`}>{s.value}</span>
             </div>
           );
@@ -227,10 +227,10 @@ function ROEGauge({ bb }: { bb: BankBreakdown }) {
     : (spread <= -0.03 ? 'capital destroyer' : 'below-cost-of-capital');
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>ROE vs CoE Spread</p>
       <div className="flex items-baseline justify-between mb-2">
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">Value creation signal</span>
+        <span className="text-xs text-muted-foreground">Value creation signal</span>
         <span className={`text-lg font-bold tabular-nums ${
           isPositive ? 'text-green-600' : 'text-red-500'
         }`}>
@@ -238,10 +238,10 @@ function ROEGauge({ bb }: { bb: BankBreakdown }) {
         </span>
       </div>
       {/* Gauge bar */}
-      <div className="relative w-full h-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+      <div className="relative w-full h-2.5 bg-muted rounded-full overflow-hidden">
         {/* Zero-line marker at position 33.3% (since range is [-500, +1000]) */}
         <div
-          className="absolute top-0 h-full w-px bg-zinc-400 dark:bg-zinc-600"
+          className="absolute top-0 h-full w-px bg-muted-foreground/50"
           style={{ left: '33.3%' }}
         />
         {/* Fill: green for positive spread, red for negative */}
@@ -274,52 +274,52 @@ function CapitalReturnCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
   if (!hasAnyYield) return null;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 text-center">
+    <div className="rounded-2xl border border-border bg-card p-5 text-center">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>Capital Return</p>
-      <p className="text-5xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+      <p className="text-5xl font-bold tabular-nums text-foreground">
         {fmtPct(totalYield, 1)}
       </p>
       <p className="text-base font-semibold text-green-600 mt-2">total yield</p>
-      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">div + buyback, TTM</p>
+      <p className="text-xs text-muted-foreground mt-0.5">div + buyback, TTM</p>
 
       {/* 4-metric row */}
       <div className="grid grid-cols-2 gap-3 mt-5 text-left">
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
+        <div className="rounded-xl border border-border bg-card p-3.5">
           <p className={`${SECTION_HEADING_CLS} mb-1`}>Div yield</p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <p className="text-xl font-bold tabular-nums text-foreground">
             {fmtPct(bb.dividend_yield, 2)}
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">DPS {fmtMoney(bb.dps, sym)}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">DPS {fmtMoney(bb.dps, sym)}</p>
         </div>
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
+        <div className="rounded-xl border border-border bg-card p-3.5">
           <p className={`${SECTION_HEADING_CLS} mb-1`}>Buyback yield</p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <p className="text-xl font-bold tabular-nums text-foreground">
             {fmtPct(bb.buyback_yield, 2)}
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">{fmtBn(bb.buybacks_usd, sym)}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">{fmtBn(bb.buybacks_usd, sym)}</p>
         </div>
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3.5">
+        <div className="rounded-xl border border-border bg-card p-3.5">
           <p className={`${SECTION_HEADING_CLS} mb-1`}>Payout ratio</p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <p className="text-xl font-bold tabular-nums text-foreground">
             {fmtPct(bb.total_payout_ratio, 0)}
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">of net income</p>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">of net income</p>
         </div>
         <div className={`rounded-xl border p-3.5 ${
           bb.cet1_surplus_usd != null && bb.cet1_surplus_usd > 0
             ? 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40'
-            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+            : 'border-border bg-card'
         }`}>
           <p className={`${SECTION_HEADING_CLS} mb-1 ${
             bb.cet1_surplus_usd != null && bb.cet1_surplus_usd > 0 ? 'text-green-600' : ''
           }`}>Distributable</p>
           <p className={`text-xl font-bold tabular-nums ${
             bb.cet1_surplus_usd != null && bb.cet1_surplus_usd > 0
-              ? 'text-green-700 dark:text-green-400' : 'text-zinc-900 dark:text-zinc-50'
+              ? 'text-green-700 dark:text-green-400' : 'text-foreground'
           }`}>
             {fmtBn(bb.cet1_surplus_usd, sym)}
           </p>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-mono">CET1 surplus vs target</p>
+          <p className="text-xs text-muted-foreground mt-0.5 font-mono">CET1 surplus vs target</p>
         </div>
       </div>
     </div>
@@ -339,24 +339,24 @@ function HistoryChart({ title, unit, data, color, caption, yFormat }: {
   const rows = data.filter(d => d.value != null).map(d => ({ period: d.period, value: d.value as number }));
   if (rows.length < 2) {
     return (
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+      <div className="rounded-2xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-2">
           <p className={SECTION_HEADING_CLS}>{title}</p>
-          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{unit}</span>
+          <span className="text-xs font-medium text-muted-foreground">{unit}</span>
         </div>
-        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic py-6 text-center">
+        <p className="text-[11px] text-muted-foreground/70 italic py-6 text-center">
           Insufficient data ({rows.length} of 5 years). Data vendor does not expose {title.toLowerCase()} for this ticker.
         </p>
       </div>
     );
   }
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center justify-between mb-2">
         <p className={SECTION_HEADING_CLS}>{title}</p>
-        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{unit}</span>
+        <span className="text-xs font-medium text-muted-foreground">{unit}</span>
       </div>
-      {caption && <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-3">{caption}</p>}
+      {caption && <p className="text-xs text-muted-foreground mb-3">{caption}</p>}
       <div className="h-32 w-full">
         <ResponsiveContainer>
           <BarChart data={rows} margin={{ top: 18, right: 4, left: 4, bottom: 2 }}>
@@ -398,17 +398,17 @@ function HistoryChart({ title, unit, data, color, caption, yFormat }: {
 function NIMSensitivityTile({ bb }: { bb: BankBreakdown }) {
   if (bb.nim_rate_sensitivity_bps == null) return null;
   return (
-    <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 p-3 mt-3">
+    <div className="rounded-lg border border-border bg-muted/50 p-3 mt-3">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
           Rate sensitivity
         </span>
-        <span className="text-sm font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+        <span className="text-sm font-bold tabular-nums text-foreground">
           {bb.nim_rate_sensitivity_bps.toFixed(0)} bps NIM per 1 bp rate
         </span>
       </div>
       {bb.forward_nim_guidance && (
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 italic">
+        <p className="text-[11px] text-muted-foreground mt-1 italic">
           {bb.forward_nim_guidance}
         </p>
       )}
@@ -439,7 +439,7 @@ function LoanGrowthCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
   if (bb.loan_growth_yoy != null) {
     const positive = bb.loan_growth_yoy >= 0;
     return (
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 text-center">
+      <div className="rounded-2xl border border-border bg-card p-5 text-center">
         <p className={`${SECTION_HEADING_CLS} mb-3`}>Loan Growth (YoY)</p>
         <p className={`text-5xl font-bold tabular-nums ${
           positive ? 'text-green-600' : 'text-red-500'
@@ -447,13 +447,13 @@ function LoanGrowthCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
           {positive ? '+' : ''}{(bb.loan_growth_yoy * 100).toFixed(1)}%
         </p>
         {bb.deposit_growth_yoy != null && (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             Deposits {bb.deposit_growth_yoy >= 0 ? '+' : ''}{(bb.deposit_growth_yoy * 100).toFixed(1)}% ·
             LDR {fmtPct(bb.loan_to_deposit_ratio, 0)}
           </p>
         )}
         {bb.forward_loan_growth_guidance && (
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-3 italic px-2">
+          <p className="text-[11px] text-muted-foreground mt-3 italic px-2">
             {bb.forward_loan_growth_guidance}
           </p>
         )}
@@ -482,22 +482,22 @@ function BookQualityCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
     : 'muted';
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5">
+    <div className="rounded-2xl border border-border bg-card p-5">
       <p className={`${SECTION_HEADING_CLS} mb-4`}>Book Quality</p>
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm mb-3">
         {bb.npl_ratio != null && (
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">NPL ratio</span>
-            <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{fmtPct(bb.npl_ratio, 2)}</span>
+            <span className="text-muted-foreground">NPL ratio</span>
+            <span className="font-semibold tabular-nums text-foreground">{fmtPct(bb.npl_ratio, 2)}</span>
           </div>
         )}
         {bb.npl_coverage_ratio != null && (
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">NPL coverage</span>
+            <span className="text-muted-foreground">NPL coverage</span>
             <span className={`font-semibold tabular-nums ${
               covColor === 'green' ? 'text-green-600' :
               covColor === 'red'   ? 'text-red-500'   :
-              covColor === 'amber' ? 'text-amber-500' : 'text-zinc-900 dark:text-zinc-50'
+              covColor === 'amber' ? 'text-amber-500' : 'text-foreground'
             }`}>
               {(bb.npl_coverage_ratio * 100).toFixed(0)}%
             </span>
@@ -505,14 +505,14 @@ function BookQualityCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
         )}
         {bb.net_charge_offs_pct != null && (
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">Net charge-offs</span>
-            <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{fmtPct(bb.net_charge_offs_pct, 2)}</span>
+            <span className="text-muted-foreground">Net charge-offs</span>
+            <span className="font-semibold tabular-nums text-foreground">{fmtPct(bb.net_charge_offs_pct, 2)}</span>
           </div>
         )}
         {bb.management_overlays_bn != null && (
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">Mgmt overlays</span>
-            <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+            <span className="text-muted-foreground">Mgmt overlays</span>
+            <span className="font-semibold tabular-nums text-foreground">
               {sym}{bb.management_overlays_bn.toFixed(2)}B
             </span>
           </div>
@@ -522,26 +522,26 @@ function BookQualityCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
       {/* Coverage gauge */}
       {bb.npl_coverage_ratio != null && (
         <>
-          <div className="relative w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+          <div className="relative w-full h-2 bg-muted rounded-full overflow-hidden">
             <div
               className={`absolute top-0 left-0 h-full rounded-full ${
                 covColor === 'green' ? 'bg-green-500' :
                 covColor === 'red'   ? 'bg-red-500'   :
-                covColor === 'amber' ? 'bg-amber-500' : 'bg-zinc-400'
+                covColor === 'amber' ? 'bg-amber-500' : 'bg-muted-foreground/50'
               }`}
               style={{ width: `${Math.min(100, bb.npl_coverage_ratio * 50)}%` }}
             />
             {/* 100% safety line */}
-            <div className="absolute top-0 h-full w-px bg-zinc-400 dark:bg-zinc-500" style={{ left: '50%' }} />
+            <div className="absolute top-0 h-full w-px bg-muted-foreground/50" style={{ left: '50%' }} />
           </div>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1 font-mono">
+          <p className="text-[10px] text-muted-foreground mt-1 font-mono">
             coverage = provisions / NPLs · 100% = line
           </p>
         </>
       )}
 
       {bb.research_evidence && (
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-3 italic">
+        <p className="text-[11px] text-muted-foreground mt-3 italic">
           Source: {bb.research_evidence.slice(0, 200)}
         </p>
       )}

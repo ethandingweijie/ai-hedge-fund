@@ -24,7 +24,7 @@ export function MobileBottomNav() {
               href={href}
               className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors
                 ${isActive
-                  ? 'text-blue-500'
+                  ? 'text-brand'
                   : 'text-muted-foreground'
                 }`}
             >

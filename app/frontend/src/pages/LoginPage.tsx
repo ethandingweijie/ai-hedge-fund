@@ -2,7 +2,7 @@
  * LoginPage.tsx — Reimagined UI
  *
  * Minimal-fintech Linear/Stripe aesthetic. Zinc-neutral palette, 1px borders,
- * Equitable green (#2e7d32) reserved for logo. Wires real Google GSI + Apple
+ * Brand green (#297A4B) reserved for logo. Wires real Google GSI + Apple
  * OAuth flows from auth-context into the new button shells.
  */
 
@@ -24,7 +24,7 @@ declare global {
   }
 }
 
-const BRAND = '#2e7d32';
+const BRAND = '#297A4B';
 
 function Leaf({ size = 28 }: { size?: number }) {
   return (
@@ -45,7 +45,7 @@ function Leaf({ size = 28 }: { size?: number }) {
 }
 
 function Divider({ className = '' }: { className?: string }) {
-  return <div className={`h-px bg-zinc-200 dark:bg-zinc-800 ${className}`} />;
+  return <div className={`h-px bg-border ${className}`} />;
 }
 
 function Check({ width = 12, height = 12 }: { width?: number; height?: number }) {
@@ -181,7 +181,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col bg-white dark:bg-zinc-900 relative overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col bg-background relative overflow-hidden">
       {/* ── Hero video background — LIGHT MODE ────────────────────────────────
          Slow-motion looped footage recoloured to Equitable green hue. Hidden
          in dark mode. Muted + playsInline so it autoplays on mobile. */}
@@ -208,7 +208,7 @@ export function LoginPage() {
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, rgba(46,125,50,0.22) 0%, rgba(255,255,255,0.55) 55%, rgba(255,255,255,0.92) 100%)',
+              'linear-gradient(180deg, rgba(41,122,75,0.22) 0%, rgba(238,243,236,0.55) 55%, rgba(238,243,236,0.92) 100%)',
           }}
         />
         {/* Soft vignette so content remains legible over moving footage */}
@@ -216,7 +216,7 @@ export function LoginPage() {
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(255,255,255,0.6) 100%)',
+              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(238,243,236,0.6) 100%)',
           }}
         />
       </div>
@@ -230,7 +230,7 @@ export function LoginPage() {
           className="absolute inset-0 w-full h-full object-cover"
           style={{
             // Footage is already green-themed — just dim + soften saturation
-            // so it sits behind the zinc-900 surface as ambient motion.
+            // so it sits behind the forest surface as ambient motion.
             filter: 'saturate(1.05) brightness(0.85) contrast(1.0)',
             opacity: 0.55,
           }}
@@ -242,12 +242,12 @@ export function LoginPage() {
           preload="auto"
           aria-hidden="true"
         />
-        {/* Dark wash: zinc-900 fades in toward the bottom so the sign-in card sits on a solid surface */}
+        {/* Dark wash: forest bg fades in toward the bottom so the sign-in card sits on a solid surface */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, rgba(24,24,27,0.35) 0%, rgba(24,24,27,0.55) 55%, rgba(24,24,27,0.85) 100%)',
+              'linear-gradient(180deg, rgba(19,28,21,0.35) 0%, rgba(19,28,21,0.55) 55%, rgba(19,28,21,0.85) 100%)',
           }}
         />
         {/* Radial vignette — dark edges, lighter centre */}
@@ -255,7 +255,7 @@ export function LoginPage() {
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(24,24,27,0.7) 100%)',
+              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(19,28,21,0.7) 100%)',
           }}
         />
       </div>
@@ -266,16 +266,16 @@ export function LoginPage() {
           {/* Logo */}
           <div className="flex items-center gap-2.5 mb-10">
             <Leaf size={28} />
-            <span className="text-[17px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            <span className="text-[17px] font-semibold tracking-tight text-foreground">
               Equitable
             </span>
           </div>
 
           {/* Heading */}
-          <h1 className="text-[28px] leading-[1.1] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-[28px] leading-[1.1] font-semibold tracking-tight text-foreground">
             Sign in
           </h1>
-          <p className="text-[14px] text-zinc-500 dark:text-zinc-400 mt-2">
+          <p className="text-[14px] text-muted-foreground mt-2">
             Investment research, on every market that matters.
           </p>
 
@@ -296,7 +296,7 @@ export function LoginPage() {
                 style={{ minHeight: 48 }}
               />
             ) : (
-              <div className="w-full h-12 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[14px] font-medium text-zinc-400 flex items-center justify-center gap-2.5 select-none">
+              <div className="w-full h-12 rounded-lg border border-border bg-card text-[14px] font-medium text-muted-foreground/70 flex items-center justify-center gap-2.5 select-none">
                 Google (configure VITE_GOOGLE_CLIENT_ID)
               </div>
             )}
@@ -306,10 +306,10 @@ export function LoginPage() {
               type="button"
               onClick={handleAppleSignIn}
               disabled={!!loading}
-              className="w-full h-12 rounded-lg bg-zinc-900 dark:bg-white active:bg-zinc-800 dark:active:bg-zinc-200 text-[14px] font-medium text-white dark:text-zinc-900 flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full h-12 rounded-lg bg-foreground active:bg-foreground/85 text-[14px] font-medium text-background flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading === 'apple' ? (
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white dark:border-zinc-400 dark:border-t-zinc-900 rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-background/40 border-t-background rounded-full animate-spin" />
               ) : (
                 <svg width="14" height="17" viewBox="0 0 17 20" fill="currentColor">
                   <path d="M13.87 10.56c-.02-2.17 1.77-3.21 1.85-3.27-1.01-1.48-2.58-1.68-3.14-1.7-1.33-.14-2.6.79-3.28.79-.68 0-1.72-.77-2.83-.75-1.45.02-2.79.85-3.54 2.15C1.1 10.4 2.13 14.7 3.9 17.12c.88 1.27 1.93 2.69 3.3 2.64 1.33-.05 1.83-.86 3.43-.86 1.6 0 2.05.86 3.44.84 1.43-.02 2.33-1.29 3.2-2.57.99-1.47 1.4-2.88 1.43-2.96-.03-.01-2.76-1.06-2.79-4.19l-.04-.46zM11.4 3.6C12.1 2.74 12.57 1.55 12.44.34c-1.04.04-2.3.7-3.04 1.55-.67.77-1.25 2-1.1 3.17 1.16.09 2.34-.59 3.1-1.46z" />
@@ -322,20 +322,20 @@ export function LoginPage() {
           {/* Market chip divider */}
           <div className="mt-8 flex items-center gap-3">
             <Divider className="flex-1" />
-            <span className="text-[11px] text-zinc-400 dark:text-zinc-500 uppercase tracking-[0.1em]">
+            <span className="text-[11px] text-muted-foreground/70 uppercase tracking-[0.1em]">
               US · HK · SGX
             </span>
             <Divider className="flex-1" />
           </div>
 
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center mt-6 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground/70 text-center mt-6 leading-relaxed">
             By signing in you agree to the Terms &amp; Privacy. Your searches are private to your account.
           </p>
         </div>
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 h-10 border-t border-zinc-100 dark:border-zinc-800 bg-white/70 dark:bg-transparent backdrop-blur-sm flex items-center justify-center text-[11px] text-zinc-400 dark:text-zinc-500">
+      <div className="relative z-10 h-10 border-t border-border/60 bg-background/70 dark:bg-transparent backdrop-blur-sm flex items-center justify-center text-[11px] text-muted-foreground/70">
         <span className="inline-flex items-center gap-1.5">
           <Check width={12} height={12} /> Secure · Private · v1.7.1
         </span>

@@ -194,16 +194,16 @@ export function ScreenerPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
+    <div className="min-h-full flex flex-col bg-background">
       {/* Market segmented control */}
       <div className="px-3 pt-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
-        <div className="flex items-center gap-1 p-1 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 rounded-lg">
+        <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/60 rounded-lg">
           {(['US', 'HK', 'SG'] as Market[]).map(m => (
             <button
               key={m}
               onClick={() => { setMarket(m); setSector('All'); }}
               className={`flex-1 h-8 rounded-md text-[11.5px] font-medium transition-colors
-                ${market === m ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm border border-zinc-200 dark:border-zinc-800' : 'text-zinc-500 dark:text-zinc-400 active:text-zinc-800'}`}
+                ${market === m ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground active:text-foreground'}`}
             >
               {MARKET_LABELS[m]}
             </button>
@@ -214,12 +214,12 @@ export function ScreenerPage() {
       {/* Search */}
       <div className="px-3 pt-2.5">
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" width={15} height={15}/>
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={15} height={15}/>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search ticker or name"
-            className="w-full h-10 pl-8 pr-3 text-[13px] rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 focus:bg-white dark:focus:bg-zinc-900 focus:border-zinc-300 dark:focus:border-zinc-700 focus:outline-none focus:ring-2 placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-50"
+            className="w-full h-10 pl-8 pr-3 text-[13px] rounded-lg bg-muted/60 border border-border focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 placeholder:text-muted-foreground/70 text-foreground"
             style={{ ['--tw-ring-color' as any]: `${BRAND}1a` }}
           />
         </div>
@@ -233,8 +233,8 @@ export function ScreenerPage() {
             onClick={() => setSector(s)}
             className={`h-8 px-2.5 text-[11px] rounded-lg border flex items-center shrink-0 transition-colors
               ${sector === s
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-zinc-900 dark:border-zinc-100'
-                : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 active:bg-zinc-50 dark:active:bg-zinc-800'}`}
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-card text-muted-foreground border-border active:bg-muted'}`}
           >
             {s}
           </button>
@@ -242,21 +242,21 @@ export function ScreenerPage() {
         <button
           onClick={() => setVgpmOnly(v => !v)}
           className={`h-8 px-2.5 text-[11px] rounded-lg border flex items-center gap-1 shrink-0 transition-colors
-            ${vgpmOnly ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[#2e7d32] dark:text-[#4ea354]' : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400'}`}
+            ${vgpmOnly ? 'bg-brand/10 border-brand/30 text-brand' : 'bg-card border-border text-muted-foreground'}`}
         >
           <Check width={11} height={11}/> VGPM only
         </button>
       </div>
 
       {/* Sort tabs */}
-      <div className="border-b border-zinc-100 dark:border-zinc-800 mt-2">
+      <div className="border-b border-border/60 mt-2">
         <div className="px-3 flex items-center gap-1 overflow-x-auto phone-scroll">
           {SORTS.map(s => (
             <button
               key={s.id}
               onClick={() => setSortKey(s.id)}
               className={`h-9 px-2.5 text-[11.5px] font-medium border-b-[2px] -mb-px transition-colors shrink-0
-                ${sortKey === s.id ? 'text-zinc-900 dark:text-zinc-50 border-[#2e7d32]' : 'text-zinc-500 dark:text-zinc-400 border-transparent active:text-zinc-800'}`}
+                ${sortKey === s.id ? 'text-foreground border-brand' : 'text-muted-foreground border-transparent active:text-foreground'}`}
             >
               Sort: {s.label}
             </button>
@@ -268,31 +268,31 @@ export function ScreenerPage() {
       <div className="px-3 pt-2 pb-6 flex-1">
         <div className="flex items-center justify-between px-1 mb-1.5">
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
               Top candidates
             </span>
             {lastRefreshed && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                <span className="w-1 h-1 rounded-full bg-[#2e7d32] dark:bg-[#4ea354]"/>
+              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
+                <span className="w-1 h-1 rounded-full bg-brand"/>
                 updated {lastRefreshed.toLocaleTimeString()}
               </span>
             )}
           </div>
-          <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{rows.length} · {market}</span>
+          <span className="text-[10px] text-muted-foreground/70">{rows.length} · {market}</span>
         </div>
 
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden shadow-sm">
+        <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
           {/* Header row */}
-          <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-800/40 grid grid-cols-12 items-center text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <div className="px-3 py-2 border-b border-border/60 bg-muted/50 grid grid-cols-12 items-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
             <span className="col-span-5">Ticker · Sector</span>
             <span className="col-span-2 text-right">Score</span>
             <span className="col-span-5 text-right pr-1">V · G · P · M</span>
           </div>
 
           {loading && !data ? (
-            <div className="px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500">Loading…</div>
+            <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70">Loading…</div>
           ) : rows.length === 0 ? (
-            <div className="px-3 py-10 text-center text-[12px] text-zinc-400 dark:text-zinc-500">
+            <div className="px-3 py-10 text-center text-[12px] text-muted-foreground/70">
               No matches. Adjust filters.
             </div>
           ) : (
@@ -300,40 +300,40 @@ export function ScreenerPage() {
               <SwipeRow
                 key={r.symbol}
                 onClick={() => handleOpen(r.symbol)}
-                className={i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : ''}
+                className={i > 0 ? 'border-t border-border/60' : ''}
                 actions={[
                   {
                     icon: <Search width={18} height={18} strokeWidth={2}/>,
                     label: 'Analyse',
-                    color: '#3b82f6',
+                    color: '#163300',
                     onClick: () => handleOpen(r.symbol),
                   },
                   {
                     icon: <Bookmark width={18} height={18} strokeWidth={2}/>,
                     label: 'Watch',
-                    color: '#22c55e',
+                    color: '#297A4B',
                     onClick: () => handleWatch(r.symbol),
                   },
                 ]}
               >
-                <div className="w-full text-left grid grid-cols-12 items-center gap-2 px-3 py-2.5 active:bg-zinc-50 dark:active:bg-zinc-800 transition-colors">
+                <div className="w-full text-left grid grid-cols-12 items-center gap-2 px-3 py-2.5 active:bg-muted/60 transition-colors">
                   <div className="col-span-5 min-w-0">
-                    <div className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums truncate">{r.symbol}</div>
-                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{r.companyName}</div>
-                    <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-zinc-400 dark:text-zinc-500">
+                    <div className="text-[12.5px] font-semibold text-foreground tabular-nums truncate">{r.symbol}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">{r.companyName}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
                       <span className="truncate">{r.sector || '—'}</span>
-                      <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                      <span className="text-muted-foreground/50">·</span>
                       <span className="tabular-nums">{formatMarketCap(r.marketCap)}</span>
                     </div>
                   </div>
                   <div className="col-span-2 flex flex-col items-end">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">
+                      <span className="text-[14px] font-semibold text-foreground tabular-nums">
                         {r.composite_score ?? '—'}
                       </span>
-                      <span className="text-[9px] text-zinc-400 dark:text-zinc-500">/100</span>
+                      <span className="text-[9px] text-muted-foreground/70">/100</span>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden mt-1">
+                    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mt-1">
                       <div
                         className="h-full rounded-full"
                         style={{
@@ -355,7 +355,7 @@ export function ScreenerPage() {
           )}
         </div>
 
-        <div className="mt-3 px-1 text-[10.5px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+        <div className="mt-3 px-1 text-[10.5px] text-muted-foreground/70 leading-relaxed">
           Universe: {data?.total ?? 0} stocks · Composite = 0.30·V + 0.25·G + 0.25·P + 0.20·M, sector-neutralised.
         </div>
       </div>

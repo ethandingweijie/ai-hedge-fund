@@ -41,7 +41,7 @@ export function ResearchNav() {
                   flex items-center gap-2 px-4 py-3 text-[17px] font-medium
                   border-b-2 transition-colors
                   ${isActive
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                    ? 'border-brand text-brand'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                   }
                 `}

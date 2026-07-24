@@ -4,8 +4,8 @@
  * Pipeline-forward analyst view for Biopharma tickers.
  *
  * Design DNA matches REITValuationPanel + BankValuationPanel:
- *   - uppercase tracking-[0.2em] section headings in zinc-500/400
- *   - `rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4`
+ *   - uppercase tracking-[0.2em] section headings in muted-foreground
+ *   - `rounded-2xl border border-border bg-card p-4`
  *   - functional colors only (green-600 / red-500 / blue-500); phase chips are
  *     the one exception because they map to an ISO phase ontology where each
  *     colour signals regulatory risk (Approved = green → Ph1 = red).
@@ -80,11 +80,11 @@ const PHASE_COLORS: Record<string, string> = {
   ph3:         'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400',
   ph2:         'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
   ph1:         'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
-  preclinical: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
+  preclinical: 'bg-muted text-muted-foreground',
 };
 
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400';
+  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 
@@ -184,15 +184,15 @@ function RNPVHeader({ dcfRange, currentPrice, sym }: {
     : null;
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+    <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-baseline justify-between">
         <p className={SECTION_HEADING_CLS}>Pipeline rNPV / share</p>
-        <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+        <span className="text-[10px] text-muted-foreground">
           base case · WACC {fmtPct(dcfRange.wacc, 1)}
         </span>
       </div>
       <div className="mt-2 flex items-baseline justify-between gap-2">
-        <p className="text-3xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50">
+        <p className="text-3xl font-bold tabular-nums text-foreground">
           {fmtMoney(iv, sym)}
         </p>
         {upside != null && (
@@ -203,15 +203,15 @@ function RNPVHeader({ dcfRange, currentPrice, sym }: {
       </div>
       <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
         <div>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Pipeline + Legacy</p>
-          <p className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pipeline + Legacy</p>
+          <p className="font-semibold tabular-nums text-foreground">
             {fmtMoney(pipelineAndLegacyPerShare, sym)}/sh
           </p>
         </div>
         <div>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Net Cash</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Net Cash</p>
           <p className={`font-semibold tabular-nums ${
-            (netCashPerShare ?? 0) > 0 ? 'text-green-600' : 'text-zinc-900 dark:text-zinc-50'
+            (netCashPerShare ?? 0) > 0 ? 'text-green-600' : 'text-foreground'
           }`}>
             {fmtMoney(netCashPerShare, sym)}/sh
           </p>
@@ -228,9 +228,9 @@ function PipelineTable({ assets, sym }: {
 }) {
   if (!assets || assets.length === 0) {
     return (
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+      <div className="rounded-2xl border border-border bg-card p-4">
         <p className={SECTION_HEADING_CLS}>Pipeline Assets</p>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 italic py-6 text-center">
+        <p className="text-xs text-muted-foreground italic py-6 text-center">
           Deep-research extractor didn't surface pipeline assets. Re-run with fresh research.
         </p>
       </div>
@@ -247,17 +247,17 @@ function PipelineTable({ assets, sym }: {
   const totalRnpv = ranked.reduce((s, r) => s + r.rnpv_bn, 0);
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+    <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-3">
         <p className={SECTION_HEADING_CLS}>Pipeline Assets</p>
-        <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+        <span className="text-[10px] text-muted-foreground">
           {ranked.length} assets · {sym}{totalRnpv.toFixed(2)}B rNPV
         </span>
       </div>
       <div className="overflow-x-auto -mx-4 px-4">
         <table className="w-full text-xs border-collapse" style={{ minWidth: '440px' }}>
           <thead>
-            <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
+            <tr className="border-b border-border text-muted-foreground">
               <th className="text-left py-2 pr-2 font-semibold">Asset</th>
               <th className="text-left py-2 pr-2 font-semibold">Phase</th>
               <th className="text-right py-2 pr-2 font-semibold">Peak</th>
@@ -270,17 +270,17 @@ function PipelineTable({ assets, sym }: {
               const phase = normPhase(asset.phase);
               const chipCls = PHASE_COLORS[phase] ?? PHASE_COLORS.preclinical;
               return (
-                <tr key={`${asset.name}-${i}`} className="border-b border-zinc-100 dark:border-zinc-800/50">
+                <tr key={`${asset.name}-${i}`} className="border-b border-border/50">
                   <td className="py-2 pr-2">
-                    <div className="font-semibold text-zinc-900 dark:text-zinc-50">
+                    <div className="font-semibold text-foreground">
                       {asset.name}
                       {asset.partner && (
-                        <span className="text-[9px] text-zinc-500 dark:text-zinc-400 ml-1">
+                        <span className="text-[9px] text-muted-foreground ml-1">
                           w/ {asset.partner}
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                    <div className="text-[10px] text-muted-foreground truncate">
                       {asset.indication ?? '—'}
                       {asset.therapeutic_area && ` · ${asset.therapeutic_area.replace(/_/g, ' ')}`}
                     </div>
@@ -290,30 +290,30 @@ function PipelineTable({ assets, sym }: {
                       {phaseLabel(asset.phase)}
                     </span>
                   </td>
-                  <td className="py-2 pr-2 text-right font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
+                  <td className="py-2 pr-2 text-right font-mono tabular-nums text-foreground">
                     {(() => { const pk = peakBn(asset); return pk != null ? `${sym}${pk.toFixed(1)}B` : '—'; })()}
                   </td>
-                  <td className="py-2 pr-2 text-right font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
+                  <td className="py-2 pr-2 text-right font-mono tabular-nums text-foreground">
                     {(pos * 100).toFixed(0)}%
                   </td>
-                  <td className="py-2 text-right font-mono tabular-nums font-semibold text-zinc-900 dark:text-zinc-50">
+                  <td className="py-2 text-right font-mono tabular-nums font-semibold text-foreground">
                     {sym}{rnpv_bn.toFixed(2)}B
                   </td>
                 </tr>
               );
             })}
-            <tr className="border-t-2 border-zinc-300 dark:border-zinc-700 font-semibold bg-zinc-50 dark:bg-zinc-900/50">
-              <td className="py-2 pr-2 text-zinc-900 dark:text-zinc-50" colSpan={4}>
+            <tr className="border-t-2 border-border font-semibold bg-muted/50">
+              <td className="py-2 pr-2 text-foreground" colSpan={4}>
                 Total rNPV
               </td>
-              <td className="py-2 text-right font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
+              <td className="py-2 text-right font-mono tabular-nums text-foreground">
                 {sym}{totalRnpv.toFixed(2)}B
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-3 font-mono leading-relaxed">
+      <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
         rNPV = Peak × PoS × op_margin × ramp_profile × discount · PoS from BIO 2011-2020 × TA multiplier
       </p>
     </div>
@@ -371,9 +371,9 @@ function CatalystsTimeline({ assets, sym }: {
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+    <div className="rounded-2xl border border-border bg-card p-4">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>Upcoming Catalysts</p>
-      <ol className="relative border-l-2 border-zinc-200 dark:border-zinc-800 ml-2">
+      <ol className="relative border-l-2 border-border ml-2">
         {catalysts.map((c, i) => {
           const rnpv_bn = riskAdjNpvBn(c.asset);
           const peak_bn = peakBn(c.asset);
@@ -383,19 +383,19 @@ function CatalystsTimeline({ assets, sym }: {
                 className={`absolute w-3 h-3 ${colorCls[c.color]} rounded-full -left-[23px] mt-1`}
               ></div>
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-50">
+                <span className="text-xs font-semibold text-foreground">
                   {c.asset.launch_year ?? 'TBD'}
                 </span>
                 <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${chipCls[c.color]}`}>
                   {c.eventType}
                 </span>
               </div>
-              <p className="text-sm text-zinc-800 dark:text-zinc-200 mt-1">
+              <p className="text-sm text-foreground mt-1">
                 <span className="font-semibold">{c.asset.name}</span>
                 {c.asset.indication && ` — ${c.asset.indication}`}
               </p>
               {peak_bn != null && (
-                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                <p className="text-[10px] text-muted-foreground mt-0.5">
                   Peak {sym}{peak_bn.toFixed(1)}B · driving {sym}{rnpv_bn.toFixed(2)}B rNPV
                   {c.asset.partner && ` · w/ ${c.asset.partner}`}
                 </p>
@@ -440,48 +440,48 @@ function RDProductivity({
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+    <div className="rounded-2xl border border-border bg-card p-4">
       <p className={`${SECTION_HEADING_CLS} mb-3`}>R&D &amp; Capital</p>
       <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
         {rdRatio != null ? (
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">R&amp;D / Revenue</span>
-            <span className={`font-semibold tabular-nums ${rdRatio > 0.5 ? 'text-red-500' : rdRatio > 0.25 ? 'text-amber-500' : 'text-zinc-900 dark:text-zinc-50'}`}>
+            <span className="text-muted-foreground">R&amp;D / Revenue</span>
+            <span className={`font-semibold tabular-nums ${rdRatio > 0.5 ? 'text-red-500' : rdRatio > 0.25 ? 'text-amber-500' : 'text-foreground'}`}>
               {(rdRatio * 100).toFixed(0)}%
             </span>
           </div>
         ) : null}
         {rd_spend != null ? (
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">R&amp;D spend</span>
-            <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+            <span className="text-muted-foreground">R&amp;D spend</span>
+            <span className="font-semibold tabular-nums text-foreground">
               {fmtBn(rdSpendBn, sym)}
             </span>
           </div>
         ) : null}
         <div className="flex items-center justify-between">
-          <span className="text-zinc-500 dark:text-zinc-400">Net cash</span>
+          <span className="text-muted-foreground">Net cash</span>
           <span className={`font-semibold tabular-nums ${netCashBn > 0 ? 'text-green-600' : 'text-red-500'}`}>
             {netCashBn > 0 ? '+' : ''}{fmtBn(netCashBn, sym)}
           </span>
         </div>
         {runwayYears != null ? (
           <div className="flex items-center justify-between">
-            <span className="text-zinc-500 dark:text-zinc-400">Runway</span>
+            <span className="text-muted-foreground">Runway</span>
             <span className={`font-semibold tabular-nums ${runwayYears < 2 ? 'text-red-500' : runwayYears < 3 ? 'text-amber-500' : 'text-green-600'}`}>
               {runwayYears.toFixed(1)}y
             </span>
           </div>
         ) : null}
         <div className="flex items-center justify-between">
-          <span className="text-zinc-500 dark:text-zinc-400">Shares out</span>
-          <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <span className="text-muted-foreground">Shares out</span>
+          <span className="font-semibold tabular-nums text-foreground">
             {shares > 0 ? `${(shares / 1e6).toFixed(1)}M` : '—'}
           </span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-zinc-500 dark:text-zinc-400">WACC</span>
-          <span className="font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+          <span className="text-muted-foreground">WACC</span>
+          <span className="font-semibold tabular-nums text-foreground">
             {fmtPct(dcfRange.wacc, 1)}
           </span>
         </div>

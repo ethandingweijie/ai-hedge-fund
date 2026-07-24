@@ -174,7 +174,7 @@ export function LiveSearchPanel({ streamEvents, liveData, thinking: thinkingProp
             <div className="space-y-0.5 mb-1">
               {searches.map((sq, i) => (
                 <div key={i} className="flex items-center gap-1.5">
-                  <Search size={11} className="text-blue-400/70 shrink-0" />
+                  <Search size={11} className="text-brand/70 shrink-0" />
                   <span className="text-[11px] text-foreground/80 font-medium">{sq.query}</span>
                 </div>
               ))}

@@ -212,7 +212,7 @@ export function classifyTechSubtype(
 
 // Provider color utility for consistent styling across components
 export function getProviderColor(_provider: string): string {
-  return 'bg-gray-600/20 text-primary border-gray-600/40';
+  return 'bg-muted text-foreground border-border';
   // switch (provider.toLowerCase()) {
   //   case 'anthropic':
   //     return 'bg-orange-600/20 text-orange-300 border-orange-600/40';

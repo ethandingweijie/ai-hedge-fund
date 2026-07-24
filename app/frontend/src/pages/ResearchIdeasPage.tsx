@@ -95,16 +95,18 @@ export function ResearchIdeasPage() {
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
   const isDesktop = mode === 'desktop';
-  // Desktop/iPad size tokens — larger cards + fonts (mobile phone-frame unchanged).
+  // Desktop/iPad size tokens — larger cards + fonts. Sizes deliberately
+  // roomy (Wise-style): generous paddings, ≥11px minimum type, relaxed
+  // leading, so the catalogue reads airy rather than data-dense.
   const sz = {
-    pad: isDesktop ? 'p-6' : 'p-4',
-    title: isDesktop ? 'text-2xl' : 'text-base',
-    blurb: isDesktop ? 'text-[15px] leading-relaxed' : 'text-xs leading-relaxed',
-    meta: isDesktop ? 'text-[13px]' : 'text-[11px]',
-    badge: isDesktop ? 'text-[11px]' : 'text-[10px]',
-    preview: isDesktop ? 'text-[14px]' : 'text-[11px]',
-    previewLabel: isDesktop ? 'text-[11px]' : 'text-[9px]',
-    chip: isDesktop ? 'text-[11px]' : 'text-[9px]',
+    pad: isDesktop ? 'p-7' : 'p-5',
+    title: isDesktop ? 'text-2xl' : 'text-lg',
+    blurb: isDesktop ? 'text-base leading-relaxed' : 'text-[13.5px] leading-relaxed',
+    meta: isDesktop ? 'text-[14px]' : 'text-[12px]',
+    badge: isDesktop ? 'text-[12px]' : 'text-[11px]',
+    preview: isDesktop ? 'text-[15px]' : 'text-[12.5px]',
+    previewLabel: isDesktop ? 'text-[12px]' : 'text-[10.5px]',
+    chip: isDesktop ? 'text-[12px]' : 'text-[10.5px]',
   };
   const [ideas, setIdeas] = useState<SW46IdeaMeta[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,7 +291,7 @@ export function ResearchIdeasPage() {
             "Idea of the Day" hero card spans both columns. `items-stretch` makes
             the two cards in a row share the tallest height so their outlines
             line up (matters at iPad widths where titles wrap to two lines). */}
-        <div className={isDesktop ? 'grid grid-cols-1 lg:grid-cols-2 gap-3 items-stretch' : 'space-y-3'}>
+        <div className={isDesktop ? 'grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch' : 'space-y-4'}>
           {ideas.map((idea) => {
             const isAi = idea.id === 'idea_of_the_day';
             const sides = ideaSides(idea.id);
@@ -307,10 +309,10 @@ export function ResearchIdeasPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       {isAi && (
                         <span
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-900 dark:text-purple-100 text-[9px] font-bold uppercase tracking-wider"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-500/30 text-purple-900 dark:text-purple-100 text-[11px] font-bold uppercase tracking-wider"
                           title="Generated daily by Qwen3.6-plus with native web search"
                         >
                           <Sparkles size={10} />
@@ -320,7 +322,7 @@ export function ResearchIdeasPage() {
                       <span className={`${sz.title} font-semibold text-foreground`}>{idea.name}</span>
                       {isAi && (idea.ticker_count ?? 0) > 0 && (
                         <span
-                          className={`${sz.badge} px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-800 dark:text-purple-200 font-semibold uppercase tracking-wider`}
+                          className={`${sz.badge} px-2 py-1 rounded bg-purple-500/20 text-purple-800 dark:text-purple-200 font-semibold uppercase tracking-wider`}
                           title="Number of ideas you've shortlisted"
                         >
                           {idea.ticker_count} shortlisted
@@ -332,19 +334,19 @@ export function ResearchIdeasPage() {
                         stock count regardless of how long the title wraps
                         (mobile and desktop alike). */}
                     {!isAi && (
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <div className="flex items-center gap-2 mb-2.5 flex-wrap">
                         {sides.map((s) => (
-                          <span key={s.label} className={`${sz.badge} px-1.5 py-0.5 rounded font-bold uppercase tracking-wider ${s.cls}`}>
+                          <span key={s.label} className={`${sz.badge} px-2 py-1 rounded font-bold uppercase tracking-wider ${s.cls}`}>
                             {s.label}
                           </span>
                         ))}
-                        <span className={`${sz.badge} px-1.5 py-0.5 rounded bg-primary/10 text-primary font-semibold uppercase tracking-wider`}>
+                        <span className={`${sz.badge} px-2 py-1 rounded bg-primary/10 text-primary font-semibold uppercase tracking-wider`}>
                           {idea.ticker_count} stocks
                         </span>
                       </div>
                     )}
-                    <p className={`${sz.blurb} text-muted-foreground mb-2`}>{idea.blurb}</p>
-                    <div className={`flex items-center gap-4 ${sz.meta} text-muted-foreground mb-2 flex-wrap`}>
+                    <p className={`${sz.blurb} text-muted-foreground mb-3`}>{idea.blurb}</p>
+                    <div className={`flex items-center gap-4 ${sz.meta} text-muted-foreground mb-3 flex-wrap`}>
                       <span>
                         {isAi ? 'Last idea: ' : 'Last run: '}
                         <span className="font-mono">{formatRunTime(idea.last_run_at)}</span>
@@ -384,13 +386,13 @@ export function ResearchIdeasPage() {
                         catalyst preview. Mirrors the detail-page format so
                         the card meaningfully summarises the idea at a glance. */}
                     {isAi && idea.latest_idea_ticker && (
-                      <div className="mt-2 pt-2 border-t border-purple-300/40 dark:border-purple-500/20 space-y-1.5">
+                      <div className="mt-3 pt-3 border-t border-purple-300/40 dark:border-purple-500/20 space-y-2.5">
                         {/* Mode + region + vehicle badges */}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {idea.latest_idea_mode && (
                             <span
                               className={
-                                'px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ' +
+                                'px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider ' +
                                 (idea.latest_idea_mode === 'thematic_geographic'
                                   ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200'
                                   : idea.latest_idea_mode === 'thematic_sector'
@@ -404,12 +406,12 @@ export function ResearchIdeasPage() {
                             </span>
                           )}
                           {idea.latest_idea_region && (
-                            <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 text-[9px] font-semibold">
+                            <span className="px-2 py-1 rounded bg-muted text-foreground/80 text-[11px] font-semibold">
                               {idea.latest_idea_region}
                             </span>
                           )}
                           {idea.latest_idea_vehicle && idea.latest_idea_vehicle !== 'stock' && (
-                            <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 text-[9px] font-semibold uppercase">
+                            <span className="px-2 py-1 rounded bg-muted text-foreground/80 text-[11px] font-semibold uppercase">
                               {idea.latest_idea_vehicle}
                             </span>
                           )}
@@ -417,35 +419,35 @@ export function ResearchIdeasPage() {
 
                         {/* Ticker + company line */}
                         <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className="font-mono text-sm font-bold text-purple-900 dark:text-purple-100">
+                          <span className="font-mono text-base font-bold text-purple-900 dark:text-purple-100">
                             {idea.latest_idea_ticker}
                           </span>
                           {idea.latest_idea_company && (
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[180px]">
+                            <span className="text-[12px] text-muted-foreground truncate max-w-[180px]">
                               {idea.latest_idea_company}
                             </span>
                           )}
-                          <span className="text-[10px] uppercase tracking-wider text-purple-700/70 dark:text-purple-300/70 ml-auto">
+                          <span className="text-[12px] uppercase tracking-wider text-purple-700/70 dark:text-purple-300/70 ml-auto">
                             Today's hypothesis
                           </span>
                         </div>
 
                         {/* Theme line for thematic modes */}
                         {idea.latest_idea_theme && (
-                          <p className="text-[10px] text-amber-800 dark:text-amber-300 leading-snug line-clamp-2">
+                          <p className="text-[12px] text-amber-800 dark:text-amber-300 leading-relaxed line-clamp-2">
                             <span className="font-semibold">Theme:</span>{' '}
                             {idea.latest_idea_theme}
                           </p>
                         )}
 
                         {/* Hypothesis */}
-                        <p className="text-[11px] text-foreground/80 italic leading-snug line-clamp-3">
+                        <p className="text-[13px] text-foreground/80 italic leading-relaxed line-clamp-3">
                           {idea.latest_idea_hypothesis}
                         </p>
 
                         {/* Catalyst preview */}
                         {idea.latest_idea_catalyst && (
-                          <p className="text-[10px] text-cyan-800 dark:text-cyan-300 leading-snug line-clamp-2">
+                          <p className="text-[12px] text-cyan-800 dark:text-cyan-300 leading-relaxed line-clamp-2">
                             <span className="font-semibold">Catalyst:</span>{' '}
                             {idea.latest_idea_catalyst}
                           </p>
@@ -454,8 +456,8 @@ export function ResearchIdeasPage() {
                     )}
 
                     {isAi && !idea.latest_idea_ticker && (
-                      <div className="mt-2 pt-2 border-t border-purple-300/40 dark:border-purple-500/20">
-                        <p className="text-[11px] text-muted-foreground italic">
+                      <div className="mt-3 pt-3 border-t border-purple-300/40 dark:border-purple-500/20">
+                        <p className="text-[13px] text-muted-foreground italic">
                           No idea generated yet. Click the + button to spin one up.
                         </p>
                       </div>
@@ -463,13 +465,13 @@ export function ResearchIdeasPage() {
 
                     {/* SW46 top-3 picks preview */}
                     {idea.id === 'sw46' && topPicks.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-border">
+                      <div className="mt-3 pt-3 border-t border-border">
                         <div className={`${sz.previewLabel} uppercase tracking-wider text-muted-foreground mb-1.5`}>Top 3 ranked</div>
                         <div className="flex flex-wrap gap-1.5">
                           {topPicks.map((t) => (
                             <div
                               key={t.ticker}
-                              className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`}
+                              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`}
                               title={t.justification ?? ''}
                             >
                               <span className="font-mono font-bold text-foreground">{t.ticker}</span>
@@ -488,7 +490,7 @@ export function ResearchIdeasPage() {
                         the hero-card spec: "indicate the top 5 for growth and top
                         5 for dividend" under the main card. */}
                     {idea.id === 'hk50' && ((idea.top5_growth?.length ?? 0) > 0 || (idea.top5_dividend?.length ?? 0) > 0) && (
-                      <div className="mt-2 pt-2 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Top 5 · Growth</div>
                           <div className="space-y-1">
@@ -524,7 +526,7 @@ export function ResearchIdeasPage() {
                         Aggregate reflects the latest force-rescore / qualitative refresh.
                         Falls back to composite × 12.5 for tickers without qual yet (same scale). */}
                     {idea.id === 'complacency' && topComplacency.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-border">
+                      <div className="mt-3 pt-3 border-t border-border">
                         <div className={`${sz.previewLabel} uppercase tracking-wider text-muted-foreground mb-1.5`}>
                           Top {topComplacency.length} by aggregate score
                           <span className="ml-1 normal-case text-muted-foreground/70">
@@ -538,7 +540,7 @@ export function ResearchIdeasPage() {
                             return (
                               <div
                                 key={t.ticker}
-                                className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`}
+                                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`}
                                 title={[
                                   `${t.ticker} — ${t.name}`,
                                   `Verdict: ${t.verdict}  ·  Composite ${t.composite.toFixed(1)}/8`,
@@ -557,7 +559,7 @@ export function ResearchIdeasPage() {
                           })}
                         </div>
                         {topComplacency.some((t) => t.aggregate_score == null) && (
-                          <p className="mt-1 text-[9px] text-muted-foreground/70 italic">
+                          <p className="mt-1 text-[11px] text-muted-foreground/70 italic">
                             * quant-only score (qual not yet computed —
                             cohort row's aggregate_score is null;
                             force-rescore the ticker to populate it)
@@ -576,7 +578,7 @@ export function ResearchIdeasPage() {
                        (idea.top_short_sectors?.length ?? 0) > 0 ||
                        (idea.lead_long_tickers?.length ?? 0) > 0 ||
                        (idea.lead_short_tickers?.length ?? 0) > 0) && (
-                      <div className="mt-2 pt-2 border-t border-border space-y-2.5">
+                      <div className="mt-3 pt-3 border-t border-border space-y-2.5">
                         {/* Sector tailwinds */}
                         {((idea.top_long_sectors?.length ?? 0) > 0 || (idea.top_short_sectors?.length ?? 0) > 0) && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -584,28 +586,28 @@ export function ResearchIdeasPage() {
                               <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Long sector tailwinds</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(idea.top_long_sectors ?? []).map((s) => (
-                                  <div key={s.etf} className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
+                                  <div key={s.etf} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
                                     <span className="font-mono font-bold text-foreground">{s.etf}</span>
                                     <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${momentumColor(s.composite)}`}>
                                       {s.composite != null ? (s.composite > 0 ? `+${s.composite.toFixed(0)}` : s.composite.toFixed(0)) : '—'}
                                     </span>
                                   </div>
                                 ))}
-                                {(idea.top_long_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[10px] italic">none</span>}
+                                {(idea.top_long_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[12px] italic">none</span>}
                               </div>
                             </div>
                             <div>
                               <div className={`${sz.previewLabel} uppercase tracking-wider text-red-600 dark:text-red-400 mb-1.5`}>Short sector tailwinds</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(idea.top_short_sectors ?? []).map((s) => (
-                                  <div key={s.etf} className={`flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
+                                  <div key={s.etf} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
                                     <span className="font-mono font-bold text-foreground">{s.etf}</span>
                                     <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${momentumColor(s.composite)}`}>
                                       {s.composite != null ? s.composite.toFixed(0) : '—'}
                                     </span>
                                   </div>
                                 ))}
-                                {(idea.top_short_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[10px] italic">none</span>}
+                                {(idea.top_short_sectors?.length ?? 0) === 0 && <span className="text-muted-foreground/60 text-[12px] italic">none</span>}
                               </div>
                             </div>
                           </div>
@@ -619,7 +621,7 @@ export function ResearchIdeasPage() {
                                 {(idea.lead_long_tickers ?? []).map((t) => (
                                   <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
                                     <span className="font-mono font-bold text-foreground w-12">{t.ticker}</span>
-                                    {t.sector && <span className={`text-[10px] truncate ${t.sector_aligned ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
+                                    {t.sector && <span className={`text-[12px] truncate ${t.sector_aligned ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
                                     <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ml-auto ${momentumColor(t.composite)}`}>
                                       {t.composite != null ? (t.composite > 0 ? `+${t.composite.toFixed(0)}` : t.composite.toFixed(0)) : '—'}
                                     </span>
@@ -633,7 +635,7 @@ export function ResearchIdeasPage() {
                                 {(idea.lead_short_tickers ?? []).map((t) => (
                                   <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
                                     <span className="font-mono font-bold text-foreground w-12">{t.ticker}</span>
-                                    {t.sector && <span className={`text-[10px] truncate ${t.sector_aligned ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
+                                    {t.sector && <span className={`text-[12px] truncate ${t.sector_aligned ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
                                     <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ml-auto ${momentumColor(t.composite)}`}>
                                       {t.composite != null ? t.composite.toFixed(0) : '—'}
                                     </span>

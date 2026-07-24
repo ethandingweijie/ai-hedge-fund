@@ -6,41 +6,42 @@
   :root {
     --safe-area-top: env(safe-area-inset-top);
     --safe-area-bottom: env(safe-area-inset-bottom);
-    --background: 0 0% 94%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --background: 100 20% 95%;      /* ~#EEF3EC warm cream page bg */
+    --foreground: 100 40% 10%;      /* ~#122413 deep forest text */
+    --card: 0 0% 100%;              /* white cards on cream bg */
+    --card-foreground: 100 40% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 100 40% 10%;
+    --primary: 96 72% 67%;          /* ~#9FE870 Wise green (button fills) */
+    --primary-foreground: 100 45% 10%; /* dark forest text on green buttons */
+    --brand: 140 45% 32%;           /* ~#297A4B mid green: text/links/active icons */
+    --secondary: 90 15% 91%;
+    --secondary-foreground: 100 40% 12%;
+    --muted: 90 15% 91%;
+    --muted-foreground: 100 10% 40%;
+    --accent: 96 55% 90%;
+    --accent-foreground: 100 40% 12%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 85%;
-    --node-border: 0 0% 88%;
-    --node-border-hover: 0 0% 75%;
-    --node-border-selected: 0 0% 10%;
-    --status-border: 0 0% 85%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.5rem;
-    --sidebar-background: 0 0% 98%;
+    --border: 90 12% 85%;
+    --node-border: 90 12% 85%;
+    --node-border-hover: 90 10% 72%;
+    --node-border-selected: 140 45% 32%;
+    --status-border: 90 12% 85%;
+    --input: 90 12% 88%;
+    --ring: 96 65% 50%;
+    --radius: 1rem;
+    --sidebar-background: 100 22% 97%;
     --panel-bg: 0 0% 100%;
     --node-bg: 0 0% 100%;
-    
+
     /* Hover colors for light theme */
-    --hover-background: rgb(156 163 175 / 0.3); /* gray-400/30 */
-    --hover-foreground: 0 0% 15%;
-    
+    --hover-background: rgb(159 232 112 / 0.18); /* wise green tint */
+    --hover-foreground: 100 40% 12%;
+
     /* Active/selected colors for light theme */
-    --active-background: rgb(229 231 235 / 0.8); /* gray-200/80 */
-    --active-foreground: 0 0% 10%;
+    --active-background: rgb(159 232 112 / 0.3);
+    --active-foreground: 100 45% 10%;
     
     /* Ramp Grey Colors */
     --ramp-grey-100: #f5f5f5;
@@ -74,49 +75,50 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-foreground: 100 25% 22%;
+    --sidebar-primary: 140 45% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 96 55% 90%;
+    --sidebar-accent-foreground: 100 40% 12%;
+    --sidebar-border: 90 12% 87%;
+    --sidebar-ring: 96 65% 50%;
   }
 
   .dark {
-    /* Claude-style dark: warm charcoal backgrounds, soft off-white text */
-    --background: 224 13% 13%;        /* #1e2028  main page bg  */
-    --foreground: 220 9% 89%;         /* #e2e4ea  primary text  */
-    --card: 224 12% 17%;              /* #252830  card surface  */
-    --card-foreground: 220 9% 89%;
-    --popover: 224 12% 17%;
-    --popover-foreground: 220 9% 89%;
-    --primary: 220 9% 89%;            /* used for filled buttons */
-    --primary-foreground: 224 13% 13%;
-    --secondary: 224 10% 22%;         /* #323540  subtle surface */
-    --secondary-foreground: 220 9% 89%;
-    --muted: 224 10% 22%;
-    --muted-foreground: 220 7% 58%;   /* #8c909c  de-emphasised */
-    --accent: 224 10% 22%;
-    --accent-foreground: 220 9% 89%;
+    /* Wise-inspired dark: deep forest backgrounds, soft cream text */
+    --background: 150 18% 9%;         /* ~#131C15 near-black forest */
+    --foreground: 90 20% 92%;
+    --card: 150 15% 13%;
+    --card-foreground: 90 20% 92%;
+    --popover: 150 15% 13%;
+    --popover-foreground: 90 20% 92%;
+    --primary: 96 60% 58%;            /* deeper green for contrast on dark bg */
+    --primary-foreground: 100 45% 8%;
+    --brand: 96 55% 68%;              /* lighter green for text on dark bg */
+    --secondary: 150 12% 18%;
+    --secondary-foreground: 90 20% 92%;
+    --muted: 150 12% 18%;
+    --muted-foreground: 90 8% 60%;
+    --accent: 150 20% 20%;
+    --accent-foreground: 90 20% 92%;
     --destructive: 0 62.8% 40%;
-    --destructive-foreground: 220 9% 89%;
-    --border: 224 9% 26%;             /* #3a3e4a  dividers      */
-    --node-border: 224 9% 26%;
-    --node-border-hover: 224 8% 38%;
-    --node-border-selected: 220 9% 80%;
-    --status-border: 224 9% 26%;
-    --input: 224 10% 22%;
-    --ring: 220 7% 65%;
-    --panel-bg: 224 12% 17%;
-    --node-bg: 224 12% 17%;
-    --sidebar-background: 224 13% 11%;  /* slightly darker sidebar */
+    --destructive-foreground: 90 20% 92%;
+    --border: 150 10% 22%;
+    --node-border: 150 10% 22%;
+    --node-border-hover: 150 8% 32%;
+    --node-border-selected: 96 55% 68%;
+    --status-border: 150 10% 22%;
+    --input: 150 10% 20%;
+    --ring: 96 60% 50%;
+    --panel-bg: 150 15% 13%;
+    --node-bg: 150 15% 13%;
+    --sidebar-background: 150 20% 7%;  /* slightly darker sidebar */
 
     /* Hover / active */
-    --hover-background: rgb(90 95 115 / 0.35);
-    --hover-foreground: 220 9% 95%;
-    --active-background: rgb(90 95 115 / 0.55);
-    --active-foreground: 220 9% 98%;
+    --hover-background: rgb(159 232 112 / 0.12);
+    --hover-foreground: 90 20% 95%;
+    --active-background: rgb(159 232 112 / 0.2);
+    --active-foreground: 96 55% 78%;
 
     /* Tab Colors */
     --tab-active-text: #dde0e8;
@@ -135,13 +137,13 @@
     --chart-3: 35 80% 58%;
     --chart-4: 280 60% 62%;
     --chart-5: 340 72% 58%;
-    --sidebar-foreground: 220 9% 89%;
-    --sidebar-primary: 220 76% 58%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 224 10% 22%;
-    --sidebar-accent-foreground: 220 9% 89%;
-    --sidebar-border: 224 9% 26%;
-    --sidebar-ring: 220 76% 58%;
+    --sidebar-foreground: 90 20% 92%;
+    --sidebar-primary: 96 55% 68%;
+    --sidebar-primary-foreground: 100 45% 8%;
+    --sidebar-accent: 150 20% 20%;
+    --sidebar-accent-foreground: 90 20% 92%;
+    --sidebar-border: 150 10% 22%;
+    --sidebar-ring: 96 60% 50%;
   }
 }
 
@@ -305,7 +307,7 @@
   inset: 0;
   border-radius: 0.5rem;
   background: linear-gradient(90deg, 
-    #2383F4, #5e61e7, #8F00FF, #7831d4, #2383F4
+    #163300, #297A4B, #9FE870, #297A4B, #163300
   );
   background-size: 200% 100%;
   animation: gradientFlow 3s linear infinite;
@@ -329,7 +331,7 @@
 /* Gradient animation for in-progress elements */
 .gradient-animation {
   background: linear-gradient(90deg, 
-    #2383F4, #5e61e7, #8F00FF, #7831d4, #2383F4
+    #163300, #297A4B, #9FE870, #297A4B, #163300
   );
   background-size: 200% 100%;
   animation: gradientFlow 3s linear infinite;
@@ -338,7 +340,7 @@
 /* Gradient text animation */
 .gradient-text {
   background: linear-gradient(90deg, 
-    #2383F4, #5e61e7, #8F00FF, #7831d4, #2383F4
+    #163300, #297A4B, #9FE870, #297A4B, #163300
   );
   background-size: 200% 100%;
   animation: gradientFlow 3s linear infinite;

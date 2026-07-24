@@ -49,7 +49,7 @@ export function ValuationLadder({ dcfRange, currentPrice, ticker }: ValuationLad
           <span className="text-xs text-muted-foreground w-20">Current</span>
           <div className="flex-1 bg-muted rounded h-2 relative">
             <div
-              className="absolute top-0 h-2 bg-gray-400 rounded"
+              className="absolute top-0 h-2 bg-muted-foreground/50 rounded"
               style={{ width: `${(current / maxIv) * 100}%` }}
             />
           </div>

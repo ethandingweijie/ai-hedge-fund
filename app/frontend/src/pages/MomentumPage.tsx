@@ -152,8 +152,8 @@ export function MomentumPage() {
             <ArrowLeft size={18} />
           </button>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-foreground truncate">Momentum (US)</h1>
-            <p className="text-xs text-muted-foreground">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">Momentum (US)</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">
               Last run {formatRunTime(cohort?.created_at ?? null)}
               {cohort?.as_of ? ` · as of ${cohort.as_of}` : ' · live'}
               {' · '}
@@ -167,9 +167,9 @@ export function MomentumPage() {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full border-2 border-foreground/70 text-foreground bg-card hover:bg-muted disabled:opacity-50 transition-colors"
           >
-            {refreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            {refreshing ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
             Refresh
           </button>
         </div>
@@ -190,16 +190,16 @@ export function MomentumPage() {
       {!loading && cohort && cohort.run_id != null && (
         <>
           {/* ── View toggle: Sector vs Equity momentum ─────────────────── */}
-          <div className="flex items-center gap-2 mb-4 border-b border-border pb-3">
+          <div className="flex items-center gap-3 mb-5">
             {(['SECTOR', 'EQUITY'] as const).map((v) => (
               <button
                 key={v}
                 onClick={() => setView(v)}
                 className={
-                  'px-4 py-2 min-h-[40px] text-sm font-semibold rounded-md border select-none touch-manipulation ' +
+                  'px-5 py-2.5 min-h-[44px] text-sm font-semibold rounded-full border-2 select-none touch-manipulation transition-colors ' +
                   (view === v
-                    ? 'bg-primary/15 border-primary/50 text-primary'
-                    : 'border-border text-muted-foreground hover:bg-muted')
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'bg-card border-foreground/70 text-foreground hover:bg-muted')
                 }
               >
                 {v === 'SECTOR' ? 'Sector Momentum' : 'Equity Momentum'}
@@ -210,20 +210,20 @@ export function MomentumPage() {
           {view === 'SECTOR' && (
           /* ── Sector momentum map ────────────────────────────────────── */
           <div className="mb-5">
-            <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-              <h2 className="text-sm font-semibold text-foreground">Sector momentum map</h2>
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <h2 className="text-base font-bold text-foreground">Sector momentum map</h2>
               <div className="flex items-center gap-1.5">
                 {(['LONG', 'SHORT'] as const).map((d) => (
                   <button
                     key={d}
                     onClick={() => setSectorDir(d)}
                     className={
-                      'px-4 py-2 min-h-[40px] text-sm font-semibold rounded-full border select-none touch-manipulation ' +
+                      'px-5 py-2.5 min-h-[44px] text-sm font-semibold rounded-full border-2 select-none touch-manipulation transition-colors ' +
                       (sectorDir === d
                         ? (d === 'LONG'
-                            ? 'bg-emerald-600/20 border-emerald-600/50 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-red-600/20 border-red-600/50 text-red-700 dark:text-red-300')
-                        : 'border-border text-muted-foreground hover:bg-muted')
+                            ? 'bg-emerald-500/20 border-emerald-600/60 text-emerald-800 dark:text-emerald-300'
+                            : 'bg-red-500/20 border-red-600/60 text-red-800 dark:text-red-300')
+                        : 'bg-card border-foreground/70 text-foreground hover:bg-muted')
                     }
                   >
                     {d === 'LONG'
@@ -246,12 +246,12 @@ export function MomentumPage() {
                 key={d}
                 onClick={() => setDir(d)}
                 className={
-                  'px-4 py-2 min-h-[40px] text-sm font-semibold rounded-full border select-none touch-manipulation ' +
+                  'px-5 py-2.5 min-h-[44px] text-sm font-semibold rounded-full border-2 select-none touch-manipulation transition-colors ' +
                   (dir === d
-                    ? (d === 'LONG' ? 'bg-emerald-600/20 border-emerald-600/50 text-emerald-700 dark:text-emerald-300'
-                      : d === 'SHORT' ? 'bg-red-600/20 border-red-600/50 text-red-700 dark:text-red-300'
-                      : 'bg-primary/15 border-primary/50 text-primary')
-                    : 'border-border text-muted-foreground hover:bg-muted')
+                    ? (d === 'LONG' ? 'bg-emerald-500/20 border-emerald-600/60 text-emerald-800 dark:text-emerald-300'
+                      : d === 'SHORT' ? 'bg-red-500/20 border-red-600/60 text-red-800 dark:text-red-300'
+                      : 'bg-primary border-primary text-primary-foreground')
+                    : 'bg-card border-foreground/70 text-foreground hover:bg-muted')
                 }
               >
                 {d === 'LONG' ? `Long (${longCount})` : d === 'SHORT' ? `Short (${shortCount})` : `All (${cohort.ticker_count})`}
@@ -260,21 +260,21 @@ export function MomentumPage() {
           </div>
 
           {/* ── Ticker table ──────────────────────────────────────────── */}
-          <div className="overflow-x-auto border border-border rounded-md">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
+            <table className="w-full text-[14px]">
               <thead>
-                <tr className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
-                  <th className="text-left px-3 py-2 font-semibold">#</th>
-                  <th className="text-left px-3 py-2 font-semibold">Ticker</th>
-                  <th className="text-left px-3 py-2 font-semibold">Verdict</th>
-                  <th className="text-right px-3 py-2 font-semibold" title="Composite -6..+6">Comp</th>
-                  <th className="text-center px-2 py-2 font-semibold" title="STATE pillar (-2..+2)">S</th>
-                  <th className="text-center px-2 py-2 font-semibold" title="TURN pillar (-2..+2)">T</th>
-                  <th className="text-center px-2 py-2 font-semibold" title="ACCEL pillar (-2..+2)">A</th>
-                  <th className="text-right px-3 py-2 font-semibold" title="1-month return">1m</th>
-                  <th className="text-right px-3 py-2 font-semibold" title="3-month return">3m</th>
-                  <th className="text-center px-2 py-2 font-semibold" title="Sector-aligned (direction agrees with sector ETF)">Sec</th>
-                  <th className="text-left px-3 py-2 font-semibold">Sector</th>
+                <tr className="border-b border-border bg-muted/50 text-[11px] uppercase tracking-wider text-foreground/70">
+                  <th className="text-left px-4 py-3 font-bold">#</th>
+                  <th className="text-left px-4 py-3 font-bold">Ticker</th>
+                  <th className="text-left px-4 py-3 font-bold">Verdict</th>
+                  <th className="text-right px-4 py-3 font-bold" title="Composite -6..+6">Comp</th>
+                  <th className="text-center px-2.5 py-3 font-bold" title="STATE pillar (-2..+2)">S</th>
+                  <th className="text-center px-2.5 py-3 font-bold" title="TURN pillar (-2..+2)">T</th>
+                  <th className="text-center px-2.5 py-3 font-bold" title="ACCEL pillar (-2..+2)">A</th>
+                  <th className="text-right px-4 py-3 font-bold" title="1-month return">1m</th>
+                  <th className="text-right px-4 py-3 font-bold" title="3-month return">3m</th>
+                  <th className="text-center px-2.5 py-3 font-bold" title="Sector-aligned (direction agrees with sector ETF)">Sec</th>
+                  <th className="text-left px-4 py-3 font-bold">Sector</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,39 +284,39 @@ export function MomentumPage() {
                     onClick={() => setSelected(r)}
                     className="border-b border-border/60 hover:bg-muted/40 cursor-pointer"
                   >
-                    <td className="px-3 py-2 text-muted-foreground">{r.rank ?? '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-4 py-3.5 text-muted-foreground">{r.rank ?? '—'}</td>
+                    <td className="px-4 py-3.5">
                       <span className="font-mono font-bold text-foreground">{r.ticker}</span>
-                      <span className="ml-2 text-[11px] text-muted-foreground hidden md:inline">{r.name}</span>
+                      <span className="ml-2.5 text-[13px] font-semibold text-foreground hidden md:inline">{r.name}</span>
                     </td>
-                    <td className="px-3 py-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold border ${verdictColor(r.verdict)}`}>
+                    <td className="px-4 py-3.5">
+                      <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold whitespace-nowrap ${verdictColor(r.verdict)}`}>
                         {r.verdict}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right">
-                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold font-mono ${compositeColor(r.composite)}`}>
+                    <td className="px-4 py-3.5 text-right">
+                      <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(r.composite)}`}>
                         {fmtSigned(r.composite)}
                       </span>
                     </td>
-                    <td className="px-2 py-2 text-center"><span className={`px-1 py-0.5 rounded text-[11px] font-mono ${pillarColor(r.state_score)}`}>{fmtSigned(r.state_score)}</span></td>
-                    <td className="px-2 py-2 text-center"><span className={`px-1 py-0.5 rounded text-[11px] font-mono ${pillarColor(r.turn_score)}`}>{fmtSigned(r.turn_score)}</span></td>
-                    <td className="px-2 py-2 text-center"><span className={`px-1 py-0.5 rounded text-[11px] font-mono ${pillarColor(r.accel_score)}`}>{fmtSigned(r.accel_score)}</span></td>
-                    <td className="px-3 py-2 text-right font-mono text-[12px]">{fmtPct(r.r_21d)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[12px]">{fmtPct(r.r_63d)}</td>
-                    <td className="px-2 py-2 text-center">{r.sector_aligned ? <span className="text-[11px]">✓</span> : ''}</td>
-                    <td className="px-3 py-2 text-[12px] text-muted-foreground">{r.sector_etf ?? r.sector ?? '—'}</td>
+                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.state_score)}`}>{fmtSigned(r.state_score)}</span></td>
+                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.turn_score)}`}>{fmtSigned(r.turn_score)}</span></td>
+                    <td className="px-2.5 py-3.5 text-center"><span className={`px-2 py-1 rounded-full text-[11.5px] font-mono ${pillarColor(r.accel_score)}`}>{fmtSigned(r.accel_score)}</span></td>
+                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-foreground text-[13px]">{fmtPct(r.r_21d)}</td>
+                    <td className="px-4 py-3.5 text-right font-mono font-semibold text-foreground text-[13px]">{fmtPct(r.r_63d)}</td>
+                    <td className="px-2.5 py-3.5 text-center">{r.sector_aligned ? <span className="text-[12px] text-brand font-bold">✓</span> : ''}</td>
+                    <td className="px-4 py-3.5 text-[13px] text-muted-foreground">{r.sector_etf ?? r.sector ?? '—'}</td>
                   </tr>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={11} className="px-3 py-6 text-center text-muted-foreground">No {dir === 'ALL' ? '' : dir.toLowerCase()} names this run.</td></tr>
+                  <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">No {dir === 'ALL' ? '' : dir.toLowerCase()} names this run.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
 
           {/* Column legend */}
-          <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">
+          <p className="text-[12px] text-muted-foreground mt-3 leading-relaxed">
             <span className="font-semibold text-foreground">Comp</span> = composite (−6…+6, sum of the three pillars; + long / − short) ·{' '}
             <span className="font-semibold text-foreground">S</span> = State (where the trend is now) ·{' '}
             <span className="font-semibold text-foreground">T</span> = Turn (MACD/SMA/RSI inflection) ·{' '}
@@ -352,51 +352,51 @@ function SectorTable({ sectors, dir }: {
   dir: 'LONG' | 'SHORT';
 }) {
   return (
-    <div className="overflow-x-auto border border-border rounded-md">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
+      <table className="w-full text-[14px]">
         <thead>
-          <tr className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wider text-muted-foreground">
-            <th className="text-left px-3 py-2 font-semibold">ETF</th>
-            <th className="text-left px-3 py-2 font-semibold">Sector</th>
-            <th className="text-left px-3 py-2 font-semibold">Status</th>
-            <th className="text-right px-3 py-2 font-semibold" title="Composite -6..+6 (now)">Rank</th>
-            <th className="text-right px-3 py-2 font-semibold" title="Composite -6..+6 a month ago (~21 sessions)">Rank 1M</th>
-            <th className="text-right px-3 py-2 font-semibold" title="Composite -6..+6 a quarter ago (~63 sessions)">Rank 3M</th>
+          <tr className="border-b border-border bg-muted/50 text-[11px] uppercase tracking-wider text-foreground/70">
+            <th className="text-left px-4 py-3 font-bold">ETF</th>
+            <th className="text-left px-4 py-3 font-bold">Sector</th>
+            <th className="text-left px-4 py-3 font-bold">Status</th>
+            <th className="text-right px-4 py-3 font-bold" title="Composite -6..+6 (now)">Rank</th>
+            <th className="text-right px-4 py-3 font-bold" title="Composite -6..+6 a month ago (~21 sessions)">Rank 1M</th>
+            <th className="text-right px-4 py-3 font-bold" title="Composite -6..+6 a quarter ago (~63 sessions)">Rank 3M</th>
           </tr>
         </thead>
         <tbody>
           {sectors.map((s) => (
-            <tr key={s.etf} className="border-b border-border/60" title={s.justification ?? ''}>
-              <td className="px-3 py-2 font-mono font-bold text-foreground">{s.etf}</td>
-              <td className="px-3 py-2 text-[12px] text-muted-foreground">{sectorName(s)}</td>
-              <td className="px-3 py-2">
+            <tr key={s.etf} className="border-b border-border/60 hover:bg-muted/40" title={s.justification ?? ''}>
+              <td className="px-4 py-3.5 font-mono font-bold text-foreground">{s.etf}</td>
+              <td className="px-4 py-3.5 text-[13px] font-semibold text-foreground">{sectorName(s)}</td>
+              <td className="px-4 py-3.5">
                 {s.verdict && s.verdict !== 'Neutral' ? (
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold border ${verdictColor(s.verdict)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-semibold whitespace-nowrap ${verdictColor(s.verdict)}`}>
                     {verdictShort(s.verdict)}
                   </span>
                 ) : (
-                  <span className="text-[11px] text-muted-foreground/60">Neutral</span>
+                  <span className="text-[12px] text-muted-foreground/60">Neutral</span>
                 )}
               </td>
-              <td className="px-3 py-2 text-right">
-                <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold font-mono ${compositeColor(s.composite)}`}>
+              <td className="px-4 py-3.5 text-right">
+                <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(s.composite)}`}>
                   {fmtSigned(s.composite)}
                 </span>
               </td>
-              <td className="px-3 py-2 text-right">
+              <td className="px-4 py-3.5 text-right">
                 {s.composite_1m == null ? (
-                  <span className="text-[11px] text-muted-foreground/50 font-mono">—</span>
+                  <span className="text-[12px] text-muted-foreground/50 font-mono">—</span>
                 ) : (
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold font-mono ${compositeColor(s.composite_1m)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(s.composite_1m)}`}>
                     {fmtSigned(s.composite_1m)}
                   </span>
                 )}
               </td>
-              <td className="px-3 py-2 text-right">
+              <td className="px-4 py-3.5 text-right">
                 {s.composite_3m == null ? (
-                  <span className="text-[11px] text-muted-foreground/50 font-mono">—</span>
+                  <span className="text-[12px] text-muted-foreground/50 font-mono">—</span>
                 ) : (
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold font-mono ${compositeColor(s.composite_3m)}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold font-mono ${compositeColor(s.composite_3m)}`}>
                     {fmtSigned(s.composite_3m)}
                   </span>
                 )}
@@ -405,7 +405,7 @@ function SectorTable({ sectors, dir }: {
           ))}
           {sectors.length === 0 && (
             <tr>
-              <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
+              <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                 No {dir === 'LONG' ? 'long' : 'short'} tailwinds this run.
               </td>
             </tr>

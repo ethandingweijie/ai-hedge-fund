@@ -9,9 +9,9 @@
  *                      DDOG)
  *
  * Design DNA matches REIT / Bank / Biopharma panels:
- *   - uppercase tracking-[0.2em] section headings in zinc-500/400
- *   - `rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white
- *      dark:bg-zinc-900 p-4`
+ *   - uppercase tracking-[0.2em] section headings in muted-foreground
+ *   - `rounded-2xl border border-border bg-white
+ *      bg-card p-4`
  *   - functional colors only (green-600 / red-500 / amber-600 / blue-600)
  *
  * Data sources — NO FABRICATION:
@@ -60,7 +60,7 @@ function hasSubsection(sectionText: string | null, subsection: string): boolean 
 }
 
 const SECTION_HEADING_CLS =
-  'text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400';
+  'text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground';
 
 // ── Formatters ─────────────────────────────────────────────────────────────
 
@@ -153,11 +153,11 @@ function ScenarioStrip({
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+    <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-3">
         <p className={SECTION_HEADING_CLS}>Scenario Fair Value</p>
         {currentPrice != null && (
-          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">
+          <span className="text-[10px] text-muted-foreground tabular-nums">
             current {fmtMoney(currentPrice, sym)}
           </span>
         )}
@@ -168,7 +168,7 @@ function ScenarioStrip({
           <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-500 dark:text-rose-400">
             Bear
           </p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">
+          <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {bear != null ? fmtMoney(bear, sym, bear >= 100 ? 0 : 2) : '—'}
           </p>
           <p className="text-[11px] font-semibold tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">
@@ -176,11 +176,11 @@ function ScenarioStrip({
           </p>
         </div>
         {/* BASE */}
-        <div className="text-center border-x border-zinc-200 dark:border-zinc-800">
+        <div className="text-center border-x border-border">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 dark:text-blue-400">
             Base
           </p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">
+          <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {base != null ? fmtMoney(base, sym, base >= 100 ? 0 : 2) : '—'}
           </p>
           <p className="text-[11px] font-semibold tabular-nums text-blue-600 dark:text-blue-400 mt-0.5">
@@ -192,7 +192,7 @@ function ScenarioStrip({
           <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500 dark:text-emerald-400">
             Bull
           </p>
-          <p className="text-xl font-bold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">
+          <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {bull != null ? fmtMoney(bull, sym, bull >= 100 ? 0 : 2) : '—'}
           </p>
           <p className="text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
@@ -218,17 +218,17 @@ function KPITile({
     tone === 'green' ? 'text-green-600' :
     tone === 'amber' ? 'text-amber-600' :
     tone === 'red'   ? 'text-red-500'   :
-                       'text-zinc-900 dark:text-zinc-50';
+                       'text-foreground';
   return (
     <div>
-      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
         {label}
       </p>
       <p className={`text-xl font-bold tabular-nums ${toneCls} mt-0.5`}>
         {value}
       </p>
       {sub && (
-        <p className="text-[9px] text-zinc-400 mt-0.5">{sub}</p>
+        <p className="text-[9px] text-muted-foreground/70 mt-0.5">{sub}</p>
       )}
     </div>
   );
@@ -248,7 +248,7 @@ function SubtypeBanner({
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-700 dark:text-indigo-300">
           Hyperscaler · AI Capex ROI
         </p>
-        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mt-0.5">{ticker}</p>
+        <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>
       </div>
     );
   }
@@ -258,7 +258,7 @@ function SubtypeBanner({
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-sky-700 dark:text-sky-300">
           Mature SaaS · Durability
         </p>
-        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mt-0.5">{ticker}</p>
+        <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>
       </div>
     );
   }
@@ -268,7 +268,7 @@ function SubtypeBanner({
       <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">
         Growth SaaS · Unit Economics
       </p>
-      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mt-0.5">{ticker}</p>
+      <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>
     </div>
   );
 }
@@ -381,7 +381,7 @@ function HyperscalerView({
       <SubtypeBanner subtype="hyperscaler" ticker={ticker} />
 
       {tiles.length > 0 && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <p className={`${SECTION_HEADING_CLS} mb-3`}>Key Metrics</p>
           <div className="grid grid-cols-3 gap-3">
             {tiles}
@@ -390,10 +390,10 @@ function HyperscalerView({
       )}
 
       {showTrend && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between mb-3">
             <p className={SECTION_HEADING_CLS}>Revenue Trend · last {trendRows.length} FY</p>
-            <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+            <span className="text-[10px] text-muted-foreground">
               bar = revenue · overlay = capex
             </span>
           </div>
@@ -405,10 +405,10 @@ function HyperscalerView({
                 : null;
               return (
                 <div key={r.period} className="flex items-center gap-2">
-                  <span className="w-14 text-[10px] font-mono text-zinc-500 dark:text-zinc-400 shrink-0">
+                  <span className="w-14 text-[10px] font-mono text-muted-foreground shrink-0">
                     {r.period}
                   </span>
-                  <div className="flex-1 h-6 rounded bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden">
+                  <div className="flex-1 h-6 rounded bg-muted relative overflow-hidden">
                     <div className="absolute inset-y-0 left-0 bg-blue-500 dark:bg-blue-600"
                          style={{ width: `${revWidth}%` }}></div>
                     {capexWidth != null && (
@@ -417,14 +417,14 @@ function HyperscalerView({
                            title={`capex ${((r.capex! / r.revenue) * 100).toFixed(0)}%`}></div>
                     )}
                   </div>
-                  <span className="w-14 text-right text-[11px] font-mono tabular-nums text-zinc-900 dark:text-zinc-50 shrink-0">
+                  <span className="w-14 text-right text-[11px] font-mono tabular-nums text-foreground shrink-0">
                     {fmtBn(r.revenue, sym)}
                   </span>
                 </div>
               );
             })}
           </div>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-3 font-mono leading-relaxed">
+          <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
             Revenue from FMP · capex overlay = |capital_expenditure| / revenue
           </p>
         </div>
@@ -585,7 +585,7 @@ function MatureSaasView({
       <SubtypeBanner subtype="mature_saas" ticker={ticker} />
 
       {tiles.length > 0 && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <p className={`${SECTION_HEADING_CLS} mb-3`}>Key Metrics</p>
           <div className="grid grid-cols-3 gap-3">
             {tiles}
@@ -594,19 +594,19 @@ function MatureSaasView({
       )}
 
       {showDecomp && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between mb-3">
             <p className={SECTION_HEADING_CLS}>Rule of 40 · Decomposition</p>
             <span className={`text-lg font-bold tabular-nums ${
               decompTone === 'green' ? 'text-green-600' :
               decompTone === 'amber' ? 'text-amber-600' :
               decompTone === 'red'   ? 'text-red-500'   :
-                                       'text-zinc-900 dark:text-zinc-50'
+                                       'text-foreground'
             }`}>
               {decompSum != null ? decompSum.toFixed(0) : '—'}
             </span>
           </div>
-          <div className="w-full h-8 rounded-lg overflow-hidden flex border border-zinc-200 dark:border-zinc-800">
+          <div className="w-full h-8 rounded-lg overflow-hidden flex border border-border">
             <div className="bg-blue-500 flex items-center justify-center text-white text-[11px] font-semibold"
                  style={{ width: `${growthW}%` }}
                  title={`Growth ${growthPct.toFixed(0)}%`}>
@@ -621,20 +621,20 @@ function MatureSaasView({
           <ul className="flex flex-col gap-1 mt-3 text-xs">
             <li className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-              <span className="text-zinc-700 dark:text-zinc-300 flex-1">Revenue Growth</span>
-              <span className="tabular-nums font-semibold text-zinc-900 dark:text-zinc-50">
+              <span className="text-foreground/80 flex-1">Revenue Growth</span>
+              <span className="tabular-nums font-semibold text-foreground">
                 {growthPct.toFixed(0)}%
               </span>
             </li>
             <li className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
-              <span className="text-zinc-700 dark:text-zinc-300 flex-1">FCF Margin</span>
-              <span className="tabular-nums font-semibold text-zinc-900 dark:text-zinc-50">
+              <span className="text-foreground/80 flex-1">FCF Margin</span>
+              <span className="tabular-nums font-semibold text-foreground">
                 {fcfPct.toFixed(0)}%
               </span>
             </li>
           </ul>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-3 font-mono leading-relaxed">
+          <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
             Target ≥40 healthy · ≥60 best-in-class
           </p>
         </div>
@@ -827,7 +827,7 @@ function GrowthSaasView({
       <SubtypeBanner subtype="growth_saas" ticker={ticker} />
 
       {tiles.length > 0 && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <p className={`${SECTION_HEADING_CLS} mb-3`}>Key Metrics</p>
           <div className="grid grid-cols-3 gap-3">
             {tiles}
@@ -836,11 +836,11 @@ function GrowthSaasView({
       )}
 
       {lightRows.length > 0 && (
-        <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <p className={`${SECTION_HEADING_CLS} mb-3`}>Unit Economics Traffic Light</p>
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400">
+              <tr className="border-b border-border text-muted-foreground">
                 <th className="text-left py-2 pr-2 font-semibold">Metric</th>
                 <th className="text-right py-2 pr-2 font-semibold">Value</th>
                 <th className="text-right py-2 font-semibold">Status</th>
@@ -849,11 +849,11 @@ function GrowthSaasView({
             <tbody>
               {lightRows.map((r, i) => (
                 <tr key={r.metric} className={i < lightRows.length - 1
-                  ? 'border-b border-zinc-100 dark:border-zinc-800/50' : ''}>
-                  <td className="py-2 pr-2 text-zinc-900 dark:text-zinc-50 font-medium">
+                  ? 'border-b border-border/50' : ''}>
+                  <td className="py-2 pr-2 text-foreground font-medium">
                     {r.metric}
                   </td>
-                  <td className="py-2 pr-2 text-right font-mono tabular-nums text-zinc-900 dark:text-zinc-50">
+                  <td className="py-2 pr-2 text-right font-mono tabular-nums text-foreground">
                     {r.value}
                   </td>
                   <td className="py-2 text-right">
@@ -866,7 +866,7 @@ function GrowthSaasView({
               ))}
             </tbody>
           </table>
-          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-3 font-mono leading-relaxed">
+          <p className="text-[10px] text-muted-foreground mt-3 font-mono leading-relaxed">
             Benchmarks: NRR ≥115 · GR ≥95 · CAC &lt;18mo · Magic &gt;1.0 · Post-SBC FCF &gt;10%
           </p>
         </div>

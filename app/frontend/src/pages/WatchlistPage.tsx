@@ -203,14 +203,14 @@ export function WatchlistPage() {
 
   // ── MOBILE LAYOUT ─────────────────────────────────────────────────────────────
   // Aligned with HistoryPage / ScreenerPage: neutral zinc background (white in light,
-  // zinc-900 in dark), neutral cards, shared GradeChip for VGPM.
+  // token-driven cream/forest surfaces, shared GradeChip for VGPM.
   if (mode === 'mobile') {
     return (
-      <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
+      <div className="min-h-full flex flex-col bg-background">
         {/* Hero — kept minimal, matches HistoryPage top bar spacing */}
         <div className="px-4 pt-4 pb-2 pr-14">
           {lastRefreshed && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">· updated {lastRefreshed.toLocaleTimeString()}</span>
+            <span className="text-xs text-muted-foreground/70">· updated {lastRefreshed.toLocaleTimeString()}</span>
           )}
         </div>
 
@@ -223,21 +223,21 @@ export function WatchlistPage() {
                 onChange={e => handleInputChange(e.target.value)}
                 onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
                 placeholder="Search ticker or company…"
-                className="w-full h-11 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800 px-4 text-[13px] focus:bg-white dark:focus:bg-zinc-900 focus:border-zinc-300 dark:focus:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#2e7d32]/10 placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-50"
+                className="w-full h-11 rounded-lg bg-muted/60 border border-border px-4 text-[13px] focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground"
                 disabled={adding}
                 autoComplete="off"
               />
               {showSugg && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-lg z-50 overflow-hidden">
+                <div className="absolute top-full left-0 mt-1 w-full bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
                   {suggestions.map(s => (
                     <button
                       key={s.ticker}
                       type="button"
-                      className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                      className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-muted/60 transition-colors"
                       onMouseDown={e => { e.preventDefault(); handleSelectSuggestion(s); }}
                     >
-                      <span className="font-mono font-semibold text-sm w-14 shrink-0 text-zinc-900 dark:text-zinc-50">{s.ticker}</span>
-                      <span className="text-sm text-zinc-500 dark:text-zinc-400 truncate">{s.name}</span>
+                      <span className="font-mono font-semibold text-sm w-14 shrink-0 text-foreground">{s.ticker}</span>
+                      <span className="text-sm text-muted-foreground truncate">{s.name}</span>
                     </button>
                   ))}
                 </div>
@@ -253,18 +253,18 @@ export function WatchlistPage() {
           <div className="flex items-center px-3 mb-1">
             <div className="flex-1" />
             <div className="flex items-center gap-0">
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">Valuation</span>
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">Growth</span>
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">Profit.</span>
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">Momentum</span>
+              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Valuation</span>
+              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Growth</span>
+              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Profit.</span>
+              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Momentum</span>
             </div>
           </div>
 
           {/* Watchlist cards */}
           {loading ? (
-            <div className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">Loading watchlist...</div>
+            <div className="py-8 text-center text-sm text-muted-foreground">Loading watchlist...</div>
           ) : items.length === 0 ? (
-            <div className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">Your watchlist is empty. Add a ticker above.</div>
+            <div className="py-8 text-center text-sm text-muted-foreground">Your watchlist is empty. Add a ticker above.</div>
           ) : (
             <div className="space-y-2">
               {items.map(item => {
@@ -274,7 +274,7 @@ export function WatchlistPage() {
                   <SwipeableCard
                     key={item.ticker}
                     onClick={() => navigate(`/report/${item.ticker}`)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-left flex items-center shadow-sm cursor-pointer"
+                    className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-left flex items-center shadow-sm cursor-pointer"
                     actions={[
                       {
                         icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
@@ -291,20 +291,20 @@ export function WatchlistPage() {
                     {/* Left: Ticker + Company stacked — only this subtree opens
                         the report. Taps on price / VGPM do nothing; swipe
                         actions still work anywhere on the card. */}
-                    <div data-tap="open" className="shrink-0 w-[80px] active:bg-zinc-50 dark:active:bg-zinc-800 rounded-md -m-1 p-1 cursor-pointer">
-                      <span className="font-bold text-[15px] leading-none block text-zinc-900 dark:text-zinc-50">{item.ticker}</span>
-                      <span className="text-[9px] text-zinc-500 dark:text-zinc-400 leading-tight block mt-1">
+                    <div data-tap="open" className="shrink-0 w-[80px] active:bg-muted/60 rounded-md -m-1 p-1 cursor-pointer">
+                      <span className="font-bold text-[15px] leading-none block text-foreground">{item.ticker}</span>
+                      <span className="text-[9px] text-muted-foreground leading-tight block mt-1">
                         {item.companyName}
                       </span>
                     </div>
 
                     {/* Center: Price + %Change, vertically centered */}
                     <div className="shrink-0 text-center">
-                      <span className="text-sm font-semibold tabular-nums block leading-tight text-zinc-900 dark:text-zinc-50">
+                      <span className="text-sm font-semibold tabular-nums block leading-tight text-foreground">
                         {price != null ? `$${price.toFixed(2)}` : '—'}
                       </span>
                       {pct != null && (
-                        <span className={`text-[10px] font-semibold tabular-nums block leading-tight ${pct >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <span className={`text-[10px] font-semibold tabular-nums block leading-tight ${pct >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
                           {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
                         </span>
                       )}

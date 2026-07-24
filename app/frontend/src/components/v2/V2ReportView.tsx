@@ -214,37 +214,37 @@ export function V2ReportView({
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-full flex flex-col bg-white dark:bg-zinc-900">
+    <div className="min-h-full flex flex-col bg-background">
       {/* Ticker header — offset from top so it clears the iOS status bar.
           The hamburger is a fixed top-left button (in MobileTopBar); we leave
           a 48px top gutter so the ticker row sits just below that button. */}
       <div
-        className="sticky z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 px-5 pb-3"
+        className="sticky z-20 bg-background/95 backdrop-blur border-b border-border/60 px-5 pb-3"
         style={{ top: 0, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 56px)' }}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-baseline gap-2 flex-wrap">
               <span
-                className="text-[22px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums leading-none"
+                className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
                 style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
               >
                 {ticker || '—'}
               </span>
               {companyName && (
-                <span className="text-[13px] text-zinc-500 dark:text-zinc-400 truncate leading-none">
+                <span className="text-[13px] text-muted-foreground truncate leading-none">
                   {companyName}
                 </span>
               )}
             </div>
             <div className="mt-2 flex items-center gap-1.5 flex-wrap">
               {sector && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-border text-muted-foreground">
                   {sector}
                 </span>
               )}
               {regime?.risk_appetite && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-md border border-border text-muted-foreground">
                   {regime.risk_appetite}{regime.volatility_regime ? ` · ${regime.volatility_regime} vol` : ''}
                 </span>
               )}
@@ -253,7 +253,7 @@ export function V2ReportView({
           {livePrice != null && (
             <div className="text-right shrink-0">
               <div
-                className="text-[22px] font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums leading-none"
+                className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
                 style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
               >
                 ${livePrice.toFixed(2)}
@@ -261,7 +261,7 @@ export function V2ReportView({
               {priceChangePct != null && (
                 <div className="mt-1.5 text-[12px]">
                   <Delta v={priceChangePct} />
-                  <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">1Y</span>
+                  <span className="text-muted-foreground/70 font-normal ml-1">1Y</span>
                 </div>
               )}
             </div>
@@ -270,7 +270,7 @@ export function V2ReportView({
       </div>
 
       {/* Tab strip */}
-      <div className="sticky z-10 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800"
+      <div className="sticky z-10 bg-background border-b border-border/60"
            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 120px)' }}>
         <div className="px-3 flex items-center gap-1 overflow-x-auto phone-scroll">
           {TABS.map(t => (
@@ -279,12 +279,12 @@ export function V2ReportView({
               onClick={() => setTab(t.id)}
               className={`h-10 px-2.5 text-[12px] font-medium border-b-[2px] -mb-px transition-colors shrink-0 flex items-center gap-1
                 ${tab === t.id
-                  ? 'text-zinc-900 dark:text-zinc-50 border-[#2e7d32]'
-                  : 'text-zinc-500 dark:text-zinc-400 border-transparent active:text-zinc-800'}`}
+                  ? 'text-foreground border-brand'
+                  : 'text-muted-foreground border-transparent active:text-foreground'}`}
             >
               {t.label}
               {t.id === 'summary' && isRunning && (
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#2e7d32] dark:bg-[#4ea354] animate-pulse" />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-brand animate-pulse" />
               )}
             </button>
           ))}
@@ -381,22 +381,22 @@ function ProgressHeader({
   onCancel?: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
       {/* Row 1 — phase label + % + Cancel (single line, tight) */}
       <div className="px-4 pt-3 pb-1 flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-[13.5px] font-semibold text-zinc-900 dark:text-zinc-50 truncate tracking-tight">
+          <div className="text-[13.5px] font-semibold text-foreground truncate tracking-tight">
             {currentPhaseLabel ?? 'Running analysis…'}
           </div>
         </div>
         <div className="shrink-0 flex items-center gap-2">
-          <span className="text-[15px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 tracking-tight">
+          <span className="text-[15px] font-semibold tabular-nums text-foreground tracking-tight">
             {Math.round(progressPct)}%
           </span>
           {onCancel && (
             <button
               onClick={onCancel}
-              className="text-[11.5px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+              className="text-[11.5px] font-medium text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
             >
               Cancel
             </button>
@@ -406,15 +406,15 @@ function ProgressHeader({
       {/* Row 2 — live thinking/status detail flows into the full width.
           Wraps up to 3 lines so the reader actually gets to see what's
           happening (previously truncated mid-sentence with "..."). */}
-      <div className="px-4 pb-2.5 text-[11.5px] text-zinc-500 dark:text-zinc-400 leading-snug line-clamp-3 break-words min-h-[1.35em]">
+      <div className="px-4 pb-2.5 text-[11.5px] text-muted-foreground leading-snug line-clamp-3 break-words min-h-[1.35em]">
         {thinkingDetail ?? 'Running analysis — research streams in over 4–6 minutes.'}
       </div>
-      <div className="h-1 bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+      <div className="h-1 bg-muted overflow-hidden">
         <div
           className="h-full transition-[width] duration-200 ease-out"
           style={{
             width: `${Math.max(0, Math.min(100, progressPct))}%`,
-            background: `linear-gradient(90deg, ${BRAND} 0%, ${BRAND} 80%, #4ea354 100%)`,
+            background: `linear-gradient(90deg, ${BRAND} 0%, ${BRAND} 80%, #9FE870 100%)`,
             boxShadow: `0 0 8px ${BRAND}80`,
           }}
         />
@@ -427,7 +427,7 @@ function ProgressHeader({
 function LoadingSpinner({ size = 16 }: { size?: number }) {
   return (
     <span
-      className="inline-block rounded-full border-2 border-[#2e7d32] dark:border-[#4ea354] border-t-transparent animate-spin"
+      className="inline-block rounded-full border-2 border-brand border-t-transparent animate-spin"
       style={{ width: size, height: size }}
     />
   );
@@ -435,11 +435,11 @@ function LoadingSpinner({ size = 16 }: { size?: number }) {
 
 function LoadingCard({ label, minH = 80 }: { label: string; minH?: number }) {
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
+    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
         {label}
       </div>
-      <div className="flex items-center justify-center gap-2.5 text-zinc-400 dark:text-zinc-500" style={{ minHeight: minH }}>
+      <div className="flex items-center justify-center gap-2.5 text-muted-foreground/70" style={{ minHeight: minH }}>
         <LoadingSpinner size={14} />
         <span className="text-[12px]">Computing…</span>
       </div>
@@ -450,8 +450,8 @@ function LoadingCard({ label, minH = 80 }: { label: string; minH?: number }) {
 function LoadingGradeChip({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
-      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-zinc-400 dark:text-zinc-500">{label}</span>
-      <span className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md bg-zinc-50 dark:bg-zinc-800/60">
+      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>
+      <span className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md bg-muted/60">
         <LoadingSpinner size={10} />
       </span>
     </div>
@@ -479,8 +479,8 @@ function SummaryBody({
 
       {/* Portfolio Manager hero card — loading skeleton while pipeline runs */}
       {decision ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-2">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
             Portfolio Manager
           </div>
           <div className="flex items-baseline gap-3 flex-wrap">
@@ -490,32 +490,32 @@ function SummaryBody({
                 signal when the meaningful number here is the recommended
                 portfolio weight. Labelled "weight" to remove that ambiguity. */}
             {typeof decision.position_size_pct === 'number' && (
-              <span className="text-[15px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+              <span className="text-[15px] font-semibold tabular-nums text-foreground">
                 {(decision.position_size_pct * 100).toFixed(1)}%
-                <span className="ml-1 text-[11px] font-normal text-zinc-500 dark:text-zinc-400">weight</span>
+                <span className="ml-1 text-[11px] font-normal text-muted-foreground">weight</span>
               </span>
             )}
           </div>
           {typeof decision.price_target === 'number' && (
             <div className="mt-3 flex items-baseline gap-2">
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Target</span>
-              <span className="text-[15px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+              <span className="text-[11px] text-muted-foreground">Target</span>
+              <span className="text-[15px] font-semibold tabular-nums text-foreground">
                 ${decision.price_target.toFixed(2)}
               </span>
             </div>
           )}
           {decision.rationale && (
-            <p className="mt-3 text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed">
+            <p className="mt-3 text-[12.5px] text-foreground/80 leading-relaxed">
               {decision.rationale}
             </p>
           )}
         </div>
       ) : (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-2">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
             Portfolio Manager
           </div>
-          <div className="flex items-center gap-2.5 py-2 text-zinc-400 dark:text-zinc-500">
+          <div className="flex items-center gap-2.5 py-2 text-muted-foreground/70">
             <LoadingSpinner size={16} />
             <span className="text-[12px]">
               {isRunning ? 'Investor agents running...' : 'Waiting for decision'}
@@ -525,10 +525,10 @@ function SummaryBody({
       )}
 
       {/* VGPM scorecard — always rendered, with spinners per grade until ready */}
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
+      <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
           VGPM Scorecard
-          {!vgpm && isRunning && <span className="ml-2 text-zinc-400 dark:text-zinc-500 normal-case font-normal tracking-normal">· computing…</span>}
+          {!vgpm && isRunning && <span className="ml-2 text-muted-foreground/70 normal-case font-normal tracking-normal">· computing…</span>}
         </div>
         <div className="grid grid-cols-4 gap-3">
           {vgpm?.valuation?.grade
@@ -632,36 +632,36 @@ function ValuationBody({
     <div className="px-4 pt-4 pb-8 space-y-4">
       {/* ── 12-Month Price Target hero ──────────────────────────────── */}
       {target != null ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-5">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-5">
           <div className="text-center">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400 dark:text-zinc-500">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
               12-Month Price Target
             </div>
-            <div className="text-[34px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 tabular-nums mt-1 leading-none">
+            <div className="text-[34px] font-semibold tracking-tight text-foreground tabular-nums mt-1 leading-none">
               ${target.toFixed(2)}
             </div>
             {upside != null && (
-              <div className={`mt-2 text-[14px] font-medium tabular-nums ${upside >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+              <div className={`mt-2 text-[14px] font-medium tabular-nums ${upside >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
                 {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% upside
               </div>
             )}
             {current != null && (
-              <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              <div className="text-[11px] text-muted-foreground">
                 vs current ${current.toFixed(2)}
               </div>
             )}
             {consensusPt != null && (
-              <div className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <div className="mt-1.5 text-[11px] text-muted-foreground">
                 Wall St. consensus{' '}
-                <span className="font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums">
+                <span className="font-semibold text-foreground/80 tabular-nums">
                   ${consensusPt.toFixed(2)}
                 </span>
                 {consensusDelta != null && (
                   <span className={`ml-1 tabular-nums ${
                     Math.abs(consensusDelta) < 5
-                      ? 'text-zinc-400 dark:text-zinc-500'
+                      ? 'text-muted-foreground/70'
                       : consensusDelta > 0
-                        ? 'text-[#2e7d32] dark:text-[#4ea354]'
+                        ? 'text-brand'
                         : 'text-rose-600 dark:text-rose-400'
                   }`}>
                     ({consensusDelta >= 0 ? '+' : ''}{consensusDelta.toFixed(1)}% vs model)
@@ -685,14 +685,14 @@ function ValuationBody({
 
       {/* ── Scenario probabilities ──────────────────────────────────── */}
       {(scenarioAnalysis || dcfRange) ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
           <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Scenario Probabilities
             </span>
-            {wacc != null && <span className="text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">WACC {(wacc * 100).toFixed(1)}%</span>}
+            {wacc != null && <span className="text-[10px] tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
           </div>
-          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[9px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/70">
             <span className="w-[60px] text-right">12M Target</span>
             <span className="w-[56px] text-right">DCF IV</span>
           </div>
@@ -701,21 +701,21 @@ function ValuationBody({
             { prob: probBase, name: 'Base', target12m: base12m, iv: baseIV, color: 'blue' },
             { prob: probBull, name: 'Bull', target12m: bull12m, iv: bullIV, color: 'brand' },
           ].map((r, i) => (
-            <div key={r.name} className={`flex items-center gap-2 py-2 ${i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : ''}`}>
-              <span className="w-[34px] text-[11.5px] font-semibold text-zinc-700 dark:text-zinc-300 tabular-nums">
+            <div key={r.name} className={`flex items-center gap-2 py-2 ${i > 0 ? 'border-t border-border/60' : ''}`}>
+              <span className="w-[34px] text-[11.5px] font-semibold text-foreground/80 tabular-nums">
                 {Math.round((r.prob ?? 0) * 100)}%
               </span>
-              <div className="w-[60px] h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+              <div className="w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
                   style={{ width: `${Math.min(100, (r.prob ?? 0) * 200)}%` }}
-                  className={`h-full ${r.color === 'rose' ? 'bg-rose-500 dark:bg-rose-400' : r.color === 'blue' ? 'bg-blue-500 dark:bg-blue-400' : 'bg-[#2e7d32] dark:bg-[#4ea354]'}`}
+                  className={`h-full ${r.color === 'rose' ? 'bg-rose-500 dark:bg-rose-400' : r.color === 'blue' ? 'bg-blue-500 dark:bg-blue-400' : 'bg-brand'}`}
                 />
               </div>
-              <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-50 min-w-[40px]">{r.name}</span>
-              <span className="ml-auto w-[60px] text-right text-[12px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
+              <span className="text-[12.5px] font-semibold text-foreground min-w-[40px]">{r.name}</span>
+              <span className="ml-auto w-[60px] text-right text-[12px] font-semibold tabular-nums text-foreground">
                 {r.target12m != null ? `$${r.target12m.toFixed(2)}` : '—'}
               </span>
-              <span className="w-[56px] text-right text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+              <span className="w-[56px] text-right text-[11px] tabular-nums text-muted-foreground">
                 {r.iv != null ? `$${r.iv.toFixed(2)}` : '—'}
               </span>
             </div>
@@ -727,19 +727,19 @@ function ValuationBody({
 
       {/* ── Scenario analysis (v2 native bar chart) ─────────────────── */}
       {(bullIV != null || baseIV != null || bearIV != null) ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
           <div className="flex items-start justify-between mb-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Scenario Analysis
             </span>
             {upside != null && (
-              <span className={`inline-flex items-center gap-1 text-[10.5px] font-medium ${upside >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+              <span className={`inline-flex items-center gap-1 text-[10.5px] font-medium ${upside >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
                 EV upside {upside >= 0 ? '+' : ''}{upside.toFixed(1)}%
               </span>
             )}
           </div>
           {baseDelta != null && bearDelta != null && (
-            <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-3">
+            <p className="text-[11.5px] text-muted-foreground leading-relaxed mb-3">
               Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside; bear-case downside is {Math.abs(bearDelta).toFixed(0)}%.
             </p>
           )}
@@ -806,7 +806,7 @@ function ValuationBody({
       {sectorCard && <SectorValuationCard payload={sectorCard} />}
 
       {isRunning && !haveAny && (
-        <p className="text-center text-[11px] text-zinc-400 dark:text-zinc-500 pt-2">
+        <p className="text-center text-[11px] text-muted-foreground/70 pt-2">
           Valuation renders once the pipeline reaches Phase 4.5 (DCF Engine).
         </p>
       )}
@@ -823,23 +823,23 @@ function MetricBox({
   tone?: 'neutral' | 'bull' | 'bear';
 }) {
   const bg =
-    tone === 'bull' ? 'bg-[#ecf5ed]/70 dark:bg-[#2e7d32]/10 border-[#d0e7d2]/70 dark:border-[#2e7d32]/20' :
+    tone === 'bull' ? 'bg-brand/10 border-brand/20' :
     tone === 'bear' ? 'bg-rose-50/70 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20' :
-    'bg-zinc-50/80 dark:bg-zinc-800/40 border-zinc-100 dark:border-zinc-800';
+    'bg-muted/50 border-border/60';
   const labelCls =
-    tone === 'bull' ? 'text-[#2e7d32]/80 dark:text-[#4ea354]/80' :
+    tone === 'bull' ? 'text-brand/80' :
     tone === 'bear' ? 'text-rose-700/80 dark:text-rose-400/80' :
-    'text-zinc-500 dark:text-zinc-400';
+    'text-muted-foreground';
   const valCls =
-    tone === 'bull' ? 'text-[#2e7d32] dark:text-[#4ea354]' :
+    tone === 'bull' ? 'text-brand' :
     tone === 'bear' ? 'text-rose-700 dark:text-rose-400' :
-    'text-zinc-900 dark:text-zinc-50';
+    'text-foreground';
   return (
-    <div className={`p-3 rounded-xl border ${bg}`}>
+    <div className={`p-3 rounded-lg border ${bg}`}>
       <div className={`text-[10px] uppercase tracking-[0.08em] font-semibold ${labelCls}`}>{label}</div>
       <div className={`text-[18px] font-semibold tabular-nums mt-1 tracking-tight ${valCls}`}>{value}</div>
       {delta != null && (
-        <div className={`text-[10.5px] font-medium tabular-nums mt-0.5 ${delta >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+        <div className={`text-[10.5px] font-medium tabular-nums mt-0.5 ${delta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
           {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
         </div>
       )}
@@ -860,7 +860,7 @@ function V2ScenarioBars({
   const bars = [
     { label: 'Bear', value: bear,  fill: '#f43f5e' },
     { label: 'Base', value: base,  fill: '#3b82f6' },
-    { label: 'Bull', value: bull,  fill: '#2e7d32' },
+    { label: 'Bull', value: bull,  fill: '#297A4B' },
     { label: 'EV',   value: ev,    fill: '#a855f7' },
   ].filter(b => typeof b.value === 'number' && b.value > 0) as { label: string; value: number; fill: string }[];
 
@@ -888,13 +888,13 @@ function V2ScenarioBars({
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
       {/* Grid */}
-      <g className="text-zinc-200 dark:text-zinc-800">
+      <g className="text-border/70">
         {ticks.map(t => (
           <line key={t} x1={padL} y1={yFor(t)} x2={w - padR} y2={yFor(t)}
                 stroke="currentColor" strokeWidth={0.5} strokeDasharray="2,3" />
         ))}
       </g>
-      <g className="fill-zinc-400 dark:fill-zinc-500">
+      <g className="fill-muted-foreground/70">
         {ticks.map(t => (
           <text key={t} x={padL - 4} y={yFor(t) + 3} textAnchor="end" fontSize={9}>${Math.round(t)}</text>
         ))}
@@ -904,9 +904,9 @@ function V2ScenarioBars({
       {current && current >= yMin && current <= yMax && (
         <g>
           <line x1={padL} y1={yFor(current)} x2={w - padR} y2={yFor(current)}
-                className="text-zinc-400 dark:text-zinc-500" stroke="currentColor" strokeWidth={1} strokeDasharray="4,4"/>
+                className="text-muted-foreground/70" stroke="currentColor" strokeWidth={1} strokeDasharray="4,4"/>
           <text x={w - padR - 2} y={yFor(current) - 3} textAnchor="end" fontSize={9}
-                className="fill-zinc-500 dark:fill-zinc-400">Current ${current.toFixed(2)}</text>
+                className="fill-muted-foreground">Current ${current.toFixed(2)}</text>
         </g>
       )}
 
@@ -920,11 +920,11 @@ function V2ScenarioBars({
           <g key={b.label}>
             <rect x={x} y={y} width={barW} height={Math.max(2, bh)} rx={2.5} fill={b.fill} />
             <text x={cx} y={y - 4} textAnchor="middle" fontSize={9}
-                  className="fill-zinc-700 dark:fill-zinc-200" fontWeight={600}>
+                  className="fill-foreground/80" fontWeight={600}>
               ${Math.round(b.value)}
             </text>
             <text x={cx} y={h - padB + 14} textAnchor="middle" fontSize={10}
-                  className="fill-zinc-500 dark:fill-zinc-400">{b.label}</text>
+                  className="fill-muted-foreground">{b.label}</text>
           </g>
         );
       })}
@@ -954,20 +954,20 @@ function V2ValuationLadder({
   };
 
   const rows = [
-    { name: 'Current',   value: current,  color: 'bg-zinc-400 dark:bg-zinc-500', delta: null as number | null, growth: null as number | null | undefined },
-    { name: 'Bull case', value: bullIV,   color: 'bg-[#2e7d32] dark:bg-[#4ea354]', delta: pct(bullIV), growth: bullG },
+    { name: 'Current',   value: current,  color: 'bg-muted-foreground/50', delta: null as number | null, growth: null as number | null | undefined },
+    { name: 'Bull case', value: bullIV,   color: 'bg-brand', delta: pct(bullIV), growth: bullG },
     { name: 'Base case', value: baseIV,   color: 'bg-blue-500 dark:bg-blue-400',   delta: pct(baseIV), growth: baseG },
     { name: 'Bear case', value: bearIV,   color: 'bg-rose-500 dark:bg-rose-400',   delta: pct(bearIV), growth: bearG },
   ];
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
           DCF Valuation Ladder
         </span>
         {wacc != null && (
-          <span className="text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">
+          <span className="text-[10px] tabular-nums text-muted-foreground/70">
             WACC: {(wacc * 100).toFixed(1)}%
           </span>
         )}
@@ -975,25 +975,25 @@ function V2ValuationLadder({
       <div className="space-y-2.5">
         {rows.map(r => r.value != null && (
           <div key={r.name} className="flex items-center gap-3">
-            <span className="text-[11.5px] text-zinc-500 dark:text-zinc-400 w-[62px] shrink-0">{r.name}</span>
-            <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+            <span className="text-[11.5px] text-muted-foreground w-[62px] shrink-0">{r.name}</span>
+            <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
               <div
                 className={`h-full rounded-full ${r.color}`}
                 style={{ width: `${Math.max(4, Math.min(100, (r.value / maxIV) * 100))}%` }}
               />
             </div>
             <div className="flex items-baseline gap-1.5 min-w-[100px] justify-end">
-              <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">
+              <span className="text-[12.5px] font-semibold text-foreground tabular-nums">
                 ${r.value.toFixed(2)}
               </span>
               {r.delta != null && (
-                <span className={`text-[11px] font-medium tabular-nums ${r.delta >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+                <span className={`text-[11px] font-medium tabular-nums ${r.delta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
                   {r.delta >= 0 ? '+' : ''}{r.delta.toFixed(1)}%
                 </span>
               )}
             </div>
             {r.growth != null && (
-              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums w-[38px] text-right">
+              <span className="text-[10px] text-muted-foreground/70 tabular-nums w-[38px] text-right">
                 @ {(r.growth * 100).toFixed(0)}% g
               </span>
             )}
@@ -1077,14 +1077,14 @@ function InvestorsBody({
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
       {/* Panel Verdicts card */}
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
+      <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
           Panel Verdicts
         </div>
         <div className="grid grid-cols-4 gap-2">
           {(['BUY', 'HOLD', 'SELL', 'SHORT'] as const).map(v => (
             <div key={v} className="flex flex-col items-center gap-1">
-              <span className="text-[18px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">
+              <span className="text-[18px] font-semibold text-foreground tabular-nums">
                 {counts[v] || 0}
               </span>
               <ActionPill action={v} />
@@ -1094,32 +1094,32 @@ function InvestorsBody({
       </div>
 
       {/* Agent thesis list */}
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         {agentList.map((p, i) => (
           <div
             key={p.name + i}
-            className={`px-4 py-3 flex items-start gap-3 ${i > 0 ? 'border-t border-zinc-100 dark:border-zinc-800' : ''}`}
+            className={`px-4 py-3 flex items-start gap-3 ${i > 0 ? 'border-t border-border/60' : ''}`}
           >
-            <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 flex items-center justify-center text-[11px] font-semibold shrink-0">
+            <div className="w-8 h-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[11px] font-semibold shrink-0">
               {p.name[0]}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">{p.name}</span>
+                <span className="text-[13px] font-semibold text-foreground">{p.name}</span>
                 <ActionPill action={p.verdict} />
                 {p.conviction > 0 && (
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                  <span className="text-[10px] text-muted-foreground/70 tabular-nums">
                     {p.conviction}/10
                   </span>
                 )}
                 {p.priceTarget != null && (
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 tabular-nums">
+                  <span className="text-[10px] text-muted-foreground/70 tabular-nums">
                     · ${p.priceTarget.toFixed(2)}
                   </span>
                 )}
               </div>
               {p.thesis && (
-                <p className="text-[12px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
                   {p.thesis}
                 </p>
               )}
@@ -1129,12 +1129,12 @@ function InvestorsBody({
       </div>
 
       {/* Points of Disagreement (Debate) */}
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+      <div className="rounded-lg border border-border bg-card shadow-sm p-4">
         <div className="flex items-center justify-between mb-2.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
             Points of Disagreement
           </span>
-          <span className="text-[10px] text-zinc-400 dark:text-zinc-500">debate</span>
+          <span className="text-[10px] text-muted-foreground/70">debate</span>
         </div>
         {debateTriggered && tDebate ? (
           <div className="space-y-2">
@@ -1156,7 +1156,7 @@ function InvestorsBody({
             )}
           </div>
         ) : (
-          <p className="text-[12px] text-zinc-500 dark:text-zinc-400">
+          <p className="text-[12px] text-muted-foreground">
             Debate round not triggered for {ticker} (requires ≥3 BUY and ≥3 SELL signals).
           </p>
         )}
@@ -1167,15 +1167,15 @@ function InvestorsBody({
 
 function DebateRow({ side, who, point }: { side: 'bull' | 'bear'; who: string; point: string }) {
   const accent = side === 'bull'
-    ? 'border-l-[#2e7d32] dark:border-l-[#4ea354]'
+    ? 'border-l-brand'
     : 'border-l-rose-500 dark:border-l-rose-400';
   const labelCls = side === 'bull'
-    ? 'text-[#2e7d32] dark:text-[#4ea354]'
+    ? 'text-brand'
     : 'text-rose-600 dark:text-rose-400';
   return (
     <div className={`pl-3 border-l-2 ${accent}`}>
       <div className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${labelCls}`}>{who}</div>
-      <p className="text-[12px] text-zinc-700 dark:text-zinc-300 mt-0.5 leading-relaxed">{point}</p>
+      <p className="text-[12px] text-foreground/80 mt-0.5 leading-relaxed">{point}</p>
     </div>
   );
 }
@@ -1243,14 +1243,14 @@ function RiskBody({
     <div className="px-4 pt-4 pb-8 space-y-4">
       {/* Power Law card */}
       {powerLaw ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Power Law
             </span>
             {powerLawOverall != null && (
-              <span className="text-[15px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">
-                {powerLawOverall.toFixed(1)} <span className="text-[11px] text-zinc-400 dark:text-zinc-500 font-normal">/ 10</span>
+              <span className="text-[15px] font-semibold tabular-nums text-foreground">
+                {powerLawOverall.toFixed(1)} <span className="text-[11px] text-muted-foreground/70 font-normal">/ 10</span>
               </span>
             )}
           </div>
@@ -1263,19 +1263,19 @@ function RiskBody({
             {dims.map(d => d.score != null && (
               <div key={d.label}>
                 <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-50">{d.label}</span>
-                  <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">
+                  <span className="text-[12.5px] font-semibold text-foreground">{d.label}</span>
+                  <span className="text-[12.5px] font-semibold text-foreground tabular-nums">
                     {d.score.toFixed(1)}
                   </span>
                 </div>
-                <div className="w-full h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-[#2e7d32] dark:bg-[#4ea354]"
+                    className="h-full rounded-full bg-brand"
                     style={{ width: `${Math.max(0, Math.min(100, (d.score / 10) * 100))}%` }}
                   />
                 </div>
                 {d.note && (
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
+                  <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
                     {d.note}
                   </p>
                 )}
@@ -1294,9 +1294,9 @@ function RiskBody({
 
       {/* Value Trap card */}
       {valueTrap ? (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Value Trap Check
             </span>
             {trapVerdict && (
@@ -1305,7 +1305,7 @@ function RiskBody({
                   ? 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30'
                   : trapVerdict.includes('MEDIUM')
                   ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
-                  : 'text-[#2e7d32] dark:text-[#4ea354] bg-[#ecf5ed] dark:bg-[#2e7d32]/10 border-[#d0e7d2] dark:border-[#2e7d32]/30'
+                  : 'text-brand bg-brand/10 border-brand/25'
               }`}>
                 {trapVerdict}
               </span>
@@ -1313,19 +1313,19 @@ function RiskBody({
           </div>
           <div className="space-y-3">
             {trapChecks.map((c, i) => c.rating && (
-              <div key={c.k} className={`flex items-start gap-2.5 ${i > 0 ? 'pt-3 border-t border-zinc-100 dark:border-zinc-800' : ''}`}>
+              <div key={c.k} className={`flex items-start gap-2.5 ${i > 0 ? 'pt-3 border-t border-border/60' : ''}`}>
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
-                    c.rating === 'GREEN' ? 'bg-[#2e7d32] dark:bg-[#4ea354]'
+                    c.rating === 'GREEN' ? 'bg-brand'
                     : c.rating === 'AMBER' ? 'bg-amber-500 dark:bg-amber-400'
                     : 'bg-rose-500 dark:bg-rose-400'
                   }`}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[12.5px] font-semibold text-zinc-900 dark:text-zinc-50">{c.k}</span>
+                    <span className="text-[12.5px] font-semibold text-foreground">{c.k}</span>
                     <span className={`text-[10px] font-semibold tracking-wide shrink-0 ${
-                      c.rating === 'GREEN' ? 'text-[#2e7d32] dark:text-[#4ea354]'
+                      c.rating === 'GREEN' ? 'text-brand'
                       : c.rating === 'AMBER' ? 'text-amber-600 dark:text-amber-400'
                       : 'text-rose-600 dark:text-rose-400'
                     }`}>
@@ -1333,7 +1333,7 @@ function RiskBody({
                     </span>
                   </div>
                   {c.ev && (
-                    <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                    <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-relaxed">
                       {c.ev}
                     </p>
                   )}
@@ -1348,16 +1348,16 @@ function RiskBody({
 
       {/* Scenario Mix (bull/bear split bar) */}
       {showScenario && (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Scenario Mix
             </span>
-            <span className="text-[10px] text-zinc-400 dark:text-zinc-500">12-mo</span>
+            <span className="text-[10px] text-muted-foreground/70">12-mo</span>
           </div>
-          <div className="w-full h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden flex">
+          <div className="w-full h-2 rounded-full bg-muted overflow-hidden flex">
             <div
-              className="h-full bg-[#2e7d32] dark:bg-[#4ea354]"
+              className="h-full bg-brand"
               style={{ width: `${Math.round(((bullProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}%` }}
             />
             <div
@@ -1366,7 +1366,7 @@ function RiskBody({
             />
           </div>
           <div className="flex items-center justify-between mt-2 text-[11px] tabular-nums">
-            <span className="text-[#2e7d32] dark:text-[#4ea354]">
+            <span className="text-brand">
               {Math.round(((bullProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}% bull
             </span>
             <span className="text-rose-600 dark:text-rose-400">
@@ -1398,7 +1398,7 @@ function PowerLawPentagon({ dims }: { dims: { label: string; score?: number }[] 
         <polygon key={ring}
           points={poly(angles.map(a => [cx + r * ring * Math.cos(a), cy + r * ring * Math.sin(a)]))}
           fill="none"
-          className="text-zinc-200 dark:text-zinc-700"
+          className="text-border"
           stroke="currentColor"
           strokeWidth={0.5}
         />
@@ -1406,7 +1406,7 @@ function PowerLawPentagon({ dims }: { dims: { label: string; score?: number }[] 
       {/* Axes */}
       {outer.map(([x, y], i) => (
         <line key={i} x1={cx} y1={cy} x2={x} y2={y}
-          className="text-zinc-200 dark:text-zinc-700" stroke="currentColor" strokeWidth={0.5} />
+          className="text-border" stroke="currentColor" strokeWidth={0.5} />
       ))}
       {/* Data polygon */}
       <polygon
@@ -1429,7 +1429,7 @@ function PowerLawPentagon({ dims }: { dims: { label: string; score?: number }[] 
           <text key={`l${i}`} x={lx} y={ly}
             textAnchor={Math.abs(Math.cos(angles[i])) < 0.1 ? 'middle' : Math.cos(angles[i]) > 0 ? 'start' : 'end'}
             fontSize={9}
-            className="fill-zinc-600 dark:fill-zinc-400"
+            className="fill-muted-foreground"
           >
             {label}
           </text>
@@ -1472,15 +1472,15 @@ function ResearchBody({
     <div className="px-4 pt-4 pb-8 space-y-4">
       {/* Research complete status card */}
       {hasData && (
-        <div className="rounded-xl border border-[#d0e7d2] dark:border-[#2e7d32]/40 bg-[#ecf5ed]/60 dark:bg-[#2e7d32]/10 shadow-sm p-4 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-white dark:bg-zinc-900 border border-[#d0e7d2] dark:border-[#2e7d32]/40 flex items-center justify-center shrink-0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <div className="rounded-lg border border-brand/25 bg-brand/10 shadow-sm p-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-card border border-brand/25 flex items-center justify-center shrink-0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#297A4B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">Research complete</div>
-            <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+            <div className="text-[13px] font-semibold text-foreground">Research complete</div>
+            <div className="text-[11px] text-muted-foreground truncate">
               {sourceCount > 0 && <>{sourceCount} source{sourceCount === 1 ? '' : 's'} · </>}
               Qwen 3.6-plus + Claude Sonnet
             </div>
@@ -1490,7 +1490,7 @@ function ResearchBody({
 
       {/* Sub-tab switcher */}
       {hasData && (
-        <div className="flex items-center gap-1 p-1 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 rounded-lg">
+        <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/60 rounded-lg">
           {([
             { id: 'summary' as const, label: 'Research summary' },
             { id: 'brief'   as const, label: 'Industry brief' },
@@ -1501,8 +1501,8 @@ function ResearchBody({
               onClick={() => setSub(t.id)}
               className={`flex-1 h-8 rounded-md text-[11.5px] font-medium transition-colors
                 ${sub === t.id
-                  ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm border border-zinc-200 dark:border-zinc-800'
-                  : 'text-zinc-500 dark:text-zinc-400 active:text-zinc-800'}`}
+                  ? 'bg-card text-foreground shadow-sm border border-border'
+                  : 'text-muted-foreground active:text-foreground'}`}
             >
               {t.label}
             </button>
@@ -1528,11 +1528,11 @@ function ResearchBody({
         )
       )}
       {hasData && sub === 'brief' && industryBrief && (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
+        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
             Industry Intelligence Brief
           </div>
-          <div className="text-[12.5px] text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+          <div className="text-[12.5px] text-foreground/80 leading-relaxed whitespace-pre-wrap">
             {industryBrief}
           </div>
         </div>
@@ -1547,7 +1547,7 @@ function ResearchBody({
       )}
 
       {!isComplete && isResearchPhase && (
-        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 text-center">
+        <p className="text-[11px] text-muted-foreground/70 text-center">
           Research streaming — thinking stream shown above. Sections fill in as synthesis completes.
         </p>
       )}
@@ -1575,29 +1575,29 @@ function StreamingResearchSummary({
   return (
     <div className="flex flex-col gap-3">
       {/* Streaming banner — explains why Qwen summary is absent vs. completed view */}
-      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+      <div className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
             Research streaming · {ticker}
           </span>
         </div>
-        <p className="text-[12px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+        <p className="text-[12px] text-muted-foreground leading-relaxed">
           Industry brief and deep research are populating live. The AI summary card appears once synthesis completes.
         </p>
       </div>
 
       {industryBrief && (
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900">
+        <div className="border border-border rounded-lg overflow-hidden bg-card">
           <button
             onClick={() => setBriefOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-zinc-50 dark:active:bg-zinc-800/60"
+            className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-foreground active:bg-muted/60"
           >
             <span>Industry Intelligence Brief</span>
-            <span className="text-[11px] text-zinc-400">{briefOpen ? '▲' : '▼'}</span>
+            <span className="text-[11px] text-muted-foreground/70">{briefOpen ? '▲' : '▼'}</span>
           </button>
           {briefOpen && (
-            <div className="border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 text-[12.5px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
+            <div className="border-t border-border px-4 py-3 text-[12.5px] text-foreground/80 whitespace-pre-wrap leading-relaxed">
               {industryBrief}
             </div>
           )}
@@ -1605,16 +1605,16 @@ function StreamingResearchSummary({
       )}
 
       {deepResearch && (
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-900">
+        <div className="border border-border rounded-lg overflow-hidden bg-card">
           <button
             onClick={() => setDeepOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-zinc-50 dark:active:bg-zinc-800/60"
+            className="w-full flex items-center justify-between px-4 py-3 text-[13px] font-medium text-foreground active:bg-muted/60"
           >
             <span>Deep Research</span>
-            <span className="text-[11px] text-zinc-400">{deepOpen ? '▲' : '▼'}</span>
+            <span className="text-[11px] text-muted-foreground/70">{deepOpen ? '▲' : '▼'}</span>
           </button>
           {deepOpen && (
-            <div className="border-t border-zinc-200 dark:border-zinc-800 px-4 py-3 text-[12.5px] text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed">
+            <div className="border-t border-border px-4 py-3 text-[12.5px] text-foreground/80 whitespace-pre-wrap leading-relaxed">
               {deepResearch}
             </div>
           )}
@@ -1639,10 +1639,10 @@ function FinancialsBody({
       {/* Revenue Build — FMP geographic segmentation (LTM fiscal year) */}
       <V2RevenueBuild ticker={ticker} kind="geo" />
 
-      {/* Income Statement — wrap FinancialsChart in zinc-900 dark card shell
+      {/* Income Statement — wrap FinancialsChart in a token-driven card shell
           matching Key Stats / Valuation cards. The inner FinancialsChart
           has its own surface; the `v2-dark-card` wrapper overrides it. */}
-      <div className="v2-dark-card rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
+      <div className="v2-dark-card rounded-lg border border-border bg-card shadow-sm overflow-hidden">
         <style>{`
           .v2-dark-card > * {
             background: transparent !important;
@@ -1711,7 +1711,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
   // Segmented toggle — Annual | Quarter. Sits in the header regardless of
   // loading / empty state so the user can always switch.
   const toggle = (
-    <div className="flex items-center p-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-800">
+    <div className="flex items-center p-0.5 rounded-md bg-muted/60 border border-border">
       {(['annual', 'quarter'] as const).map(p => (
         <button
           key={p}
@@ -1719,8 +1719,8 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           onClick={() => setPeriod(p)}
           className={`h-5 px-2 text-[9.5px] font-medium rounded uppercase tracking-wider transition-colors ${
             period === p
-              ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 shadow-sm'
-              : 'text-zinc-500 dark:text-zinc-400 active:text-zinc-800'
+              ? 'bg-card text-foreground shadow-sm'
+              : 'text-muted-foreground active:text-foreground'
           }`}
         >
           {p === 'annual' ? 'Annual' : 'Quarter'}
@@ -1730,9 +1730,9 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
   );
 
   const card = (body: React.ReactNode) => (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
           {title}
         </span>
         {toggle}
@@ -1743,22 +1743,22 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
 
   if (loading) {
     return card(
-      <div className="flex items-center gap-2 text-[12px] text-zinc-400 dark:text-zinc-500">
-        <div className="w-3 h-3 rounded-full border-2 border-zinc-300 dark:border-zinc-700 border-t-[#2e7d32] dark:border-t-[#4ea354] animate-spin" />
+      <div className="flex items-center gap-2 text-[12px] text-muted-foreground/70">
+        <div className="w-3 h-3 rounded-full border-2 border-border border-t-brand animate-spin" />
         Loading segmentation…
       </div>
     );
   }
   if (errored || !data) {
     return card(
-      <p className="text-[12px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+      <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
         Segment data unavailable.
       </p>
     );
   }
   if (!data.segments.length) {
     return card(
-      <p className="text-[12px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+      <p className="text-[12px] text-muted-foreground/70 leading-relaxed">
         {emptyLbl}
       </p>
     );
@@ -1776,25 +1776,25 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           const pctLabel = s.pct != null ? `${s.pct.toFixed(1)}%` : '—';
           const yoy = s.yoy_pct;
           return (
-            <div key={s.name} className="p-2.5 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40">
-              <div className="text-[9.5px] uppercase tracking-wider font-semibold text-zinc-500 dark:text-zinc-400 truncate" title={s.name}>
+            <div key={s.name} className="p-2.5 rounded-lg border border-border/60 bg-muted/40">
+              <div className="text-[9.5px] uppercase tracking-wider font-semibold text-muted-foreground truncate" title={s.name}>
                 {shortName(s.name)}
               </div>
-              <div className="text-[14px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 mt-1">
+              <div className="text-[14px] font-semibold tabular-nums text-foreground mt-1">
                 {fmtMoney(s.revenue)}
               </div>
               <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 tabular-nums">{pctLabel}</span>
+                <span className="text-[10px] text-muted-foreground tabular-nums">{pctLabel}</span>
                 {yoy != null && (
-                  <span className={`text-[10px] font-medium tabular-nums ${yoy >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+                  <span className={`text-[10px] font-medium tabular-nums ${yoy >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
                     {yoy >= 0 ? '+' : ''}{yoy.toFixed(1)}%
                   </span>
                 )}
               </div>
               {/* Share bar */}
-              <div className="mt-1.5 h-1 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+              <div className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full bg-[#2e7d32] dark:bg-[#4ea354]"
+                  className="h-full bg-brand"
                   style={{ width: `${Math.max(2, Math.min(100, s.pct ?? 0))}%` }}
                 />
               </div>
@@ -1802,7 +1802,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           );
         })}
       </div>
-      <div className="flex items-center justify-between text-[10.5px] text-zinc-400 dark:text-zinc-500">
+      <div className="flex items-center justify-between text-[10.5px] text-muted-foreground/70">
         <span>{periodLabel}</span>
         <span className="tabular-nums">
           Total {data.total_revenue != null ? `${fmtMoney(data.total_revenue)} ${currency}` : '—'}
@@ -1875,17 +1875,17 @@ function V2StockChart({ ticker }: { ticker: string }) {
   };
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
+    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
       <div className="flex items-baseline justify-between mb-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
             {hoverIdx != null ? displayDateLabel : `Price · ${tf.label}`}
           </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-[22px] font-semibold tracking-tight tabular-nums text-zinc-900 dark:text-zinc-50 leading-none">
+            <span className="text-[22px] font-semibold tracking-tight tabular-nums text-foreground leading-none">
               ${displayPrice.toFixed(2)}
             </span>
-            <span className={`text-[12px] font-medium tabular-nums ${periodDelta >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+            <span className={`text-[12px] font-medium tabular-nums ${periodDelta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
               {periodDelta >= 0 ? '+' : ''}{periodDelta.toFixed(2)}%
             </span>
           </div>
@@ -1900,8 +1900,8 @@ function V2StockChart({ ticker }: { ticker: string }) {
             onClick={() => { setTfIdx(i); setHoverIdx(null); }}
             className={`h-7 px-3 text-[11px] font-semibold rounded-full transition-colors shrink-0
               ${tfIdx === i
-                ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                : 'bg-zinc-50 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 active:bg-zinc-100 dark:active:bg-zinc-800'}`}
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/60 text-muted-foreground active:bg-muted'}`}
           >
             {t.label}
           </button>
@@ -1909,11 +1909,11 @@ function V2StockChart({ ticker }: { ticker: string }) {
       </div>
 
       {loading ? (
-        <div className="h-[180px] flex items-center justify-center gap-2 text-zinc-400 dark:text-zinc-500">
+        <div className="h-[180px] flex items-center justify-center gap-2 text-muted-foreground/70">
           <LoadingSpinner size={14} /><span className="text-[12px]">Loading chart…</span>
         </div>
       ) : points.length === 0 ? (
-        <div className="h-[180px] flex items-center justify-center text-[12px] text-zinc-400 dark:text-zinc-500">
+        <div className="h-[180px] flex items-center justify-center text-[12px] text-muted-foreground/70">
           No price data available
         </div>
       ) : (
@@ -1931,13 +1931,13 @@ function V2StockChart({ ticker }: { ticker: string }) {
               <stop offset="100%" stopColor={BRAND} stopOpacity="0"/>
             </linearGradient>
           </defs>
-          <g className="text-zinc-200 dark:text-zinc-800">
+          <g className="text-border/70">
             {yVals.map((v, i) => (
               <line key={i} x1={padL} y1={yFor(v)} x2={w - padR} y2={yFor(v)}
                     stroke="currentColor" strokeWidth={0.6} strokeDasharray="2,3"/>
             ))}
           </g>
-          <g className="fill-zinc-400 dark:fill-zinc-500">
+          <g className="fill-muted-foreground/70">
             {yVals.map((v, i) => (
               <text key={i} x={padL - 4} y={yFor(v) + 3} textAnchor="end" fontSize={9}>${v.toFixed(0)}</text>
             ))}
@@ -1947,9 +1947,9 @@ function V2StockChart({ ticker }: { ticker: string }) {
           {hoverIdx != null && points[hoverIdx] != null && (
             <g>
               <line x1={xFor(hoverIdx)} y1={padT} x2={xFor(hoverIdx)} y2={padT + chartH}
-                    className="text-zinc-400 dark:text-zinc-500" stroke="currentColor" strokeWidth={0.8}/>
+                    className="text-muted-foreground/70" stroke="currentColor" strokeWidth={0.8}/>
               <circle cx={xFor(hoverIdx)} cy={yFor(points[hoverIdx])} r={3.5} fill={BRAND}
-                      className="stroke-white dark:stroke-zinc-900" strokeWidth={1.5}/>
+                      className="stroke-card" strokeWidth={1.5}/>
             </g>
           )}
         </svg>
@@ -2009,18 +2009,18 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
   ];
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500 mb-3">
+    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
         Key Stats
       </div>
       <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
         {rows.map((r) => (
           <div key={r.k} className="flex items-baseline justify-between">
-            <span className="text-[11.5px] text-zinc-500 dark:text-zinc-400">{r.k}</span>
+            <span className="text-[11.5px] text-muted-foreground">{r.k}</span>
             <span className={`text-[13px] font-semibold tabular-nums ${
-              r.v.startsWith('+') ? 'text-[#2e7d32] dark:text-[#4ea354]'
+              r.v.startsWith('+') ? 'text-brand'
               : r.v.startsWith('-') && r.v !== '—' ? 'text-rose-600 dark:text-rose-400'
-              : 'text-zinc-900 dark:text-zinc-50'
+              : 'text-foreground'
             }`}>
               {r.v}
             </span>

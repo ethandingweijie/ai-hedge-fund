@@ -40,8 +40,8 @@ const config: Config = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
-  			background: 'hsl(var(--background))',
-  			foreground: 'hsl(var(--foreground))',
+  			background: 'hsl(var(--background) / <alpha-value>)',
+  			foreground: 'hsl(var(--foreground) / <alpha-value>)',
   			card: {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
@@ -54,13 +54,14 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--primary))',
   				foreground: 'hsl(var(--primary-foreground))'
   			},
+  			brand: 'hsl(var(--brand) / <alpha-value>)',
   			secondary: {
   				DEFAULT: 'hsl(var(--secondary))',
   				foreground: 'hsl(var(--secondary-foreground))'
   			},
   			muted: {
-  				DEFAULT: 'hsl(var(--muted))',
-  				foreground: 'hsl(var(--muted-foreground))'
+  				DEFAULT: 'hsl(var(--muted) / <alpha-value>)',
+  				foreground: 'hsl(var(--muted-foreground) / <alpha-value>)'
   			},
   			accent: {
   				DEFAULT: 'hsl(var(--accent))',
@@ -83,7 +84,7 @@ const config: Config = {
   				'900': 'var(--ramp-grey-900)',
   				'1000': 'var(--ramp-grey-1000)'
   			},
-  			border: 'hsl(var(--border))',
+  			border: 'hsl(var(--border) / <alpha-value>)',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',
   			node: {

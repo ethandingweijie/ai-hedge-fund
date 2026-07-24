@@ -81,7 +81,7 @@ function sourceColor(type?: string, name?: string): string {
     case 'fmp':
       return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
     default:
-      return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+      return 'bg-muted text-muted-foreground';
   }
 }
 
@@ -146,7 +146,7 @@ export function DeepResearchPanel({
         <div className="flex items-center gap-2 mb-4">
           <h3 className="text-sm font-semibold">Deep Research Report — {ticker}</h3>
           {entries.length > 0 && (
-            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-brand/10 text-brand">
               {entries.length} citation{entries.length !== 1 ? 's' : ''}
             </span>
           )}
@@ -232,7 +232,7 @@ export function DeepResearchPanel({
                           href={entry.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline break-all leading-tight block"
+                          className="text-brand hover:underline break-all leading-tight block"
                           title={entry.url}
                         >
                           {sourceLabel(entry.source_type, entry.source_name)}

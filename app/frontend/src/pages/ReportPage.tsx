@@ -1006,7 +1006,7 @@ export function ReportPage() {
     const { user } = useAuth();
 
     return (
-      <div className="min-h-screen flex flex-col bg-white dark:bg-zinc-900 relative overflow-hidden">
+      <div className="min-h-screen flex flex-col bg-background relative overflow-hidden">
         {/* ── Hero video background — LIGHT MODE ──────────────────────────────
            Slow-motion looped footage recoloured toward Equitable green.
            Shared with LoginPage; playbackRate driven below via useEffect. */}
@@ -1072,10 +1072,10 @@ export function ReportPage() {
 
           {/* Greeting */}
           <div className="px-6 text-center">
-            <p className="text-[15px] text-zinc-500 dark:text-zinc-400">
+            <p className="text-[15px] text-muted-foreground">
               Hello, {user?.name ?? user?.email ?? 'friend'}
             </p>
-            <h1 className="mt-1 text-[24px] leading-[1.15] font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+            <h1 className="mt-1 text-[24px] leading-[1.15] font-semibold tracking-tight text-foreground">
               What ticker are we analysing?
             </h1>
           </div>
@@ -1083,7 +1083,7 @@ export function ReportPage() {
           {/* Search form */}
           <form onSubmit={handleSubmit} className="px-4 mt-6 flex items-center gap-2">
             <div className="flex-1 relative" ref={searchBarRef}>
-              <V2Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" width={16} height={16}/>
+              <V2Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={16} height={16}/>
               <input
                 value={ticker}
                 onChange={(e) => {
@@ -1115,13 +1115,13 @@ export function ReportPage() {
                 onFocus={() => { if (suggestions.length > 0) setShowSugg(true); }}
                 onBlur={() => setTimeout(() => setShowSugg(false), 150)}
                 placeholder="Search ticker or company..."
-                className="w-full h-11 pl-9 pr-4 text-[13px] rounded-full bg-white/90 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 focus:bg-white dark:focus:bg-zinc-900 focus:border-[#2e7d32] dark:focus:border-[#4ea354] focus:outline-none focus:ring-2 focus:ring-[#2e7d32]/10 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 text-zinc-900 dark:text-zinc-50 shadow-sm transition-colors"
+                className="w-full h-11 pl-9 pr-4 text-[13px] rounded-full bg-card/90 border border-border focus:bg-card focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground shadow-sm transition-colors"
                 maxLength={60}
                 autoFocus
               />
               {/* Autocomplete dropdown */}
               {showSugg && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg max-h-80 overflow-y-auto z-20">
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto z-20">
                   {suggestions.map(s => (
                     <button
                       key={s.ticker}
@@ -1132,14 +1132,14 @@ export function ReportPage() {
                         setShowSugg(false);
                         setSuggestions([]);
                       }}
-                      className="w-full text-left px-3 py-2 text-[13px] hover:bg-zinc-50 dark:hover:bg-zinc-800 border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 flex items-center justify-between gap-3"
+                      className="w-full text-left px-3 py-2 text-[13px] hover:bg-muted/60 border-b border-border/60 last:border-b-0 flex items-center justify-between gap-3"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">{s.ticker}</div>
-                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{s.name}</div>
+                        <div className="font-semibold text-foreground tabular-nums">{s.ticker}</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{s.name}</div>
                       </div>
                       {s.exchange && (
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 shrink-0">{s.exchange}</span>
+                        <span className="text-[10px] text-muted-foreground/70 shrink-0">{s.exchange}</span>
                       )}
                     </button>
                   ))}
@@ -1149,7 +1149,7 @@ export function ReportPage() {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="h-11 px-4 rounded-full bg-[#2e7d32] active:bg-[#265c29] text-white text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition-colors"
+              className="h-11 px-4 rounded-full bg-primary active:bg-primary/80 text-primary-foreground text-[13px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center shadow-sm transition-colors"
             >
               Analyse
             </button>
@@ -1160,20 +1160,20 @@ export function ReportPage() {
             <button
               type="button"
               onClick={() => setShowArchetype(v => !v)}
-              className="text-[11px] text-zinc-500 dark:text-zinc-400"
+              className="text-[11px] text-muted-foreground"
             >
-              <V2Users width={11} height={11} className="inline-block mr-1 -mt-0.5 text-[#2e7d32]" />
-              <span className="font-medium text-zinc-700 dark:text-zinc-200">{archetypeLabel}</span>
-              <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">.</span>
+              <V2Users width={11} height={11} className="inline-block mr-1 -mt-0.5 text-brand" />
+              <span className="font-medium text-foreground/80">{archetypeLabel}</span>
+              <span className="mx-1.5 text-muted-foreground/50">.</span>
               {activeAgents.length} agent{activeAgents.length === 1 ? '' : 's'}
-              <span className="ml-1.5 text-[#2e7d32] dark:text-[#4ea354] font-medium">change</span>
+              <span className="ml-1.5 text-brand font-medium">change</span>
             </button>
           </div>
 
           {/* Archetype panel (collapsible) */}
           {showArchetype && (
-            <div className="mx-4 mt-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 shadow-sm">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-2">
+            <div className="mx-4 mt-3 rounded-lg border border-border bg-card p-3 shadow-sm">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
                 Investor archetype
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -1185,8 +1185,8 @@ export function ReportPage() {
                     disabled={isProfileLocked(p.agents)}
                     className={`h-8 px-2.5 text-[11px] rounded-lg border transition-colors
                       ${profileIdx === idx
-                        ? 'bg-[#ecf5ed] dark:bg-[#2e7d32]/15 border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[#2e7d32] dark:text-[#4ea354]'
-                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 active:bg-zinc-50 dark:active:bg-zinc-800'}
+                        ? 'bg-brand/10 border-brand/25 text-brand'
+                        : 'bg-card border-border text-muted-foreground active:bg-muted/60'}
                       disabled:opacity-40 disabled:cursor-not-allowed`}
                   >
                     {p.label}
@@ -1195,7 +1195,7 @@ export function ReportPage() {
                 ))}
               </div>
               {isStarterTier && (
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-2">
+                <p className="text-[10px] text-muted-foreground/70 mt-2">
                   Starter plan: some profiles restricted. Upgrade for full access.
                 </p>
               )}
@@ -1207,25 +1207,25 @@ export function ReportPage() {
             <button
               type="button"
               onClick={() => navigate('/screener')}
-              className="h-9 px-3.5 rounded-full bg-white/80 dark:bg-zinc-800/60 border border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[12px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-white dark:active:bg-zinc-800 flex items-center gap-1.5 transition-colors"
+              className="h-9 px-3.5 rounded-full bg-card/80 border border-brand/25 text-[12px] font-medium text-foreground active:bg-card flex items-center gap-1.5 transition-colors"
             >
-              <V2Scales className="text-[#2e7d32] dark:text-[#4ea354]" width={13} height={13}/>
+              <V2Scales className="text-brand" width={13} height={13}/>
               Screener
             </button>
             <button
               type="button"
               onClick={() => navigate('/watchlist')}
-              className="h-9 px-3.5 rounded-full bg-white/80 dark:bg-zinc-800/60 border border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[12px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-white dark:active:bg-zinc-800 flex items-center gap-1.5 transition-colors"
+              className="h-9 px-3.5 rounded-full bg-card/80 border border-brand/25 text-[12px] font-medium text-foreground active:bg-card flex items-center gap-1.5 transition-colors"
             >
-              <V2Star className="text-[#2e7d32] dark:text-[#4ea354]" width={13} height={13}/>
+              <V2Star className="text-brand" width={13} height={13}/>
               Watchlist
             </button>
             <button
               type="button"
               onClick={() => navigate('/history')}
-              className="h-9 px-3.5 rounded-full bg-white/80 dark:bg-zinc-800/60 border border-[#d0e7d2] dark:border-[#2e7d32]/40 text-[12px] font-medium text-zinc-800 dark:text-zinc-100 active:bg-white dark:active:bg-zinc-800 flex items-center gap-1.5 transition-colors"
+              className="h-9 px-3.5 rounded-full bg-card/80 border border-brand/25 text-[12px] font-medium text-foreground active:bg-card flex items-center gap-1.5 transition-colors"
             >
-              <V2Clock className="text-[#2e7d32] dark:text-[#4ea354]" width={13} height={13}/>
+              <V2Clock className="text-brand" width={13} height={13}/>
               History
             </button>
           </div>
@@ -1234,11 +1234,11 @@ export function ReportPage() {
           {v2Popular.length > 0 && (
             <div className="mt-8 mb-6">
               <div className="px-4 mb-2 flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                   Popular
                 </span>
-                <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                  <span className="w-1 h-1 rounded-full bg-[#2e7d32] dark:bg-[#4ea354] animate-pulse" />
+                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70">
+                  <span className="w-1 h-1 rounded-full bg-brand animate-pulse" />
                   live
                 </span>
               </div>
@@ -1258,13 +1258,13 @@ export function ReportPage() {
                         key={`${t.ticker}-${i}`}
                         type="button"
                         onClick={() => { setTicker(t.ticker); setTimeout(() => { const f = document.querySelector('form'); if (f) (f as HTMLFormElement).requestSubmit(); }, 0); }}
-                        className="shrink-0 px-3 py-2 rounded-xl bg-white dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-800 flex items-center gap-2 active:bg-zinc-50 dark:active:bg-zinc-800 transition-colors"
+                        className="shrink-0 px-3 py-2 rounded-lg bg-card border border-border flex items-center gap-2 active:bg-muted/60 transition-colors"
                       >
-                        <span className="text-[12px] font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight">{t.ticker}</span>
+                        <span className="text-[12px] font-semibold text-foreground tabular-nums tracking-tight">{t.ticker}</span>
                         {t.price != null && (
-                          <span className="text-[11px] text-zinc-500 dark:text-zinc-400 tabular-nums">${t.price.toFixed(2)}</span>
+                          <span className="text-[11px] text-muted-foreground tabular-nums">${t.price.toFixed(2)}</span>
                         )}
-                        <span className={`text-[11px] font-medium tabular-nums ${delta >= 0 ? 'text-[#2e7d32] dark:text-[#4ea354]' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <span className={`text-[11px] font-medium tabular-nums ${delta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
                           {delta >= 0 ? '^' : 'v'} {Math.abs(delta).toFixed(2)}%
                         </span>
                       </button>
@@ -1280,7 +1280,7 @@ export function ReportPage() {
 
           {/* Footer hint */}
           <div className="px-6 pb-6 text-center">
-            <p className="text-[10.5px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+            <p className="text-[10.5px] text-muted-foreground/70 leading-relaxed">
               Results stream in over 4-6 minutes . US . HK . SGX universe
             </p>
           </div>
@@ -1334,7 +1334,7 @@ export function ReportPage() {
                   animation: progress-shimmer 1.4s ease-in-out infinite;
                 }
               `}</style>
-              <div className="w-full h-3 rounded-full overflow-hidden flex bg-gray-200 dark:bg-gray-700">
+              <div className="w-full h-3 rounded-full overflow-hidden flex bg-muted">
                 {/* Completed — blue */}
                 <div
                   className="h-full bg-blue-500 transition-all duration-500 flex-none"
@@ -1360,7 +1360,7 @@ export function ReportPage() {
                   </span>
                 )}
               </div>
-              <div className="w-full h-3 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+              <div className="w-full h-3 rounded-full overflow-hidden bg-muted">
                 <div className="h-full w-full bg-green-500 transition-all duration-500" />
               </div>
             </div>

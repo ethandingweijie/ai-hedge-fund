@@ -315,7 +315,7 @@ export function PriceTargetPanel({
 
       {/* ── FX conversion notice (non-USD reporting companies) ─────────── */}
       {isNonUSD && (
-        <div className="rounded-md bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 px-3 py-2 text-[11px] text-sky-800 dark:text-sky-300 leading-snug">
+        <div className="rounded-md bg-muted/50 border border-border px-3 py-2 text-[11px] text-muted-foreground leading-snug">
           <strong>💱 FX conversion applied:</strong>{' '}
           {ticker} reports financials in{' '}
           <span className="font-semibold">{reportedCurrency}</span>.{' '}
@@ -384,7 +384,7 @@ export function PriceTargetPanel({
             </div>
           )}
           {missingDCFCases.length > 0 && (
-            <div className="flex items-start gap-1.5 rounded bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-700 px-3 py-2 text-[10px] text-slate-600 dark:text-slate-400">
+            <div className="flex items-start gap-1.5 rounded bg-muted/50 border border-border px-3 py-2 text-[10px] text-muted-foreground">
               <span className="mt-px shrink-0">ℹ</span>
               <span>
                 <strong>DCF note:</strong> Intrinsic values for the{' '}

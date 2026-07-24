@@ -136,21 +136,21 @@ export function ResearchNarrativeCard({
   );
 
   return (
-    <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+    <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           {icon && <span className="mr-1.5">{icon}</span>}
           {title}
         </p>
         {truncated && (
-          <span className="text-[10px] text-zinc-500 dark:text-zinc-400">(excerpt)</span>
+          <span className="text-[10px] text-muted-foreground">(excerpt)</span>
         )}
       </div>
-      <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+      <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
         {display}
       </div>
       {sourceLabel && (
-        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-3 italic">
+        <p className="text-[10px] text-muted-foreground mt-3 italic">
           {sourceLabel}
         </p>
       )}
