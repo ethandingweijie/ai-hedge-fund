@@ -25,6 +25,7 @@ import type { RunSummary } from '@/lib/reportTypes';
 import { NAV_ITEMS, useAppNav, type NavItem } from '@/components/nav-config';
 import { LayoutModeToggle } from '@/components/LayoutModeToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { EquitableMark } from '@/components/brand/EquitableMark';
 
 const ACTION_COLORS: Record<string, string> = {
   BUY:   'bg-green-600 text-white',
@@ -76,7 +77,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
       <div className={`flex items-center border-b border-border h-14 ${collapsed ? 'justify-center px-0' : 'justify-between px-3'}`}>
         {!collapsed && (
           <a href="#/report" className="flex items-center gap-2 min-w-0">
-            <img src="/icon-192x192.png" alt="Equitable" className="w-7 h-7 rounded-full shrink-0" />
+            <EquitableMark size={28} className="shrink-0" />
             <span className="text-sm font-bold tracking-wide text-foreground truncate">Equitable</span>
           </a>
         )}

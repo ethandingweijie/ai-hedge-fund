@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
+import { EquitableMark } from '@/components/brand/EquitableMark';
 
 declare global {
   interface Window {
@@ -22,26 +23,6 @@ declare global {
       };
     };
   }
-}
-
-const BRAND = '#297A4B';
-
-function Leaf({ size = 28 }: { size?: number }) {
-  return (
-    <div
-      className="rounded-[6px] flex items-center justify-center text-white font-extrabold"
-      style={{
-        backgroundColor: BRAND,
-        width: size,
-        height: size,
-        fontSize: size * 0.65,
-        lineHeight: 1,
-        letterSpacing: '-0.04em',
-      }}
-    >
-      e
-    </div>
-  );
 }
 
 function Divider({ className = '' }: { className?: string }) {
@@ -265,7 +246,7 @@ export function LoginPage() {
         <div className="relative w-full">
           {/* Logo */}
           <div className="flex items-center gap-2.5 mb-10">
-            <Leaf size={28} />
+            <EquitableMark size={28} />
             <span className="text-[17px] font-semibold tracking-tight text-foreground">
               Equitable
             </span>

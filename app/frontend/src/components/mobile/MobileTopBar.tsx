@@ -8,6 +8,7 @@ import type { RunSummary } from '@/lib/reportTypes';
 import { NAV_ITEMS, useAppNav } from '@/components/nav-config';
 import { LayoutModeToggle } from '@/components/LayoutModeToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { EquitableMark } from '@/components/brand/EquitableMark';
 
 const ACTION_COLORS: Record<string, string> = {
   BUY:   'bg-green-600 text-white',
@@ -79,7 +80,7 @@ export function MobileTopBar() {
               style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
             >
               <div className="flex items-center gap-2">
-                <img src="/icon-192x192.png" alt="Equitable" className="w-7 h-7 rounded-full" />
+                <EquitableMark size={28} />
                 <span className="text-sm font-bold tracking-wide text-foreground">Equitable</span>
               </div>
               <button onClick={() => setMenuOpen(false)} className="p-1 rounded-md hover:bg-muted">
