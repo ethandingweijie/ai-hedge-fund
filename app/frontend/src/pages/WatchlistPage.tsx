@@ -15,7 +15,7 @@ import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { SwipeableCard } from '@/components/mobile/SwipeableCard';
 import { GradeChip } from '@/components/v2/shared';
 import { PageContainer } from '@/components/layout/PageContainer';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { TabHero } from '@/components/layout/TabHero';
 
 // ── Grade pill ────────────────────────────────────────────────────────────────
 function GradePill({ grade }: { grade?: string }) {
@@ -207,12 +207,10 @@ export function WatchlistPage() {
   if (mode === 'mobile') {
     return (
       <div className="min-h-full flex flex-col bg-background">
-        {/* Hero — kept minimal, matches HistoryPage top bar spacing */}
-        <div className="px-4 pt-4 pb-2 pr-14">
-          {lastRefreshed && (
-            <span className="text-xs text-muted-foreground/70">· updated {lastRefreshed.toLocaleTimeString()}</span>
-          )}
-        </div>
+        <TabHero
+          title="Watchlist"
+          subtitle={lastRefreshed ? `Live prices · updated ${lastRefreshed.toLocaleTimeString()}` : 'Track the tickers you follow'}
+        />
 
         <div className="px-4 py-3 space-y-3">
           {/* Add ticker */}
@@ -330,14 +328,15 @@ export function WatchlistPage() {
 
   // ── DESKTOP LAYOUT ──────────────────────────────────────────────────────────
   return (
-    <PageContainer size="wide">
-      <PageHeader
-        title="Watchlist"
-        subtitle="Live prices refresh every 15s · click any row to open the full report."
-        actions={lastRefreshed
-          ? <span className="text-xs text-muted-foreground whitespace-nowrap">Prices updated {lastRefreshed.toLocaleTimeString()}</span>
-          : undefined}
-      />
+    <>
+    <TabHero
+      title="Watchlist"
+      subtitle="Live prices refresh every 15s · click any row to open the full report."
+      actions={lastRefreshed
+        ? <span className="text-xs text-current opacity-70 whitespace-nowrap">Prices updated {lastRefreshed.toLocaleTimeString()}</span>
+        : undefined}
+    />
+    <PageContainer size="wide" flush className="py-5 md:py-6">
 
           {/* Add ticker */}
           <Card className="p-4 mb-6">
@@ -515,5 +514,6 @@ export function WatchlistPage() {
             </div>
           )}
     </PageContainer>
+    </>
   );
 }

@@ -15,6 +15,8 @@
     --primary: 96 72% 67%;          /* ~#9FE870 Wise green (button fills) */
     --primary-foreground: 100 45% 10%; /* dark forest text on green buttons */
     --brand: 140 45% 32%;           /* ~#297A4B mid green: text/links/active icons */
+    --hero: 147 48% 13%;            /* Grab-style deep green page-hero band */
+    --hero-foreground: 90 25% 95%;  /* cream text on hero band */
     --secondary: 90 15% 91%;
     --secondary-foreground: 100 40% 12%;
     --muted: 90 15% 91%;
@@ -95,6 +97,8 @@
     --primary: 96 60% 58%;            /* deeper green for contrast on dark bg */
     --primary-foreground: 100 45% 8%;
     --brand: 96 55% 68%;              /* lighter green for text on dark bg */
+    --hero: 150 25% 11%;              /* hero band: slightly richer than dark bg */
+    --hero-foreground: 90 20% 93%;
     --secondary: 150 12% 18%;
     --secondary-foreground: 90 20% 92%;
     --muted: 150 12% 18%;

@@ -17,7 +17,7 @@ import { AlertCard } from '@/components/dd/AlertCard';
 import { DigestPanel } from '@/components/dd/DigestPanel';
 import { PerformanceFooter } from '@/components/dd/PerformanceFooter';
 import { PageContainer } from '@/components/layout/PageContainer';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { TabHero } from '@/components/layout/TabHero';
 
 const REFRESH_MS = 5 * 60 * 1000;   // 5 min auto-refresh
 
@@ -84,23 +84,24 @@ export function DDAlertsPage() {
   }, [filtered, todayIso]);
 
   return (
-    <PageContainer size="default">
-      <PageHeader
-        title="Auto Due-D"
-        subtitle="Bidirectional ±10% movement detection · directional cooldown · real-time Slack push + persistent dashboard"
-        actions={
-          <button
-            onClick={refresh}
-            disabled={loading}
-            className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border bg-muted/30"
-          >
-            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-            {lastRefreshed
-              ? `${lastRefreshed.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
-              : 'Refresh'}
-          </button>
-        }
-      />
+    <>
+    <TabHero
+      title="Auto Due-D"
+      subtitle="Bidirectional ±10% movement detection · directional cooldown · real-time Slack push + persistent dashboard"
+      actions={
+        <button
+          onClick={refresh}
+          disabled={loading}
+          className="flex items-center gap-1.5 text-[11px] text-current opacity-80 hover:opacity-100 px-2.5 py-1.5 rounded-full border border-muted-foreground/40 hover:bg-muted-foreground/15 transition-all"
+        >
+          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+          {lastRefreshed
+            ? `${lastRefreshed.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`
+            : 'Refresh'}
+        </button>
+      }
+    />
+    <PageContainer size="default" flush className="py-5 md:py-6">
       <div className="space-y-4">
       {/* Error banner */}
       {error && (
@@ -171,6 +172,7 @@ export function DDAlertsPage() {
       <PerformanceFooter sinceDays={30} />
       </div>
     </PageContainer>
+    </>
   );
 }
 

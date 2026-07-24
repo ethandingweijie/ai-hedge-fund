@@ -55,6 +55,10 @@ const config: Config = {
   				foreground: 'hsl(var(--primary-foreground))'
   			},
   			brand: 'hsl(var(--brand) / <alpha-value>)',
+  			hero: {
+  				DEFAULT: 'hsl(var(--hero) / <alpha-value>)',
+  				foreground: 'hsl(var(--hero-foreground) / <alpha-value>)'
+  			},
   			secondary: {
   				DEFAULT: 'hsl(var(--secondary))',
   				foreground: 'hsl(var(--secondary-foreground))'

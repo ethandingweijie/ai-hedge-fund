@@ -29,6 +29,7 @@ import {
   SwipeRow,
 } from '@/components/v2/shared';
 import { toast } from 'sonner';
+import { TabHero } from '@/components/layout/TabHero';
 
 /* ───────── Filter option sets ───────── */
 // Union of sector labels across US, HK, SG markets (per ScreenerPage).
@@ -251,13 +252,14 @@ export function HistoryPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-background">
+      <TabHero title="History" subtitle="Revisit past analysis runs" />
       {/* Desktop: constrain to a centered column. Wider on desktop (max-w-7xl)
           to host the 2-column run grid below; narrower (max-w-5xl) otherwise.
           On mobile the max-width exceeds the 430px frame, so it no-ops and the
           content fills the phone width as before. */}
       <div className={`w-full mx-auto flex flex-1 flex-col ${isDesktop ? 'max-w-7xl' : 'max-w-5xl'}`}>
       {/* Search */}
-      <div className="px-3 pt-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
+      <div className="px-3 pt-3">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={15} height={15}/>
           <input

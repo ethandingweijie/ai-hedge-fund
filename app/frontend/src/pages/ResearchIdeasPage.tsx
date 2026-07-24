@@ -17,7 +17,7 @@ import {
 import { Lightbulb, ChevronRight, Loader2, Sparkles, X, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { TabHero } from '@/components/layout/TabHero';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 
 
@@ -254,24 +254,24 @@ export function ResearchIdeasPage() {
   };
 
   return (
-    <PageContainer size={isDesktop ? 'wide' : 'default'}>
-      <PageHeader
-        icon={Lightbulb}
-        iconClassName="text-amber-500"
-        title="Research Ideas"
-        subtitle="Standalone valuation cohorts. Each idea lives outside the main DCF pipeline."
-        actions={
-          <button
-            onClick={() => { if (!loading) load(); }}
-            disabled={loading}
-            className="p-1.5 rounded-full hover:bg-muted disabled:opacity-50"
-            title="Re-fetch latest cohorts (auto-fires on tab focus too)"
-            aria-label="Refresh"
-          >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} className="text-muted-foreground" />}
-          </button>
-        }
-      />
+    <>
+    <TabHero
+      icon={Lightbulb}
+      title="Research Ideas"
+      subtitle="Standalone valuation cohorts. Each idea lives outside the main DCF pipeline."
+      actions={
+        <button
+          onClick={() => { if (!loading) load(); }}
+          disabled={loading}
+          className="p-2 rounded-full text-current opacity-80 hover:opacity-100 hover:bg-muted-foreground/15 disabled:opacity-50 transition-all"
+          title="Re-fetch latest cohorts (auto-fires on tab focus too)"
+          aria-label="Refresh"
+        >
+          {loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+        </button>
+      }
+    />
+    <PageContainer size={isDesktop ? 'wide' : 'default'} flush className="py-5 md:py-6">
 
         {loading && (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -684,5 +684,6 @@ export function ResearchIdeasPage() {
           })}
         </div>
     </PageContainer>
+    </>
   );
 }

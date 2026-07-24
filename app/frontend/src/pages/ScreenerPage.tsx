@@ -30,6 +30,7 @@ import {
   BRAND,
 } from '@/components/v2/shared';
 import { toast } from 'sonner';
+import { TabHero } from '@/components/layout/TabHero';
 
 type Market = 'US' | 'HK' | 'SG';
 type SortKey = 'composite' | 'valuation' | 'growth' | 'profitability' | 'momentum';
@@ -195,8 +196,9 @@ export function ScreenerPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-background">
+      <TabHero title="Screener" subtitle="Rank stocks by V·G·P·M grades" />
       {/* Market segmented control */}
-      <div className="px-3 pt-3" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}>
+      <div className="px-3 pt-3">
         <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/60 rounded-lg">
           {(['US', 'HK', 'SG'] as Market[]).map(m => (
             <button

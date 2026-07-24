@@ -11,7 +11,8 @@ import { getStockData, searchCompanies, getPopularTickers, getRunResult, type Co
 import { API_BASE_URL } from '@/config';
 import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 // v2 imports
-import { Search as V2Search, Scales as V2Scales, Clock as V2Clock, Star as V2Star, Users as V2Users } from '@/components/v2/shared';
+import { Search as V2Search, Users as V2Users } from '@/components/v2/shared';
+import { Filter, Lightbulb, BookMarked, BellRing, History as HistoryIcon } from 'lucide-react';
 import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun, mergeDataPreserve } from '@/contexts/active-run-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
@@ -1202,32 +1203,39 @@ export function ReportPage() {
             </div>
           )}
 
-          {/* Quick chips */}
-          <div className="px-4 mt-5 flex items-center justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => navigate('/screener')}
-              className="h-9 px-3.5 rounded-full bg-card/80 border border-brand/25 text-[12px] font-medium text-foreground active:bg-card flex items-center gap-1.5 transition-colors"
-            >
-              <V2Scales className="text-brand" width={13} height={13}/>
-              Screener
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/watchlist')}
-              className="h-9 px-3.5 rounded-full bg-card/80 border border-brand/25 text-[12px] font-medium text-foreground active:bg-card flex items-center gap-1.5 transition-colors"
-            >
-              <V2Star className="text-brand" width={13} height={13}/>
-              Watchlist
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/history')}
-              className="h-9 px-3.5 rounded-full bg-card/80 border border-brand/25 text-[12px] font-medium text-foreground active:bg-card flex items-center gap-1.5 transition-colors"
-            >
-              <V2Clock className="text-brand" width={13} height={13}/>
-              History
-            </button>
+          {/* Feature tiles — Grab-style quick actions: each main tab gets a
+              big playful squircle icon with its own colour identity, so the
+              app's features read at a glance. */}
+          <div className="px-4 mt-6 flex flex-wrap justify-center gap-x-3 gap-y-4">
+            {[
+              { icon: Filter,      label: 'Screener',       path: '/screener',
+                wrap: 'bg-gradient-to-br from-lime-300 to-emerald-200 dark:from-emerald-500/40 dark:to-emerald-500/15',
+                tint: 'text-emerald-800 dark:text-emerald-200' },
+              { icon: Lightbulb,   label: 'Research Ideas', path: '/research-ideas',
+                wrap: 'bg-gradient-to-br from-amber-300 to-yellow-200 dark:from-amber-500/40 dark:to-amber-500/15',
+                tint: 'text-amber-800 dark:text-amber-200' },
+              { icon: BookMarked,  label: 'Watchlist',      path: '/watchlist',
+                wrap: 'bg-gradient-to-br from-teal-300 to-cyan-200 dark:from-teal-500/40 dark:to-teal-500/15',
+                tint: 'text-teal-800 dark:text-teal-200' },
+              { icon: BellRing,    label: 'Auto Due-D',     path: '/dd-alerts',
+                wrap: 'bg-gradient-to-br from-orange-300 to-amber-200 dark:from-orange-500/40 dark:to-orange-500/15',
+                tint: 'text-orange-800 dark:text-orange-200' },
+              { icon: HistoryIcon, label: 'History',        path: '/history',
+                wrap: 'bg-gradient-to-br from-violet-300 to-purple-200 dark:from-violet-500/40 dark:to-violet-500/15',
+                tint: 'text-violet-800 dark:text-violet-200' },
+            ].map(({ icon: Icon, label, path, wrap, tint }) => (
+              <button
+                key={path}
+                type="button"
+                onClick={() => navigate(path)}
+                className="w-[30%] min-w-[104px] max-w-[150px] py-1 flex flex-col items-center gap-2.5 group"
+              >
+                <span className={`w-16 h-16 rounded-[22px] ${wrap} shadow-sm flex items-center justify-center transition-transform duration-150 group-hover:scale-110 group-hover:-rotate-3 group-active:scale-95`}>
+                  <Icon size={30} strokeWidth={2.75} className={tint} />
+                </span>
+                <span className="text-[14px] font-semibold text-foreground/85 leading-none">{label}</span>
+              </button>
+            ))}
           </div>
 
           {/* Popular marquee tape */}
