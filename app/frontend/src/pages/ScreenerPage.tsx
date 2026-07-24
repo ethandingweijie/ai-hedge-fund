@@ -196,7 +196,7 @@ export function ScreenerPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-background">
-      <TabHero title="Screener" subtitle="Rank stocks by V·G·P·M grades" />
+      <TabHero title="Screener" />
       {/* Market segmented control */}
       <div className="px-3 pt-3">
         <div className="flex items-center gap-1 p-1 bg-muted/60 border border-border/60 rounded-lg">

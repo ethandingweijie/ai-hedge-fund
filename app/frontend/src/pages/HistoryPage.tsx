@@ -252,7 +252,7 @@ export function HistoryPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col bg-background">
-      <TabHero title="History" subtitle="Revisit past analysis runs" />
+      <TabHero title="History" />
       {/* Desktop: constrain to a centered column. Wider on desktop (max-w-7xl)
           to host the 2-column run grid below; narrower (max-w-5xl) otherwise.
           On mobile the max-width exceeds the 430px frame, so it no-ops and the

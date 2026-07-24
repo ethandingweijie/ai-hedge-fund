@@ -258,7 +258,6 @@ export function ResearchIdeasPage() {
     <TabHero
       icon={Lightbulb}
       title="Research Ideas"
-      subtitle="Standalone valuation cohorts. Each idea lives outside the main DCF pipeline."
       actions={
         <button
           onClick={() => { if (!loading) load(); }}

@@ -87,7 +87,6 @@ export function DDAlertsPage() {
     <>
     <TabHero
       title="Auto Due-D"
-      subtitle="Bidirectional ±10% movement detection · directional cooldown · real-time Slack push + persistent dashboard"
       actions={
         <button
           onClick={refresh}

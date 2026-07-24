@@ -207,10 +207,7 @@ export function WatchlistPage() {
   if (mode === 'mobile') {
     return (
       <div className="min-h-full flex flex-col bg-background">
-        <TabHero
-          title="Watchlist"
-          subtitle={lastRefreshed ? `Live prices · updated ${lastRefreshed.toLocaleTimeString()}` : 'Track the tickers you follow'}
-        />
+        <TabHero title="Watchlist" />
 
         <div className="px-4 py-3 space-y-3">
           {/* Add ticker */}
@@ -331,7 +328,6 @@ export function WatchlistPage() {
     <>
     <TabHero
       title="Watchlist"
-      subtitle="Live prices refresh every 15s · click any row to open the full report."
       actions={lastRefreshed
         ? <span className="text-xs text-current opacity-70 whitespace-nowrap">Prices updated {lastRefreshed.toLocaleTimeString()}</span>
         : undefined}
