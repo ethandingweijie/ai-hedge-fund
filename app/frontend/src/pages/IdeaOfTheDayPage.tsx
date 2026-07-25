@@ -230,7 +230,7 @@ export function IdeaOfTheDayPage() {
           {/* Theme — shown only for thematic modes (geographic / sector).
               Renders ABOVE the hypothesis so the macro framing comes first. */}
           {(idea.theme || idea.industry_theme) && (
-            <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground">
+            <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
               <span className="font-bold">
                 {idea.idea_mode === 'thematic_geographic' ? 'Geographic theme: ' : 'Sector theme: '}
               </span>
@@ -238,27 +238,27 @@ export function IdeaOfTheDayPage() {
             </p>
           )}
 
-          <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground">
+          <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
             <span className="font-bold">Hypothesis: </span>
             {idea.hypothesis}
           </p>
 
-          <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground">
+          <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
             <span className="font-bold">Deep value ({idea.deep_value_score}/10): </span>
             {idea.deep_value_angle}
           </p>
 
-          <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground">
+          <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
             <span className="font-bold">Asymmetric ({idea.asymmetry_score}/10): </span>
             {idea.asymmetric_angle}
           </p>
 
-          <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground">
+          <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
             <span className="font-bold">Contrarian ({idea.contrarian_score}/10): </span>
             {idea.contrarian_angle}
           </p>
 
-          <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground">
+          <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
             <span className="font-bold">Catalyst: </span>
             {idea.primary_catalyst}
             {idea.catalyst_timeline && (
@@ -267,7 +267,7 @@ export function IdeaOfTheDayPage() {
           </p>
 
           {(idea.key_risks || []).length > 0 && (
-            <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground">
+            <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
               <span className="font-bold inline-flex items-center gap-1.5">
                 <AlertTriangle size={15} className="text-rose-600 dark:text-rose-400" /> Key risks:
               </span>{' '}
@@ -279,7 +279,7 @@ export function IdeaOfTheDayPage() {
         {/* Sources */}
         {idea.sources && idea.sources.length > 0 && (
           <div className="mb-6">
-            <p className="text-[16px] sm:text-[17px] leading-[1.6] text-foreground font-bold mb-1.5">
+            <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground font-bold mb-1.5">
               Sources ({idea.sources.length})
             </p>
             <div className="space-y-2">
@@ -289,7 +289,7 @@ export function IdeaOfTheDayPage() {
                   href={s.url || '#'}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-start gap-2 text-[15px] leading-[1.5] text-foreground/80 hover:text-brand transition-colors"
+                  className="flex items-start gap-2 text-[17px] leading-[1.5] text-foreground/80 hover:text-brand transition-colors"
                 >
                   <ExternalLink size={13} className="mt-1 flex-shrink-0 text-muted-foreground" />
                   <span className="flex-1">{s.title}{s.date ? ` (${s.date})` : ''}</span>
