@@ -318,24 +318,6 @@ export function ResearchIdeasPage() {
                   + (isDesktop && isAi ? ' lg:col-span-2' : '')
                 }
               >
-                {/* Shortlisted ribbon — a real nested <button> (legal now
-                    that the card root is a <div>, not a <button>), with its
-                    own stopPropagation so it navigates to the shortlist list
-                    instead of the card's idea-detail click. Classic diagonal
-                    corner-ribbon banner, clipped by the card's overflow-hidden
-                    so it drapes neatly across the top-right corner. */}
-                {isAi && (idea.ticker_count ?? 0) > 0 && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); navigate('/research-ideas/shortlist'); }}
-                    title={`View your ${idea.ticker_count} shortlisted idea${idea.ticker_count === 1 ? '' : 's'}`}
-                    aria-label={`View your ${idea.ticker_count} shortlisted ideas`}
-                    className="absolute top-[18px] right-[-42px] z-10 w-[170px] rotate-45 origin-center bg-primary text-primary-foreground text-[11px] font-bold uppercase tracking-wider py-1.5 shadow-md hover:brightness-95 active:scale-[0.97] transition-transform"
-                  >
-                    {idea.ticker_count} shortlisted
-                  </button>
-                )}
-
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -348,8 +330,25 @@ export function ResearchIdeasPage() {
                           AI
                         </span>
                       )}
-                      <span className={`${sz.title} font-semibold text-foreground pr-16`}>{idea.name}</span>
+                      <span className={`${sz.title} font-semibold text-foreground`}>{idea.name}</span>
                     </div>
+                    {/* Shortlisted pill — a real nested <button> (legal now
+                        that the card root is a <div>, not a <button>), with
+                        its own stopPropagation so it navigates to the
+                        shortlist list instead of the card's idea-detail
+                        click. Classic solid-green rounded pill, sits right
+                        below the title. */}
+                    {isAi && (idea.ticker_count ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate('/research-ideas/shortlist'); }}
+                        title={`View your ${idea.ticker_count} shortlisted idea${idea.ticker_count === 1 ? '' : 's'}`}
+                        aria-label={`View your ${idea.ticker_count} shortlisted ideas`}
+                        className={`inline-flex items-center gap-1 ${sz.badge} px-2.5 py-1 mb-2.5 rounded-full bg-primary text-primary-foreground font-bold uppercase tracking-wider hover:brightness-95 active:scale-[0.97] transition`}
+                      >
+                        {idea.ticker_count} shortlisted
+                      </button>
+                    )}
                     {/* Direction tag + stock count share one line, below the
                         title, so the LONG/SHORT badge always sits beside the
                         stock count regardless of how long the title wraps
@@ -366,7 +365,14 @@ export function ResearchIdeasPage() {
                         </span>
                       </div>
                     )}
-                    <p className={`${sz.blurb} text-muted-foreground mb-3`}>{idea.blurb}</p>
+                    {/* Grey blurb removed for the AI card per user request —
+                        the write-up itself (theme/hypothesis/pillars) already
+                        speaks for it; the generic "AI-generated..." copy was
+                        redundant clutter. Still shown for the other cohort
+                        cards (SW46/HK50/etc.) where it's the only description. */}
+                    {!isAi && (
+                      <p className={`${sz.blurb} text-muted-foreground mb-3`}>{idea.blurb}</p>
+                    )}
                     <div className={`flex items-center gap-4 ${sz.meta} text-muted-foreground mb-3 flex-wrap`}>
                       <span>
                         {isAi ? 'Last idea: ' : 'Last run: '}
