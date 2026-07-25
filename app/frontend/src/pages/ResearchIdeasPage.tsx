@@ -300,7 +300,7 @@ export function ResearchIdeasPage() {
                 onClick={() => handleClick(idea)}
                 className={
                   (isAi
-                    ? `w-full text-left ${sz.pad} rounded-lg border-2 border-purple-400/40 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-900/15 hover:bg-purple-100 dark:hover:bg-purple-900/25 transition-colors group relative`
+                    ? `w-full text-left ${sz.pad} rounded-lg border-2 border-primary/40 bg-card hover:bg-muted/50 transition-colors group relative`
                     : `w-full text-left ${sz.pad} rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group`)
                   + (isDesktop ? ' h-full' : '')
                   + (isDesktop && isAi ? ' lg:col-span-2' : '')
@@ -311,7 +311,7 @@ export function ResearchIdeasPage() {
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       {isAi && (
                         <span
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-500/30 text-purple-900 dark:text-purple-100 text-[11px] font-bold uppercase tracking-wider"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/20 text-brand text-[11px] font-bold uppercase tracking-wider"
                           title="Generated daily by Qwen3.6-plus with native web search"
                         >
                           <Sparkles size={10} />
@@ -321,7 +321,7 @@ export function ResearchIdeasPage() {
                       <span className={`${sz.title} font-semibold text-foreground`}>{idea.name}</span>
                       {isAi && (idea.ticker_count ?? 0) > 0 && (
                         <span
-                          className={`${sz.badge} px-2 py-1 rounded bg-purple-500/20 text-purple-800 dark:text-purple-200 font-semibold uppercase tracking-wider`}
+                          className={`${sz.badge} px-2 py-1 rounded-full bg-muted text-foreground/80 font-semibold uppercase tracking-wider`}
                           title="Number of ideas you've shortlisted"
                         >
                           {idea.ticker_count} shortlisted
@@ -373,7 +373,7 @@ export function ResearchIdeasPage() {
                       {isAi && idea.latest_idea_conviction != null && (
                         <span>
                           Conviction:{' '}
-                          <span className="font-mono font-semibold text-purple-700 dark:text-purple-300">
+                          <span className="font-mono font-semibold text-brand">
                             {idea.latest_idea_conviction}/10
                           </span>
                         </span>
@@ -385,32 +385,22 @@ export function ResearchIdeasPage() {
                         catalyst preview. Mirrors the detail-page format so
                         the card meaningfully summarises the idea at a glance. */}
                     {isAi && idea.latest_idea_ticker && (
-                      <div className="mt-3 pt-3 border-t border-purple-300/40 dark:border-purple-500/20 space-y-2.5">
-                        {/* Mode + region + vehicle badges */}
+                      <div className="mt-3 pt-3 border-t border-border space-y-2.5">
+                        {/* Mode + region + vehicle badges — one quiet brand
+                            pill style for every mode, matching the detail page. */}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {idea.latest_idea_mode && (
-                            <span
-                              className={
-                                'px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider ' +
-                                (idea.latest_idea_mode === 'thematic_geographic'
-                                  ? 'bg-amber-500/20 text-amber-900 dark:text-amber-200'
-                                  : idea.latest_idea_mode === 'thematic_sector'
-                                  ? 'bg-cyan-500/20 text-cyan-900 dark:text-cyan-200'
-                                  : idea.latest_idea_mode === 'special_situation'
-                                  ? 'bg-rose-500/20 text-rose-900 dark:text-rose-200'
-                                  : 'bg-emerald-500/20 text-emerald-900 dark:text-emerald-200')
-                              }
-                            >
+                            <span className="px-2 py-1 rounded-full text-[11px] font-semibold bg-primary/15 text-brand">
                               {idea.latest_idea_mode.replace('_', ' ')}
                             </span>
                           )}
                           {idea.latest_idea_region && (
-                            <span className="px-2 py-1 rounded bg-muted text-foreground/80 text-[11px] font-semibold">
+                            <span className="px-2 py-1 rounded-full bg-muted text-foreground/80 text-[11px] font-semibold">
                               {idea.latest_idea_region}
                             </span>
                           )}
                           {idea.latest_idea_vehicle && idea.latest_idea_vehicle !== 'stock' && (
-                            <span className="px-2 py-1 rounded bg-muted text-foreground/80 text-[11px] font-semibold uppercase">
+                            <span className="px-2 py-1 rounded-full bg-muted text-foreground/80 text-[11px] font-semibold uppercase">
                               {idea.latest_idea_vehicle}
                             </span>
                           )}
@@ -418,7 +408,7 @@ export function ResearchIdeasPage() {
 
                         {/* Ticker + company line */}
                         <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className="font-mono text-base font-bold text-purple-900 dark:text-purple-100">
+                          <span className="font-mono text-base font-bold text-foreground">
                             {idea.latest_idea_ticker}
                           </span>
                           {idea.latest_idea_company && (
@@ -426,15 +416,15 @@ export function ResearchIdeasPage() {
                               {idea.latest_idea_company}
                             </span>
                           )}
-                          <span className="text-[12px] uppercase tracking-wider text-purple-700/70 dark:text-purple-300/70 ml-auto">
+                          <span className="text-[12px] uppercase tracking-wider text-brand/80 ml-auto">
                             Today's hypothesis
                           </span>
                         </div>
 
                         {/* Theme line for thematic modes */}
                         {idea.latest_idea_theme && (
-                          <p className="text-[12px] text-amber-800 dark:text-amber-300 leading-relaxed line-clamp-2">
-                            <span className="font-semibold">Theme:</span>{' '}
+                          <p className="text-[12px] text-foreground/80 leading-relaxed line-clamp-2">
+                            <span className="font-semibold text-foreground">Theme:</span>{' '}
                             {idea.latest_idea_theme}
                           </p>
                         )}
@@ -446,8 +436,8 @@ export function ResearchIdeasPage() {
 
                         {/* Catalyst preview */}
                         {idea.latest_idea_catalyst && (
-                          <p className="text-[12px] text-cyan-800 dark:text-cyan-300 leading-relaxed line-clamp-2">
-                            <span className="font-semibold">Catalyst:</span>{' '}
+                          <p className="text-[12px] text-foreground/80 leading-relaxed line-clamp-2">
+                            <span className="font-semibold text-foreground">Catalyst:</span>{' '}
                             {idea.latest_idea_catalyst}
                           </p>
                         )}
@@ -455,7 +445,7 @@ export function ResearchIdeasPage() {
                     )}
 
                     {isAi && !idea.latest_idea_ticker && (
-                      <div className="mt-3 pt-3 border-t border-purple-300/40 dark:border-purple-500/20">
+                      <div className="mt-3 pt-3 border-t border-border">
                         <p className="text-[13px] text-muted-foreground italic">
                           No idea generated yet. Click the + button to spin one up.
                         </p>
@@ -656,7 +646,7 @@ export function ResearchIdeasPage() {
                         <button
                           onClick={handleGenerateIdea}
                           disabled={generatingIdea}
-                          className="p-1.5 rounded-full bg-purple-500/30 hover:bg-purple-500/50 text-purple-900 dark:text-purple-100 disabled:opacity-50"
+                          className="p-1.5 rounded-full bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                           title="Generate a new contrarian idea (~30-90s, costs ~$0.01)"
                           aria-label="Generate new idea"
                         >
