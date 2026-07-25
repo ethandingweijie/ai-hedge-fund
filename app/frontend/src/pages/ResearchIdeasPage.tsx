@@ -295,17 +295,47 @@ export function ResearchIdeasPage() {
             const isAi = idea.id === 'idea_of_the_day';
             const sides = ideaSides(idea.id);
             return (
-              <button
+              // A <div role="button"> — not a real <button> — because this
+              // card nests its own interactive buttons (generate/delete,
+              // and the shortlisted ribbon below). <button> cannot legally
+              // contain <button>; browsers (Safari/WebKit especially, which
+              // this app ships to via Capacitor) can silently mis-parse or
+              // drop clicks on the nested ones. onKeyDown mirrors native
+              // button Enter/Space activation for keyboard users.
+              <div
                 key={idea.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => handleClick(idea)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(idea); }
+                }}
                 className={
                   (isAi
-                    ? `w-full text-left ${sz.pad} rounded-lg border-2 border-primary/40 bg-card hover:bg-muted/50 transition-colors group relative`
-                    : `w-full text-left ${sz.pad} rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group`)
+                    ? `w-full text-left ${sz.pad} rounded-lg border-2 border-primary/40 bg-card hover:bg-muted/50 transition-colors group relative overflow-hidden cursor-pointer`
+                    : `w-full text-left ${sz.pad} rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors group cursor-pointer`)
                   + (isDesktop ? ' h-full' : '')
                   + (isDesktop && isAi ? ' lg:col-span-2' : '')
                 }
               >
+                {/* Shortlisted ribbon — a real nested <button> (legal now
+                    that the card root is a <div>, not a <button>), with its
+                    own stopPropagation so it navigates to the shortlist list
+                    instead of the card's idea-detail click. Classic diagonal
+                    corner-ribbon banner, clipped by the card's overflow-hidden
+                    so it drapes neatly across the top-right corner. */}
+                {isAi && (idea.ticker_count ?? 0) > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); navigate('/research-ideas/shortlist'); }}
+                    title={`View your ${idea.ticker_count} shortlisted idea${idea.ticker_count === 1 ? '' : 's'}`}
+                    aria-label={`View your ${idea.ticker_count} shortlisted ideas`}
+                    className="absolute top-[18px] right-[-42px] z-10 w-[170px] rotate-45 origin-center bg-primary text-primary-foreground text-[11px] font-bold uppercase tracking-wider py-1.5 shadow-md hover:brightness-95 active:scale-[0.97] transition-transform"
+                  >
+                    {idea.ticker_count} shortlisted
+                  </button>
+                )}
+
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -318,15 +348,7 @@ export function ResearchIdeasPage() {
                           AI
                         </span>
                       )}
-                      <span className={`${sz.title} font-semibold text-foreground`}>{idea.name}</span>
-                      {isAi && (idea.ticker_count ?? 0) > 0 && (
-                        <span
-                          className={`${sz.badge} px-2 py-1 rounded-full bg-muted text-foreground/80 font-semibold uppercase tracking-wider`}
-                          title="Number of ideas you've shortlisted"
-                        >
-                          {idea.ticker_count} shortlisted
-                        </span>
-                      )}
+                      <span className={`${sz.title} font-semibold text-foreground pr-16`}>{idea.name}</span>
                     </div>
                     {/* Direction tag + stock count share one line, below the
                         title, so the LONG/SHORT badge always sits beside the
@@ -668,7 +690,7 @@ export function ResearchIdeasPage() {
                     <ChevronRight size={18} className="text-muted-foreground group-hover:text-foreground" />
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
