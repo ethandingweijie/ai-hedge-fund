@@ -130,7 +130,13 @@ const TICKER_KEYED_FIELDS = new Set<string>([
   'sectors',
   'vgpm',
   'decisions',
-  'analyst_signals',
+  // NOTE: 'analyst_signals' is deliberately NOT here. It is keyed AGENT-first
+  // ({agent_key: {ticker: signal}}), not ticker-first, so normalisePartialData's
+  // `T in obj` ticker probe fails and the else-branch would mis-wrap the whole
+  // dict under the ticker ({PYPL: {pabrai: {...}}}) — unreadable by the panels.
+  // Leaving it out lets it pass through untouched; mergeDataPreserve then
+  // inner-merges per agent_key as each investor's signal streams in, and its
+  // own empty-{} clobber guard still protects populated agents.
   // Sector valuation card — emitted mid-run from pipeline.py (after the DCF
   // engine, then again after the final render). Already ticker-keyed
   // ({ticker: payload}), so normalisePartialData passes it through and

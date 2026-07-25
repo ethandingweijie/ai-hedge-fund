@@ -12,7 +12,7 @@ import { API_BASE_URL } from '@/config';
 import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 // v2 imports
 import { Search as V2Search, Users as V2Users } from '@/components/v2/shared';
-import { Filter, Lightbulb, BookMarked, BellRing, History as HistoryIcon } from 'lucide-react';
+import { Filter, Lightbulb, BookMarked, BellRing, History as HistoryIcon, Wallet } from 'lucide-react';
 import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun, mergeDataPreserve } from '@/contexts/active-run-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
@@ -1217,6 +1217,9 @@ export function ReportPage() {
               { icon: BookMarked,  label: 'Watchlist',      path: '/watchlist',
                 wrap: 'bg-gradient-to-br from-teal-300 to-cyan-200 dark:from-teal-500/40 dark:to-teal-500/15',
                 tint: 'text-teal-800 dark:text-teal-200' },
+              { icon: Wallet,      label: 'Robo Strategy',  path: '/robo-strategy',
+                wrap: 'bg-gradient-to-br from-sky-300 to-blue-200 dark:from-blue-500/40 dark:to-blue-500/15',
+                tint: 'text-blue-800 dark:text-blue-200' },
               { icon: BellRing,    label: 'Auto Due-D',     path: '/dd-alerts',
                 wrap: 'bg-gradient-to-br from-orange-300 to-amber-200 dark:from-orange-500/40 dark:to-orange-500/15',
                 tint: 'text-orange-800 dark:text-orange-200' },

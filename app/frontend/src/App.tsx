@@ -15,6 +15,7 @@ import { ShortlistedIdeasPage } from './pages/ShortlistedIdeasPage';
 import { PricingPage } from './pages/PricingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DDAlertsPage } from './pages/DDAlertsPage';
+import { RoboStrategyPage } from './pages/RoboStrategyPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
 import { ThemeProvider } from './contexts/theme-context';
 import { AuthProvider, useAuth } from './contexts/auth-context';
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />
           <Route path="/screener" element={<RequireAuth><ScreenerPage /></RequireAuth>} />
           <Route path="/watchlist" element={<RequireAuth><WatchlistPage /></RequireAuth>} />
+          <Route path="/robo-strategy" element={<RequireAuth><RoboStrategyPage /></RequireAuth>} />
           <Route path="/dd-alerts" element={<RequireAuth><DDAlertsPage /></RequireAuth>} />
           <Route path="/research-ideas" element={<RequireAuth><ResearchIdeasPage /></RequireAuth>} />
           <Route path="/research-ideas/sw46" element={<RequireAuth><SW46Page /></RequireAuth>} />

@@ -1328,3 +1328,90 @@ export function removeContrarianFromShortlist(ideaId: string): Promise<{ removed
     { method: 'DELETE' },
   );
 }
+
+// ── Robo Strategy (deterministic asset-allocation recommender) ──────────────
+// Field naming mirrors the backend exactly: snake_case at the response
+// envelope (etf_portfolio, total_investment, ...) and camelCase on each
+// holding item (allocationPercent, expenseRatio, ...) — the backend's own
+// mixed casing, ported straight from the "Robo Strategy" prototype's TS
+// engine field names, not a frontend-side translation layer.
+
+export type RoboRiskTolerance = 'conservative' | 'moderate' | 'aggressive';
+export type RoboTimeHorizon = '<3 years' | '3-7 years' | '7-15 years' | '15+ years';
+
+/** Canonical 11-sector taxonomy, matching the Screener's US sector field
+ * values exactly so sector weights apply consistently to live candidates. */
+export const ROBO_SECTORS = [
+  'Technology', 'Healthcare', 'Consumer Cyclical', 'Financial Services',
+  'Communication Services', 'Consumer Defensive', 'Energy', 'Industrials',
+  'Basic Materials', 'Real Estate', 'Utilities',
+] as const;
+
+export const ROBO_REGIONS = ['US', 'International Developed', 'Emerging Markets'] as const;
+
+export interface RoboQuestionnaire {
+  risk_tolerance: RoboRiskTolerance;
+  time_horizon: RoboTimeHorizon;
+  sector_preferences: Record<string, number>;
+  geography_preferences: Record<string, number>;
+  investment_amount: number;
+}
+
+export interface RoboTopHolding {
+  asset: string | null;
+  name: string | null;
+  weightPercentage: number;
+}
+
+export interface RoboHolding {
+  ticker: string;
+  name: string;
+  category?: string | null;
+  sector: string | null;
+  region: string | null;
+  allocationPercent: number;
+  amount: number;
+  shares: number;
+  price: number;
+  expenseRatio?: number | null;
+  riskLevel?: string | null;
+  topHoldings?: RoboTopHolding[];
+}
+
+export interface RoboBreakdowns {
+  sector: Record<string, number>;
+  geography: Record<string, number>;
+  risk: Record<string, number>;
+}
+
+export interface RoboPortfolio {
+  etf_portfolio: RoboHolding[];
+  stock_portfolio: RoboHolding[];
+  etf_breakdowns: RoboBreakdowns;
+  stock_breakdowns: RoboBreakdowns;
+  total_investment: number;
+  generated_at: string;
+}
+
+export interface RoboProfileResponse {
+  answers: RoboQuestionnaire | null;
+  portfolio: RoboPortfolio | null;
+}
+
+/** Load the logged-in user's saved questionnaire draft + last-generated
+ * portfolio, if any (both null for a first-time user). */
+export function getRoboProfile(): Promise<RoboProfileResponse> {
+  return fetchJson(`${BASE}/robo-strategy/profile`, { headers: _authHeaders() });
+}
+
+/** Generate (or regenerate) a recommended portfolio from questionnaire
+ * answers. Synchronous — no job/poll needed, this is arithmetic over an
+ * already-cached/live-fetched universe, not a multi-minute LLM job. Also
+ * persists the answers + result server-side for the logged-in user. */
+export function generateRoboPortfolio(answers: RoboQuestionnaire): Promise<RoboPortfolio> {
+  return fetchJson(`${BASE}/robo-strategy/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify(answers),
+  });
+}

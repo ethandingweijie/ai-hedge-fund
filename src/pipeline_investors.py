@@ -445,9 +445,14 @@ def run_advanced_investor(agent_key: str, state: AgentState) -> dict[str, dict]:
         )
 
         results[ticker] = signal.model_dump()
+        # Stream this agent's signal (incl. thesis_summary) the moment it finishes,
+        # so the thesis appears on the go alongside its conviction status — instead
+        # of all-at-once at run end. analyst_signals is agent-first keyed; dict(results)
+        # is a shallow copy so the SSE-queued event isn't mutated by the next iteration.
         progress.update_status(
             f"investor_{agent_key}", ticker,
-            f"{signal.signal} | conviction {signal.conviction}/10"
+            f"{signal.signal} | conviction {signal.conviction}/10",
+            partial_data={"analyst_signals": {agent_key: dict(results)}},
         )
 
     return results
