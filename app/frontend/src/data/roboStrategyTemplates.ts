@@ -195,7 +195,7 @@ export const STRATEGY_TEMPLATES: StrategyTemplate[] = [
 ];
 
 // ── Taxonomy adapter: prototype's 10-sector/5-region split -> this app's
-// canonical 11-sector/3-region split (ROBO_SECTORS / ROBO_REGIONS). ────────
+// canonical 11-sector/4-region split (ROBO_SECTORS / ROBO_REGIONS). ────────
 
 const SECTOR_MAP: Record<string, string> = {
   Technology: 'Technology',
@@ -219,19 +219,23 @@ function mapSectorWeights(raw: Record<string, number>): Record<string, number> {
   return result;
 }
 
-/** Europe + Asia Pacific -> International Developed; Global/International
- * splits evenly (unspecified by definition); US and Emerging Markets map
- * straight across. */
+/** US / Europe / Asia Pacific / Emerging Markets map straight across (the
+ * canonical taxonomy now mirrors the prototype's own regions instead of
+ * squashing Europe+APAC into one "International Developed" bucket); only
+ * Global/International (unspecified by definition) splits evenly across
+ * all four. */
 function mapGeographyWeights(raw: Record<string, number>): Record<string, number> {
   const us = raw['US'] ?? 0;
   const europe = raw['Europe'] ?? 0;
   const asiaPacific = raw['Asia Pacific'] ?? 0;
   const em = raw['Emerging Markets'] ?? 0;
   const global = raw['Global/International'] ?? 0;
+  const globalShare = global / 4;
   return {
-    US: us,
-    'International Developed': europe + asiaPacific + global / 2,
-    'Emerging Markets': em + global / 2,
+    US: us + globalShare,
+    Europe: europe + globalShare,
+    'Asia-Pacific': asiaPacific + globalShare,
+    'Emerging Markets': em + globalShare,
   };
 }
 

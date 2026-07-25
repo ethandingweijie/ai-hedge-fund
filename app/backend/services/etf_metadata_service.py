@@ -40,39 +40,49 @@ _STABLE = "https://financialmodelingprep.com/stable"
 _CACHE_KEY = "etf_universe_v1"
 _TTL_HOURS = 24
 
-# FMP country name -> our 3-way macro-region taxonomy (MSCI-style EM
-# classification). Taiwan/South Korea placement is a judgment call some
-# index providers disagree on — kept as one clearly-named constant so it's
-# a one-line fix if it ever looks wrong once real data is flowing through.
+# FMP country name -> our 4-way macro-region taxonomy: US / Europe /
+# Asia-Pacific / Emerging Markets. This is a deliberate PRODUCT taxonomy, not
+# a strict MSCI developed/emerging classification: Hong Kong is grouped under
+# Emerging Markets (with China) rather than its technical MSCI-Developed
+# status, because in this app HK exposure is used as a Greater-China proxy
+# (HK-listed China tech, KWEB/MCHI holdings, HK-listed dual-class stocks) —
+# putting it in "Asia-Pacific" alongside Japan/Australia would dilute the
+# one geography-preference lever a user has for dialing up China/HK exposure.
+# South Korea/Taiwan placement (APAC vs EM) is a judgment call some index
+# providers disagree on — kept as one clearly-named constant so it's a
+# one-line fix if it ever looks wrong once real data is flowing through.
 _COUNTRY_TO_REGION: dict[str, str] = {
     "United States": "US",
-    "United Kingdom": "International Developed",
-    "Japan": "International Developed",
-    "Germany": "International Developed",
-    "France": "International Developed",
-    "Canada": "International Developed",
-    "Australia": "International Developed",
-    "Switzerland": "International Developed",
-    "Netherlands": "International Developed",
-    "Sweden": "International Developed",
-    "Hong Kong": "International Developed",
-    "Singapore": "International Developed",
-    "Spain": "International Developed",
-    "Italy": "International Developed",
-    "Denmark": "International Developed",
-    "Belgium": "International Developed",
-    "Norway": "International Developed",
-    "Finland": "International Developed",
-    "Israel": "International Developed",
-    "New Zealand": "International Developed",
-    "Ireland": "International Developed",
-    "Austria": "International Developed",
-    "Portugal": "International Developed",
+
+    "United Kingdom": "Europe",
+    "Germany": "Europe",
+    "France": "Europe",
+    "Switzerland": "Europe",
+    "Netherlands": "Europe",
+    "Sweden": "Europe",
+    "Spain": "Europe",
+    "Italy": "Europe",
+    "Denmark": "Europe",
+    "Belgium": "Europe",
+    "Norway": "Europe",
+    "Finland": "Europe",
+    "Israel": "Europe",
+    "Ireland": "Europe",
+    "Austria": "Europe",
+    "Portugal": "Europe",
+
+    "Japan": "Asia-Pacific",
+    "Australia": "Asia-Pacific",
+    "New Zealand": "Asia-Pacific",
+    "Singapore": "Asia-Pacific",
+    "South Korea": "Asia-Pacific",
+    "Korea": "Asia-Pacific",
+    "Canada": "Asia-Pacific",  # developed, non-US, non-Europe — closest-fit bucket
+
     "China": "Emerging Markets",
+    "Hong Kong": "Emerging Markets",
     "India": "Emerging Markets",
     "Taiwan": "Emerging Markets",
-    "South Korea": "Emerging Markets",
-    "Korea": "Emerging Markets",
     "Brazil": "Emerging Markets",
     "South Africa": "Emerging Markets",
     "Mexico": "Emerging Markets",

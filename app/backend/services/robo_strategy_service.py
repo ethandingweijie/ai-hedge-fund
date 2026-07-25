@@ -8,13 +8,24 @@ sources instead of the prototype's static arrays + mock price table.
 No LLM, no randomness (the prototype's `seed` param was dead code and is not
 ported) — same questionnaire answers always produce the same portfolio.
 
-Two deliberate fixes vs. the ported prototype (both called out inline below):
+Deliberate fixes vs. the ported prototype (all called out inline below):
   1. ETF category partition is now a mutually-exclusive `bucket` tag instead
      of the prototype's exclusion filter, which accidentally let REIT ETFs
      be double-picked via both the "stock" and "REIT" category rankings.
   2. Breakdown charts are computed separately per mode (etf vs stock) instead
      of the prototype always deriving them from the stock portfolio alone,
      even while viewing the ETF tab.
+  3. Both select_etfs and select_stocks allocate geography FIRST (proportional
+     slot counts across US/Europe/Asia-Pacific/Emerging Markets, with a
+     guaranteed floor for any region with nonzero user weight), THEN rank
+     within each region pool — instead of one blended cross-region score.
+     A single blended ranking let a broad, ultra-cheap US fund (VTI's 0.03%
+     expense ratio vs. a China ETF's 0.6-0.9%) structurally out-score a
+     concentrated regional fund even after a user meaningfully reduced (but
+     didn't zero out) US geography weight, since the expense-ratio penalty
+     dwarfed any realistic region-fit swing from a moderate reallocation —
+     the reported "reduced US, but still no China/HK" bug. See
+     `_proportional_counts` for the guarantee mechanism.
 
 Everything else — the risk/horizon glide-path formula, the sector/region
 scoring shape, the pick counts, the equal-weight-within-category logic, the
@@ -30,11 +41,17 @@ from typing import Optional
 
 from app.backend.services import etf_metadata_service, screener_service
 
-# Synthetic region key stock-mode candidates from HK/SG are tagged with,
-# since their combined questionnaire weight (International Developed +
-# Emerging Markets) can't be split further — see the plan's geography
-# mapping note. ETF mode has no such approximation (real country data).
-_COMBINED_INTL_EM_REGION = "International Developed / Emerging Markets"
+# Geography taxonomy: US / Europe / Asia-Pacific / Emerging Markets (matches
+# ROBO_REGIONS on the frontend and etf_metadata_service's _COUNTRY_TO_REGION).
+# Stock-mode candidates get a REAL region tag straight from their listing
+# market — HK stocks are tagged "Emerging Markets" (grouped with China, same
+# Greater-China-proxy rationale as etf_metadata_service's country map: HK is
+# how a user actually dials up China exposure here) and SG stocks are tagged
+# "Asia-Pacific". Europe has no stock-mode candidates (this app's screener
+# only covers US/HK/SG) — a nonzero Europe weight simply gets 0 stock-mode
+# slots; ETF mode has full Europe coverage via VEA/EFA/VXUS.
+_HK_STOCK_REGION = "Emerging Markets"
+_SG_STOCK_REGION = "Asia-Pacific"
 
 # HK/SG screener sector names -> canonical 11-sector taxonomy
 # (app/backend/services/screener_service.py's _SCREENER_SECTORS), so a
@@ -100,10 +117,6 @@ def score_sector(sector: str, sector_prefs: dict) -> float:
     return sector_prefs.get(sector, 50)
 
 
-def score_region(region: str, geo_prefs: dict) -> float:
-    return geo_prefs.get(region, 30)
-
-
 def normalize_weights(weights: dict) -> dict:
     total = sum(weights.values())
     if total == 0:
@@ -117,6 +130,30 @@ def _dominant(weights: Optional[dict]) -> Optional[str]:
     if not weights:
         return None
     return max(weights.items(), key=lambda kv: kv[1])[0]
+
+
+def _proportional_counts(weights: dict[str, float], total_count: int) -> dict[str, int]:
+    """Split `total_count` slots across `weights`' nonzero-weight keys
+    proportionally, largest-remainder-style, but with a floor of 1 slot for
+    every key with weight > 0 (as long as slots remain) — this is the actual
+    mechanism that guarantees "I set a nonzero China/HK/Emerging-Markets
+    weight" translates into at least one pick from that region, instead of
+    a single blended score letting it get crowded out entirely."""
+    active = {k: w for k, w in weights.items() if w > 0}
+    if not active or total_count <= 0:
+        return {}
+    norm = normalize_weights(active)
+    ordered = sorted(norm.items(), key=lambda kv: -kv[1])
+    counts: dict[str, int] = {}
+    remaining = total_count
+    for i, (key, w) in enumerate(ordered):
+        if remaining <= 0:
+            break
+        is_last = i == len(ordered) - 1
+        share = remaining if is_last else min(remaining, max(1, _round_half_up((w / 100) * total_count)))
+        counts[key] = share
+        remaining -= share
+    return counts
 
 
 # ── Step 4a: ETF selection ─────────────────────────────────────────────────────
@@ -155,7 +192,33 @@ def select_etfs(
         else:
             region_fit = 30
         expense_ratio = etf.get("expenseRatio") or 0
-        return sector_fit * 0.6 + region_fit * 0.4 - expense_ratio * 10
+        # Expense ratio is a minor tiebreaker, not a primary driver: real
+        # China/India funds run 0.6-0.9% vs. ~0.03% for VTI/VOO. The
+        # prototype's *10 multiplier (tuned against its own mock/narrow
+        # ratio range) turned that gap into a 6-9 point penalty — bigger
+        # than any realistic region_fit swing from a moderate geography
+        # reallocation — so cheap broad-US fields always won regardless of
+        # region preference. *2 keeps cost a real factor without letting it
+        # override what the user actually asked for.
+        return sector_fit * 0.6 + region_fit * 0.4 - expense_ratio * 2
+
+    def build_item(etf: dict, alloc_percent: float) -> dict:
+        amount = (alloc_percent / 100) * total_amount
+        price = etf["price"]
+        return {
+            "ticker": etf["ticker"],
+            "name": etf.get("name") or etf["ticker"],
+            "category": etf.get("bucket"),
+            "sector": _dominant(etf.get("sectorWeights")),
+            "region": _dominant(etf.get("regionWeights")),
+            "allocationPercent": round(alloc_percent, 2),
+            "amount": round(amount, 2),
+            "shares": math.floor(amount / price),
+            "price": price,
+            "expenseRatio": etf.get("expenseRatio"),
+            "riskLevel": None,  # no single risk tier for a fund — omitted, not faked
+            "topHoldings": etf.get("topHoldings") or [],
+        }
 
     def allocate_to_category(etfs: list[dict], target_percent: float, count: int) -> None:
         if target_percent <= 0 or not etfs or count <= 0:
@@ -168,29 +231,55 @@ def select_etfs(
             return
         per_pick = target_percent / len(picks)
         for etf in picks:
-            amount = (per_pick / 100) * total_amount
-            price = etf["price"]
-            selected.append({
-                "ticker": etf["ticker"],
-                "name": etf.get("name") or etf["ticker"],
-                "category": etf.get("bucket"),
-                "sector": _dominant(etf.get("sectorWeights")),
-                "region": _dominant(etf.get("regionWeights")),
-                "allocationPercent": round(per_pick, 2),
-                "amount": round(amount, 2),
-                "shares": math.floor(amount / price),
-                "price": price,
-                "expenseRatio": etf.get("expenseRatio"),
-                "riskLevel": None,  # no single risk tier for a fund — omitted, not faked
-                "topHoldings": etf.get("topHoldings") or [],
-            })
+            selected.append(build_item(etf, per_pick))
+
+    def allocate_equity_etfs(etfs: list[dict], target_percent: float, count: int) -> None:
+        """Equity sleeve only: split `count` slots across US/Europe/
+        Asia-Pacific/Emerging Markets PROPORTIONALLY to geo_weights (with a
+        guaranteed floor — see _proportional_counts), THEN rank within each
+        region pool by score_etf — instead of one blended ranking across all
+        ~35 equity ETFs. See the module docstring for why the blended
+        version structurally favored cheap broad-US funds."""
+        if target_percent <= 0 or not etfs or count <= 0:
+            return
+        priced = [e for e in etfs if e.get("price")]
+        by_region: dict[str, list[dict]] = {"US": [], "Europe": [], "Asia-Pacific": [], "Emerging Markets": []}
+        for e in priced:
+            region = _dominant(e.get("regionWeights"))
+            if region in by_region:
+                by_region[region].append(e)
+
+        region_counts = _proportional_counts(
+            {r: geo_weights.get(r, 0) for r in by_region if by_region[r]}, count,
+        )
+        picks: list[dict] = []
+        for region, region_count in region_counts.items():
+            pool = sorted(by_region[region], key=score_etf, reverse=True)
+            picks.extend(pool[:region_count])
+
+        # Safety fallback: fill any shortfall (a region requested more slots
+        # than its pool had) from the best remaining candidates overall,
+        # rather than silently under-filling the sleeve.
+        if len(picks) < count:
+            picked_tickers = {p["ticker"] for p in picks}
+            leftover = sorted(
+                (e for pool in by_region.values() for e in pool if e["ticker"] not in picked_tickers),
+                key=score_etf, reverse=True,
+            )
+            picks.extend(leftover[: count - len(picks)])
+
+        if not picks:
+            return
+        per_pick = target_percent / len(picks)
+        for etf in picks:
+            selected.append(build_item(etf, per_pick))
 
     stock_count = min(5, max_etfs - 3)
     bond_count = 2 if base_alloc["bonds"] > 0 else 0
     comm_count = 1 if base_alloc["commodities"] > 0 else 0
     reit_count = 1 if base_alloc["reits"] > 0 else 0
 
-    allocate_to_category(stock_etfs, base_alloc["stocks"], stock_count)
+    allocate_equity_etfs(stock_etfs, base_alloc["stocks"], stock_count)
     allocate_to_category(bond_etfs, base_alloc["bonds"], bond_count)
     allocate_to_category(commodity_etfs, base_alloc["commodities"], comm_count)
     allocate_to_category(reit_etfs, base_alloc["reits"], reit_count)
@@ -207,43 +296,67 @@ def select_stocks(
     total_amount: float,
     candidates: list[dict],
 ) -> list[dict]:
+    """Region-first, sector-second: split target_count across regions by
+    geo_weights (guaranteed floor per _proportional_counts — this is what
+    makes "reduce US, raise Emerging Markets" actually surface HK stocks
+    instead of them being crowded out sector-by-sector), then within each
+    region's own candidate pool, distribute across whichever sectors that
+    pool actually covers. The old sector-first ordering meant any sector
+    with zero HK/SG candidates (Consumer Defensive, Basic Materials,
+    Utilities — this app's screener has no other non-US market) silently
+    filled with US stocks every time, regardless of geography preference;
+    doing region first means that gap only affects sector distribution
+    *within* the non-US sleeve, not how big the non-US sleeve is."""
     selected: list[dict] = []
     target_count = {"conservative": 12, "aggressive": 18}.get(risk, 15)
 
-    norm_sectors = normalize_weights(sector_weights)
-    sectors = sorted(
-        ((s, w) for s, w in norm_sectors.items() if w > 3),
-        key=lambda kv: -kv[1],
-    )
+    region_pools: dict[str, list[dict]] = {}
+    for c in candidates:
+        region_pools.setdefault(c.get("region", ""), []).append(c)
 
-    remaining_picks = target_count
-    for sector, sector_weight in sectors:
-        if remaining_picks <= 0:
-            break
-        picks_for_sector = max(1, _round_half_up((sector_weight / 100) * target_count))
-        actual_picks = min(picks_for_sector, remaining_picks)
+    norm_sectors_all = normalize_weights(sector_weights)
+    norm_geo = normalize_weights({r: geo_weights.get(r, 0) for r in region_pools if region_pools[r]})
+    region_counts = _proportional_counts(dict(norm_geo), target_count)
 
-        sector_stocks = [c for c in candidates if c.get("sector") == sector]
+    for region, region_count in region_counts.items():
+        region_percent = norm_geo.get(region, 0)
+        pool = region_pools[region]
 
-        scored = []
-        for stock in sector_stocks:
-            score = score_region(stock.get("region", ""), geo_weights)
-            if risk == "conservative" and stock.get("riskLevel") == "low":
-                score += 20
-            if risk == "aggressive" and stock.get("riskLevel") == "high":
-                score += 15
-            if stock.get("isMegaCap"):
-                score += 10
-            scored.append((stock, score))
-        scored.sort(key=lambda x: -x[1])
-        picks = [s for s, _ in scored[:actual_picks]]
+        # Re-normalize sector preference to only the sectors THIS region's
+        # pool actually covers, so a coverage gap (e.g. HK/SG have no
+        # Utilities candidates) redistributes across the sectors that pool
+        # does have instead of implicitly falling back to US.
+        available_sectors = {c.get("sector") for c in pool if c.get("sector")}
+        region_sector_weights = {
+            s: w for s, w in norm_sectors_all.items() if s in available_sectors and w > 3
+        }
+        if not region_sector_weights and available_sectors:
+            region_sector_weights = {s: 100 / len(available_sectors) for s in available_sectors}
+        norm_region_sectors = normalize_weights(region_sector_weights)
+        sector_counts = _proportional_counts(dict(region_sector_weights), region_count)
 
-        if picks:
-            # Divisor is actual_picks (the target), matching the prototype
-            # exactly — if fewer candidates were found than actual_picks,
-            # this sector's allocated % is deliberately under-filled rather
-            # than redistributed (ported behaviour, not "fixed").
-            per_pick_weight = sector_weight / actual_picks
+        for sector, sector_count in sector_counts.items():
+            sector_stocks = [c for c in pool if c.get("sector") == sector]
+
+            scored = []
+            for stock in sector_stocks:
+                score = 0.0
+                if risk == "conservative" and stock.get("riskLevel") == "low":
+                    score += 20
+                if risk == "aggressive" and stock.get("riskLevel") == "high":
+                    score += 15
+                if stock.get("isMegaCap"):
+                    score += 10
+                scored.append((stock, score))
+            scored.sort(key=lambda x: -x[1])
+            picks = [s for s, _ in scored[:sector_count]]
+            if not picks:
+                continue
+
+            # region_percent * sector's share within the region = this
+            # sector-within-region's share of the whole portfolio.
+            sector_percent = region_percent * norm_region_sectors.get(sector, 0) / 100
+            per_pick_weight = sector_percent / len(picks)
             for stock in picks:
                 amount = (per_pick_weight / 100) * total_amount
                 price = stock.get("price") or 0
@@ -258,8 +371,6 @@ def select_stocks(
                     "price": price,
                     "riskLevel": stock.get("riskLevel"),
                 })
-
-        remaining_picks -= actual_picks
 
     # Enforce max 10% per position.
     max_per_position = total_amount * 0.1
@@ -342,10 +453,8 @@ def _dedupe_by_company(candidates: list[dict]) -> list[dict]:
 
 def _get_stock_candidates() -> list[dict]:
     """Live Screener universe, tagged for geography scoring: US stocks keep
-    region='US'; HK/SG stocks (the app's only non-US live data) are combined
-    under one synthetic region key representing the questionnaire's
-    International-Developed + Emerging-Markets weight together — see the
-    module docstring / plan's geography-mapping note for why."""
+    region='US'; HK stocks are tagged 'Emerging Markets' (Greater-China
+    proxy — see _HK_STOCK_REGION); SG stocks are tagged 'Asia-Pacific'."""
     candidates: list[dict] = []
 
     us = screener_service.get_screener_stocks(market_cap_more_than=2_000_000_000)
@@ -356,13 +465,13 @@ def _get_stock_candidates() -> list[dict]:
 
     hk = screener_service.get_hk_screener_stocks()
     for item in hk.get("items", []):
-        c = _to_candidate(item, region=_COMBINED_INTL_EM_REGION, sector_map=_HK_SECTOR_TO_CANONICAL)
+        c = _to_candidate(item, region=_HK_STOCK_REGION, sector_map=_HK_SECTOR_TO_CANONICAL)
         if c:
             candidates.append(c)
 
     sg = screener_service.get_sg_screener_stocks()
     for item in sg.get("items", []):
-        c = _to_candidate(item, region=_COMBINED_INTL_EM_REGION, sector_map=_SG_SECTOR_TO_CANONICAL)
+        c = _to_candidate(item, region=_SG_STOCK_REGION, sector_map=_SG_SECTOR_TO_CANONICAL)
         if c:
             candidates.append(c)
 
@@ -386,10 +495,12 @@ def generate_portfolio(answers: dict) -> dict:
     etf_universe = etf_metadata_service.get_etf_universe()
     etf_portfolio = select_etfs(base_alloc, sector_prefs, geo_prefs, investment_amount, etf_universe)
 
-    combined_non_us = geo_prefs.get("International Developed", 0) + geo_prefs.get("Emerging Markets", 0)
-    stock_geo_weights = {"US": geo_prefs.get("US", 0), _COMBINED_INTL_EM_REGION: combined_non_us}
+    # Stock-mode regions now line up 1:1 with geo_prefs' own keys (US /
+    # Europe / Asia-Pacific / Emerging Markets) — no combining needed. Europe
+    # simply has no stock-mode candidates (screener only covers US/HK/SG);
+    # select_stocks' region_pools filter drops empty regions automatically.
     stock_candidates = _get_stock_candidates()
-    stock_portfolio = select_stocks(sector_prefs, stock_geo_weights, risk_tolerance, investment_amount, stock_candidates)
+    stock_portfolio = select_stocks(sector_prefs, geo_prefs, risk_tolerance, investment_amount, stock_candidates)
 
     return {
         "etf_portfolio": etf_portfolio,

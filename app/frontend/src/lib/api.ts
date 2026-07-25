@@ -1347,7 +1347,11 @@ export const ROBO_SECTORS = [
   'Basic Materials', 'Real Estate', 'Utilities',
 ] as const;
 
-export const ROBO_REGIONS = ['US', 'International Developed', 'Emerging Markets'] as const;
+// 4-way geography taxonomy: US / Europe / Asia-Pacific / Emerging Markets.
+// Hong Kong is deliberately grouped under Emerging Markets (with China),
+// not Asia-Pacific — in this app HK exposure is a Greater-China proxy, so
+// it shares the lever a user actually reaches for to dial up China/HK.
+export const ROBO_REGIONS = ['US', 'Europe', 'Asia-Pacific', 'Emerging Markets'] as const;
 
 export interface RoboQuestionnaire {
   risk_tolerance: RoboRiskTolerance;

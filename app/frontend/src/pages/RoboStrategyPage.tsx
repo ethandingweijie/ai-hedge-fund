@@ -49,8 +49,18 @@ const DEFAULT_ANSWERS: RoboQuestionnaire = {
   risk_tolerance: 'moderate',
   time_horizon: '7-15 years',
   sector_preferences: evenSplit(ROBO_SECTORS),
-  geography_preferences: { US: 70, 'International Developed': 15, 'Emerging Markets': 15 },
+  geography_preferences: { US: 45, Europe: 15, 'Asia-Pacific': 15, 'Emerging Markets': 25 },
   investment_amount: 10000,
+};
+
+// Friendlier slider labels — states upfront which countries live in each
+// bucket, since "Emerging Markets" alone doesn't tell a user this is their
+// lever for China/Hong Kong/India exposure.
+const REGION_LABELS: Record<string, string> = {
+  US: 'US',
+  Europe: 'Europe',
+  'Asia-Pacific': 'Asia-Pacific (Japan, Australia, Korea)',
+  'Emerging Markets': 'Emerging Markets (China, Hong Kong, India)',
 };
 
 const RISK_OPTIONS: { value: RoboRiskTolerance; label: string; desc: string }[] = [
@@ -294,16 +304,17 @@ export function RoboStrategyPage() {
               {ROBO_REGIONS.map((region) => (
                 <RangeSlider
                   key={region}
-                  label={region}
+                  label={REGION_LABELS[region] ?? region}
                   value={answers.geography_preferences[region] ?? 0}
                   onChange={(v) => handleGeoChange(region, v)}
                 />
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground/80 italic mt-2 leading-relaxed">
-              International Developed and Emerging Markets stock exposure is approximated using this
-              app's Hong Kong and Singapore screener universes; Diversified ETFs mode uses true
-              global-region funds for more precise exposure.
+              In Individual Stocks mode, Emerging Markets exposure comes from our Hong Kong screener
+              universe and Asia-Pacific from Singapore; Europe has no individual-stock coverage yet.
+              Diversified ETFs mode has full coverage across all four regions, including dedicated
+              China and India funds.
             </p>
           </AccordionContent>
         </AccordionItem>
