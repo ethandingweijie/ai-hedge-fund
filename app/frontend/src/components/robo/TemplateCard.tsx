@@ -1,11 +1,11 @@
 /**
  * TemplateCard.tsx
  * ==================
- * A single "Browse Strategies" template card. Deliberately minimal — one
- * icon, one title, one line of description, one line of plain-text
- * metadata. No badges, no boxed footer, no stacked chrome: those read as
- * clutter at a glance across a 10-card grid, so risk/stocks/bonds/horizon
- * collapse into a single muted text line instead of separate pills/boxes.
+ * A single "Browse Strategies" template card — icon, risk-level pill, title,
+ * description, tag chips, and a Stocks/Bonds/Horizon stat footer. Risk pill
+ * color is the primary visual cue for how aggressive a strategy is: red for
+ * aggressive, green for moderate, yellow/amber for conservative (NOT green —
+ * conservative and moderate must read as visually distinct at a glance).
  */
 import {
   BarChart3, Banknote, Cpu, Shield, HeartPulse, Leaf, Globe, DollarSign, Bot, Earth,
@@ -23,6 +23,12 @@ const RISK_LABEL: Record<StrategyTemplate['riskLevel'], string> = {
   aggressive: 'Aggressive',
 };
 
+const RISK_PILL: Record<StrategyTemplate['riskLevel'], string> = {
+  conservative: 'bg-amber-400/20 text-amber-700 dark:text-amber-300',
+  moderate: 'bg-brand text-white',
+  aggressive: 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
+};
+
 export function TemplateCard({ template, onSelect }: { template: StrategyTemplate; onSelect: () => void }) {
   const Icon = ICONS[template.icon] ?? BarChart3;
   const { stocks, bonds } = template.assetAllocation;
@@ -31,20 +37,45 @@ export function TemplateCard({ template, onSelect }: { template: StrategyTemplat
     <button
       type="button"
       onClick={onSelect}
-      className="text-left rounded-lg border border-border bg-card p-4 hover:border-brand/40 transition-colors flex flex-col gap-2.5"
+      className="text-left rounded-xl border border-border bg-card p-6 hover:border-brand/40 hover:shadow-sm transition-all flex flex-col gap-4"
     >
-      <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-        <Icon size={17} className="text-primary" />
+      <div className="flex items-start justify-between gap-3">
+        <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+          <Icon size={22} className="text-primary" />
+        </div>
+        <span className={`text-[12px] font-semibold px-3 py-1.5 rounded-full shrink-0 ${RISK_PILL[template.riskLevel]}`}>
+          {RISK_LABEL[template.riskLevel]}
+        </span>
       </div>
 
-      <div className="text-[14px] font-semibold text-foreground">{template.name}</div>
+      <div>
+        <div className="text-[20px] font-bold text-foreground">{template.name}</div>
+        <p className="text-[13.5px] text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
+          {template.description}
+        </p>
+      </div>
 
-      <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-1">
-        {template.description}
-      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {template.tags.map((tag) => (
+          <span key={tag} className="text-[11px] px-2.5 py-1 rounded-full border border-border text-muted-foreground">
+            {tag}
+          </span>
+        ))}
+      </div>
 
-      <div className="text-[11px] text-muted-foreground/70">
-        {RISK_LABEL[template.riskLevel]} · {stocks}/{bonds} stocks/bonds · {template.timeHorizon}
+      <div className="grid grid-cols-3 gap-2 bg-muted/60 rounded-lg py-3 mt-auto">
+        <div className="text-center">
+          <div className="text-[16px] font-bold font-mono text-foreground">{stocks}%</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Stocks</div>
+        </div>
+        <div className="text-center">
+          <div className="text-[16px] font-bold font-mono text-foreground">{bonds}%</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Bonds</div>
+        </div>
+        <div className="text-center">
+          <div className="text-[14px] font-semibold text-foreground">{template.timeHorizon}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mt-0.5">Horizon</div>
+        </div>
       </div>
     </button>
   );
