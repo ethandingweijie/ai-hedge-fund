@@ -46,6 +46,7 @@ export function LoginPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
+  const [googleBtnWidth, setGoogleBtnWidth] = useState<number | null>(null);
   const appleScriptRef = useRef(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const heroVideoRef = useRef<HTMLVideoElement>(null);
@@ -93,42 +94,67 @@ export function LoginPage() {
     document.head.appendChild(script);
   }, []);
 
-  // Google GSI — renders an invisible button we trigger programmatically
+  // Measure the auth-buttons column so the Google GSI button (which only
+  // accepts a fixed pixel width, no 100%/auto) can be rendered at exactly
+  // the same width as the Apple button's `w-full`. Re-measures on resize
+  // (e.g. orientation change) since GSI can't resize itself after render.
+  // Ignores sub-pixel jitter so it doesn't re-render on every layout tick.
+  useEffect(() => {
+    const el = googleBtnRef.current?.parentElement;
+    if (!el) return;
+    const update = () => {
+      const next = Math.round(el.clientWidth);
+      setGoogleBtnWidth((prev) => (prev != null && Math.abs(prev - next) < 2 ? prev : next));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Google GSI — renders an invisible button we trigger programmatically.
+  // `initialize()` only needs to run once; only `renderButton()` re-runs
+  // when the measured width changes (e.g. orientation change).
+  const googleInitializedRef = useRef(false);
   useEffect(() => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) return;
+    if (!clientId || googleBtnWidth == null) return;
+    const render = () => {
+      const w = window as any;
+      if (!w.google?.accounts?.id) return;
+      if (!googleInitializedRef.current) {
+        w.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (resp: { credential: string }) => handleGoogleCredential(resp.credential),
+        });
+        googleInitializedRef.current = true;
+      }
+      if (googleBtnRef.current) {
+        // GSI clamps width to [200, 400] — clamp locally too so a very
+        // narrow or wide container doesn't silently mismatch the Apple button.
+        w.google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: 'outline',
+          size: 'large',
+          width: Math.min(400, Math.max(200, googleBtnWidth)),
+          text: 'continue_with',
+          shape: 'rectangular',
+          logo_alignment: 'center',
+        });
+      }
+    };
     const existing = document.getElementById('google-gsi-script');
     if (existing) {
-      initGoogleButton(clientId);
+      render();
       return;
     }
     const script = document.createElement('script');
     script.id = 'google-gsi-script';
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
-    script.onload = () => initGoogleButton(clientId);
+    script.onload = render;
     document.head.appendChild(script);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function initGoogleButton(clientId: string) {
-    const w = window as any;
-    if (!w.google?.accounts?.id) return;
-    w.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: (resp: { credential: string }) => handleGoogleCredential(resp.credential),
-    });
-    if (googleBtnRef.current) {
-      w.google.accounts.id.renderButton(googleBtnRef.current, {
-        theme: 'outline',
-        size: 'large',
-        width: 340,
-        text: 'continue_with',
-        shape: 'rectangular',
-        logo_alignment: 'center',
-      });
-    }
-  }
+  }, [googleBtnWidth]);
 
   function handleGoogleCredential(credential: string) {
     setError(null);
@@ -273,21 +299,30 @@ export function LoginPage() {
             {import.meta.env.VITE_GOOGLE_CLIENT_ID ? (
               <div
                 ref={googleBtnRef}
-                className={`w-full flex justify-center ${loading === 'google' ? 'opacity-60 pointer-events-none' : ''}`}
-                style={{ minHeight: 48 }}
+                // GSI's own "rectangular" shape has a small ~4px corner radius
+                // it doesn't expose a way to configure — overflow-hidden here
+                // clips its rendered iframe to our rounded-lg token instead,
+                // so it reads as rounded as the Apple button beside it.
+                className={`w-full flex justify-center overflow-hidden rounded-lg ${loading === 'google' ? 'opacity-60 pointer-events-none' : ''}`}
+                style={{ minHeight: 40 }}
               />
             ) : (
-              <div className="w-full h-12 rounded-lg border border-border bg-card text-[14px] font-medium text-muted-foreground/70 flex items-center justify-center gap-2.5 select-none">
+              <div className="w-full h-10 rounded-lg border border-border bg-card text-[14px] font-medium text-muted-foreground/70 flex items-center justify-center gap-2.5 select-none">
                 Google (configure VITE_GOOGLE_CLIENT_ID)
               </div>
             )}
 
-            {/* Apple */}
+            {/* Apple — height matches Google GSI's fixed "large" size (40px);
+                GSI has no way to render taller, so this side conforms to it. */}
             <button
               type="button"
               onClick={handleAppleSignIn}
               disabled={!!loading}
-              className="w-full h-12 rounded-lg bg-foreground active:bg-foreground/85 text-[14px] font-medium text-background flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              // min-h-10 (not just h-10) is required: the global mobile
+              // tap-target rule (index.css, `button, a { min-height: 44px }`
+              // under 768px) otherwise wins on phones and stretches this
+              // button back past Google's hard-capped 40px GSI height.
+              className="w-full h-10 min-h-10 rounded-lg bg-foreground active:bg-foreground/85 text-[14px] font-medium text-background flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading === 'apple' ? (
                 <div className="w-4 h-4 border-2 border-background/40 border-t-background rounded-full animate-spin" />
