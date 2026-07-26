@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import logging
 import statistics
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -99,6 +100,36 @@ _log = logging.getLogger(__name__)
 _PROJECTION_YEARS = 10
 _MIN_HISTORY_YEARS = 2
 _DEFAULT_TGR = {"bear": 0.015, "base": 0.025, "bull": 0.035}
+
+# Retries for the line-items fetch — a single FMP hiccup shouldn't blank the
+# whole Valuation Methodology panel. Short exponential backoff (1.5s, 3s).
+_LINE_ITEMS_MAX_RETRIES = 2
+_LINE_ITEMS_RETRY_BASE_DELAY = 1.5
+
+# Last-resort base-case revenue growth by sector, used ONLY when guided
+# guidance, analyst estimates, AND historical CAGR all fail to produce a
+# growth rate (data_source == "sector_default" — lowest confidence tier,
+# flagged as such on the frontend). Near-term growth, not terminal/perpetuity
+# growth — deliberately higher than TERMINAL_GROWTH_RATES.
+_SECTOR_DEFAULT_GROWTH: dict[str, float] = {
+    "Tech":                 0.12,
+    "Semiconductor":        0.10,
+    "Consumer":             0.06,
+    "Biopharma":            0.08,
+    "Telco":                0.03,
+    "Crypto":               0.15,
+    "Energy":               0.04,
+    "Financials":           0.06,
+    "Industrials":          0.05,
+    "RealEstate":           0.04,
+    "REIT":                 0.04,
+    "Transportation":       0.04,
+    "Materials":            0.04,
+    "Resources":            0.04,
+    "ProfessionalServices": 0.06,
+    "HealthcareServices":   0.07,
+}
+_DEFAULT_SECTOR_DEFAULT_GROWTH = 0.05
 
 # Scenario growth multipliers applied to the derived base growth rate
 _GROWTH_MULT = {"bear": 0.55, "base": 1.00, "bull": 1.50}
@@ -3139,38 +3170,58 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _log.warning("[DCF] Sector '%s' not in FCF_MARGIN_FLOOR — using -5%% default.", sector)
         progress.update_status(agent_id, ticker, "Fetching historical financials")
 
-        try:
-            line_items = search_line_items(
-                ticker,
-                ["revenue", "free_cash_flow", "shares_outstanding",
-                 "debt_to_equity", "net_debt", "total_debt", "ebitda", "net_income",
-                 "total_equity", "total_assets", "dividends_per_share",
-                 "book_value_per_share", "capital_expenditure", "ebit",
-                 "interest_expense", "invested_capital",
-                 "research_and_development", "stock_based_compensation",
-                 # REIT-specific
-                 "depreciation_and_amortization", "operating_cash_flow",
-                 "cash_and_equivalents",
-                 # Bank-specific (Tier 2)
-                 "interest_income", "provision_for_loan_losses",
-                 "goodwill", "intangible_assets",
-                 "tangible_book_value_per_share",     # FMP-direct TBV (fixes JPM over-strip bug)
-                 "total_liabilities",
-                 "operating_expense",
-                 # Tech/Payment-processor methods
-                 "gross_profit", "cost_of_revenue"],
-                end_date,
-                period="annual",
-                limit=7,
-                api_key=api_key,
-            )
-        except Exception as _exc:
+        # Retry a transient fetch failure (rate limit / hiccup) before giving
+        # up on the ticker entirely — a single flaky FMP call shouldn't blank
+        # the whole Valuation Methodology panel for the run.
+        line_items = None
+        _line_items_exc: Exception | None = None
+        for _attempt in range(_LINE_ITEMS_MAX_RETRIES + 1):
+            try:
+                line_items = search_line_items(
+                    ticker,
+                    ["revenue", "free_cash_flow", "shares_outstanding",
+                     "debt_to_equity", "net_debt", "total_debt", "ebitda", "net_income",
+                     "total_equity", "total_assets", "dividends_per_share",
+                     "book_value_per_share", "capital_expenditure", "ebit",
+                     "interest_expense", "invested_capital",
+                     "research_and_development", "stock_based_compensation",
+                     # REIT-specific
+                     "depreciation_and_amortization", "operating_cash_flow",
+                     "cash_and_equivalents",
+                     # Bank-specific (Tier 2)
+                     "interest_income", "provision_for_loan_losses",
+                     "goodwill", "intangible_assets",
+                     "tangible_book_value_per_share",     # FMP-direct TBV (fixes JPM over-strip bug)
+                     "total_liabilities",
+                     "operating_expense",
+                     # Tech/Payment-processor methods
+                     "gross_profit", "cost_of_revenue"],
+                    end_date,
+                    period="annual",
+                    limit=7,
+                    api_key=api_key,
+                )
+                _line_items_exc = None
+                break
+            except Exception as _exc:
+                _line_items_exc = _exc
+                if _attempt < _LINE_ITEMS_MAX_RETRIES:
+                    _delay = _LINE_ITEMS_RETRY_BASE_DELAY * (_attempt + 1)
+                    progress.update_status(
+                        agent_id, ticker,
+                        f"Line items fetch failed (attempt {_attempt + 1}/{_LINE_ITEMS_MAX_RETRIES + 1}) "
+                        f"— retrying in {_delay:.1f}s"
+                    )
+                    time.sleep(_delay)
+
+        if _line_items_exc is not None:
             progress.update_status(agent_id, ticker, "Failed to fetch line items — skipping")
             # Diagnostic — surface the bail reason in state so post-hoc
             # forensics can identify which early-exit fired without
             # needing live progress logs (which aren't persisted).
             state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
-                f"line_items_fetch_failed: {type(_exc).__name__}: {str(_exc)[:120]}"
+                f"line_items_fetch_failed: {type(_line_items_exc).__name__}: "
+                f"{str(_line_items_exc)[:120]} (after {_LINE_ITEMS_MAX_RETRIES + 1} attempts)"
             )
             dcf_range[ticker] = {}
             continue
@@ -3522,17 +3573,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if growth_base is None:
             growth_base = _historical_cagr(series, revenue_base=revenue_base)
             if growth_base is None:
-                progress.update_status(agent_id, ticker,
-                                       "Cannot derive growth rate — skipping")
+                # Last resort — guidance, analyst estimates, AND historical
+                # CAGR all failed (typically bad/missing revenue data despite
+                # passing the earlier history-length check). Rather than
+                # blank the panel, fall back to a sector-average base-case
+                # growth rate; data_source == "sector_default" flags this as
+                # the lowest-confidence tier on the frontend.
+                growth_base = _SECTOR_DEFAULT_GROWTH.get(sector, _DEFAULT_SECTOR_DEFAULT_GROWTH)
+                data_source = "sector_default"
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Cannot derive growth rate — using {sector} sector default ({growth_base:.1%})"
+                )
                 state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
-                    f"no_growth_rate: guidance_keys={list(guidance.keys())[:5] if guidance else 'none'}, "
+                    f"no_growth_rate_used_sector_default_{growth_base:.1%}: "
+                    f"guidance_keys={list(guidance.keys())[:5] if guidance else 'none'}, "
                     f"estimates_count={len(estimates) if estimates else 0}, "
                     f"series_count={len(series)}, "
                     f"revenue_first={series[0]['revenue'] if series else None}, "
                     f"revenue_last={series[-1]['revenue'] if series else None}"
                 )
-                dcf_range[ticker] = {}
-                continue
 
         # ── Consensus dispersion bands (Feature 1a) ─────────────────────
         # Derives asymmetric bear / base / bull growth rates from analyst

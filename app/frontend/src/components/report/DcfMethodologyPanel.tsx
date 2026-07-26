@@ -34,6 +34,11 @@ const DATA_SOURCE_INFO: Record<string, { label: string; detail: string; variant:
     detail: 'No management guidance or analyst consensus available — growth assumption extrapolated from historical revenue trend. Lower confidence than guided or analyst-sourced growth.',
     variant: 'warning',
   },
+  sector_default: {
+    label: 'Sector average (fallback)',
+    detail: 'No guidance, analyst estimates, or usable historical revenue trend were available — growth assumption falls back to a sector-average rate. Lowest-confidence tier; treat this valuation as a rough estimate.',
+    variant: 'warning',
+  },
 };
 
 function pct(v?: number | null, decimals = 1): string {
