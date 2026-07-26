@@ -327,7 +327,18 @@ def select_stocks(
         region_pools.setdefault(c.get("region", ""), []).append(c)
 
     norm_sectors_all = normalize_weights(sector_weights)
-    norm_geo = normalize_weights({r: geo_weights.get(r, 0) for r in region_pools if region_pools[r]})
+    active_geo = {r: geo_weights.get(r, 0) for r in region_pools if region_pools[r]}
+    if not any(w > 0 for w in active_geo.values()):
+        # The user's entire geography preference sits in regions this mode
+        # has no live candidates for (Europe has no stock-mode data source;
+        # Asia-Pacific's only source, Singapore, currently has none either
+        # — see _SG_STOCK_REGION). Falling through here would return an
+        # empty portfolio. Rather than that, fall back to an even split
+        # across whichever regions DO have candidates (today: US and
+        # Emerging Markets) — a coverage limitation should degrade to "best
+        # available", never to nothing.
+        active_geo = {r: 1 for r in region_pools if region_pools[r]}
+    norm_geo = normalize_weights(active_geo)
     region_counts = _proportional_counts(dict(norm_geo), target_count)
 
     for region, region_count in region_counts.items():
