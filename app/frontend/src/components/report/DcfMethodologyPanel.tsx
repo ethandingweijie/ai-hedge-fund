@@ -68,13 +68,19 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
   // dcf_agent.py's early-exit branches leave dcf_range[ticker] = {} rather
   // than omitting the key entirely — Object.keys check catches that exact
   // shape (a populated result always has at least `profile` + scenario keys).
+  // Always render a card here rather than returning null — hiding the panel
+  // entirely reads as "did this even run?" to a user browsing history;
+  // an explicit "not available" is more honest than silence. skipReason is
+  // only known for runs made after the diagnostic was added, hence the
+  // generic fallback for older archived runs.
   if (!dcfRange || Object.keys(dcfRange).length === 0) {
-    if (!skipReason) return null;
     return (
       <Card className="p-4">
         <h3 className="text-sm font-semibold mb-1.5">Valuation Methodology — {ticker}</h3>
         <p className="text-xs text-muted-foreground">
-          Not available for this run — {friendlySkipReason(skipReason)}.
+          {skipReason
+            ? `Not available for this run — ${friendlySkipReason(skipReason)}.`
+            : 'Not available for this run — insufficient data at run time.'}
         </p>
       </Card>
     );
