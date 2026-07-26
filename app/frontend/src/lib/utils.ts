@@ -23,6 +23,27 @@ export function parseBackendIso(iso: string | null | undefined): Date {
   return new Date(hasTz ? iso : iso + 'Z');
 }
 
+/** Relative time label ("5m ago", "3h ago"), falling back to a short date
+ * beyond 30 days. Shared by NewsPanel and the ticker chat. Uses parseBackendIso
+ * so naive (no-tz) backend timestamps aren't misread as local time — see the
+ * comment above parseBackendIso. */
+export function timeAgo(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const date = parseBackendIso(dateStr);
+    const ms = Date.now() - date.getTime();
+    const mins = Math.floor(ms / 60_000);
+    if (mins < 60) return `${Math.max(mins, 0)}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return '';
+  }
+}
+
 // Platform detection utility
 export function isMac(): boolean {
   return typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;

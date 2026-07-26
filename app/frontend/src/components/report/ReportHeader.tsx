@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+import { MessageSquare } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useCompanyProfile } from '@/hooks/use-company-name';
 import type { PortfolioDecision, MacroRegime, VgpmResult } from '@/lib/reportTypes';
@@ -58,6 +60,14 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold tracking-tight">{ticker}</h1>
           <span className={`px-3 py-1 rounded-full text-sm font-semibold ${colorClass}`}>{action}</span>
+          <Link
+            to={`/discuss/${ticker}`}
+            title={`Discuss ${ticker}`}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+          >
+            <MessageSquare size={13} />
+            Discuss
+          </Link>
         </div>
         <p className="text-muted-foreground text-xs mt-1">
           {runAt && !isNaN(new Date(runAt).getTime()) ? `Run ${new Date(runAt).toLocaleString()} · ` : ''}{modelName ?? 'N/A'}

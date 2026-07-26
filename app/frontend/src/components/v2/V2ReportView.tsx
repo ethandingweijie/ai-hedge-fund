@@ -11,6 +11,8 @@
  */
 
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { MessageSquare } from 'lucide-react';
 import type {
   RunResult,
   VgpmResult,
@@ -197,22 +199,33 @@ export function V2ReportView({
               )}
             </div>
           </div>
-          {livePrice != null && (
-            <div className="text-right shrink-0">
-              <div
-                className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
-                style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
+          <div className="flex items-start gap-2 shrink-0">
+            {ticker && (
+              <Link
+                to={`/discuss/${ticker}`}
+                title={`Discuss ${ticker}`}
+                className="flex items-center justify-center w-8 h-8 rounded-full border border-border text-muted-foreground active:text-foreground shrink-0"
               >
-                ${livePrice.toFixed(2)}
-              </div>
-              {priceChangePct != null && (
-                <div className="mt-1.5 text-[12px]">
-                  <Delta v={priceChangePct} />
-                  <span className="text-muted-foreground/70 font-normal ml-1">1Y</span>
+                <MessageSquare size={15} />
+              </Link>
+            )}
+            {livePrice != null && (
+              <div className="text-right shrink-0">
+                <div
+                  className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
+                  style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
+                >
+                  ${livePrice.toFixed(2)}
                 </div>
-              )}
-            </div>
-          )}
+                {priceChangePct != null && (
+                  <div className="mt-1.5 text-[12px]">
+                    <Delta v={priceChangePct} />
+                    <span className="text-muted-foreground/70 font-normal ml-1">1Y</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

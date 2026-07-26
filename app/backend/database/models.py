@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from .connection import Base
 
@@ -142,6 +142,41 @@ class ApiKey(Base):
     # Optional metadata
     description = Column(Text, nullable=True)  # Human-readable description
     last_used = Column(DateTime(timezone=True), nullable=True)  # Track usage
+
+
+class ChatMessage(Base):
+    """Per-ticker discussion message. One level of reply nesting only —
+    parent_message_id points at a top-level message; replies-to-replies are
+    rejected at the repository/route layer, not enforced by the schema."""
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    edited_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)  # soft-delete
+
+    ticker = Column(String(20), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    parent_message_id = Column(Integer, ForeignKey("chat_messages.id"), nullable=True, index=True)
+    content = Column(Text, nullable=False)
+
+
+class ChatReaction(Base):
+    """A user's reaction to a chat message. reaction_type is a plain string
+    (not an enum) so more reaction types can be added later without a
+    migration — v1 only ever writes "like"."""
+    __tablename__ = "chat_reactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    message_id = Column(Integer, ForeignKey("chat_messages.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    reaction_type = Column(String(20), nullable=False, default="like")
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", "reaction_type", name="uq_chat_reaction_once"),
+    )
 
 
  

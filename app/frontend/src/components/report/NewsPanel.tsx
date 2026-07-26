@@ -6,25 +6,10 @@
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { getCompanyNews, type NewsArticle } from '@/lib/api';
+import { timeAgo } from '@/lib/utils';
 
 interface NewsPanelProps {
   ticker: string;
-}
-
-function timeAgo(dateStr: string): string {
-  if (!dateStr) return '';
-  try {
-    const ms = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(ms / 60_000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 30) return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch {
-    return '';
-  }
 }
 
 function cleanDomain(site: string): string {

@@ -1440,3 +1440,85 @@ export function generateRoboPortfolio(answers: RoboQuestionnaire): Promise<RoboP
     body: JSON.stringify(answers),
   });
 }
+
+// ── Chat (per-ticker discussion) endpoints ──────────────────────────────────
+
+export interface ChatMessage {
+  id: number;
+  ticker: string;
+  user_id: number;
+  author_name: string;
+  content: string;
+  created_at: string;
+  edited_at: string | null;
+  is_deleted: boolean;
+  parent_message_id: number | null;
+  reply_count: number;
+  like_count: number;
+  liked_by_me: boolean;
+}
+
+export interface ChatMessageListResponse {
+  messages: ChatMessage[];
+  has_more: boolean;
+}
+
+/** Fetch a page of top-level messages for a ticker's thread, newest-first
+ * page (returned oldest-first for display) via `beforeId`, or everything
+ * newer than `sinceId` for polling. */
+export function getChatMessages(
+  ticker: string,
+  params?: { limit?: number; beforeId?: number; sinceId?: number },
+): Promise<ChatMessageListResponse> {
+  const qs = new URLSearchParams();
+  if (params?.limit != null) qs.set('limit', String(params.limit));
+  if (params?.beforeId != null) qs.set('before_id', String(params.beforeId));
+  if (params?.sinceId != null) qs.set('since_id', String(params.sinceId));
+  const query = qs.toString();
+  return fetchJson(
+    `${BASE}/chat/${encodeURIComponent(ticker)}/messages${query ? `?${query}` : ''}`,
+    { headers: _authHeaders() },
+  );
+}
+
+/** Fetch all replies (one level) to a top-level message. */
+export function getChatReplies(ticker: string, messageId: number): Promise<ChatMessage[]> {
+  return fetchJson(
+    `${BASE}/chat/${encodeURIComponent(ticker)}/messages/${messageId}/replies`,
+    { headers: _authHeaders() },
+  );
+}
+
+/** Post a new top-level message to a ticker's thread. */
+export function postChatMessage(ticker: string, content: string): Promise<ChatMessage> {
+  return fetchJson(`${BASE}/chat/${encodeURIComponent(ticker)}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify({ content }),
+  });
+}
+
+/** Reply to a top-level message (server rejects replying to a reply). */
+export function postChatReply(ticker: string, messageId: number, content: string): Promise<ChatMessage> {
+  return fetchJson(`${BASE}/chat/${encodeURIComponent(ticker)}/messages/${messageId}/replies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify({ content }),
+  });
+}
+
+/** Soft-delete a message (author-only; server enforces). */
+export function deleteChatMessage(ticker: string, messageId: number): Promise<{ deleted: boolean }> {
+  return fetchJson(`${BASE}/chat/${encodeURIComponent(ticker)}/messages/${messageId}`, {
+    method: 'DELETE',
+    headers: _authHeaders(),
+  });
+}
+
+/** Toggle the current user's like on a message. */
+export function toggleChatLike(ticker: string, messageId: number): Promise<{ liked: boolean; like_count: number }> {
+  return fetchJson(`${BASE}/chat/${encodeURIComponent(ticker)}/messages/${messageId}/like`, {
+    method: 'POST',
+    headers: _authHeaders(),
+  });
+}

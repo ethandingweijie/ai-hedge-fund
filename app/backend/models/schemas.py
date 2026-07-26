@@ -289,3 +289,41 @@ class ApiKeySummaryResponse(BaseModel):
 class ApiKeyBulkUpdateRequest(BaseModel):
     """Request to update multiple API keys at once"""
     api_keys: List[ApiKeyCreateRequest]
+
+
+# ── Chat (per-ticker discussion) schemas ─────────────────────────────────────
+
+class ChatMessageCreateRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
+class ChatMessageResponse(BaseModel):
+    """Shaped directly from ChatRepository's aggregated dicts (author_name /
+    reply_count / like_count / liked_by_me are computed there, not native
+    columns) — from_attributes isn't needed since the repository already
+    returns plain dicts, but kept for consistency with the rest of this file."""
+    id: int
+    ticker: str
+    user_id: int
+    author_name: str
+    content: str
+    created_at: datetime
+    edited_at: Optional[datetime] = None
+    is_deleted: bool
+    parent_message_id: Optional[int] = None
+    reply_count: int
+    like_count: int
+    liked_by_me: bool
+
+    class Config:
+        from_attributes = True
+
+
+class ChatMessageListResponse(BaseModel):
+    messages: List[ChatMessageResponse]
+    has_more: bool
+
+
+class ChatReactionToggleResponse(BaseModel):
+    liked: bool
+    like_count: int
