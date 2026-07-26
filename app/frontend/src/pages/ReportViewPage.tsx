@@ -276,17 +276,22 @@ export function ReportViewPage() {
             ) : (
               <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={ticker} />
             )}
+            {/* Sits directly below the DCF ladder in the same column instead of
+                as its own full-width strip — fills the column's remaining
+                height instead of leaving the ladder's sparse-data cards
+                (no bear/bull IV stored) looking like dead space above a gap. */}
+            <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} />
           </div>
           <div className="flex flex-col gap-2">
             <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
             <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
             <NewsPanel ticker={ticker} />
+            {/* Same idea on the right column — was a full-width strip below the
+                grid, now stacks with the other Analysis-adjacent cards so both
+                columns grow together instead of one trailing off short. */}
+            <AgentSignalsPanel agentSignals={agentSignals} ticker={ticker} />
           </div>
         </div>
-
-        <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} />
-
-        <AgentSignalsPanel agentSignals={agentSignals} ticker={ticker} />
 
         {/* ── Analysis (anchored to Industry Brief) ──────────────────────── */}
         <SectionAnchor id="analysis" label="Analysis" />

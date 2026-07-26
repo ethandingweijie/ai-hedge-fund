@@ -29,6 +29,7 @@ import { CardAuditBanner }     from '@/components/report/CardAuditBanner';
 import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
 import { AgentSignalsPanel }   from '@/components/report/AgentSignalsPanel';
+import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { IntelligenceGrid }    from '@/components/report/IntelligenceGrid';
 import { FinancialsChart }     from '@/components/report/FinancialsChart';
 import { ValuationLadder }     from '@/components/report/ValuationLadder';
@@ -1439,6 +1440,11 @@ export function ReportPage() {
                 <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={liveTicker} />
               ))
             )}
+            {/* Sits directly below the DCF ladder in the same column instead of
+                as its own full-width strip — fills the column's remaining
+                height instead of leaving the ladder's sparse-data cards
+                (no bear/bull IV stored) looking like dead space above a gap. */}
+            <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} />
           </div>
           <div className="flex flex-col gap-2">
             {renderSection('power_law', 'Power Law', (
@@ -1448,12 +1454,14 @@ export function ReportPage() {
               <ValueTrapChecklist analysis={valueTrap} ticker={liveTicker} />
             ))}
             <NewsPanel ticker={liveTicker} />
+            {/* Same idea on the right column — was a full-width strip below the
+                grid, now stacks with the other Analysis-adjacent cards so both
+                columns grow together instead of one trailing off short. */}
+            {renderSection('agents', 'Agent Signals', (
+              <AgentSignalsPanel agentSignals={agentSignals} ticker={liveTicker} />
+            ))}
           </div>
         </div>
-
-        {renderSection('agents', 'Agent Signals', (
-          <AgentSignalsPanel agentSignals={agentSignals} ticker={liveTicker} />
-        ))}
 
         {/* ── Analysis ────────────────────────────────────────────────────── */}
         {/* Renders as soon as partial_data.industry_brief OR .deep_research */}

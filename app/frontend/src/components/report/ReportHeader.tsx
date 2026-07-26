@@ -43,87 +43,85 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
   return (
     <Card className="p-6 flex flex-col min-w-0">
 
-      {/* ── Row 1: ticker | VGPM | Regime ──
-          min-w-0 on the Card above is required for the flex-1 centre column
-          below to actually shrink instead of forcing this whole row past
-          its grid track — without it, on narrower desktop widths this
-          content overflowed into StockPanel's column (the Regime/VGPM
-          badges were getting visually clipped at the column boundary). The
-          stat row and VGPM row both wrap now instead of overflowing. */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-
-        {/* Left: ticker + action + run info */}
-        <div className="shrink-0">
-          {companyName && (
-            <p className="text-sm text-muted-foreground font-medium leading-none mb-1">{companyName}</p>
-          )}
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight">{ticker}</h1>
-            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${colorClass}`}>{action}</span>
-          </div>
-          <p className="text-muted-foreground text-xs mt-1">
-            {runAt && !isNaN(new Date(runAt).getTime()) ? `Run ${new Date(runAt).toLocaleString()} · ` : ''}{modelName ?? 'N/A'}
-          </p>
+      {/* ── Ticker / action / run info ──
+          Own row now (not squeezed beside the stats), so it never competes
+          for width with anything else — the stats and VGPM rows below are
+          full-card-width CSS Grids instead, which stay a stable 4-column
+          layout at any card width instead of flex-wrapping unpredictably
+          between a single row and an uneven 2x2 depending on how much room
+          the sidebar leaves (that used to make the card visibly "jump"
+          between layouts as the sidebar toggled). */}
+      <div className="min-w-0">
+        {companyName && (
+          <p className="text-sm text-muted-foreground font-medium leading-none mb-1">{companyName}</p>
+        )}
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight">{ticker}</h1>
+          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${colorClass}`}>{action}</span>
         </div>
-
-        {/* Centre: Position / Target / Current / Regime + VGPM below */}
-        <div className="flex flex-col flex-1 min-w-0 items-center gap-3">
-          <div className="flex items-start gap-4 flex-wrap justify-center">
-            {decision?.position_size_pct != null && (
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Position</p>
-                <p className="text-xl font-bold">{(decision.position_size_pct * 100).toFixed(2)}%</p>
-              </div>
-            )}
-            {decision?.price_target != null && decision.price_target > 0 && (
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Target</p>
-                <p className="text-xl font-bold">{currencySymbol(ticker)}{decision.price_target.toFixed(2)}</p>
-              </div>
-            )}
-            {currentPrice != null && (
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Current</p>
-                <p className="text-xl font-bold">{currencySymbol(ticker)}{currentPrice.toFixed(2)}</p>
-              </div>
-            )}
-            {regime && (
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Regime</p>
-                <div className="flex flex-col items-center gap-1">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded border border-border text-xs text-foreground/80">{regime.risk_appetite}</span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded border border-border text-xs text-foreground/80">{regime.volatility_regime} vol</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {vgpm && (
-            <div className="flex items-start gap-2.5 flex-wrap justify-center">
-              {VGPM_DIMS.map(({ key }) => {
-                const dim = vgpm[key];
-                if (!dim) return null;
-                const fullLabel = key.charAt(0).toUpperCase() + key.slice(1);
-                const tooltip = [
-                  `${fullLabel}: ${dim.score}/100`,
-                  ...(dim.subs ?? []),
-                ].join('\n');
-                return (
-                  <div key={key} className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">{fullLabel}</span>
-                    <span
-                      title={tooltip}
-                      className={`text-xl font-bold px-3 py-1 rounded-lg cursor-help ${gradeColorClass(dim.grade)}`}
-                    >
-                      {dim.grade}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <p className="text-muted-foreground text-xs mt-1">
+          {runAt && !isNaN(new Date(runAt).getTime()) ? `Run ${new Date(runAt).toLocaleString()} · ` : ''}{modelName ?? 'N/A'}
+        </p>
       </div>
+
+      {/* ── Position / Target / Current / Regime ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
+        {decision?.position_size_pct != null && (
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Position</p>
+            <p className="text-xl font-bold">{(decision.position_size_pct * 100).toFixed(2)}%</p>
+          </div>
+        )}
+        {decision?.price_target != null && decision.price_target > 0 && (
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Target</p>
+            <p className="text-xl font-bold">{currencySymbol(ticker)}{decision.price_target.toFixed(2)}</p>
+          </div>
+        )}
+        {currentPrice != null && (
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Current</p>
+            <p className="text-xl font-bold">{currencySymbol(ticker)}{currentPrice.toFixed(2)}</p>
+          </div>
+        )}
+        {regime && (
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Regime</p>
+            <div className="flex flex-wrap gap-1">
+              <span className="inline-flex items-center px-2 py-0.5 rounded border border-border text-xs text-foreground/80">{regime.risk_appetite}</span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded border border-border text-xs text-foreground/80">{regime.volatility_regime} vol</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── VGPM ── */}
+      {vgpm && (
+        <div className="grid grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
+          {VGPM_DIMS.map(({ key }) => {
+            const dim = vgpm[key];
+            if (!dim) return (
+              <div key={key} />
+            );
+            const fullLabel = key.charAt(0).toUpperCase() + key.slice(1);
+            const tooltip = [
+              `${fullLabel}: ${dim.score}/100`,
+              ...(dim.subs ?? []),
+            ].join('\n');
+            return (
+              <div key={key} className="flex flex-col items-center gap-1">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">{fullLabel}</span>
+                <span
+                  title={tooltip}
+                  className={`text-xl font-bold px-3 py-1 rounded-lg cursor-help ${gradeColorClass(dim.grade)}`}
+                >
+                  {dim.grade}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Rationale ── */}
       {/* Cap line length to a comfortable reading measure (~72ch). `ch` units
