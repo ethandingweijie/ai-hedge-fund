@@ -10,7 +10,6 @@ import { V2ReportView } from '@/components/v2/V2ReportView';
 
 import { ReportHeader } from '@/components/report/ReportHeader';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
-import { ScenarioChart } from '@/components/report/ScenarioChart';
 import { PowerLawRadar } from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist } from '@/components/report/ValueTrapChecklist';
 import { AgentSignalsPanel } from '@/components/report/AgentSignalsPanel';
@@ -225,7 +224,6 @@ export function ReportViewPage() {
               decision={decision}
               ticker={ticker}
             />
-            <ScenarioChart scenario={scenarioAnalysis} ticker={ticker} />
             {dcfRange?.reit_breakdown ? (
               <REITValuationPanel
                 dcfRange={dcfRange}

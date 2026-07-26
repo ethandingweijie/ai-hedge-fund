@@ -2,8 +2,8 @@
  * REITValuationPanel
  * -------------------
  * REIT-specific supplement to the Valuation tab. Renders BELOW the existing
- * PriceTargetPanel + ScenarioChart (which already work well for REITs) and
- * replaces ONLY the generic DCF ladder at the bottom.
+ * PriceTargetPanel (which already works well for REITs) and replaces ONLY
+ * the generic DCF ladder at the bottom.
  *
  * Design DNA matches the live deployed app exactly:
  *   - Uppercase `tracking-[0.2em]` section headings in muted-foreground

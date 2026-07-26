@@ -10,7 +10,7 @@
  * already consume the RunResult shape.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   RunResult,
   VgpmResult,
@@ -47,6 +47,8 @@ import { BiopharmaValuationPanel } from '@/components/report/biopharma/Biopharma
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SectorValuationCard } from '@/components/report/SectorValuationCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
+import { ProgressHeader } from '@/components/report/ProgressHeader';
+import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
@@ -153,65 +155,8 @@ export function V2ReportView({
       .catch(() => { /* ignore */ });
   }, [ticker]);
 
-  const isResearchPhase = useMemo(
-    () => Object.values(phaseMap).some(p =>
-      (p.phase === 'deep_research_agent' || p.phase === 'deep_research') && !p.status?.toLowerCase().match(/done|complete/)
-    ),
-    [phaseMap]
-  );
-
-  // ── Progress-header derivations ────────────────────────────────────────
-  // Split the single stringy `currentPhaseLabel` prop (which previously
-  // carried the raw "Thinking: ..." message and got truncated to one line)
-  // into two semantically-distinct pieces:
-  //   • phaseLabel      — short human-readable phase name ("Deep Research")
-  //   • thinkingDetail  — full streaming status detail, flows into the
-  //                       subtitle slot where "Hold tight …" used to be,
-  //                       wrapping across up to 3 lines so the reader
-  //                       actually gets to see what's happening.
-  //
-  // Both derive from phaseMap (already passed as prop). No new state.
-  const progressDerived = useMemo(() => {
-    // Short display names for the 15 backend phase keys. Mirrors the
-    // PHASE_LABELS.running map in ReportPage.tsx but uses shorter labels
-    // so Row 1 stays comfortably on a single line alongside % / Cancel.
-    const PHASE_SHORT: Record<string, string> = {
-      macro_regime_classifier: 'Macro Regime',
-      strategic_router:        'Sector Routing',
-      intelligence_agents:     'Intelligence',
-      data_router:             'Data Router',
-      deep_research_agent:     'Deep Research',
-      deep_research:           'Deep Research',
-      industry_specialist:     'Industry Brief',
-      dcf_engine:              'DCF Engine',
-      investor_agents:         'Investor Agents',
-      debate_round:            'Agent Debate',
-      power_law_agent:         'Power Law',
-      value_trap_agent:        'Value Trap',
-      phase7_complete:         'Wrapping Up',
-      advanced_risk_manager:   'Risk Manager',
-      portfolio_manager:       'Portfolio Decision',
-      pipeline_queued:         'Queued',
-    };
-
-    const events = Object.values(phaseMap);
-    if (events.length === 0) return { phaseLabel: undefined, thinkingDetail: undefined };
-
-    // Latest non-done event (still running) → primary; else last completed.
-    const running = events.filter(p => !/done|complete|✓/i.test(p.status ?? ''));
-    const activePhase = running.length > 0 ? running[running.length - 1] : events[events.length - 1];
-    const phaseKey = activePhase.phase;
-
-    const phaseLabel = PHASE_SHORT[phaseKey] ?? phaseKey.replace(/_/g, ' ');
-
-    // Detail text: prefer summary (longer, richer), then status. Skip if
-    // it matches phase label (avoids redundant echo).
-    const raw = (activePhase.summary || activePhase.status || '').trim();
-    const thinkingDetail = raw && raw.toLowerCase() !== phaseLabel.toLowerCase()
-      ? raw : undefined;
-
-    return { phaseLabel, thinkingDetail };
-  }, [phaseMap]);
+  const isResearchPhase = useIsResearchPhase(phaseMap);
+  const progressDerived = useProgressDerived(phaseMap);
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
@@ -370,60 +315,6 @@ export function V2ReportView({
  *          space so the user can actually read what's happening)
  *   Row 3: Progress bar
  */
-function ProgressHeader({
-  progressPct,
-  currentPhaseLabel,
-  thinkingDetail,
-  onCancel,
-}: {
-  progressPct: number;
-  currentPhaseLabel?: string;
-  thinkingDetail?: string;
-  onCancel?: () => void;
-}) {
-  return (
-    <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
-      {/* Row 1 — phase label + % + Cancel (single line, tight) */}
-      <div className="px-4 pt-3 pb-1 flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-[13.5px] font-semibold text-foreground truncate tracking-tight">
-            {currentPhaseLabel ?? 'Running analysis…'}
-          </div>
-        </div>
-        <div className="shrink-0 flex items-center gap-2">
-          <span className="text-[15px] font-semibold tabular-nums text-foreground tracking-tight">
-            {Math.round(progressPct)}%
-          </span>
-          {onCancel && (
-            <button
-              onClick={onCancel}
-              className="text-[11.5px] font-medium text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </div>
-      {/* Row 2 — live thinking/status detail flows into the full width.
-          Wraps up to 3 lines so the reader actually gets to see what's
-          happening (previously truncated mid-sentence with "..."). */}
-      <div className="px-4 pb-2.5 text-[11.5px] text-muted-foreground leading-snug line-clamp-3 break-words min-h-[1.35em]">
-        {thinkingDetail ?? 'Running analysis — research streams in over 4–6 minutes.'}
-      </div>
-      <div className="h-1 bg-muted overflow-hidden">
-        <div
-          className="h-full transition-[width] duration-200 ease-out"
-          style={{
-            width: `${Math.max(0, Math.min(100, progressPct))}%`,
-            background: `linear-gradient(90deg, ${BRAND} 0%, ${BRAND} 80%, #9FE870 100%)`,
-            boxShadow: `0 0 8px ${BRAND}80`,
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 /* ───────── Summary Tab ───────── */
 function LoadingSpinner({ size = 16 }: { size?: number }) {
   return (
@@ -587,9 +478,6 @@ function ValuationBody({
   const upside = (target != null && current != null && current > 0)
     ? ((target - current) / current) * 100
     : (scenarioAnalysis?.upside_pct ?? null);
-  const longTerm = dcfRange?.base?.intrinsic_value ?? scenarioAnalysis?.base?.fair_value ?? null;
-  const longTermDelta = (longTerm != null && current != null && current > 0)
-    ? ((longTerm - current) / current) * 100 : null;
   const bullIV = dcfRange?.bull?.intrinsic_value ?? scenarioAnalysis?.bull?.fair_value ?? null;
   const baseIV = dcfRange?.base?.intrinsic_value ?? scenarioAnalysis?.base?.fair_value ?? null;
   const bearIV = dcfRange?.bear?.intrinsic_value ?? scenarioAnalysis?.bear?.fair_value ?? null;
@@ -601,14 +489,9 @@ function ValuationBody({
   const bull12m = has12mTargets.bull ?? bullIV;
   const base12m = has12mTargets.base ?? target ?? baseIV;
   const bear12m = has12mTargets.bear ?? bearIV;
-  // Deltas for the 12m-PT-based hero tiles (Bull case / Bear case sub-cards).
-  // These hero cards live UNDER the "12-Month Price Target" header, so they
-  // must reflect the 12m PTs (capped by Convergence Cap + bear floor), NOT
-  // the raw DCF IVs. Pre-fix used bullIV/bearIV which produced numbers that
-  // disagreed with the headline (e.g. MDB headline $289 but Bull-case tile
-  // showed uncapped IV $691). Fixed 2026-04-25.
-  const bull12mDelta = (bull12m != null && current != null && current > 0) ? ((bull12m - current) / current) * 100 : null;
-  const bear12mDelta = (bear12m != null && current != null && current > 0) ? ((bear12m - current) / current) * 100 : null;
+  // bull12m/base12m/bear12m are 12m PTs (capped by Convergence Cap + bear
+  // floor), NOT raw DCF IVs — used as-is in the Scenario Probabilities table
+  // below (target12m column) so they match the headline 12m target.
   // Wall Street analyst consensus PT (from FMP /price-target-consensus, persisted
   // in dcf_range.consensus_pt by dcf_agent). Frontend renders as a small
   // sanity-check line under the headline 12m PT so users see model vs market.
@@ -620,15 +503,12 @@ function ValuationBody({
   const probBull = scenarioAnalysis?.bull?.probability ?? 0.25;
   const probBase = scenarioAnalysis?.base?.probability ?? 0.50;
   const probBear = scenarioAnalysis?.bear?.probability ?? 0.25;
-  const evValue = scenarioAnalysis?.expected_value ?? target ?? null;
 
   const haveAny = dcfRange || scenarioAnalysis || decision;
   if (!haveAny) {
     return (
       <div className="px-4 pt-4 pb-8 space-y-4">
-        <LoadingCard label="12-Month Price Target" minH={180} />
-        <LoadingCard label="Scenario Probabilities" minH={140} />
-        <LoadingCard label="Scenario Analysis" minH={220} />
+        <LoadingCard label="12-Month Price Target" minH={320} />
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       </div>
     );
@@ -636,123 +516,103 @@ function ValuationBody({
 
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
-      {/* ── 12-Month Price Target hero ──────────────────────────────── */}
-      {target != null ? (
+      {/* ── 12-Month Price Target (hero + probability-weighted scenario table) ──
+          Consolidated 2026-05: this used to be three separate cards (hero,
+          "Scenario Probabilities" table, "Scenario Analysis" bar chart) that
+          all restated the same bear/base/bull numbers. The table already
+          carries strictly more information than the other two — probability
+          weight plus both the 12m target AND the long-term DCF IV per
+          scenario — so it's kept, with the hero headline on top and the old
+          bar chart's one useful addition (the plain-English BLUF sentence)
+          folded in instead of a redundant chart. */}
+      {(target != null || scenarioAnalysis || dcfRange) ? (
         <div className="rounded-lg border border-border bg-card shadow-sm p-5">
-          <div className="text-center">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-              12-Month Price Target
-            </div>
-            <div className="text-[34px] font-semibold tracking-tight text-foreground tabular-nums mt-1 leading-none">
-              ${target.toFixed(2)}
-            </div>
-            {upside != null && (
-              <div className={`mt-2 text-[14px] font-medium tabular-nums ${upside >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
-                {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% upside
+          {target != null && (
+            <div className="text-center">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+                12-Month Price Target
               </div>
-            )}
-            {current != null && (
-              <div className="text-[11px] text-muted-foreground">
-                vs current ${current.toFixed(2)}
+              <div className="text-[34px] font-semibold tracking-tight text-foreground tabular-nums mt-1 leading-none">
+                ${target.toFixed(2)}
               </div>
-            )}
-            {consensusPt != null && (
-              <div className="mt-1.5 text-[11px] text-muted-foreground">
-                Wall St. consensus{' '}
-                <span className="font-semibold text-foreground/80 tabular-nums">
-                  ${consensusPt.toFixed(2)}
-                </span>
-                {consensusDelta != null && (
-                  <span className={`ml-1 tabular-nums ${
-                    Math.abs(consensusDelta) < 5
-                      ? 'text-muted-foreground/70'
-                      : consensusDelta > 0
-                        ? 'text-brand'
-                        : 'text-rose-600 dark:text-rose-400'
-                  }`}>
-                    ({consensusDelta >= 0 ? '+' : ''}{consensusDelta.toFixed(1)}% vs model)
+              {upside != null && (
+                <div className={`mt-2 text-[14px] font-medium tabular-nums ${upside >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+                  {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% upside
+                </div>
+              )}
+              {current != null && (
+                <div className="text-[11px] text-muted-foreground">
+                  vs current ${current.toFixed(2)}
+                </div>
+              )}
+              {consensusPt != null && (
+                <div className="mt-1.5 text-[11px] text-muted-foreground">
+                  Wall St. consensus{' '}
+                  <span className="font-semibold text-foreground/80 tabular-nums">
+                    ${consensusPt.toFixed(2)}
                   </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 2×2 metric grid */}
-          <div className="grid grid-cols-2 gap-2 mt-5">
-            <MetricBox label="Current price"   value={current != null ? `$${current.toFixed(2)}` : '—'} tone="neutral" />
-            <MetricBox label="Long-term value (Base)" value={longTerm != null ? `$${longTerm.toFixed(2)}` : '—'} delta={longTermDelta ?? undefined} tone="neutral" />
-            <MetricBox label="Bull case"       value={bull12m  != null ? `$${bull12m.toFixed(2)}`  : '—'} delta={bull12mDelta ?? undefined} tone="bull" />
-            <MetricBox label="Bear case"       value={bear12m  != null ? `$${bear12m.toFixed(2)}`  : '—'} delta={bear12mDelta ?? undefined} tone="bear" />
-          </div>
-        </div>
-      ) : (
-        <LoadingCard label="12-Month Price Target" minH={200} />
-      )}
-
-      {/* ── Scenario probabilities ──────────────────────────────────── */}
-      {(scenarioAnalysis || dcfRange) ? (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-              Scenario Probabilities
-            </span>
-            {wacc != null && <span className="text-[10px] tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
-          </div>
-          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-            <span className="w-[60px] text-right">12M Target</span>
-            <span className="w-[56px] text-right">DCF IV</span>
-          </div>
-          {[
-            { prob: probBear, name: 'Bear', target12m: bear12m, iv: bearIV, color: 'rose' },
-            { prob: probBase, name: 'Base', target12m: base12m, iv: baseIV, color: 'blue' },
-            { prob: probBull, name: 'Bull', target12m: bull12m, iv: bullIV, color: 'brand' },
-          ].map((r, i) => (
-            <div key={r.name} className={`flex items-center gap-2 py-2 ${i > 0 ? 'border-t border-border/60' : ''}`}>
-              <span className="w-[34px] text-[11.5px] font-semibold text-foreground/80 tabular-nums">
-                {Math.round((r.prob ?? 0) * 100)}%
-              </span>
-              <div className="w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
-                <div
-                  style={{ width: `${Math.min(100, (r.prob ?? 0) * 200)}%` }}
-                  className={`h-full ${r.color === 'rose' ? 'bg-rose-500 dark:bg-rose-400' : r.color === 'blue' ? 'bg-blue-500 dark:bg-blue-400' : 'bg-brand'}`}
-                />
-              </div>
-              <span className="text-[12.5px] font-semibold text-foreground min-w-[40px]">{r.name}</span>
-              <span className="ml-auto w-[60px] text-right text-[12px] font-semibold tabular-nums text-foreground">
-                {r.target12m != null ? `$${r.target12m.toFixed(2)}` : '—'}
-              </span>
-              <span className="w-[56px] text-right text-[11px] tabular-nums text-muted-foreground">
-                {r.iv != null ? `$${r.iv.toFixed(2)}` : '—'}
-              </span>
+                  {consensusDelta != null && (
+                    <span className={`ml-1 tabular-nums ${
+                      Math.abs(consensusDelta) < 5
+                        ? 'text-muted-foreground/70'
+                        : consensusDelta > 0
+                          ? 'text-brand'
+                          : 'text-rose-600 dark:text-rose-400'
+                    }`}>
+                      ({consensusDelta >= 0 ? '+' : ''}{consensusDelta.toFixed(1)}% vs model)
+                    </span>
+                  )}
+                </div>
+              )}
+              {baseDelta != null && bearDelta != null && (
+                <p className="text-[11px] text-muted-foreground leading-relaxed mt-2.5">
+                  Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside; bear-case downside is {Math.abs(bearDelta).toFixed(0)}%.
+                </p>
+              )}
             </div>
-          ))}
-        </div>
-      ) : (
-        <LoadingCard label="Scenario Probabilities" minH={140} />
-      )}
-
-      {/* ── Scenario analysis (v2 native bar chart) ─────────────────── */}
-      {(bullIV != null || baseIV != null || bearIV != null) ? (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
-          <div className="flex items-start justify-between mb-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-              Scenario Analysis
-            </span>
-            {upside != null && (
-              <span className={`inline-flex items-center gap-1 text-[10.5px] font-medium ${upside >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
-                EV upside {upside >= 0 ? '+' : ''}{upside.toFixed(1)}%
-              </span>
-            )}
-          </div>
-          {baseDelta != null && bearDelta != null && (
-            <p className="text-[11.5px] text-muted-foreground leading-relaxed mb-3">
-              Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside; bear-case downside is {Math.abs(bearDelta).toFixed(0)}%.
-            </p>
           )}
-          <V2ScenarioBars bear={bearIV} base={baseIV} bull={bullIV} ev={evValue} current={current ?? undefined} />
+
+          {(scenarioAnalysis || dcfRange) && (
+            <div className={target != null ? 'mt-5 pt-4 border-t border-border/60' : ''}>
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+                  Scenario Probabilities
+                </span>
+                {wacc != null && <span className="text-[10px] tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
+              </div>
+              <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/70">
+                <span className="w-[60px] text-right">12M Target</span>
+                <span className="w-[56px] text-right">DCF IV</span>
+              </div>
+              {[
+                { prob: probBear, name: 'Bear', target12m: bear12m, iv: bearIV, color: 'rose' },
+                { prob: probBase, name: 'Base', target12m: base12m, iv: baseIV, color: 'neutral' },
+                { prob: probBull, name: 'Bull', target12m: bull12m, iv: bullIV, color: 'brand' },
+              ].map((r, i) => (
+                <div key={r.name} className={`flex items-center gap-2 py-2 ${i > 0 ? 'border-t border-border/60' : ''}`}>
+                  <span className="w-[34px] text-[11.5px] font-semibold text-foreground/80 tabular-nums">
+                    {Math.round((r.prob ?? 0) * 100)}%
+                  </span>
+                  <div className="w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      style={{ width: `${Math.min(100, (r.prob ?? 0) * 200)}%` }}
+                      className={`h-full ${r.color === 'rose' ? 'bg-rose-500 dark:bg-rose-400' : r.color === 'neutral' ? 'bg-foreground/35' : 'bg-brand'}`}
+                    />
+                  </div>
+                  <span className="text-[12.5px] font-semibold text-foreground min-w-[40px]">{r.name}</span>
+                  <span className="ml-auto w-[60px] text-right text-[12px] font-semibold tabular-nums text-foreground">
+                    {r.target12m != null ? `$${r.target12m.toFixed(2)}` : '—'}
+                  </span>
+                  <span className="w-[56px] text-right text-[11px] tabular-nums text-muted-foreground">
+                    {r.iv != null ? `$${r.iv.toFixed(2)}` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
-        <LoadingCard label="Scenario Analysis" minH={220} />
+        <LoadingCard label="12-Month Price Target" minH={320} />
       )}
 
       {/* ── REIT branch OR DCF Valuation Ladder ──────────────────────────── */}
@@ -822,123 +682,6 @@ function ValuationBody({
   );
 }
 
-function MetricBox({
-  label, value, delta, tone = 'neutral',
-}: {
-  label: string;
-  value: string;
-  delta?: number;
-  tone?: 'neutral' | 'bull' | 'bear';
-}) {
-  const bg =
-    tone === 'bull' ? 'bg-brand/10 border-brand/20' :
-    tone === 'bear' ? 'bg-rose-50/70 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20' :
-    'bg-muted/50 border-border/60';
-  const labelCls =
-    tone === 'bull' ? 'text-brand/80' :
-    tone === 'bear' ? 'text-rose-700/80 dark:text-rose-400/80' :
-    'text-muted-foreground';
-  const valCls =
-    tone === 'bull' ? 'text-brand' :
-    tone === 'bear' ? 'text-rose-700 dark:text-rose-400' :
-    'text-foreground';
-  return (
-    <div className={`p-3 rounded-lg border ${bg}`}>
-      <div className={`text-[10px] uppercase tracking-[0.08em] font-semibold ${labelCls}`}>{label}</div>
-      <div className={`text-[18px] font-semibold tabular-nums mt-1 tracking-tight ${valCls}`}>{value}</div>
-      {delta != null && (
-        <div className={`text-[10.5px] font-medium tabular-nums mt-0.5 ${delta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
-          {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───────── V2 Scenario Bars (Bear/Base/Bull/EV) ───────── */
-function V2ScenarioBars({
-  bear, base, bull, ev, current,
-}: {
-  bear?: number | null;
-  base?: number | null;
-  bull?: number | null;
-  ev?: number | null;
-  current?: number;
-}) {
-  const bars = [
-    { label: 'Bear', value: bear,  fill: '#f43f5e' },
-    { label: 'Base', value: base,  fill: '#3b82f6' },
-    { label: 'Bull', value: bull,  fill: '#297A4B' },
-    { label: 'EV',   value: ev,    fill: '#a855f7' },
-  ].filter(b => typeof b.value === 'number' && b.value > 0) as { label: string; value: number; fill: string }[];
-
-  if (bars.length === 0) return null;
-
-  const values = bars.map(b => b.value).concat(current ? [current] : []);
-  const rawMin = Math.min(...values);
-  const rawMax = Math.max(...values);
-  // Pad 10% above/below
-  const yMin = Math.max(0, rawMin * 0.85);
-  const yMax = rawMax * 1.1;
-
-  const w = 340, h = 200;
-  const padT = 14, padB = 28, padL = 42, padR = 12;
-  const chartW = w - padL - padR;
-  const chartH = h - padT - padB;
-  const yFor = (v: number) => padT + chartH * (1 - (v - yMin) / Math.max(0.001, yMax - yMin));
-  const barW = Math.min(38, (chartW / bars.length) * 0.6);
-  const step = chartW / bars.length;
-
-  // 5 Y ticks
-  const ticks: number[] = [];
-  for (let i = 0; i <= 4; i++) ticks.push(yMin + (yMax - yMin) * (i / 4));
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="xMidYMid meet" style={{ height: 200 }}>
-      {/* Grid */}
-      <g className="text-border/70">
-        {ticks.map(t => (
-          <line key={t} x1={padL} y1={yFor(t)} x2={w - padR} y2={yFor(t)}
-                stroke="currentColor" strokeWidth={0.5} strokeDasharray="2,3" />
-        ))}
-      </g>
-      <g className="fill-muted-foreground/70">
-        {ticks.map(t => (
-          <text key={t} x={padL - 4} y={yFor(t) + 3} textAnchor="end" fontSize={9}>${Math.round(t)}</text>
-        ))}
-      </g>
-
-      {/* Current line */}
-      {current && current >= yMin && current <= yMax && (
-        <g>
-          <line x1={padL} y1={yFor(current)} x2={w - padR} y2={yFor(current)}
-                className="text-muted-foreground/70" stroke="currentColor" strokeWidth={1} strokeDasharray="4,4"/>
-          <text x={w - padR - 2} y={yFor(current) - 3} textAnchor="end" fontSize={9}
-                className="fill-muted-foreground">Current ${current.toFixed(2)}</text>
-        </g>
-      )}
-
-      {/* Bars */}
-      {bars.map((b, i) => {
-        const cx = padL + step * (i + 0.5);
-        const x = cx - barW / 2;
-        const y = yFor(b.value);
-        const bh = yFor(yMin) - y;
-        return (
-          <g key={b.label}>
-            <rect x={x} y={y} width={barW} height={Math.max(2, bh)} rx={2.5} fill={b.fill} />
-            <text x={cx} y={y - 4} textAnchor="middle" fontSize={9}
-                  className="fill-foreground/80" fontWeight={600}>
-              ${Math.round(b.value)}
-            </text>
-            <text x={cx} y={h - padB + 14} textAnchor="middle" fontSize={10}
-                  className="fill-muted-foreground">{b.label}</text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
 
 /* ───────── V2 DCF Valuation Ladder ───────── */
 function V2ValuationLadder({

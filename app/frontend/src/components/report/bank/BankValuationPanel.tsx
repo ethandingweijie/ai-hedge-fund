@@ -2,8 +2,8 @@
  * BankValuationPanel
  * -------------------
  * Bank-specific supplement to the Valuation tab, rendered below the existing
- * PriceTargetPanel + ScenarioChart when `dcfRange.bank_breakdown` is present
- * (backend emits it only for Financials / Bank / Mortgage profiles).
+ * PriceTargetPanel when `dcfRange.bank_breakdown` is present (backend emits
+ * it only for Financials / Bank / Mortgage profiles).
  *
  * Design DNA exactly matches REITValuationPanel:
  *   - uppercase `tracking-[0.2em]` section headings in muted-foreground

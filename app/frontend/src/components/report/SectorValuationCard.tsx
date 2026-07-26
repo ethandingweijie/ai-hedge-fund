@@ -10,8 +10,7 @@
  *   - Per-KPI in-band / near-floor / out-of-band / fallback badges
  *
  * Mount points:
- *   - MobileReportView Valuation section (after MobilePriceTarget)
- *   - V2ReportView Valuation tab (after V2ScenarioBars)
+ *   - V2ReportView Valuation tab (after the DCF valuation ladder)
  *
  * Legacy sub-profiles (SaaS / REIT / Biopharma) are excluded backend-side
  * — the payload will be absent from `data.sector_card` and the frontend

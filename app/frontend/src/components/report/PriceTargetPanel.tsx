@@ -57,7 +57,7 @@ function upsidePct(target: number | undefined, current: number | undefined): num
 
 function upsideColor(pct: number | null): string {
   if (pct == null) return 'text-muted-foreground';
-  return pct >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+  return pct >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400';
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -197,21 +197,21 @@ export function PriceTargetPanel({
       value: (raw12m?.bear != null && raw12m.bear > 0) ? raw12m.bear : null,
       weight: bearProb ?? null,
       contribution: (raw12m?.bear != null && raw12m.bear > 0 && bearProb != null) ? raw12m.bear * bearProb : null,
-      color: 'text-red-500 dark:text-red-400',
+      color: 'text-rose-600 dark:text-rose-400',
     },
     {
       label: 'Base',
       value: (raw12m?.base != null && raw12m.base > 0) ? raw12m.base : null,
       weight: baseProb ?? null,
       contribution: (raw12m?.base != null && raw12m.base > 0 && baseProb != null) ? raw12m.base * baseProb : null,
-      color: 'text-blue-600 dark:text-blue-400',
+      color: 'text-foreground/80',
     },
     {
       label: 'Bull',
       value: (raw12m?.bull != null && raw12m.bull > 0) ? raw12m.bull : null,
       weight: bullProb ?? null,
       contribution: (raw12m?.bull != null && raw12m.bull > 0 && bullProb != null) ? raw12m.bull * bullProb : null,
-      color: 'text-green-600 dark:text-green-400',
+      color: 'text-brand',
     },
   ];
 
@@ -236,9 +236,9 @@ export function PriceTargetPanel({
   // Only include cases that actually have data; use scenario probabilities where
   // available (scenario agent may override the 25/50/25 default weighting)
   const dcfAvailCases = [
-    { label: 'Bear', value: bearIV ?? null, weight: bearProb ?? 0.25, color: 'text-red-500 dark:text-red-400' },
-    { label: 'Base', value: baseIV ?? null, weight: baseProb ?? 0.50, color: 'text-blue-600 dark:text-blue-400' },
-    { label: 'Bull', value: bullIV ?? null, weight: bullProb ?? 0.25, color: 'text-green-600 dark:text-green-400' },
+    { label: 'Bear', value: bearIV ?? null, weight: bearProb ?? 0.25, color: 'text-rose-600 dark:text-rose-400' },
+    { label: 'Base', value: baseIV ?? null, weight: baseProb ?? 0.50, color: 'text-foreground/80' },
+    { label: 'Bull', value: bullIV ?? null, weight: bullProb ?? 0.25, color: 'text-brand' },
   ];
 
   const rowsDCF = dcfAvailCases.map(c => ({
@@ -336,7 +336,7 @@ export function PriceTargetPanel({
             title="12-Month Forward Multiple"
             subtitle="Sector multiples on Year-1 projected financials"
             badge="12m PT"
-            badgeColor="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-300"
+            badgeColor="bg-brand/10 text-brand"
             rows={rows12m}
             blendedLabel="Probability-weighted 12m Target"
             blendedValue={pt12mBlended}
@@ -351,7 +351,7 @@ export function PriceTargetPanel({
             title="Long-term Intrinsic Value (DCF)"
             subtitle="10-year discounted cash flow — NOT the price target"
             badge="EV"
-            badgeColor="bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300"
+            badgeColor="bg-muted text-muted-foreground border border-border"
             rows={rowsDCF}
             blendedLabel="Probability-weighted Expected Value"
             blendedValue={expectedValue}
@@ -400,7 +400,7 @@ export function PriceTargetPanel({
 
       {/* ── Valuation chasm warning ─────────────────────────────────────── */}
       {chasmRatio != null && chasmRatio >= 5 && (
-        <div className="rounded-md bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-3 py-2.5 text-[11px] text-violet-800 dark:text-violet-300 leading-snug space-y-1">
+        <div className="rounded-md bg-muted/60 border border-border px-3 py-2.5 text-[11px] text-foreground/80 leading-snug space-y-1">
           <p className="font-bold">
             📐 Valuation Chasm — {chasmRatio.toFixed(1)}× gap between 12m target and long-term EV
           </p>

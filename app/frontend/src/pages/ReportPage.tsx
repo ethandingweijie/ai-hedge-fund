@@ -16,6 +16,9 @@ import { Filter, Lightbulb, BookMarked, BellRing, History as HistoryIcon, Wallet
 import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun, mergeDataPreserve } from '@/contexts/active-run-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
+import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
+import { ProgressHeader } from '@/components/report/ProgressHeader';
+import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
 // MobileReportView removed — replaced by V2ReportView (dead legacy mobile fallback gated on `if (false && ...)` removed 2026-04).
 import type { ProgressEvent } from '@/lib/reportTypes';
@@ -23,7 +26,6 @@ import type { ProgressEvent } from '@/lib/reportTypes';
 // ── Report section components ────────────────────────────────────────────────
 import { ReportHeader }        from '@/components/report/ReportHeader';
 import { CardAuditBanner }     from '@/components/report/CardAuditBanner';
-import { ScenarioChart }       from '@/components/report/ScenarioChart';
 import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
 import { AgentSignalsPanel }   from '@/components/report/AgentSignalsPanel';
@@ -140,146 +142,10 @@ function phaseLabel(phase: string): string {
   return phase.replace(/_agent$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// ── Live research quips — bucketed by progress ───────────────────────────────
-const QUIPS_BY_STAGE: Record<'early' | 'mid' | 'late' | 'final', string[]> = {
-  // 0–30 %: chaos, frustration, just getting started
-  early: [
-    "The GPUs are on fire! Putting them out while the remaining works!",
-    "My wife is asking me to take care of the kids.. Hang on a bit!",
-    "We are working our equity analyst backend hard! Shhh\u2026",
-    "Yawns. This is taking a while because of budget..",
-    "Trust me we are working on it.",
-    "Someone spilled coffee on the server rack. Cleaning up\u2026",
-    "Convincing the interns to stop arguing and start analyzing\u2026",
-    "Deep Research is commencing really. Sending my kids to the library nearby to get the books.",
-  ],
-  // 30–60 %: mid-grind, still struggling but making progress
-  mid: [
-    "Flipping our CFA textbook behind the scenes!",
-    "Asking our boss on holiday for approval\u2026",
-    "Half-way there \u2014 the analysts are starting to sweat.",
-    "Running the numbers twice. Then a third time just to be safe.",
-    "Our quant team disagrees with our fundamental team. Mediating\u2026",
-    "Checking whether this is a value trap or a genuine bargain\u2026",
-    "The spreadsheet has 47 tabs. We're on tab 23.",
-    "Somewhere a DCF model is being built. Slowly.",
-  ],
-  // 70–90 %: closing in, cautious optimism
-  late: [
-    "Checking with our school professors on the formatting.",
-    "Almost there \u2014 peer-reviewing the thesis one more time.",
-    "Crossing the t's and dotting the i's on the valuation.",
-    "Running final sanity checks so we don't embarrass ourselves.",
-    "The debate panel is reaching a consensus\u2026 almost.",
-    "Polishing the report so it looks like we knew what we were doing.",
-    "Senior analyst is reviewing. Waiting for the red pen\u2026",
-    "Just formatting the footnotes. Very important footnotes.",
-  ],
-  // 90–100 %: nearly done, excited energy
-  final: [
-    "Wrapping up! The finish line is in sight.",
-    "Final touches \u2014 adding the cherry on top of the analysis.",
-    "Done with the hard part. Now making it look pretty.",
-    "Sending the draft to compliance\u2026 just kidding, we ship fast here.",
-    "Almost ready to present to the investment committee!",
-    "Last spell-check. We promise.",
-    "Signing off the report. Thank you for your patience!",
-  ],
-};
-
-function getStage(pct: number): 'early' | 'mid' | 'late' | 'final' {
-  if (pct < 30)  return 'early';
-  if (pct < 70)  return 'mid';
-  if (pct < 90)  return 'late';
-  return 'final';
-}
-
-function LiveResearchLabel({ pct, phaseMap }: { pct: number; phaseMap: Record<string, ProgressEvent> }) {
-  const stage = getStage(pct);
-
-  const [quipIdx,  setQuipIdx]  = useState(0);
-  const [fadeIn,   setFadeIn]   = useState(true);
-  const [dot,      setDot]      = useState(0);
-  const prevStageRef = useRef<'early' | 'mid' | 'late' | 'final'>(stage);
-
-  // Determine current active phase from phaseMap
-  const phases = Object.values(phaseMap);
-  // Filter out pipeline_queued to find the real active pipeline phase
-  const realPhases = phases.filter(p => p.phase !== 'pipeline_queued');
-  const activePhase = realPhases.length > 0
-    ? realPhases.filter(p => p.status.toLowerCase() !== 'done').pop()  // latest non-done
-      ?? realPhases[realPhases.length - 1]  // fallback: last completed phase
-    : (phases.length > 0 ? phases[phases.length - 1] : null);  // fall back to pipeline_queued if nothing else
-  const currentPhaseLabel = activePhase
-    ? (activePhase.status.toLowerCase() === 'done'
-        ? (PHASE_LABELS[activePhase.phase]?.done ?? phaseLabel(activePhase.phase))
-        : (PHASE_LABELS[activePhase.phase]?.running ?? phaseLabel(activePhase.phase)))
-    : 'Starting analysis...';
-
-  // Helper: crossfade to a new quip index
-  const crossfadeTo = useCallback((nextIdx: number) => {
-    setFadeIn(false);
-    const t = window.setTimeout(() => {
-      setQuipIdx(nextIdx);
-      setFadeIn(true);
-    }, 300);
-    return t;
-  }, []);
-
-  useEffect(() => {
-    if (prevStageRef.current === stage) return;
-    prevStageRef.current = stage;
-    const t = crossfadeTo(0);
-    return () => window.clearTimeout(t);
-  }, [stage, crossfadeTo]);
-
-  useEffect(() => {
-    let fadeTimer: number;
-    const interval = window.setInterval(() => {
-      const pool = QUIPS_BY_STAGE[prevStageRef.current];
-      fadeTimer = crossfadeTo((quipIdx + 1) % pool.length);
-    }, 5000);
-    return () => {
-      window.clearInterval(interval);
-      window.clearTimeout(fadeTimer);
-    };
-  }, [quipIdx, crossfadeTo]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setDot(d => (d + 1) % 5), 350);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const pool = QUIPS_BY_STAGE[stage];
-  const quipText = pool[quipIdx] ?? pool[0];
-
-  return (
-    <span className="flex items-center gap-1.5 min-w-0">
-      {/* Animated five dots */}
-      <span className="flex items-center gap-[3px] shrink-0">
-        {[0,1,2,3,4].map(i => (
-          <span
-            key={i}
-            className="inline-block w-1.5 h-1.5 rounded-full bg-primary transition-opacity duration-200"
-            style={{ opacity: dot === i ? 1 : 0.25 }}
-          />
-        ))}
-      </span>
-      {/* Phase label (primary) + quip (secondary) */}
-      <span className="flex flex-col min-w-0">
-        <span className="text-xs font-semibold text-foreground truncate">
-          {currentPhaseLabel}
-        </span>
-        <span
-          className="text-[10px] text-muted-foreground/60 truncate transition-opacity duration-300"
-          style={{ opacity: fadeIn ? 1 : 0 }}
-        >
-          {quipText}
-        </span>
-      </span>
-    </span>
-  );
-}
+// Desktop live progress now uses the same ProgressHeader + LiveSearchPanel
+// as mobile (app/frontend/src/hooks/useProgressDerived.ts,
+// app/frontend/src/components/report/ProgressHeader.tsx) instead of the
+// quip-rotating LiveResearchLabel this file used to define locally.
 
 function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -796,6 +662,12 @@ export function ReportPage() {
       : phaseDone === 0
         ? Math.min(5, phaseSeen)
         : Math.min(99, Math.round((1 - Math.pow(1 - phaseDone / totalPhases, 1.5)) * 100));
+
+  // Same derivation mobile (V2ReportView) uses for its ProgressHeader —
+  // shared so desktop shows identical phase/thinking text, not a re-derived
+  // approximation.
+  const isResearchPhase = useIsResearchPhase(phaseMap);
+  const progressDerived = useProgressDerived(phaseMap);
 
   // ── Prompt for notification permission on first visit (PWA home screen) ─────
   // iOS PWA shows the prompt on first interaction. We trigger on any user tap
@@ -1319,62 +1191,19 @@ export function ReportPage() {
             <span className="text-red-500 text-2xl shrink-0">✗</span>
           ) : null}
 
-          {/* Ticker + status */}
+          {/* Ticker + status — the detailed phase/thinking/progress-bar view
+              now lives in the ProgressHeader card below (same component
+              mobile uses), so this sticky row just needs a short summary. */}
           <span className="font-mono font-bold text-xl shrink-0">{ticker}</span>
           {isRunning && (
-            <div className="flex-1 flex flex-col gap-2.5 mx-2 min-w-0 hidden sm:flex">
-              <div className="flex items-center justify-between gap-4">
-                <LiveResearchLabel pct={progressPct} phaseMap={phaseMap} />
-                <span className="text-base font-bold tabular-nums text-primary shrink-0">
-                  {progressPct}%
-                </span>
-              </div>
-              {/* Progress bar — blue (done) + blue shimmer (in-progress) + grey (upcoming) */}
-              <style>{`
-                @keyframes progress-shimmer {
-                  0%   { background-position:  200% 0; }
-                  100% { background-position: -200% 0; }
-                }
-                .progress-shimmer-seg {
-                  background: linear-gradient(90deg,
-                    rgba(59,130,246,0.25) 25%,
-                    rgba(59,130,246,0.7)  50%,
-                    rgba(59,130,246,0.25) 75%
-                  );
-                  background-size: 200% 100%;
-                  animation: progress-shimmer 1.4s ease-in-out infinite;
-                }
-              `}</style>
-              <div className="w-full h-3 rounded-full overflow-hidden flex bg-muted">
-                {/* Completed — blue */}
-                <div
-                  className="h-full bg-blue-500 transition-all duration-500 flex-none"
-                  style={{ width: `${progressPct}%` }}
-                />
-                {/* In-progress phase — one segment wide, blue shimmer */}
-                {progressPct < 100 && (
-                  <div
-                    className="progress-shimmer-seg h-full flex-none transition-all duration-500"
-                    style={{ width: `${(1 / SECTIONS.length) * 100}%` }}
-                  />
-                )}
-              </div>
-            </div>
+            <span className="text-sm text-muted-foreground truncate">
+              {progressDerived.phaseLabel ?? 'Running analysis…'} · {progressPct}%
+            </span>
           )}
           {isComplete && liveResult && (
-            <div className="flex-1 flex flex-col gap-1.5 mx-2 min-w-0 hidden sm:flex">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-green-600 dark:text-green-400 font-medium">Analysis complete</span>
-                {events.length === 0 && (
-                  <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded text-[10px] font-medium">
-                    cached · ran &lt;30 min ago
-                  </span>
-                )}
-              </div>
-              <div className="w-full h-3 rounded-full overflow-hidden bg-muted">
-                <div className="h-full w-full bg-green-500 transition-all duration-500" />
-              </div>
-            </div>
+            <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+              Analysis complete
+            </span>
           )}
           {isComplete && !liveResult && (
             <span className="text-xs text-muted-foreground animate-pulse">Loading report…</span>
@@ -1427,6 +1256,48 @@ export function ReportPage() {
         </div>
       </div>
 
+      {/* ── Live progress card — same ProgressHeader mobile shows, so the
+          desktop web UI stops looking idle while a run streams in. ── */}
+      {isRunning && (
+        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-4">
+          <ProgressHeader
+            progressPct={progressPct}
+            currentPhaseLabel={progressDerived.phaseLabel}
+            thinkingDetail={progressDerived.thinkingDetail}
+            onCancel={handleReset}
+          />
+        </div>
+      )}
+      {isRunning && !isComplete && (isResearchPhase || !!(liveData.deep_research_thinking as string)) && (
+        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-3">
+          <LiveSearchPanel
+            streamEvents={events}
+            liveData={liveData}
+            thinking={(liveData.deep_research_thinking as string) || ''}
+            isResearchPhase={isResearchPhase}
+            isComplete={isComplete}
+          />
+        </div>
+      )}
+      {/* ── Completion confirmation — the explicit "update once done" the
+          mobile view leaves to the shared browser Notification/title/vibrate
+          signal below; desktop additionally gets this in-page card. ── */}
+      {isComplete && liveResult && (
+        <div className="max-w-6xl mx-auto px-4 md:px-8 pt-4">
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 flex items-center gap-2">
+            <span className="text-emerald-600 dark:text-emerald-400 text-base">✓</span>
+            <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+              Analysis complete
+            </span>
+            {events.length === 0 && (
+              <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                cached · ran &lt;30 min ago
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Page content ─────────────────────────────────────────────────────── */}
       <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-2">
 
@@ -1475,13 +1346,15 @@ export function ReportPage() {
         </div>
 
         {/* ── Valuation ───────────────────────────────────────────────────── */}
-        {/* Order: PriceTargetPanel (hero + quad + scenario probs) and         */}
-        {/* ScenarioChart are shown for every ticker — they work for REITs too.*/}
-        {/* For REITs, REITValuationPanel is inserted after and replaces the   */}
-        {/* generic DCF ladder with NAV hero, Method Breakdown, NPI/DPU        */}
-        {/* history, Portfolio Composition, Cap-Rate Sensitivity. Non-REITs    */}
-        {/* fall through to ValuationLadder. Gate is dcfRange.reit_breakdown,  */}
-        {/* which the DCF agent only emits for RealEstate / REIT profiles.     */}
+        {/* PriceTargetPanel is the single valuation-summary card (hero target +   */}
+        {/* probability-weighted 12m/DCF blend tables). It already contains every  */}
+        {/* number ScenarioChart's bar chart re-plotted, so that separate card was  */}
+        {/* dropped as pure duplication (2026-05). For REITs, REITValuationPanel   */}
+        {/* is inserted after and replaces the generic DCF ladder with NAV hero,   */}
+        {/* Method Breakdown, NPI/DPU history, Portfolio Composition, Cap-Rate     */}
+        {/* Sensitivity. Non-REITs fall through to ValuationLadder. Gate is        */}
+        {/* dcfRange.reit_breakdown, which the DCF agent only emits for            */}
+        {/* RealEstate / REIT profiles.                                            */}
         <SectionAnchor
           id="valuation"
           label="Valuation"
@@ -1496,9 +1369,6 @@ export function ReportPage() {
                 decision={decision}
                 ticker={liveTicker}
               />
-            ))}
-            {renderSection('scenario', 'Scenario Analysis', (
-              <ScenarioChart scenario={scenarioAnalysis} ticker={liveTicker} />
             ))}
             {dcfRange?.reit_breakdown ? (
               renderSection('valuation', 'REIT Valuation', (

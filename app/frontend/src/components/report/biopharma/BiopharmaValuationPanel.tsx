@@ -518,9 +518,9 @@ export function BiopharmaValuationPanel({
   // NB: do NOT early-return on missing dcfRange. Each sub-component handles
   // null/missing data on its own (RNPVHeader hides if no IV; RDProductivity
   // uses raw_financials directly; PipelineTable shows "no pipeline" message).
-  // Previously we returned null here — but the universal PriceTargetPanel +
-  // ScenarioChart render ABOVE this gate, so a null return made the page
-  // look like the old generic UI, not the new Biopharma panel. Always
+  // Previously we returned null here — but the universal PriceTargetPanel
+  // renders ABOVE this gate, so a null return made the page look like the
+  // old generic UI, not the new Biopharma panel. Always
   // rendering ensures the reader sees SOMETHING Biopharma-specific (at
   // minimum the pipeline table or narrative cards).
   const assets = pipelineAssets ?? [];
