@@ -954,6 +954,17 @@ async def get_stock_data(ticker: str, period: str = "1y"):
             "net_cash":                   net_cash,
             "fifty_two_week_high":        _safe(info.get("fiftyTwoWeekHigh")),
             "fifty_two_week_low":         _safe(info.get("fiftyTwoWeekLow")),
+            "price_to_book":              _safe(info.get("priceToBook")),
+            "eps_ttm":                    _safe(info.get("trailingEps")),
+            # NOT info.get("dividendYield") — yfinance has a long-standing bug
+            # where that field sometimes returns a raw percentage-scale
+            # artifact (e.g. 1.0 for a stock yielding ~0.75%) instead of the
+            # actual fraction. trailingAnnualDividendYield is the reliable one.
+            "dividend_yield":             _safe(info.get("trailingAnnualDividendYield")),
+            "day_high":                   _safe(info.get("dayHigh")),
+            "day_low":                    _safe(info.get("dayLow")),
+            "prev_close":                 _safe(info.get("previousClose")),
+            "volume":                     _safe(info.get("volume")),
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -982,6 +993,14 @@ async def get_stock_data(ticker: str, period: str = "1y"):
 
         _prefer_fmp("fifty_two_week_high",        q.get("yearHigh"))
         _prefer_fmp("fifty_two_week_low",         q.get("yearLow"))
+
+        _prefer_fmp("price_to_book",              km.get("pbRatioTTM") or rt.get("priceToBookRatioTTM"))
+        _prefer_fmp("eps_ttm",                     rt.get("netIncomePerShareTTM"))
+        _prefer_fmp("dividend_yield",              rt.get("dividendYieldTTM"))
+        _prefer_fmp("day_high",                    q.get("dayHigh"))
+        _prefer_fmp("day_low",                     q.get("dayLow"))
+        _prefer_fmp("prev_close",                  q.get("previousClose"))
+        _prefer_fmp("volume",                      q.get("volume"))
     # Final fallback — ROA as a proxy for ROIC when neither FMP nor HK path filled it
     if metrics["return_on_invested_capital"] is None and metrics.get("return_on_assets") is not None:
         metrics["return_on_invested_capital"] = metrics["return_on_assets"]

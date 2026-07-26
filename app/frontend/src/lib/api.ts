@@ -247,15 +247,36 @@ export function removeFromWatchlist(ticker: string): Promise<{ removed: string }
   });
 }
 
-/** Fetch 1-year price history and key financial metrics for a ticker. */
+/** Fetch price history and key financial metrics for a ticker.
+ *  Matches app/backend/routes/analysis.py `get_stock_data`'s `metrics` dict. */
 export function getStockData(ticker: string, period = '1y'): Promise<{
   ticker: string;
   history: { date: string; close: number }[];
   metrics: {
     market_cap?: number;
     revenue?: number;
-    net_income?: number;
-    profit_margin?: number;
+    free_cash_flow?: number;
+    net_margin?: number;
+    pe_ratio?: number;
+    price_to_sales?: number;
+    revenue_growth?: number;
+    ev_to_ebitda?: number;
+    return_on_equity?: number;
+    return_on_assets?: number;
+    return_on_invested_capital?: number;
+    free_cash_flow_yield?: number;
+    total_cash?: number;
+    total_debt?: number;
+    net_cash?: number;
+    fifty_two_week_high?: number;
+    fifty_two_week_low?: number;
+    price_to_book?: number;
+    eps_ttm?: number;
+    dividend_yield?: number;
+    day_high?: number;
+    day_low?: number;
+    prev_close?: number;
+    volume?: number;
   };
 }> {
   return fetchJson(`${BASE}/analysis/stock/${encodeURIComponent(ticker.toUpperCase())}?period=${period}`);

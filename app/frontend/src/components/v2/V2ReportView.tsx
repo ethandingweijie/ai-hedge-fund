@@ -1614,7 +1614,7 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
     return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
   };
   const fmtMult = (v: number | undefined) => v == null ? '—' : `${v.toFixed(1)}×`;
-  // Per-share price — 52wk high/low are raw dollar levels, not aggregates
+  // Per-share price — 52wk/day high/low are raw dollar levels, not aggregates
   const fmtPrice = (v: number | undefined) => {
     if (v == null) return '—';
     return `$${v.toLocaleString(undefined, {
@@ -1622,11 +1622,22 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
       maximumFractionDigits: v < 10 ? 2 : 0,
     })}`;
   };
+  const fmtVolume = (v: number | undefined) => {
+    if (v == null) return '—';
+    const abs = Math.abs(v);
+    if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+    if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+    if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+    return v.toLocaleString();
+  };
 
-  // 14-cell grid. For US tickers, valuation + profitability rows prefer FMP
-  // TTM values (/key-metrics-ttm + /ratios-ttm) over yfinance info which can
-  // lag by a quarter. ROIC falls back to ROA if neither FMP nor HK path
-  // provided a value (handled backend-side).
+  // 20-cell grid (extended from 14 — see app/backend/routes/analysis.py
+  // get_stock_data for the new P/B, EPS, Div Yield, Day High/Low, Volume
+  // fields). Same field set/order as desktop's StockPanel for consistency.
+  // For US tickers, valuation + profitability rows prefer FMP TTM values
+  // (/key-metrics-ttm + /ratios-ttm) over yfinance info which can lag by a
+  // quarter. ROIC falls back to ROA if neither FMP nor HK path provided a
+  // value (handled backend-side).
   const rows: { k: string; v: string }[] = [
     { k: 'Market cap', v: fmtMoney(metrics.market_cap) },
     { k: 'Rev TTM',    v: fmtMoney(metrics.revenue) },
@@ -1634,14 +1645,20 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
     { k: 'Net margin', v: fmtPct(metrics.net_margin) },
     { k: 'P/E',        v: fmtMult(metrics.pe_ratio) },
     { k: 'P/S',        v: fmtMult(metrics.price_to_sales) },
-    { k: 'Rev growth', v: fmtPct(metrics.revenue_growth) },
+    { k: 'P/B',        v: fmtMult(metrics.price_to_book) },
     { k: 'EV/EBITDA',  v: fmtMult(metrics.ev_to_ebitda) },
+    { k: 'Rev growth', v: fmtPct(metrics.revenue_growth) },
+    { k: 'EPS ttm',    v: fmtPrice(metrics.eps_ttm) },
     { k: 'ROE',        v: fmtPct(metrics.return_on_equity) },
     { k: 'ROIC',       v: fmtPct(metrics.return_on_invested_capital ?? metrics.return_on_assets) },
-    { k: 'Net cash',   v: fmtMoney(metrics.net_cash) },
     { k: 'FCF yield',  v: fmtPct(metrics.free_cash_flow_yield) },
+    { k: 'Div yield',  v: fmtPct(metrics.dividend_yield) },
+    { k: 'Net cash',   v: fmtMoney(metrics.net_cash) },
     { k: '52wk high',  v: fmtPrice(metrics.fifty_two_week_high) },
     { k: '52wk low',   v: fmtPrice(metrics.fifty_two_week_low) },
+    { k: 'Day high',   v: fmtPrice(metrics.day_high) },
+    { k: 'Day low',    v: fmtPrice(metrics.day_low) },
+    { k: 'Volume',     v: fmtVolume(metrics.volume) },
   ];
 
   return (

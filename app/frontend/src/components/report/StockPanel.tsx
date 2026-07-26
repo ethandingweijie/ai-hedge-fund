@@ -18,14 +18,27 @@ interface StockPanelProps {
 interface StockData {
   history: { date: string; close: number }[];
   metrics: {
-    market_cap?:       number;
-    revenue?:          number;
-    free_cash_flow?:   number;
-    net_margin?:       number;
-    pe_ratio?:         number;
-    revenue_growth?:   number;
-    ev_to_ebitda?:     number;
-    return_on_equity?: number;
+    market_cap?:                  number;
+    revenue?:                     number;
+    free_cash_flow?:              number;
+    net_margin?:                  number;
+    pe_ratio?:                    number;
+    price_to_sales?:              number;
+    price_to_book?:               number;
+    ev_to_ebitda?:                number;
+    revenue_growth?:              number;
+    eps_ttm?:                     number;
+    return_on_equity?:            number;
+    return_on_invested_capital?:  number;
+    return_on_assets?:            number;
+    free_cash_flow_yield?:        number;
+    dividend_yield?:              number;
+    net_cash?:                    number;
+    fifty_two_week_high?:         number;
+    fifty_two_week_low?:          number;
+    day_high?:                    number;
+    day_low?:                     number;
+    volume?:                      number;
   };
 }
 
@@ -96,6 +109,25 @@ function fmtMultiple(v: number | undefined): string {
   return `${v.toFixed(1)}x`;
 }
 
+// Per-share price (52wk high/low, day high/low) — a raw dollar level, not an
+// aggregate, so it needs the ticker-aware currency formatter but WITHOUT the
+// K/M/B/T scaling makeFmtLarge applies.
+function makeFmtPrice(sym: string) {
+  return (v: number | undefined): string => {
+    if (v == null) return '—';
+    return `${sym}${v.toFixed(2)}`;
+  };
+}
+
+function fmtVolume(v: number | undefined): string {
+  if (v == null) return '—';
+  const abs = Math.abs(v);
+  if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${(v / 1e3).toFixed(1)}K`;
+  return v.toLocaleString();
+}
+
 // ── Metric definitions ────────────────────────────────────────────────────────
 // `currency: true` means the value needs the ticker-aware currency formatter
 // (injected at render time inside the component via makeFmtLarge).
@@ -103,25 +135,47 @@ function fmtMultiple(v: number | undefined): string {
 type MetricDef = {
   key:       keyof StockData['metrics'];
   label:     string;
-  currency?: true;
+  currency?: true;   // large $ value — K/M/B/T scaled (makeFmtLarge)
+  price?:    true;   // per-share $ value — no scaling (makeFmtPrice)
   fmt?:      (v: number | undefined) => string;
   signed?:   true;   // colour green/red based on sign
 };
 
+// 20 fields (10 rows × 2 cols) — extended from the original 8 to reach parity
+// with mobile's V2KeyStats (P/S, ROIC, Net Cash, FCF Yield, 52wk High/Low)
+// plus new additions fetched from FMP for the first time (P/B, EPS, Div
+// Yield, Day High/Low, Volume) — see app/backend/routes/analysis.py
+// get_stock_data. DR Ratio / Turnover Rate / Amplitude / Flow of Equity from
+// the reference design were skipped: they're China/HK-trading-terminal
+// concepts (ADR conversion ratio, share turnover %) that don't fit this
+// app's fundamentals/DCF focus and aren't in the FMP fields already fetched.
 const METRICS: MetricDef[] = [
-  { key: 'market_cap',       label: 'Market Cap',       currency: true              },
-  { key: 'revenue',          label: 'Revenue (TTM)',     currency: true              },
-  { key: 'free_cash_flow',   label: 'Free Cash Flow',   currency: true              },
-  { key: 'net_margin',       label: 'Net Margin',        fmt: fmtPct,   signed: true },
-  { key: 'pe_ratio',         label: 'P/E (TTM)',         fmt: fmtMultiple            },
-  { key: 'revenue_growth',   label: 'Rev Growth YoY',   fmt: fmtPct,   signed: true },
-  { key: 'ev_to_ebitda',     label: 'EV / EBITDA',      fmt: fmtMultiple            },
-  { key: 'return_on_equity', label: 'Return on Equity', fmt: fmtPct,   signed: true },
+  { key: 'market_cap',                  label: 'Market Cap',       currency: true              },
+  { key: 'revenue',                     label: 'Revenue (TTM)',    currency: true              },
+  { key: 'free_cash_flow',              label: 'Free Cash Flow',   currency: true              },
+  { key: 'net_margin',                  label: 'Net Margin',       fmt: fmtPct,   signed: true },
+  { key: 'pe_ratio',                    label: 'P/E (TTM)',        fmt: fmtMultiple            },
+  { key: 'price_to_sales',              label: 'P/S (TTM)',        fmt: fmtMultiple            },
+  { key: 'price_to_book',               label: 'P/B',              fmt: fmtMultiple            },
+  { key: 'ev_to_ebitda',                label: 'EV / EBITDA',      fmt: fmtMultiple            },
+  { key: 'revenue_growth',              label: 'Rev Growth YoY',   fmt: fmtPct,   signed: true },
+  { key: 'eps_ttm',                     label: 'EPS (TTM)',        price: true                 },
+  { key: 'return_on_equity',            label: 'Return on Equity', fmt: fmtPct,   signed: true },
+  { key: 'return_on_invested_capital',  label: 'ROIC',             fmt: fmtPct,   signed: true },
+  { key: 'free_cash_flow_yield',        label: 'FCF Yield',        fmt: fmtPct                 },
+  { key: 'dividend_yield',              label: 'Div Yield',        fmt: fmtPct                 },
+  { key: 'net_cash',                    label: 'Net Cash',         currency: true, signed: true },
+  { key: 'fifty_two_week_high',         label: '52W High',         price: true                 },
+  { key: 'fifty_two_week_low',          label: '52W Low',          price: true                 },
+  { key: 'day_high',                    label: 'Day High',         price: true                 },
+  { key: 'day_low',                     label: 'Day Low',          price: true                 },
+  { key: 'volume',                      label: 'Volume',           fmt: fmtVolume              },
 ];
 
 export function StockPanel({ ticker }: StockPanelProps) {
   const sym = currencySymbol(ticker);
   const fmtLarge = makeFmtLarge(sym);
+  const fmtPrice = makeFmtPrice(sym);
   const [tfIdx, setTfIdx] = useState(4);           // default: 1Y
   const [data, setData] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -240,10 +294,11 @@ export function StockPanel({ ticker }: StockPanelProps) {
       {/* ── Key metrics (2 × 4 grid) ────────────────────────────────────── */}
       {data && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-3">
-          {METRICS.map(({ key, label, currency, fmt, signed }) => {
+          {METRICS.map(({ key, label, currency, price, fmt, signed }) => {
             const val       = data.metrics[key];
-            // Currency metrics use the ticker-aware fmtLarge (HK$ vs $)
-            const formatter = currency ? fmtLarge : (fmt ?? (() => '—'));
+            // Currency metrics use the ticker-aware fmtLarge (HK$ vs $, K/M/B/T
+            // scaled); price metrics use fmtPrice (same currency symbol, no scaling).
+            const formatter = currency ? fmtLarge : price ? fmtPrice : (fmt ?? (() => '—'));
             const formatted = formatter(val);
             const valueColor = !signed || val == null
               ? 'text-foreground'
