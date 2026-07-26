@@ -1330,7 +1330,7 @@ export function ReportPage() {
           audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[liveTicker]}
           ticker={liveTicker}
         />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-stretch">
           <ReportHeader
             ticker={liveTicker}
             runAt={liveResult?.run_at ?? runStartedAt.current}
@@ -1360,7 +1360,7 @@ export function ReportPage() {
           label="Valuation"
           badge={sectionCompleted('valuation', phaseMap) ? <SectionCompleteBadge /> : null}
         />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start">
           <div className="flex flex-col gap-4">
             {renderSection('price_target', 'Price Target', (
               <PriceTargetPanel

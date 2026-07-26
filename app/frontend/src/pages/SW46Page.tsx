@@ -58,18 +58,22 @@ const formatRunTime = (iso: string | null): string => {
 
 // ─── Tier colour chips ────────────────────────────────────────────────────
 
+// Text colors carry both a light-mode (dark, readable-on-pale-fill) and a
+// dark-mode (light, readable-on-dark-fill) tone — the previous single set
+// of pale 300-weight text colors was tuned for dark backgrounds only and
+// was nearly illegible against the app's light cream theme.
 const AICT_COLOR: Record<AICTTier, string> = {
-  Fortress: 'bg-emerald-600/20 text-emerald-300 border-emerald-700/40',
-  Castle:   'bg-blue-600/20 text-blue-300 border-blue-700/40',
-  Chapel:   'bg-amber-600/20 text-amber-300 border-amber-700/40',
-  Stone:    'bg-orange-600/20 text-orange-300 border-orange-700/40',
-  Wood:     'bg-red-600/20 text-red-300 border-red-700/40',
+  Fortress: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
+  Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
+  Stone:    'bg-orange-600/20 text-orange-700 dark:text-orange-300 border-orange-700/40',
+  Wood:     'bg-red-600/20 text-red-700 dark:text-red-300 border-red-700/40',
 };
 
 const TA_COLOR: Record<TATier, string> = {
-  'Not-TT':  'bg-emerald-600/20 text-emerald-300 border-emerald-700/40',
-  'Near-TT': 'bg-amber-600/20 text-amber-300 border-amber-700/40',
-  'TT*':     'bg-red-600/20 text-red-300 border-red-700/40',
+  'Not-TT':  'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  'Near-TT': 'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
+  'TT*':     'bg-red-600/20 text-red-700 dark:text-red-300 border-red-700/40',
   'N/A':     'bg-muted text-muted-foreground border-border',
 };
 
@@ -82,11 +86,11 @@ function verdictLabel(score: number): string {
 }
 
 function verdictColor(score: number): string {
-  if (score >= 60) return 'bg-emerald-600/30 text-emerald-200';
-  if (score >= 45) return 'bg-blue-600/30 text-blue-200';
-  if (score >= 25) return 'bg-amber-600/30 text-amber-200';
-  if (score >= 10) return 'bg-orange-600/30 text-orange-200';
-  return 'bg-red-600/30 text-red-200';
+  if (score >= 60) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
+  if (score >= 45) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
+  if (score >= 25) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
+  if (score >= 10) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
+  return 'bg-red-600/30 text-red-900 dark:text-red-200';
 }
 
 

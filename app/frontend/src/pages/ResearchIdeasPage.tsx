@@ -33,11 +33,11 @@ function formatRunTime(iso: string | null): string {
 }
 
 function verdictColor(score: number): string {
-  if (score >= 60) return 'bg-emerald-600/30 text-emerald-200';
-  if (score >= 45) return 'bg-blue-600/30 text-blue-200';
-  if (score >= 25) return 'bg-amber-600/30 text-amber-200';
-  if (score >= 10) return 'bg-orange-600/30 text-orange-200';
-  return 'bg-red-600/30 text-red-200';
+  if (score >= 60) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
+  if (score >= 45) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
+  if (score >= 25) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
+  if (score >= 10) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
+  return 'bg-red-600/30 text-red-900 dark:text-red-200';
 }
 
 // Aggregate-score color (0-100 scale, INVERTED — high = bearish short signal)

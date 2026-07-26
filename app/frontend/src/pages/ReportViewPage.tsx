@@ -195,7 +195,7 @@ export function ReportViewPage() {
           audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[ticker]}
           ticker={ticker}
         />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-stretch">
           <ReportHeader
             ticker={ticker}
             runAt={result.run_at}
@@ -216,7 +216,7 @@ export function ReportViewPage() {
         {/* in place of the generic DCF ladder. Price Target + Scenario Chart */}
         {/* work for REITs too, so they render unconditionally.                */}
         <SectionAnchor id="valuation" label="Valuation" />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start">
           <div className="flex flex-col gap-4">
             <PriceTargetPanel
               dcfRange={dcfRange}

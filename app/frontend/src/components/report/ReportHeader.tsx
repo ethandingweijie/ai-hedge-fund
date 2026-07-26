@@ -41,10 +41,16 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
   const displaySubSector = formatSector(subSector || profile?.industry || null);
 
   return (
-    <Card className="p-6 flex flex-col">
+    <Card className="p-6 flex flex-col min-w-0">
 
-      {/* ── Row 1: ticker | VGPM | Regime ── */}
-      <div className="flex items-start justify-between gap-6">
+      {/* ── Row 1: ticker | VGPM | Regime ──
+          min-w-0 on the Card above is required for the flex-1 centre column
+          below to actually shrink instead of forcing this whole row past
+          its grid track — without it, on narrower desktop widths this
+          content overflowed into StockPanel's column (the Regime/VGPM
+          badges were getting visually clipped at the column boundary). The
+          stat row and VGPM row both wrap now instead of overflowing. */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
 
         {/* Left: ticker + action + run info */}
         <div className="shrink-0">
@@ -61,8 +67,8 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
         </div>
 
         {/* Centre: Position / Target / Current / Regime + VGPM below */}
-        <div className="flex flex-col flex-1 items-center gap-3">
-          <div className="flex items-start gap-5">
+        <div className="flex flex-col flex-1 min-w-0 items-center gap-3">
+          <div className="flex items-start gap-4 flex-wrap justify-center">
             {decision?.position_size_pct != null && (
               <div className="text-center">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Position</p>
@@ -93,7 +99,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           </div>
 
           {vgpm && (
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-2.5 flex-wrap justify-center">
               {VGPM_DIMS.map(({ key }) => {
                 const dim = vgpm[key];
                 if (!dim) return null;
