@@ -623,6 +623,7 @@ export function ReportPage() {
   const powerLaw      = _byTicker(data.power_law_analysis  as Record<string, import('@/lib/reportTypes').PowerLawAnalysis>  | undefined);
   const valueTrap     = _byTicker(data.value_trap_analysis as Record<string, import('@/lib/reportTypes').ValueTrapAnalysis> | undefined);
   const dcfRange      = _byTicker(data.dcf_range           as Record<string, import('@/lib/reportTypes').DcfRange>          | undefined);
+  const dcfSkipReason = _byTicker(data.dcf_skip_reasons    as Record<string, string>                                        | undefined);
   const industryBrief = data.industry_brief       as string | undefined;
   const deepResearch  = (data.deep_research ?? data.deep_research_report)   as string | undefined;
   const deepAnnotated = data.deep_research_annotated as string | undefined;
@@ -1444,7 +1445,7 @@ export function ReportPage() {
                 as its own full-width strip — fills the column's remaining
                 height instead of leaving the ladder's sparse-data cards
                 (no bear/bull IV stored) looking like dead space above a gap. */}
-            <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} />
+            <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} skipReason={dcfSkipReason} />
           </div>
           <div className="flex flex-col gap-2">
             {renderSection('power_law', 'Power Law', (

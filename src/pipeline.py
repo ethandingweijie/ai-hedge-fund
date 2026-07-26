@@ -209,10 +209,19 @@ def run_advanced_pipeline(
                       f"citation={'✓' if _c.get('citation_audit') else '✗'}")
 
         def _all_cached(key: str, age_days: float = 7.0) -> bool:
-            """True if every ticker has a fresh-enough non-None cache entry for key."""
+            """True if every ticker has a fresh-enough, non-empty cache entry for key.
+
+            Truthy check (not `is not None`) is deliberate: a prior run that
+            crashed or skipped a ticker still archives that phase as `{}`
+            (e.g. dcf_range on a DCF-engine failure — see pipeline.py's
+            except block around run_dcf_agent). `{} is not None` is True, so
+            the old `is not None` check treated that empty placeholder as a
+            valid cache hit and silently propagated the emptiness forward for
+            up to `age_days`, with no error surfaced anywhere in the new run.
+            """
             return all(
                 _phase_cache.get(t) is not None
-                and _phase_cache[t].get(key) is not None  # type: ignore[union-attr]
+                and _phase_cache[t].get(key)  # type: ignore[union-attr]
                 and _phase_cache[t]["age_days"] <= age_days  # type: ignore[index]
                 for t in tickers
             )
@@ -923,6 +932,16 @@ def run_advanced_pipeline(
             # Raw financial history (strategic router Phase 2) + DCF outputs
             "raw_financials":     state["data"].get("raw_financials", {}),
             "dcf_range":          state["data"].get("dcf_range", {}),
+            # Per-ticker reason a DCF entry came back {} (set by dcf_agent.py's
+            # early-exit branches) + the exception when the whole engine
+            # crashed (set by the try/except around run_dcf_agent below).
+            # Without these two keys in this allowlist, an empty
+            # Valuation Methodology panel is silent and undiagnosable from
+            # the archived run — the reason existed in state but never
+            # reached web_runs.full_result_json. Same serialization-contract
+            # bug class as saas_metrics/framework_metrics_all above.
+            "dcf_skip_reasons":   state["data"].get("dcf_skip_reasons", {}),
+            "dcf_engine_error":   state["data"].get("dcf_engine_error"),
             # Phase 4.6 — peer comparison table data
             "peer_comparison":    state["data"].get("peer_comparison", {}),
             # Phase 4.7 — 12-month price history for sparkline

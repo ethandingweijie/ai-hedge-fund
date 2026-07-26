@@ -13,6 +13,9 @@ import type { DcfRange } from '@/lib/reportTypes';
 interface DcfMethodologyPanelProps {
   dcfRange?: DcfRange | null;
   ticker: string;
+  /** Why dcfRange came back {} for this ticker (dcf_agent.py early-exit —
+   *  insufficient history, no growth rate, etc.), if known. */
+  skipReason?: string | null;
 }
 
 const DATA_SOURCE_INFO: Record<string, { label: string; detail: string; variant: 'success' | 'outline' | 'warning' }> = {
@@ -44,8 +47,33 @@ const SCENARIOS = [
   { key: 'bull', label: 'Bull' },
 ] as const;
 
-export function DcfMethodologyPanel({ dcfRange, ticker }: DcfMethodologyPanelProps) {
-  if (!dcfRange) return null;
+const SKIP_REASON_LABELS: Record<string, string> = {
+  line_items_fetch_failed: 'Financial data provider request failed',
+  insufficient_history: 'Not enough annual financial history available',
+  no_shares_data: 'Shares outstanding data unavailable',
+  no_growth_rate: 'No management guidance, analyst estimates, or historical trend to derive a growth rate',
+};
+
+function friendlySkipReason(reason: string): string {
+  const [code] = reason.split(':', 1);
+  return SKIP_REASON_LABELS[code] ?? reason;
+}
+
+export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodologyPanelProps) {
+  // dcf_agent.py's early-exit branches leave dcf_range[ticker] = {} rather
+  // than omitting the key entirely — Object.keys check catches that exact
+  // shape (a populated result always has at least `profile` + scenario keys).
+  if (!dcfRange || Object.keys(dcfRange).length === 0) {
+    if (!skipReason) return null;
+    return (
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold mb-1.5">Valuation Methodology — {ticker}</h3>
+        <p className="text-xs text-muted-foreground">
+          Not available for this run — {friendlySkipReason(skipReason)}.
+        </p>
+      </Card>
+    );
+  }
 
   const src = dcfRange.data_source ? DATA_SOURCE_INFO[dcfRange.data_source] : undefined;
   const methodBadges: Array<{ name: string; weight?: number }> =

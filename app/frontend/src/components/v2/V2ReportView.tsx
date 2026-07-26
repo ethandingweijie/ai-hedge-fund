@@ -122,6 +122,7 @@ export function V2ReportView({
   const powerLaw = (data.power_law_analysis as Record<string, PowerLawAnalysis> | undefined)?.[ticker];
   const valueTrap = (data.value_trap_analysis as Record<string, ValueTrapAnalysis> | undefined)?.[ticker];
   const dcfRange = (data.dcf_range as Record<string, DcfRange> | undefined)?.[ticker];
+  const dcfSkipReason = (data.dcf_skip_reasons as Record<string, string> | undefined)?.[ticker];
   // Sector-specific valuation card (Option B). Absent for legacy sub-profiles.
   const sectorCard = (data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker];
   const industryBrief = data.industry_brief as string | undefined;
@@ -290,6 +291,7 @@ export function V2ReportView({
         {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} />}
         {tab === 'valuation'  && <ValuationBody
           dcfRange={dcfRange}
+          dcfSkipReason={dcfSkipReason}
           scenarioAnalysis={scenarioAnalysis}
           decision={decision}
           ticker={ticker}
@@ -462,10 +464,12 @@ function SummaryBody({
 
 /* ───────── Valuation Tab ───────── */
 function ValuationBody({
-  dcfRange, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
+  dcfRange, dcfSkipReason, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
   sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics, sectorCard,
 }: {
   dcfRange: DcfRange | undefined;
+  /** Why dcfRange came back {} for this ticker, if known (see DcfMethodologyPanel). */
+  dcfSkipReason?: string;
   scenarioAnalysis: ScenarioAnalysis | undefined;
   decision: any;
   ticker: string;
@@ -566,7 +570,7 @@ function ValuationBody({
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       )}
 
-      <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} />
+      <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 
       {/* ── Sector Valuation Card (Option B render) ─────────────────── */}
       {sectorCard && <SectorValuationCard payload={sectorCard} />}

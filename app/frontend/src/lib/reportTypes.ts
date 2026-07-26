@@ -435,6 +435,16 @@ export interface PipelineData {
     message: string;
     traceback?: string;
   } | null;
+  // Per-ticker reason a dcf_range entry came back {} (e.g. "insufficient_history:
+  // only_1_years_min_2") + the exception when the whole DCF engine crashed.
+  // See DcfMethodologyPanel — surfaced so an empty valuation panel is
+  // diagnosable instead of silently blank.
+  dcf_skip_reasons?: Record<string, string>;
+  dcf_engine_error?: {
+    exception_type: string;
+    message: string;
+    traceback?: string;
+  } | null;
   [key: string]: unknown;
 }
 
