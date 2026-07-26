@@ -47,6 +47,7 @@ import { BiopharmaValuationPanel } from '@/components/report/biopharma/Biopharma
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SectorValuationCard } from '@/components/report/SectorValuationCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
+import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
 import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
@@ -472,37 +473,10 @@ function ValuationBody({
   /** Sector-specific valuation card payload (V3 audit bridge UI). */
   sectorCard?: SectorCardPayload;
 }) {
-  // Extract all the numbers we need from real data
-  const target = (scenarioAnalysis?.['12m_price_target'] ?? decision?.price_target ?? null);
+  // Extract the numbers still needed by sibling panels below (PriceTargetPanel
+  // now owns its own derivation of target/upside/bear-base-bull/consensus).
   const current = currentPrice ?? scenarioAnalysis?.current_price ?? null;
-  const upside = (target != null && current != null && current > 0)
-    ? ((target - current) / current) * 100
-    : (scenarioAnalysis?.upside_pct ?? null);
-  const bullIV = dcfRange?.bull?.intrinsic_value ?? scenarioAnalysis?.bull?.fair_value ?? null;
-  const baseIV = dcfRange?.base?.intrinsic_value ?? scenarioAnalysis?.base?.fair_value ?? null;
-  const bearIV = dcfRange?.bear?.intrinsic_value ?? scenarioAnalysis?.bear?.fair_value ?? null;
-  const bearDelta = (bearIV != null && current != null && current > 0) ? ((bearIV - current) / current) * 100 : null;
-  const baseDelta = (baseIV != null && current != null && current > 0) ? ((baseIV - current) / current) * 100 : null;
   const wacc = dcfRange?.wacc ?? null;
-
-  const has12mTargets = dcfRange?.['12m_targets'] ?? {};
-  const bull12m = has12mTargets.bull ?? bullIV;
-  const base12m = has12mTargets.base ?? target ?? baseIV;
-  const bear12m = has12mTargets.bear ?? bearIV;
-  // bull12m/base12m/bear12m are 12m PTs (capped by Convergence Cap + bear
-  // floor), NOT raw DCF IVs — used as-is in the Scenario Probabilities table
-  // below (target12m column) so they match the headline 12m target.
-  // Wall Street analyst consensus PT (from FMP /price-target-consensus, persisted
-  // in dcf_range.consensus_pt by dcf_agent). Frontend renders as a small
-  // sanity-check line under the headline 12m PT so users see model vs market.
-  // null for HK/SG tickers (FMP n/a) or when fetch failed.
-  const consensusPt = (dcfRange?.consensus_pt?.consensus ?? null) as number | null;
-  const consensusDelta = (consensusPt != null && target != null && target > 0)
-    ? ((consensusPt - target) / target) * 100
-    : null;
-  const probBull = scenarioAnalysis?.bull?.probability ?? 0.25;
-  const probBase = scenarioAnalysis?.base?.probability ?? 0.50;
-  const probBear = scenarioAnalysis?.bear?.probability ?? 0.25;
 
   const haveAny = dcfRange || scenarioAnalysis || decision;
   if (!haveAny) {
@@ -516,101 +490,12 @@ function ValuationBody({
 
   return (
     <div className="px-4 pt-4 pb-8 space-y-4">
-      {/* ── 12-Month Price Target (hero + probability-weighted scenario table) ──
-          Consolidated 2026-05: this used to be three separate cards (hero,
-          "Scenario Probabilities" table, "Scenario Analysis" bar chart) that
-          all restated the same bear/base/bull numbers. The table already
-          carries strictly more information than the other two — probability
-          weight plus both the 12m target AND the long-term DCF IV per
-          scenario — so it's kept, with the hero headline on top and the old
-          bar chart's one useful addition (the plain-English BLUF sentence)
-          folded in instead of a redundant chart. */}
-      {(target != null || scenarioAnalysis || dcfRange) ? (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-5">
-          {target != null && (
-            <div className="text-center">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-                12-Month Price Target
-              </div>
-              <div className="text-[34px] font-semibold tracking-tight text-foreground tabular-nums mt-1 leading-none">
-                ${target.toFixed(2)}
-              </div>
-              {upside != null && (
-                <div className={`mt-2 text-[14px] font-medium tabular-nums ${upside >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
-                  {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% upside
-                </div>
-              )}
-              {current != null && (
-                <div className="text-[11px] text-muted-foreground">
-                  vs current ${current.toFixed(2)}
-                </div>
-              )}
-              {consensusPt != null && (
-                <div className="mt-1.5 text-[11px] text-muted-foreground">
-                  Wall St. consensus{' '}
-                  <span className="font-semibold text-foreground/80 tabular-nums">
-                    ${consensusPt.toFixed(2)}
-                  </span>
-                  {consensusDelta != null && (
-                    <span className={`ml-1 tabular-nums ${
-                      Math.abs(consensusDelta) < 5
-                        ? 'text-muted-foreground/70'
-                        : consensusDelta > 0
-                          ? 'text-brand'
-                          : 'text-rose-600 dark:text-rose-400'
-                    }`}>
-                      ({consensusDelta >= 0 ? '+' : ''}{consensusDelta.toFixed(1)}% vs model)
-                    </span>
-                  )}
-                </div>
-              )}
-              {baseDelta != null && bearDelta != null && (
-                <p className="text-[11px] text-muted-foreground leading-relaxed mt-2.5">
-                  Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside; bear-case downside is {Math.abs(bearDelta).toFixed(0)}%.
-                </p>
-              )}
-            </div>
-          )}
-
-          {(scenarioAnalysis || dcfRange) && (
-            <div className={target != null ? 'mt-5 pt-4 border-t border-border/60' : ''}>
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-                  Scenario Probabilities
-                </span>
-                {wacc != null && <span className="text-[10px] tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
-              </div>
-              <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/70">
-                <span className="w-[60px] text-right">12M Target</span>
-                <span className="w-[56px] text-right">DCF IV</span>
-              </div>
-              {[
-                { prob: probBear, name: 'Bear', target12m: bear12m, iv: bearIV, color: 'rose' },
-                { prob: probBase, name: 'Base', target12m: base12m, iv: baseIV, color: 'neutral' },
-                { prob: probBull, name: 'Bull', target12m: bull12m, iv: bullIV, color: 'brand' },
-              ].map((r, i) => (
-                <div key={r.name} className={`flex items-center gap-2 py-2 ${i > 0 ? 'border-t border-border/60' : ''}`}>
-                  <span className="w-[34px] text-[11.5px] font-semibold text-foreground/80 tabular-nums">
-                    {Math.round((r.prob ?? 0) * 100)}%
-                  </span>
-                  <div className="w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div
-                      style={{ width: `${Math.min(100, (r.prob ?? 0) * 200)}%` }}
-                      className={`h-full ${r.color === 'rose' ? 'bg-rose-500 dark:bg-rose-400' : r.color === 'neutral' ? 'bg-foreground/35' : 'bg-brand'}`}
-                    />
-                  </div>
-                  <span className="text-[12.5px] font-semibold text-foreground min-w-[40px]">{r.name}</span>
-                  <span className="ml-auto w-[60px] text-right text-[12px] font-semibold tabular-nums text-foreground">
-                    {r.target12m != null ? `$${r.target12m.toFixed(2)}` : '—'}
-                  </span>
-                  <span className="w-[56px] text-right text-[11px] tabular-nums text-muted-foreground">
-                    {r.iv != null ? `$${r.iv.toFixed(2)}` : '—'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* ── 12-Month Price Target ──────────────────────────────────────
+          Standardised 2026-07: same PriceTargetPanel component desktop
+          uses (components/report/PriceTargetPanel.tsx) — one
+          implementation instead of mobile carrying its own duplicate. */}
+      {haveAny ? (
+        <PriceTargetPanel dcfRange={dcfRange} scenario={scenarioAnalysis} decision={decision} ticker={ticker} />
       ) : (
         <LoadingCard label="12-Month Price Target" minH={320} />
       )}
