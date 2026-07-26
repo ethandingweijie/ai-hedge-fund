@@ -583,7 +583,22 @@ def run_advanced_pipeline(
             try:
                 _dcf_t   = state["data"].get("dcf_range", {}).get(_t, {})
                 _scen_t  = state["data"].get("scenario_analysis", {}).get(_t, {})
-                _raw_fin = state["data"].get("raw_financials", {})
+                # ROIC-proxy input (net_income/revenue for the latest fiscal
+                # year) sourced from the shared knowledge graph — FMP-direct,
+                # ~24h fresh + earnings-date-aware — instead of
+                # state["data"]["raw_financials"], which is LLM-reformatted
+                # and (on a routing-cache hit) can be up to 30 days stale.
+                # Falls back to the state value if the KG fetch fails for
+                # any reason, so this never blocks a run.
+                try:
+                    from app.backend.services.knowledge_graph import get_kg_annual_line_items
+                    _raw_fin = get_kg_annual_line_items(
+                        _t, end_date, sector=_sectors_map.get(_t) if isinstance(_sectors_map, dict) else None,
+                    )
+                except Exception:
+                    _raw_fin = {}
+                if not _raw_fin:
+                    _raw_fin = state["data"].get("raw_financials", {})
                 _dcf_cal = {
                     "margin_direction": _dcf_t.get("base", {}).get("margin_direction", "stable"),
                     "risk_flag":        _dcf_t.get("base", {}).get("risk_flag", ""),

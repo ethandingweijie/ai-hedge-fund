@@ -270,16 +270,23 @@ def _make_api_request(
 # producing the "did not complete (outer timeout)" empty-cohort failure.
 #
 # A simple token bucket smooths the call rate below FMP's threshold so
-# 429s rarely fire. Tunable:
-#   FMP_MAX_RPS            — refill rate (default 5 req/s; FMP premium is
-#                            ~300/min = 5/s, higher tiers more)
-#   FMP_BURST              — bucket capacity (default 10)
+# 429s rarely fire. This bucket is now the SHARED rate limiter for every FMP
+# caller in the process, including app/backend/services/screener_service.py
+# (which used to call requests.get directly with no throttle at all — see
+# acquire_fmp_token() below). Tunable:
+#   FMP_MAX_RPS            — refill rate (default ~11.5 req/s ≈ 700/min,
+#                            the shared budget across screener + live
+#                            pipeline traffic, ~7% headroom under a 750/min
+#                            plan ceiling)
+#   FMP_BURST              — bucket capacity (default 25 — absorbs the
+#                            screener's up-to-20-in-flight concurrency
+#                            without instantly draining)
 #   FMP_THROTTLE_DISABLED  — set "true" to bypass entirely
 import threading as _fmp_threading
 
 _FMP_THROTTLE_DISABLED = os.environ.get("FMP_THROTTLE_DISABLED", "false").lower() == "true"
-_FMP_MAX_RPS = float(os.environ.get("FMP_MAX_RPS", "5"))
-_FMP_BURST = float(os.environ.get("FMP_BURST", "10"))
+_FMP_MAX_RPS = float(os.environ.get("FMP_MAX_RPS", "11.5"))
+_FMP_BURST = float(os.environ.get("FMP_BURST", "25"))
 _fmp_throttle_lock = _fmp_threading.Lock()
 _fmp_tokens = _FMP_BURST
 _fmp_last_refill = time.monotonic()
@@ -300,6 +307,13 @@ def _fmp_acquire() -> None:
                 return
             wait = (1.0 - _fmp_tokens) / _FMP_MAX_RPS
         time.sleep(min(wait, 1.0))
+
+
+def acquire_fmp_token() -> None:
+    """Public entry point for the shared FMP token bucket — call this before
+    any direct `requests.get` to a financialmodelingprep.com endpoint from
+    outside this module (e.g. screener_service.py's own FMP calls)."""
+    _fmp_acquire()
 
 
 def _fmp_get(path: str, params: dict, api_key: str | None, uncap: bool = False) -> list | dict | None:

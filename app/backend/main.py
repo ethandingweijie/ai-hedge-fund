@@ -167,7 +167,12 @@ def _run_backfill():
     try:
         from app.backend.services.screener_service import backfill_master_universe
         logger.info("VGPM backfill starting...")
-        result = backfill_master_universe(batch_size=50, passes=5, delay=30)
+        # delay=8s (was 30s): the shared FMP token bucket (src/tools/api.py,
+        # ~700/min) now does the rate smoothing itself, so the old fixed
+        # inter-batch sleep only needs to avoid pathological bursts, not
+        # carry the whole throttling burden — this roughly halves full-
+        # backfill wall time.
+        result = backfill_master_universe(batch_size=50, passes=5, delay=8)
         logger.info(
             "VGPM backfill complete: %d/%d tickers scored",
             result.get("scored", 0), result.get("total", 0),

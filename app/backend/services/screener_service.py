@@ -12,8 +12,11 @@ Fast VGPM methodology
 - Factors per dimension: 8–9 FMP sub-factors (see _fetch_ticker_metrics).
   yfinance supplements (rec_score, short_ratio) only for single-ticker lookups.
 - Weights: sector-specific per dimension (12 GICS profiles + default).
-- Caching: raw metrics cached 24h in raw_metrics_cache; computed VGPM in
-  fast_vgpm_cache; screener results in screener_cache.
+- Caching: raw TTM metrics cached in the shared knowledge graph
+  (app/backend/services/knowledge_graph.py, kg_ticker_metrics — also read by
+  the live analysis pipeline); computed VGPM in fast_vgpm_cache; screener
+  results in screener_cache. All FMP calls (including this module's own)
+  are throttled through the shared token bucket in src/tools/api.py.
 """
 import hashlib
 import json
@@ -130,6 +133,8 @@ def get_live_quotes(tickers: list[str], exchanges: Optional[list[str]] = None) -
 
             def _fetch_one(sym: str) -> tuple[str, dict] | None:
                 try:
+                    from src.tools.api import acquire_fmp_token
+                    acquire_fmp_token()
                     r = requests.get(
                         _FMP_STABLE,
                         params={"symbol": sym, "apikey": api_key},
@@ -342,42 +347,11 @@ def _set_fast_vgpm_cached(data: dict[str, dict], ttl_hours: int = 24):
         conn.close()
 
 
-# ── Raw metrics cache (stores fetched FMP values, survives methodology updates) ─
-
-def _get_raw_metrics_cached(tickers: list[str]) -> dict[str, dict]:
-    if not tickers:
-        return {}
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
-    now_iso = datetime.now(timezone.utc).isoformat()
-    try:
-        placeholders = ",".join("?" * len(tickers))
-        rows = conn.execute(
-            f"SELECT ticker, data_json FROM raw_metrics_cache "
-            f"WHERE ticker IN ({placeholders}) AND expires_at > ?",
-            [*tickers, now_iso],
-        ).fetchall()
-    finally:
-        conn.close()
-    return {row["ticker"]: json.loads(row["data_json"]) for row in rows}
-
-
-def _set_raw_metrics_cached(data: dict[str, dict], ttl_hours: int = 24):
-    if not data:
-        return
-    now = datetime.now(timezone.utc)
-    expires = (now + timedelta(hours=ttl_hours)).isoformat()
-    now_iso = now.isoformat()
-    conn = _connect()
-    try:
-        conn.executemany(
-            "INSERT OR REPLACE INTO raw_metrics_cache (ticker, cached_at, expires_at, data_json) "
-            "VALUES (?, ?, ?, ?)",
-            [(t, now_iso, expires, json.dumps(v)) for t, v in data.items()],
-        )
-        conn.commit()
-    finally:
-        conn.close()
+# ── Raw metrics cache ──────────────────────────────────────────────────────
+# Superseded by app/backend/services/knowledge_graph.py's kg_ticker_metrics
+# table (shared with the live pipeline). raw_metrics_cache's DDL (_ensure_tables
+# above) is kept as a harmless no-op for one release in case of rollback —
+# nothing writes to it anymore.
 
 
 # ── FMP call ───────────────────────────────────────────────────────────────────
@@ -855,12 +829,46 @@ def _safe_float(v) -> Optional[float]:
 
 
 def _fmp_get(url: str, params: dict, timeout: int = 10) -> list | dict | None:
-    """Single FMP GET — returns parsed JSON or None on any failure."""
-    try:
-        r = requests.get(url, params=params, timeout=timeout)
-        return r.json() if r.ok else None
-    except Exception:
+    """Single FMP GET — returns parsed JSON or None on any failure.
+
+    Routed through the shared FMP token bucket (src/tools/api.py) so this
+    module's traffic counts against the same combined rate budget as the
+    live pipeline's FMP calls — previously this hit FMP with zero throttling.
+    Retries on 429 (rate-limit) and 402 (burst-throttle), matching
+    src/tools/api.py's own _fmp_get retry policy.
+    """
+    from src.tools.api import acquire_fmp_token
+
+    for attempt in range(3):
+        acquire_fmp_token()
+        try:
+            r = requests.get(url, params=params, timeout=timeout)
+        except Exception:
+            import time as _time
+            _time.sleep(1)
+            continue
+
+        if r.status_code == 200:
+            try:
+                return r.json()
+            except Exception:
+                return None
+
+        if r.status_code == 429:
+            import time as _time
+            _time.sleep(20 * (attempt + 1))
+            continue
+
+        if r.status_code == 402:
+            import time as _time
+            if attempt < 2:
+                _time.sleep(1.5 + attempt * 1.5)
+                continue
+            return None
+
         return None
+
+    return None
 
 
 def _fetch_ticker_metrics(
@@ -1085,8 +1093,13 @@ def _fetch_ticker_metrics(
         if total > 0:
             analyst_upgrade = pos / total
 
+    # Last reported earnings date — drives earnings-aware cache invalidation
+    # for the knowledge graph's annual line-items (see knowledge_graph.py).
+    last_earnings_date = es[0].get("date") if es else None
+
     return {
         "ticker": ticker,
+        "last_earnings_date": last_earnings_date,
         # Valuation
         "pe": pe, "pb": pb, "ev_ebitda": ev_ebitda, "ev_sales": ev_sales,
         "peg": peg, "fcf_yield": fcf_yield, "div_yield": div_yield, "fwd_pe": fwd_pe,
@@ -1324,17 +1337,22 @@ def _get_or_compute_fast_vgpm(
     missing = [t for t in tickers if t not in cached_vgpm]
 
     if missing:
-        # Check raw metrics cache first to avoid re-fetching
-        cached_raw = _get_raw_metrics_cached(missing)
+        # Check the shared knowledge-graph cache first to avoid re-fetching.
+        # (Supersedes the old per-screener raw_metrics_cache table — see
+        # app/backend/services/knowledge_graph.py.)
+        from app.backend.services import knowledge_graph as _kg
+        cached_raw = _kg.get_ttm_metrics_cached(missing)
         to_fetch   = [t for t in missing if t not in cached_raw]
 
         api_key = _get_fmp_key()
         good_fetched: dict[str, dict] = {}
 
         if to_fetch:
-            # Each ticker makes 8 internal FMP calls with 4 workers.
-            # Cap outer concurrency so total in-flight requests stay under
-            # FMP's ~300 req/min free-tier limit.
+            # Each ticker makes 8 internal FMP calls with 4 workers. Outer
+            # concurrency is capped to bound in-flight requests; the actual
+            # rate ceiling is enforced by the shared token bucket in
+            # src/tools/api.py (acquire_fmp_token, ~700/min combined with
+            # the live pipeline's traffic), not by this worker count.
             workers = min(5, len(to_fetch))
             newly_fetched: dict[str, dict] = {}
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -1355,7 +1373,7 @@ def _get_or_compute_fast_vgpm(
                 t: m for t, m in newly_fetched.items()
                 if any(m.get(k) is not None for k in _metric_keys)
             }
-            _set_raw_metrics_cached(good_fetched)
+            _kg.set_ttm_metrics(good_fetched, sector_map=sector_map, industry_map=industry_map)
 
         all_raw = {**cached_raw, **good_fetched}
 
@@ -1389,13 +1407,18 @@ def invalidate_for_ticker(ticker: str):
     try:
         conn.execute("DELETE FROM screener_lookup_cache WHERE symbol = ?", (ticker,))
         conn.execute("DELETE FROM fast_vgpm_cache WHERE ticker = ?", (ticker,))
-        conn.execute("DELETE FROM raw_metrics_cache WHERE ticker = ?", (ticker,))
         conn.execute("DELETE FROM screener_cache")
         conn.commit()
     except Exception:
         pass
     finally:
         conn.close()
+
+    try:
+        from app.backend.services import knowledge_graph as _kg
+        _kg.delete_ticker(ticker)
+    except Exception:
+        pass
 
 
 # ── Master universe ────────────────────────────────────────────────────────────
@@ -2097,8 +2120,9 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
     # ── Step 4: compute VGPM within HK universe (peer-relative) ──────────────
     hk_vgpm: dict[str, dict] = {}
     if raw_metrics_list:
-        # Store metrics in raw_metrics_cache so subsequent lookup_ticker calls benefit
-        _set_raw_metrics_cached({m["ticker"]: m for m in raw_metrics_list})
+        # Store metrics in the knowledge graph so subsequent lookup_ticker calls benefit
+        from app.backend.services import knowledge_graph as _kg
+        _kg.set_ttm_metrics({m["ticker"]: m for m in raw_metrics_list})
         try:
             hk_vgpm = _compute_fast_vgpm_universe(raw_metrics_list)
             _set_fast_vgpm_cached(hk_vgpm)

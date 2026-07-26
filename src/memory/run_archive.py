@@ -436,10 +436,24 @@ def save_run(state: dict, decisions: dict) -> str:
                         }
                     insider_d   = analyst_signals.get("insider_activity_agent", {}).get(ticker, {})
                     insider_sum = insider_d.get("summary", "") if isinstance(insider_d, dict) else ""
+                    # ROIC-proxy input from the shared knowledge graph (same fix
+                    # as src/pipeline.py's live VGPM call) — falls back to
+                    # raw_fin (LLM-formatted, used as-is for raw_fin_json above)
+                    # if the KG fetch fails for any reason.
+                    vgpm_raw_fin = raw_fin
+                    try:
+                        from app.backend.services.knowledge_graph import get_kg_annual_line_items
+                        _kg_fin = get_kg_annual_line_items(
+                            ticker, data.get("end_date", ""), sector=data.get("sector"),
+                        )
+                        if _kg_fin:
+                            vgpm_raw_fin = _kg_fin
+                    except Exception:
+                        pass
                     vgpm_result = _compute_vgpm(
                         dcf_ticker=dcf,
                         scen_ticker=scen,
-                        raw_financials=raw_fin,
+                        raw_financials=vgpm_raw_fin,
                         dcf_cal=dcf_cal_data,
                         insider_summary=insider_sum,
                     )
