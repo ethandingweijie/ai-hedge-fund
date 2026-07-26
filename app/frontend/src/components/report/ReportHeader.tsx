@@ -98,10 +98,17 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
                 const dim = vgpm[key];
                 if (!dim) return null;
                 const fullLabel = key.charAt(0).toUpperCase() + key.slice(1);
+                const tooltip = [
+                  `${fullLabel}: ${dim.score}/100`,
+                  ...(dim.subs ?? []),
+                ].join('\n');
                 return (
                   <div key={key} className="flex flex-col items-center gap-1">
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">{fullLabel}</span>
-                    <span className={`text-xl font-bold px-3 py-1 rounded-lg ${gradeColorClass(dim.grade)}`}>
+                    <span
+                      title={tooltip}
+                      className={`text-xl font-bold px-3 py-1 rounded-lg cursor-help ${gradeColorClass(dim.grade)}`}
+                    >
                       {dim.grade}
                     </span>
                   </div>

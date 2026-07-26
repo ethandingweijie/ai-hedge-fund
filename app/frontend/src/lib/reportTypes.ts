@@ -126,6 +126,13 @@ export interface DcfCase {
   reported_currency?: string;
   fx_rate?: number;
   fx_note?: string;
+  // Per-scenario terminal-value inputs (src/agents/analysis/dcf_agent.py,
+  // `scenario_results[scenario]`) — already sent by the backend, previously
+  // untyped/unused by the frontend.
+  tgr?: number;                    // terminal growth rate used for this scenario
+  fcf_margin_start?: number;       // Year-1 FCF margin assumption
+  margin_delta_per_year?: number;  // annual FCF-margin drift assumed over the projection
+  tv_pct?: number;                 // terminal value as a fraction of total intrinsic value
 }
 
 // ── REIT-specific breakdown ────────────────────────────────────────────────
@@ -288,6 +295,14 @@ export interface DcfRange {
   profile?: string;
   reit_breakdown?: ReitBreakdown | null;
   bank_breakdown?: BankBreakdown | null;
+  // Methodology-transparency fields — already emitted by
+  // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
+  // untyped/unused on the frontend. See DcfMethodologyPanel.
+  profile_rationale?: string;         // why this profile/method mix was chosen
+  data_source?: 'guided' | 'analyst' | 'historical' | string;  // growth-rate provenance
+  c_macro?: number;                   // macro-regime WACC modifier applied
+  calibration_error?: boolean;        // true when the DCF failed an internal sanity check
+  calibration_note?: string;          // human-readable explanation when calibration_error is set
 }
 
 export interface RoutingDecision {

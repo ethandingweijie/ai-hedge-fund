@@ -17,6 +17,7 @@ import { AgentSignalsPanel } from '@/components/report/AgentSignalsPanel';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
+import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
@@ -284,6 +285,8 @@ export function ReportViewPage() {
             <NewsPanel ticker={ticker} />
           </div>
         </div>
+
+        <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} />
 
         <AgentSignalsPanel agentSignals={agentSignals} ticker={ticker} />
 

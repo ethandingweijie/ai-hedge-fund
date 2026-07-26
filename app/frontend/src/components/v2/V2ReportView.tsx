@@ -46,6 +46,7 @@ import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel'
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SectorValuationCard } from '@/components/report/SectorValuationCard';
+import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
@@ -447,6 +448,11 @@ function LoadingCard({ label, minH = 80 }: { label: string; minH?: number }) {
   );
 }
 
+function vgpmTooltip(label: string, dim?: { score?: number; subs?: string[] }): string | undefined {
+  if (!dim) return undefined;
+  return [`${label}: ${dim.score}/100`, ...(dim.subs ?? [])].join('\n');
+}
+
 function LoadingGradeChip({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
@@ -532,16 +538,16 @@ function SummaryBody({
         </div>
         <div className="grid grid-cols-4 gap-3">
           {vgpm?.valuation?.grade
-            ? <GradeChip grade={vgpm.valuation.grade} label="Valuation" />
+            ? <GradeChip grade={vgpm.valuation.grade} label="Valuation" tooltip={vgpmTooltip('Valuation', vgpm.valuation)} />
             : <LoadingGradeChip label="Valuation" />}
           {vgpm?.growth?.grade
-            ? <GradeChip grade={vgpm.growth.grade} label="Growth" />
+            ? <GradeChip grade={vgpm.growth.grade} label="Growth" tooltip={vgpmTooltip('Growth', vgpm.growth)} />
             : <LoadingGradeChip label="Growth" />}
           {vgpm?.profitability?.grade
-            ? <GradeChip grade={vgpm.profitability.grade} label="Profit." />
+            ? <GradeChip grade={vgpm.profitability.grade} label="Profit." tooltip={vgpmTooltip('Profitability', vgpm.profitability)} />
             : <LoadingGradeChip label="Profit." />}
           {vgpm?.momentum?.grade
-            ? <GradeChip grade={vgpm.momentum.grade} label="Momentum" />
+            ? <GradeChip grade={vgpm.momentum.grade} label="Momentum" tooltip={vgpmTooltip('Momentum', vgpm.momentum)} />
             : <LoadingGradeChip label="Momentum" />}
         </div>
       </div>
@@ -801,6 +807,8 @@ function ValuationBody({
       ) : (
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       )}
+
+      <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} />
 
       {/* ── Sector Valuation Card (Option B render) ─────────────────── */}
       {sectorCard && <SectorValuationCard payload={sectorCard} />}

@@ -125,12 +125,15 @@ function gradeStyle(grade?: string | null) {
   };
 }
 
-export function GradeChip({ grade, label }: { grade?: string | null; label?: string }) {
+export function GradeChip({ grade, label, tooltip }: { grade?: string | null; label?: string; tooltip?: string }) {
   const s = gradeStyle(grade);
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
       {label && <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
-      <span className={`inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md text-[11.5px] font-bold tabular-nums ${s.text} ${s.bg}`}>
+      <span
+        title={tooltip}
+        className={`inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md text-[11.5px] font-bold tabular-nums ${tooltip ? 'cursor-help' : ''} ${s.text} ${s.bg}`}
+      >
         {grade || '—'}
       </span>
     </div>
