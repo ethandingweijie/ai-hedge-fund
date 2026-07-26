@@ -24,6 +24,15 @@ tickers) rather than being folded into a single generic "Emerging Markets"
 bucket, so a user tilting heavily toward either has real breadth to select
 from — including KSTR (KraneShares SSE STAR Market 50, tracking China's
 STAR50 tech/innovation board).
+
+Coverage note (2026-07-26 expansion): added dedicated Europe and Asia-Pacific
+groups — the prior "intl_developed" group (VEA/EFA/VXUS/EWJ) was all blended
+multi-region funds, so a user maxing the questionnaire's Europe or
+Asia-Pacific geography weight (added in the same pass that added those
+regions) had no pure-play to actually select, only approximations. Also
+broadened EM breadth beyond China/India (Brazil, Taiwan), US factor/dividend
+coverage beyond SCHD/VUG/VTV, and bond/commodity coverage (TIPS, munis, EM
+debt, silver, oil) which was previously narrow.
 """
 from __future__ import annotations
 
@@ -59,11 +68,22 @@ ETF_UNIVERSE: list[EtfUniverseEntry] = [
     {"ticker": "XLRE", "bucket": "stock", "group": "us_sector"},
     {"ticker": "XLU",  "bucket": "stock", "group": "us_sector"},
 
-    # ── International developed equity ───────────────────────────────────────
+    # ── International developed equity (blended, multi-region) ──────────────
     {"ticker": "VEA",  "bucket": "stock", "group": "intl_developed"},
     {"ticker": "EFA",  "bucket": "stock", "group": "intl_developed"},
     {"ticker": "VXUS", "bucket": "stock", "group": "intl_developed"},
-    {"ticker": "EWJ",  "bucket": "stock", "group": "intl_developed"},
+    {"ticker": "EWJ",  "bucket": "stock", "group": "intl_developed"},   # Japan
+
+    # ── Europe equity (pure-play — VEA/EFA/VXUS above are blended, not
+    #    Europe-specific, so a user maxing the Europe geography weight had
+    #    nothing to actually select before this group existed) ───────────────
+    {"ticker": "VGK",  "bucket": "stock", "group": "europe"},   # broad Europe incl. UK
+    {"ticker": "EZU",  "bucket": "stock", "group": "europe"},   # Eurozone-only
+
+    # ── Asia-Pacific developed equity (pure-play, ex the blended EWJ above) ──
+    {"ticker": "VPL",  "bucket": "stock", "group": "apac_developed"},   # broad developed Pacific
+    {"ticker": "EWA",  "bucket": "stock", "group": "apac_developed"},   # Australia
+    {"ticker": "EWY",  "bucket": "stock", "group": "apac_developed"},   # South Korea
 
     # ── Emerging markets — broad ─────────────────────────────────────────────
     {"ticker": "VWO",  "bucket": "stock", "group": "em_broad"},
@@ -83,16 +103,30 @@ ETF_UNIVERSE: list[EtfUniverseEntry] = [
     {"ticker": "SMIN", "bucket": "stock", "group": "india"},   # India small-cap
     {"ticker": "FLIN", "bucket": "stock", "group": "india"},   # broad India, low-cost
 
+    # ── Other emerging markets (single-country, beyond China/India) ─────────
+    {"ticker": "EWZ",  "bucket": "stock", "group": "em_other"},   # Brazil
+    {"ticker": "EWT",  "bucket": "stock", "group": "em_other"},   # Taiwan
+
+    # ── US factor / dividend equity (beyond SCHD/VUG/VTV above) ─────────────
+    {"ticker": "VYM",  "bucket": "stock", "group": "us_factor"},   # high dividend yield
+    {"ticker": "MTUM", "bucket": "stock", "group": "us_factor"},   # momentum factor
+    {"ticker": "QUAL", "bucket": "stock", "group": "us_factor"},   # quality factor
+
     # ── Bonds ─────────────────────────────────────────────────────────────────
     {"ticker": "BND",  "bucket": "bond", "group": "bonds"},
     {"ticker": "AGG",  "bucket": "bond", "group": "bonds"},
     {"ticker": "TLT",  "bucket": "bond", "group": "bonds"},
     {"ticker": "BNDX", "bucket": "bond", "group": "bonds"},
     {"ticker": "HYG",  "bucket": "bond", "group": "bonds"},
+    {"ticker": "TIP",  "bucket": "bond", "group": "bonds"},   # inflation-protected (TIPS)
+    {"ticker": "MUB",  "bucket": "bond", "group": "bonds"},   # national municipal bond
+    {"ticker": "EMB",  "bucket": "bond", "group": "bonds"},   # emerging-market debt
 
     # ── Commodities ───────────────────────────────────────────────────────────
     {"ticker": "GLD",  "bucket": "commodity", "group": "commodities"},
     {"ticker": "DBC",  "bucket": "commodity", "group": "commodities"},
+    {"ticker": "SLV",  "bucket": "commodity", "group": "commodities"},   # silver
+    {"ticker": "USO",  "bucket": "commodity", "group": "commodities"},   # crude oil
 
     # ── REITs ─────────────────────────────────────────────────────────────────
     {"ticker": "VNQ",  "bucket": "reit", "group": "reits"},

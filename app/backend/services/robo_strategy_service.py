@@ -209,8 +209,20 @@ def select_etfs(
             "ticker": etf["ticker"],
             "name": etf.get("name") or etf["ticker"],
             "category": etf.get("bucket"),
+            # Single dominant tag — for the holdings-table row / CSV export,
+            # where one label per line is what's readable. NOT used for the
+            # breakdown charts (see sectorWeights/regionWeights below and
+            # calculate_breakdowns) — a broad fund's dominant sector is a
+            # poor summary of a fund that's actually spread across 11
+            # sectors (e.g. VTI is 36% Technology, not 100%).
             "sector": _dominant(etf.get("sectorWeights")),
             "region": _dominant(etf.get("regionWeights")),
+            # Full real composition (live FMP sector/country-weightings) —
+            # what calculate_breakdowns uses to aggregate this holding's
+            # dollar allocation PROPORTIONALLY across every sector/region it
+            # actually holds, instead of dumping 100% of it into one tag.
+            "sectorWeights": etf.get("sectorWeights") or {},
+            "regionWeights": etf.get("regionWeights") or {},
             "allocationPercent": round(alloc_percent, 2),
             "amount": round(amount, 2),
             "shares": math.floor(amount / price),
@@ -387,18 +399,40 @@ def select_stocks(
 # ── Step 5: breakdowns ──────────────────────────────────────────────────────────
 
 def calculate_breakdowns(items: list[dict]) -> dict:
+    """ETF items carry full look-through composition (sectorWeights /
+    regionWeights, each summing to ~100 across the fund's real holdings) —
+    aggregate each fund's dollar allocation PROPORTIONALLY across every
+    sector/region it actually holds, not into a single dominant tag. A
+    broad fund like VTI is ~36% Technology, ~12% Financial Services, ...
+    across all 11 sectors; crediting its whole allocation to "Technology"
+    alone would badly overstate one sector and erase the rest of the fund's
+    real composition. Individual-stock items (Individual Stocks mode) have
+    no weights dict — a single stock genuinely IS 100% one sector/region,
+    so they fall back to the flat sector/region tag, which is exact for
+    them, not an approximation."""
     sector_breakdown: dict[str, float] = {}
     geography_breakdown: dict[str, float] = {}
     risk_breakdown: dict[str, float] = {}
     for item in items:
         pct = item.get("allocationPercent", 0) or 0
-        sector = item.get("sector")
-        region = item.get("region")
         risk_level = item.get("riskLevel")
-        if sector:
+
+        sector_weights = item.get("sectorWeights")
+        if sector_weights:
+            for sector, weight in sector_weights.items():
+                sector_breakdown[sector] = sector_breakdown.get(sector, 0) + pct * weight / 100
+        elif item.get("sector"):
+            sector = item["sector"]
             sector_breakdown[sector] = sector_breakdown.get(sector, 0) + pct
-        if region:
+
+        region_weights = item.get("regionWeights")
+        if region_weights:
+            for region, weight in region_weights.items():
+                geography_breakdown[region] = geography_breakdown.get(region, 0) + pct * weight / 100
+        elif item.get("region"):
+            region = item["region"]
             geography_breakdown[region] = geography_breakdown.get(region, 0) + pct
+
         if risk_level:  # ETF items carry no riskLevel — deliberately excluded, not faked
             risk_breakdown[risk_level] = risk_breakdown.get(risk_level, 0) + pct
     return {"sector": sector_breakdown, "geography": geography_breakdown, "risk": risk_breakdown}
