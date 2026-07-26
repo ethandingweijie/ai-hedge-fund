@@ -90,6 +90,7 @@ from src.agents.industry.sector_prompts import (
     is_biopharma_sector, is_tech_sector, is_bank_sector, is_reit_sector,
 )
 from src.tools.hk.ticker import is_hk_ticker as _is_hk_ticker
+from src.tools.sg.ticker import is_sg_ticker as _is_sg_ticker
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
 
@@ -3258,7 +3259,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _price_avg_50:  float | None = None
         _price_avg_200: float | None = None
         _quote_mcap:    float | None = None
-        if not (is_hk_ticker(ticker) or is_sg_ticker(ticker)):
+        if not (_is_hk_ticker(ticker) or _is_sg_ticker(ticker)):
             try:
                 from src.tools.api import _fmp_get as _fmp_get_quote, _STABLE as _FMP_STABLE
                 _quote = _fmp_get_quote(
@@ -4723,7 +4724,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _ffo_ps_ttm  = (_ffo / shares) if (_ffo and shares and shares > 0) else None
                 _affo_ps_ttm = (_affo / shares) if (_affo and shares and shares > 0) else None
                 # Scenario growth on the per-share metric
-                _scen_g = scenario_results[scen_name].get("growth_rate", _base_g) or _base_g
+                _scen_g = scenario_results[scen_name].get("growth_rate", growth_base) or growth_base
                 _ffo_ps_fwd  = _ffo_ps_ttm * (1 + _scen_g)  if _ffo_ps_ttm  else None
                 _affo_ps_fwd = _affo_ps_ttm * (1 + _scen_g) if _affo_ps_ttm else None
                 # P/FFO × FFO/sh and P/AFFO × AFFO/sh — blended 60/40
