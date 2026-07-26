@@ -63,7 +63,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           <Link
             to={`/discuss/${ticker}`}
             title={`Discuss ${ticker}`}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand text-white hover:bg-brand/90 transition-colors"
           >
             <MessageSquare size={13} />
             Discuss
