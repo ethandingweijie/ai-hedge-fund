@@ -272,6 +272,165 @@ async def backfill_convergence_cap(
     return summary
 
 
+@router.post("/admin/backfill-dcf-range")
+async def backfill_dcf_range(
+    secret: str = "",
+    ticker: str = "",
+    tickers: str = "",
+    dry_run: bool = True,
+):
+    """Re-run the DCF engine for historical web_runs rows whose dcf_range came
+    back empty (the 2026-04-25 is_hk_ticker/is_sg_ticker NameError, fixed in
+    commit a6c72d8 — see reference doc v2.6.0 for the full root-cause writeup).
+
+    Only re-runs run_dcf_agent (deterministic, no LLM) — reuses every other
+    context already captured in the row (sector, macro_regime, management
+    guidance, REIT/bank/SaaS metrics, etc.) so the backfill reflects "what the
+    DCF engine would have produced at run time, had it not crashed", not a
+    fresh classification. Financials/quote/analyst-estimate data is fetched
+    live (FMP has no historical snapshot API), so results reflect current
+    data, not necessarily the exact figures available on the original run date.
+
+    Query params:
+      secret    — DB_UPLOAD_SECRET (required)
+      ticker    — single ticker filter (e.g. 'FLUT')
+      tickers   — CSV list (e.g. 'FLUT,PYPL,MOH') — overrides `ticker` if both given
+      dry_run   — default True. Pass dry_run=false to actually persist.
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    paths = _get_db_paths()
+    db_path = paths.get("run_archive")
+    if not db_path or not os.path.exists(db_path):
+        raise HTTPException(status_code=404, detail="run_archive DB not found")
+
+    target_tickers: list[str] = []
+    if tickers:
+        target_tickers = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    elif ticker:
+        target_tickers = [ticker.strip().upper()]
+    if not target_tickers:
+        raise HTTPException(status_code=400, detail="ticker or tickers required")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    placeholders = ",".join("?" * len(target_tickers))
+    rows = conn.execute(
+        f"SELECT run_id, run_at, ticker, full_result_json FROM web_runs "
+        f"WHERE ticker IN ({placeholders}) "
+        f"AND full_result_json IS NOT NULL "
+        f"AND json_extract(full_result_json, '$.checkpoint') IS NULL "
+        f"ORDER BY run_at DESC",
+        target_tickers,
+    ).fetchall()
+
+    summary = {
+        "dry_run": dry_run,
+        "tickers_filter": target_tickers,
+        "rows_processed": 0,
+        "rows_updated": 0,
+        "rows_skipped_already_filled": 0,
+        "rows_crashed": 0,
+        "changes": [],
+    }
+
+    from datetime import date
+    from src.agents.analysis.dcf_agent import run_dcf_agent
+
+    end_date = date.today().strftime("%Y-%m-%d")
+
+    for row in rows:
+        summary["rows_processed"] += 1
+        run_id = row["run_id"]
+        t = row["ticker"]
+
+        try:
+            full = json.loads(row["full_result_json"])
+        except Exception:
+            continue
+
+        data = full.get("data", {}) or {}
+        existing_dcf = (data.get("dcf_range") or {}).get(t) or {}
+        if existing_dcf:
+            summary["rows_skipped_already_filled"] += 1
+            continue
+
+        sector = (data.get("sectors") or {}).get(t) or data.get("sector") or "Tech"
+        state = {
+            "data": {
+                "tickers": [t],
+                "end_date": end_date,
+                "sectors": {t: sector},
+                "sector": sector,
+                "macro_regime": data.get("macro_regime") or {},
+                "management_guidance": data.get("management_guidance") or {},
+                "segment_scenarios": data.get("segment_scenarios") or {},
+                "pipeline_assets": data.get("pipeline_assets") or {},
+                "reit_metrics": data.get("reit_metrics") or {},
+                "bank_metrics": data.get("bank_metrics") or {},
+                "saas_metrics": data.get("saas_metrics") or {},
+                "framework_metrics": data.get("framework_metrics_all") or {},
+                "dcf_calibration_signals": data.get("dcf_calibration") or {},
+                "sector_confidence": "HIGH",
+            },
+            "metadata": {},
+        }
+
+        try:
+            state = run_dcf_agent(state)
+        except Exception as exc:
+            summary["rows_crashed"] += 1
+            summary["changes"].append({
+                "run_id": run_id, "run_at": row["run_at"], "ticker": t,
+                "status": "crashed", "error": f"{type(exc).__name__}: {str(exc)[:200]}",
+            })
+            continue
+
+        new_dcf = state["data"].get("dcf_range", {}).get(t) or {}
+        new_skip_reasons = state["data"].get("dcf_skip_reasons", {}) or {}
+
+        if not new_dcf:
+            summary["changes"].append({
+                "run_id": run_id, "run_at": row["run_at"], "ticker": t,
+                "status": "still_empty",
+                "skip_reason": new_skip_reasons.get(t, "<no reason recorded>"),
+            })
+            continue
+
+        dcf_range_map = data.get("dcf_range") or {}
+        dcf_range_map[t] = new_dcf
+        data["dcf_range"] = dcf_range_map
+        if new_skip_reasons.get(t):
+            skip_map = data.get("dcf_skip_reasons") or {}
+            skip_map[t] = new_skip_reasons[t]
+            data["dcf_skip_reasons"] = skip_map
+        full["data"] = data
+
+        if not dry_run:
+            conn.execute(
+                "UPDATE web_runs SET full_result_json = ? WHERE run_id = ?",
+                (json.dumps(full), run_id),
+            )
+
+        summary["rows_updated"] += 1
+        summary["changes"].append({
+            "run_id": run_id,
+            "run_at": row["run_at"],
+            "ticker": t,
+            "status": "filled",
+            "data_source": new_dcf.get("data_source"),
+            "profile": new_dcf.get("profile"),
+            "base_iv": (new_dcf.get("base") or {}).get("intrinsic_value"),
+        })
+
+    if not dry_run:
+        conn.commit()
+    conn.close()
+    return summary
+
+
 @router.delete("/admin/row")
 async def delete_row(secret: str = "", db: str = "run_archive", table: str = "", key_col: str = "", key_val: str = ""):
     """Delete a single row by primary key."""
