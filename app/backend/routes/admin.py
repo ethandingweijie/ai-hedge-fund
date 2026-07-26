@@ -278,6 +278,7 @@ async def backfill_dcf_range(
     ticker: str = "",
     tickers: str = "",
     dry_run: bool = True,
+    force: bool = False,
 ):
     """Re-run the DCF engine for historical web_runs rows whose dcf_range came
     back empty (the 2026-04-25 is_hk_ticker/is_sg_ticker NameError, fixed in
@@ -296,6 +297,12 @@ async def backfill_dcf_range(
       ticker    — single ticker filter (e.g. 'FLUT')
       tickers   — CSV list (e.g. 'FLUT,PYPL,MOH') — overrides `ticker` if both given
       dry_run   — default True. Pass dry_run=false to actually persist.
+      force     — default False (skip rows that already have a non-empty
+                  dcf_range). Pass force=true to recompute and overwrite those
+                  too — e.g. after a downstream fix like the profile_name
+                  NameError in _run_backward_gate (2026-07-27) that left an
+                  already-backfilled row's calibration_note stale/wrong even
+                  though dcf_range itself wasn't empty.
     """
     if not ADMIN_SECRET or secret != ADMIN_SECRET:
         raise HTTPException(status_code=403, detail="Invalid secret")
@@ -353,7 +360,7 @@ async def backfill_dcf_range(
 
         data = full.get("data", {}) or {}
         existing_dcf = (data.get("dcf_range") or {}).get(t) or {}
-        if existing_dcf:
+        if existing_dcf and not force:
             summary["rows_skipped_already_filled"] += 1
             continue
 

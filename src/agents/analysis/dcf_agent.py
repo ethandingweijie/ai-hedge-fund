@@ -51,6 +51,7 @@ Fallback behaviour:
 from __future__ import annotations
 
 import logging
+import random
 import statistics
 import time
 from datetime import datetime, timedelta
@@ -2959,6 +2960,7 @@ def _run_backward_gate(
     api_key: str,
     profile_data: Optional[dict] = None,
     reported_currency: str = "USD",
+    profile_name: str = "",
 ) -> tuple[bool, str]:
     """
     T-1 Year Test: run the valuation model with data from ~12 months ago and
@@ -4634,6 +4636,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             api_key=api_key,
             profile_data=profile_data,
             reported_currency=reported_currency,
+            profile_name=profile_name,
         )
 
         # ── 12m Forward-Multiple Price Target ────────────────────────────────
