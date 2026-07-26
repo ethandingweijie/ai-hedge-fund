@@ -327,3 +327,9 @@ class ChatMessageListResponse(BaseModel):
 class ChatReactionToggleResponse(BaseModel):
     liked: bool
     like_count: int
+
+
+class ChatActiveTickerResponse(BaseModel):
+    ticker: str
+    message_count: int
+    last_activity_at: datetime

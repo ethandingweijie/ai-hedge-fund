@@ -205,7 +205,7 @@ export function V2ReportView({
               <Link
                 to={`/discuss/${ticker}`}
                 title={`Discuss ${ticker}`}
-                className="flex items-center justify-center w-8 h-8 rounded-full border border-border text-muted-foreground active:text-foreground shrink-0"
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-green-600 text-white active:bg-green-700 shrink-0"
               >
                 <MessageSquare size={15} />
               </Link>

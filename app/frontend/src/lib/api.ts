@@ -1522,3 +1522,15 @@ export function toggleChatLike(ticker: string, messageId: number): Promise<{ lik
     headers: _authHeaders(),
   });
 }
+
+export interface ChatActiveTicker {
+  ticker: string;
+  message_count: number;
+  last_activity_at: string;
+}
+
+/** Tickers with at least one message, ranked by most recent activity —
+ * powers the Discuss landing page's active-discussions list. */
+export function getActiveChatTickers(limit = 12): Promise<ChatActiveTicker[]> {
+  return fetchJson(`${BASE}/chat/active-tickers?limit=${limit}`, { headers: _authHeaders() });
+}

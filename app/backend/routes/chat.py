@@ -32,6 +32,7 @@ from app.backend.models.schemas import (
     ChatMessageResponse,
     ChatMessageListResponse,
     ChatReactionToggleResponse,
+    ChatActiveTickerResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,20 @@ def _normalize_ticker(ticker: str) -> str:
 def _check_profanity(content: str) -> None:
     if profanity.contains_profanity(content):
         raise HTTPException(status_code=400, detail="Please remove inappropriate language and try again.")
+
+
+@router.get("/active-tickers", response_model=list[ChatActiveTickerResponse])
+async def list_active_tickers(
+    limit: int = 12,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        repo = ChatRepository(db)
+        return repo.get_active_tickers(limit=min(max(limit, 1), 50))
+    except Exception as exc:
+        logger.error("list_active_tickers failed: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to load active tickers")
 
 
 @router.get("/{ticker}/messages", response_model=ChatMessageListResponse)

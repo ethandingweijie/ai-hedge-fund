@@ -202,3 +202,25 @@ class ChatRepository:
             .all()
         )
         return self._attach_aggregates(rows, current_user_id)
+
+    def get_active_tickers(self, limit: int = 12) -> List[dict]:
+        """Tickers with at least one message (top-level or reply, excluding
+        soft-deletes), ranked by most recent activity. `message_count`
+        covers the whole thread (not just top-level) so it reads as
+        "how much discussion", not just "how many topics started"."""
+        rows = (
+            self.db.query(
+                ChatMessage.ticker,
+                func.count(ChatMessage.id).label("message_count"),
+                func.max(ChatMessage.created_at).label("last_activity_at"),
+            )
+            .filter(ChatMessage.deleted_at.is_(None))
+            .group_by(ChatMessage.ticker)
+            .order_by(func.max(ChatMessage.created_at).desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {"ticker": ticker, "message_count": count, "last_activity_at": last_activity}
+            for ticker, count, last_activity in rows
+        ]
