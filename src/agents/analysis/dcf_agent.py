@@ -4312,48 +4312,91 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     elif "proxy" in m:
                         methods_to_compute.add(m["proxy"])
 
-                # ── Growth premium: PEG-inspired multiple adjustment ─────
-                # Scale relative-value multiples based on company growth vs
-                # sector average.  Sensitivity=0.30 means a company growing
-                # 2x sector avg gets ~1.30x the base multiple.
+                # ── Growth premium: growth-vs-sector, quality-gated by ROIC ──
+                # v3.20 — the v3.19 PEG-style "growth vs sector avg" heuristic
+                # scaled the multiple off raw growth alone, with no regard for
+                # whether that growth actually earns more than its cost of
+                # capital — it could (and did) apply a bullish premium in the
+                # SAME scenario where Gate B just above concluded "Forward
+                # ROIC < threshold → TGR set to 0" (the DCF side of this same
+                # function already decided this growth doesn't create value).
+                # Two contradictory verdicts on the same growth, from two
+                # disconnected mechanisms.
+                #
+                # First attempt at a fix (still in git history) replaced the
+                # driver entirely with the excess-return spread
+                # (forward_roic − wacc) / wacc. Tested against FLUT/PYPL/MOH/
+                # CY6U.SI/FRSH and rejected: it let a high-ROIC, negative- or
+                # low-growth business earn a growth premium on returns alone —
+                # MOH tested at growth_premium 1.56x (a premium!) on -2.0%
+                # growth, purely because its (normalization-inflated) ROIC
+                # cleared WACC. A growth premium for negative growth is not
+                # economically coherent regardless of capital efficiency.
+                #
+                # This version keeps growth-vs-sector as the driver (so sign
+                # always tracks growth — negative/below-average growth can
+                # never produce a premium) and uses the ROIC−WACC spread only
+                # as a QUALITY GATE that scales how much of that growth-based
+                # premium/discount to apply:
+                #   forward_roic ≤ wacc  → growth isn't clearing its cost of
+                #                          capital (same bar Gate B uses) →
+                #                          gate fully closed, premium/discount
+                #                          suppressed to neutral (1.0). Matches
+                #                          Gate B's own verdict instead of
+                #                          contradicting it, without ALSO
+                #                          double-discounting on top of Gate
+                #                          B's terminal-value zeroing.
+                #   forward_roic > wacc  → quality = min(1.0, spread/wacc),
+                #                          i.e. how comfortably it clears WACC,
+                #                          capped at full pass-through. The
+                #                          growth-based premium/discount is
+                #                          scaled by this quality factor — it
+                #                          can only shrink toward neutral, never
+                #                          flip sign or amplify beyond the raw
+                #                          growth-based figure.
+                # Falls back to the ungated legacy growth-vs-sector-avg figure
+                # only when forward_roic isn't computable (missing EBIT/
+                # invested-capital data).
                 _GROWTH_SENSITIVITY = 0.30
                 _peer_for_gp = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name)
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
-                if _sector_g_avg > 0.005:
-                    _gp_raw = 1.0 + _GROWTH_SENSITIVITY * (g - _sector_g_avg) / _sector_g_avg
-                    # REIT-specific tighter cap: REIT sub-type peer multiples
-                    # (_REIT_SUBTYPE_MULTIPLES) already embed growth expectations
-                    # — data_center at 22x P/FFO already reflects AI-driven premium.
-                    # Applying the standard 0.60-2.50 growth_premium band on top
-                    # of sub-type multiples double-counts growth and produces
-                    # aggressive IVs (DLR at $324 vs $201 market, 61% upside).
-                    # Tighter [0.85, 1.20] band preserves some differentiation
-                    # (DLR > O) while aligning blended IV with analyst PT range.
-                    _is_reit_profile = is_reit_sector(sector) or profile_name == "REIT"
-                    # High-multiple Tech profiles: same double-count issue as REIT.
-                    # _TECH_SUBTYPE_MULTIPLES already embed growth expectations
-                    # — Growth SaaS EV/Rev 22x / Cybersecurity 22x / Hyper-Growth
-                    # 25x / AI 30x each sit well above mature-tech (6-10x) precisely
-                    # because they reflect forward-growth premium baked into street
-                    # multiples. Applying the generic 0.60-2.50 growth_premium band
-                    # on top produces absurd IVs (DDOG base $665 vs $128 market on
-                    # 28% growth × 22x × 1.75 premium × yr1 revenue projection).
-                    # Tighter [0.85, 1.30] band preserves growth differentiation
-                    # without double-counting growth into the peer multiple.
-                    _is_high_mult_tech = profile_name in {
-                        "Growth SaaS",
-                        "Cybersecurity / Mission-Critical SaaS",
-                        "Hyper-Growth Platform",
-                        "High-Growth Tech / AI",
-                    }
-                    if _is_reit_profile:
-                        growth_premium = max(0.85, min(1.20, _gp_raw))
-                    elif _is_high_mult_tech:
-                        growth_premium = max(0.85, min(1.30, _gp_raw))
+                _gp_raw_growth = (
+                    1.0 + _GROWTH_SENSITIVITY * (g - _sector_g_avg) / _sector_g_avg
+                    if _sector_g_avg > 0.005 else 1.0
+                )
+                if forward_roic is not None and wacc > 0:
+                    if forward_roic <= wacc:
+                        _gp_raw = 1.0
                     else:
-                        growth_premium = max(0.60, min(2.50, _gp_raw))
+                        _quality = min(1.0, (forward_roic - wacc) / wacc)
+                        _gp_raw = 1.0 + (_gp_raw_growth - 1.0) * _quality
                 else:
-                    growth_premium = 1.0
+                    _gp_raw = _gp_raw_growth
+
+                # REIT-specific tighter cap: REIT sub-type peer multiples
+                # (_REIT_SUBTYPE_MULTIPLES) already embed growth expectations —
+                # data_center at 22x P/FFO already reflects AI-driven premium.
+                # Stacking a wide premium band on top of sub-type multiples
+                # double-counts growth (DLR at $324 vs $201 market, 61% upside
+                # was the original discovery). This is a separate concern from
+                # the driver formula above — it doesn't go away just because
+                # the driver is now economically grounded, since the double-
+                # count is in the peer TABLE, not the driver.
+                _is_reit_profile = is_reit_sector(sector) or profile_name == "REIT"
+                # High-multiple Tech profiles: same double-count issue as REIT
+                # — _TECH_SUBTYPE_MULTIPLES already embed growth expectations.
+                _is_high_mult_tech = profile_name in {
+                    "Growth SaaS",
+                    "Cybersecurity / Mission-Critical SaaS",
+                    "Hyper-Growth Platform",
+                    "High-Growth Tech / AI",
+                }
+                if _is_reit_profile:
+                    growth_premium = max(0.85, min(1.20, _gp_raw))
+                elif _is_high_mult_tech:
+                    growth_premium = max(0.85, min(1.30, _gp_raw))
+                else:
+                    growth_premium = max(0.60, min(1.80, _gp_raw))
 
                 # ── SBC Dilution Override ─────────────────────────────────
                 # If stock-based compensation > 20% of revenue, the P/E
