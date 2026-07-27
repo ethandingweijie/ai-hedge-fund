@@ -65,16 +65,30 @@ _ALIASES: dict[str, str] = {
     "REIT":                   "Real Estate",
     "REITs":                  "Real Estate",
     "Property Trust":         "Real Estate",
+    # 2026-07-27 gap fix — these 4 DCF-emitted sector strings (see
+    # src/data/sector_profiles.py SECTOR_WACC) had no alias entry at all,
+    # so resolve_sector's fallback silently routed them to Technology —
+    # the single most aggressive band set in this file (35% growth for
+    # A+, 25% FCF margin for A+). Every ticker in these 4 sectors was
+    # graded on a curve built for hypergrowth software companies, which
+    # is the same class of bug already fixed once for Telco/Consumer/
+    # Financial on 2026-05-21 (see test_resolve_previously_unaliased_
+    # pipeline_strings) — the alias table just hadn't kept pace with the
+    # DCF engine's own sector taxonomy.
+    "ProfessionalServices":   "Professional Services",  # NEW canonical
+    "Resources":              "Basic Materials",         # mining/extraction ≈ existing Materials profile
 }
 
-# 13 canonical sectors (was 11; added Biopharma + Telecom 2026-05-21).
+# 16 canonical sectors (was 13; added Professional Services, Transportation,
+# Crypto 2026-07-27 — see the "2026-07-27 gap fix" comment above _ALIASES).
 # ALL band tables below MUST cover every entry. The CANONICAL_SECTORS guard
 # tests in tests/test_vgpm_sector_bands.py enforce this.
 CANONICAL_SECTORS: tuple[str, ...] = (
     "Technology", "Financial Services", "Healthcare", "Biopharma",
     "Utilities", "Energy", "Real Estate", "Consumer Defensive",
     "Consumer Cyclical", "Industrials", "Communication Services",
-    "Telecom", "Basic Materials",
+    "Telecom", "Basic Materials", "Professional Services",
+    "Transportation", "Crypto",
 )
 
 
@@ -164,6 +178,24 @@ SECTOR_GROWTH_BANDS: dict[str, list[tuple[float, int]]] = {
         # Commodity-cyclical similar to Energy.
         (18, 95), (10, 85), (5, 70), (0, 58), (-8, 44), (-15, 30), (-25, 18), (-40, 8),
     ],
+    "Professional Services": [
+        # Asset-light consulting / IT services (ACN, TRI, Genpact-style).
+        # GDP-plus organic norm, occasional M&A-driven spikes into low
+        # double digits; rarely Tech-caliber hypergrowth.
+        (18, 95), (12, 85), (7, 70), (4, 58), (1, 44), (-3, 30), (-8, 18), (-15, 8),
+    ],
+    "Transportation": [
+        # Rail/airlines/trucking/shipping — capital-intensive and cyclical,
+        # GDP-correlated with occasional pricing-power upside for rail
+        # duopolies. Wider downside tail than Industrials for cyclicality.
+        (15, 95), (10, 85), (6, 70), (3, 58), (0, 44), (-5, 30), (-15, 18), (-25, 8),
+    ],
+    "Crypto": [
+        # Mining/exchange/treasury equities — revenue tracks token prices,
+        # not operations. Extreme swings in both directions are normal;
+        # bands must tolerate what would be a catastrophic miss elsewhere.
+        (60, 95), (30, 85), (10, 70), (0, 58), (-30, 44), (-50, 30), (-70, 18), (-90, 8),
+    ],
 }
 
 
@@ -228,6 +260,22 @@ SECTOR_FCF_MARGIN_BANDS: dict[str, list[tuple[float, int]]] = {
         # Commodity-tied; volatile.
         (15, 95), (10, 82), (6, 68), (2, 54), (-3, 34), (-12, 18), (-25, 6),
     ],
+    "Professional Services": [
+        # Labor-driven, low capex — margins often exceed Industrials
+        # (ACN ~12-14%, TRI ~20%+ given its data/subscription mix).
+        (20, 95), (14, 82), (9, 68), (5, 54), (1, 34), (-4, 18), (-12, 6),
+    ],
+    "Transportation": [
+        # Heavy capex (planes/rail/trucks/ships) suppresses margins vs
+        # Industrials despite similar revenue growth profile.
+        (12, 95), (8, 82), (5, 68), (2, 54), (-2, 34), (-8, 18), (-18, 6),
+    ],
+    "Crypto": [
+        # Miners run thin/negative margins (rig + power capex); exchanges
+        # can be highly profitable in bull markets. Deep negative is normal,
+        # not distress — do not floor it the way a Tech ticker would be.
+        (25, 95), (10, 82), (0, 68), (-20, 54), (-50, 34), (-100, 18), (-200, 6),
+    ],
 }
 
 
@@ -288,6 +336,19 @@ SECTOR_P_FCF_BANDS: dict[str, list[tuple[float, int]]] = {
         # Cyclical, compressed.
         (6, 95), (10, 80), (15, 62), (25, 40), (45, 18),
     ],
+    "Professional Services": [
+        # Premium multiple for quality/recurring-revenue characteristics
+        # (consulting backlogs, TRI-style subscription data products).
+        (11, 95), (16, 80), (24, 62), (35, 40), (55, 18),
+    ],
+    "Transportation": [
+        # Compressed vs Industrials given capital intensity + cyclicality.
+        (7, 95), (11, 80), (16, 62), (24, 40), (40, 18),
+    ],
+    "Crypto": [
+        # Positive FCF at all is notable; multiples run hot when it exists.
+        (10, 95), (18, 80), (30, 62), (50, 40), (80, 18),
+    ],
 }
 
 
@@ -346,6 +407,22 @@ SECTOR_ROIC_SPREAD_BANDS: dict[str, list[tuple[float, int]]] = {
     ],
     "Basic Materials": [
         (0.08, 92), (0.03, 78), (0.0, 62), (-0.04, 42), (-0.15, 20),
+    ],
+    "Professional Services": [
+        # Asset-light — low invested-capital base means healthy spreads
+        # are typical (goodwill from M&A aside).
+        (0.10, 92), (0.05, 78), (0.0, 62), (-0.04, 42), (-0.12, 20),
+    ],
+    "Transportation": [
+        # Mixed — rail duopolies generate wide spreads, airlines thin/
+        # negative. Moderate tolerance, harder ceiling than Industrials.
+        (0.06, 92), (0.02, 78), (0.0, 62), (-0.05, 42), (-0.15, 20),
+    ],
+    "Crypto": [
+        # WACC is already 15% (SECTOR_WACC) to reflect the risk premium,
+        # so even a modest positive spread clears a high bar and should
+        # score well; deep negative is the norm, not distress.
+        (0.10, 92), (0.03, 78), (-0.05, 62), (-0.20, 42), (-0.50, 20),
     ],
 }
 
