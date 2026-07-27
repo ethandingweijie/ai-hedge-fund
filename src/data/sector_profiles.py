@@ -41,6 +41,8 @@ Key corrections vs prior version (2026-03-26 recalibration):
   Financials sub-types: added — see _FINANCIALS_PROFILE_WACC
 """
 
+import statistics
+
 # ── 1. WACC ───────────────────────────────────────────────────────────────────
 
 # Base WACC rates by sector (pre-leverage-adjustment).
@@ -2267,6 +2269,133 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Semiconductor":       {"ev_ebitda": 20.0, "pe": 25.0, "ev_revenue": 6.0,  "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.12},
 }
 
+
+# ── Dynamic peer multiples (2026-07-27) ───────────────────────────────────────
+# SECTOR_PEER_MULTIPLES above is a single static number per profile, calibrated
+# once and never refreshed — it can't tell a FinTech name trading at a market
+# discount (competitive share loss, credibility discount) from one trading at
+# a premium; every name in the bucket gets the same 22x P/E regardless of
+# where its actual peer group trades today. This section replaces that with a
+# LIVE median computed from a curated peer basket, when enough fresh data is
+# available, falling back field-by-field to the static number above otherwise.
+#
+# Curation, not automation, is deliberate — this mirrors standard equity-
+# research practice (comparable-company analysis always starts from analyst
+# judgment about which businesses are genuinely comparable, not just a shared
+# industry code; Bloomberg/FactSet's algorithmic peer suggestions are treated
+# as a candidate list an analyst prunes, never used as-is). An automated
+# same-sector filter would have grouped e.g. PayPal with Visa (structurally
+# different economics — see FinTech vs Payment Networks below).
+#
+# Data source: app/backend/services/knowledge_graph.py's kg_ticker_metrics
+# cache (TTM ratios: pe, pb, ev_ebitda, ev_sales, fcf_yield, rev_growth),
+# the same per-ticker cache the screener and live pipeline VGPM already share.
+# READ-ONLY here — deliberately does NOT live-fetch missing peers. The team
+# already tried and removed a screener pre-warm mechanism because it broke
+# load times; adding bounded live-fetches for up to N peers on every DCF run
+# would reintroduce that same class of risk on a much hotter path. Coverage
+# builds up purely organically as the screener/pipeline touch these tickers
+# in the course of normal use — large, frequently-analyzed names (most of
+# this basket) should accumulate fresh cache entries quickly. Until then,
+# every field just falls back to the static table, so this can never make a
+# valuation worse than today's baseline, only better once data exists.
+SECTOR_PEER_BASKETS: dict[str, list[str]] = {
+    "Tech":                 ["MSFT", "GOOGL", "ORCL", "ADBE", "CRM", "IBM", "SAP"],
+    "Consumer":             ["PG", "KO", "PEP", "WMT", "TGT", "COST", "CL"],
+    "Biopharma":            ["PFE", "MRK", "ABBV", "BMY", "LLY", "JNJ", "GSK"],
+    "MedTech / Devices":    ["MDT", "SYK", "BSX", "ISRG", "ZBH", "EW"],
+    "CDMO / Life Science Tools": ["TMO", "DHR", "A", "CRL", "ICLR", "AVTR"],
+    "Pre-approval Biotech": ["VRTX", "REGN", "ALNY", "BMRN", "RARE", "SRPT"],
+    "Telco":                ["VZ", "T", "TMUS", "VOD", "BCE"],
+    "Crypto":               ["COIN", "MSTR", "MARA", "RIOT", "HUT", "CLSK"],
+    "Energy":               ["XOM", "CVX", "COP", "EOG", "SLB", "OXY"],
+    "Regulated Utility":    ["NEE", "DUK", "SO", "D", "AEP", "XEL"],
+    "IPP":                  ["NRG", "VST", "CEG", "TLN"],
+    "Financials":           ["JPM", "BAC", "WFC", "C", "USB", "PNC"],
+    "Money Center Bank":    ["JPM", "BAC", "C", "WFC", "HSBC"],
+    "Regional Bank":        ["USB", "PNC", "TFC", "RF", "KEY", "CFG"],
+    "Insurance":            ["PGR", "TRV", "ALL", "CB", "AIG", "MET"],
+    "Investment Bank":      ["GS", "MS", "LAZ", "EVR"],
+    "Asset Manager":        ["BLK", "BEN", "TROW", "IVZ", "STT"],
+    # FinTech ≠ Payment Networks: PYPL/SQ/AFRM/SOFI carry consumer-credit and
+    # checkout-competition risk that V/MA/AXP's closed-loop network economics
+    # don't — a real analyst would never treat these as the same comp set,
+    # even though FMP/GICS often lump them together.
+    "FinTech":              ["SQ", "AFRM", "SOFI", "PYPL", "GPN", "FI"],
+    "Mortgage/GSE":         ["FNMA", "FMCC"],
+    "Payment Networks":     ["V", "MA", "AXP"],
+    "Market Infrastructure": ["ICE", "CME", "NDAQ", "CBOE"],
+    "Brokerage":            ["SCHW", "IBKR", "HOOD"],
+    "Membership / Subscription Retail": ["COST", "BJ"],
+    "Consumer Durables":    ["WHR", "NWL", "SNBR", "NWL"],
+    "Automotive & EV":      ["TSLA", "GM", "F", "RIVN", "LCID"],
+    "Travel & Dining":      ["MCD", "SBUX", "DIS", "ABNB", "BKNG"],
+    "Industrials":          ["HON", "GE", "MMM", "CAT", "DE"],
+    "RealEstate":           ["VNO", "BXP", "SLG"],
+    "REIT":                 ["O", "SPG", "PLD", "EQIX", "AVB"],
+    "Transportation":       ["UNP", "CSX", "DAL", "UAL", "JBHT"],
+    "Materials":            ["LIN", "APD", "SHW", "NEM"],
+    "Resources":            ["FCX", "NEM", "VALE", "SCCO"],
+    "ProfessionalServices": ["ACN", "IBM", "EXLS", "WNS", "GLOB"],
+    "Semiconductor":        ["NVDA", "AVGO", "TXN", "QCOM", "AMD"],
+}
+
+# Minimum number of peers that must have fresh, usable KG data for a field
+# before the dynamic median is trusted over the static fallback. 4 is a
+# judgment call — enough to be more than a coin flip, low enough that the
+# dynamic path actually engages given organic (non-pre-warmed) KG coverage.
+_MIN_PEERS_FOR_DYNAMIC = 4
+
+# KG field name -> SECTOR_PEER_MULTIPLES field name, plus a unit converter
+# where they differ (KG's fcf_yield is a percentage like 5.0; the static
+# table uses a decimal fraction like 0.05).
+_KG_FIELD_MAP: dict[str, tuple[str, float]] = {
+    "pe":         ("pe", 1.0),
+    "pb":         ("pb", 1.0),
+    "ev_ebitda":  ("ev_ebitda", 1.0),
+    "ev_sales":   ("ev_revenue", 1.0),
+    "fcf_yield":  ("fcf_yield", 0.01),
+    "rev_growth": ("growth_avg", 1.0),
+}
+
+
+def get_dynamic_peer_multiples(
+    sector: str,
+    profile_name: str = "",
+) -> dict[str, float]:
+    """Median peer multiples computed live from the Knowledge Graph cache for
+    a curated basket, field-by-field. Returns {} (never raises, never blocks)
+    when the basket is undefined or too few peers have fresh KG data — callers
+    should merge this OVER the static SECTOR_PEER_MULTIPLES entry, not use it
+    standalone, since individual fields (cn_adr_haircut, ev_rd, growth_avg
+    when peers lack growth data) may still need the static value.
+    """
+    basket = SECTOR_PEER_BASKETS.get(profile_name) or SECTOR_PEER_BASKETS.get(sector)
+    if not basket:
+        return {}
+    try:
+        from app.backend.services.knowledge_graph import get_ttm_metrics_cached
+        cached = get_ttm_metrics_cached(basket)
+    except Exception:
+        return {}
+    if not cached:
+        return {}
+
+    result: dict[str, float] = {}
+    for kg_field, (out_field, unit_mult) in _KG_FIELD_MAP.items():
+        vals = []
+        for t in basket:
+            m = cached.get(t)
+            if not m:
+                continue
+            v = m.get(kg_field)
+            if v is not None and v > 0:
+                vals.append(v * unit_mult)
+        if len(vals) >= _MIN_PEERS_FOR_DYNAMIC:
+            result[out_field] = round(statistics.median(vals), 4)
+    return result
+
+
 # ── HK / HKEX sector peer multiples ──────────────────────────────────────────
 # Source: Hang Seng Index sector benchmarks, calibrated 2026-04.
 #
@@ -2360,7 +2489,12 @@ def get_sector_peer_multiples(
 
     Returns
     -------
-    dict with keys: ev_ebitda, pe, ev_revenue, pb, fcf_yield
+    dict with keys: ev_ebitda, pe, ev_revenue, pb, fcf_yield. Individual
+    fields may come from a live peer-basket median (see
+    get_dynamic_peer_multiples) when enough fresh comp data exists;
+    otherwise from the static table below. Never a mix of stale-static
+    and stale-dynamic for the same field — each field is independently
+    either live or static, never partially blended.
     """
     if is_hk:
         return (
@@ -2368,11 +2502,15 @@ def get_sector_peer_multiples(
             or HK_SECTOR_PEER_MULTIPLES.get(sector)
             or {}
         )
-    return (
+    static = (
         SECTOR_PEER_MULTIPLES.get(profile_name)
         or SECTOR_PEER_MULTIPLES.get(sector)
         or {}
     )
+    dynamic = get_dynamic_peer_multiples(sector, profile_name)
+    if not dynamic:
+        return static
+    return {**static, **dynamic}
 
 
 def get_wacc_for_exchange(
