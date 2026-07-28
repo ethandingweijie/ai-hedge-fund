@@ -103,6 +103,12 @@ _PROJECTION_YEARS = 10
 _MIN_HISTORY_YEARS = 2
 _DEFAULT_TGR = {"bear": 0.015, "base": 0.025, "bull": 0.035}
 
+# RSU/PSU cash tax withholding, as a fraction of gross SBC expense — used
+# when FMP doesn't expose a clean withholding line (same estimator and rate
+# as src/research_ideas/sw46/tragic_algebra.py's Method E, calibrated
+# against Burry/Cassandra-Unchained's published SBC framework).
+_RSU_TAX_WITHHOLDING_RATE = 0.37
+
 # Retries for the line-items fetch — a single FMP hiccup shouldn't blank the
 # whole Valuation Methodology panel. Short exponential backoff (1.5s, 3s).
 _LINE_ITEMS_MAX_RETRIES = 2
@@ -349,11 +355,34 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
     # adds it back to OCF. Owner-earnings FCF subtracts it back out because SBC
     # is a real dilution cost to shareholders even when it isn't a cash outflow.
     # Falls back to reported FCF when SBC is not disclosed (e.g. some utilities).
+    #
+    # Buyback-netted (v3.21) — ports the core insight of Method E from
+    # src/research_ideas/sw46/tragic_algebra.py (validated against Burry /
+    # Cassandra-Unchained's published SBC framework: ADBE dE 88.2% vs their
+    # 88.3%). The prior version charged 100% of gross SBC dollar-for-dollar
+    # regardless of capital allocation — a company that fully repurchases its
+    # own SBC-driven issuance (net share count flat or shrinking) was
+    # penalized identically to a company diluting shareholders at the same
+    # gross SBC level. Only the UNFUNDED portion is a real cost:
+    #   unfunded_comp = max(0, SBC - buybacks)
+    # Net buyers (buybacks >= SBC) get unfunded_comp = 0 — the buyback is
+    # genuine capital return, not charged against owner earnings. Also
+    # charges the cash tax withheld on RSU/PSU vesting (a real financing-
+    # activity cash outflow FCF's operating-cash-flow basis doesn't capture),
+    # estimated at _RSU_TAX_WITHHOLDING_RATE of gross SBC when FMP doesn't
+    # expose a clean withholding line (no such line is currently fetched by
+    # search_line_items, so this is always the estimate for now — same
+    # fallback and rate tragic_algebra.py uses when its own cleaner FMP line
+    # is unavailable).
     for row in rows:
         fcf = row["free_cash_flow"]
         sbc = row["stock_based_compensation"]
+        buybacks = abs(row.get("common_stock_repurchased") or row.get("share_buyback") or 0.0)
         if fcf is not None and sbc is not None:
-            row["fcf_owner_earnings"] = fcf - abs(sbc)
+            sbc_abs = abs(sbc)
+            unfunded_comp = max(0.0, sbc_abs - buybacks)
+            cash_tax_withholding = sbc_abs * _RSU_TAX_WITHHOLDING_RATE
+            row["fcf_owner_earnings"] = fcf - unfunded_comp - cash_tax_withholding
         else:
             row["fcf_owner_earnings"] = fcf
 
@@ -3198,7 +3227,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      "total_liabilities",
                      "operating_expense",
                      # Tech/Payment-processor methods
-                     "gross_profit", "cost_of_revenue"],
+                     "gross_profit", "cost_of_revenue",
+                     # Buyback-netted SBC (fcf_owner_earnings) + SBC Dilution
+                     # Override — was previously requested nowhere in this
+                     # call despite _extract_annual_series() already trying
+                     # to read it off every row, so share_buyback silently
+                     # came back None/0 for every ticker until this fix.
+                     "share_buyback"],
                     end_date,
                     period="annual",
                     limit=7,
@@ -3974,7 +4009,32 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             progress.update_status(
                 agent_id, ticker,
                 f"WACC loading from deep research risk_flag={_risk_flag}: "
-                f"+{_wacc_loading*100:.0f}bps → WACC={wacc:.3f}"
+                # Fix (v3.21): was *100 (percentage points, not basis points)
+                # — a 25bps/50bps loading always displayed as "+0bps" since
+                # 0.25/0.50 both round to 0 under :.0f. Value applied to wacc
+                # was always correct; only this log line was wrong.
+                f"+{_wacc_loading*10000:.0f}bps → WACC={wacc:.3f}"
+            )
+
+        # REIT NAV: widen the research-extracted cap rate under the SAME
+        # risk_flag signal WACC loading just used above (v3.21). Previously
+        # a research-extracted cap_rate_market override (see _rm_override
+        # further below) was used as-is regardless of how risky deep
+        # research flagged the same company elsewhere in this run — e.g. a
+        # cap rate override MORE aggressive (lower) than the sector default
+        # for a name simultaneously flagged HIGH risk. A higher cap rate
+        # means a lower NAV (gross_asset_value = NOI / cap_rate), so this
+        # widening is directionally conservative, same as the WACC loading
+        # above. Deliberately does NOT touch the sub-type default cap rate
+        # (_REIT_SUBTYPE_MULTIPLES) when no research override exists — that
+        # table is already a calibrated multi-company baseline, not a
+        # single-point extraction, so it doesn't have the same failure mode.
+        if most_recent.get("cap_rate_market") is not None and _wacc_loading:
+            _cap_rate_before = most_recent["cap_rate_market"]
+            most_recent["cap_rate_market"] = _cap_rate_before + _wacc_loading
+            ticker_forward_flags.append(
+                f"REIT cap rate widened +{_wacc_loading*10000:.0f}bps for risk_flag={_risk_flag}: "
+                f"{_cap_rate_before:.2%} → {most_recent['cap_rate_market']:.2%}"
             )
 
         # ── Change 6: Country Risk Premium (CRP) for non-USD-reporting US-listed tickers ──
@@ -4399,18 +4459,31 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     growth_premium = max(0.60, min(1.80, _gp_raw))
 
                 # ── SBC Dilution Override ─────────────────────────────────
-                # If stock-based compensation > 20% of revenue, the P/E
-                # multiple is structurally inflated by GAAP earnings that
-                # don't reflect real dilution cost.  Discount peer P/E by 15%.
-                # Common in EV / tech-heavy consumer (TSLA, RIVN, LCID).
+                # If UNFUNDED stock comp (SBC not offset by buybacks) exceeds
+                # 20% of revenue, the P/E multiple is structurally inflated
+                # by GAAP earnings that don't reflect real dilution cost.
+                # Discount peer P/E by 15%. Common in EV / tech-heavy
+                # consumer (TSLA, RIVN, LCID).
+                #
+                # Gated on UNFUNDED comp (v3.21), not raw SBC, to stay
+                # consistent with fcf_owner_earnings above — a company
+                # buying back its own SBC-driven issuance shouldn't be
+                # charged twice by two SBC levers that disagree about
+                # whether buybacks matter. See that comment for the full
+                # Method E rationale (src/research_ideas/sw46/tragic_algebra.py).
                 _sbc_discount = 1.0
                 _sbc = most_recent.get("stock_based_compensation")
+                _sbc_buybacks = abs(
+                    most_recent.get("common_stock_repurchased")
+                    or most_recent.get("share_buyback") or 0.0
+                )
                 if _sbc and revenue_base and revenue_base > 0:
-                    _sbc_pct = abs(_sbc) / revenue_base
-                    if _sbc_pct > 0.20:
+                    _unfunded_pct = max(0.0, abs(_sbc) - _sbc_buybacks) / revenue_base
+                    if _unfunded_pct > 0.20:
                         _sbc_discount = 0.85
                         forward_flags.append(
-                            f"SBC Dilution: SBC/Rev {_sbc_pct:.0%} > 20% → P/E discounted 15%"
+                            f"SBC Dilution: unfunded comp/Rev {_unfunded_pct:.0%} > 20% "
+                            f"→ P/E discounted 15%"
                         )
 
                 # ── Deep Value Recovery Alert ─────────────────────────────
