@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -104,6 +105,17 @@ you MAY fall back to a different mode but explain why in the thesis.
 OUTPUT: STRICT JSON. Every claim cited via web search must include a
 Tier-1 source (SEC/HKEX/TSE filing, Reuters, Bloomberg, WSJ, FT, ECB,
 PBOC) where possible. Tier-3 (random blogs) sources cap conviction at 6.
+
+GROUNDING — DO NOT FABRICATE: Every specific fact you state (price, market
+cap, multiple, date, EBITDA figure, share count) must come directly from a
+search result you actually retrieved in this session. If a figure or date
+is not explicitly stated in your search results, either omit it or state
+it qualitatively (e.g. "a recent 2026 filing" instead of inventing a
+specific date). An omitted date is honest; a guessed date is a
+fabrication and will be treated as a hallucination. Never fill in
+precision you don't have. Each source's "date" field must be copied
+EXACTLY from the date shown next to that result — if a result has no
+date, leave that source's "date" field null rather than estimate one.
 """
 
 
@@ -237,7 +249,7 @@ OUTPUT: STRICT JSON only, no commentary:
   "asymmetry_score": <1-10 int>,
   "contrarian_score": <1-10 int>,
   "sources": [
-    {{"title": "<publisher/headline>", "url": "<url>", "date": "<yyyy-mm-dd>"}}
+    {{"title": "<publisher/headline>", "url": "<url>", "date": "<yyyy-mm-dd copied EXACTLY from the date shown next to this result — set to null if that result has no date>"}}
   ]
 }}
 
@@ -246,19 +258,207 @@ VALIDATION CHECKLIST:
   ✗ Fewer than 2 sources cited: reject
   ✗ For thematic modes without theme or industry_theme populated: reject
   ✗ AI/semiconductor/datacenter hype names: reject
+  ✗ Any date, price, or figure you did not read directly off a search result: reject — use null/qualitative language instead
   ✓ Bounded downside with explicit floor (assets/cash/macro fundamental)
   ✓ Contrarian against current capital-flow / sell-side stance
   ✓ Identifiable catalyst with timeline
 """
 
 
+# ─── DeepSeek web-search path ───────────────────────────────────────────────
+#
+# DeepSeek has no native server-side search (unlike DashScope's
+# enable_search=True), so this drives an agentic tool-calling loop against
+# DeepSeek's Anthropic-compat endpoint, executing real searches via Tavily
+# (reusing the same _search_web/_TAVILY_TOOL the deep-research module uses)
+# with thinking enabled throughout. Unlike qwen_web_search, every retrieved
+# result is captured in citation_sink so generate_idea_of_the_day() can
+# verify the model's claimed sources against what it actually saw, rather
+# than trusting citations it may have fabricated (see _verify_and_clean_sources).
+
+_DEEPSEEK_MODEL = "deepseek-v4-flash"
+# Tavily is on a free-tier plan — kept deliberately small so a single idea
+# generation doesn't burn through shared quota. DeepSeek's own training
+# knowledge covers background/history; searches are reserved for the
+# handful of facts that must be CURRENT (latest price, latest quarter,
+# latest catalyst news). See _TAVILY_BUDGET_NOTE below for how that's
+# communicated to the model so quality doesn't drop with fewer searches.
+_DEEPSEEK_MAX_SEARCHES = 3
+
+_TAVILY_BUDGET_NOTE = """
+
+SEARCH BUDGET — USE SPARINGLY: you have a strict, limited budget of only
+3 web searches (Tavily is a shared, rate-limited resource — treat every
+search as costly). Do NOT spend searches on background/history/general
+company facts you already know from training — rely on your own knowledge
+for that. Reserve your 3 searches ONLY for facts that must be verified as
+CURRENT: (1) latest stock price / market cap, (2) most recent quarter's
+results or filing, (3) the specific current catalyst or news driving the
+thesis. Make each query maximally specific and information-dense (include
+the ticker, the metric, and a recent time window) so one search returns
+everything you need on that fact — do not issue a vague query and then a
+follow-up refinement; get it right in one shot per fact."""
+
+
+def _call_deepseek_web_search(
+    system_prompt: str,
+    user_prompt: str,
+    max_searches: int = _DEEPSEEK_MAX_SEARCHES,
+) -> tuple[Optional[str], list[dict]]:
+    """
+    DeepSeek v4-flash equivalent of qwen_web_search(). Returns (raw_text,
+    citation_sink) — citation_sink is every {title, url, cited_text, date}
+    actually retrieved via Tavily during this run. None/[] on failure.
+    """
+    import anthropic
+    from src.agents.industry.deep_research import _search_web, _TAVILY_TOOL
+
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY")
+    tavily_key = os.environ.get("TAVILY_API_KEY")
+    if not deepseek_key or not tavily_key:
+        logger.warning(
+            "_call_deepseek_web_search: missing DEEPSEEK_API_KEY or "
+            "TAVILY_API_KEY — cannot run DeepSeek idea generation."
+        )
+        return None, []
+
+    # Scoped to this function only — the Qwen path's _SYSTEM_PROMPT is
+    # untouched, since DashScope's native search isn't a shared/free
+    # resource the same way Tavily is.
+    system_prompt = system_prompt + _TAVILY_BUDGET_NOTE
+
+    client = anthropic.Anthropic(api_key=deepseek_key, base_url="https://api.deepseek.com/anthropic")
+    citation_sink: list[dict] = []
+    msgs: list[dict] = [{"role": "user", "content": user_prompt}]
+    n_searches = 0
+
+    try:
+        while n_searches < max_searches:
+            resp = client.messages.create(
+                model=_DEEPSEEK_MODEL,
+                max_tokens=8000,
+                system=system_prompt,
+                tools=[_TAVILY_TOOL],
+                thinking={"type": "enabled", "budget_tokens": 4000},
+                messages=msgs,
+            )
+            # Pass back the full content list (incl. thinking blocks) — DeepSeek
+            # requires reasoning_content to round-trip through multi-turn tool
+            # contexts, same as native Anthropic extended thinking.
+            msgs.append({"role": "assistant", "content": resp.content})
+
+            if resp.stop_reason == "tool_use":
+                tool_results = []
+                for blk in resp.content:
+                    if blk.type != "tool_use":
+                        continue
+                    # Every tool_use block in this response MUST get a matching
+                    # tool_result, even ones past the search cap — an unanswered
+                    # tool_use in the conversation history is invalid and can
+                    # get the whole call rejected (the exact "12/10 searches"
+                    # overshoot case deep_research.py's Tavily loop already
+                    # flagged). Once the cap is hit, stub the remainder instead
+                    # of silently dropping them.
+                    if n_searches < max_searches:
+                        query = blk.input.get("query", "")
+                        n_searches += 1
+                        result = _search_web(query, tavily_key, citation_sink=citation_sink)
+                    else:
+                        result = "Search budget reached — this query was not run."
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": blk.id,
+                        "content": result,
+                    })
+                if tool_results:
+                    msgs.append({"role": "user", "content": tool_results})
+                if n_searches >= max_searches:
+                    msgs.append({
+                        "role": "user",
+                        "content": "Search budget reached. Output the STRICT JSON idea now.",
+                    })
+            elif resp.stop_reason == "end_turn":
+                text = "".join(b.text for b in resp.content if b.type == "text")
+                return text, citation_sink
+            else:
+                break
+
+        # Search budget spent without an end_turn — force final synthesis.
+        resp = client.messages.create(
+            model=_DEEPSEEK_MODEL, max_tokens=8000, system=system_prompt,
+            thinking={"type": "enabled", "budget_tokens": 4000},
+            messages=msgs + [{"role": "user", "content": "Output the STRICT JSON idea now, no more tools."}],
+        )
+        text = "".join(b.text for b in resp.content if b.type == "text")
+        return text, citation_sink
+    except Exception as exc:
+        logger.exception("_call_deepseek_web_search failed: %s", exc)
+        return None, citation_sink
+
+
+def _verify_and_clean_sources(parsed: dict, citation_sink: list[dict]) -> dict:
+    """
+    Cross-check every claimed source against what was actually retrieved via
+    Tavily during this run. Prevents the model from presenting a fabricated
+    date (or a URL it never actually searched) as a verified citation.
+
+      - Source URL not found in citation_sink → dropped (unverifiable: either
+        hallucinated or recalled from training data, not from this run's
+        search results).
+      - URL found but claimed date disagrees with the retrieved date →
+        overwritten with the retrieved date (ground truth wins).
+      - URL found but Tavily had no date for it → date forced to null rather
+        than trust an invented one.
+    """
+    sources = parsed.get("sources")
+    if not isinstance(sources, list):
+        parsed["sources"] = []
+        return parsed
+
+    retrieved_by_url = {c["url"]: c for c in citation_sink if c.get("url")}
+
+    cleaned = []
+    dropped = 0
+    for src in sources:
+        if not isinstance(src, dict):
+            continue
+        url = src.get("url")
+        match = retrieved_by_url.get(url) if url else None
+        if match is None:
+            dropped += 1
+            logger.warning(
+                "generate_idea_of_the_day: dropping unverifiable source "
+                "(url not seen in this run's search results): %s", url,
+            )
+            continue
+        retrieved_date = match.get("date") or None
+        claimed_date = src.get("date")
+        if claimed_date and retrieved_date and str(claimed_date)[:10] != str(retrieved_date)[:10]:
+            logger.warning(
+                "generate_idea_of_the_day: source date mismatch for %s "
+                "(claimed=%s, retrieved=%s) — using retrieved date.",
+                url, claimed_date, retrieved_date,
+            )
+        src["date"] = retrieved_date
+        cleaned.append(src)
+
+    if dropped:
+        logger.info(
+            "generate_idea_of_the_day: dropped %d/%d unverifiable source(s)",
+            dropped, len(sources),
+        )
+    parsed["sources"] = cleaned
+    return parsed
+
+
 def generate_idea_of_the_day(
     exclude_tickers: list[str] | None = None,
     max_retries: int = 2,
     mode: str | None = None,
+    provider: str = "qwen",
 ) -> Optional[dict]:
     """
-    Asks Qwen-with-web-search to find and write up ONE contrarian idea.
+    Asks an LLM-with-web-search to find and write up ONE contrarian idea.
     Returns a dict matching the ContrarianIdea schema, or None on failure.
 
     `mode` lets the caller force a specific generation methodology:
@@ -267,25 +467,74 @@ def generate_idea_of_the_day(
     week instead of always-bottom-up US picks.
 
     `exclude_tickers` avoids duplicates with recent ideas.
+
+    `provider`: 'qwen' (default, live production path — DashScope native
+      search, no dependency on Tavily's free-tier quota) or 'deepseek'
+      (opt-in — deepseek-v4-flash + client-orchestrated Tavily search, since
+      DeepSeek has no native search of its own; claimed sources are verified
+      against what was actually retrieved before being returned, see
+      _verify_and_clean_sources). Both providers share the same GROUNDING
+      rule in _SYSTEM_PROMPT, so the anti-fabrication fix applies either way.
     """
     chosen_mode = mode or _pick_mode_for_today()
-    logger.info("generate_idea_of_the_day: mode=%s", chosen_mode)
+    logger.info("generate_idea_of_the_day: mode=%s provider=%s", chosen_mode, provider)
     user_prompt = _build_user_prompt(
         exclude_tickers=exclude_tickers, mode=chosen_mode,
     )
 
     raw = None
+    citation_sink: list[dict] = []
+    effective_provider = provider
     for attempt in range(max_retries + 1):
+        if effective_provider == "deepseek":
+            raw, citation_sink = _call_deepseek_web_search(_SYSTEM_PROMPT, user_prompt)
+            # Non-empty raw with ZERO real citations means Tavily failed on
+            # every search this attempt (_search_web catches per-call errors
+            # and returns a "Search error: ..." placeholder rather than
+            # raising, so a total Tavily outage doesn't surface as an
+            # exception — it surfaces as evidence-free output instead).
+            # Treat that as a failed attempt: retry, or fall through to the
+            # Qwen safety net, rather than shipping an idea built on nothing.
+            if raw and not citation_sink:
+                logger.warning(
+                    "generate_idea_of_the_day: deepseek attempt %d produced "
+                    "output but zero real citations (Tavily likely failed "
+                    "every search this attempt) — treating as failed.",
+                    attempt + 1,
+                )
+                raw = None
+        else:
+            raw = qwen_web_search(
+                user_prompt=user_prompt,
+                system_prompt=_SYSTEM_PROMPT,
+                max_chars=10000,
+            )
+        if raw and raw.strip():
+            break
+
+    # Safety net: if the DeepSeek path came back empty (or evidence-free)
+    # after every retry — DEEPSEEK_API_KEY/TAVILY_API_KEY missing, or Tavily
+    # failing every search this run — fall back to the legacy Qwen path once
+    # so the daily idea doesn't go dark, and doesn't ship ungrounded.
+    if not raw and provider == "deepseek":
+        logger.warning(
+            "generate_idea_of_the_day: deepseek path failed after %d attempt(s) "
+            "— falling back to qwen for this run.",
+            max_retries + 1,
+        )
+        effective_provider = "qwen"
         raw = qwen_web_search(
             user_prompt=user_prompt,
             system_prompt=_SYSTEM_PROMPT,
             max_chars=10000,
         )
-        if raw and raw.strip():
-            break
+        citation_sink = []
 
     if not raw:
-        logger.error("generate_idea_of_the_day: Qwen returned empty after %d attempts", max_retries + 1)
+        logger.error(
+            "generate_idea_of_the_day: %s returned empty after %d attempts",
+            effective_provider, max_retries + 1,
+        )
         return None
 
     # Extract JSON
@@ -293,7 +542,7 @@ def generate_idea_of_the_day(
         start = raw.find("{")
         end = raw.rfind("}")
         if start < 0 or end <= start:
-            logger.error("generate_idea_of_the_day: no JSON in Qwen response")
+            logger.error("generate_idea_of_the_day: no JSON in %s response", effective_provider)
             return None
         parsed = json.loads(raw[start : end + 1])
     except Exception as exc:
@@ -329,8 +578,12 @@ def generate_idea_of_the_day(
     # Fill meta
     parsed["idea_id"] = uuid.uuid4().hex[:16]
     parsed["generated_at"] = datetime.now(timezone.utc).isoformat()
-    parsed["model_used"] = "qwen3.6-plus"
-    parsed["cost_usd"] = 0.01  # rough estimate for Qwen + search
+    if effective_provider == "deepseek":
+        parsed["model_used"] = _DEEPSEEK_MODEL
+        parsed["cost_usd"] = 0.01  # rough estimate — DeepSeek token pricing + Tavily searches
+    else:
+        parsed["model_used"] = "qwen3.6-plus"
+        parsed["cost_usd"] = 0.01  # rough estimate for Qwen + search
 
     # Coerce optional list fields
     parsed.setdefault("sources", [])
@@ -339,6 +592,15 @@ def generate_idea_of_the_day(
         parsed["sources"] = []
     if not isinstance(parsed["key_risks"], list):
         parsed["key_risks"] = []
+
+    # DeepSeek path only: cross-check every claimed source against what was
+    # actually retrieved this run, dropping/correcting anything the model
+    # couldn't have legitimately seen (see GROUNDING rule in _SYSTEM_PROMPT —
+    # this is the enforced backstop for that instruction, not a replacement
+    # for it). Qwen's native search never exposes individual results, so
+    # there's nothing to verify against on that path.
+    if effective_provider == "deepseek" and citation_sink:
+        parsed = _verify_and_clean_sources(parsed, citation_sink)
 
     return parsed
 
@@ -350,8 +612,9 @@ if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    print("Generating today's contrarian idea via Qwen web search...")
-    idea = generate_idea_of_the_day()
+    cli_provider = "deepseek" if "--provider=deepseek" in sys.argv else "qwen"
+    print(f"Generating today's contrarian idea via {cli_provider} web search...")
+    idea = generate_idea_of_the_day(provider=cli_provider)
     if not idea:
         print("FAILED")
     else:
