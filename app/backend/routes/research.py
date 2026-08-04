@@ -16,11 +16,19 @@ Complacency (Ackman-style 4-pillar equity screener):
   GET  /research/ideas/complacency/{ticker}    -> per-ticker detail
   POST /research/ideas/complacency/refresh     -> run cohort fresh & persist
   GET  /research/ideas/complacency/runs        -> historical run list
+
+Fund Flow (geographic rotation across regional equity ETFs):
+  GET  /research/ideas/fundflow                -> latest snapshot
+  GET  /research/ideas/fundflow/summary        -> just the summary brief
+  GET  /research/ideas/fundflow/{region}       -> per-geography detail
+  POST /research/ideas/fundflow/refresh        -> run fresh & persist
+  GET  /research/ideas/fundflow/runs           -> historical run list
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -28,6 +36,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.backend.services import sw46_storage, complacency_storage
 from app.backend.services import momentum_storage
+from app.backend.services import fundflow_storage
 from app.backend.services import complacency_job_store as job_store
 from app.backend.services import contrarian_storage
 from app.backend.services import hk50_storage
@@ -39,6 +48,8 @@ from src.research_ideas.complacency.runner import run_complacency, score_one_tic
 from src.research_ideas.complacency.universe import list_tickers as complacency_list_tickers
 from src.research_ideas.momentum.runner import run_momentum
 from src.research_ideas.momentum.universe import list_tickers as momentum_list_tickers
+from src.research_ideas.fundflow.runner import run_fundflow
+from src.research_ideas.fundflow.universe import list_regions as fundflow_list_regions
 from src.research_ideas.contrarian.idea_generator import generate_idea_of_the_day
 from src.research_ideas.contrarian.chat_agent import chat_turn as contrarian_chat_turn
 
@@ -135,6 +146,7 @@ async def list_research_ideas():
     latest_compl = await asyncio.to_thread(complacency_storage.get_latest_complacency_run)
     latest_hk50 = await asyncio.to_thread(hk50_storage.get_latest_hk50_run)
     latest_momentum = await asyncio.to_thread(momentum_storage.get_latest_momentum_run)
+    latest_fundflow = await asyncio.to_thread(fundflow_storage.get_latest_fundflow_run)
 
     sw46_meta = {
         "id": "sw46",
@@ -293,7 +305,61 @@ async def list_research_ideas():
         "lead_short_tickers": _lead_tickers(mom_results, "SHORT"),
     }
 
-    return {"ideas": [iotd_meta, sw46_meta, complacency_meta, hk50_meta, momentum_meta]}
+    # Fund Flow — geographic rotation screen. The hero card shows the
+    # strongest inflow and outflow geographies plus the summary headline, so
+    # the catalogue conveys "where money is going" without a drill-in.
+    def _flow_preview(regions: list, want_inflow: bool) -> list[dict]:
+        sign = 1 if want_inflow else -1
+        picked = [r for r in regions if (r.get("composite") or 0.0) * sign > 0]
+        picked.sort(key=lambda r: (r.get("composite") or 0.0), reverse=want_inflow)
+        return [
+            {
+                "region": r.get("region"),
+                "label": r.get("label"),
+                "emoji": r.get("emoji"),
+                "composite": r.get("composite"),
+                "verdict": r.get("verdict"),
+                "rel_flow_z": r.get("rel_flow_z"),
+                "implied_flow_21d": r.get("implied_flow_21d"),
+            }
+            for r in picked[:4]
+        ]
+
+    ff_regions = (latest_fundflow.get("regions") or []) if latest_fundflow else []
+    ff_summary = (latest_fundflow.get("summary") or {}) if latest_fundflow else {}
+    fundflow_meta = {
+        "id": "fundflow",
+        "name": "Fund Flow (Geographic)",
+        "blurb": (
+            "Where money is moving across the key regional equity ETFs — US, "
+            "Europe, Japan, Korea, China, India, Hong Kong, Singapore and "
+            "Indonesia. The same three-pillar signed engine as the sector "
+            "momentum screen, applied to money instead of price: PRESSURE "
+            "(flow versus a region's own baseline), TURN (fresh inflection), "
+            "ACCELERATION (is it strengthening) sum to a -6..+6 composite. "
+            "Measured issuer creation/redemption corroborates the tape, and a "
+            "rotation overlay shows who is winning share of the world's bid."
+        ),
+        "ticker_count": len(fundflow_list_regions()),
+        "last_run_at": latest_fundflow.get("created_at") if latest_fundflow else None,
+        "as_of": latest_fundflow.get("as_of") if latest_fundflow else None,
+        "long_count": latest_fundflow.get("inflow_count") if latest_fundflow else None,
+        "short_count": latest_fundflow.get("outflow_count") if latest_fundflow else None,
+        "headline_metric_label": "Inflow / Outflow",
+        "is_dual_direction": True,
+        "flow_headline": ff_summary.get("headline"),
+        "flow_regime": ff_summary.get("regime"),
+        "flow_summary_source": ff_summary.get("summary_source"),
+        "top_inflow_regions": _flow_preview(ff_regions, want_inflow=True),
+        "top_outflow_regions": _flow_preview(ff_regions, want_inflow=False),
+    }
+
+    return {
+        "ideas": [
+            iotd_meta, sw46_meta, complacency_meta, hk50_meta,
+            momentum_meta, fundflow_meta,
+        ]
+    }
 
 
 # ─── Research Idea of the Day (contrarian deep-value) ────────────────────
@@ -1847,6 +1913,167 @@ async def refresh_momentum(as_of: str | None = None, max_workers: int = 6):
     except Exception as exc:
         tb = traceback.format_exc()
         logger.exception("refresh_momentum failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+# ─── Fund Flow (geographic rotation) endpoints ────────────────────────────
+
+
+_EMPTY_FUNDFLOW = {
+    "run_id": None,
+    "created_at": None,
+    "as_of": None,
+    "universe": "fundflow-geographic",
+    "region_count": 0,
+    "inflow_count": 0,
+    "outflow_count": 0,
+    "summary": None,
+    "regions": [],
+    "benchmarks": [],
+    "failed_regions": [],
+}
+
+
+@router.get("/ideas/fundflow")
+async def get_fundflow_cohort():
+    """Most-recent persisted geographic fund-flow snapshot."""
+    try:
+        latest = await asyncio.to_thread(fundflow_storage.get_latest_fundflow_run)
+        return latest or dict(_EMPTY_FUNDFLOW)
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_fundflow_cohort failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/fundflow/runs")
+async def list_fundflow_runs(limit: int = 20):
+    """Historical fund-flow runs (header-only — no region JSON)."""
+    try:
+        runs = await asyncio.to_thread(fundflow_storage.list_fundflow_runs, limit)
+        return {"runs": runs}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_fundflow_runs failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/fundflow/summary")
+async def get_fundflow_summary():
+    """Just the summary brief from the latest run — for the catalogue card."""
+    try:
+        latest = await asyncio.to_thread(fundflow_storage.get_latest_fundflow_run)
+        if not latest:
+            return {"as_of": None, "created_at": None, "summary": None}
+        return {
+            "as_of": latest.get("as_of"),
+            "created_at": latest.get("created_at"),
+            "summary": latest.get("summary"),
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_fundflow_summary failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/fundflow/{region}")
+async def get_fundflow_region(region: str):
+    """Per-geography detail — pulls from the latest run. Benchmarks included,
+    so /fundflow/WORLD resolves as well as /fundflow/JP."""
+    key = region.upper()
+    try:
+        latest = await asyncio.to_thread(fundflow_storage.get_latest_fundflow_run)
+        if not latest:
+            raise HTTPException(status_code=404, detail="No fund-flow run yet — refresh first")
+        for r in (latest.get("regions") or []) + (latest.get("benchmarks") or []):
+            if r.get("region") == key:
+                return r
+        raise HTTPException(status_code=404, detail=f"{key} not in the fund-flow universe")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_fundflow_region(%s) failed: %s", region, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/fundflow/refresh")
+async def refresh_fundflow(
+    as_of: str | None = None,
+    max_workers: int = 8,
+    narrate: bool = True,
+):
+    """
+    Trigger a fresh geographic fund-flow run. Synchronous (returns once
+    persisted) — ~27 ETFs x 3 FMP calls plus one DeepSeek summary call, so it
+    completes in well under two minutes.
+
+    `as_of` (ISO yyyy-mm-dd) points the whole screen at a historical date.
+    `narrate=false` skips the DeepSeek write-up and keeps the deterministic
+    summary — useful when the model is rate-limited or you want a run that
+    depends on nothing but FMP.
+    """
+    try:
+        cohort = await asyncio.to_thread(
+            run_fundflow,
+            as_of=as_of,
+            max_workers=max_workers,
+            save=True,
+            narrate_summary=narrate,
+        )
+        return {
+            "run_id": cohort.run_id,
+            "created_at": cohort.created_at,
+            "as_of": cohort.as_of,
+            "region_count": cohort.region_count,
+            "inflow_count": cohort.inflow_count,
+            "outflow_count": cohort.outflow_count,
+            "summary_source": cohort.summary.summary_source if cohort.summary else None,
+            "failed_regions": cohort.failed_regions,
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("refresh_fundflow failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/fundflow/weekly-run")
+async def run_fundflow_weekly(force: bool = True, notify: bool = True):
+    """
+    Run the WEEKLY fund-flow cycle on demand — the identical code path the
+    Monday scheduler takes, so testing the Slack push exercises the real
+    thing rather than a parallel copy.
+
+    force=true  (default) bypasses the 6-day idempotency guard.
+    notify=false runs and persists but skips the Slack post.
+    """
+    try:
+        from src.research_ideas.fundflow.scheduler import run_weekly_cycle
+
+        cohort = await asyncio.to_thread(run_weekly_cycle, force, notify)
+        if cohort is None:
+            return {
+                "ran": False,
+                "reason": (
+                    "skipped — a run completed within the last 6 days (pass force=true)"
+                    if not force else "run failed; see server logs"
+                ),
+            }
+        summary = cohort.get("summary") or {}
+        return {
+            "ran": True,
+            "run_id": cohort.get("run_id"),
+            "created_at": cohort.get("created_at"),
+            "region_count": cohort.get("region_count"),
+            "inflow_count": cohort.get("inflow_count"),
+            "outflow_count": cohort.get("outflow_count"),
+            "summary_source": summary.get("summary_source"),
+            "slack_configured": bool(os.environ.get("SLACK_WEBHOOK_URL")),
+            "notified": bool(notify and os.environ.get("SLACK_WEBHOOK_URL")),
+        }
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("run_fundflow_weekly failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 

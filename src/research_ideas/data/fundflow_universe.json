@@ -1,0 +1,131 @@
+{
+  "_comment": [
+    "Geographic fund-flow universe. Each region is a BASKET of US-listed",
+    "country/regional ETFs. Flows are aggregated in dollars across the whole",
+    "basket, so the region row answers 'how much money moved into this",
+    "geography', not 'how did one ticker trade'.",
+    "",
+    "  etf       — primary vehicle. Its price series drives the price-momentum",
+    "              overlay (flow-vs-price confirmation / divergence).",
+    "  basket    — every vehicle whose dollars count toward the region. Always",
+    "              includes the primary. Deliberately includes both broad and",
+    "              thematic sleeves (e.g. China = MCHI broad + FXI large-cap +",
+    "              KWEB internet) because rotation BETWEEN sleeves is itself a",
+    "              flow signal.",
+    "  hedged    — currency-hedged twin, where a liquid one exists. Used to",
+    "              decompose FX drag out of the unhedged USD return.",
+    "  bloc      — grouping for the summary narrative roll-up."
+  ],
+  "regions": [
+    {
+      "region": "US",
+      "label": "United States",
+      "emoji": "🇺🇸",
+      "bloc": "Developed",
+      "etf": "SPY",
+      "basket": ["SPY", "VTI", "QQQ"],
+      "hedged": null
+    },
+    {
+      "region": "EU",
+      "label": "Europe (EU)",
+      "emoji": "🇪🇺",
+      "bloc": "Developed",
+      "etf": "VGK",
+      "basket": ["VGK", "EZU", "IEUR"],
+      "hedged": "HEDJ"
+    },
+    {
+      "region": "JP",
+      "label": "Japan",
+      "emoji": "🇯🇵",
+      "bloc": "Developed",
+      "etf": "EWJ",
+      "basket": ["EWJ", "BBJP", "DXJ"],
+      "hedged": "DXJ"
+    },
+    {
+      "region": "KR",
+      "label": "Korea",
+      "emoji": "🇰🇷",
+      "bloc": "Asia EM",
+      "etf": "EWY",
+      "basket": ["EWY", "FLKR"],
+      "hedged": null
+    },
+    {
+      "region": "CN",
+      "label": "China",
+      "emoji": "🇨🇳",
+      "bloc": "Asia EM",
+      "etf": "MCHI",
+      "basket": ["MCHI", "FXI", "KWEB", "ASHR"],
+      "hedged": null
+    },
+    {
+      "region": "IN",
+      "label": "India",
+      "emoji": "🇮🇳",
+      "bloc": "Asia EM",
+      "etf": "INDA",
+      "basket": ["INDA", "EPI", "SMIN"],
+      "hedged": null
+    },
+    {
+      "region": "HK",
+      "label": "Hong Kong",
+      "emoji": "🇭🇰",
+      "bloc": "Asia EM",
+      "etf": "EWH",
+      "basket": ["EWH"],
+      "hedged": null
+    },
+    {
+      "region": "SG",
+      "label": "Singapore",
+      "emoji": "🇸🇬",
+      "bloc": "Asia EM",
+      "etf": "EWS",
+      "basket": ["EWS"],
+      "hedged": null
+    },
+    {
+      "region": "ID",
+      "label": "Indonesia",
+      "emoji": "🇮🇩",
+      "bloc": "Asia EM",
+      "etf": "EIDO",
+      "basket": ["EIDO"],
+      "hedged": null
+    }
+  ],
+  "benchmarks": [
+    {
+      "region": "WORLD",
+      "label": "Global (ACWI)",
+      "emoji": "🌍",
+      "bloc": "Benchmark",
+      "etf": "ACWI",
+      "basket": ["ACWI"],
+      "hedged": null
+    },
+    {
+      "region": "EM",
+      "label": "Emerging Markets",
+      "emoji": "🌐",
+      "bloc": "Benchmark",
+      "etf": "EEM",
+      "basket": ["EEM", "VWO"],
+      "hedged": null
+    },
+    {
+      "region": "DEVXUS",
+      "label": "Developed ex-US",
+      "emoji": "🌏",
+      "bloc": "Benchmark",
+      "etf": "VEA",
+      "basket": ["VEA", "EFA"],
+      "hedged": null
+    }
+  ]
+}

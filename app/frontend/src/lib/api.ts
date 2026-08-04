@@ -401,6 +401,23 @@ export interface SW46IdeaMeta {
   top_short_sectors?: MomentumSectorPreview[];
   lead_long_tickers?: MomentumTickerPreview[];
   lead_short_tickers?: MomentumTickerPreview[];
+  // Fund Flow-specific (geographic rotation). Reuses long_count/short_count
+  // for inflow/outflow counts so the shared card chrome needs no special case.
+  flow_headline?: string | null;
+  flow_regime?: string | null;
+  flow_summary_source?: string | null;
+  top_inflow_regions?: FundFlowRegionPreview[];
+  top_outflow_regions?: FundFlowRegionPreview[];
+}
+
+export interface FundFlowRegionPreview {
+  region: string;
+  label: string | null;
+  emoji: string | null;
+  composite: number | null;
+  verdict: string | null;
+  rel_flow_z: number | null;
+  implied_flow_21d: number | null;
 }
 
 export interface MomentumSectorPreview {
@@ -1200,6 +1217,201 @@ export function refreshMomentum(opts: { asOf?: string; maxWorkers?: number } = {
 
 export function listMomentumRuns(limit = 20): Promise<{ runs: MomentumRunHeader[] }> {
   return fetchJson(`${BASE}/research/ideas/momentum/runs?limit=${limit}`);
+}
+
+
+// ── Fund Flow (geographic rotation) ─────────────────────────────────────────
+//
+// The same three-pillar signed engine as the sector momentum screen, applied
+// to MONEY instead of price. Two quantities travel together and must not be
+// confused in the UI:
+//
+//   cmf_z_21 / rel_flow_z — tape-derived flow pressure, in SIGMA off a
+//     region's own baseline. Present for every region every day. Never render
+//     these as dollars or as a percentage of assets.
+//   implied_flow_* — measured issuer creation/redemption, in DOLLARS. Real
+//     money, but null wherever the share-count feed is stale, which is why it
+//     corroborates the composite rather than driving it.
+
+export type FlowVerdict =
+  | 'Accelerating-Inflow'
+  | 'Turning-Inflow'
+  | 'Neutral'
+  | 'Turning-Outflow'
+  | 'Accelerating-Outflow';
+
+export type FlowDirection = 'INFLOW' | 'OUTFLOW' | 'NEUTRAL';
+
+export type ImpliedQuality = 'good' | 'partial' | 'stale' | 'none';
+
+export interface FlowSparkPoint {
+  d: string;                          // ISO date
+  v: number;                          // flow pressure, sigma
+}
+
+export interface FundFlowRegionResult {
+  region: string;                     // "JP"
+  label: string;                      // "Japan"
+  emoji: string | null;
+  bloc: string | null;                // "Developed" | "Asia EM" | "Benchmark"
+  etf: string;
+  basket: string[];
+  is_benchmark: boolean;
+  bars: number;
+
+  aum: number | null;
+  tape_flow_5d: number | null;        // signed accumulation dollars (NOT flow)
+  tape_flow_21d: number | null;
+  tape_flow_63d: number | null;
+  tape_flow_126d: number | null;
+  tape_flow_252d: number | null;
+  avg_daily_turnover: number | null;
+
+  // The composite is scored on the 1-month window; 3/6/12-month reads sit
+  // alongside so a month can be judged against the longer trend.
+  cmf_21: number | null;              // -1..+1 raw
+  cmf_5: number | null;
+  cmf_63: number | null;
+  cmf_126: number | null;
+  cmf_252: number | null;
+  cmf_z_21: number | null;            // sigma off own baseline
+  cmf_z_63: number | null;
+  cmf_z_126: number | null;
+  cmf_z_252: number | null;
+  cmf_z_delta_21: number | null;
+  mfi_14: number | null;              // 0..100
+  flow_breadth_21: number | null;     // 0..1
+  turnover_surge: number | null;      // 21d / 63d turnover
+  flow_z_21: number | null;
+  flow_slope_21: number | null;
+  days_since_turn: number | null;
+
+  pressure_score: number;             // -2..+2
+  turn_score: number;
+  accel_score: number;
+  composite: number;                  // -6..+6
+  signal_strength: number;            // 0-100
+  composite_1m: number | null;        // where the composite stood N ago
+  composite_3m: number | null;
+  composite_6m: number | null;
+  composite_12m: number | null;
+
+  verdict: FlowVerdict;
+  direction: FlowDirection;
+  passes_gate: boolean;
+
+  rel_flow_z: number | null;          // own pressure - world pressure, sigma
+  rel_flow_z_1m: number | null;
+  rel_flow_z_delta: number | null;    // the rotation axis
+
+  price_composite: number | null;     // -6..+6 from the momentum engine
+  price_verdict: string | null;
+  r_21d: number | null;
+  r_63d: number | null;
+  r_126d: number | null;
+  r_252d: number | null;
+  fx_drag_21d: number | null;         // unhedged 1m return - hedged 1m return
+  divergence: string | null;          // confirming | flow-leads | price-leads
+
+  implied_flow_21d: number | null;    // measured USD
+  implied_flow_63d: number | null;
+  implied_flow_126d: number | null;
+  implied_flow_252d: number | null;
+  implied_flow_21d_pct_aum: number | null;
+  implied_flow_63d_pct_aum: number | null;
+  implied_flow_126d_pct_aum: number | null;
+  implied_flow_252d_pct_aum: number | null;
+  implied_quality: ImpliedQuality;
+
+  spark: FlowSparkPoint[];
+  flag_notes: string[];
+  justification: string | null;
+  data_notes: string[];
+}
+
+export interface FundFlowSummary {
+  headline: string;
+  regime: string;
+  net_implied_flow_21d: number | null;
+  implied_coverage: number;
+  inflow_count: number;
+  outflow_count: number;
+  key_flows: string[];
+  key_changes: string[];
+  implications: string[];
+  watch_items: string[];
+  summary_source: 'deepseek' | 'deterministic';
+  model_used: string | null;
+}
+
+export interface FundFlowCohort {
+  run_id: string | null;
+  created_at: string | null;
+  as_of: string | null;
+  universe: string;
+  region_count: number;
+  inflow_count: number;
+  outflow_count: number;
+  summary: FundFlowSummary | null;
+  regions: FundFlowRegionResult[];
+  benchmarks: FundFlowRegionResult[];
+  failed_regions: Array<{ region: string; reason: string }>;
+}
+
+export interface FundFlowRunHeader {
+  run_id: string;
+  created_at: string;
+  as_of: string | null;
+  universe: string;
+  region_count: number;
+  inflow_count: number;
+  outflow_count: number;
+  failed_regions: Array<{ region: string; reason: string }>;
+}
+
+export function getFundFlowCohort(): Promise<FundFlowCohort> {
+  return fetchJson(`${BASE}/research/ideas/fundflow`);
+}
+
+export function getFundFlowRegion(region: string): Promise<FundFlowRegionResult> {
+  return fetchJson(`${BASE}/research/ideas/fundflow/${encodeURIComponent(region.toUpperCase())}`);
+}
+
+export function getFundFlowSummary(): Promise<{
+  as_of: string | null;
+  created_at: string | null;
+  summary: FundFlowSummary | null;
+}> {
+  return fetchJson(`${BASE}/research/ideas/fundflow/summary`);
+}
+
+/**
+ * Trigger a fresh geographic fund-flow run. Synchronous — ~27 ETFs plus one
+ * DeepSeek summary call, around a minute end to end. `narrate: false` skips
+ * the model and keeps the deterministic summary.
+ */
+export function refreshFundFlow(opts: {
+  asOf?: string; maxWorkers?: number; narrate?: boolean;
+} = {}): Promise<{
+  run_id: string;
+  created_at: string;
+  as_of: string | null;
+  region_count: number;
+  inflow_count: number;
+  outflow_count: number;
+  summary_source: string | null;
+  failed_regions: Array<{ region: string; reason: string }>;
+}> {
+  const q = new URLSearchParams();
+  if (opts.asOf) q.set('as_of', opts.asOf);
+  if (opts.maxWorkers != null) q.set('max_workers', String(opts.maxWorkers));
+  if (opts.narrate === false) q.set('narrate', 'false');
+  const qs = q.toString();
+  return fetchJson(`${BASE}/research/ideas/fundflow/refresh${qs ? `?${qs}` : ''}`, { method: 'POST' });
+}
+
+export function listFundFlowRuns(limit = 20): Promise<{ runs: FundFlowRunHeader[] }> {
+  return fetchJson(`${BASE}/research/ideas/fundflow/runs?limit=${limit}`);
 }
 
 

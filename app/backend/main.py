@@ -75,6 +75,19 @@ async def startup_event():
     except Exception as exc:
         logger.warning("IV15 alert scheduler failed to start: %s", exc)
 
+    # Start the geographic fund-flow brief — fires WEEKLY on Monday at
+    # SGT 08:00 (= Mon UTC 00:00), which lands after Friday's US close so
+    # the brief covers a complete week. Scores the nine geographies, has
+    # DeepSeek write the summary, persists, and pushes a Block Kit digest
+    # to SLACK_WEBHOOK_URL. Idempotent: skips the slot if a run completed
+    # in the last 6 days. Disable via FUNDFLOW_SCHEDULER_DISABLED=true.
+    try:
+        from src.research_ideas.fundflow.scheduler import start_fundflow_scheduler
+        start_fundflow_scheduler()
+        logger.info("Fund-flow weekly scheduler started")
+    except Exception as exc:
+        logger.warning("Fund-flow weekly scheduler failed to start: %s", exc)
+
 
 async def _check_ollama():
     try:

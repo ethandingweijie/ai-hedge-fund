@@ -77,6 +77,11 @@ function ideaSides(id: string): Array<{ label: string; cls: string }> {
       { label: 'Long Ideas', cls: LONG_BADGE },
       { label: 'Short Ideas', cls: SHORT_BADGE },
     ];
+  if (id === 'fundflow')
+    return [
+      { label: 'Inflows', cls: LONG_BADGE },
+      { label: 'Outflows', cls: SHORT_BADGE },
+    ];
   return [];
 }
 
@@ -203,6 +208,7 @@ export function ResearchIdeasPage() {
     else if (idea.id === 'hk50') navigate('/research-ideas/hk50');
     else if (idea.id === 'complacency') navigate('/research-ideas/complacency');
     else if (idea.id === 'momentum') navigate('/research-ideas/momentum');
+    else if (idea.id === 'fundflow') navigate('/research-ideas/fundflow');
     else if (idea.id === 'idea_of_the_day' && idea.latest_idea_id) {
       navigate(`/research-ideas/idea-of-the-day/${idea.latest_idea_id}`);
     }
@@ -361,7 +367,7 @@ export function ResearchIdeasPage() {
                           </span>
                         ))}
                         <span className={`${sz.badge} px-2 py-1 rounded bg-primary/10 text-primary font-semibold uppercase tracking-wider`}>
-                          {idea.ticker_count} stocks
+                          {idea.ticker_count} {idea.id === 'fundflow' ? 'geographies' : 'stocks'}
                         </span>
                       </div>
                     )}
@@ -397,6 +403,14 @@ export function ResearchIdeasPage() {
                       )}
                       {idea.id === 'momentum' && idea.as_of && (
                         <span>As of: <span className="font-mono font-semibold text-foreground">{idea.as_of}</span></span>
+                      )}
+                      {idea.id === 'fundflow' && (idea.long_count != null || idea.short_count != null) && (
+                        <span>
+                          Inflow / Outflow:{' '}
+                          <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">{idea.long_count ?? 0}</span>
+                          {' / '}
+                          <span className="font-mono font-semibold text-red-700 dark:text-red-300">{idea.short_count ?? 0}</span>
+                        </span>
                       )}
                       {isAi && idea.latest_idea_conviction != null && (
                         <span>
@@ -662,6 +676,68 @@ export function ResearchIdeasPage() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Fund Flow preview — the summary headline (the whole
+                        point of the screen is readable in one line) plus the
+                        strongest inflow and outflow geographies. */}
+                    {idea.id === 'fundflow' &&
+                      (idea.flow_headline ||
+                       (idea.top_inflow_regions?.length ?? 0) > 0 ||
+                       (idea.top_outflow_regions?.length ?? 0) > 0) && (
+                      <div className="mt-3 pt-3 border-t border-border space-y-2.5">
+                        {idea.flow_headline && (
+                          <p className={`${sz.preview} text-foreground/85 leading-relaxed line-clamp-3`}>
+                            {idea.flow_headline}
+                          </p>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>
+                              Money moving in
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(idea.top_inflow_regions ?? []).map((r) => (
+                                <div
+                                  key={r.region}
+                                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`}
+                                  title={`${r.label ?? r.region} · ${r.verdict ?? ''}`}
+                                >
+                                  <span className="font-semibold text-foreground">{r.emoji} {r.label}</span>
+                                  <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${momentumColor(r.composite)}`}>
+                                    {r.composite != null ? (r.composite > 0 ? `+${r.composite.toFixed(0)}` : r.composite.toFixed(0)) : '—'}
+                                  </span>
+                                </div>
+                              ))}
+                              {(idea.top_inflow_regions?.length ?? 0) === 0 && (
+                                <span className="text-muted-foreground/60 text-[12px] italic">none</span>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className={`${sz.previewLabel} uppercase tracking-wider text-red-600 dark:text-red-400 mb-1.5`}>
+                              Money moving out
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(idea.top_outflow_regions ?? []).map((r) => (
+                                <div
+                                  key={r.region}
+                                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`}
+                                  title={`${r.label ?? r.region} · ${r.verdict ?? ''}`}
+                                >
+                                  <span className="font-semibold text-foreground">{r.emoji} {r.label}</span>
+                                  <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ${momentumColor(r.composite)}`}>
+                                    {r.composite != null ? r.composite.toFixed(0) : '—'}
+                                  </span>
+                                </div>
+                              ))}
+                              {(idea.top_outflow_regions?.length ?? 0) === 0 && (
+                                <span className="text-muted-foreground/60 text-[12px] italic">none</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
