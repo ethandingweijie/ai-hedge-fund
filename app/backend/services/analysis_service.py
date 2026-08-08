@@ -1305,13 +1305,17 @@ async def run_analysis_pipeline(
     on_phase: Callable[..., None],  # (phase, status, summary, reasoning, ticker, timestamp, partial_data)
     selected_agents: list[str] | None = None,
     user_id: Optional[int] = None,
+    run_id: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
     Run the 10-phase advanced pipeline for a ticker.
     Streams progress via on_phase callback.
     Returns (run_id, result_dict).
+
+    run_id may be supplied by the caller (queue/enqueue path) so SSE clients
+    can subscribe to progress:{run_id} before the job starts executing.
     """
-    run_id = str(uuid.uuid4())
+    run_id = run_id or str(uuid.uuid4())
     loop = asyncio.get_event_loop()
     progress_queue: asyncio.Queue = asyncio.Queue()
     result_container: dict = {}
