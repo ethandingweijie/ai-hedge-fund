@@ -947,7 +947,9 @@ export function ReportPage() {
           {/* Greeting — left-aligned: the top-left hamburger is gone (avatar
               sits top-right), so the hero uses the full left gutter. */}
           <div className="px-4 text-left">
-            <p className="text-[15px] text-muted-foreground">
+            {/* Same size/weight as the h1 below — the greeting reads as the
+                first line of the hero headline, not a caption. */}
+            <p className="text-[24px] leading-[1.15] font-semibold tracking-tight text-foreground">
               Hello, {user?.name ?? user?.email ?? 'friend'}
             </p>
             <h1 className="mt-1 text-[24px] leading-[1.15] font-semibold tracking-tight text-foreground">
