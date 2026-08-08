@@ -245,9 +245,9 @@ def _parse_llm_json(raw: str, extractor_name: str = "") -> dict | list | None:
                 pass
 
     # All strategies failed — log truncated preview for ops visibility
-    _preview = text[:300].replace("\n", " ⏎ ")
+    _preview = text[:300].replace("\n", " | ")
     print(
-        f"  [llm_json_parse] ⚠ {extractor_name or 'extractor'} failed to parse "
+        f"  [llm_json_parse] {extractor_name or 'extractor'} failed to parse "
         f"(len={len(text)}): {_preview}..."
     )
     return None
@@ -429,12 +429,14 @@ _WEB_SEARCH_TOOL = {
     "max_uses": MAX_SEARCHES,
 }
 
-# Minimum searches required before we consider Tier 1 "live".
-# Even 1 confirmed live web_search call proves the tool ran and the model
-# touched the open web — far better than falling through to training data.
-# Previous value of 3 caused over-aggressive fallback to knowledge_only when
-# the API completed quickly or returned few tool calls on straightforward queries.
-_MIN_LIVE_SEARCHES = 1
+# Minimum confirmed server-side searches before Tier 1 counts as "live".
+# C4 (Workstream C): raised 1 → 4. One search proved the tool ran, but a
+# single-query evidence base is too thin to feed the valuation model — the
+# DCF calibration and sector extractors need multiple corroborated sources.
+# Below this floor the run fires one follow-up nudge for more searches
+# (reusing the synthesis-nudge mechanism) and, if still thin, is tagged
+# research_degraded so downstream consumers can see the evidence is weak.
+_MIN_LIVE_SEARCHES = 4
 
 
 # ── Section extractor ──────────────────────────────────────────────────────────
@@ -1062,7 +1064,7 @@ def _extract_saas_metrics(
     except Exception as _exc:
         # Surface the real error — previously silent "return {}" hid Qwen
         # rate limits, auth errors, and API timeouts.
-        print(f"  [saas_metrics {ticker}] ⚠ extractor FAILED: {type(_exc).__name__}: {_exc}")
+        print(f"  [saas_metrics {ticker}] extractor FAILED: {type(_exc).__name__}: {_exc}")
         return {}
 
 
@@ -1189,6 +1191,7 @@ def _extract_bank_metrics(
     sections: dict[str, str],
     deep_research: str,
     ticker: str,
+    retry_directive: str = "",
 ) -> dict:
     """
     LLM pass to extract bank-specific metrics that override DCF engine defaults:
@@ -1279,7 +1282,7 @@ def _extract_bank_metrics(
                 "    'X bps NIM sensitivity per 1 bp rate change'. Report the X value directly.\n"
                 "  * forward_*_guidance: verbatim or near-verbatim management quote describing\n"
                 "    forward NIM / loan growth expectations. Keep ≤200 chars.\n"
-            ),
+            ) + retry_directive,
             messages=[{
                 "role": "user",
                 "content": (
@@ -1336,6 +1339,7 @@ def _extract_insurance_metrics(
     sections: dict[str, str],
     deep_research: str,
     ticker: str,
+    retry_directive: str = "",
 ) -> dict:
     """
     Insurance KPIs extractor. As of PR #1 (sector_kpi_framework), this
@@ -1374,6 +1378,7 @@ def _extract_insurance_metrics(
             return extract_via_framework(
                 sdk_client, model_name, sections, deep_research, ticker,
                 profile_name="Insurance",
+                retry_directive=retry_directive,
             )
     except Exception:
         pass   # fall through to legacy body
@@ -1428,7 +1433,7 @@ def _extract_insurance_metrics(
                 "  * new_money_yield: forward yield on newly invested money — distinct from\n"
                 "    book yield (which is FMP-derivable). Look for 'reinvestment yield of X%',\n"
                 "    'new money yield', 'portfolio yield rolling toward X%'.\n"
-            ),
+            ) + retry_directive,
             messages=[{
                 "role": "user",
                 "content": (
@@ -1438,10 +1443,9 @@ def _extract_insurance_metrics(
             }],
         )
         raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
+        # C3: robust parse (preamble/postamble/mixed-fence tolerant) — the
+        # legacy json.loads silently dropped responses Qwen wrapped in prose.
+        parsed = _parse_llm_json(raw, extractor_name="insurance_metrics")
         if not isinstance(parsed, dict):
             return {}
 
@@ -1484,6 +1488,7 @@ def _extract_reit_metrics(
     sections: dict[str, str],
     deep_research: str,
     ticker: str,
+    retry_directive: str = "",
 ) -> dict:
     """
     LLM pass over the deep research report to extract REIT-specific metrics
@@ -1628,7 +1633,7 @@ def _extract_reit_metrics(
                 "      → {\"data_center\": 0.95, \"interconnection\": 0.05}\n"
                 "    Do NOT force 'IT parks' → 'office' or 'net-lease' → 'retail'. Preserve\n"
                 "    the disclosed category taxonomy.\n"
-            ),
+            ) + retry_directive,
             messages=[{
                 "role": "user",
                 "content": (
@@ -1720,6 +1725,7 @@ def _extract_pipeline_assets(
     sections: dict[str, str],
     deep_research: str,
     ticker: str,
+    retry_directive: str = "",
 ) -> list[dict]:
     """
     LLM pass over the deep research report to extract individual biopharma
@@ -1815,7 +1821,7 @@ def _extract_pipeline_assets(
                 "  * If the company is a biopharma but no pipeline details are discussed, "
                 "return [].\n"
                 "  * Maximum 15 assets — focus on the most material.\n"
-            ),
+            ) + retry_directive,
             messages=[{
                 "role": "user",
                 "content": (
@@ -2601,6 +2607,570 @@ def _extract_citation_registry(
         return []
 
 
+# ── C6: deterministic research↔financials consistency check ──────────────────
+
+def _check_research_financial_consistency(
+    sections: dict[str, str],
+    raw_financials: dict | None,
+    ticker: str,
+) -> dict:
+    """Deterministic research↔books consistency check (no LLM).
+
+    Compares headline numbers in Section 2A of the research (revenue growth,
+    net margin, revenue magnitude) against raw_financials (FMP line items).
+    Only unit-agnostic comparisons (growth rates, margins) plus a
+    scale-normalised revenue magnitude check — raw_financials units vary by
+    source, so the magnitude check tries common scales before flagging.
+
+    Returns {check_name: {books, research_claim, divergence, section}} for
+    every HIGH-CONFIDENCE divergence, {} otherwise. Ambiguous research text
+    (no parseable claim) is silently skipped — we only flag what we can prove.
+    Downstream consumers: financial_editor audit context + pipeline return
+    dict (research_financial_divergences).
+    """
+    flags: dict = {}
+    if not raw_financials or not isinstance(raw_financials, dict):
+        return flags
+    section_2a = sections.get("2a") or sections.get("2A") or ""
+    if not section_2a:
+        return flags
+
+    fy_keys = sorted(
+        k for k, v in raw_financials.items() if isinstance(v, dict)
+    )
+    if len(fy_keys) < 2:
+        return flags
+    latest = raw_financials[fy_keys[-1]]
+    prev   = raw_financials[fy_keys[-2]]
+
+    def _num(d: dict, key: str) -> float | None:
+        v = d.get(key)
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    rev      = _num(latest, "revenue")
+    prev_rev = _num(prev, "revenue")
+    ni       = _num(latest, "net_income")
+
+    def _median(vals: list[float]) -> float:
+        vals = sorted(vals)
+        n = len(vals)
+        return vals[n // 2] if n % 2 else (vals[n // 2 - 1] + vals[n // 2]) / 2
+
+    # ── Revenue growth (unit-free) ────────────────────────────────────────────
+    if rev and prev_rev and prev_rev > 0:
+        books_growth = rev / prev_rev - 1
+        _claims = re.findall(
+            r"(?i)revenue[^.%\n]{0,60}?(?:grew|growth|increase[d]?|up|rose)"
+            r"[^.%\n]{0,40}?(\d{1,2}(?:\.\d)?)\s*%",
+            section_2a,
+        ) + re.findall(
+            r"(?i)(\d{1,2}(?:\.\d)?)\s*%[^.\n]{0,40}?revenue\s+growth",
+            section_2a,
+        )
+        _claims_pct = [float(c) for c in _claims if 0 <= float(c) <= 200]
+        if _claims_pct:
+            research_growth = _median(_claims_pct) / 100
+            if abs(research_growth - books_growth) > 0.05:
+                flags["revenue_growth"] = {
+                    "books":          round(books_growth, 4),
+                    "research_claim": round(research_growth, 4),
+                    "divergence_pp":  round(abs(research_growth - books_growth) * 100, 1),
+                    "section":        "2a",
+                }
+
+    # ── Net margin (unit-free) ────────────────────────────────────────────────
+    if rev and rev > 0 and ni is not None:
+        books_margin = ni / rev
+        _m_claims = re.findall(
+            r"(?i)net\s+(?:income\s+)?margin[^.%\n]{0,30}?(\d{1,2}(?:\.\d)?)\s*%",
+            section_2a,
+        )
+        _m_pct = [float(c) for c in _m_claims if -50 <= float(c) <= 60]
+        if _m_pct:
+            research_margin = _median(_m_pct) / 100
+            if abs(research_margin - books_margin) > 0.03:
+                flags["net_margin"] = {
+                    "books":          round(books_margin, 4),
+                    "research_claim": round(research_margin, 4),
+                    "divergence_pp":  round(abs(research_margin - books_margin) * 100, 1),
+                    "section":        "2a",
+                }
+
+    # ── Revenue magnitude (scale-normalised) ─────────────────────────────────
+    # Research phrasing: "revenue of $3.9B", "$3,954 million revenue", ...
+    if rev and rev > 0:
+        _r_claims = re.findall(
+            r"(?i)(?:revenue[^$€\n]{0,40}?|of\s+)\$\s?(\d{1,4}(?:[,.]\d{1,3})*)"
+            r"\s*(billion|bn|b\b|million|mm|m\b)?",
+            section_2a,
+        )
+        for _amt_s, _unit in _r_claims[:5]:
+            try:
+                _amt = float(_amt_s.replace(",", ""))
+            except ValueError:
+                continue
+            _unit_l = (_unit or "").lower()
+            if _unit_l.startswith("b"):
+                research_rev_usd = _amt * 1e9
+            elif _unit_l.startswith("m"):
+                research_rev_usd = _amt * 1e6
+            else:
+                research_rev_usd = _amt  # bare number — scale-ambiguous, try all
+            # Try common books scales; books may be raw USD, thousands, M or B
+            for _scale in (1.0, 1e3, 1e6, 1e9):
+                _books_usd = rev * _scale
+                if _books_usd <= 0:
+                    continue
+                _ratio = research_rev_usd / _books_usd
+                if 0.75 <= _ratio <= 1.25:
+                    break
+            else:
+                flags["revenue_magnitude"] = {
+                    "books_raw":       rev,
+                    "research_claim":  research_rev_usd,
+                    "note":            "no books scale within ±25% of the research figure",
+                    "section":         "2a",
+                }
+                break  # one flag is enough
+
+    if flags:
+        print(
+            f"  [consistency {ticker}] research-vs-books divergences: "
+            f"{sorted(flags.keys())}"
+        )
+    return flags
+
+
+# ── C4/C5 helpers (module-level so they're unit-testable) ────────────────────
+
+_LIVE_RESEARCH_TIERS = ("anthropic_web", "tavily", "qwen_web")
+
+
+def _research_evidence_state(research_tier: str, search_count: int) -> tuple[bool, bool, str]:
+    """C4 live-data gate.
+
+    Returns (is_live, is_degraded, label):
+      is_live     — live tier AND confirmed searches >= floor
+      is_degraded — live tier but BELOW the search floor: the evidence base
+                    is too thin for the valuation model to trust blindly
+      label       — progress suffix for the "Deep research complete" line
+    """
+    is_live     = research_tier in _LIVE_RESEARCH_TIERS and search_count >= _MIN_LIVE_SEARCHES
+    is_degraded = research_tier in _LIVE_RESEARCH_TIERS and search_count < _MIN_LIVE_SEARCHES
+    label = (
+        " [LIVE WEB DATA]" if is_live else
+        " [DEGRADED — below live-search floor]" if is_degraded else
+        " [TRAINING DATA — no live searches]"
+    )
+    return is_live, is_degraded, label
+
+
+def _harvest_block_citations(blocks, seen_urls: set, server_citations: list) -> int:
+    """Collect server-verified web_search_result_location citations from
+    response blocks into server_citations (deduped by URL). Returns count
+    of newly added citations."""
+    added = 0
+    for blk in blocks:
+        if not hasattr(blk, "text"):
+            continue
+        for cit in getattr(blk, "citations", []) or []:
+            if getattr(cit, "type", "") != "web_search_result_location":
+                continue
+            url = getattr(cit, "url", "") or ""
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            server_citations.append({
+                "url":        url,
+                "title":      getattr(cit, "title",      "") or "",
+                "cited_text": (getattr(cit, "cited_text", "") or "")[:150],
+            })
+            added += 1
+    return added
+
+
+def _append_continuation(
+    sdk_client, model_name: str, system_prompt: str,
+    human_msg: str, prior_content, text: str,
+    seen_urls: set, server_citations: list, ticker: str,
+) -> str:
+    """C5 truncation repair.
+
+    stop_reason == "max_tokens" means synthesis was cut off mid-report
+    (typically section 2F, which the investor / scenario / trap agents
+    consume). One tool-free continuation call lets the model finish from
+    exactly where it stopped; the continuation is appended. On any failure
+    the truncated report is kept (some report beats none).
+    """
+    if not text.strip():
+        return text
+    try:
+        _cont_resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=MAX_TOKENS,
+            system=system_prompt,
+            # No tools — the continuation only writes. The assistant turn
+            # carries the truncated report so the model knows where it stopped.
+            messages=[
+                {"role": "user",      "content": human_msg},
+                {"role": "assistant", "content": prior_content},
+                {"role": "user",      "content": (
+                    "Your previous response was cut off mid-report because it hit "
+                    "the output token limit. Continue the report from EXACTLY where "
+                    "it stopped. Do not repeat anything already written, and do not "
+                    "run any more searches — just finish the remaining sub-sections."
+                )},
+            ],
+        )
+    except Exception as _cont_err:
+        progress.update_status(
+            "deep_research", ticker,
+            f"Tier 1: continuation failed "
+            f"({type(_cont_err).__name__}: {str(_cont_err)[:60]}) "
+            "— keeping truncated report"
+        )
+        return text
+    _cont_text = _strip_narration(
+        "".join(b.text for b in _cont_resp.content if hasattr(b, "text"))
+    )
+    if _cont_text.strip():
+        _harvest_block_citations(_cont_resp.content, seen_urls, server_citations)
+        progress.update_status(
+            "deep_research", ticker,
+            f"Tier 1: continuation appended (+{len(_cont_text):,} chars) "
+            "— truncation repaired"
+        )
+        return text.rstrip() + "\n\n" + _cont_text
+    return text
+
+
+def _coverage_nudge(
+    sdk_client, model_name: str, system_prompt: str,
+    human_msg: str, prior_content, text: str, n_searches: int,
+    seen_urls: set, server_citations: list, ticker: str,
+) -> tuple[str, int]:
+    """C4 search-coverage nudge.
+
+    Fewer confirmed server searches than the live floor → thin evidence base
+    for the valuation model. Ask for more targeted searches and a re-issued
+    report, reusing the multi-turn continuation mechanism. Returns
+    (text, n_searches): the re-issued report supersedes the thin one when the
+    nudge produced text; otherwise the original report is kept (never lose
+    research over a failed nudge).
+    """
+    _needed = max(4, _MIN_LIVE_SEARCHES - n_searches)
+    progress.update_status(
+        "deep_research", ticker,
+        f"Tier 1: only {n_searches}/{_MIN_LIVE_SEARCHES} live searches — "
+        f"nudging for {_needed} more before accepting..."
+    )
+    try:
+        _more_resp = sdk_client.messages.create(
+            model=model_name,
+            max_tokens=MAX_TOKENS,
+            system=system_prompt,
+            tools=[_WEB_SEARCH_TOOL],
+            messages=[
+                {"role": "user",      "content": human_msg},
+                {"role": "assistant", "content": prior_content},
+                {"role": "user",      "content": (
+                    f"You have only run {n_searches} web search(es) so far, which is "
+                    "not enough evidence for a valuation-grade report. Run at least "
+                    f"{_needed} MORE targeted searches — e.g. latest earnings/guidance, "
+                    "competitor dynamics, regulatory developments, analyst views — and "
+                    "then RE-ISSUE the complete Section 2 report (all sub-sections 2A "
+                    "through 2F) incorporating the new findings."
+                )},
+            ],
+        )
+    except Exception as _more_err:
+        progress.update_status(
+            "deep_research", ticker,
+            f"Tier 1: search-coverage nudge failed "
+            f"({type(_more_err).__name__}: {str(_more_err)[:60]}) "
+            f"— keeping original report ({n_searches} searches)"
+        )
+        return text, n_searches
+
+    _more_text_raw = ""
+    for block in _more_resp.content:
+        btype = getattr(block, "type", None)
+        if btype in ("server_tool_use", "tool_use") and getattr(block, "name", None) == "web_search":
+            n_searches += 1
+        if hasattr(block, "text"):
+            _more_text_raw += block.text
+    _harvest_block_citations(_more_resp.content, seen_urls, server_citations)
+
+    _more_text = _strip_narration(_more_text_raw)
+    if _more_text.strip():
+        progress.update_status(
+            "deep_research", ticker,
+            f"Tier 1: search-coverage nudge succeeded — now "
+            f"{n_searches} searches, report re-issued ({len(_more_text):,} chars)"
+        )
+        return _more_text, n_searches
+    progress.update_status(
+        "deep_research", ticker,
+        f"Tier 1: search-coverage nudge returned no text — "
+        f"keeping original report ({n_searches} searches)"
+    )
+    return text, n_searches
+
+
+# ── Shared extractor fan-out (fresh + cache/delta paths — Workstream C) ──────
+#
+# C1 (research→valuation quality): single implementation of the sector
+# extractor fan-out, shared by the fresh-research path AND the cache-hit /
+# delta paths. Before this refactor, cached runs (<3d) and delta runs (3–14d)
+# returned early and skipped ALL extractors — saas_metrics, bank_metrics,
+# reit_metrics, pipeline_assets, insurance_metrics, framework_metrics,
+# segment_scenarios came back empty — starving the DCF engine and blanking
+# the sector cards on the majority of live runs (most runs are cache hits).
+
+# C3 — sharper-prompt directive appended to an extractor's system prompt when
+# its first call returned no usable values (mirrors the saas_metrics internal
+# retry that recovered ~20% of empty first calls on Qwen).
+_EXTRACTOR_RETRY_DIRECTIVE = (
+    "\n\nSECOND-ATTEMPT INSTRUCTIONS: Your previous response to this exact "
+    "request contained no usable values. The values are very likely present "
+    "in the text. Re-read it carefully — including tables, bullet lists and "
+    "the Section 2F KPI block — convert percentages to decimals, and return "
+    "every KPI you can substantiate. Only return an empty object/array if "
+    "the text genuinely contains none of these metrics."
+)
+
+# Extractors eligible for the one-shot retry-on-empty (C3). saas_metrics has
+# its own internal sharper-prompt retry; dcf_calibration / segment_scenarios
+# are narrative extractors where an empty result is usually legitimate.
+_RETRY_ON_EMPTY_EXTRACTORS = {
+    "bank_metrics", "reit_metrics", "insurance_metrics",
+    "pipeline_assets", "framework_metrics",
+}
+
+
+def _is_empty_extraction(out) -> bool:
+    """True when an extractor output carries no usable payload."""
+    if out is None:
+        return True
+    if isinstance(out, list):
+        return len(out) == 0
+    if isinstance(out, dict):
+        return not any(
+            v not in (None, "", [], {})
+            for k, v in out.items()
+            if k != "evidence" and not k.startswith("_")
+        )
+    return False
+
+
+def _run_extractor_fanout(
+    sdk_client,
+    synthesis_model: str,
+    sections: dict[str, str],
+    final_report: str,
+    ticker: str,
+    sector: str,
+    profile_name: str,
+    raw_financials: dict,
+    precomputed: dict | None = None,
+) -> tuple[dict, list[dict]]:
+    """Run the sector extractor fan-out in parallel.
+
+    Returns (results, failures):
+      results  — {extractor_name: dict|list}; empty container when an
+                 extractor produced nothing.
+      failures — [{extractor, stage, detail}] where stage is "exception"
+                 (call raised) or "empty" (still no usable values after the
+                 retry-on-empty). Makes silent {}s diagnosable from
+                 full_result_json / Railway logs (C3).
+
+    precomputed — outputs already obtained upstream (e.g. dcf_calibration
+                 re-extracted on the cache path); reused without another
+                 LLM call.
+    """
+    agent_id = "deep_research"
+    precomputed = precomputed or {}
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from src.agents.industry.sector_prompts import needs_extractor
+
+    # ── Sub-profile dispatch (PR #6) — fires for ALL profiles in
+    # SECTOR_KPI_FRAMEWORK, including those with a dedicated legacy
+    # extractor (see v3.14 note on the fresh path).
+    def _framework_metrics_dispatch(retry_directive: str = ""):
+        if not profile_name:
+            return {}
+        try:
+            from src.data.sector_kpi_framework import (
+                SECTOR_KPI_FRAMEWORK,
+                extract_via_framework,
+            )
+            if profile_name not in SECTOR_KPI_FRAMEWORK:
+                return {}
+            return extract_via_framework(
+                sdk_client, synthesis_model, sections, final_report, ticker,
+                profile_name=profile_name,
+                retry_directive=retry_directive,
+            )
+        except Exception:
+            return {}
+
+    # Sector-aware extractor gating — skips extractors that would almost
+    # certainly return {} for the given (sector, profile_name).
+    _all_extractors: dict[str, callable] = {
+        "dcf_calibration":   lambda rd="": _extract_dcf_calibration(sdk_client, synthesis_model, sections, ticker),
+        "segment_scenarios": lambda rd="": _extract_segment_scenarios(sdk_client, synthesis_model, sections, final_report, ticker),
+        "pipeline_assets":   lambda rd="": _extract_pipeline_assets(sdk_client, synthesis_model, sections, final_report, ticker, retry_directive=rd),
+        "reit_metrics":      lambda rd="": _extract_reit_metrics(sdk_client, synthesis_model, sections, final_report, ticker, retry_directive=rd),
+        "bank_metrics":      lambda rd="": _extract_bank_metrics(sdk_client, synthesis_model, sections, final_report, ticker, retry_directive=rd),
+        "saas_metrics":      lambda rd="": _extract_saas_metrics(sdk_client, synthesis_model, sections, final_report, ticker),
+        "insurance_metrics": lambda rd="": _extract_insurance_metrics(sdk_client, synthesis_model, sections, final_report, ticker, retry_directive=rd),
+        "framework_metrics": _framework_metrics_dispatch,
+    }
+    _extractor_tasks = {
+        name: fn for name, fn in _all_extractors.items()
+        if needs_extractor(name, sector, profile_name, ticker=ticker)
+    }
+    # Railway stdout visibility: which extractors will fire for this run.
+    _skipped = [n for n in _all_extractors if n not in _extractor_tasks]
+    print(
+        f"  Extractors fan-out ({ticker} · sector={sector!r} · "
+        f"profile={profile_name!r}): running {sorted(_extractor_tasks)} | "
+        f"skipped {sorted(_skipped)} | mode=PARALLEL"
+        + (f" | precomputed={sorted(precomputed)}" if precomputed else "")
+    )
+
+    _failures: list[dict] = []
+    _results: dict = {}
+
+    # Precomputed entries short-circuit (no LLM call)
+    for _name in list(_extractor_tasks):
+        if _name in precomputed:
+            _results[_name] = precomputed[_name]
+            print(f"  Extractor [{_name}] reused precomputed output (no LLM call)")
+
+    _to_run = {n: fn for n, fn in _extractor_tasks.items() if n not in _results}
+
+    def _log_result(_name: str, _out) -> None:
+        if isinstance(_out, list):
+            _summary = f"list[{len(_out)}]"
+        elif isinstance(_out, dict):
+            _populated = {k: v for k, v in _out.items() if v not in (None, "", [], {})}
+            _summary = (
+                f"{len(_populated)}/{len(_out)} fields populated: "
+                f"{sorted(_populated)}" if _populated
+                else f"EMPTY dict ({len(_out)} null fields)"
+            )
+        else:
+            _summary = f"{type(_out).__name__}"
+        _status_icon = "OK" if _out else "EMPTY"
+        print(f"  Extractor [{_name}] {_status_icon} -> {_summary}")
+
+    def _collect(_futures: dict, _retry_tag: str = "") -> None:
+        for _fut in as_completed(_futures):
+            _name = _futures[_fut]
+            try:
+                _out = _fut.result()
+                _results[_name] = _out
+                _log_result(_name, _out)
+            except Exception as _exc:
+                progress.update_status(agent_id, ticker,
+                                       f"Extractor {_name} failed: {_exc}")
+                _results[_name] = {} if _name != "pipeline_assets" else []
+                _failures.append({
+                    "extractor": _name,
+                    "stage":     "exception",
+                    "detail":    f"{type(_exc).__name__}: {str(_exc)[:200]}",
+                })
+                # Traceback to stdout so the real error is visible, not just
+                # the "failed: X" summary.
+                print(f"  Extractor [{_name}] FAILED{_retry_tag}: "
+                      f"{type(_exc).__name__}: {_exc}")
+                import traceback as _tb
+                _tb.print_exc()
+
+    if _to_run:
+        with ThreadPoolExecutor(max_workers=6) as _ex:
+            _collect({_ex.submit(fn, ""): name for name, fn in _to_run.items()})
+
+    # ── C3 retry-on-empty: one sharper-prompt retry for eligible extractors
+    _retry_tasks = {
+        n: _all_extractors[n]
+        for n, _out in _results.items()
+        if n in _to_run
+        and n in _RETRY_ON_EMPTY_EXTRACTORS
+        and _is_empty_extraction(_out)
+    }
+    if _retry_tasks:
+        print(
+            f"  Extractors retry-on-empty ({ticker}): "
+            f"{sorted(_retry_tasks)} — one sharper-prompt retry each"
+        )
+        with ThreadPoolExecutor(max_workers=len(_retry_tasks)) as _ex:
+            _futures = {
+                _ex.submit(fn, _EXTRACTOR_RETRY_DIRECTIVE): name
+                for name, fn in _retry_tasks.items()
+            }
+            for _fut in as_completed(_futures):
+                _name = _futures[_fut]
+                try:
+                    _out2 = _fut.result()
+                    if not _is_empty_extraction(_out2):
+                        _results[_name] = _out2
+                        print(f"  Extractor [{_name}] retry recovered data:")
+                        _log_result(_name, _out2)
+                    else:
+                        print(f"  Extractor [{_name}] retry still empty")
+                except Exception as _exc:
+                    print(f"  Extractor [{_name}] retry failed: "
+                          f"{type(_exc).__name__}: {_exc}")
+
+    # Record still-empty outputs so silent {}s are diagnosable (C3)
+    for _name in sorted(_extractor_tasks):
+        if _name in _results and _is_empty_extraction(_results[_name]):
+            _failures.append({
+                "extractor": _name,
+                "stage":     "empty",
+                "detail":    "no usable values after all attempts",
+            })
+
+    # ── SaaS FMP self-compute fallback — fills null fields from raw
+    # financials (Rule of 40, Magic Number, CAC Payback, Billings Growth).
+    # Runs whenever the saas extractor was in scope, identical to the fresh
+    # path so cache-hit runs get the same enrichment.
+    if "saas_metrics" in _extractor_tasks:
+        _saas_before_fallback = (
+            dict(_results.get("saas_metrics"))
+            if isinstance(_results.get("saas_metrics"), dict) else {}
+        )
+        _results["saas_metrics"] = _compute_saas_metrics_fallback(
+            raw_financials, _results.get("saas_metrics", {})
+        )
+        _saas_metrics_dbg = _results["saas_metrics"]
+        if isinstance(_saas_metrics_dbg, dict):
+            _llm_fields = {k for k, v in _saas_before_fallback.items() if v not in (None, "", [], {})}
+            _final_fields = {k for k, v in _saas_metrics_dbg.items() if v not in (None, "", [], {})}
+            _filled_by_fallback = sorted(_final_fields - _llm_fields)
+            print(
+                f"  SaaS metrics ({ticker}): LLM={sorted(_llm_fields)} | "
+                f"FMP-fallback added={_filled_by_fallback} | "
+                f"final={sorted(_final_fields)}"
+            )
+
+    if _failures:
+        print(
+            f"  Extractor failures ({ticker}): "
+            f"{[(f['extractor'], f['stage']) for f in _failures]}"
+        )
+
+    return _results, _failures
+
+
 # ── Per-ticker research worker ────────────────────────────────────────────────
 
 def _research_one_ticker(
@@ -2697,6 +3267,25 @@ def _research_one_ticker(
                         _annotated_cached[:_insert] + f"[{_ref_n}]" + _annotated_cached[_insert:]
                     )
                     _used_cached.add(_ref_n)
+            # ── C1: run the sector extractor fan-out on the cached sections.
+            # Before this, cache-hit runs (<3d) skipped ALL extractors and fed
+            # KPI-starved inputs to the DCF engine / blank sector cards. The
+            # dcf_calibration we already re-extracted above is passed as
+            # precomputed so it isn't extracted twice.
+            _ext_client = anthropic.Anthropic(
+                api_key=anthropic_key, base_url=base_url,
+                timeout=CLIENT_TIMEOUT, max_retries=4,
+            )
+            _ext_results, _ext_failures = _run_extractor_fanout(
+                _ext_client, _synthesis_model,
+                _cached["deep_research_sections"], _cached_text, ticker,
+                sector, profile_name, raw_financials,
+                precomputed={"dcf_calibration": _dcf_cal},
+            )
+            # C6: deterministic research↔books check (no LLM cost)
+            _divergences = _check_research_financial_consistency(
+                _cached["deep_research_sections"], raw_financials, ticker
+            )
             return {
                 "deep_research":            _cached_text,
                 "deep_research_annotated":  _annotated_cached,
@@ -2708,6 +3297,16 @@ def _research_one_ticker(
                 "cache_age_days":           _age,
                 "cache_run_id":             _cached["run_id"],
                 "dcf_calibration":          _dcf_cal,
+                "segment_scenarios":        _ext_results.get("segment_scenarios", {}),
+                "pipeline_assets":          _ext_results.get("pipeline_assets", []),
+                "reit_metrics":             _ext_results.get("reit_metrics", {}),
+                "bank_metrics":             _ext_results.get("bank_metrics", {}),
+                "saas_metrics":             _ext_results.get("saas_metrics", {}),
+                "insurance_metrics":        _ext_results.get("insurance_metrics", {}),
+                "framework_metrics":        _ext_results.get("framework_metrics", {}),
+                "extractor_failures":       _ext_failures,
+                "research_degraded":        False,
+                "research_financial_divergences": _divergences,
             }
 
         # ── Delta hit: 2–7 days old ───────────────────────────────────────────
@@ -2793,6 +3392,19 @@ def _research_one_ticker(
                 # Append supplement to full text
                 _merged_full = _merged_full + "\n\nRECENT NEWS SUPPLEMENT.\n" + _supplement
 
+            # ── C1: run the sector extractor fan-out on the MERGED sections.
+            # Delta runs previously skipped all extractors like pure-cache
+            # runs. dcf_calibration already re-extracted above is reused.
+            _ext_results_d, _ext_failures_d = _run_extractor_fanout(
+                _delta_client, _synthesis_model,
+                _merged_sections, _merged_full, ticker,
+                sector, profile_name, raw_financials,
+                precomputed={"dcf_calibration": _dcf_cal_d},
+            )
+            # C6: deterministic research↔books check on the MERGED sections
+            _divergences_d = _check_research_financial_consistency(
+                _merged_sections, raw_financials, ticker
+            )
             return {
                 "deep_research":          _merged_full,
                 "deep_research_sections": _merged_sections,
@@ -2803,6 +3415,16 @@ def _research_one_ticker(
                 "cache_age_days":         _age,
                 "cache_run_id":           _cached["run_id"],
                 "dcf_calibration":        _dcf_cal_d,
+                "segment_scenarios":      _ext_results_d.get("segment_scenarios", {}),
+                "pipeline_assets":        _ext_results_d.get("pipeline_assets", []),
+                "reit_metrics":           _ext_results_d.get("reit_metrics", {}),
+                "bank_metrics":           _ext_results_d.get("bank_metrics", {}),
+                "saas_metrics":           _ext_results_d.get("saas_metrics", {}),
+                "insurance_metrics":      _ext_results_d.get("insurance_metrics", {}),
+                "framework_metrics":      _ext_results_d.get("framework_metrics", {}),
+                "extractor_failures":     _ext_failures_d,
+                "research_degraded":      False,
+                "research_financial_divergences": _divergences_d,
             }
 
         except Exception as _delta_err:
@@ -3161,23 +3783,7 @@ def _research_one_ticker(
                 # Citations are always enabled for web_search_20260209.
                 # Each web_search_result_location has: url, title, cited_text,
                 # encrypted_index.  cited_text, title, url do NOT count as tokens.
-                _new_cits = 0
-                for cit in getattr(block, "citations", []) or []:
-                    cit_type = getattr(cit, "type", "") or ""
-                    if cit_type != "web_search_result_location":
-                        continue
-                    url        = getattr(cit, "url",        "") or ""
-                    title      = getattr(cit, "title",      "") or ""
-                    cited_text = getattr(cit, "cited_text", "") or ""
-                    if not url or url in _seen_urls:
-                        continue
-                    _seen_urls.add(url)
-                    server_citations.append({
-                        "url":        url,
-                        "title":      title,
-                        "cited_text": cited_text[:150],
-                    })
-                    _new_cits += 1
+                _new_cits = _harvest_block_citations([block], _seen_urls, server_citations)
 
                 # Stream new sources to frontend as they're discovered
                 if _new_cits > 0:
@@ -3242,22 +3848,10 @@ def _research_one_ticker(
                 )
                 if nudge_text.strip():
                     # Harvest citations attached to the nudge synthesis
-                    for blk in nudge_resp.content:
-                        if not hasattr(blk, "text"):
-                            continue
-                        for cit in getattr(blk, "citations", []) or []:
-                            if getattr(cit, "type", "") != "web_search_result_location":
-                                continue
-                            url = getattr(cit, "url", "") or ""
-                            if not url or url in _seen_urls:
-                                continue
-                            _seen_urls.add(url)
-                            server_citations.append({
-                                "url":        url,
-                                "title":      getattr(cit, "title",      "") or "",
-                                "cited_text": (getattr(cit, "cited_text", "") or "")[:150],
-                            })
+                    _harvest_block_citations(nudge_resp.content, _seen_urls, server_citations)
                     text = nudge_text
+                    # The nudge's own stop_reason now governs truncation repair
+                    _stop = getattr(nudge_resp, "stop_reason", _stop)
                     progress.update_status(
                         agent_id, ticker,
                         f"Tier 1: synthesis nudge succeeded ({len(text):,} chars, "
@@ -3283,6 +3877,21 @@ def _research_one_ticker(
                     f"({type(_nudge_err).__name__}: {str(_nudge_err)[:60]}) "
                     "— falling back to retry"
                 )
+
+        # ── C5: truncation repair (module helper _append_continuation) ────────
+        if _stop == "max_tokens":
+            text = _append_continuation(
+                sdk_client, model_name, _research_system, human_msg,
+                response.content, text, _seen_urls, server_citations, ticker,
+            )
+
+        # ── C4: search-coverage nudge (module helper _coverage_nudge) ─────────
+        if 0 < n_searches < _MIN_LIVE_SEARCHES and text.strip():
+            text, n_searches = _coverage_nudge(
+                sdk_client, model_name, _research_system, human_msg,
+                response.content, text, n_searches, _seen_urls,
+                server_citations, ticker,
+            )
 
         return text, n_searches, server_citations
 
@@ -3741,6 +4350,8 @@ def _research_one_ticker(
                         "research_tier": "none", "citation_registry": [],
                         "web_intelligence": {}, "cache_hit": False,
                         "cache_age_days": None, "cache_run_id": None,
+                        "extractor_failures": [], "research_degraded": False,
+                        "research_financial_divergences": {},
                     }
         else:
             try:
@@ -3755,14 +4366,22 @@ def _research_one_ticker(
                     "research_tier": "none", "citation_registry": [],
                     "web_intelligence": {}, "cache_hit": False,
                     "cache_age_days": None, "cache_run_id": None,
+                    "extractor_failures": [], "research_degraded": False,
+                    "research_financial_divergences": {},
                 }
 
-    _is_live = research_tier in ("anthropic_web", "tavily", "qwen_web") and search_count >= _MIN_LIVE_SEARCHES
+    # C4: live-data gate — a live-tier run that never reached the search
+    # floor is "degraded": the evidence base is too thin for the valuation
+    # model to trust blindly. The flag rides in the result dict so
+    # downstream consumers can see it.
+    _is_live, _research_degraded, _evidence_label = _research_evidence_state(
+        research_tier, search_count
+    )
     progress.update_status(
         agent_id, ticker,
         f"Deep research complete — tier={research_tier} | {search_count} web searches | "
         f"{sum(1 for l in final_report.splitlines() if l.strip())} non-empty lines"
-        + (" [LIVE WEB DATA]" if _is_live else " [TRAINING DATA — no live searches]")
+        + _evidence_label
     )
 
     sections = _extract_sections(final_report)
@@ -3777,6 +4396,17 @@ def _research_one_ticker(
             "[deep_research] Section parser matched NO 2A-2F headers for %s — "
             "LLM output may use a non-canonical header format. First 200 chars: %s",
             ticker, final_report[:200].replace(chr(10), ' | '),
+        )
+
+    # ── C6: deterministic research↔books consistency check (no LLM) ──────────
+    research_financial_divergences = _check_research_financial_consistency(
+        sections, raw_financials, ticker
+    )
+    if research_financial_divergences:
+        progress.update_status(
+            agent_id, ticker,
+            f"Consistency check: {len(research_financial_divergences)} "
+            f"research↔books divergence(s) flagged"
         )
 
     # ── Citation Registry extraction ──────────────────────────────────────────
@@ -3849,155 +4479,19 @@ def _research_one_ticker(
     )
 
     # ── Parallel extractor fan-out ───────────────────────────────────────────
-    # Restored 2026-04-25 after persistence bug fix (commit 1ac5490).
-    # Earlier sequential revert was misdiagnosis — the "unreliable saas_metrics"
-    # symptom was caused by run_advanced_pipeline() dropping extractor outputs
-    # from its return dict, NOT by parallel execution. Extractors always worked;
-    # data just never reached full_result_json.
+    # Shared implementation with the cache-hit / delta paths (see
+    # _run_extractor_fanout). Restored 2026-04-25 after persistence bug fix
+    # (commit 1ac5490); refactored into the shared function by Workstream C1
+    # so cached runs produce identical KPI coverage to fresh runs.
     #
-    # With 1ac5490 fix (saas_metrics et al. now in return dict), parallel is
-    # safe and ~3× faster. Typical extractor runtime drops from ~30s sequential
-    # (dcf_calibration + segment_scenarios + saas_metrics) to ~10s parallel
-    # (slowest-wins). For a 4-6 min pipeline this saves ~20s per ticker.
-    #
-    # Thread safety: each extractor holds its own Qwen request lifecycle via
-    # sdk_client.messages.create(). anthropic SDK is designed to handle
-    # concurrent requests from the same client instance. I/O-bound workload
-    # means GIL isn't a concern.
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    from src.agents.industry.sector_prompts import needs_extractor
-
-    # ── Sub-profile dispatch (PR #6) ───────────────────────────────────────
-    # The generic `framework_metrics` task fires for any ticker whose
-    # profile_name is registered in SECTOR_KPI_FRAMEWORK BUT NOT covered
-    # by a dedicated legacy extractor below. This handles all PR #6 new
-    # sub-profiles (Regulated Utility, Upstream O&G, Semi sub-types, Telco,
-    # Mining, Auto/EV, Managed Care) without needing a per-sub-profile task.
-    #
-    # Exclusion set: profiles handled by dedicated _extract_X_metrics
-    # functions to avoid double-extracting identical content.
-    _LEGACY_COVERED_PROFILES = {
-        # Insurance — _extract_insurance_metrics (delegates to framework, but
-        # has dedicated task slot so output also lives in insurance_metrics)
-        "Insurance",
-        # Bank profiles — _extract_bank_metrics
-        "Money Center Bank", "Money Center Bank (EU)", "Regional Bank",
-        "Super-Regional Bank", "EM Bank", "EM Bank (Premium)",
-        "Investment Bank", "Bank / Lending Institution",
-        # SaaS family — _extract_saas_metrics (sector-gated, fires for any Tech)
-        "Growth SaaS", "Mature SaaS", "Cybersecurity / Mission-Critical SaaS",
-        "Hyperscaler / Tech Conglomerate", "High-Growth Tech / AI",
-        "Hyper-Growth Platform", "Mature Platform", "Early Platform",
-        "Levered Subscription",
-        # REIT — _extract_reit_metrics
-        "REIT",
-        # Biopharma drug developers — _extract_pipeline_assets
-        "Pre-approval Biotech", "Large Cap Pharma",
-    }
-
-    def _framework_metrics_dispatch():
-        """Generic framework extractor — fires for ALL profiles in
-        SECTOR_KPI_FRAMEWORK, including those with a dedicated legacy
-        extractor.
-
-        v3.14 — removed the `_LEGACY_COVERED_PROFILES` gate. The 68-profile
-        coverage audit (v3.13) showed 15 of 68 profiles had mandatory KPIs
-        the legacy extractor wouldn't surface because of field-name drift
-        (e.g. legacy bank emits `npl_ratio`, framework expects `npl_ratio_pct`)
-        or framework-only KPIs (e.g. `cloud_revenue_growth_pct`,
-        `casa_ratio_pct`, `customer_concentration_pct`) that the legacy
-        schema simply doesn't declare.
-
-        With both extractors firing, the legacy bucket continues to feed the
-        bespoke panels (TechValuationPanel reads `saas_metrics`, etc.) using
-        legacy field names, while `framework_metrics_all` populates with the
-        framework's canonical key names so the new SectorValuationCard finds
-        every mandatory tier-driver KPI.
-
-        Cost: ~1 extra LLM call (~800 tokens) per legacy-covered ticker per
-        run. For a 5-ticker run with 2 SaaS tickers that's ~1600 extra tokens
-        — acceptable for the gap-closing benefit (15 profiles regain
-        mandatory-KPI coverage on the new card).
-
-        Returns {} only when profile_name is empty or absent from
-        SECTOR_KPI_FRAMEWORK.
-        """
-        if not profile_name:
-            return {}
-        try:
-            from src.data.sector_kpi_framework import (
-                SECTOR_KPI_FRAMEWORK,
-                extract_via_framework,
-            )
-            if profile_name not in SECTOR_KPI_FRAMEWORK:
-                return {}
-            return extract_via_framework(
-                sdk_client, _synthesis_model, sections, final_report, ticker,
-                profile_name=profile_name,
-            )
-        except Exception:
-            return {}
-
-    # Sector-aware extractor gating — skips extractors that would almost
-    # certainly return {} for the given (sector, profile_name). Saves
-    # ~800 tokens × skipped extractor. A tech ticker runs 3 extractors
-    # (dcf_calibration, segment_scenarios, saas_metrics) instead of 6.
-    _all_extractors: dict[str, callable] = {
-        "dcf_calibration":   lambda: _extract_dcf_calibration(sdk_client, _synthesis_model, sections, ticker),
-        "segment_scenarios": lambda: _extract_segment_scenarios(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "pipeline_assets":   lambda: _extract_pipeline_assets(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "reit_metrics":      lambda: _extract_reit_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "bank_metrics":      lambda: _extract_bank_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "saas_metrics":      lambda: _extract_saas_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "insurance_metrics": lambda: _extract_insurance_metrics(sdk_client, _synthesis_model, sections, final_report, ticker),
-        "framework_metrics": _framework_metrics_dispatch,
-    }
-    _extractor_tasks = {
-        name: fn for name, fn in _all_extractors.items()
-        if needs_extractor(name, sector, profile_name, ticker=ticker)
-    }
-    # Railway stdout visibility: which extractors will fire for this run.
-    # Gated extractors (e.g. saas_metrics skipped for Bank tickers) are
-    # listed so user can spot unexpectedly missing extractions.
-    _skipped = [n for n in _all_extractors if n not in _extractor_tasks]
-    print(
-        f"  Extractors fan-out ({ticker} · sector={sector!r} · "
-        f"profile={profile_name!r}): running {sorted(_extractor_tasks)} | "
-        f"skipped {sorted(_skipped)} | mode=PARALLEL"
+    # Thread safety: each extractor holds its own request lifecycle via
+    # sdk_client.messages.create(); the anthropic SDK handles concurrent
+    # requests from the same client instance. I/O-bound workload means GIL
+    # isn't a concern.
+    _results, _extractor_failures = _run_extractor_fanout(
+        sdk_client, _synthesis_model, sections, final_report, ticker,
+        sector, profile_name, raw_financials,
     )
-
-    _results: dict = {}
-    with ThreadPoolExecutor(max_workers=6) as _ex:
-        _futures = {_ex.submit(fn): name for name, fn in _extractor_tasks.items()}
-        for _fut in as_completed(_futures):
-            _name = _futures[_fut]
-            try:
-                _out = _fut.result()
-                _results[_name] = _out
-                # Per-extractor result summary — visible in Railway stdout so
-                # user can see which extractors returned data vs empty.
-                if isinstance(_out, list):
-                    _summary = f"list[{len(_out)}]"
-                elif isinstance(_out, dict):
-                    _populated = {k: v for k, v in _out.items() if v not in (None, "", [], {})}
-                    _summary = (
-                        f"{len(_populated)}/{len(_out)} fields populated: "
-                        f"{sorted(_populated)}" if _populated
-                        else f"EMPTY dict ({len(_out)} null fields)"
-                    )
-                else:
-                    _summary = f"{type(_out).__name__}"
-                _status_icon = "✓" if _out else "⚠ EMPTY"
-                print(f"  Extractor [{_name}] {_status_icon} → {_summary}")
-            except Exception as _exc:
-                progress.update_status(agent_id, ticker,
-                                       f"Extractor {_name} failed: {_exc}")
-                _results[_name] = {} if _name != "pipeline_assets" else []
-                # Traceback to stdout so the real error is visible, not just
-                # the "failed: X" summary.
-                print(f"  Extractor [{_name}] ✗ FAILED: {type(_exc).__name__}: {_exc}")
-                import traceback as _tb
-                _tb.print_exc()
 
     dcf_calibration   = _results.get("dcf_calibration", {})
     segment_scenarios = _results.get("segment_scenarios", {})
@@ -4007,23 +4501,6 @@ def _research_one_ticker(
     saas_metrics      = _results.get("saas_metrics", {})
     insurance_metrics = _results.get("insurance_metrics", {})
     framework_metrics = _results.get("framework_metrics", {})
-
-    # Apply FMP self-compute fallback to fill null SaaS metric fields from
-    # raw financials (Rule of 40, Magic Number, CAC Payback, Billings Growth).
-    # LLM-extracted values are preserved; only nulls get filled. Source-level
-    # write so downstream consumers see the enriched dict in the returned state.
-    _saas_before_fallback = dict(saas_metrics) if isinstance(saas_metrics, dict) else {}
-    saas_metrics = _compute_saas_metrics_fallback(raw_financials, saas_metrics)
-    # Show which fields the FMP fallback filled (vs what the LLM extracted)
-    if isinstance(saas_metrics, dict):
-        _llm_fields = {k for k, v in _saas_before_fallback.items() if v not in (None, "", [], {})}
-        _final_fields = {k for k, v in saas_metrics.items() if v not in (None, "", [], {})}
-        _filled_by_fallback = sorted(_final_fields - _llm_fields)
-        print(
-            f"  SaaS metrics ({ticker}): LLM={sorted(_llm_fields)} | "
-            f"FMP-fallback added={_filled_by_fallback} | "
-            f"final={sorted(_final_fields)}"
-        )
 
     progress.update_status(
         agent_id, ticker,
@@ -4126,6 +4603,9 @@ def _research_one_ticker(
         "saas_metrics":           saas_metrics,
         "insurance_metrics":      insurance_metrics,
         "framework_metrics":      framework_metrics,
+        "extractor_failures":     _extractor_failures,
+        "research_degraded":      _research_degraded,
+        "research_financial_divergences": research_financial_divergences,
     }
 
 
@@ -4282,6 +4762,8 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
                         "research_tier": "none", "citation_registry": [],
                         "web_intelligence": {}, "cache_hit": False,
                         "cache_age_days": None, "cache_run_id": None,
+                        "extractor_failures": [], "research_degraded": False,
+                        "research_financial_divergences": {},
                     }
 
     state["data"]["deep_research_map"] = deep_research_map
@@ -4353,6 +4835,30 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
             framework_metrics_all[t] = fm
     state["data"]["framework_metrics"] = framework_metrics_all
 
+    # ── Per-ticker extractor failures (C3 diagnosability) ──────────────────
+    # Exceptions and still-empty outputs recorded by _run_extractor_fanout so
+    # silent {}s are visible in full_result_json / Railway logs.
+    extractor_failures_all: dict[str, list] = {}
+    for t, res in deep_research_map.items():
+        _fl = res.get("extractor_failures")
+        if _fl:
+            extractor_failures_all[t] = _fl
+    state["data"]["extractor_failures"] = extractor_failures_all
+
+    # ── Per-ticker research↔books divergences (C6) ──────────────────────────
+    # Deterministic checks in _check_research_financial_consistency flagged
+    # research claims that contradict FMP line items. Consumed by
+    # financial_editor (audit context) and surfaced in the pipeline return
+    # dict. NOTE: separate key from consistency_flags — portfolio_manager
+    # overwrites consistency_flags[ticker] with a string in phase 9, so
+    # writing dicts here would get clobbered.
+    divergences_all: dict[str, dict] = {}
+    for t, res in deep_research_map.items():
+        _dv = res.get("research_financial_divergences")
+        if _dv:
+            divergences_all[t] = _dv
+    state["data"]["research_financial_divergences"] = divergences_all
+
     # ── v3.13 BRIDGE: also publish under `*_all` state keys ──────────────────
     # The new SectorValuationCard's _collect_kpi_values() reads these
     # `*_all`-suffixed keys (the canonical naming). Legacy panels keep reading
@@ -4384,6 +4890,9 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     state["data"]["deep_research_sections"]   = primary.get("deep_research_sections", {})
     state["data"]["research_tier"]            = primary.get("research_tier", "none")
     state["data"]["citation_registry"]        = primary.get("citation_registry", [])
+    # C4: primary ticker below the live-search floor → downstream consumers
+    # (DCF agent, investor agents) can discount thin-evidence research.
+    state["data"]["research_degraded"]        = bool(primary.get("research_degraded"))
     state["data"]["web_intelligence"]       = {}
     if primary.get("cache_hit"):
         state["data"]["research_cache_hit"]      = True

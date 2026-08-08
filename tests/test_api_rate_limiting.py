@@ -171,46 +171,49 @@ class TestRateLimiting:
     @patch('src.tools.api.time.sleep')
     @patch('src.tools.api.requests.get')
     def test_full_integration(self, mock_get, mock_sleep, mock_cache):
-        """Test that get_prices function properly handles rate limiting."""
+        """Test that get_prices function properly handles rate limiting.
+
+        Contract (post-FMP-migration): get_prices hits FMP stable
+        historical-price-eod/light, which returns a JSON LIST of
+        {symbol, date, price, volume} rows; `price` populates all OHLC
+        fields. _fmp_get backs off 20s on the first 429 (was 60s in the
+        legacy financialdatasets path).
+        """
         # Mock cache to return None (cache miss)
         mock_cache.get_prices.return_value = None
-        
-        # Setup mock responses: first 429, then 200 with valid data
+
+        # Setup mock responses: first 429, then 200 with valid FMP data
         mock_429_response = Mock()
         mock_429_response.status_code = 429
-        
+
         mock_200_response = Mock()
         mock_200_response.status_code = 200
-        mock_200_response.json.return_value = {
-            "ticker": "AAPL",
-            "prices": [
-                {
-                    "time": "2024-01-01T00:00:00Z",
-                    "open": 100.0,
-                    "close": 101.0,
-                    "high": 102.0,
-                    "low": 99.0,
-                    "volume": 1000
-                }
-            ]
-        }
-        
+        mock_200_response.json.return_value = [
+            {
+                "symbol": "AAPL",
+                "date": "2024-01-01",
+                "price": 101.0,
+                "volume": 1000,
+            }
+        ]
+
         mock_get.side_effect = [mock_429_response, mock_200_response]
-        
+
         # Set environment variable for API key
         with patch.dict(os.environ, {"FINANCIAL_DATASETS_API_KEY": "test-key"}):
             # Call get_prices
             result = get_prices("AAPL", "2024-01-01", "2024-01-02")
-        
+
         # Verify the function succeeded and returned data
         assert len(result) == 1
-        assert result[0].open == 100.0
         assert result[0].close == 101.0
-        
-        # Verify rate limiting behavior
+        assert result[0].open == 101.0  # EOD-light: single price fills OHLC
+        assert result[0].volume == 1000
+
+        # Verify rate limiting behavior (429 → retry after 20s backoff)
         assert mock_get.call_count == 2
-        mock_sleep.assert_called_once_with(60)
-        
+        mock_sleep.assert_called_once_with(20)
+
         # Verify cache operations
         mock_cache.get_prices.assert_called_once()
         mock_cache.set_prices.assert_called_once()

@@ -6353,6 +6353,7 @@ def extract_via_framework(
     deep_research: str,
     ticker: str,
     profile_name: str,
+    retry_directive: str = "",
 ) -> dict:
     """L5 — generic sector extractor. Calls the LLM with the framework-rendered
     system prompt, validates the output against framework clamps, and annotates
@@ -6409,7 +6410,7 @@ def extract_via_framework(
             model=model_name,
             max_tokens=900,    # bumped from 600 to allow more KPIs + evidence
             temperature=0.1,
-            system=spec_built["system_prompt"] + mandatory_directive,
+            system=spec_built["system_prompt"] + mandatory_directive + retry_directive,
             messages=[{
                 "role": "user",
                 "content": (
@@ -6420,10 +6421,15 @@ def extract_via_framework(
             }],
         )
         raw = "".join(b.text for b in resp.content if hasattr(b, "text")).strip()
-        if raw.startswith("```"):
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-        parsed = json.loads(raw)
+        # C3: robust parse (preamble/postamble/mixed-fence tolerant). The old
+        # fence-strip + json.loads silently returned {} when the model wrapped
+        # the JSON in prose — observed failure mode on Qwen synthesis models.
+        # Function-level import to avoid a module-load cycle (deep_research
+        # imports this module at call time too).
+        from src.agents.industry.deep_research import _parse_llm_json
+        parsed = _parse_llm_json(
+            raw, extractor_name=f"framework_metrics[{profile_name}]"
+        )
         if not isinstance(parsed, dict):
             return {}
 

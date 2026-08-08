@@ -1021,6 +1021,14 @@ def run_advanced_pipeline(
             "editor_review":      {},
             "citation_audit":     state["data"].get("citation_audit", {}),
             "consistency_flags":  state["data"].get("consistency_flags", {}),
+            # C3 — extractor exceptions / still-empty outputs per ticker
+            "extractor_failures": state["data"].get("extractor_failures", {}),
+            # C6 — deterministic research↔books divergences per ticker
+            # (separate from consistency_flags: PM overwrites that key with a
+            # string in phase 9; these dicts must survive to persistence)
+            "research_financial_divergences": state["data"].get("research_financial_divergences", {}),
+            # C4 — primary ticker below the live-search floor
+            "research_degraded":  state["data"].get("research_degraded", False),
             # Citation registry + footnotes (deep_research → specialist → PDF)
             "citation_registry":  state["data"].get("citation_registry", []),
             "industry_footnotes": state["data"].get("industry_footnotes", []),

@@ -430,25 +430,51 @@ def test_pr6_profile_has_distinctive_mandatory_kpi(profile, probe_kpi):
     )
 
 
-def test_pr6_profiles_not_double_extracted():
-    """PR #6 new sub-profiles must NOT appear in the legacy-covered exclusion
-    list in deep_research.py — otherwise the generic framework task wouldn't
-    fire for them."""
-    # Re-derive the exclusion list from deep_research.py source
-    import re as _re
-    from pathlib import Path
-    dr_path = (Path(__file__).resolve().parent.parent
-               / "src" / "agents" / "industry" / "deep_research.py")
-    src = dr_path.read_text(encoding="utf-8")
-    # Find the _LEGACY_COVERED_PROFILES set literal
-    m = _re.search(r"_LEGACY_COVERED_PROFILES = \{(.*?)\}", src, _re.DOTALL)
-    assert m, "Could not find _LEGACY_COVERED_PROFILES in deep_research.py"
-    legacy_text = m.group(1)
-    for profile in PR6_NEW_PROFILES:
-        assert f'"{profile}"' not in legacy_text, (
-            f"{profile} is in _LEGACY_COVERED_PROFILES but should be "
-            f"framework-dispatched (PR #6). Remove from exclusion list."
-        )
+@pytest.mark.parametrize("profile", PR6_NEW_PROFILES)
+def test_pr6_profiles_framework_dispatch_fires(profile, monkeypatch):
+    """PR #6 new sub-profiles must NOT be excluded from the generic
+    framework_metrics dispatch — otherwise the framework task wouldn't
+    fire for them and the SectorValuationCard renders empty.
+
+    History: this used to grep deep_research.py for the
+    `_LEGACY_COVERED_PROFILES` exclusion set. That set was dead code
+    (v3.14 removed the gate) and was deleted by the Workstream C1
+    fan-out refactor (2026-08), so the guarantee is now tested
+    behaviorally: running the shared fan-out for a PR6 profile must
+    call extract_via_framework exactly once.
+    """
+    import src.agents.industry.deep_research as dr
+    import src.agents.industry.sector_prompts as sp
+    import src.data.sector_kpi_framework as skf
+
+    assert profile in skf.SECTOR_KPI_FRAMEWORK, "precondition: registered"
+
+    calls = []
+
+    def fake_extract(client, model, sections, report, ticker,
+                     profile_name=None, retry_directive=""):
+        calls.append(profile_name)
+        return {"probe": "kpi"}
+
+    monkeypatch.setattr(
+        sp, "needs_extractor",
+        lambda name, sector, pname, ticker=None: name == "framework_metrics",
+    )
+    monkeypatch.setattr(skf, "extract_via_framework", fake_extract)
+
+    results, failures = dr._run_extractor_fanout(
+        sdk_client=None, synthesis_model="m",
+        sections={"2a": "x"}, final_report="r",
+        ticker="TEST", sector="Tech", profile_name=profile,
+        raw_financials={},
+    )
+
+    assert calls == [profile], (
+        f"{profile}: framework dispatch did not fire exactly once "
+        f"(calls={calls}) — profile may have been re-added to an "
+        f"exclusion gate."
+    )
+    assert results["framework_metrics"] == {"probe": "kpi"}
 
 
 # ── render_specialist_addendum tests ─────────────────────────────────────────

@@ -77,6 +77,13 @@ def run_financial_editor(state: AgentState) -> AgentState:
         trap = (state["data"].get("value_trap_analysis") or {}).get(ticker, {})
         macro_regime = state["data"].get("macro_regime", {})
         consistency_flag = (state["data"].get("consistency_flags") or {}).get(ticker, "")
+        # C6 — deterministic research↔books divergences: deep_research checks
+        # Section 2A claims (growth/margin/revenue) against FMP line items.
+        # Kept separate from consistency_flags (PM overwrites that with a
+        # string in phase 9).
+        research_divergences = (
+            (state["data"].get("research_financial_divergences") or {}).get(ticker, {})
+        )
 
         # Build a compact report summary for the editor
         action      = str(decision.get("action", "HOLD")).upper()
@@ -116,7 +123,8 @@ def run_financial_editor(state: AgentState) -> AgentState:
                 "=== DECISION ===\n"
                 "Action: {action} | Position Size: {size_pct:.1%} | Price Target: ${price_tgt:.2f}\n"
                 "Rationale: {rationale}\n"
-                "Directional flag: {flag}\n\n"
+                "Directional flag: {flag}\n"
+                "Research-vs-books divergences: {divergences}\n\n"
                 "=== VALUATION ===\n"
                 "Current price: ${curr:.2f} | EV: ${ev:.2f} | 12m PT: ${pt12:.2f} | Upside: {upside:.1f}%\n"
                 "Blended IV — Bear: ${bear_iv:.0f} | Base: ${base_iv:.0f} | Bull: ${bull_iv:.0f}\n"
@@ -145,6 +153,14 @@ def run_financial_editor(state: AgentState) -> AgentState:
             "price_tgt": price_tgt or 0,
             "rationale": rationale,
             "flag": consistency_flag or "None",
+            "divergences": (
+                "; ".join(
+                    f"{k}: books={v.get('books', v.get('books_raw'))} vs "
+                    f"research={v.get('research_claim')}"
+                    + (f" ({v['divergence_pp']}pp apart)" if v.get("divergence_pp") else "")
+                    for k, v in research_divergences.items()
+                ) or "None detected"
+            ),
             "curr": curr_price or 0,
             "ev": ev or 0,
             "pt12": pt_12m or 0,
