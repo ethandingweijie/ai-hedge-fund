@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import asyncio
+import logging
 import uuid
 
 from app.backend.database import get_db
@@ -15,6 +16,8 @@ from src.utils.progress import progress
 from src.utils.analysts import get_agents_list
 
 router = APIRouter(prefix="/hedge-fund")
+
+logger = logging.getLogger(__name__)
 
 @router.post(
     path="/run",
@@ -30,6 +33,22 @@ async def run(request_data: HedgeFundRequest, request: Request, db: Session = De
         if not request_data.api_keys:
             api_key_service = ApiKeyService(db)
             request_data.api_keys = api_key_service.get_api_keys_dict()
+
+        # ── Queue mode (Phase 2f): Redis available → execute in the arq worker.
+        # API keys are already hydrated into the payload above (the worker has
+        # no request-scoped DB session). Progress streams back over
+        # progress_bus; the parsed final payload is fetched from arq's result
+        # store after the terminal event. Falls through to the in-process path
+        # when Redis is unavailable or enqueueing fails.
+        from app.backend.services import queue_client
+        if await queue_client.queue_mode_enabled():
+            try:
+                _queued = await _start_queue_run(request_data)
+            except Exception as exc:
+                logger.warning("queue mode unavailable (%s) — in-process fallback", exc)
+                _queued = None
+            if _queued is not None:
+                return _queued
 
         # Create the portfolio
         portfolio = create_portfolio(request_data.initial_cash, request_data.margin_requirement, request_data.tickers, request_data.portfolio_positions)
@@ -165,6 +184,92 @@ async def run(request_data: HedgeFundRequest, request: Request, db: Session = De
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred while processing the request: {str(e)}")
+
+
+# ── Queue-mode execution (Phase 2f) ──────────────────────────────────────────
+# With Redis available the agent graph runs in the arq worker. The SSE stream
+# is sourced from progress_bus (Redis pub/sub + replay buffer); the parsed
+# final payload comes from arq's result store after graph_complete. Client
+# disconnect no longer cancels the run (the worker finishes and the result
+# stays retrievable for keep_result seconds) — same trade-off as /analysis/run.
+
+_QUEUE_STREAM_DEADLINE = 1800  # matches worker job_timeout
+
+
+async def _start_queue_run(request_data: HedgeFundRequest):
+    """Enqueue the graph run and return a bus-backed StreamingResponse.
+
+    Raises on enqueue failure — the route catches it and falls back to the
+    in-process path.
+    """
+    from app.backend.services import queue_client
+
+    run_id = uuid.uuid4().hex[:16]  # same format as the in-process path
+    payload = request_data.model_dump(mode="json")
+    job = await queue_client.enqueue_hedge_fund_run(run_id, None, payload)
+    return StreamingResponse(
+        _queue_stream_generator(run_id, job),
+        media_type="text/event-stream",
+    )
+
+
+async def _queue_stream_generator(run_id: str, job):
+    """SSE stream sourced from progress_bus + arq result store. Emits the same
+    event contract as the in-process path: start / progress_update / complete / error."""
+    from app.backend.services import progress_bus
+
+    yield StartEvent().to_sse()
+
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + _QUEUE_STREAM_DEADLINE
+    stream = progress_bus.iter_events(run_id)
+    while True:
+        try:
+            event = await asyncio.wait_for(stream.__anext__(), timeout=60.0)
+        except asyncio.TimeoutError:
+            if loop.time() > deadline:
+                yield ErrorEvent(
+                    message="Timed out waiting for the hedge fund worker (30 min)."
+                ).to_sse()
+                return
+            continue
+        except StopAsyncIteration:
+            yield ErrorEvent(message="Progress stream ended unexpectedly.").to_sse()
+            return
+
+        if event.get("completed"):
+            if event.get("phase") == "graph_error" or event.get("status") == "error":
+                yield ErrorEvent(
+                    message=event.get("summary", "Hedge fund run failed")
+                ).to_sse()
+                return
+            # graph_complete — fetch the parsed final payload from the result store
+            try:
+                result = await job.result(timeout=60)
+            except Exception as exc:
+                yield ErrorEvent(
+                    message=f"Failed to retrieve run result: {exc}"
+                ).to_sse()
+                return
+            final_data = result.get("final_data") if isinstance(result, dict) else None
+            if not final_data:
+                # Same error the in-process path emits for an empty result
+                yield ErrorEvent(
+                    message="Failed to generate hedge fund decisions"
+                ).to_sse()
+                return
+            yield CompleteEvent(data=final_data).to_sse()
+            return
+
+        if event.get("phase") == "agent_progress":
+            yield ProgressUpdateEvent(
+                agent=event.get("agent"),
+                ticker=event.get("ticker"),
+                status=event.get("status"),
+                timestamp=event.get("timestamp"),
+                analysis=event.get("analysis"),
+            ).to_sse()
+
 
 @router.post(
     path="/backtest",

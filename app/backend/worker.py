@@ -265,12 +265,17 @@ async def run_hedge_fund_graph_task(
 
     The web process hydrates API keys into the payload BEFORE enqueueing
     (the worker has no request-scoped DB session to resolve them lazily).
-    The raw graph result is returned via arq's result store; the web SSE
-    layer (Phase 2f) parses decisions from it exactly as the old in-process
-    path did.
+    Progress streams over the bus; the parsed final payload (decisions /
+    analyst_signals / current_prices — same shape as the in-process route's
+    CompleteEvent data) is returned via arq's result store, which the web
+    SSE layer fetches after the graph_complete terminal event.
     """
     from app.backend.models.schemas import HedgeFundRequest
-    from app.backend.services.graph import create_graph, run_graph_async
+    from app.backend.services.graph import (
+        create_graph,
+        parse_hedge_fund_response,
+        run_graph_async,
+    )
     from app.backend.services.portfolio import create_portfolio
     from src.utils.progress import progress
 
@@ -344,7 +349,19 @@ async def run_hedge_fund_graph_task(
         "run_id": run_id,
         "completed": True,
     })
-    return {"run_id": run_id, "user_id": user_id, "ok": bool(result)}
+
+    # Same shape as the in-process route's CompleteEvent data. None when the
+    # graph produced no messages — the web layer turns that into the same
+    # "Failed to generate hedge fund decisions" error the old path emitted.
+    final_data = None
+    if result and result.get("messages"):
+        final_data = {
+            "decisions": parse_hedge_fund_response(result["messages"][-1].content),
+            "analyst_signals": result.get("data", {}).get("analyst_signals", {}),
+            "current_prices": result.get("data", {}).get("current_prices", {}),
+        }
+    return {"run_id": run_id, "user_id": user_id, "ok": bool(result),
+            "final_data": final_data}
 
 
 def _log_publish_outcome(task: asyncio.Task) -> None:

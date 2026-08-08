@@ -114,3 +114,24 @@ async def enqueue_research_job(job_id: str, kind: str, params: dict) -> None:
         _queue_name=QUEUE_NAME,
         _expires=DEDUP_TTL,
     )
+
+
+async def enqueue_hedge_fund_run(run_id: str, user_id: Optional[int],
+                                 request_payload: dict):
+    """Enqueue a hedge-fund graph run. Raises on Redis/arq failure.
+
+    Returns the arq Job handle — after the bus emits graph_complete the web
+    SSE layer awaits job.result() to fetch the parsed final payload.
+    """
+    from app.backend.worker import QUEUE_NAME
+
+    pool = await get_arq_pool()
+    return await pool.enqueue_job(
+        "run_hedge_fund_graph_task",
+        run_id=run_id,
+        user_id=user_id,
+        request_payload=request_payload,
+        _job_id=f"hedgefund:{run_id}",
+        _queue_name=QUEUE_NAME,
+        _expires=DEDUP_TTL,
+    )
