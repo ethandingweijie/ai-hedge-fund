@@ -348,6 +348,40 @@ def _fix_sequences(cur) -> list[str]:
     return fixed
 
 
+def _has_unique_constraint(cur, table: str) -> bool:
+    """PK, UNIQUE constraint, or UNIQUE index -> ON CONFLICT has a target."""
+    cur.execute(
+        """
+        SELECT 1 FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        WHERE rel.relname = %s AND con.contype IN ('p', 'u')
+        UNION ALL
+        SELECT 1 FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = %s AND indexdef ILIKE %s
+        LIMIT 1
+        """,
+        (table, table, "%UNIQUE%"),
+    )
+    return cur.fetchone() is not None
+
+
+def _dedup_table(cur, table: str) -> int:
+    """Rebuild a constraint-less table keeping only distinct rows.
+
+    Re-runs of the migration duplicate rows in tables without any PK/unique
+    constraint (ON CONFLICT DO NOTHING has nothing to trigger on). Rows are
+    identical copies, so SELECT DISTINCT loses nothing.
+    """
+    tmp = f"{table}_mig_dedup"
+    cur.execute(f"DROP TABLE IF EXISTS {_q(tmp)}")
+    cur.execute(f"CREATE TABLE {_q(tmp)} AS SELECT DISTINCT * FROM {_q(table)}")
+    cur.execute(f"SELECT COUNT(*) FROM {_q(tmp)}")
+    kept = cur.fetchone()[0]
+    cur.execute(f"DROP TABLE {_q(table)}")
+    cur.execute(f"ALTER TABLE {_q(tmp)} RENAME TO {_q(table)}")
+    return kept
+
+
 # ── Entry point ──────────────────────────────────────────────────────────────
 
 def run_migration(dry_run: bool = False) -> dict:
@@ -408,14 +442,23 @@ def run_migration(dry_run: bool = False) -> dict:
                     finally:
                         sq.close()
                 if not dry_run:
-                    report["sequences_fixed"] = _fix_sequences(cur)
-                    # Verify: actual Postgres row count per migrated table
+                    # Verify landed row counts; repair constraint-less tables
+                    # that accumulated duplicates across repeated runs.
                     for t in report["tables"]:
                         try:
                             cur.execute(f"SELECT COUNT(*) FROM {_q(t['table'])}")
                             t["pg_rows"] = cur.fetchone()[0]
                         except Exception as exc:
                             t["pg_rows"] = f"error: {exc}"
+                            continue
+                        if (isinstance(t["pg_rows"], int)
+                                and t["pg_rows"] > t.get("source_rows", 0)
+                                and not _has_unique_constraint(cur, t["table"])):
+                            t["deduped_to"] = _dedup_table(cur, t["table"])
+                            logger.info("deduped %s: %d -> %d rows",
+                                        t["table"], t["pg_rows"], t["deduped_to"])
+                            t["pg_rows"] = t["deduped_to"]
+                    report["sequences_fixed"] = _fix_sequences(cur)
         finally:
             pg_conn.close()
     finally:
