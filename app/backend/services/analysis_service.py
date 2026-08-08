@@ -119,7 +119,9 @@ CREATE TABLE IF NOT EXISTS web_runs (
     regime           TEXT,
     sector           TEXT,
     profile_name     TEXT,
-    is_checkpoint    INTEGER DEFAULT 0
+    is_checkpoint    INTEGER DEFAULT 0,
+    -- Workstream A: per-phase pipeline timing JSON; NULL for legacy rows.
+    phase_durations  TEXT
 )
 """
 
@@ -176,6 +178,10 @@ def _migrate_web_runs_columns(conn: sqlite3.Connection) -> None:
         ("profile_name",  "ALTER TABLE web_runs ADD COLUMN profile_name  TEXT"),
         ("is_checkpoint", "ALTER TABLE web_runs ADD COLUMN is_checkpoint  INTEGER DEFAULT 0"),
         ("user_id",       "ALTER TABLE web_runs ADD COLUMN user_id        INTEGER"),
+        # Workstream A — per-phase pipeline timing JSON. Dedicated column so
+        # timing queries (avg deep-research duration, slowest phase) don't
+        # have to parse the full_result_json blob. Additive-only migration.
+        ("phase_durations", "ALTER TABLE web_runs ADD COLUMN phase_durations TEXT"),
     ]
     for col, sql in migrations:
         if col not in existing:
@@ -287,6 +293,9 @@ def _save_partial_web_run(
         "data": {
             # ── always present ───────────────────────────────────────────
             "tickers":                     data.get("tickers", [ticker]),
+            # In-progress phase timings (Workstream A) — a crashed/stuck run's
+            # checkpoint row shows exactly which phases finished before failure.
+            "phase_durations":             data.get("phase_durations"),
             "macro_regime":                data.get("macro_regime"),
             "raw_financials":              data.get("raw_financials"),
             "routing_decision":            data.get("routing_decision"),
@@ -371,13 +380,17 @@ def _save_web_run(
     _ensure_web_runs_table()
     db_path = _get_db_path()
     final_action, regime, sector, profile_name = _extract_web_run_summary(result, ticker)
+    # Workstream A — persist per-phase timing JSON in a dedicated column (it
+    # also lives inside full_result_json). NULL when absent (legacy/CLI runs).
+    _pd = (result.get("data") or {}).get("phase_durations") or None
+    _pd_json = json.dumps(_sanitize_floats(_pd), default=str) if _pd else None
     conn = _connect(db_path)
     try:
         conn.execute(
             "INSERT OR REPLACE INTO web_runs "
             "(run_id, run_at, ticker, model_name, archive_run_id, full_result_json, "
-            " final_action, regime, sector, profile_name, is_checkpoint, user_id) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,0,?)",
+            " final_action, regime, sector, profile_name, phase_durations, is_checkpoint, user_id) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?)",
             (
                 run_id,
                 # Store as plain ISO without tz suffix so string sort is consistent
@@ -391,6 +404,7 @@ def _save_web_run(
                 regime or None,
                 sector or None,
                 profile_name or None,
+                _pd_json,
                 user_id,
             ),
         )

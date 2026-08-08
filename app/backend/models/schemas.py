@@ -257,10 +257,17 @@ class ApiKeyUpdateRequest(BaseModel):
 
 
 class ApiKeyResponse(BaseModel):
-    """Complete API key response"""
+    """API key response.
+
+    Deliberately carries `key_preview` (last 4 characters) and NOT the secret
+    itself. This model used to expose `key_value`, and GET /api-keys/{provider}
+    was unauthenticated — so every provider key the app held could be read by
+    anyone who knew the URL. Keys are write-only over the API now: clients set
+    them and see enough to identify which key is stored, never the value.
+    """
     id: int
     provider: str
-    key_value: str
+    key_preview: Optional[str] = None
     is_active: bool
     description: Optional[str]
     created_at: datetime

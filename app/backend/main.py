@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 
+from app.backend.auth_gate import AuthGateMiddleware, verify_startup_config
 from app.backend.routes import api_router
 from app.backend.database.connection import engine
 from app.backend.database.models import Base
@@ -13,6 +14,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="AI Hedge Fund API", description="Backend API for AI Hedge Fund", version="1.9.0")
+
+# Refuse to boot with a forgeable JWT signing key (see auth_gate.py).
+verify_startup_config()
 
 # Initialize database tables (this is safe to run multiple times)
 Base.metadata.create_all(bind=engine)
@@ -26,6 +30,12 @@ _dev_origins = [
 _extra_origins = [
     o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
+# Middleware order: Starlette makes the LAST-added middleware the outermost, so
+# AuthGate is registered first and CORS second. That way CORS wraps the gate and
+# a 401 still carries Access-Control-Allow-Origin — otherwise the browser
+# reports an opaque CORS failure instead of the actual 401.
+app.add_middleware(AuthGateMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_dev_origins + ["capacitor://localhost", "http://localhost"] + _extra_origins,

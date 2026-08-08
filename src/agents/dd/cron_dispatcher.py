@@ -337,7 +337,17 @@ def _fetch_tier1_via_http(*, base_url: str) -> set[str]:
     """
     url = f"{base_url}/api/dd-universe/tier1"
     try:
-        r = requests.get(url, timeout=HTTP_TIMEOUT_SEC)
+        # The web service requires auth on every non-admin route; this cron
+        # service has no user JWT, so it authenticates with the shared admin
+        # secret (same DB_UPLOAD_SECRET used for the /admin/* POSTs). Read from
+        # env rather than threaded through as a parameter so the signature
+        # stays stable for callers and test stubs.
+        secret = os.environ.get(ENV_ADMIN_SECRET, "")
+        r = requests.get(
+            url,
+            timeout=HTTP_TIMEOUT_SEC,
+            headers={"X-Admin-Secret": secret} if secret else {},
+        )
         r.raise_for_status()
         body = r.json()
         tickers = {t.strip().upper() for t in body.get("tickers", []) if t and t.strip()}

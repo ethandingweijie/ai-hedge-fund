@@ -4160,10 +4160,13 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
 
     # US tickers → Anthropic (claude-sonnet-4-6, no base_url override)
     # HK tickers → Qwen3-max via Alibaba Cloud (DEEP_RESEARCH_* env vars)
-    _us_key: str | None = os.environ.get("ANTHROPIC_API_KEY")
-    _hk_key: str | None = os.environ.get("DEEP_RESEARCH_API_KEY") or _us_key
-    _hk_base_url: str | None = os.environ.get("DEEP_RESEARCH_BASE_URL") or None
-    _hk_model: str | None = os.environ.get("DEEP_RESEARCH_MODEL") or None
+    # Per-run overlay first (see src/utils/run_config.py), then process env.
+    from src.utils.run_config import getenv as _cfg_getenv
+
+    _us_key: str | None = _cfg_getenv("ANTHROPIC_API_KEY")
+    _hk_key: str | None = _cfg_getenv("DEEP_RESEARCH_API_KEY") or _us_key
+    _hk_base_url: str | None = _cfg_getenv("DEEP_RESEARCH_BASE_URL") or None
+    _hk_model: str | None = _cfg_getenv("DEEP_RESEARCH_MODEL") or None
 
     # Require at least the US key to proceed
     anthropic_key = _us_key or _hk_key
@@ -4185,7 +4188,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     # selects Qwen — structured pipeline runs on Claude but deep research should
     # still use Qwen for superior web search) → pipeline model → claude-sonnet-4-6.
     _us_model: str = (
-        os.environ.get("DEEP_RESEARCH_MODEL")
+        _cfg_getenv("DEEP_RESEARCH_MODEL")
         or state["metadata"].get("model_name")
         or "claude-sonnet-4-6"
     )

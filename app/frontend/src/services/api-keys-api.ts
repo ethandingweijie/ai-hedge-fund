@@ -3,7 +3,11 @@ import { API_BASE_URL } from '@/config';
 export interface ApiKey {
   id: number;
   provider: string;
-  key_value: string;
+  /**
+   * Last 4 characters only ("…a1b2"), or null when no key is stored.
+   * The backend never returns the secret — keys are write-only over the API.
+   */
+  key_preview?: string | null;
   is_active: boolean;
   description?: string;
   created_at: string;

@@ -18,7 +18,9 @@ Entry point called from main.py when --pipeline advanced is passed.
 
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import datetime
 
 from langchain_core.messages import HumanMessage
@@ -109,12 +111,43 @@ def run_advanced_pipeline(
         print(f"  Active investor agents ({len(active_agents)}): {', '.join(active_agents)}")
 
         # ----------------------------------------------------------------
+        # Phase timing instrumentation (Workstream A)
+        # Every phase's wall-clock duration is appended to one shared list,
+        # mounted at state["data"]["phase_durations"] and serialised via the
+        # return dict into web_runs.full_result_json + the dedicated
+        # web_runs.phase_durations column. The list OBJECT is shared (never
+        # copied) so checkpoint partial saves see in-progress timings.
+        # ----------------------------------------------------------------
+        _phase_durations: list[dict] = []
+        state["data"]["phase_durations"] = _phase_durations
+
+        @contextmanager
+        def _timed(phase_name: str):
+            _t0 = time.perf_counter()
+            _started_at = datetime.now().isoformat(timespec="seconds")
+            try:
+                yield
+            finally:
+                _dur = time.perf_counter() - _t0
+                _phase_durations.append({
+                    "phase":       phase_name,
+                    "started_at":  _started_at,
+                    "finished_at": datetime.now().isoformat(timespec="seconds"),
+                    "duration_s":  round(_dur, 2),
+                })
+                # Re-mount in case the timed phase replaced the state dict
+                state["data"]["phase_durations"] = _phase_durations
+                # One-line, Railway-greppable duration log
+                print(f"  [timing] {phase_name}: {_dur:.1f}s")
+
+        # ----------------------------------------------------------------
         # PHASE 1 — Macro Regime Classifier
         # ----------------------------------------------------------------
         print(f"\n{'='*60}")
         print("[1/10] Macro Regime Classifier")
         print('='*60)
-        state = run_macro_regime_classifier(state)
+        with _timed("1_macro_regime"):
+            state = run_macro_regime_classifier(state)
         regime = state["data"].get("macro_regime", {})
         print(f"  Regime: {regime.get('risk_appetite')} | "
               f"{regime.get('rate_direction')} rates | "
@@ -128,7 +161,8 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[2/10] Strategic Routing Agent")
         print('='*60)
-        state = run_strategic_router(state)
+        with _timed("2_strategic_router"):
+            state = run_strategic_router(state)
         print(f"  Sector: {state['data'].get('sector')}")
         progress.update_status("strategic_router", primary_ticker, "✓ Routing complete",
                                partial_data={"routing_decision": state["data"].get("routing_decision"),
@@ -143,7 +177,8 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[2.5/10] Intelligence Agents (Insider · Revision · Sentiment · EarningsQuality · ShortInterest, parallel)")
         print('='*60)
-        state = _run_intelligence_agents_parallel(state)
+        with _timed("2_5_intelligence"):
+            state = _run_intelligence_agents_parallel(state)
         progress.update_status("intelligence_agents", primary_ticker, "✓ Intelligence complete",
                                partial_data={"news_sentiment":   state["data"].get("news_sentiment", {}),
                                              "short_interest":   state["data"].get("short_interest", {}),
@@ -182,7 +217,8 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[2.7/10] EDGAR_HKEX Resolver")
         print('='*60)
-        state = run_edgar_hkex_resolver(state)
+        with _timed("2_7_edgar_hkex"):
+            state = run_edgar_hkex_resolver(state)
         for ticker in tickers:
             ref = state["data"].get("edgar_filing_refs", {}).get(ticker, {})
             if ref:
@@ -203,16 +239,17 @@ def run_advanced_pipeline(
         # and is intentionally NOT bypassed here.
         # ----------------------------------------------------------------
         _phase_cache: dict[str, dict | None] = {}
-        for _t in tickers:
-            _phase_cache[_t] = get_phase_cache(_t, max_age_days=60)
-            if _phase_cache[_t]:
-                _c = _phase_cache[_t]
-                print(f"  [cache] {_t}: found recent run from "
-                      f"{_c['run_at'][:10]} (age {_c['age_days']:.1f}d) — "
-                      f"brief={'✓' if _c.get('industry_brief') else '✗'} "
-                      f"dcf={'✓' if _c.get('dcf_range') else '✗'} "
-                      f"power_law={'✓' if _c.get('power_law') else '✗'} "
-                      f"citation={'✓' if _c.get('citation_audit') else '✗'}")
+        with _timed("2_8_archive_cache_load"):
+            for _t in tickers:
+                _phase_cache[_t] = get_phase_cache(_t, max_age_days=60)
+                if _phase_cache[_t]:
+                    _c = _phase_cache[_t]
+                    print(f"  [cache] {_t}: found recent run from "
+                          f"{_c['run_at'][:10]} (age {_c['age_days']:.1f}d) — "
+                          f"brief={'✓' if _c.get('industry_brief') else '✗'} "
+                          f"dcf={'✓' if _c.get('dcf_range') else '✗'} "
+                          f"power_law={'✓' if _c.get('power_law') else '✗'} "
+                          f"citation={'✓' if _c.get('citation_audit') else '✗'}")
 
         def _all_cached(key: str, age_days: float = 7.0) -> bool:
             """True if every ticker has a fresh-enough, non-empty cache entry for key.
@@ -261,7 +298,8 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[3/10] Deep Research (Claude+Tavily) & Data Router")
         print('='*60)
-        state = run_data_router(state)
+        with _timed("3_deep_research_router"):
+            state = run_data_router(state)
         # Emit comprehensive partial_data so the frontend populates Valuation
         # Key Metrics + Commentary cards mid-run (2026-04-25).
         # Previous emit only surfaced the raw deep_research text + citations,
@@ -326,17 +364,18 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[4/10] Industry Specialist Agent")
         print('='*60)
-        if _all_cached("industry_brief", age_days=14.0):
-            # Inject cached brief — skip LLM call entirely
-            for _t in tickers:
-                _cached_brief = _phase_cache[_t]["industry_brief"]  # type: ignore[index]
-            # The brief is global (same for all tickers in the run), use the first one
-            state["data"]["industry_brief"] = _phase_cache[tickers[0]]["industry_brief"]  # type: ignore[index]
-            progress.update_status("industry_specialist", tickers[0],
-                                   f"[cache] Loaded from archive ({_phase_cache[tickers[0]]['age_days']:.1f}d old)")  # type: ignore[index]
-            print(f"  [cache] Industry brief loaded from archive — skipping LLM call")
-        else:
-            state = run_industry_specialist(state)
+        with _timed("4_industry_brief"):
+            if _all_cached("industry_brief", age_days=14.0):
+                # Inject cached brief — skip LLM call entirely
+                for _t in tickers:
+                    _cached_brief = _phase_cache[_t]["industry_brief"]  # type: ignore[index]
+                # The brief is global (same for all tickers in the run), use the first one
+                state["data"]["industry_brief"] = _phase_cache[tickers[0]]["industry_brief"]  # type: ignore[index]
+                progress.update_status("industry_specialist", tickers[0],
+                                       f"[cache] Loaded from archive ({_phase_cache[tickers[0]]['age_days']:.1f}d old)")  # type: ignore[index]
+                print(f"  [cache] Industry brief loaded from archive — skipping LLM call")
+            else:
+                state = run_industry_specialist(state)
         brief_lines = state["data"].get("industry_brief", "").splitlines()
         for line in brief_lines[:80]:
             print(f"  {line}")
@@ -358,49 +397,50 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[4.5/10] DCF Engine (multi-method, macro-aware)")
         print('='*60)
-        if _all_cached("dcf_range", age_days=60.0):
-            cached_dcf: dict = {}
-            for _t in tickers:
-                _cd = _phase_cache[_t]["dcf_range"]  # type: ignore[index]
-                cached_dcf[_t] = _cd
-                progress.update_status("dcf_engine", _t,
-                                       f"[cache] Loaded from archive ({_phase_cache[_t]['age_days']:.1f}d old)")  # type: ignore[index]
-            state["data"]["dcf_range"] = cached_dcf
-            print(f"  [cache] DCF range loaded from archive — skipping recalculation")
-        else:
-            # Defensive exception handling — surface any silent DCF crash via
-            # progress.update_status so the error is visible in /analysis/status
-            # and the frontend SSE stream. Previously an exception in run_dcf_agent
-            # would propagate up through run_advanced_pipeline, be caught by the
-            # analysis_service wrapper, and become an invisible RuntimeError —
-            # user would see "pipeline_complete" with no valuation and no trace.
-            try:
-                progress.update_status("dcf_engine", primary_ticker, "Starting DCF engine")
-                state = run_dcf_agent(state)
-            except Exception as _dcf_exc:
-                import traceback as _tb
-                _err_head = f"{type(_dcf_exc).__name__}: {str(_dcf_exc)[:200]}"
-                _err_trace = _tb.format_exc()[:1500]
-                progress.update_status(
-                    "dcf_engine", primary_ticker,
-                    f"DCF CRASHED — {_err_head}"
-                )
-                print(f"\n[ERROR] DCF engine crashed:\n{_err_trace}\n")
-                # Persist the exception to state for post-hoc forensics —
-                # progress.update_status is transient, print() goes to
-                # Railway logs but isn't accessible from /analysis/runs.
-                # state["data"]["dcf_engine_error"] is the only surface
-                # that survives into the run JSON for browsing later.
-                state["data"]["dcf_engine_error"] = {
-                    "exception_type": type(_dcf_exc).__name__,
-                    "message":        str(_dcf_exc)[:500],
-                    "traceback":      _err_trace,
-                    "primary_ticker": primary_ticker,
-                    "tickers":        list(tickers),
-                }
-                # Ensure dcf_range is set to empty dict for each ticker so
-                # downstream code doesn't re-throw on missing key
-                state["data"]["dcf_range"] = {t: {} for t in tickers}
+        with _timed("4_5_dcf_engine"):
+            if _all_cached("dcf_range", age_days=60.0):
+                cached_dcf: dict = {}
+                for _t in tickers:
+                    _cd = _phase_cache[_t]["dcf_range"]  # type: ignore[index]
+                    cached_dcf[_t] = _cd
+                    progress.update_status("dcf_engine", _t,
+                                           f"[cache] Loaded from archive ({_phase_cache[_t]['age_days']:.1f}d old)")  # type: ignore[index]
+                state["data"]["dcf_range"] = cached_dcf
+                print(f"  [cache] DCF range loaded from archive — skipping recalculation")
+            else:
+                # Defensive exception handling — surface any silent DCF crash via
+                # progress.update_status so the error is visible in /analysis/status
+                # and the frontend SSE stream. Previously an exception in run_dcf_agent
+                # would propagate up through run_advanced_pipeline, be caught by the
+                # analysis_service wrapper, and become an invisible RuntimeError —
+                # user would see "pipeline_complete" with no valuation and no trace.
+                try:
+                    progress.update_status("dcf_engine", primary_ticker, "Starting DCF engine")
+                    state = run_dcf_agent(state)
+                except Exception as _dcf_exc:
+                    import traceback as _tb
+                    _err_head = f"{type(_dcf_exc).__name__}: {str(_dcf_exc)[:200]}"
+                    _err_trace = _tb.format_exc()[:1500]
+                    progress.update_status(
+                        "dcf_engine", primary_ticker,
+                        f"DCF CRASHED — {_err_head}"
+                    )
+                    print(f"\n[ERROR] DCF engine crashed:\n{_err_trace}\n")
+                    # Persist the exception to state for post-hoc forensics —
+                    # progress.update_status is transient, print() goes to
+                    # Railway logs but isn't accessible from /analysis/runs.
+                    # state["data"]["dcf_engine_error"] is the only surface
+                    # that survives into the run JSON for browsing later.
+                    state["data"]["dcf_engine_error"] = {
+                        "exception_type": type(_dcf_exc).__name__,
+                        "message":        str(_dcf_exc)[:500],
+                        "traceback":      _err_trace,
+                        "primary_ticker": primary_ticker,
+                        "tickers":        list(tickers),
+                    }
+                    # Ensure dcf_range is set to empty dict for each ticker so
+                    # downstream code doesn't re-throw on missing key
+                    state["data"]["dcf_range"] = {t: {} for t in tickers}
         dcf_range = state["data"].get("dcf_range", {})
         for ticker in tickers:
             dcf = dcf_range.get(ticker, {})
@@ -451,7 +491,8 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[4.6/10] Peer Comparison Engine")
         print('='*60)
-        state = run_peer_comparison(state)
+        with _timed("4_6_peer_comparison"):
+            state = run_peer_comparison(state)
         peer_comp = state["data"].get("peer_comparison", {})
         for ticker in tickers:
             peers_found = list(peer_comp.get(ticker, {}).keys())
@@ -464,24 +505,25 @@ def run_advanced_pipeline(
         from datetime import datetime as _dt, timedelta as _td
         from src.tools.api import get_prices as _get_prices
         import os as _os
-        _ph_api_key = (
-            state["data"].get("api_key")
-            or _os.environ.get("FINANCIAL_DATASETS_API_KEY")
-        )
-        _ph_end   = end_date
-        _ph_start = (_dt.strptime(end_date, "%Y-%m-%d") - _td(days=365)).strftime("%Y-%m-%d")
-        price_history_all: dict[str, list] = {}
-        for ticker in tickers:
-            try:
-                _prices = _get_prices(ticker, _ph_start, _ph_end, api_key=_ph_api_key)
-                price_history_all[ticker] = [
-                    {"date": p.time, "close": p.close} for p in (_prices or [])
-                ]
-                print(f"  {ticker}: {len(price_history_all[ticker])} price points fetched")
-            except Exception:
-                price_history_all[ticker] = []
-                print(f"  {ticker}: price history unavailable")
-        state["data"]["price_history"] = price_history_all
+        with _timed("4_7_price_history"):
+            _ph_api_key = (
+                state["data"].get("api_key")
+                or _os.environ.get("FINANCIAL_DATASETS_API_KEY")
+            )
+            _ph_end   = end_date
+            _ph_start = (_dt.strptime(end_date, "%Y-%m-%d") - _td(days=365)).strftime("%Y-%m-%d")
+            price_history_all: dict[str, list] = {}
+            for ticker in tickers:
+                try:
+                    _prices = _get_prices(ticker, _ph_start, _ph_end, api_key=_ph_api_key)
+                    price_history_all[ticker] = [
+                        {"date": p.time, "close": p.close} for p in (_prices or [])
+                    ]
+                    print(f"  {ticker}: {len(price_history_all[ticker])} price points fetched")
+                except Exception:
+                    price_history_all[ticker] = []
+                    print(f"  {ticker}: price history unavailable")
+            state["data"]["price_history"] = price_history_all
 
         # ----------------------------------------------------------------
         # PHASE 5 — Investor Agents (parallel)
@@ -489,7 +531,8 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print(f"[5/10] Investor Agents ({len(active_agents)} agents, parallel)")
         print('='*60)
-        state = _run_investor_agents_parallel(state, active_agents)
+        with _timed("5_investor_agents"):
+            state = _run_investor_agents_parallel(state, active_agents)
 
         # Signal summary
         for ticker in tickers:
@@ -522,17 +565,18 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[6/10] Debate Round")
         print('='*60)
-        if should_trigger_debate(state["data"]["analyst_signals"], tickers):
-            print("  TRIGGERED — genuine conflict detected")
-            state = run_debate_round(state)
-            for ticker in tickers:
-                dr = state["data"].get("debate_result", {}).get(ticker)
-                if dr:
-                    print(f"  {ticker} adjudicated: {dr.get('adjudicated_signal')} "
-                          f"conviction {dr.get('adjudicated_conviction')}/10")
-        else:
-            print("  SKIPPED — no strong conflict (< 3 BUY and 3 SELL on same ticker)")
-            state["data"]["debate_result"] = {}
+        with _timed("6_debate"):
+            if should_trigger_debate(state["data"]["analyst_signals"], tickers):
+                print("  TRIGGERED — genuine conflict detected")
+                state = run_debate_round(state)
+                for ticker in tickers:
+                    dr = state["data"].get("debate_result", {}).get(ticker)
+                    if dr:
+                        print(f"  {ticker} adjudicated: {dr.get('adjudicated_signal')} "
+                              f"conviction {dr.get('adjudicated_conviction')}/10")
+            else:
+                print("  SKIPPED — no strong conflict (< 3 BUY and 3 SELL on same ticker)")
+                state["data"]["debate_result"] = {}
         progress.update_status("debate_round", primary_ticker, "✓ Debate complete",
                                partial_data={"debate_result": state["data"].get("debate_result")})
 
@@ -545,35 +589,37 @@ def run_advanced_pipeline(
 
         # Run Phase 8 (basic risk manager) first so scenario has current prices
         # risk_management_agent returns a partial state (LangGraph pattern) — merge, don't replace
-        _partial = risk_management_agent(state)
-        state["messages"] = _partial.get("messages", state["messages"])
-        state["data"].update(_partial.get("data", {}))
+        with _timed("7_0_basic_risk"):
+            _partial = risk_management_agent(state)
+            state["messages"] = _partial.get("messages", state["messages"])
+            state["data"].update(_partial.get("data", {}))
 
         import copy
 
-        # Power law: skip LLM if cached within 60 days (structural moat is sticky)
-        _power_law_cached = _all_cached("power_law", age_days=60.0)
-        # Value trap: skip LLM if cached within 30 days (financial quality signals are semi-stable)
-        _value_trap_cached = _all_cached("value_trap", age_days=30.0)
-        # (cached data was already emitted to frontend before Phase 3 — no re-emission needed here)
+        with _timed("7_scenario_pl_trap"):
+            # Power law: skip LLM if cached within 60 days (structural moat is sticky)
+            _power_law_cached = _all_cached("power_law", age_days=60.0)
+            # Value trap: skip LLM if cached within 30 days (financial quality signals are semi-stable)
+            _value_trap_cached = _all_cached("value_trap", age_days=30.0)
+            # (cached data was already emitted to frontend before Phase 3 — no re-emission needed here)
 
-        state_copy_a = copy.deepcopy(state)
-        state_copy_b = copy.deepcopy(state)
-        state_copy_c = copy.deepcopy(state)
+            state_copy_a = copy.deepcopy(state)
+            state_copy_b = copy.deepcopy(state)
+            state_copy_c = copy.deepcopy(state)
 
-        workers = max(1, 3 - int(_power_law_cached) - int(_value_trap_cached))
-        with ThreadPoolExecutor(max_workers=workers) as executor:
-            f_scenario = _ctx_submit(executor, run_scenario_agent, state_copy_a)
-            f_power = None if _power_law_cached else _ctx_submit(executor, run_power_law_agent, state_copy_b)
-            f_trap  = None if _value_trap_cached else _ctx_submit(executor, run_value_trap_agent, state_copy_c)
+            workers = max(1, 3 - int(_power_law_cached) - int(_value_trap_cached))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                f_scenario = _ctx_submit(executor, run_scenario_agent, state_copy_a)
+                f_power = None if _power_law_cached else _ctx_submit(executor, run_power_law_agent, state_copy_b)
+                f_trap  = None if _value_trap_cached else _ctx_submit(executor, run_value_trap_agent, state_copy_c)
 
-        state["data"]["scenario_analysis"] = f_scenario.result()["data"]["scenario_analysis"]
+            state["data"]["scenario_analysis"] = f_scenario.result()["data"]["scenario_analysis"]
 
-        if not _value_trap_cached:
-            state["data"]["value_trap_analysis"] = f_trap.result()["data"]["value_trap_analysis"]  # type: ignore[union-attr]
+            if not _value_trap_cached:
+                state["data"]["value_trap_analysis"] = f_trap.result()["data"]["value_trap_analysis"]  # type: ignore[union-attr]
 
-        if not _power_law_cached:
-            state["data"]["power_law_analysis"] = f_power.result()["data"]["power_law_analysis"]  # type: ignore[union-attr]
+            if not _power_law_cached:
+                state["data"]["power_law_analysis"] = f_power.result()["data"]["power_law_analysis"]  # type: ignore[union-attr]
 
         for ticker in tickers:
             scen = state["data"]["scenario_analysis"].get(ticker, {})
@@ -587,51 +633,52 @@ def run_advanced_pipeline(
         #    dcf_range (Phase 4.5) + scenario_analysis (Phase 7, just set above).
         #    Emitting here means the scorecard appears ~3 phases earlier than
         #    waiting for the full pipeline to return to analysis_service.
-        _vgpm: dict = {}
-        _analyst_signals = state["data"].get("analyst_signals", {})
-        # Sector lookup for sector-aware VGPM sub-score thresholds (added
-        # 2026-05-21 to fix the post-Apr-25 B-band grade compression).
-        # Pulls sector from state.data.sectors[ticker]; falls back to
-        # _SECTOR_DEFAULT (Technology) when absent.
-        _sectors_map = state["data"].get("sectors", {})
-        for _t in tickers:
-            try:
-                _dcf_t   = state["data"].get("dcf_range", {}).get(_t, {})
-                _scen_t  = state["data"].get("scenario_analysis", {}).get(_t, {})
-                # ROIC-proxy input (net_income/revenue for the latest fiscal
-                # year) sourced from the shared knowledge graph — FMP-direct,
-                # ~24h fresh + earnings-date-aware — instead of
-                # state["data"]["raw_financials"], which is LLM-reformatted
-                # and (on a routing-cache hit) can be up to 30 days stale.
-                # Falls back to the state value if the KG fetch fails for
-                # any reason, so this never blocks a run.
+        with _timed("7_vgpm"):
+            _vgpm: dict = {}
+            _analyst_signals = state["data"].get("analyst_signals", {})
+            # Sector lookup for sector-aware VGPM sub-score thresholds (added
+            # 2026-05-21 to fix the post-Apr-25 B-band grade compression).
+            # Pulls sector from state.data.sectors[ticker]; falls back to
+            # _SECTOR_DEFAULT (Technology) when absent.
+            _sectors_map = state["data"].get("sectors", {})
+            for _t in tickers:
                 try:
-                    from app.backend.services.knowledge_graph import get_kg_annual_line_items
-                    _raw_fin = get_kg_annual_line_items(
-                        _t, end_date, sector=_sectors_map.get(_t) if isinstance(_sectors_map, dict) else None,
+                    _dcf_t   = state["data"].get("dcf_range", {}).get(_t, {})
+                    _scen_t  = state["data"].get("scenario_analysis", {}).get(_t, {})
+                    # ROIC-proxy input (net_income/revenue for the latest fiscal
+                    # year) sourced from the shared knowledge graph — FMP-direct,
+                    # ~24h fresh + earnings-date-aware — instead of
+                    # state["data"]["raw_financials"], which is LLM-reformatted
+                    # and (on a routing-cache hit) can be up to 30 days stale.
+                    # Falls back to the state value if the KG fetch fails for
+                    # any reason, so this never blocks a run.
+                    try:
+                        from app.backend.services.knowledge_graph import get_kg_annual_line_items
+                        _raw_fin = get_kg_annual_line_items(
+                            _t, end_date, sector=_sectors_map.get(_t) if isinstance(_sectors_map, dict) else None,
+                        )
+                    except Exception:
+                        _raw_fin = {}
+                    if not _raw_fin:
+                        _raw_fin = state["data"].get("raw_financials", {})
+                    _dcf_cal = {
+                        "margin_direction": _dcf_t.get("base", {}).get("margin_direction", "stable"),
+                        "risk_flag":        _dcf_t.get("base", {}).get("risk_flag", ""),
+                    }
+                    _insider_raw = _analyst_signals.get("insider_activity_agent", {}).get(_t, {})
+                    _insider_sum = _insider_raw.get("summary", "") if isinstance(_insider_raw, dict) else ""
+                    _sector = _sectors_map.get(_t) if isinstance(_sectors_map, dict) else None
+                    _vgpm[_t] = _compute_vgpm(
+                        dcf_ticker=_dcf_t,
+                        scen_ticker=_scen_t,
+                        raw_financials=_raw_fin,
+                        dcf_cal=_dcf_cal,
+                        insider_summary=_insider_sum,
+                        sector=_sector,
                     )
-                except Exception:
-                    _raw_fin = {}
-                if not _raw_fin:
-                    _raw_fin = state["data"].get("raw_financials", {})
-                _dcf_cal = {
-                    "margin_direction": _dcf_t.get("base", {}).get("margin_direction", "stable"),
-                    "risk_flag":        _dcf_t.get("base", {}).get("risk_flag", ""),
-                }
-                _insider_raw = _analyst_signals.get("insider_activity_agent", {}).get(_t, {})
-                _insider_sum = _insider_raw.get("summary", "") if isinstance(_insider_raw, dict) else ""
-                _sector = _sectors_map.get(_t) if isinstance(_sectors_map, dict) else None
-                _vgpm[_t] = _compute_vgpm(
-                    dcf_ticker=_dcf_t,
-                    scen_ticker=_scen_t,
-                    raw_financials=_raw_fin,
-                    dcf_cal=_dcf_cal,
-                    insider_summary=_insider_sum,
-                    sector=_sector,
-                )
-            except Exception as _e:
-                print(f"  [vgpm] Warning: could not compute VGPM for {_t}: {_e}")
-        state["data"]["vgpm"] = _vgpm
+                except Exception as _e:
+                    print(f"  [vgpm] Warning: could not compute VGPM for {_t}: {_e}")
+            state["data"]["vgpm"] = _vgpm
 
         progress.update_status("phase7_complete", primary_ticker, "✓ Phase 7 complete",
                                partial_data={"scenario_analysis":  state["data"].get("scenario_analysis"),
@@ -653,7 +700,8 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[8/10] Advanced Risk Manager (dual-layer)")
         print('='*60)
-        state = run_advanced_risk_manager(state)
+        with _timed("8_risk_manager"):
+            state = run_advanced_risk_manager(state)
         for ticker in tickers:
             risk = state["data"]["analyst_signals"].get("advanced_risk_manager", {}).get(ticker, {})
             flags = risk.get("level1_flags", []) + risk.get("sector_flags", [])
@@ -668,9 +716,10 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[9/10] Conviction-Weighted Portfolio Manager")
         print('='*60)
-        pm_result = run_advanced_portfolio_manager(state)
-        state["messages"] = pm_result["messages"]
-        state["data"].update(pm_result.get("data", {}))
+        with _timed("9_portfolio_manager"):
+            pm_result = run_advanced_portfolio_manager(state)
+            state["messages"] = pm_result["messages"]
+            state["data"].update(pm_result.get("data", {}))
         decisions = pm_result.get("decisions", {})
         for ticker, d in decisions.items():
             print(f"  {ticker}: {d.get('action')} | "
@@ -691,17 +740,18 @@ def run_advanced_pipeline(
         # ----------------------------------------------------------------
         # PHASE 10 — Post-Trade Review (optional)
         # ----------------------------------------------------------------
-        if enable_post_trade_review:
-            print(f"\n{'='*60}")
-            print("[10/10] Post-Trade Review")
-            print('='*60)
-            state = run_post_trade_review(state)
-            review = state["data"].get("post_trade_review", {})
-            print(f"  Reviewed {review.get('reviewed', 0)} past trade(s)")
-            for upd in review.get("weight_updates", []):
-                print(f"  Weight update: {upd}")
-        else:
-            print(f"\n[10/10] Post-Trade Review — SKIPPED (use --post-trade-review to enable)")
+        with _timed("10_post_trade_review"):
+            if enable_post_trade_review:
+                print(f"\n{'='*60}")
+                print("[10/10] Post-Trade Review")
+                print('='*60)
+                state = run_post_trade_review(state)
+                review = state["data"].get("post_trade_review", {})
+                print(f"  Reviewed {review.get('reviewed', 0)} past trade(s)")
+                for upd in review.get("weight_updates", []):
+                    print(f"  Weight update: {upd}")
+            else:
+                print(f"\n[10/10] Post-Trade Review — SKIPPED (use --post-trade-review to enable)")
 
         # ----------------------------------------------------------------
         # Append to trade log for future Phase 10 reviews
@@ -721,37 +771,38 @@ def run_advanced_pipeline(
         #   3. Survive the run replay path (get_run_result reconstruction)
         #   4. Show up in the V3 audit_bridge Risk multiplier (no longer 1.0x)
         # ----------------------------------------------------------------
-        try:
-            from src.data.sector_kpi_framework import (
-                _augment_metrics_with_fmp_risk,
-                _augment_metrics_with_fmp_commodity,  # V3.1
-                is_legacy_profile,
-            )
-            _profile_names = state["data"].get("profile_names", {})
-            _tickers = state["data"].get("tickers", []) or list(_profile_names.keys())
-            for _t in _tickers:
-                _profile = _profile_names.get(_t) or state["data"].get("profile_name") or ""
-                if not _profile or is_legacy_profile(_profile):
-                    continue
-                # Pick the right metrics dict for this profile (framework vs
-                # legacy sector-specific). Augment in-place if present.
-                for _state_key in ("framework_metrics_all",
-                                   "insurance_metrics_all", "bank_metrics_all"):
-                    _bucket = state["data"].get(_state_key) or {}
-                    if _t in _bucket and isinstance(_bucket[_t], dict):
-                        _bucket[_t] = _augment_metrics_with_fmp_risk(_t, _bucket[_t])
-                        # V3.1 — also augment commodity prices for Resources/Energy
-                        _bucket[_t] = _augment_metrics_with_fmp_commodity(_profile, _bucket[_t])
-                        state["data"][_state_key] = _bucket
-                # If no metrics dict exists yet for this ticker, create one
-                # in framework_metrics_all (so render_card_payload finds it)
-                _fwm = state["data"].setdefault("framework_metrics_all", {})
-                if _t not in _fwm:
-                    _aug = _augment_metrics_with_fmp_risk(_t, {})
-                    _aug = _augment_metrics_with_fmp_commodity(_profile, _aug)
-                    _fwm[_t] = _aug
-        except Exception as _e:
-            print(f"  [fmp_risk_augment] failed: {_e!r} — Risk/Commodity multiplier will be 1.0x")
+        with _timed("10_fmp_risk_augment"):
+            try:
+                from src.data.sector_kpi_framework import (
+                    _augment_metrics_with_fmp_risk,
+                    _augment_metrics_with_fmp_commodity,  # V3.1
+                    is_legacy_profile,
+                )
+                _profile_names = state["data"].get("profile_names", {})
+                _tickers = state["data"].get("tickers", []) or list(_profile_names.keys())
+                for _t in _tickers:
+                    _profile = _profile_names.get(_t) or state["data"].get("profile_name") or ""
+                    if not _profile or is_legacy_profile(_profile):
+                        continue
+                    # Pick the right metrics dict for this profile (framework vs
+                    # legacy sector-specific). Augment in-place if present.
+                    for _state_key in ("framework_metrics_all",
+                                       "insurance_metrics_all", "bank_metrics_all"):
+                        _bucket = state["data"].get(_state_key) or {}
+                        if _t in _bucket and isinstance(_bucket[_t], dict):
+                            _bucket[_t] = _augment_metrics_with_fmp_risk(_t, _bucket[_t])
+                            # V3.1 — also augment commodity prices for Resources/Energy
+                            _bucket[_t] = _augment_metrics_with_fmp_commodity(_profile, _bucket[_t])
+                            state["data"][_state_key] = _bucket
+                    # If no metrics dict exists yet for this ticker, create one
+                    # in framework_metrics_all (so render_card_payload finds it)
+                    _fwm = state["data"].setdefault("framework_metrics_all", {})
+                    if _t not in _fwm:
+                        _aug = _augment_metrics_with_fmp_risk(_t, {})
+                        _aug = _augment_metrics_with_fmp_commodity(_profile, _aug)
+                        _fwm[_t] = _aug
+            except Exception as _e:
+                print(f"  [fmp_risk_augment] failed: {_e!r} — Risk/Commodity multiplier will be 1.0x")
 
         # ----------------------------------------------------------------
         # v3.4 — SEC EDGAR fallback for cet1_ratio (Banks).
@@ -763,34 +814,35 @@ def run_advanced_pipeline(
         # Runs only for bank profiles where cet1_ratio is missing or None.
         # Caches by ticker so re-runs in same session don't re-hit SEC.
         # ----------------------------------------------------------------
-        try:
-            from src.data.sec_edgar import cet1_for_ticker
-            _BANK_PROFILES = {
-                "Money Center Bank", "Money Center Bank (EU)",
-                "Regional Bank", "Super-Regional Bank",
-                "EM Bank", "EM Bank (Premium)",
-                "Bank / Lending Institution",
-                "Investment Bank", "Mortgage/GSE",
-            }
-            _profile_names_sec = state["data"].get("profile_names", {})
-            _tickers_sec = state["data"].get("tickers", []) or list(_profile_names_sec.keys())
-            for _t in _tickers_sec:
-                _profile = _profile_names_sec.get(_t) or state["data"].get("profile_name") or ""
-                if _profile not in _BANK_PROFILES:
-                    continue
-                for _state_key in ("framework_metrics_all", "bank_metrics_all"):
-                    _bucket = state["data"].get(_state_key) or {}
-                    if _t not in _bucket or not isinstance(_bucket[_t], dict):
+        with _timed("10_sec_cet1_fallback"):
+            try:
+                from src.data.sec_edgar import cet1_for_ticker
+                _BANK_PROFILES = {
+                    "Money Center Bank", "Money Center Bank (EU)",
+                    "Regional Bank", "Super-Regional Bank",
+                    "EM Bank", "EM Bank (Premium)",
+                    "Bank / Lending Institution",
+                    "Investment Bank", "Mortgage/GSE",
+                }
+                _profile_names_sec = state["data"].get("profile_names", {})
+                _tickers_sec = state["data"].get("tickers", []) or list(_profile_names_sec.keys())
+                for _t in _tickers_sec:
+                    _profile = _profile_names_sec.get(_t) or state["data"].get("profile_name") or ""
+                    if _profile not in _BANK_PROFILES:
                         continue
-                    if _bucket[_t].get("cet1_ratio") is not None:
-                        continue  # LLM/FMP already provided it
-                    _sec = cet1_for_ticker(_t)
-                    if _sec and _sec.get("cet1_ratio"):
-                        _bucket[_t]["cet1_ratio"] = _sec["cet1_ratio"]
-                        print(f"  [sec_edgar] {_t} CET1={_sec['cet1_ratio']*100:.2f}% "
-                              f"from {_sec.get('filing_date','?')} 10-Q")
-        except Exception as _e:
-            print(f"  [sec_edgar_fallback] failed: {_e!r} — banks without LLM CET1 will use band default 1.0x")
+                    for _state_key in ("framework_metrics_all", "bank_metrics_all"):
+                        _bucket = state["data"].get(_state_key) or {}
+                        if _t not in _bucket or not isinstance(_bucket[_t], dict):
+                            continue
+                        if _bucket[_t].get("cet1_ratio") is not None:
+                            continue  # LLM/FMP already provided it
+                        _sec = cet1_for_ticker(_t)
+                        if _sec and _sec.get("cet1_ratio"):
+                            _bucket[_t]["cet1_ratio"] = _sec["cet1_ratio"]
+                            print(f"  [sec_edgar] {_t} CET1={_sec['cet1_ratio']*100:.2f}% "
+                                  f"from {_sec.get('filing_date','?')} 10-Q")
+            except Exception as _e:
+                print(f"  [sec_edgar_fallback] failed: {_e!r} — banks without LLM CET1 will use band default 1.0x")
 
         # ----------------------------------------------------------------
         # V4-β — Z-Score Engine: augment per-ticker metrics dicts with
@@ -807,31 +859,32 @@ def run_advanced_pipeline(
         # (band-only) and progressively migrates to z-driven as runs
         # accumulate.
         # ----------------------------------------------------------------
-        try:
-            from src.data.zscore_engine import augment_metrics_with_z_scores as _z_augment
-            from src.data.sector_kpi_framework import is_legacy_profile as _is_legacy
-            _profile_names_z = state["data"].get("profile_names", {})
-            _tickers_z = state["data"].get("tickers", []) or list(_profile_names_z.keys())
-            _z_summary: list[str] = []
-            for _t in _tickers_z:
-                _profile = _profile_names_z.get(_t) or state["data"].get("profile_name") or ""
-                if not _profile or _is_legacy(_profile):
-                    continue
-                for _state_key in ("framework_metrics_all",
-                                   "insurance_metrics_all", "bank_metrics_all"):
-                    _bucket = state["data"].get(_state_key) or {}
-                    if _t in _bucket and isinstance(_bucket[_t], dict):
-                        _bucket[_t] = _z_augment(_profile, _t, _bucket[_t])
-                        state["data"][_state_key] = _bucket
-                        _zs = _bucket[_t].get("_z_scores") or {}
-                        if _zs:
-                            _z_summary.append(f"{_t}({_profile}):{len(_zs)}KPIs")
-            if _z_summary:
-                print(f"  [zscore_engine] {' | '.join(_z_summary)}")
-            else:
-                print(f"  [zscore_engine] no peer cohorts found (fresh archive or sparse profiles)")
-        except Exception as _e:
-            print(f"  [zscore_engine] failed: {_e!r} — composite will use band-based tiers")
+        with _timed("10_zscore_engine"):
+            try:
+                from src.data.zscore_engine import augment_metrics_with_z_scores as _z_augment
+                from src.data.sector_kpi_framework import is_legacy_profile as _is_legacy
+                _profile_names_z = state["data"].get("profile_names", {})
+                _tickers_z = state["data"].get("tickers", []) or list(_profile_names_z.keys())
+                _z_summary: list[str] = []
+                for _t in _tickers_z:
+                    _profile = _profile_names_z.get(_t) or state["data"].get("profile_name") or ""
+                    if not _profile or _is_legacy(_profile):
+                        continue
+                    for _state_key in ("framework_metrics_all",
+                                       "insurance_metrics_all", "bank_metrics_all"):
+                        _bucket = state["data"].get(_state_key) or {}
+                        if _t in _bucket and isinstance(_bucket[_t], dict):
+                            _bucket[_t] = _z_augment(_profile, _t, _bucket[_t])
+                            state["data"][_state_key] = _bucket
+                            _zs = _bucket[_t].get("_z_scores") or {}
+                            if _zs:
+                                _z_summary.append(f"{_t}({_profile}):{len(_zs)}KPIs")
+                if _z_summary:
+                    print(f"  [zscore_engine] {' | '.join(_z_summary)}")
+                else:
+                    print(f"  [zscore_engine] no peer cohorts found (fresh archive or sparse profiles)")
+            except Exception as _e:
+                print(f"  [zscore_engine] failed: {_e!r} — composite will use band-based tiers")
 
         # ----------------------------------------------------------------
         # Sector valuation card payload — per-ticker dict consumed by the
@@ -844,13 +897,14 @@ def run_advanced_pipeline(
         # archive picks it up, AND added to the run_advanced_pipeline
         # return dict below so web_runs JSON gets it (per 1ac5490 fix).
         # ----------------------------------------------------------------
-        try:
-            from src.data.sector_kpi_framework import render_card_payloads_for_run
-            _sector_card = render_card_payloads_for_run(state) or {}
-        except Exception as _e:
-            print(f"  [sector_card] render failed: {_e!r} — frontend will hide card")
-            _sector_card = {}
-        state["data"]["sector_card"] = _sector_card
+        with _timed("10_sector_card_render"):
+            try:
+                from src.data.sector_kpi_framework import render_card_payloads_for_run
+                _sector_card = render_card_payloads_for_run(state) or {}
+            except Exception as _e:
+                print(f"  [sector_card] render failed: {_e!r} — frontend will hide card")
+                _sector_card = {}
+            state["data"]["sector_card"] = _sector_card
 
         # SECOND mid-run emit — the now-fully-correct card (includes any KPIs
         # that only landed after the DCF emit, e.g. z-score composite inputs).
@@ -880,36 +934,46 @@ def run_advanced_pipeline(
         #
         # See plan: C:/Users/ethan/.claude/plans/mighty-gliding-graham.md
         # ----------------------------------------------------------------
-        try:
-            from src.agents.audit.card_qa_agent import run_card_qa_agent  # type: ignore
-            _qa_audits: dict[str, dict] = {}
-            for _qa_ticker in tickers:
-                if not _qa_ticker:
-                    continue
-                _qa_audits[_qa_ticker] = run_card_qa_agent(state, _qa_ticker)
-            state["data"]["card_qa_audit"] = _qa_audits
-        except Exception as _qa_exc:
-            import traceback as _qa_tb
-            _qa_trace = "".join(
-                _qa_tb.format_exception(type(_qa_exc), _qa_exc, _qa_exc.__traceback__)
-            )
-            print(f"  [card_qa_agent] FAILED — pipeline continues: {type(_qa_exc).__name__}: {_qa_exc!r}")
-            state["data"]["card_qa_engine_error"] = {
-                "exception_type": type(_qa_exc).__name__,
-                "message":        str(_qa_exc)[:500],
-                "traceback":      _qa_trace,
-                "primary_ticker": primary_ticker,
-                "tickers":        list(tickers),
-            }
-            state["data"]["card_qa_audit"] = {}
+        with _timed("10_5_card_qa"):
+            try:
+                from src.agents.audit.card_qa_agent import run_card_qa_agent  # type: ignore
+                _qa_audits: dict[str, dict] = {}
+                for _qa_ticker in tickers:
+                    if not _qa_ticker:
+                        continue
+                    _qa_audits[_qa_ticker] = run_card_qa_agent(state, _qa_ticker)
+                state["data"]["card_qa_audit"] = _qa_audits
+            except Exception as _qa_exc:
+                import traceback as _qa_tb
+                _qa_trace = "".join(
+                    _qa_tb.format_exception(type(_qa_exc), _qa_exc, _qa_exc.__traceback__)
+                )
+                print(f"  [card_qa_agent] FAILED — pipeline continues: {type(_qa_exc).__name__}: {_qa_exc!r}")
+                state["data"]["card_qa_engine_error"] = {
+                    "exception_type": type(_qa_exc).__name__,
+                    "message":        str(_qa_exc)[:500],
+                    "traceback":      _qa_trace,
+                    "primary_ticker": primary_ticker,
+                    "tickers":        list(tickers),
+                }
+                state["data"]["card_qa_audit"] = {}
 
         # ----------------------------------------------------------------
         # Episodic run archive (SQLite — src/data/run_archive.db)
         # ----------------------------------------------------------------
-        _archive_run_id = save_run(state, decisions)
-        summary = archive_summary()
+        with _timed("11_save_archive"):
+            _archive_run_id = save_run(state, decisions)
+            summary = archive_summary()
         print(f"  [archive] {summary['total_runs']} run(s) stored | "
               f"{summary['scored']} scored | {summary['pending']} pending")
+
+        # ── One-line timing summary (Railway-greppable) ─────────────────────
+        if _phase_durations:
+            _total_s = sum(e["duration_s"] for e in _phase_durations)
+            _slowest = max(_phase_durations, key=lambda e: e["duration_s"])
+            print(f"  [timing] pipeline total: {_total_s:.1f}s across "
+                  f"{len(_phase_durations)} phases | slowest: "
+                  f"{_slowest['phase']} ({_slowest['duration_s']:.1f}s)")
 
         print(f"\n{'='*60}")
         print("Advanced pipeline complete.")
@@ -1020,6 +1084,12 @@ def run_advanced_pipeline(
             # be in this return dict — see commit 1ac5490 / sector_kpi_framework
             # render_card_payload docstring for why state-only writes get lost.
             "sector_card":            state["data"].get("sector_card", {}),
+            # ── Workstream A: per-phase wall-clock timings ─────────────────────
+            # List of {phase, started_at, finished_at, duration_s}. Serialised
+            # into web_runs.full_result_json AND the dedicated
+            # web_runs.phase_durations column by analysis_service._save_web_run.
+            # Additive key — old replay payloads simply lack it.
+            "phase_durations":    _phase_durations,
             # Internal — lets analysis_service link web_runs to the archive row
             # without calling save_run() a second time (which would create a duplicate).
             "_archive_run_id":    _archive_run_id,

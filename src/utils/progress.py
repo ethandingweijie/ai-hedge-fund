@@ -5,13 +5,24 @@ from rich.table import Table
 from rich.style import Style
 from rich.text import Text
 from typing import Dict, Optional, Callable, List
+import contextvars
 import sys
 import threading
 
-# Thread-local storage so each pipeline thread can stamp its own run_id.
+# Per-run tag so each pipeline run stamps its own run_id on every event.
 # progress.update_status() reads this and includes run_id in every handler call
 # so that concurrent SSE handlers can filter to their own run's events.
-_tl = threading.local()
+#
+# This is a ContextVar, NOT a threading.local. The pipeline fans work out to
+# ThreadPoolExecutors (src/pipeline.py), and a thread-local does not cross that
+# boundary: child threads saw run_id=None, those events were treated as
+# "untagged / CLI" and broadcast to *every* registered handler, so one user's
+# SSE stream received another user's agent output and partial_data. A ContextVar
+# propagates correctly as long as the thread is started via
+# src.utils.run_config.spawn / .submit, which copy the context.
+_run_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "progress_run_id", default=None
+)
 
 console = Console()
 
@@ -20,17 +31,20 @@ class AgentProgress:
     """Manages progress tracking for multiple agents."""
 
     def set_run_id(self, run_id: str) -> None:
-        """Tag the current thread with run_id so update_status can stamp events."""
-        _tl.run_id = run_id
+        """Tag the current context with run_id so update_status can stamp events."""
+        _run_id_var.set(run_id)
 
     def get_run_id(self) -> Optional[str]:
-        """Return the run_id for the current thread (None in CLI / untagged threads)."""
-        return getattr(_tl, "run_id", None)
+        """Return the run_id for the current context (None in CLI / untagged code)."""
+        return _run_id_var.get()
 
     def __init__(self):
         self.agent_status: Dict[str, Dict[str, str]] = {}
         self.started = False
         self.update_handlers: List[Callable[[str, Optional[str], str], None]] = []
+        # Guards mutation of update_handlers. Handlers are registered and removed
+        # from the event loop while pipeline worker threads iterate the list.
+        self._handlers_lock = threading.Lock()
         # Live table is only used when running interactively (no SSE handlers registered)
         self._table: Optional[Table] = None
         self._live: Optional[Live] = None
@@ -39,13 +53,15 @@ class AgentProgress:
 
     def register_handler(self, handler: Callable[[str, Optional[str], str], None]):
         """Register a handler to be called when agent status updates."""
-        self.update_handlers.append(handler)
+        with self._handlers_lock:
+            self.update_handlers.append(handler)
         return handler  # Return handler to support use as decorator
 
     def unregister_handler(self, handler: Callable[[str, Optional[str], str], None]):
         """Unregister a previously registered handler."""
-        if handler in self.update_handlers:
-            self.update_handlers.remove(handler)
+        with self._handlers_lock:
+            if handler in self.update_handlers:
+                self.update_handlers.remove(handler)
 
     # ── Interactive (CLI) lifecycle ───────────────────────────────────────────
 
@@ -101,13 +117,18 @@ class AgentProgress:
         # Handlers registered for a different run will receive this run_id and
         # can drop the event — preventing partial_data cross-contamination when
         # multiple pipeline runs are active concurrently.
-        run_id = getattr(_tl, "run_id", None)
+        run_id = _run_id_var.get()
 
         # Notify all registered SSE handlers.
         # run_id is passed as 7th positional arg; legacy handlers that only
         # accept 5 args will receive it via *args / ignore it.  Handlers that
         # want run_id filtering should accept it as event_run_id=None.
-        for handler in self.update_handlers:
+        # Snapshot under the lock: a run finishing on the event loop can
+        # unregister its handler while a worker thread is mid-iteration.
+        with self._handlers_lock:
+            handlers = list(self.update_handlers)
+
+        for handler in handlers:
             try:
                 handler(agent_name, ticker, status, analysis, timestamp, partial_data, run_id)
             except TypeError:
