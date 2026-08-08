@@ -166,8 +166,8 @@ export function V2ReportView({
   return (
     <div className="min-h-full flex flex-col bg-background">
       {/* Ticker header — offset from top so it clears the iOS status bar.
-          The hamburger is a fixed top-left button (in MobileTopBar); we leave
-          a 48px top gutter so the ticker row sits just below that button. */}
+          The avatar menu button is a fixed top-right button (in MobileTopBar);
+          we leave a top gutter so the ticker row sits just below it. */}
       <div
         className="sticky z-20 bg-background/95 backdrop-blur border-b border-border/60 px-5 pb-3"
         style={{ top: 0, paddingTop: 'calc(env(safe-area-inset-top, 0px) + 56px)' }}

@@ -21,7 +21,7 @@ export function MobileTickerHeader({
   const isPositive = (priceChange ?? 0) >= 0;
 
   return (
-    <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border pl-14 pr-14 py-2">
+    <div className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b border-border pl-4 pr-14 py-2">
       <div className="flex items-center justify-between">
         {/* Left: ticker + company stacked */}
         <div className="min-w-0">

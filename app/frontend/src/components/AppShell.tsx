@@ -3,7 +3,7 @@
  * ============
  * Chooses the navigation shell based on the persisted layout mode:
  *   • 'desktop' → DesktopLayout  (persistent sidebar + wide content)
- *   • 'mobile'  → MobileLayout   (430px phone frame + hamburger drawer)
+ *   • 'mobile'  → MobileLayout   (430px phone frame + avatar menu page)
  *
  * The /login route is a standalone full-screen experience and renders WITHOUT
  * any shell in either mode (no nav chrome before the user is authenticated).

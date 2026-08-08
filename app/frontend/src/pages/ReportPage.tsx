@@ -944,8 +944,9 @@ export function ReportPage() {
         <div className="relative z-10 flex-1 flex flex-col">
           <div className="flex-1 min-h-[40px]" />
 
-          {/* Greeting */}
-          <div className="px-6 text-center">
+          {/* Greeting — left-aligned: the top-left hamburger is gone (avatar
+              sits top-right), so the hero uses the full left gutter. */}
+          <div className="px-4 text-left">
             <p className="text-[15px] text-muted-foreground">
               Hello, {user?.name ?? user?.email ?? 'friend'}
             </p>
@@ -1030,7 +1031,7 @@ export function ReportPage() {
           </form>
 
           {/* Archetype / profile hint */}
-          <div className="px-4 mt-2.5 text-center">
+          <div className="px-4 mt-2.5 text-left">
             <button
               type="button"
               onClick={() => setShowArchetype(v => !v)}

@@ -70,12 +70,15 @@ export function DiscussPage() {
   }
 
   return (
-    <PageContainer size="prose">
+    <>
+      {/* Hero sits OUTSIDE the padded container (same as Screener/Watchlist)
+          so its title hugs the left gutter instead of doubling the px-4. */}
       <TabHero
         title="Discuss"
         subtitle="Search a ticker to join its discussion thread"
         icon={MessageSquare}
       />
+      <PageContainer size="prose" flush className="pb-8">
       <div className="mt-6">
         <form
           onSubmit={(e) => { e.preventDefault(); goToTicker(ticker); }}
@@ -150,6 +153,7 @@ export function DiscussPage() {
           </div>
         )}
       </div>
-    </PageContainer>
+      </PageContainer>
+    </>
   );
 }

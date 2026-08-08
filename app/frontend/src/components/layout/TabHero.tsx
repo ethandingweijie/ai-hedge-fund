@@ -17,7 +17,8 @@
  * desktop <main> scroller and the 430px mobile phone frame alike).
  *
  * In mobile layout mode the band pads itself below the iOS safe area and
- * left of the floating hamburger button (MobileTopBar).
+ * right of the floating avatar button (MobileTopBar), with the title
+ * flush to the normal left gutter.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -60,11 +61,12 @@ export function TabHero({ title, subtitle, icon: Icon, actions, className }: Tab
             : 'bg-hero text-hero-foreground',
           className,
         )}
-        // Mobile: keep the title row exactly BESIDE the fixed hamburger
-        // (which sits at viewport safe-area + 12px). At rest the phone frame
-        // already pads for the safe area, so we add only 12px; once pinned at
-        // the viewport top the frame's padding has scrolled away, so the band
-        // must carry the safe-area inset itself.
+        // Mobile: keep the actions slot clear of the fixed avatar button
+        // (top-right, viewport safe-area + 12px) while the title uses the
+        // full left gutter. At rest the phone frame already pads for the
+        // safe area, so we add only 12px; once pinned at the viewport top
+        // the frame's padding has scrolled away, so the band must carry the
+        // safe-area inset itself.
         style={isMobile ? {
           paddingTop: scrolled
             ? 'calc(env(safe-area-inset-top, 0px) + 12px)'
@@ -74,15 +76,14 @@ export function TabHero({ title, subtitle, icon: Icon, actions, className }: Tab
         <div
           className={cn(
             'px-4 md:px-6 flex items-center justify-between gap-3 transition-all duration-300',
-            isMobile && 'pl-14', // clear the floating hamburger button
+            isMobile && 'pr-14', // clear the floating avatar button (top-right)
             scrolled ? 'pb-3' : 'pb-4',
             !isMobile && (scrolled ? 'pt-3' : 'pt-6'),
           )}
         >
           <div className="min-w-0">
             {/* Title keeps its size in both states (Grab keeps "Finance" large
-                on the white bar too) — only the colours swap. min-h-9 matches
-                the 36px hamburger button so the row centres against it. */}
+                on the white bar too) — only the colours swap. */}
             <h1 className="font-bold tracking-tight leading-none flex items-center gap-2.5 text-[26px] md:text-[30px] min-h-9">
               {Icon && (
                 <Icon

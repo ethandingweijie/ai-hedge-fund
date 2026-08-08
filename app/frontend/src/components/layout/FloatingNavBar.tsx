@@ -12,7 +12,7 @@
  *
  * WhatsApp-style: big icons + labels, fully-rounded pill, capsule highlight on
  * the active tab, hugging the bottom edge above the iOS home indicator.
- * z-50: below the hamburger (z-10000) and drawer (z-10001).
+ * z-50: below the avatar button (z-10000).
  */
 import { Filter, Lightbulb, BookMarked, Wallet, History } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';

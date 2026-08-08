@@ -9,7 +9,7 @@
  *      data pages don't stretch edge-to-edge.
  *
  *   2. A MODE-AWARE vertical chrome offset. Pages used to bake in `pt-16 pb-20`
- *      to clear the mobile floating hamburger (MobileTopBar) + leave bottom
+ *      to clear the mobile floating avatar button (MobileTopBar) + leave bottom
  *      breathing room. But the desktop shell (DesktopSidebar) has neither, so
  *      that padding became dead space top and bottom on desktop. Here the
  *      offset is applied only in mobile mode; desktop gets a normal `py-8`.
