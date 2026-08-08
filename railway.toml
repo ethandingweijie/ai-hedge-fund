@@ -2,6 +2,9 @@
 dockerfilePath = "docker/Dockerfile.web"
 
 [deploy]
+# Runs before each deploy rolls out: creates missing ORM tables, then applies
+# any new Alembic migrations (idempotent — safe to run on every deploy).
+predeployCommand = "python scripts/sync_schema.py"
 healthcheckPath = "/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -13,6 +14,15 @@ config = context.config
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Production (Railway) runs against PostgreSQL via the DATABASE_URL env var.
+# Override the SQLite URL baked into alembic.ini so migrations apply to the
+# real database. Locally, DATABASE_URL is unset and the SQLite URL is kept.
+_database_url = os.environ.get("DATABASE_URL")
+if _database_url:
+    if _database_url.startswith("postgres://"):
+        _database_url = _database_url.replace("postgres://", "postgresql://", 1)
+    config.set_main_option("sqlalchemy.url", _database_url)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
