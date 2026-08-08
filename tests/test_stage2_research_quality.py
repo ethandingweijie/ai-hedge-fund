@@ -98,6 +98,15 @@ def test_c4_evidence_state_cached_is_not_degraded():
     assert "TRAINING DATA" in label
 
 
+def test_c4_evidence_state_qwen_agent_search_is_live_not_degraded():
+    # Qwen's streaming path returns a proxy count of 1 (real count is not
+    # observable). It must NOT be degraded on that proxy — agent search is
+    # live web data.
+    is_live, degraded, label = dr._research_evidence_state("qwen_web", 1)
+    assert is_live and not degraded
+    assert "LIVE WEB DATA" in label
+
+
 def test_c4_coverage_nudge_reissues_report_and_counts_searches():
     nudge_resp = _Resp([
         _Block(btype="server_tool_use", name="web_search"),

@@ -2750,16 +2750,29 @@ def _check_research_financial_consistency(
 
 _LIVE_RESEARCH_TIERS = ("anthropic_web", "tavily", "qwen_web")
 
+# Tiers whose search count is NOT observable. Qwen's OpenAI-compatible
+# streaming path runs a single agent-strategy call (search_strategy="agent")
+# that fans out to multiple live searches internally, but the protocol returns
+# no per-search count — _run_with_qwen_web_search returns a proxy of 1.
+# Applying the numeric floor to that proxy would degrade EVERY Qwen run, so
+# these tiers are treated as live on their own evidence (non-empty report from
+# a search-enabled call) instead of a count they cannot report.
+_UNCOUNTABLE_LIVE_TIERS = ("qwen_web",)
+
 
 def _research_evidence_state(research_tier: str, search_count: int) -> tuple[bool, bool, str]:
     """C4 live-data gate.
 
     Returns (is_live, is_degraded, label):
-      is_live     — live tier AND confirmed searches >= floor
+      is_live     — live tier AND confirmed searches >= floor (or an
+                    uncountable agent-search tier with a report)
       is_degraded — live tier but BELOW the search floor: the evidence base
                     is too thin for the valuation model to trust blindly
       label       — progress suffix for the "Deep research complete" line
     """
+    if research_tier in _UNCOUNTABLE_LIVE_TIERS:
+        # Agent-search tier: count is a proxy, never degrade on it.
+        return True, False, " [LIVE WEB DATA — agent search]"
     is_live     = research_tier in _LIVE_RESEARCH_TIERS and search_count >= _MIN_LIVE_SEARCHES
     is_degraded = research_tier in _LIVE_RESEARCH_TIERS and search_count < _MIN_LIVE_SEARCHES
     label = (
