@@ -1,30 +1,48 @@
 from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import QueuePool, SingletonThreadPool
 import os
 from pathlib import Path
 
 # Get the backend directory path
 BACKEND_DIR = Path(__file__).parent.parent
-DATABASE_PATH = os.environ.get("DATABASE_PATH", str(BACKEND_DIR / "hedge_fund.db"))
 
-# Database configuration - use absolute path
-DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+# DATABASE_URL from env (Railway auto-provides for Postgres addons)
+# Falls back to SQLite for local development
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Create SQLAlchemy engine
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False}  # Needed for SQLite
-)
+if DATABASE_URL:
+    # PostgreSQL mode (production)
+    _IS_POSTGRES = True
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,  # Verify connections before use
+        pool_recycle=3600,   # Recycle connections after 1 hour
+    )
+else:
+    # SQLite mode (local development)
+    _IS_POSTGRES = False
+    DATABASE_PATH = os.environ.get("DATABASE_PATH", str(BACKEND_DIR / "hedge_fund.db"))
+    DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},  # Needed for SQLite
+        poolclass=SingletonThreadPool,
+    )
 
 
 @event.listens_for(engine, "connect")
 def _set_sqlite_pragmas(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA synchronous=NORMAL")
-    cursor.execute("PRAGMA busy_timeout=5000")
-    cursor.close()
+    """Set SQLite pragmas for WAL mode (no-op for Postgres)."""
+    if not _IS_POSTGRES:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -38,4 +56,9 @@ def get_db():
     try:
         yield db
     finally:
-        db.close() 
+        db.close()
+
+
+def is_postgres() -> bool:
+    """Check if the app is running with PostgreSQL (production) or SQLite (local)."""
+    return _IS_POSTGRES 
