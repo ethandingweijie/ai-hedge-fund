@@ -175,11 +175,6 @@ def run_data_router(state: AgentState) -> AgentState:
 
     progress.update_status(agent_id, ticker, "Pre-fetching shared financial metrics")
 
-    # Shared data every investor uses
-    metrics = get_financial_metrics(ticker, end_date, period="ttm", limit=5, api_key=api_key)
-    market_cap = get_market_cap(ticker, end_date, api_key=api_key)
-    prices = get_prices(ticker, start_date, end_date, api_key=api_key)
-
     # Sector-aware overlay: add sector-specific fields to every agent's fetch.
     # The LLM classifier may emit the sector as the canonical key ("Tech",
     # "Biopharma", "Financials", "RealEstate") OR a loose variant
@@ -218,14 +213,27 @@ def run_data_router(state: AgentState) -> AgentState:
 
     progress.update_status(agent_id, ticker, f"Fetching {len(all_fields)} unique line items")
 
-    line_items = search_line_items(
-        ticker=ticker,
-        line_items=sorted(all_fields),
-        end_date=end_date,
-        period="annual",
-        limit=5,
-        api_key=api_key,
-    )
+    # ── B3: issue all four FMP pre-fetches CONCURRENTLY ──────────────────────
+    # Mutually independent; previously sequential, they added ~4 round-trips
+    # (plus search_line_items' internal pacing) before deep research could
+    # start. search_line_items keeps its internal 0.25 s pacing and
+    # _fmp_get's token-bucket throttle still bounds the aggregate FMP rate.
+    # Failure semantics unchanged: an exception propagates exactly as the
+    # sequential version did.
+    from concurrent.futures import ThreadPoolExecutor
+    from src.utils.run_config import submit as _ctx_submit
+    with ThreadPoolExecutor(max_workers=4) as _ex:
+        _f_metrics = _ctx_submit(_ex, get_financial_metrics, ticker, end_date,
+                                 period="ttm", limit=5, api_key=api_key)
+        _f_mcap    = _ctx_submit(_ex, get_market_cap, ticker, end_date, api_key=api_key)
+        _f_prices  = _ctx_submit(_ex, get_prices, ticker, start_date, end_date, api_key=api_key)
+        _f_items   = _ctx_submit(_ex, search_line_items, ticker=ticker,
+                                 line_items=sorted(all_fields), end_date=end_date,
+                                 period="annual", limit=5, api_key=api_key)
+        metrics    = _f_metrics.result()
+        market_cap = _f_mcap.result()
+        prices     = _f_prices.result()
+        line_items = _f_items.result()
 
     # Index line items by field name for fast per-agent slicing
     line_item_by_field: dict[str, list] = {}

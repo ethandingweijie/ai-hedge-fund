@@ -373,11 +373,22 @@ def _search_web(
     try:
         from tavily import TavilyClient
         client = TavilyClient(api_key=tavily_api_key)
-        response = client.search(
-            query=query,
-            max_results=MAX_RESULTS,
-            search_depth="advanced",
-        )
+        # B7: 10 s timeout + one retry. Previously no timeout was passed
+        # (SDK default 60 s, no retry) — a hung Tavily call stalled the
+        # whole tool-use loop. The retry absorbs single-request blips.
+        response = None
+        for _attempt in range(2):
+            try:
+                response = client.search(
+                    query=query,
+                    max_results=MAX_RESULTS,
+                    search_depth="advanced",
+                    timeout=10,
+                )
+                break
+            except Exception:
+                if _attempt == 1:
+                    raise
         snippets = []
         for r in response.get("results", []):
             title     = r.get("title", "")
@@ -3298,36 +3309,21 @@ def _research_one_ticker(
                 )
             )
 
-            # Re-extract citation registry from cached text (never persisted —
-            # only deep_research_text is stored — so this always runs). We
-            # rebuild it so the citation auditor gets structured source
-            # metadata (URLs, speakers, dates) rather than raw text only.
+            # B8: rebuild the citation registry (never persisted — only
+            # deep_research_text is stored, so this always runs) CONCURRENTLY
+            # with the extractor work below instead of blocking it. The two
+            # are independent LLM calls; this hides the citation call's wall
+            # time on cache-miss runs. _extract_citation_registry returns []
+            # on any failure, so the future never raises.
+            from concurrent.futures import ThreadPoolExecutor as _B8Pool
+            _cached_text = _cached["deep_research_text"]
             _cal_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
-            _citations = _extract_citation_registry(
-                _cal_client, _synthesis_model, _cached["deep_research_text"], ticker,
+            _cit_ex = _B8Pool(max_workers=1)
+            _cit_future = _cit_ex.submit(
+                _extract_citation_registry,
+                _cal_client, _synthesis_model, _cached_text, ticker,
                 edgar_filing_ref=edgar_filing_ref,
             )
-            # Re-annotate cached text with rebuilt citation markers so the
-            # frontend DeepResearchPanel can render inline [n] hyperlinks.
-            _cached_text = _cached["deep_research_text"]
-            _annotated_cached = _cached_text
-            _used_cached: set = set()
-            for _entry in sorted(
-                (_e for _e in _citations if _e.get("quote") and len(_e["quote"]) > 20),
-                key=lambda _e: len(_e.get("quote", "")),
-                reverse=True,
-            ):
-                _ref_n = _entry.get("ref_id")
-                if not _ref_n or _ref_n in _used_cached:
-                    continue
-                _phrase = _entry["quote"][:120].strip()
-                _pos = _annotated_cached.find(_phrase)
-                if _pos >= 0:
-                    _insert = _pos + len(_phrase)
-                    _annotated_cached = (
-                        _annotated_cached[:_insert] + f"[{_ref_n}]" + _annotated_cached[_insert:]
-                    )
-                    _used_cached.add(_ref_n)
 
             if _ext_reused:
                 _ext_results  = _persisted_ext["results"]
@@ -3372,6 +3368,30 @@ def _research_one_ticker(
                         print(f"  [C2] {ticker}: extractor outputs persisted for reuse")
                 except Exception:
                     pass
+
+            # Join the concurrent citation rebuild (B8) and re-annotate cached
+            # text with the rebuilt markers so the frontend DeepResearchPanel
+            # can render inline [n] hyperlinks.
+            _citations = _cit_future.result()
+            _cit_ex.shutdown(wait=False)
+            _annotated_cached = _cached_text
+            _used_cached: set = set()
+            for _entry in sorted(
+                (_e for _e in _citations if _e.get("quote") and len(_e["quote"]) > 20),
+                key=lambda _e: len(_e.get("quote", "")),
+                reverse=True,
+            ):
+                _ref_n = _entry.get("ref_id")
+                if not _ref_n or _ref_n in _used_cached:
+                    continue
+                _phrase = _entry["quote"][:120].strip()
+                _pos = _annotated_cached.find(_phrase)
+                if _pos >= 0:
+                    _insert = _pos + len(_phrase)
+                    _annotated_cached = (
+                        _annotated_cached[:_insert] + f"[{_ref_n}]" + _annotated_cached[_insert:]
+                    )
+                    _used_cached.add(_ref_n)
             # C6: deterministic research↔books check (no LLM cost)
             _divergences = _check_research_financial_consistency(
                 _cached["deep_research_sections"], raw_financials, ticker
@@ -3460,13 +3480,20 @@ def _research_one_ticker(
             # citation_registry is not stored in the archive; rebuild from merged text
             # so the citation auditor receives structured source metadata for new delta
             # amendments as well as the original base research.
-            _dcf_cal_d = _extract_dcf_calibration(
-                _delta_client, _synthesis_model, _merged_sections, ticker
-            )
-            _citations_d = _extract_citation_registry(
+            # B8: the two calls are independent — run citations concurrently
+            # with dcf_calibration (hides one call's wall time).
+            from concurrent.futures import ThreadPoolExecutor as _B8Pool
+            _cit_ex_d = _B8Pool(max_workers=1)
+            _cit_future_d = _cit_ex_d.submit(
+                _extract_citation_registry,
                 _delta_client, _synthesis_model, _merged_full, ticker,
                 edgar_filing_ref=edgar_filing_ref,
             )
+            _dcf_cal_d = _extract_dcf_calibration(
+                _delta_client, _synthesis_model, _merged_sections, ticker
+            )
+            _citations_d = _cit_future_d.result()
+            _cit_ex_d.shutdown(wait=False)
             # Inject Phase 2.5 news sentiment as a "recent_news" section (post-cache-date only)
             _ns_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
             _supplement = _build_news_supplement(
@@ -4534,10 +4561,50 @@ def _research_one_ticker(
         if e.get("url")
     ]
 
-    llm_registry = _extract_citation_registry(
+    # B8: the extractor fan-out below does NOT depend on the citation
+    # registry — run them concurrently (hides one citation call's wall
+    # time on every fresh run). _extract_citation_registry returns []
+    # on any failure, so the future never raises.
+    from concurrent.futures import ThreadPoolExecutor as _B8Pool
+    _cit_ex_f = _B8Pool(max_workers=1)
+    _cit_future_f = _cit_ex_f.submit(
+        _extract_citation_registry,
         sdk_client, _synthesis_model, final_report, ticker,
         edgar_filing_ref=edgar_filing_ref,
     )
+
+    # ── Parallel extractor fan-out ───────────────────────────────────────────
+    # Shared implementation with the cache-hit / delta paths (see
+    # _run_extractor_fanout). Restored 2026-04-25 after persistence bug fix
+    # (commit 1ac5490); refactored into the shared function by Workstream C1
+    # so cached runs produce identical KPI coverage to fresh runs.
+    #
+    # Thread safety: each extractor holds its own request lifecycle via
+    # sdk_client.messages.create(); the anthropic SDK handles concurrent
+    # requests from the same client instance. I/O-bound workload means GIL
+    # isn't a concern.
+    #
+    # B8: moved ahead of the citation-registry join — the two are independent.
+    _results, _extractor_failures = _run_extractor_fanout(
+        sdk_client, _synthesis_model, sections, final_report, ticker,
+        sector, profile_name, raw_financials,
+    )
+    # C2: persist the fan-out outputs keyed on these sections — the next run
+    # that cache-hits on this research reuses them with zero LLM calls.
+    try:
+        from src.memory.run_archive import (
+            save_extractor_outputs as _save_persisted_ext,
+        )
+        _save_persisted_ext(
+            ticker,
+            _hash_research_sections(sections, profile_name),
+            _results, _extractor_failures,
+        )
+    except Exception:
+        pass
+
+    llm_registry = _cit_future_f.result()
+    _cit_ex_f.shutdown(wait=False)
     ref_offset = len(seed_registry)
     llm_deduped: list[dict] = []
     for entry in llm_registry:
@@ -4582,33 +4649,9 @@ def _research_one_ticker(
         f"{len(_used_ids)} inline markers inserted"
     )
 
-    # ── Parallel extractor fan-out ───────────────────────────────────────────
-    # Shared implementation with the cache-hit / delta paths (see
-    # _run_extractor_fanout). Restored 2026-04-25 after persistence bug fix
-    # (commit 1ac5490); refactored into the shared function by Workstream C1
-    # so cached runs produce identical KPI coverage to fresh runs.
-    #
-    # Thread safety: each extractor holds its own request lifecycle via
-    # sdk_client.messages.create(); the anthropic SDK handles concurrent
-    # requests from the same client instance. I/O-bound workload means GIL
-    # isn't a concern.
-    _results, _extractor_failures = _run_extractor_fanout(
-        sdk_client, _synthesis_model, sections, final_report, ticker,
-        sector, profile_name, raw_financials,
-    )
-    # C2: persist the fan-out outputs keyed on these sections — the next run
-    # that cache-hits on this research reuses them with zero LLM calls.
-    try:
-        from src.memory.run_archive import (
-            save_extractor_outputs as _save_persisted_ext,
-        )
-        _save_persisted_ext(
-            ticker,
-            _hash_research_sections(sections, profile_name),
-            _results, _extractor_failures,
-        )
-    except Exception:
-        pass
+    # (B8: the extractor fan-out + C2 persist ran CONCURRENTLY with the
+    # citation registry rebuild above — see the fan-out block earlier in
+    # this function.)
 
     dcf_calibration   = _results.get("dcf_calibration", {})
     segment_scenarios = _results.get("segment_scenarios", {})

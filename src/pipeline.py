@@ -85,6 +85,11 @@ def run_advanced_pipeline(
     """
     progress.start()
 
+    # B2 background executor (peer comparison + price history shadow run).
+    # Initialised here so the finally-block cleanup is safe even if the
+    # pipeline raises before the shadow launch.
+    _bg_peer_exec: ThreadPoolExecutor | None = None
+
     try:
         # ----------------------------------------------------------------
         # Initialise state
@@ -141,13 +146,74 @@ def run_advanced_pipeline(
                 print(f"  [timing] {phase_name}: {_dur:.1f}s")
 
         # ----------------------------------------------------------------
-        # PHASE 1 — Macro Regime Classifier
+        # FRONT BLOCK — Phases 1, 2, 2.5, 2.7 (parallel)
         # ----------------------------------------------------------------
         print(f"\n{'='*60}")
-        print("[1/10] Macro Regime Classifier")
+        print("[1-2.7/10] Front block (Macro ∥ Router ∥ Intelligence ∥ EDGAR, parallel)")
         print('='*60)
-        with _timed("1_macro_regime"):
-            state = run_macro_regime_classifier(state)
+        # B1 — phases 1 + 2 + 2.5 + 2.7 run CONCURRENTLY below. All four
+        # need only tickers + dates and write DISJOINT state keys (verified
+        # by grep):
+        #   macro  → macro_regime, agent_weight_multipliers,
+        #             conviction_weights, position_size_cap
+        #   router → company_name, sector(s), profile_name(s),
+        #             raw_financials, routing_decision, insider_summary, …
+        #   intel  → insider_activity, analyst_revisions, news_sentiment,
+        #             earnings_quality, short_interest, analyst_signals
+        #   edgar  → edgar_filing_refs
+        # The router does NOT read macro_regime (verified), so no ordering
+        # dependency exists. Each phase runs on a deepcopy; results merge
+        # after the join. Wall time becomes max(the four) instead of the sum
+        # (~35-70 s saved on fresh runs; more when FMP is slow). Per-phase
+        # timings keep their original phase names (overlapping started_at
+        # values reveal the concurrency); SSE progress events are emitted
+        # post-merge in the same order as the sequential pipeline, so
+        # frontend map-based tracking is unaffected.
+
+        def _timed_call(phase_name: str, fn, st):
+            """_timed() equivalent safe to run inside a worker thread."""
+            _t0 = time.perf_counter()
+            _started_at = datetime.now().isoformat(timespec="seconds")
+            try:
+                return fn(st)
+            finally:
+                _dur = time.perf_counter() - _t0
+                _phase_durations.append({
+                    "phase":       phase_name,
+                    "started_at":  _started_at,
+                    "finished_at": datetime.now().isoformat(timespec="seconds"),
+                    "duration_s":  round(_dur, 2),
+                })
+                print(f"  [timing] {phase_name}: {_dur:.1f}s")
+
+        import copy as _copy
+        _st_macro  = _copy.deepcopy(state)
+        _st_router = _copy.deepcopy(state)
+        _st_intel  = _copy.deepcopy(state)
+        _st_edgar  = _copy.deepcopy(state)
+
+        with ThreadPoolExecutor(max_workers=4) as _front_ex:
+            _f_macro  = _ctx_submit(_front_ex, _timed_call, "1_macro_regime",
+                                    run_macro_regime_classifier, _st_macro)
+            _f_router = _ctx_submit(_front_ex, _timed_call, "2_strategic_router",
+                                    run_strategic_router, _st_router)
+            _f_intel  = _ctx_submit(_front_ex, _timed_call, "2_5_intelligence",
+                                    _run_intelligence_agents_parallel, _st_intel)
+            _f_edgar  = _ctx_submit(_front_ex, _timed_call, "2_7_edgar_hkex",
+                                    run_edgar_hkex_resolver, _st_edgar)
+
+        # Join — an exception re-raises here exactly as the sequential
+        # pipeline would have raised mid-phase (fail semantics unchanged).
+        _st_macro  = _f_macro.result()
+        _st_router = _f_router.result()
+        _st_intel  = _f_intel.result()
+        _st_edgar  = _f_edgar.result()
+
+        # Merge: router's copy is the base (carries the most downstream
+        # keys); graft the other three phases' disjoint key sets on top.
+        state = _merge_front_block(_st_router, _st_macro, _st_intel, _st_edgar,
+                                   _phase_durations)
+
         regime = state["data"].get("macro_regime", {})
         print(f"  Regime: {regime.get('risk_appetite')} | "
               f"{regime.get('rate_direction')} rates | "
@@ -155,30 +221,13 @@ def run_advanced_pipeline(
         progress.update_status("macro_regime_classifier", primary_ticker, "✓ Regime identified",
                                partial_data={"macro_regime": state["data"].get("macro_regime")})
 
-        # ----------------------------------------------------------------
-        # PHASE 2 — Strategic Routing Agent
-        # ----------------------------------------------------------------
-        print(f"\n{'='*60}")
-        print("[2/10] Strategic Routing Agent")
-        print('='*60)
-        with _timed("2_strategic_router"):
-            state = run_strategic_router(state)
+        # (Phase 2 strategic router ran in the front block above.)
         print(f"  Sector: {state['data'].get('sector')}")
         progress.update_status("strategic_router", primary_ticker, "✓ Routing complete",
                                partial_data={"routing_decision": state["data"].get("routing_decision"),
                                              "raw_financials": state["data"].get("raw_financials")})
 
-        # ----------------------------------------------------------------
-        # PHASE 2.5 — Intelligence Agents (deterministic, parallel)
-        # Insider Activity + Analyst Revision + News Sentiment +
-        # Earnings Quality run concurrently on deepcopies, then results
-        # are merged back.  No LLM required — pure data signals.
-        # ----------------------------------------------------------------
-        print(f"\n{'='*60}")
-        print("[2.5/10] Intelligence Agents (Insider · Revision · Sentiment · EarningsQuality · ShortInterest, parallel)")
-        print('='*60)
-        with _timed("2_5_intelligence"):
-            state = _run_intelligence_agents_parallel(state)
+        # (Phase 2.5 intelligence agents ran in the front block above.)
         progress.update_status("intelligence_agents", primary_ticker, "✓ Intelligence complete",
                                partial_data={"news_sentiment":   state["data"].get("news_sentiment", {}),
                                              "short_interest":   state["data"].get("short_interest", {}),
@@ -207,18 +256,10 @@ def run_advanced_pipeline(
                 f"squeeze={si.get('squeeze_risk','?')}"
             )
 
-        # ----------------------------------------------------------------
-        # PHASE 2.7 — EDGAR_HKEX Resolver (no LLM, ~0.5 s per ticker)
-        # US tickers : resolves SEC EDGAR accession number + filing URL
-        # HK tickers : resolves HKEXnews Annual Report PDF URL
-        # Enables deep research to cite financial data to the primary source
-        # instead of the vague "Financial Data API" attribution.
-        # ----------------------------------------------------------------
-        print(f"\n{'='*60}")
-        print("[2.7/10] EDGAR_HKEX Resolver")
-        print('='*60)
-        with _timed("2_7_edgar_hkex"):
-            state = run_edgar_hkex_resolver(state)
+        # (Phase 2.7 EDGAR/HKEX resolver ran in the front block above.
+        #  US tickers: SEC EDGAR accession + filing URL; HK tickers:
+        #  HKEXnews Annual Report PDF URL — lets deep research cite
+        #  financial data to the primary source.)
         for ticker in tickers:
             ref = state["data"].get("edgar_filing_refs", {}).get(ticker, {})
             if ref:
@@ -290,6 +331,29 @@ def run_advanced_pipeline(
                                        f"[cache] Loaded from archive ({_phase_cache[_t]['age_days']:.1f}d old)",  # type: ignore[index]
                                        partial_data={"value_trap_analysis": _early_vt})
             print(f"  [cache] Value Trap streamed to frontend early — skipping Phase 7 LLM call")
+
+        # ----------------------------------------------------------------
+        # B2 — Peer Comparison (4.6) + Price History (4.7) shadow launch.
+        # Both need only tickers + sector + dates (all present after the
+        # front-block merge), and their sole consumers are the pipeline
+        # return dict and the PDF report — nothing between here and their
+        # nominal phase slots reads peer_comparison or price_history.
+        # Launched now, they run CONCURRENTLY with deep research / industry
+        # brief / DCF and are joined at their nominal 4.6/4.7 slots, hiding
+        # ~1 min of wall time entirely. run_peer_comparison writes exactly
+        # one state key (peer_comparison — verified in source), so joining
+        # extracts just that key into the live state.
+        # ----------------------------------------------------------------
+        _bg_peer_exec = ThreadPoolExecutor(max_workers=2)
+        _st_peer = _copy.deepcopy(state)
+        _f_peer_bg = _ctx_submit(_bg_peer_exec, run_peer_comparison, _st_peer)
+        _ph_api_key_bg = (
+            state["data"].get("api_key")
+            or os.environ.get("FINANCIAL_DATASETS_API_KEY")
+        )
+        _f_ph_bg = _ctx_submit(_bg_peer_exec, _fetch_price_history,
+                               list(tickers), end_date, _ph_api_key_bg)
+        print("  [B2] Peer comparison + price history launched in background")
 
         # ----------------------------------------------------------------
         # PHASE 3 — Deep Research (Claude+Tavily) & Data Router
@@ -492,7 +556,10 @@ def run_advanced_pipeline(
         print("[4.6/10] Peer Comparison Engine")
         print('='*60)
         with _timed("4_6_peer_comparison"):
-            state = run_peer_comparison(state)
+            # B2: ran in the background since the front block — just join.
+            # run_peer_comparison writes exactly one data key; extract it.
+            _st_peer_done = _f_peer_bg.result()
+            state["data"]["peer_comparison"] = _st_peer_done["data"].get("peer_comparison", {})
         peer_comp = state["data"].get("peer_comparison", {})
         for ticker in tickers:
             peers_found = list(peer_comp.get(ticker, {}).keys())
@@ -502,28 +569,11 @@ def run_advanced_pipeline(
         # ----------------------------------------------------------------
         # PHASE 4.7 — Price History (12-month, for sparkline)
         # ----------------------------------------------------------------
-        from datetime import datetime as _dt, timedelta as _td
-        from src.tools.api import get_prices as _get_prices
-        import os as _os
         with _timed("4_7_price_history"):
-            _ph_api_key = (
-                state["data"].get("api_key")
-                or _os.environ.get("FINANCIAL_DATASETS_API_KEY")
-            )
-            _ph_end   = end_date
-            _ph_start = (_dt.strptime(end_date, "%Y-%m-%d") - _td(days=365)).strftime("%Y-%m-%d")
-            price_history_all: dict[str, list] = {}
-            for ticker in tickers:
-                try:
-                    _prices = _get_prices(ticker, _ph_start, _ph_end, api_key=_ph_api_key)
-                    price_history_all[ticker] = [
-                        {"date": p.time, "close": p.close} for p in (_prices or [])
-                    ]
-                    print(f"  {ticker}: {len(price_history_all[ticker])} price points fetched")
-                except Exception:
-                    price_history_all[ticker] = []
-                    print(f"  {ticker}: price history unavailable")
+            # B2: fetched in the background since the front block — join.
+            price_history_all: dict[str, list] = _f_ph_bg.result()
             state["data"]["price_history"] = price_history_all
+        _bg_peer_exec.shutdown(wait=False)
 
         # ----------------------------------------------------------------
         # PHASE 5 — Investor Agents (parallel)
@@ -1106,6 +1156,13 @@ def run_advanced_pipeline(
         }
 
     finally:
+        # B2: on any exit path, cancel still-queued shadow work (running
+        # futures finish on their deepcopies — bounded and harmless).
+        if _bg_peer_exec is not None:
+            try:
+                _bg_peer_exec.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
         progress.stop()
 
 
@@ -1164,11 +1221,80 @@ def _run_intelligence_agents_parallel(state: AgentState) -> AgentState:
     return state
 
 
+def _merge_front_block(router_state: AgentState, macro_state: AgentState,
+                       intel_state: AgentState, edgar_state: AgentState,
+                       phase_durations: list) -> AgentState:
+    """B1 merge — combine the four front-block phase results into one state.
+
+    The router's copy is the base (it carries the most downstream keys); the
+    other three phases' DISJOINT key sets are grafted on top (disjointness
+    verified by grep — see the FRONT BLOCK comment in run_advanced_pipeline).
+    The shared phase_durations list is re-mounted on the surviving state so
+    later phases keep appending to the one serialised list.
+    """
+    state = router_state
+    state["data"]["phase_durations"] = phase_durations
+    for _k in ("macro_regime", "agent_weight_multipliers",
+               "conviction_weights", "position_size_cap"):
+        if _k in macro_state["data"]:
+            state["data"][_k] = macro_state["data"][_k]
+    for _k in ("insider_activity", "analyst_revisions", "news_sentiment",
+               "earnings_quality", "short_interest", "analyst_signals"):
+        if _k in intel_state["data"]:
+            state["data"][_k] = intel_state["data"][_k]
+    state["data"]["edgar_filing_refs"] = edgar_state["data"].get("edgar_filing_refs", {})
+    return state
+
+
+def _investor_max_workers() -> int:
+    """B5 — worker cap for the investor-agent pool, env-tunable.
+
+    Default 6 (long-standing behaviour). Measured 2026-08-09 on the
+    production Anthropic account: bumping PIPELINE_INVESTOR_MAX_WORKERS
+    to 10 saturated the per-minute token/rate budget — the 12 concurrent
+    contexts (~50k tokens each) triggered sustained 429 retries and the
+    investor phase ran SLOWER than at 6. Only raise this on accounts with
+    substantially higher Anthropic limits. Qwen/DashScope burst-limits
+    around 3-4 concurrent calls (429s), so the default stays there too.
+    Malformed values fall back to 6 — a bad env var must never sink a run.
+    """
+    try:
+        return max(1, int(os.environ.get("PIPELINE_INVESTOR_MAX_WORKERS", "") or 6))
+    except ValueError:
+        return 6
+
+
+def _fetch_price_history(tickers: list[str], end_date: str, api_key: str | None) -> dict[str, list]:
+    """B2 — 12-month price history (sparkline) extracted for background execution.
+
+    Was inline in phase 4.7; identical behaviour — per-ticker graceful
+    degradation to [] on any fetch failure.
+    """
+    from datetime import datetime as _dt, timedelta as _td
+    from src.tools.api import get_prices as _get_prices
+
+    _ph_end   = end_date
+    _ph_start = (_dt.strptime(end_date, "%Y-%m-%d") - _td(days=365)).strftime("%Y-%m-%d")
+    price_history_all: dict[str, list] = {}
+    for ticker in tickers:
+        try:
+            _prices = _get_prices(ticker, _ph_start, _ph_end, api_key=api_key)
+            price_history_all[ticker] = [
+                {"date": p.time, "close": p.close} for p in (_prices or [])
+            ]
+            print(f"  {ticker}: {len(price_history_all[ticker])} price points fetched")
+        except Exception:
+            price_history_all[ticker] = []
+            print(f"  {ticker}: price history unavailable")
+    return price_history_all
+
+
 def _run_investor_agents_parallel(state: AgentState, active_agents: list[str]) -> AgentState:
-    """Run all investor agents concurrently. Max 6 threads to avoid API rate limits."""
+    """Run all investor agents concurrently. Worker cap via _investor_max_workers()
+    (B5: PIPELINE_INVESTOR_MAX_WORKERS env, default 6 to avoid API rate limits)."""
     results: dict[str, dict] = {}
 
-    with ThreadPoolExecutor(max_workers=min(len(active_agents), 6)) as executor:
+    with ThreadPoolExecutor(max_workers=min(len(active_agents), _investor_max_workers())) as executor:
         futures = {
             _ctx_submit(executor, run_advanced_investor, agent_key, state): agent_key
             for agent_key in active_agents

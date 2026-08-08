@@ -30,6 +30,33 @@ class Cache:
         """Append new price data to cache."""
         self._prices_cache[ticker] = self._merge_data(self._prices_cache.get(ticker), data, key_field="time")
 
+    def get_prices_covering(
+        self, key_prefix: str, start_date: str, end_date: str
+    ) -> list[dict[str, any]] | None:
+        """B4 — serve a price window from any cached SUPERSET range.
+
+        Price cache keys end in ``_{start}_{end}`` (10-char ISO dates). If any
+        entry under ``key_prefix`` covers ``[start_date, end_date]``, return
+        its rows sliced to the window — saving a repeat FMP fetch when several
+        phases request overlapping windows for the same ticker. ``list(...)``
+        snapshot before iteration: concurrent set_prices() calls may add keys
+        while a worker thread scans, and iterating a mutating dict raises.
+        Returns None (caller fetches) when nothing covers the window.
+        """
+        for key, rows in list(self._prices_cache.items()):
+            if not key.startswith(key_prefix) or not rows:
+                continue
+            # key = f"{prefix-with-ticker}_{start}_{end}" — dates are the
+            # last two 10-char segments; parse from the right so tickers
+            # containing '_' or '.' cannot confuse the split.
+            k_start, k_end = key[-21:-11], key[-10:]
+            if k_start <= start_date and k_end >= end_date:
+                return [
+                    r for r in rows
+                    if start_date <= (r.get("time") or "") <= end_date
+                ]
+        return None
+
     def get_financial_metrics(self, ticker: str) -> list[dict[str, any]]:
         """Get cached financial metrics if available."""
         return self._financial_metrics_cache.get(ticker)

@@ -179,8 +179,12 @@ class TestRateLimiting:
         fields. _fmp_get backs off 20s on the first 429 (was 60s in the
         legacy financialdatasets path).
         """
-        # Mock cache to return None (cache miss)
+        # Mock cache to return None (cache miss). Both the exact-key lookup
+        # and the B4 superset-window lookup must miss for the network path
+        # to be exercised — an un-stubbed Mock attribute is truthy and would
+        # short-circuit the fetch.
         mock_cache.get_prices.return_value = None
+        mock_cache.get_prices_covering.return_value = None
 
         # Setup mock responses: first 429, then 200 with valid FMP data
         mock_429_response = Mock()

@@ -169,7 +169,23 @@ def get_model(model_name: str, model_provider: ModelProvider, api_keys: dict = N
         # leaving brief_text empty and triggering the compact-prompt retry.
         # Higher max_tokens does not force the model to generate more tokens —
         # it only raises the ceiling; the model still stops when done.
-        return ChatAnthropic(model=model_name, api_key=api_key, max_tokens=64000)
+        #
+        # B6: explicit timeout + retries. A hung Anthropic call previously
+        # stalled its whole pipeline phase forever — now it raises and
+        # LangChain retries.
+        #
+        # MEASURED 2026-08-09: timeout=120 (copied from the Qwen path) was
+        # TOO SHORT for Anthropic-side calls — investor agents legitimately
+        # run ~150-250 s and the citation-registry rebuild ~127 s. At 120 s
+        # every such call hit APITimeoutError; with SDK max_retries=3 each
+        # outer attempt burned ~8 min (4 × 120 s) before surfacing, and the
+        # investor phase degraded into a retry cascade. 600 s is the
+        # Anthropic SDK default: still caps true hangs (the original goal)
+        # while clearing every measured legitimate call with wide margin.
+        return ChatAnthropic(
+            model=model_name, api_key=api_key, max_tokens=64000,
+            timeout=600, max_retries=2,
+        )
     elif model_provider == ModelProvider.DEEPSEEK:
         api_key = (api_keys or {}).get("DEEPSEEK_API_KEY") or _env("DEEPSEEK_API_KEY")
         if not api_key:

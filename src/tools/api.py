@@ -444,6 +444,15 @@ def get_prices(
     if cached := _cache.get_prices(cache_key):
         return [Price(**p) for p in cached]
 
+    # B4: serve from any cached SUPERSET window instead of re-fetching.
+    # Several pipeline phases request overlapping windows for the same
+    # ticker (data_router start→end, 4.7 sparkline 365d, ADV 30d, …);
+    # set_prices merges by date, so the widest earlier fetch already
+    # contains every row a narrower window needs.
+    if covered := _cache.get_prices_covering(f"fmp_{ticker}_", start_date, end_date):
+        _cache.set_prices(cache_key, covered)   # pin exact key for repeat hits
+        return [Price(**p) for p in covered]
+
     data = _fmp_get(
         f"{_STABLE}/historical-price-eod/light",
         {"symbol": ticker, "from": start_date, "to": end_date},
