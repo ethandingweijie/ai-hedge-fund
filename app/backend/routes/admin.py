@@ -24,8 +24,13 @@ def _secret_ok(request: Request, secret: str) -> bool:
     """
     import hmac
     presented = secret or request.headers.get("X-Admin-Secret", "")
-    return (bool(ADMIN_SECRET) and bool(presented)
-            and hmac.compare_digest(presented, ADMIN_SECRET))
+    if not (ADMIN_SECRET and presented):
+        return False
+    # Compare as UTF-8 bytes: hmac.compare_digest raises TypeError on
+    # non-ASCII str input, and a junk/garbled header must yield a clean
+    # 403 — never an unhandled 500.
+    return hmac.compare_digest(presented.encode("utf-8"),
+                               ADMIN_SECRET.encode("utf-8"))
 
 
 def _get_db_paths() -> dict[str, str]:
