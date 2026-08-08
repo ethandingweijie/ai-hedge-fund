@@ -45,9 +45,9 @@ export function PageContainer({ size = 'default', className, flush = false, chil
     <div className="min-h-full bg-background">
       <div
         className={cn(
-          'mx-auto w-full px-4 md:px-6',
+          'mx-auto w-full px-4 md:px-8',
           MAX_W[size],
-          !flush && (mode === 'mobile' ? 'pt-16 pb-20' : 'py-6 md:py-8'),
+          !flush && (mode === 'mobile' ? 'pt-16 pb-20' : 'py-8 md:py-10'),
           className,
         )}
       >

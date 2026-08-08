@@ -45,7 +45,7 @@ function scrollTo(id: string) {
 function SectionAnchor({ id, label, badge }: { id: string; label: string; badge?: React.ReactNode }) {
   return (
     <div id={id} className="scroll-mt-28">
-      <div className="flex items-center gap-3 mb-4 pt-10">
+      <div className="flex items-center gap-3 mb-6 pt-12">
         <div className="h-px w-6 bg-border shrink-0" />
         <span className="text-xs font-bold uppercase tracking-[0.14em] text-foreground/40 whitespace-nowrap flex items-center gap-1.5">
           {label}
@@ -187,7 +187,7 @@ export function ReportViewPage() {
       </div>
 
       {/* ── Page content ───────────────────────────────────────────────────── */}
-      <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-2">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 pt-4 md:pt-8 pb-12 md:pb-16 space-y-6">
 
         {/* ── Summary ────────────────────────────────────────────────────── */}
         <div id="summary" className="scroll-mt-28" />
@@ -196,7 +196,7 @@ export function ReportViewPage() {
           audit={(data as { card_qa_audit?: Record<string, import('@/lib/reportTypes').DdCardAudit> }).card_qa_audit?.[ticker]}
           ticker={ticker}
         />
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 items-stretch">
           <ReportHeader
             ticker={ticker}
             runAt={result.run_at}
@@ -217,8 +217,8 @@ export function ReportViewPage() {
         {/* in place of the generic DCF ladder. Price Target + Scenario Chart */}
         {/* work for REITs too, so they render unconditionally.                */}
         <SectionAnchor id="valuation" label="Valuation" />
-        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start">
-          <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-5 items-start">
+          <div className="flex flex-col gap-5">
             <PriceTargetPanel
               dcfRange={dcfRange}
               scenario={scenarioAnalysis}
@@ -283,7 +283,7 @@ export function ReportViewPage() {
                 (no bear/bull IV stored) looking like dead space above a gap. */}
             <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-5">
             <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
             <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
             <NewsPanel ticker={ticker} />

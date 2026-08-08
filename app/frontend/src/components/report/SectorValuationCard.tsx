@@ -333,7 +333,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
       <div className="grid grid-cols-7 items-center gap-1 text-center">
         {/* Quality */}
         <div className="col-span-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-2 py-1.5">
-          <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-blue-600 dark:text-blue-400">
+          <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-blue-600 dark:text-blue-400">
             <span>Quality</span>
             {bridge.quality_weight != null && (
               <span className="text-muted-foreground normal-case tracking-normal">
@@ -348,7 +348,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
             {zChip(bridge.quality_z, bridge.quality_cohort)}
             {coverageChip(bridge.quality_extracted, bridge.quality_total)}
           </div>
-          <div className="text-[9px] text-muted-foreground truncate" title={bridge.quality_note}>
+          <div className="text-[10px] text-muted-foreground truncate" title={bridge.quality_note}>
             {bridge.quality_note}
           </div>
         </div>
@@ -357,7 +357,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
 
         {/* Risk */}
         <div className="col-span-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5">
-          <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             <span>Risk</span>
             {bridge.risk_weight != null && (
               <span className="text-muted-foreground normal-case tracking-normal">
@@ -372,7 +372,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
             {zChip(bridge.risk_z, bridge.risk_cohort)}
             {coverageChip(bridge.risk_extracted, bridge.risk_total)}
           </div>
-          <div className="text-[9px] text-muted-foreground truncate" title={bridge.risk_note}>
+          <div className="text-[10px] text-muted-foreground truncate" title={bridge.risk_note}>
             {bridge.risk_note}
           </div>
         </div>
@@ -381,7 +381,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
 
         {/* Commodity */}
         <div className="col-span-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1.5">
-          <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
+          <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
             <span>Comm</span>
             {bridge.commodity_weight != null && (
               <span className="text-muted-foreground normal-case tracking-normal">
@@ -418,7 +418,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
           {bridge.tier_label && (
             <span
               className={cn(
-                'inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider',
+                'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
                 bridge.tier_label === 'premium'
                   ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                   : bridge.tier_label === 'haircut'

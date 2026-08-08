@@ -361,23 +361,23 @@ export function ComplacencyPage() {
         {/* Cohort summary bar */}
         <div className="flex flex-wrap items-center gap-4 mb-3 p-3 rounded-md border border-border bg-card">
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Gate Passers</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Gate Passers</span>
             <span className="text-lg font-bold font-mono text-foreground">
               {cohort?.gate_passers ?? 0} <span className="text-xs text-muted-foreground">/ {cohort?.ticker_count ?? 0}</span>
             </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Tickers</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Tickers</span>
             <span className="text-lg font-bold font-mono text-foreground">{cohort?.ticker_count ?? 0}</span>
           </div>
           {cohort?.failed_tickers && cohort.failed_tickers.length > 0 && (
             <div className="flex flex-col" title={cohort.failed_tickers.map((f) => `${f.ticker}: ${f.reason}`).join('\n')}>
-              <span className="text-[9px] uppercase tracking-wider text-amber-500">Failed</span>
+              <span className="text-[10px] uppercase tracking-wider text-amber-500">Failed</span>
               <span className="text-lg font-bold font-mono text-amber-500">{cohort.failed_tickers.length}</span>
             </div>
           )}
           <div className="flex flex-col">
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground">Last run</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Last run</span>
             <span className="text-xs text-foreground">{formatRunTime(cohort?.created_at ?? null)}</span>
           </div>
           <div className="ml-auto">
@@ -491,26 +491,26 @@ export function ComplacencyPage() {
                     on white. Dark-mode keeps the pastel softness via `dark:`. */}
                 <tr className="border-b border-border/50">
                   <th colSpan={5} className="px-2 py-1"></th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-violet-500/15 text-violet-900 dark:text-violet-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-violet-500/15 text-violet-900 dark:text-violet-300">
                     Aggregate
                   </th>
-                  <th colSpan={4} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
+                  <th colSpan={4} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
                     Pillar scores
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-rose-500/15 text-rose-900 dark:text-rose-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-rose-500/15 text-rose-900 dark:text-rose-300">
                     Valuation
                   </th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-orange-500/15 text-orange-900 dark:text-orange-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-orange-500/15 text-orange-900 dark:text-orange-300">
                     Behav.
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-900 dark:text-cyan-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-900 dark:text-cyan-300">
                     Technical
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-900 dark:text-emerald-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-900 dark:text-emerald-300">
                     Quality
                   </th>
                   <th colSpan={1} className="px-2 py-1"></th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[9px] uppercase tracking-wider font-bold bg-purple-500/15 text-purple-900 dark:text-purple-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-purple-500/15 text-purple-900 dark:text-purple-300">
                     Put rec
                   </th>
                 </tr>
@@ -941,7 +941,7 @@ function ComplacencyDrawer({
               <span className="text-[10px] font-mono font-bold text-foreground">
                 {ticker.composite.toFixed(1)} / 8
                 {ticker.passes_gate && (
-                  <span className="ml-2 px-1.5 py-0.5 rounded bg-cyan-500/30 text-cyan-200 text-[9px] uppercase">
+                  <span className="ml-2 px-1.5 py-0.5 rounded bg-cyan-500/30 text-cyan-200 text-[10px] uppercase">
                     Gate passed
                   </span>
                 )}
@@ -1063,7 +1063,7 @@ function ComplacencyDrawer({
             <section className="border border-purple-500/30 rounded-md bg-purple-500/5 p-3">
               <div className="flex items-baseline justify-between mb-2">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-purple-300">Put Recommendation</h2>
-                <span className="text-[9px] text-muted-foreground italic">v1 · yfinance · no IV percentile</span>
+                <span className="text-[10px] text-muted-foreground italic">v1 · yfinance · no IV percentile</span>
               </div>
               <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
                 <FragmentRow row={{ label: 'Strike',  value: `${fmtPrice(ticker.put_recommendation.strike)}  (${(ticker.put_recommendation.strike_pct_otm * 100).toFixed(1)}% OTM)`, highlight: true }} />
@@ -1082,7 +1082,7 @@ function ComplacencyDrawer({
               <p className="mt-2 text-[11px] text-foreground/80 leading-relaxed italic">
                 {ticker.put_recommendation.rationale}
               </p>
-              <p className="mt-2 text-[9px] text-amber-500/70">
+              <p className="mt-2 text-[10px] text-amber-500/70">
                 ⚠ Mechanical recommendation only. US options premiums are subject to 30% withholding for non-US residents.
                 Verify chain, liquidity, and earnings calendar before trading.
               </p>
@@ -1258,7 +1258,7 @@ function QualitativePanel(
         <div className="flex items-center gap-1.5">
           {deepCount > 0 && (
             <span
-              className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-900 dark:text-purple-100 text-[9px] font-bold uppercase tracking-wider"
+              className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-900 dark:text-purple-100 text-[10px] font-bold uppercase tracking-wider"
               title="Indicators that escalated to Qwen native web search after a low-confidence first-pass score."
             >
               ★ {deepCount}/{totalIndicators} deep-research
@@ -1299,7 +1299,7 @@ function QualitativePanel(
                 className="w-full flex items-baseline gap-2 px-2 py-1.5 rounded hover:bg-muted/30 text-left"
                 onClick={() => setExpandedIndicator(expanded ? null : s.indicator)}
               >
-                <span className="text-[9px] uppercase tracking-wider text-muted-foreground w-20 flex-shrink-0">{meta.theme}</span>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground w-20 flex-shrink-0">{meta.theme}</span>
                 <span className="text-foreground flex-1 truncate">{meta.label}</span>
                 {(s.model_used || '').includes('deep') && (
                   <span
@@ -1354,7 +1354,7 @@ function QualitativePanel(
           </p>
         </div>
       )}
-      <p className="mt-2 text-[9px] text-muted-foreground/60 italic">
+      <p className="mt-2 text-[10px] text-muted-foreground/60 italic">
         Scored by {Object.values(qual.indicators)[0]?.model_used ?? 'qwen3.6-plus'} on 10-K + transcripts + 90-day news.
         {qual.assessed_at && ` Assessed ${qual.assessed_at.slice(0, 10)}.`}
       </p>
@@ -1451,12 +1451,12 @@ function Pillar(
       {liveInputs.length > 0 && (
         <div className="mt-1 space-y-0.5">
           {liveInputs.map((line, i) => (
-            <div key={i} className="text-[9px] text-muted-foreground leading-tight">{line}</div>
+            <div key={i} className="text-[10px] text-muted-foreground leading-tight">{line}</div>
           ))}
         </div>
       )}
       {liveInputs.length === 0 && score === 0 && (
-        <div className="text-[9px] text-muted-foreground/60 italic mt-1">no inputs returned</div>
+        <div className="text-[10px] text-muted-foreground/60 italic mt-1">no inputs returned</div>
       )}
     </div>
   );
@@ -1512,7 +1512,7 @@ function FragmentRow({ row }: { row: { label: string; value: string; threshold?:
       <div>
         <div className="text-muted-foreground">{row.label}</div>
         {row.threshold && (
-          <div className="text-[9px] text-muted-foreground/60 italic">{row.threshold}</div>
+          <div className="text-[10px] text-muted-foreground/60 italic">{row.threshold}</div>
         )}
       </div>
       <div className={`text-right font-mono self-start ${row.highlight ? 'text-foreground font-bold' : 'text-foreground'}`}>

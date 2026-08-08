@@ -288,7 +288,7 @@ export function WatchlistPage() {
                         actions still work anywhere on the card. */}
                     <div data-tap="open" className="shrink-0 w-[80px] active:bg-muted/60 rounded-md -m-1 p-1 cursor-pointer">
                       <span className="font-bold text-[15px] leading-none block text-foreground">{item.ticker}</span>
-                      <span className="text-[9px] text-muted-foreground leading-tight block mt-1">
+                      <span className="text-[10px] text-muted-foreground leading-tight block mt-1">
                         {item.companyName}
                       </span>
                     </div>

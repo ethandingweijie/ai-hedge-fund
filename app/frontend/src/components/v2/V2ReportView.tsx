@@ -343,7 +343,7 @@ function LoadingSpinner({ size = 16 }: { size?: number }) {
 
 function LoadingCard({ label, minH = 80 }: { label: string; minH?: number }) {
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+    <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
         {label}
       </div>
@@ -363,7 +363,7 @@ function vgpmTooltip(label: string, dim?: { score?: number; subs?: string[] }): 
 function LoadingGradeChip({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
-      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>
+      <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>
       <span className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md bg-muted/60">
         <LoadingSpinner size={10} />
       </span>
@@ -381,7 +381,7 @@ function SummaryBody({
   isRunning: boolean;
 }) {
   return (
-    <div className="px-4 pt-4 pb-8 space-y-4">
+    <div className="px-4 pt-5 pb-10 space-y-5">
       {/* Stock chart card */}
       {ticker && <V2StockChart ticker={ticker} />}
 
@@ -392,7 +392,7 @@ function SummaryBody({
 
       {/* Portfolio Manager hero card — loading skeleton while pipeline runs */}
       {decision ? (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
             Portfolio Manager
           </div>
@@ -424,7 +424,7 @@ function SummaryBody({
           )}
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
             Portfolio Manager
           </div>
@@ -438,7 +438,7 @@ function SummaryBody({
       )}
 
       {/* VGPM scorecard — always rendered, with spinners per grade until ready */}
-      <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+      <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
         <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
           VGPM Scorecard
           {!vgpm && isRunning && <span className="ml-2 text-muted-foreground/70 normal-case font-normal tracking-normal">· computing…</span>}
@@ -498,7 +498,7 @@ function ValuationBody({
   const haveAny = dcfRange || scenarioAnalysis || decision;
   if (!haveAny) {
     return (
-      <div className="px-4 pt-4 pb-8 space-y-4">
+      <div className="px-4 pt-5 pb-10 space-y-5">
         <LoadingCard label="12-Month Price Target" minH={320} />
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       </div>
@@ -506,7 +506,7 @@ function ValuationBody({
   }
 
   return (
-    <div className="px-4 pt-4 pb-8 space-y-4">
+    <div className="px-4 pt-5 pb-10 space-y-5">
       {/* ── 12-Month Price Target ──────────────────────────────────────
           Standardised 2026-07: same PriceTargetPanel component desktop
           uses (components/report/PriceTargetPanel.tsx) — one
@@ -614,7 +614,7 @@ function V2ValuationLadder({
   ];
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+    <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
           DCF Valuation Ladder
@@ -710,7 +710,7 @@ function InvestorsBody({
 
   if (agentList.length === 0) {
     return (
-      <div className="px-4 pt-4 pb-8 space-y-4">
+      <div className="px-4 pt-5 pb-10 space-y-5">
         <LoadingCard
           label={isRunning ? 'Panel Verdicts — 12 investor agents running' : 'Panel Verdicts'}
           minH={90}
@@ -728,9 +728,9 @@ function InvestorsBody({
   }
 
   return (
-    <div className="px-4 pt-4 pb-8 space-y-4">
+    <div className="px-4 pt-5 pb-10 space-y-5">
       {/* Panel Verdicts card */}
-      <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+      <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
         <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
           Panel Verdicts
         </div>
@@ -782,7 +782,7 @@ function InvestorsBody({
       </div>
 
       {/* Points of Disagreement (Debate) */}
-      <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+      <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
         <div className="flex items-center justify-between mb-2.5">
           <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
             Points of Disagreement
@@ -885,7 +885,7 @@ function RiskBody({
 
   if (!powerLaw && !valueTrap) {
     return (
-      <div className="px-4 pt-4 pb-8 space-y-4">
+      <div className="px-4 pt-5 pb-10 space-y-5">
         <LoadingCard label="Power Law — 5-dimension moat audit" minH={240} />
         <LoadingCard label="Value Trap Check" minH={200} />
       </div>
@@ -893,10 +893,10 @@ function RiskBody({
   }
 
   return (
-    <div className="px-4 pt-4 pb-8 space-y-4">
+    <div className="px-4 pt-5 pb-10 space-y-5">
       {/* Power Law card */}
       {powerLaw ? (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Power Law
@@ -947,7 +947,7 @@ function RiskBody({
 
       {/* Value Trap card */}
       {valueTrap ? (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Value Trap Check
@@ -1001,7 +1001,7 @@ function RiskBody({
 
       {/* Scenario Mix (bull/bear split bar) */}
       {showScenario && (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Scenario Mix
@@ -1115,14 +1115,14 @@ function ResearchBody({
 
   if (!hasData && !isResearchPhase) {
     return (
-      <div className="px-4 pt-4 pb-8 space-y-4">
+      <div className="px-4 pt-5 pb-10 space-y-5">
         <LoadingCard label="Research streaming — 14+ source synthesis" minH={200} />
       </div>
     );
   }
 
   return (
-    <div className="px-4 pt-4 pb-8 space-y-4">
+    <div className="px-4 pt-5 pb-10 space-y-5">
       {/* Research complete status card */}
       {hasData && (
         <div className="rounded-lg border border-brand/25 bg-brand/10 shadow-sm p-4 flex items-center gap-3">
@@ -1181,7 +1181,7 @@ function ResearchBody({
         )
       )}
       {hasData && sub === 'brief' && industryBrief && (
-        <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+        <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
             Industry Intelligence Brief
           </div>
@@ -1285,7 +1285,7 @@ function FinancialsBody({
   stockMetrics: Record<string, number | undefined> | null;
 }) {
   return (
-    <div className="px-4 pt-4 pb-8 space-y-4">
+    <div className="px-4 pt-5 pb-10 space-y-5">
       {/* Revenue Build — FMP product segmentation (LTM fiscal year) */}
       <V2RevenueBuild ticker={ticker} kind="product" />
 
@@ -1370,7 +1370,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           key={p}
           type="button"
           onClick={() => setPeriod(p)}
-          className={`h-5 px-2 text-[9.5px] font-medium rounded uppercase tracking-wider transition-colors ${
+          className={`h-5 px-2 text-[10px] font-medium rounded uppercase tracking-wider transition-colors ${
             period === p
               ? 'bg-card text-foreground shadow-sm'
               : 'text-muted-foreground active:text-foreground'
@@ -1383,7 +1383,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
   );
 
   const card = (body: React.ReactNode) => (
-    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+    <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
           {title}
@@ -1430,7 +1430,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
           const yoy = s.yoy_pct;
           return (
             <div key={s.name} className="p-2.5 rounded-lg border border-border/60 bg-muted/40">
-              <div className="text-[9.5px] uppercase tracking-wider font-semibold text-muted-foreground truncate" title={s.name}>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground truncate" title={s.name}>
                 {shortName(s.name)}
               </div>
               <div className="text-[14px] font-semibold tabular-nums text-foreground mt-1">
@@ -1528,7 +1528,7 @@ function V2StockChart({ ticker }: { ticker: string }) {
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+    <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="flex items-baseline justify-between mb-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
@@ -1679,7 +1679,7 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
   ];
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-sm p-4">
+    <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
         Key Stats
       </div>

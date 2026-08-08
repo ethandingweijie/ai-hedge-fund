@@ -401,7 +401,7 @@ function CapRateScenarios({ rb, sym, price }: {
               <th key={i} className="text-right py-2 px-1.5">
                 {fmtPct(c, 1)}
                 {i === 1 && (
-                  <span className="block text-[9px] font-normal normal-case tracking-normal text-muted-foreground/70">
+                  <span className="block text-[10px] font-normal normal-case tracking-normal text-muted-foreground/70">
                     (peer)
                   </span>
                 )}

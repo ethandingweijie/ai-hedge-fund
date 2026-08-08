@@ -125,7 +125,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             </span>
             {wacc != null && <span className="text-[10px] tabular-nums text-muted-foreground/70">WACC {(wacc * 100).toFixed(1)}%</span>}
           </div>
-          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/70">
+          <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
             <span className="w-[60px] text-right">12M Target</span>
             <span className="w-[56px] text-right">DCF IV</span>
           </div>

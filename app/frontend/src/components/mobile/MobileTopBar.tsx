@@ -113,7 +113,7 @@ export function MobileTopBar() {
                     {/* Recent runs below History */}
                     {isHistory && recentRuns.length > 0 && (
                       <div className="pl-10 pr-4 py-1 space-y-0.5">
-                        <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-1">Recent</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-1">Recent</span>
                         {recentRuns.map((run) => (
                           <button
                             key={run.run_id}
@@ -122,11 +122,11 @@ export function MobileTopBar() {
                           >
                             <span className="font-mono text-xs font-bold text-foreground min-w-[48px]">{run.ticker}</span>
                             {run.final_action && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold leading-none ${ACTION_COLORS[run.final_action] ?? 'bg-muted text-muted-foreground'}`}>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${ACTION_COLORS[run.final_action] ?? 'bg-muted text-muted-foreground'}`}>
                                 {run.final_action}
                               </span>
                             )}
-                            <span className="ml-auto text-[9px] text-muted-foreground/50 font-mono">
+                            <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
                               {parseBackendIso(run.run_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                             </span>
                           </button>
@@ -143,13 +143,13 @@ export function MobileTopBar() {
               {/* Layout mode (Mobile / Desktop) — lets the user switch to the
                   desktop/iPad sidebar shell and back. */}
               <div className="px-4 py-3 border-b border-border/60">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
                 <LayoutModeToggle onChange={() => setMenuOpen(false)} />
               </div>
 
               {/* Theme toggle */}
               <div className="px-4 py-3">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
                 <ThemeToggle />
               </div>
 

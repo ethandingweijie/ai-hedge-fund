@@ -448,7 +448,7 @@ function Stat({ label, value, tone, mono = true, title }: { label: string; value
   const labelColor = tone === 'warn' ? 'text-amber-500/80' : 'text-muted-foreground';
   return (
     <div className="flex flex-col" title={title}>
-      <span className={`text-[9px] uppercase tracking-wider ${labelColor}`}>{label}</span>
+      <span className={`text-[10px] uppercase tracking-wider ${labelColor}`}>{label}</span>
       <span className={`${mono ? 'font-mono' : ''} text-sm font-bold ${valueColor}`}>{value}</span>
     </div>
   );

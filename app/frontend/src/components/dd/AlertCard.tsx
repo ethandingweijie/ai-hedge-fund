@@ -137,25 +137,25 @@ export function AlertCard({ alert }: AlertCardProps) {
         <div className="mt-3 pt-3 border-t border-border/60 space-y-2 text-xs">
           {alert.report.cause_summary && (
             <div>
-              <div className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">Cause</div>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">Cause</div>
               <div className="text-foreground">{alert.report.cause_summary}</div>
             </div>
           )}
           {alert.report.thesis_impact && (
             <div>
-              <div className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">Thesis impact</div>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">Thesis impact</div>
               <div className="text-foreground">{alert.report.thesis_impact}</div>
             </div>
           )}
           {alert.report.recommended_action && (
             <div>
-              <div className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">Recommended action</div>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">Recommended action</div>
               <div className="text-foreground">{alert.report.recommended_action}</div>
             </div>
           )}
           {alert.report.news_drivers && alert.report.news_drivers.length > 0 && (
             <div>
-              <div className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">News drivers</div>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">News drivers</div>
               <ul className="space-y-0.5">
                 {alert.report.news_drivers.slice(0, 3).map((n, i) => (
                   <li key={i} className="text-foreground">
@@ -178,7 +178,7 @@ export function AlertCard({ alert }: AlertCardProps) {
           )}
           {alert.report.filings && alert.report.filings.length > 0 && (
             <div>
-              <div className="text-[9px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">SEC filings</div>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">SEC filings</div>
               <ul className="space-y-0.5">
                 {alert.report.filings.slice(0, 3).map((f, i) => (
                   <li key={i} className="text-foreground">
@@ -196,7 +196,7 @@ export function AlertCard({ alert }: AlertCardProps) {
             </div>
           )}
           {alert.dd_run_id && (
-            <div className="text-[9px] font-mono text-muted-foreground/70 pt-1">
+            <div className="text-[10px] font-mono text-muted-foreground/70 pt-1">
               run_id: {alert.dd_run_id}
             </div>
           )}

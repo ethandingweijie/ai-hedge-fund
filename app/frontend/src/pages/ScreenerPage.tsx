@@ -333,7 +333,7 @@ export function ScreenerPage() {
                       <span className="text-[14px] font-semibold text-foreground tabular-nums">
                         {r.composite_score ?? '—'}
                       </span>
-                      <span className="text-[9px] text-muted-foreground/70">/100</span>
+                      <span className="text-[10px] text-muted-foreground/70">/100</span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mt-1">
                       <div

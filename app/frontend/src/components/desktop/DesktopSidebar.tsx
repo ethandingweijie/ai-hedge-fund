@@ -117,7 +117,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
         {/* Recent runs — expanded only */}
         {!collapsed && recentRuns.length > 0 && (
           <div className="pt-3 mt-1 border-t border-border/60">
-            <span className="block px-3 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">Recent</span>
+            <span className="block px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1">Recent</span>
             {recentRuns.map((run) => (
               <a
                 key={run.run_id}
@@ -126,11 +126,11 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
               >
                 <span className="font-mono text-xs font-bold text-foreground min-w-[44px]">{run.ticker}</span>
                 {run.final_action && (
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold leading-none ${ACTION_COLORS[run.final_action] ?? 'bg-muted text-muted-foreground'}`}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${ACTION_COLORS[run.final_action] ?? 'bg-muted text-muted-foreground'}`}>
                     {run.final_action}
                   </span>
                 )}
-                <span className="ml-auto text-[9px] text-muted-foreground/50 font-mono">
+                <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
                   {parseBackendIso(run.run_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                 </span>
               </a>
@@ -182,11 +182,11 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
         ) : (
           <>
             <div className="px-3 py-3 border-b border-border/60">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
               <LayoutModeToggle />
             </div>
             <div className="px-3 py-3">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
               <ThemeToggle />
             </div>
             <a

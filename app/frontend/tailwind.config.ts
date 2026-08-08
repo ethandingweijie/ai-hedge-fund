@@ -37,7 +37,9 @@ const config: Config = {
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
-  			sm: 'calc(var(--radius) - 4px)'
+  			sm: 'calc(var(--radius) - 4px)',
+  			xl: 'calc(var(--radius) + 2px)',
+  			'2xl': 'calc(var(--radius) + 6px)'
   		},
   		colors: {
   			background: 'hsl(var(--background) / <alpha-value>)',

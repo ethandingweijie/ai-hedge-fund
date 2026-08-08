@@ -1626,7 +1626,7 @@ function ProgressOverlay({
                     {milestones.map(m => (
                       <span
                         key={m.label}
-                        className={`inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                           m.hit
                             ? 'bg-green-500/15 text-green-500'
                             : 'bg-muted/60 text-muted-foreground/50'

@@ -447,7 +447,7 @@ function HistoryRow({
               {row.ticker}
             </span>
             {isNew && (
-              <span className="text-[9px] font-bold uppercase tracking-wider text-brand">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand">
                 new
               </span>
             )}
@@ -471,7 +471,7 @@ function HistoryRow({
                 })}
               </div>
               <div className={isDesktop ? 'text-[12px]' : 'text-[10px]'}><Delta v={upside}/></div>
-              <div className={`text-muted-foreground/70 mt-0.5 uppercase tracking-wider ${isDesktop ? 'text-[10px]' : 'text-[9px]'}`}>
+              <div className={`text-muted-foreground/70 mt-0.5 uppercase tracking-wider ${isDesktop ? 'text-[10px]' : 'text-[10px]'}`}>
                 Target
               </div>
             </>

@@ -419,7 +419,7 @@ function QuestionRow({ qa }: { qa: HundredQQuestionAnswer }) {
             )}
           </div>
         </div>
-        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wider ${badgeCls}`}>
+        <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${badgeCls}`}>
           {qa.q_type}
         </span>
       </div>

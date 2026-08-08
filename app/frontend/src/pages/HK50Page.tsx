@@ -473,7 +473,7 @@ export function HK50Page() {
         {/* ── Membership changes since last run ───────────────────────────── */}
         {!loading && cohort && ((cohort.promoted?.length ?? 0) > 0 || (cohort.relegated?.length ?? 0) > 0) && (
           <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-2 px-3 py-2 rounded-md border border-border bg-card">
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground pt-1">Changes since last run</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground pt-1">Changes since last run</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {(cohort.promoted ?? []).map((p) => (
                 <span
@@ -696,27 +696,27 @@ export function HK50Page() {
               Policy&nbsp;×&nbsp;Moat overlay, <em>never</em> summed into the {screen} score:
               <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5 items-center">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('HIGH-CONVICTION')}`}>HIGH</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('HIGH-CONVICTION')}`}>HIGH</span>
                   strong screen + favourable policy + wide moat
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('SOLID')}`}>SOLID</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('SOLID')}`}>SOLID</span>
                   decent screen, adequate policy &amp; moat
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('QUAL-SUPPORT')}`}>QUAL</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('QUAL-SUPPORT')}`}>QUAL</span>
                   weak screen but strong policy &amp; moat — await catalyst
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('WATCH')}`}>WATCH</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('WATCH')}`}>WATCH</span>
                   mixed signals — no dimension decisive
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('QUANT-RICH')}`}>TRAP?</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('QUANT-RICH')}`}>TRAP?</span>
                   top screen undercut by policy headwind / thin moat — verify it isn&apos;t a value trap
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass('POLICY-RISK')}`}>RISK</span>
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass('POLICY-RISK')}`}>RISK</span>
                   active crackdown or eroding moat — overrides screen rank
                 </span>
               </div>
@@ -793,7 +793,7 @@ function Stat({ label, value, tone, mono = true, title }: { label: string; value
   const labelColor = tone === 'warn' ? 'text-amber-500/80' : 'text-muted-foreground';
   return (
     <div className="flex flex-col" title={title}>
-      <span className={`text-[9px] uppercase tracking-wider ${labelColor}`}>{label}</span>
+      <span className={`text-[10px] uppercase tracking-wider ${labelColor}`}>{label}</span>
       <span className={`${mono ? 'font-mono' : ''} text-sm font-bold ${valueColor}`}>{value}</span>
     </div>
   );
@@ -954,11 +954,11 @@ function QualCell({ q, onClick }: { q?: HK50Qualitative | null; onClick?: () => 
   const title = `${lines.join('\n')}\n\n(click to elaborate on the moat breakdown)`;
   return (
     <button onClick={handle} className="flex flex-col gap-0.5 text-left hover:opacity-80 cursor-pointer" title={title}>
-      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold w-fit ${convictionClass(q.conviction)}`}>
+      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold w-fit ${convictionClass(q.conviction)}`}>
         {q.incomplete && <Loader2 size={8} className="animate-spin" />}
         {CONVICTION_SHORT[q.conviction] ?? q.conviction}
       </span>
-      <span className="text-[9px] leading-tight whitespace-nowrap">
+      <span className="text-[10px] leading-tight whitespace-nowrap">
         <span className={POLICY_TEXT[pol] ?? 'text-muted-foreground'}>P:{pol}</span>
         <span className="text-muted-foreground/40"> · </span>
         <span className={MOAT_TEXT[moat] ?? 'text-muted-foreground'}>M:{moat}</span>
@@ -989,7 +989,7 @@ function ConvictionPopover({ row, onClose, onOpenDetail }: {
             <span className="text-sm font-bold text-foreground truncate">{row.name}</span>
             <span className="text-[10px] text-muted-foreground font-mono flex-shrink-0">{row.ticker}</span>
             {scored && (
-              <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold flex-shrink-0 ${convictionClass(q!.conviction)}`}>
+              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold flex-shrink-0 ${convictionClass(q!.conviction)}`}>
                 {q!.incomplete && <Loader2 size={8} className="inline animate-spin mr-1" />}
                 {q!.conviction}
               </span>
@@ -1053,10 +1053,10 @@ function QualitativeBlock({ q, onGenerate, researching, researchMsg }: {
       <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2 flex-wrap">
         Qualitative overlay
         {scored && (
-          <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${convictionClass(q!.conviction)}`}>{q!.conviction}</span>
+          <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${convictionClass(q!.conviction)}`}>{q!.conviction}</span>
         )}
         {q && (
-          <span className="text-[9px] text-muted-foreground/70 normal-case">
+          <span className="text-[10px] text-muted-foreground/70 normal-case">
             source: {q.source}{q.incomplete ? ' · streaming…' : ''}
           </span>
         )}
@@ -1178,7 +1178,7 @@ function MetricSection({ title, keys, metrics }: { title: string; keys: string[]
             <div key={m} className="flex items-center gap-2 py-1 border-b border-border/50 last:border-0">
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${SOURCE_DOT[mr?.source ?? 'missing'] ?? SOURCE_DOT.missing}`} />
               <span className="text-muted-foreground flex-1">{METRIC_META[m]?.label ?? m}</span>
-              <span className="text-[9px] text-muted-foreground/70 uppercase">{mr?.source ?? 'missing'}</span>
+              <span className="text-[10px] text-muted-foreground/70 uppercase">{mr?.source ?? 'missing'}</span>
               <span className="font-mono text-foreground w-16 text-right">{fmtMetric(m, mr?.value)}</span>
             </div>
           );

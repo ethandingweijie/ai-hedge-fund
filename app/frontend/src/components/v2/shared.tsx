@@ -129,7 +129,7 @@ export function GradeChip({ grade, label, tooltip }: { grade?: string | null; la
   const s = gradeStyle(grade);
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
-      {label && <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
+      {label && <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
       <span
         title={tooltip}
         className={`inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md text-[11.5px] font-bold tabular-nums ${tooltip ? 'cursor-help' : ''} ${s.text} ${s.bg}`}
@@ -153,7 +153,7 @@ export function Delta({ v, unit = '%' }: { v: number | null | undefined; unit?: 
 
 export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-lg border border-border bg-card ${className}`}>
+    <div className={`rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] ${className}`}>
       {children}
     </div>
   );
@@ -243,7 +243,7 @@ export function SwipeRow({
             aria-label={a.label}
           >
             {a.icon}
-            {a.label && <span className="text-[9.5px] font-medium tracking-wide">{a.label}</span>}
+            {a.label && <span className="text-[10px] font-medium tracking-wide">{a.label}</span>}
           </button>
         ))}
       </div>

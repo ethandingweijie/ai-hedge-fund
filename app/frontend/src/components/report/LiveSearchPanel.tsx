@@ -203,7 +203,7 @@ export function LiveSearchPanel({ streamEvents, liveData, thinking: thinkingProp
                     <span className="text-[10px] text-foreground/70 truncate flex-1 group-hover:text-foreground/90">
                       {src.title || domain}
                     </span>
-                    <span className="text-[9px] text-muted-foreground/50 shrink-0">
+                    <span className="text-[10px] text-muted-foreground/50 shrink-0">
                       {domain}
                     </span>
                   </a>

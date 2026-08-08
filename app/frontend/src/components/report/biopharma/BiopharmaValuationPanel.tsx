@@ -275,7 +275,7 @@ function PipelineTable({ assets, sym }: {
                     <div className="font-semibold text-foreground">
                       {asset.name}
                       {asset.partner && (
-                        <span className="text-[9px] text-muted-foreground ml-1">
+                        <span className="text-[10px] text-muted-foreground ml-1">
                           w/ {asset.partner}
                         </span>
                       )}

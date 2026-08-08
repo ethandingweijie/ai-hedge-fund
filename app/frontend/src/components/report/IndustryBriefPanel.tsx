@@ -282,7 +282,7 @@ function parseLegacy(raw: string): LegacyBlock[] {
 }
 
 function cites(text: string): React.ReactNode {
-  return <>{text.split(/(\[\d+\])/g).map((p, i) => { const m = p.match(/^\[(\d+)\]$/); return m ? <sup key={i} className="text-[9px] font-mono text-sky-400 ml-[1px]">[{m[1]}]</sup> : <span key={i}>{p}</span>; })}</>;
+  return <>{text.split(/(\[\d+\])/g).map((p, i) => { const m = p.match(/^\[(\d+)\]$/); return m ? <sup key={i} className="text-[10px] font-mono text-sky-400 ml-[1px]">[{m[1]}]</sup> : <span key={i}>{p}</span>; })}</>;
 }
 
 function LegacyBodyBlock({ text }: { text: string }) {
@@ -337,7 +337,7 @@ function LegacyView({ blocks }: { blocks: LegacyBlock[] }) {
             return (
               <div key={idx} className="px-6 pt-5 pb-0">
                 <div className="flex items-start gap-2.5 flex-wrap">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-sm">{block.label}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-sm">{block.label}</span>
                   <span className="text-sm font-semibold text-foreground leading-snug">{block.title}</span>
                 </div>
               </div>

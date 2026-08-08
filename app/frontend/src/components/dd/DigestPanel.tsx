@@ -113,7 +113,7 @@ export function DigestPanel({ digest, loading }: DigestPanelProps) {
                     <span className={`text-xs font-bold tabular-nums ${colorCls}`}>
                       median {sign}{(c.median_pct * 100).toFixed(1)}%
                     </span>
-                    <span className="font-mono text-[9px] text-muted-foreground/70 truncate max-w-[100px]">
+                    <span className="font-mono text-[10px] text-muted-foreground/70 truncate max-w-[100px]">
                       {c.cluster_id}
                     </span>
                   </div>

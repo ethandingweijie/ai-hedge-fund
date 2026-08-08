@@ -95,7 +95,7 @@ export function SectionSkeleton({ label, events, resultReady = false }: SectionS
       {/* ── Chain of Thought ────────────────────────────────────────────────── */}
       {reasoning && !resultReady && (
         <div className="pl-8">
-          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-muted-foreground/40 mb-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/40 mb-1.5">
             Chain of Thought
           </p>
           <pre className="text-[10px] text-muted-foreground/55 whitespace-pre-wrap leading-relaxed
