@@ -15,6 +15,12 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if DATABASE_URL:
     # PostgreSQL mode (production)
     _IS_POSTGRES = True
+    # SQLAlchemy resolves plain postgresql:// to the psycopg2 driver, but we
+    # use psycopg v3 — rewrite the scheme to the +psycopg dialect.
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+    elif DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
     engine = create_engine(
         DATABASE_URL,
         pool_size=20,

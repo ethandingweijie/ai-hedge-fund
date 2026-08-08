@@ -18,10 +18,14 @@ if config.config_file_name is not None:
 # Production (Railway) runs against PostgreSQL via the DATABASE_URL env var.
 # Override the SQLite URL baked into alembic.ini so migrations apply to the
 # real database. Locally, DATABASE_URL is unset and the SQLite URL is kept.
+# The scheme is rewritten to postgresql+psycopg:// because SQLAlchemy maps
+# plain postgresql:// to psycopg2, while we use psycopg v3.
 _database_url = os.environ.get("DATABASE_URL")
 if _database_url:
     if _database_url.startswith("postgres://"):
-        _database_url = _database_url.replace("postgres://", "postgresql://", 1)
+        _database_url = _database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif _database_url.startswith("postgresql://"):
+        _database_url = _database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     config.set_main_option("sqlalchemy.url", _database_url)
 
 # add your model's MetaData object here
