@@ -24,6 +24,7 @@ from src.tools.api import (
     _safe_float,
     _STABLE,
     get_analyst_estimates,
+    get_financial_scores,
 )
 
 
@@ -88,18 +89,6 @@ def fetch_profile(ticker: str) -> Optional[dict]:
 def _fetch_key_metrics_ttm(ticker: str) -> Optional[dict]:
     data = _fmp_get(
         f"{_STABLE}/key-metrics-ttm",
-        {"symbol": ticker, "limit": 1},
-        api_key=None,
-        uncap=True,
-    )
-    if isinstance(data, list) and data:
-        return data[0]
-    return None
-
-
-def _fetch_financial_scores(ticker: str) -> Optional[dict]:
-    data = _fmp_get(
-        f"{_STABLE}/financial-scores",
         {"symbol": ticker, "limit": 1},
         api_key=None,
         uncap=True,
@@ -249,7 +238,7 @@ def fetch_ticker_bundle(ticker: str, meta: dict) -> Optional[ComplacencyBundle]:
         )
 
     # Financial scores
-    fs = _fetch_financial_scores(ticker)
+    fs = get_financial_scores(ticker)
     time.sleep(0.10)
     if fs:
         bundle.altman_z = _safe_float(fs.get("altmanZScore"))

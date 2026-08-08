@@ -13,6 +13,7 @@ import { HK50Page } from './pages/HK50Page';
 import { ComplacencyPage } from './pages/ComplacencyPage';
 import { MomentumPage } from './pages/MomentumPage';
 import { FundFlowPage } from './pages/FundFlowPage';
+import { HundredQPage } from './pages/HundredQPage';
 import { IdeaOfTheDayPage } from './pages/IdeaOfTheDayPage';
 import { ShortlistedIdeasPage } from './pages/ShortlistedIdeasPage';
 import { PricingPage } from './pages/PricingPage';
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="/research-ideas/complacency" element={<RequireAuth><ComplacencyPage /></RequireAuth>} />
           <Route path="/research-ideas/momentum" element={<RequireAuth><MomentumPage /></RequireAuth>} />
           <Route path="/research-ideas/fundflow" element={<RequireAuth><FundFlowPage /></RequireAuth>} />
+          <Route path="/research-ideas/hundred-q" element={<RequireAuth><HundredQPage /></RequireAuth>} />
           <Route path="/research-ideas/idea-of-the-day/:ideaId" element={<RequireAuth><IdeaOfTheDayPage /></RequireAuth>} />
           <Route path="/research-ideas/shortlist" element={<RequireAuth><ShortlistedIdeasPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />

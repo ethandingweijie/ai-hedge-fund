@@ -88,6 +88,21 @@ async def startup_event():
     except Exception as exc:
         logger.warning("Fund-flow weekly scheduler failed to start: %s", exc)
 
+    # Start the 100-Question screener's three schedulers: a daily event-
+    # trigger sweep (new filings / insider buys / earnings / price shocks
+    # across the watchlist), a weekly full quant re-score of the pilot
+    # universe, and a quarterly qualitative "annual backstop" for
+    # Active/On-Deck tickers with stale (>365d) qual answers. Each is
+    # independently idempotent and independently disable-able — see
+    # src/research_ideas/hundred_q/scheduler.py. Disable all three via
+    # HUNDRED_Q_SCHEDULER_DISABLED=true.
+    try:
+        from src.research_ideas.hundred_q.scheduler import start_hundred_q_schedulers
+        start_hundred_q_schedulers()
+        logger.info("100-Question screener schedulers started")
+    except Exception as exc:
+        logger.warning("100-Question screener schedulers failed to start: %s", exc)
+
 
 async def _check_ollama():
     try:

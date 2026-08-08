@@ -354,10 +354,31 @@ async def list_research_ideas():
         "top_outflow_regions": _flow_preview(ff_regions, want_inflow=False),
     }
 
+    hundred_q_summary = await asyncio.to_thread(_hundred_q_storage().get_cohort_summary)
+    hundred_q_tier_counts = (hundred_q_summary or {}).get("tier_counts") or {}
+    hundred_q_meta = {
+        "id": "hundred_q",
+        "name": "100-Question Screener",
+        "blurb": (
+            "FengHe Asset Management-style systematic funnel: ~100 quality, "
+            "balance-sheet, moat, governance, valuation, and catalyst "
+            "questions, scored quant-first (deterministic FMP/EDGAR checks) "
+            "with an event-triggered LLM qualitative overlay. Composite "
+            "≥65% = Active Pass, 55-64% = On-Deck, <55% = Cool-off "
+            "(180-day lockout)."
+        ),
+        "ticker_count": (hundred_q_summary or {}).get("ticker_count", 0),
+        "last_run_at": ((hundred_q_summary or {}).get("latest_run") or {}).get("created_at"),
+        "active_pass_count": hundred_q_tier_counts.get("active_pass", 0),
+        "on_deck_count": hundred_q_tier_counts.get("on_deck", 0),
+        "cooloff_count": hundred_q_tier_counts.get("cooloff", 0),
+        "headline_metric_label": "Active Pass",
+    }
+
     return {
         "ideas": [
             iotd_meta, sw46_meta, complacency_meta, hk50_meta,
-            momentum_meta, fundflow_meta,
+            momentum_meta, fundflow_meta, hundred_q_meta,
         ]
     }
 
@@ -2139,3 +2160,153 @@ async def get_iv15_alert_state():
         tb = traceback.format_exc()
         logger.exception("get_iv15_alert_state failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+# ─── 100-Question Screener (FengHe-style quant+qual funnel) ────────────────
+#
+#   GET  /research/ideas/hundred-q                    -> tier-count snapshot
+#   GET  /research/ideas/hundred-q/tiers/{tier}        -> tickers in one tier
+#   GET  /research/ideas/hundred-q/{ticker}            -> full question ledger
+#   GET  /research/ideas/hundred-q/{ticker}/history    -> tier-transition log
+#   POST /research/ideas/hundred-q/refresh             -> background full quant batch
+#   GET  /research/ideas/hundred-q/jobs/{job_id}       -> job status
+#   POST /research/ideas/hundred-q/{ticker}/rescore    -> ad-hoc single-ticker rescore
+#
+# Phase 0-3 backend (quant scorer, qualitative LLM layer, event triggers,
+# schedulers) lives in src/research_ideas/hundred_q/ — these routes are
+# thin wrappers, per this project's asyncio.to_thread rule for every
+# blocking SQLite/FMP/EDGAR/LLM call.
+
+from app.backend.services import complacency_job_store as hundred_q_job_store  # noqa: E402  (shared generic job store, see its own docstring)
+
+
+@router.get("/ideas/hundred-q")
+async def get_hundred_q_cohort():
+    try:
+        summary = await asyncio.to_thread(_hundred_q_storage().get_cohort_summary)
+        if not summary:
+            return {"ticker_count": 0, "tier_counts": {}, "latest_run": None}
+        return summary
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hundred_q_cohort failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/hundred-q/tiers/{tier}")
+async def get_hundred_q_tier(tier: str):
+    valid = {"active_pass", "on_deck", "cooloff", "not_evaluated"}
+    if tier not in valid:
+        raise HTTPException(status_code=400, detail=f"tier must be one of {sorted(valid)}")
+    try:
+        rows = await asyncio.to_thread(_hundred_q_storage().get_watchlist, tier)
+        return {"tier": tier, "tickers": rows}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hundred_q_tier(%s) failed: %s", tier, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/hundred-q/{ticker}")
+async def get_hundred_q_ticker(ticker: str):
+    try:
+        from src.research_ideas.hundred_q.runner import assemble_full_ticker_result
+        result = await asyncio.to_thread(assemble_full_ticker_result, ticker)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"No hundred-q data for {ticker.upper()} yet — refresh first")
+        return result.model_dump()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hundred_q_ticker(%s) failed: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/hundred-q/{ticker}/history")
+async def get_hundred_q_ticker_history(ticker: str):
+    try:
+        rows = await asyncio.to_thread(_hundred_q_storage().get_tier_history, ticker)
+        return {"ticker": ticker.upper(), "history": rows}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hundred_q_ticker_history(%s) failed: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/hundred-q/refresh")
+async def refresh_hundred_q():
+    """
+    Kick off a fresh full-universe quant batch as a background job — the
+    pilot universe (30 tickers) takes a few minutes, long enough to want
+    the same async job-polling pattern complacency's refresh uses rather
+    than blocking the request.
+    """
+    try:
+        existing = await asyncio.to_thread(hundred_q_job_store.find_in_flight_job, "hundred_q_refresh")
+        if existing:
+            return {"job_id": existing["job_id"], "status": existing["status"], "resumed": True}
+
+        job_id = await asyncio.to_thread(hundred_q_job_store.create_job, "hundred_q_refresh")
+
+        async def _run():
+            hundred_q_job_store.update_progress(job_id, "running", "scoring pilot universe...")
+            try:
+                from src.research_ideas.hundred_q.runner import run_full_quant_batch
+                cohort = await asyncio.to_thread(run_full_quant_batch, 6, True, None, "adhoc")
+                hundred_q_job_store.complete_job(job_id, {
+                    "run_id": cohort.run_id, "ticker_count": cohort.ticker_count,
+                    "tier_counts": cohort.tier_counts, "failed_tickers": cohort.failed_tickers,
+                })
+            except Exception as exc:
+                logger.exception("hundred_q refresh job %s failed: %s", job_id, exc)
+                hundred_q_job_store.fail_job(job_id, str(exc))
+
+        _spawn_background(_run())
+        return {"job_id": job_id, "status": "pending"}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("refresh_hundred_q failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/hundred-q/jobs/{job_id}")
+async def get_hundred_q_job(job_id: str):
+    try:
+        job = await asyncio.to_thread(hundred_q_job_store.get_job, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_hundred_q_job(%s) failed: %s", job_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.post("/ideas/hundred-q/{ticker}/rescore")
+async def rescore_hundred_q_ticker(ticker: str, force_qual: bool = False):
+    """
+    Ad-hoc single-ticker rescore (the UI's "Force rescore" button) — NOT
+    the pillar-scoped event-trigger path. force_qual=true re-scores every
+    registered qualitative question for this ticker (an explicit,
+    user-initiated exception to the "never re-run all ~33" rule).
+    """
+    try:
+        from src.research_ideas.hundred_q.runner import score_ticker_full
+        result = await asyncio.to_thread(score_ticker_full, ticker, force_qual)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"Could not fetch data for {ticker.upper()}")
+        return result.model_dump()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("rescore_hundred_q_ticker(%s) failed: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+def _hundred_q_storage():
+    from src.research_ideas.hundred_q import storage
+    return storage

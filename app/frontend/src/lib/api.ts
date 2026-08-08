@@ -408,6 +408,10 @@ export interface SW46IdeaMeta {
   flow_summary_source?: string | null;
   top_inflow_regions?: FundFlowRegionPreview[];
   top_outflow_regions?: FundFlowRegionPreview[];
+  // 100-Question screener-specific:
+  active_pass_count?: number | null;
+  on_deck_count?: number | null;
+  cooloff_count?: number | null;
 }
 
 export interface FundFlowRegionPreview {
@@ -1745,4 +1749,167 @@ export interface ChatActiveTicker {
  * powers the Discuss landing page's active-discussions list. */
 export function getActiveChatTickers(limit = 12): Promise<ChatActiveTicker[]> {
   return fetchJson(`${BASE}/chat/active-tickers?limit=${limit}`, { headers: _authHeaders() });
+}
+
+
+// ── 100-Question Screener (FengHe-style quant+qual funnel) ─────────────────
+//
+// Composite is a flat aggregation (yes / answered) across ALL answered
+// questions, quant + qual combined. Tiers: Active Pass >=65%, On-Deck
+// 55-64%, Cool-off <55% (180-day lockout in a later phase).
+
+export type HundredQTier = 'active_pass' | 'on_deck' | 'cooloff' | 'not_evaluated';
+
+export interface HundredQEvidence {
+  source: string;
+  quote: string;
+  date: string | null;
+  url: string | null;
+}
+
+export interface HundredQQuestionAnswer {
+  question_id: string;
+  pillar: string;
+  label: string;
+  q_type: 'quant' | 'qual';
+  answer: boolean | null;      // null = data_unavailable, excluded from denominator
+  raw_value: string | null;
+  threshold_desc: string | null;
+  source: string | null;
+  evaluated_at: string | null;
+  confidence: number | null;
+  evidence: HundredQEvidence[];
+}
+
+export interface HundredQPillarScore {
+  pillar: string;
+  label: string;
+  questions_answered: number;
+  questions_yes: number;
+  pillar_pct: number | null;
+}
+
+export interface HundredQTickerResult {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  industry: string | null;
+  price: number | null;
+  market_cap: number | null;
+  question_ledger: HundredQQuestionAnswer[];
+  pillar_scores: HundredQPillarScore[];
+  quant_composite_pct: number | null;
+  qual_composite_pct: number | null;
+  composite_pct: number | null;
+  tier: HundredQTier;
+  rank: number | null;
+  evaluated_at: string | null;
+  error: string | null;
+}
+
+export interface HundredQWatchlistRow {
+  ticker: string;
+  company_name: string | null;
+  sector: string | null;
+  industry: string | null;
+  tier: HundredQTier;
+  composite_pct: number | null;
+  quant_composite_pct: number | null;
+  qual_composite_pct: number | null;
+  entered_tier_at: string | null;
+  cooloff_until: string | null;
+  last_quant_run_at: string | null;
+  last_qual_run_at: string | null;
+  last_full_eval_at: string | null;
+  run_id: string | null;
+}
+
+export interface HundredQCohortSummary {
+  ticker_count: number;
+  tier_counts: Partial<Record<HundredQTier, number>>;
+  latest_run: {
+    run_id: string;
+    created_at: string;
+    run_type: string;
+    trigger_ticker: string | null;
+    trigger_type: string | null;
+    ticker_count: number;
+    finished_at: string | null;
+  } | null;
+}
+
+export interface HundredQTierHistoryRow {
+  id: number;
+  ticker: string;
+  from_tier: string | null;
+  to_tier: string;
+  composite_pct: number | null;
+  changed_at: string;
+  run_id: string;
+  reason: string | null;
+}
+
+export interface HundredQJobStatus {
+  job_id: string;
+  kind: string;
+  ticker: string | null;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string;
+  finished_at: string | null;
+  progress_msg: string | null;
+  result: { run_id: string; ticker_count: number; tier_counts: Record<string, number>; failed_tickers: unknown[] } | null;
+  error: string | null;
+}
+
+export function getHundredQCohort(): Promise<HundredQCohortSummary> {
+  return fetchJson(`${BASE}/research/ideas/hundred-q`);
+}
+
+export function getHundredQTier(tier: HundredQTier): Promise<{ tier: HundredQTier; tickers: HundredQWatchlistRow[] }> {
+  return fetchJson(`${BASE}/research/ideas/hundred-q/tiers/${tier}`);
+}
+
+export function getHundredQTicker(ticker: string): Promise<HundredQTickerResult> {
+  return fetchJson(`${BASE}/research/ideas/hundred-q/${encodeURIComponent(ticker.toUpperCase())}`);
+}
+
+export function getHundredQTickerHistory(ticker: string): Promise<{ ticker: string; history: HundredQTierHistoryRow[] }> {
+  return fetchJson(`${BASE}/research/ideas/hundred-q/${encodeURIComponent(ticker.toUpperCase())}/history`);
+}
+
+/** Kick off a full quant-batch refresh as a background job (returns immediately). */
+export function refreshHundredQ(): Promise<{ job_id: string; status: string; resumed?: boolean }> {
+  return fetchJson(`${BASE}/research/ideas/hundred-q/refresh`, { method: 'POST' });
+}
+
+export function getHundredQJob(jobId: string): Promise<HundredQJobStatus> {
+  return fetchJson(`${BASE}/research/ideas/hundred-q/jobs/${encodeURIComponent(jobId)}`);
+}
+
+/** Poll a hundred_q job until it reaches a terminal state. Mirrors pollComplacencyJob. */
+export async function pollHundredQJob(
+  jobId: string,
+  opts: { pollIntervalMs?: number; timeoutMs?: number; onProgress?: (s: HundredQJobStatus) => void } = {},
+): Promise<HundredQJobStatus> {
+  const pollIntervalMs = opts.pollIntervalMs ?? 5000;
+  const timeoutMs = opts.timeoutMs ?? 15 * 60 * 1000;
+  const start = Date.now();
+  while (true) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`Job ${jobId} timed out after ${Math.round(timeoutMs / 1000)}s of polling`);
+    }
+    const status = await getHundredQJob(jobId);
+    opts.onProgress?.(status);
+    if (status.status === 'completed' || status.status === 'failed') return status;
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+}
+
+/** Ad-hoc single-ticker rescore (UI "Force rescore" button). forceQual=true
+ * re-scores every registered qualitative question, not just cache-stale ones. */
+export function rescoreHundredQTicker(ticker: string, opts: { forceQual?: boolean } = {}): Promise<HundredQTickerResult> {
+  const q = new URLSearchParams();
+  if (opts.forceQual) q.set('force_qual', 'true');
+  const qs = q.toString() ? `?${q.toString()}` : '';
+  return fetchJson(`${BASE}/research/ideas/hundred-q/${encodeURIComponent(ticker.toUpperCase())}/rescore${qs}`, { method: 'POST' });
 }

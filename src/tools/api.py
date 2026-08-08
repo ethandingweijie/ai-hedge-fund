@@ -52,10 +52,15 @@ _FREE_LIMIT = 5   # FMP free tier hard-cap (prices, financials). Paid endpoints 
 # ── API key resolution ─────────────────────────────────────────────────────────
 
 def _get_key(api_key: str | None) -> str | None:
+    # run_config.getenv() consults the current run's key overlay before falling
+    # back to os.environ, so concurrent web runs each use their own caller's key
+    # instead of whichever run wrote to os.environ last.
+    from src.utils.run_config import getenv as _cfg_getenv
+
     return (
         api_key
-        or os.environ.get("FMP_API_KEY")
-        or os.environ.get("FINANCIAL_DATASETS_API_KEY")
+        or _cfg_getenv("FMP_API_KEY")
+        or _cfg_getenv("FINANCIAL_DATASETS_API_KEY")
     )
 
 
@@ -2083,6 +2088,32 @@ def get_price_data(
     api_key: str = None,
 ) -> pd.DataFrame:
     return prices_to_df(get_prices(ticker, start_date, end_date, api_key=api_key))
+
+
+# ── 6b. Financial Scores (Altman Z, Piotroski F) ──────────────────────────────
+
+def get_financial_scores(ticker: str, api_key: str = None) -> dict | None:
+    """
+    Altman Z-score + Piotroski F-score via FMP /stable/financial-scores.
+
+    Returns the raw FMP row (keys include `altmanZScore`, `piotroskiScore`)
+    or None if the endpoint returns nothing for this ticker. US-only — FMP
+    doesn't compute these for HK/SG names.
+
+    Canonical source for both complacency and hundred_q screeners — don't
+    re-implement this fetch elsewhere.
+    """
+    if is_hk_ticker(ticker) or is_sg_ticker(ticker):
+        return None
+    data = _fmp_get(
+        f"{_STABLE}/financial-scores",
+        {"symbol": ticker, "limit": 1},
+        api_key,
+        uncap=True,
+    )
+    if isinstance(data, list) and data:
+        return data[0]
+    return None
 
 
 # ── 7. FX Rate ────────────────────────────────────────────────────────────────

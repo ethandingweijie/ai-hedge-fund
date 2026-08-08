@@ -29,11 +29,19 @@ import os
 _STATE_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "trigger_state.json")
 
 
-def load_state() -> dict:
-    """Load trigger state from disk. Returns {} if file missing or corrupt."""
-    if os.path.exists(_STATE_PATH):
+def load_state(path: str | None = None) -> dict:
+    """Load trigger state from disk. Returns {} if file missing or corrupt.
+
+    Pass `path` to use a separate state file from a different trigger
+    namespace (e.g. hundred_q's own state file) — two systems tracking
+    unrelated tickers/cadences under the same trigger name (like
+    "price_shock" with different thresholds) would otherwise collide if
+    they shared one JSON file.
+    """
+    target = path or _STATE_PATH
+    if os.path.exists(target):
         try:
-            with open(_STATE_PATH, encoding="utf-8") as f:
+            with open(target, encoding="utf-8") as f:
                 data = json.load(f)
                 return data if isinstance(data, dict) else {}
         except Exception:
@@ -41,10 +49,11 @@ def load_state() -> dict:
     return {}
 
 
-def save_state(state: dict) -> None:
-    """Persist trigger state to disk."""
-    os.makedirs(os.path.dirname(_STATE_PATH), exist_ok=True)
-    with open(_STATE_PATH, "w", encoding="utf-8") as f:
+def save_state(state: dict, path: str | None = None) -> None:
+    """Persist trigger state to disk. See load_state() for the `path` param."""
+    target = path or _STATE_PATH
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2)
 
 

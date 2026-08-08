@@ -82,6 +82,8 @@ function ideaSides(id: string): Array<{ label: string; cls: string }> {
       { label: 'Inflows', cls: LONG_BADGE },
       { label: 'Outflows', cls: SHORT_BADGE },
     ];
+  if (id === 'hundred_q')
+    return [{ label: 'Active Pass Ideas', cls: LONG_BADGE }];
   return [];
 }
 
@@ -209,6 +211,7 @@ export function ResearchIdeasPage() {
     else if (idea.id === 'complacency') navigate('/research-ideas/complacency');
     else if (idea.id === 'momentum') navigate('/research-ideas/momentum');
     else if (idea.id === 'fundflow') navigate('/research-ideas/fundflow');
+    else if (idea.id === 'hundred_q') navigate('/research-ideas/hundred-q');
     else if (idea.id === 'idea_of_the_day' && idea.latest_idea_id) {
       navigate(`/research-ideas/idea-of-the-day/${idea.latest_idea_id}`);
     }
