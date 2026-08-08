@@ -3048,9 +3048,12 @@ def _run_extractor_fanout(
     _failures: list[dict] = []
     _results: dict = {}
 
-    # Precomputed entries short-circuit (no LLM call)
+    # Precomputed entries short-circuit (no LLM call) — but only when they
+    # actually hold values. An empty precomputed output (e.g. the upstream
+    # dcf_calibration call failed) must fall through to the live attempt so
+    # retry-on-empty can run and any final failure gets recorded (C3).
     for _name in list(_extractor_tasks):
-        if _name in precomputed:
+        if _name in precomputed and not _is_empty_extraction(precomputed[_name]):
             _results[_name] = precomputed[_name]
             print(f"  Extractor [{_name}] reused precomputed output (no LLM call)")
 

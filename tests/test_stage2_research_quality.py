@@ -312,6 +312,38 @@ def test_c1_c3_extractor_fanout_precomputed_retry_and_failures(monkeypatch):
     assert not any(f["extractor"] == "dcf_calibration" for f in failures)
 
 
+def test_c3_empty_precomputed_falls_through_to_live_extraction(monkeypatch):
+    """An upstream extraction that returned nothing (e.g. transient API
+    failure) must NOT be reused as-is — the fan-out gets one live attempt
+    so the value can still be recovered (and failures stay recorded)."""
+    import src.agents.industry.sector_prompts as sp
+
+    calls = []
+
+    monkeypatch.setattr(
+        sp, "needs_extractor",
+        lambda name, sector, profile_name, ticker=None: name == "dcf_calibration",
+    )
+
+    def fake_dcf(c, m, s, t, retry_directive=""):
+        calls.append(retry_directive)
+        return {"wacc": 0.09}
+
+    monkeypatch.setattr(dr, "_extract_dcf_calibration", fake_dcf)
+
+    results, failures = dr._run_extractor_fanout(
+        sdk_client=None, synthesis_model="m",
+        sections={"2a": "x"}, final_report="r",
+        ticker="TEST", sector="Tech", profile_name="SaaS",
+        raw_financials={},
+        precomputed={"dcf_calibration": {}},   # upstream failed -> empty
+    )
+
+    assert calls == [""]                        # one live attempt happened
+    assert results["dcf_calibration"] == {"wacc": 0.09}
+    assert failures == []
+
+
 def test_c3_still_empty_after_retry_recorded_as_empty_failure(monkeypatch):
     import src.agents.industry.sector_prompts as sp
 
