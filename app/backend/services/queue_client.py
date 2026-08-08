@@ -92,3 +92,25 @@ async def enqueue_analysis(
         _queue_name=QUEUE_NAME,
         _expires=DEDUP_TTL,
     )
+
+
+async def enqueue_research_job(job_id: str, kind: str, params: dict) -> None:
+    """Enqueue a /research/* background job. Raises on Redis/arq failure.
+
+    The job row already exists in the job store (created by the route before
+    enqueueing); the worker task executes the module-level runner which owns
+    all status transitions (pending → running → complete/failed), so the
+    polling endpoints work identically in both modes.
+    """
+    from app.backend.worker import QUEUE_NAME
+
+    pool = await get_arq_pool()
+    await pool.enqueue_job(
+        "run_research_job_task",
+        job_id=job_id,
+        kind=kind,
+        params=params,
+        _job_id=f"research:{job_id}",
+        _queue_name=QUEUE_NAME,
+        _expires=DEDUP_TTL,
+    )

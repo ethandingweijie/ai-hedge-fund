@@ -95,6 +95,33 @@ def _spawn_background(coro):
     return task
 
 
+async def _maybe_enqueue_research(job_id: str, kind: str, params: dict) -> bool:
+    """Queue mode (Phase 2e): Redis available → run the job in the arq worker.
+
+    Returns True when the job was enqueued. Returns False when Redis is
+    unavailable or the enqueue fails — the caller then falls back to the
+    in-process _spawn_background path, so production behaviour is unchanged
+    until the Redis addon exists (Phase 2g).
+
+    The job row is created by the route BEFORE this call; the worker task
+    executes the same module-level _execute_* runner, which owns all job
+    status transitions, so GET .../jobs/{job_id} polling works in both modes.
+    """
+    from app.backend.services import queue_client
+
+    if not await queue_client.queue_mode_enabled():
+        return False
+    try:
+        await queue_client.enqueue_research_job(job_id, kind, params)
+        return True
+    except Exception as exc:
+        logger.warning(
+            "research job %s (%s) enqueue failed (%s) — in-process fallback",
+            job_id, kind, exc,
+        )
+        return False
+
+
 # ─── Heartbeat — pulses progress_msg every 30s while a job is running ────
 # Without this, the front-end toast text is frozen at the initial "scoring
 # NVDA (force_qual)" message for the entire 5-10 min job, and the user
@@ -478,10 +505,11 @@ async def trigger_idea_generation(mode: str | None = None):
 
     job_id = job_store.create_job("idea_of_the_day_gen")
 
-    async def _run():
-        await asyncio.to_thread(_execute_idea_gen_job, job_id, mode)
+    if not await _maybe_enqueue_research(job_id, "idea_of_the_day_gen", {"mode": mode}):
+        async def _run():
+            await asyncio.to_thread(_execute_idea_gen_job, job_id, mode)
 
-    _spawn_background(_run())
+        _spawn_background(_run())
     return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False, "mode": mode}
 
 
@@ -1033,10 +1061,13 @@ async def hk50_qual_deep_research(top_n: int = 20, force_refresh: bool = False):
 
     job_id = job_store.create_job("hk50_qual")
 
-    async def _run():
-        await asyncio.to_thread(_execute_hk50_qual_job, job_id, top_n, force_refresh)
+    if not await _maybe_enqueue_research(
+        job_id, "hk50_qual", {"top_n": top_n, "force_refresh": force_refresh}
+    ):
+        async def _run():
+            await asyncio.to_thread(_execute_hk50_qual_job, job_id, top_n, force_refresh)
 
-    _spawn_background(_run())
+        _spawn_background(_run())
     return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False}
 
 
@@ -1220,10 +1251,13 @@ async def hk50_qual_one_ticker(ticker: str, force_refresh: bool = False):
 
     job_id = job_store.create_job("hk50_qual_ticker", ticker=needle)
 
-    async def _run():
-        await asyncio.to_thread(_execute_hk50_ticker_qual_job, job_id, needle, force_refresh)
+    if not await _maybe_enqueue_research(
+        job_id, "hk50_qual_ticker", {"needle": needle, "force_refresh": force_refresh}
+    ):
+        async def _run():
+            await asyncio.to_thread(_execute_hk50_ticker_qual_job, job_id, needle, force_refresh)
 
-    _spawn_background(_run())
+        _spawn_background(_run())
     return {"job_id": job_id, "status": "pending", "started_at": None, "deduped": False}
 
 
@@ -1578,10 +1612,11 @@ async def refresh_complacency(max_workers: int = 3):
 
     job_id = job_store.create_job("refresh")
 
-    async def _run():
-        await asyncio.to_thread(_execute_refresh_job, job_id, max_workers)
+    if not await _maybe_enqueue_research(job_id, "refresh", {"max_workers": max_workers}):
+        async def _run():
+            await asyncio.to_thread(_execute_refresh_job, job_id, max_workers)
 
-    _spawn_background(_run())
+        _spawn_background(_run())
     return {
         "job_id":    job_id,
         "status":    "pending",
@@ -1776,10 +1811,13 @@ async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
 
     job_id = job_store.create_job("score_adhoc", ticker=ticker)
 
-    async def _run():
-        await asyncio.to_thread(_execute_score_job, job_id, ticker, force_qual)
+    if not await _maybe_enqueue_research(
+        job_id, "score_adhoc", {"ticker": ticker, "force_qual": force_qual}
+    ):
+        async def _run():
+            await asyncio.to_thread(_execute_score_job, job_id, ticker, force_qual)
 
-    _spawn_background(_run())
+        _spawn_background(_run())
     return {
         "job_id":    job_id,
         "status":    "pending",
@@ -2249,20 +2287,21 @@ async def refresh_hundred_q():
 
         job_id = await asyncio.to_thread(hundred_q_job_store.create_job, "hundred_q_refresh")
 
-        async def _run():
-            hundred_q_job_store.update_progress(job_id, "running", "scoring pilot universe...")
-            try:
-                from src.research_ideas.hundred_q.runner import run_full_quant_batch
-                cohort = await asyncio.to_thread(run_full_quant_batch, 6, True, None, "adhoc")
-                hundred_q_job_store.complete_job(job_id, {
-                    "run_id": cohort.run_id, "ticker_count": cohort.ticker_count,
-                    "tier_counts": cohort.tier_counts, "failed_tickers": cohort.failed_tickers,
-                })
-            except Exception as exc:
-                logger.exception("hundred_q refresh job %s failed: %s", job_id, exc)
-                hundred_q_job_store.fail_job(job_id, str(exc))
+        if not await _maybe_enqueue_research(job_id, "hundred_q_refresh", {}):
+            async def _run():
+                hundred_q_job_store.update_progress(job_id, "running", "scoring pilot universe...")
+                try:
+                    from src.research_ideas.hundred_q.runner import run_full_quant_batch
+                    cohort = await asyncio.to_thread(run_full_quant_batch, 6, True, None, "adhoc")
+                    hundred_q_job_store.complete_job(job_id, {
+                        "run_id": cohort.run_id, "ticker_count": cohort.ticker_count,
+                        "tier_counts": cohort.tier_counts, "failed_tickers": cohort.failed_tickers,
+                    })
+                except Exception as exc:
+                    logger.exception("hundred_q refresh job %s failed: %s", job_id, exc)
+                    hundred_q_job_store.fail_job(job_id, str(exc))
 
-        _spawn_background(_run())
+            _spawn_background(_run())
         return {"job_id": job_id, "status": "pending"}
     except Exception as exc:
         tb = traceback.format_exc()
