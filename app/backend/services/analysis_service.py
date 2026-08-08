@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from src.utils import run_config
+from src.data import db
 
 
 # ── .env.local (process-wide, load once) ──────────────────────────────────────
@@ -96,12 +97,81 @@ def _get_db_path() -> str:
 
 
 def _connect(path: str | None = None, **kwargs) -> sqlite3.Connection:
-    """Open run_archive.db with WAL mode, NORMAL sync, and a 5-second busy timeout."""
+    """Open run_archive.db with WAL mode, NORMAL sync, and a 5-second busy timeout.
+
+    SQLite path only. Kept importable for modules that still read their own
+    SQLite tables through this connection factory (e.g. routes/dd_alerts.py).
+    Production Postgres traffic goes through src.data.db — see _fetch/_exec.
+    """
     conn = sqlite3.connect(path or _get_db_path(), **kwargs)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA busy_timeout=5000")
     return conn
+
+
+# ── Dual-mode execution helpers (SQLite local / Postgres production) ─────────
+
+def _fetch(sql: str, params: list | None = None) -> list:
+    """SELECT on the active backend; rows support name-based access."""
+    if db.is_postgres():
+        return db.query(sql, params or [])
+    conn = _connect()
+    conn.row_factory = sqlite3.Row
+    try:
+        return conn.execute(sql, params or []).fetchall()
+    finally:
+        conn.close()
+
+
+def _fetch_one(sql: str, params: list | None = None):
+    """SELECT on the active backend; first row or None."""
+    rows = _fetch(sql, params)
+    return rows[0] if rows else None
+
+
+def _exec(sql: str, params: list | None = None) -> int:
+    """Run a write statement on the active backend; returns rowcount."""
+    if db.is_postgres():
+        return db.execute(sql, params or [])
+    conn = _connect()
+    try:
+        cur = conn.execute(sql, params or [])
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
+def _json_field(path: str, col: str = "full_result_json") -> str:
+    """Extract a JSON scalar from a TEXT column in the active dialect.
+
+    SQLite: json_extract(col, '$.a.b')
+    Postgres: col::jsonb #>> '{a,b}'
+    Both return NULL when any segment of the path is absent.
+    """
+    if db.is_postgres():
+        pg_path = "{" + ",".join(path.split(".")) + "}"
+        # NULLIF guards against empty-string cells: ''::jsonb raises in PG,
+        # while SQLite's json_extract('') just returns NULL.
+        return f"NULLIF({col}, '')::jsonb #>> '{pg_path}'"
+    return f"json_extract({col}, '$.{path}')"
+
+
+def _web_runs_upsert_sql(columns: list[str]) -> str:
+    """INSERT keyed on run_id that overwrites the row on conflict.
+
+    SQLite: INSERT OR REPLACE. Postgres: ON CONFLICT (run_id) DO UPDATE.
+    (DO UPDATE is strictly safer than OR REPLACE here: it only touches the
+    listed columns instead of resetting every unlisted column to NULL.)
+    """
+    cols = ", ".join(columns)
+    phs = ", ".join("?" * len(columns))
+    if db.is_postgres():
+        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in columns if c != "run_id")
+        return (f"INSERT INTO web_runs ({cols}) VALUES ({phs}) "
+                f"ON CONFLICT (run_id) DO UPDATE SET {updates}")
+    return f"INSERT OR REPLACE INTO web_runs ({cols}) VALUES ({phs})"
 
 
 # ── web_runs DDL ──────────────────────────────────────────────────────────────
@@ -189,6 +259,34 @@ def _migrate_web_runs_columns(conn: sqlite3.Connection) -> None:
 
 
 def _ensure_web_runs_table():
+    if db.is_postgres():
+        # web_runs was created by the SQLite->Postgres data migration with the
+        # full column set; backfill anything that may still be missing, then
+        # make sure the indexes exist too.
+        for col, definition in [
+            ("final_action",    "TEXT"),
+            ("regime",          "TEXT"),
+            ("sector",          "TEXT"),
+            ("profile_name",    "TEXT"),
+            ("is_checkpoint",   "INTEGER DEFAULT 0"),
+            ("user_id",         "INTEGER"),
+            ("phase_durations", "TEXT"),
+        ]:
+            db.add_column_if_missing("web_runs", col, definition)
+        for idx_sql in _WEB_RUNS_INDEXES:
+            db.execute(idx_sql)
+        # The CLI archive tables (runs / ticker_signals / agent_signals /
+        # rotation_events / ticker_routing_cache) are owned by
+        # src/memory/run_archive.py — delegate to its full-schema ensure.
+        from src.memory import run_archive
+        run_archive.ensure_schema()
+        for idx_sql in _ARCHIVE_INDEXES:
+            try:
+                db.execute(idx_sql)
+            except Exception:
+                pass
+        return
+
     db_path = _get_db_path()
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = _connect(db_path)
@@ -282,7 +380,6 @@ def _save_partial_web_run(
     land in the same row, keyed on run_id.
     """
     _ensure_web_runs_table()
-    db_path = _get_db_path()
     data = state.get("data", {})
     partial_result = {
         "run_id":       run_id,
@@ -345,28 +442,26 @@ def _save_partial_web_run(
             "sector_card":                 data.get("sector_card"),
         },
     }
-    conn = _connect(db_path)
     try:
-        conn.execute(
-            "INSERT OR REPLACE INTO web_runs "
-            "(run_id, run_at, ticker, model_name, archive_run_id, full_result_json, is_checkpoint, user_id) "
-            "VALUES (?,?,?,?,?,?,1,?)",
-            (
+        _exec(
+            _web_runs_upsert_sql(
+                ["run_id", "run_at", "ticker", "model_name", "archive_run_id",
+                 "full_result_json", "is_checkpoint", "user_id"]
+            ),
+            [
                 run_id,
                 datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"),
                 ticker,
                 model_name,
                 None,
                 json.dumps(_sanitize_floats(partial_result), default=str),
+                1,
                 user_id,
-            ),
+            ],
         )
-        conn.commit()
         print(f"  [checkpoint] '{checkpoint_name}' saved to web_runs ({run_id[:8]})")
     except Exception as e:
         print(f"  [checkpoint] DB write failed ({checkpoint_name}): {e}")
-    finally:
-        conn.close()
 
 
 def _save_web_run(
@@ -378,39 +473,35 @@ def _save_web_run(
     user_id: Optional[int] = None,
 ):
     _ensure_web_runs_table()
-    db_path = _get_db_path()
     final_action, regime, sector, profile_name = _extract_web_run_summary(result, ticker)
     # Workstream A — persist per-phase timing JSON in a dedicated column (it
     # also lives inside full_result_json). NULL when absent (legacy/CLI runs).
     _pd = (result.get("data") or {}).get("phase_durations") or None
     _pd_json = json.dumps(_sanitize_floats(_pd), default=str) if _pd else None
-    conn = _connect(db_path)
-    try:
-        conn.execute(
-            "INSERT OR REPLACE INTO web_runs "
-            "(run_id, run_at, ticker, model_name, archive_run_id, full_result_json, "
-            " final_action, regime, sector, profile_name, phase_durations, is_checkpoint, user_id) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,0,?)",
-            (
-                run_id,
-                # Store as plain ISO without tz suffix so string sort is consistent
-                # with CLI archive timestamps (both naive local-time strings).
-                datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"),
-                ticker,
-                model_name,
-                archive_run_id,
-                json.dumps(_sanitize_floats(result), default=str),
-                final_action or None,
-                regime or None,
-                sector or None,
-                profile_name or None,
-                _pd_json,
-                user_id,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _exec(
+        _web_runs_upsert_sql(
+            ["run_id", "run_at", "ticker", "model_name", "archive_run_id",
+             "full_result_json", "final_action", "regime", "sector",
+             "profile_name", "phase_durations", "is_checkpoint", "user_id"]
+        ),
+        [
+            run_id,
+            # Store as plain ISO without tz suffix so string sort is consistent
+            # with CLI archive timestamps (both naive local-time strings).
+            datetime.now().strftime("%Y-%m-%dT%H:%M:%S.%f"),
+            ticker,
+            model_name,
+            archive_run_id,
+            json.dumps(_sanitize_floats(result), default=str),
+            final_action or None,
+            regime or None,
+            sector or None,
+            profile_name or None,
+            _pd_json,
+            0,
+            user_id,
+        ],
+    )
 
     # Invalidate screener caches so the new pipeline VGPM is reflected immediately
     try:
@@ -509,60 +600,54 @@ def get_cached_run(
     same set of investor agents (cache miss when agent selection differs).
     """
     _ensure_web_runs_table()
-    db_path = _get_db_path()
-    conn = _connect(db_path, check_same_thread=False)
-    try:
-        conn.row_factory = sqlite3.Row
-        cutoff = (datetime.now() - timedelta(minutes=within_minutes)).strftime(
-            "%Y-%m-%dT%H:%M:%S.%f"
+    cutoff = (datetime.now() - timedelta(minutes=within_minutes)).strftime(
+        "%Y-%m-%dT%H:%M:%S.%f"
+    )
+    row = _fetch_one(
+        f"""
+        SELECT run_id, run_at, ticker, full_result_json
+        FROM   web_runs
+        WHERE  ticker  = ?
+          AND  run_at >= ?
+          AND  full_result_json IS NOT NULL
+          AND  {_json_field("checkpoint")} IS NULL
+        ORDER  BY run_at DESC
+        LIMIT  1
+        """,
+        [ticker.upper(), cutoff],
+    )
+    if row is None:
+        return None
+
+    result = {
+        "run_id":           row["run_id"],
+        "run_at":           row["run_at"],
+        "ticker":           row["ticker"],
+        "full_result_json": json.loads(row["full_result_json"]),
+    }
+
+    # ── Agent-set validation ───────────────────────────────────────────
+    # Verify the cached run used the same investor-agent set as requested.
+    # Two layers of normalisation needed (bug fixed 2026-04-25):
+    #   1. Frontend short names → backend agent_id via _FRONTEND_SHORT_TO_AGENT_ID
+    #      ('graham' → 'ben_graham_agent', not 'graham_agent')
+    #   2. Strip always-on system + data analysts from the cached set
+    #      (sentiment, technical, valuation, growth, fundamentals,
+    #       news_sentiment, plus risk + portfolio managers)
+    # Pre-fix: every Deep-Value / partial-profile run cache-missed because
+    # short-name normalisation produced 'graham_agent' which never matched
+    # the cached 'ben_graham_agent'.
+    if agents:
+        cached_data    = result["full_result_json"].get("data", {})
+        cached_signals = cached_data.get("analyst_signals", {})
+        cached_investor_agents = sorted(
+            k for k in cached_signals if k not in _CACHE_SYSTEM_AGENTS
         )
-        row = conn.execute(
-            """
-            SELECT run_id, run_at, ticker, full_result_json
-            FROM   web_runs
-            WHERE  ticker  = ?
-              AND  run_at >= ?
-              AND  full_result_json IS NOT NULL
-              AND  json_extract(full_result_json, '$.checkpoint') IS NULL
-            ORDER  BY run_at DESC
-            LIMIT  1
-            """,
-            (ticker.upper(), cutoff),
-        ).fetchone()
-        if row is None:
-            return None
+        requested_normalised = sorted(_canonicalize_requested_agents(agents))
+        if cached_investor_agents != requested_normalised:
+            return None   # different agent selection — force fresh run
 
-        result = {
-            "run_id":           row["run_id"],
-            "run_at":           row["run_at"],
-            "ticker":           row["ticker"],
-            "full_result_json": json.loads(row["full_result_json"]),
-        }
-
-        # ── Agent-set validation ───────────────────────────────────────────
-        # Verify the cached run used the same investor-agent set as requested.
-        # Two layers of normalisation needed (bug fixed 2026-04-25):
-        #   1. Frontend short names → backend agent_id via _FRONTEND_SHORT_TO_AGENT_ID
-        #      ('graham' → 'ben_graham_agent', not 'graham_agent')
-        #   2. Strip always-on system + data analysts from the cached set
-        #      (sentiment, technical, valuation, growth, fundamentals,
-        #       news_sentiment, plus risk + portfolio managers)
-        # Pre-fix: every Deep-Value / partial-profile run cache-missed because
-        # short-name normalisation produced 'graham_agent' which never matched
-        # the cached 'ben_graham_agent'.
-        if agents:
-            cached_data    = result["full_result_json"].get("data", {})
-            cached_signals = cached_data.get("analyst_signals", {})
-            cached_investor_agents = sorted(
-                k for k in cached_signals if k not in _CACHE_SYSTEM_AGENTS
-            )
-            requested_normalised = sorted(_canonicalize_requested_agents(agents))
-            if cached_investor_agents != requested_normalised:
-                return None   # different agent selection — force fresh run
-
-        return result
-    finally:
-        conn.close()
+    return result
 
 
 # ── Delete helper ─────────────────────────────────────────────────────────────
@@ -577,45 +662,36 @@ def delete_run(run_id: str, user_id: int = None) -> bool:
     Falls back to deleting directly from the CLI tables for CLI-only runs.
     Returns True if anything was deleted, False if run_id not found or not owned.
     """
-    db_path = _get_db_path()
-    conn = _connect(db_path, check_same_thread=False)
-    try:
-        conn.row_factory = sqlite3.Row
+    _ensure_web_runs_table()
 
-        # ── 1. Check web_runs ────────────────────────────────────────────────
-        row = conn.execute(
-            "SELECT archive_run_id, user_id FROM web_runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
+    # ── 1. Check web_runs ────────────────────────────────────────────────
+    row = _fetch_one(
+        "SELECT archive_run_id, user_id FROM web_runs WHERE run_id = ?", [run_id]
+    )
 
-        if row is not None:
-            # Ownership check: only owner can delete (legacy runs have NULL user_id)
-            run_user_id = row["user_id"]
-            if run_user_id is not None and user_id is not None and run_user_id != user_id:
-                return False  # Not the owner — deny deletion
+    if row is not None:
+        # Ownership check: only owner can delete (legacy runs have NULL user_id)
+        run_user_id = row["user_id"]
+        if run_user_id is not None and user_id is not None and run_user_id != user_id:
+            return False  # Not the owner — deny deletion
 
-            archive_id = row["archive_run_id"]
-            conn.execute("DELETE FROM web_runs WHERE run_id = ?", (run_id,))
-            # Cascade to CLI archive if this web run was also saved there
-            if archive_id:
-                conn.execute("DELETE FROM agent_signals  WHERE run_id = ?", (archive_id,))
-                conn.execute("DELETE FROM ticker_signals WHERE run_id = ?", (archive_id,))
-                conn.execute("DELETE FROM runs           WHERE run_id = ?", (archive_id,))
-            conn.commit()
-            return True
+        archive_id = row["archive_run_id"]
+        _exec("DELETE FROM web_runs WHERE run_id = ?", [run_id])
+        # Cascade to CLI archive if this web run was also saved there
+        if archive_id:
+            _exec("DELETE FROM agent_signals  WHERE run_id = ?", [archive_id])
+            _exec("DELETE FROM ticker_signals WHERE run_id = ?", [archive_id])
+            _exec("DELETE FROM runs           WHERE run_id = ?", [archive_id])
+        return True
 
-        # ── 2. Fallback: CLI-only run (no web_runs entry) ────────────────────
-        affected = conn.execute(
-            "DELETE FROM runs WHERE run_id = ?", (run_id,)
-        ).rowcount
-        if affected:
-            conn.execute("DELETE FROM agent_signals  WHERE run_id = ?", (run_id,))
-            conn.execute("DELETE FROM ticker_signals WHERE run_id = ?", (run_id,))
-            conn.commit()
-            return True
+    # ── 2. Fallback: CLI-only run (no web_runs entry) ────────────────────
+    affected = _exec("DELETE FROM runs WHERE run_id = ?", [run_id])
+    if affected:
+        _exec("DELETE FROM agent_signals  WHERE run_id = ?", [run_id])
+        _exec("DELETE FROM ticker_signals WHERE run_id = ?", [run_id])
+        return True
 
-        return False
-    finally:
-        conn.close()
+    return False
 
 
 # ── Public read helpers ───────────────────────────────────────────────────────
@@ -628,212 +704,206 @@ def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
     Ownership: user can only access their own runs (legacy runs visible to all).
     """
     _ensure_web_runs_table()
-    db_path = _get_db_path()
-    conn = _connect(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        # ── 1. Try web_runs (full JSON) ───────────────────────────────────────
-        row = conn.execute(
-            "SELECT full_result_json, user_id FROM web_runs WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()
-        if row and row[0]:
-            # Ownership check: only owner can access (legacy runs have NULL user_id)
-            run_user_id = row["user_id"]
-            if run_user_id is not None and user_id is not None and run_user_id != user_id:
-                return None  # Not the owner — deny access
-            return _sanitize_floats(json.loads(row[0]))
 
-        # ── 2. Try reconstructing from CLI archive tables ─────────────────────
-        run_row = conn.execute(
-            "SELECT * FROM runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
-        if not run_row:
-            return None
+    # ── 1. Try web_runs (full JSON) ───────────────────────────────────────
+    row = _fetch_one(
+        "SELECT full_result_json, user_id FROM web_runs WHERE run_id = ?",
+        [run_id],
+    )
+    if row and row["full_result_json"]:
+        # Ownership check: only owner can access (legacy runs have NULL user_id)
+        run_user_id = row["user_id"]
+        if run_user_id is not None and user_id is not None and run_user_id != user_id:
+            return None  # Not the owner — deny access
+        return _sanitize_floats(json.loads(row["full_result_json"]))
 
-        tickers: list[str] = json.loads(run_row["tickers"] or "[]")
-        ticker = tickers[0] if tickers else ""
+    # ── 2. Try reconstructing from CLI archive tables ─────────────────────
+    run_row = _fetch_one(
+        "SELECT * FROM runs WHERE run_id = ?", [run_id]
+    )
+    if not run_row:
+        return None
 
-        # Ticker signals
-        ts = conn.execute(
-            "SELECT * FROM ticker_signals WHERE run_id = ? AND ticker = ?",
-            (run_id, ticker),
-        ).fetchone()
+    tickers: list[str] = json.loads(run_row["tickers"] or "[]")
+    ticker = tickers[0] if tickers else ""
 
-        # Agent signals
-        agent_rows = conn.execute(
-            "SELECT * FROM agent_signals WHERE run_id = ? AND ticker = ?",
-            (run_id, ticker),
-        ).fetchall()
+    # Ticker signals
+    ts = _fetch_one(
+        "SELECT * FROM ticker_signals WHERE run_id = ? AND ticker = ?",
+        [run_id, ticker],
+    )
 
-        # Reconstruct analyst_signals dict (investor agents only)
-        analyst_signals: dict = {}
-        for ag in agent_rows:
-            analyst_signals[ag["agent_key"]] = {
-                ticker: {
-                    "signal":         ag["signal"],
-                    "conviction":     ag["conviction"],
-                    "price_target":   ag["price_target"],
-                    "time_horizon":   ag["time_horizon"],
-                    "thesis_summary": ag["thesis_summary"],
-                    "key_risks":      json.loads(ag["key_risks"] or "[]"),
-                }
+    # Agent signals
+    agent_rows = _fetch(
+        "SELECT * FROM agent_signals WHERE run_id = ? AND ticker = ?",
+        [run_id, ticker],
+    )
+
+    # Reconstruct analyst_signals dict (investor agents only)
+    analyst_signals: dict = {}
+    for ag in agent_rows:
+        analyst_signals[ag["agent_key"]] = {
+            ticker: {
+                "signal":         ag["signal"],
+                "conviction":     ag["conviction"],
+                "price_target":   ag["price_target"],
+                "time_horizon":   ag["time_horizon"],
+                "thesis_summary": ag["thesis_summary"],
+                "key_risks":      json.loads(ag["key_risks"] or "[]"),
             }
-
-        # Reconstruct decisions dict
-        decisions: dict = {}
-        if ts:
-            decisions[ticker] = {
-                "action":            ts["final_action"],
-                "position_size_pct": ts["position_size_pct"],
-                "price_target":      ts["price_target"],
-                "stop_loss":         ts["stop_loss"],
-                "entry_range":       [ts["entry_range_low"], ts["entry_range_high"]],
-                "time_horizon":      ts["time_horizon"],
-                "rationale":         ts["pm_rationale"],
-            }
-
-        # ── v3 JSON blobs (use rich data if stored, fall back to scalar stubs) ─
-        def _load_json_col(col_name: str) -> Optional[dict]:
-            val = ts[col_name] if ts else None
-            if val:
-                try:
-                    return json.loads(val)
-                except Exception:
-                    pass
-            return None
-
-        # Scenario analysis
-        scenario_full = _load_json_col("scenario_json")
-        if scenario_full:
-            scenario_analysis: dict = {ticker: scenario_full}
-        elif ts and ts["ev_upside_pct"] is not None:
-            scenario_analysis = {
-                ticker: {
-                    "upside_pct":    ts["ev_upside_pct"],
-                    "expected_value": None,
-                    "current_price": ts["price_at_run"],
-                    "bull": {"fair_value": None, "probability": 0.25, "assumptions": ""},
-                    "base": {"fair_value": None, "probability": 0.50, "assumptions": ""},
-                    "bear": {"fair_value": None, "probability": 0.25, "assumptions": ""},
-                }
-            }
-        else:
-            scenario_analysis = {}
-
-        # Power law analysis
-        pl_full = _load_json_col("power_law_json")
-        if pl_full:
-            power_law_analysis: dict = {ticker: pl_full}
-        elif ts and ts["power_law_score"] is not None:
-            power_law_analysis = {
-                ticker: {"total_score": ts["power_law_score"], "score": ts["power_law_score"]}
-            }
-        else:
-            power_law_analysis = {}
-
-        # Raw financials
-        raw_financials: dict = _load_json_col("raw_financials_json") or {}
-
-        # Citation audit
-        ca_full = _load_json_col("citation_audit_json")
-        citation_audit: dict = {ticker: ca_full} if ca_full else {}
-
-        # VGPM
-        vgpm_full = _load_json_col("vgpm_json")
-        vgpm: dict = {ticker: vgpm_full} if vgpm_full else {}
-
-        # DCF range — all three scenario intrinsic values (bear/bull added in v3)
-        dcf_range: dict = {}
-        if ts and ts["dcf_base_iv"]:
-            dcf_range[ticker] = {
-                "wacc": ts["dcf_wacc"],
-                "base": {"intrinsic_value": ts["dcf_base_iv"]},
-                "bear": {"intrinsic_value": ts["dcf_bear_iv"] if "dcf_bear_iv" in ts.keys() else None},
-                "bull": {"intrinsic_value": ts["dcf_bull_iv"] if "dcf_bull_iv" in ts.keys() else None},
-            }
-
-        # Intelligence stubs from scalar columns
-        intel: dict = {}
-        if ts:
-            intel["insider_activity_agent"] = {
-                ticker: {"signal": ts["insider_signal"], "summary": ts["insider_signal"] or ""}
-            }
-            intel["analyst_revision_agent"] = {
-                ticker: {"revision_direction": ts["revision_direction"]}
-            }
-            intel["news_sentiment_agent"] = {
-                ticker: {"signal": ts["news_signal"]}
-            }
-            intel["earnings_quality_agent"] = {
-                ticker: {
-                    "quality_verdict":       ts["eq_quality_verdict"],
-                    "overall_quality_score": ts["eq_quality_score"],
-                }
-            }
-            intel["short_interest_agent"] = {
-                ticker: {
-                    "signal":          ts["si_signal"],
-                    "short_float_pct": ts["si_short_float_pct"],
-                    "squeeze_risk":    bool(ts["si_squeeze_risk"]),
-                    "crowded_trade":   bool(ts["si_crowded_trade"]),
-                }
-            }
-
-        # Value trap
-        value_trap_analysis: dict = {}
-        if ts and ts["value_trap_verdict"]:
-            value_trap_analysis[ticker] = {"overall_verdict": ts["value_trap_verdict"]}
-
-        # Sector card (Option B render — v3.3). When the column is missing
-        # (very old runs predating the v3.3 migration) sqlite3.Row raises
-        # IndexError on string lookup, hence the .keys() guard.
-        sector_card: dict = {}
-        if ts and "sector_card_json" in ts.keys():
-            sc_full = _load_json_col("sector_card_json")
-            if sc_full:
-                sector_card[ticker] = sc_full
-
-        # Macro regime
-        macro_regime: dict = {
-            "risk_appetite":     run_row["regime_risk_appetite"],
-            "rate_direction":    run_row["regime_rate_direction"],
-            "volatility_regime": run_row["regime_volatility"],
-            "dollar_trend":      run_row["regime_dollar"],
-            "recession_risk":    run_row["regime_recession_risk"],
         }
 
-        result = {
-            "run_id":     run_id,
-            "ticker":     ticker,
-            "model_name": run_row["model_name"],
-            "run_at":     run_row["run_at"],
-            "source":     "cli_archive",
-            "data": {
-                "tickers":            tickers,
-                "sector":             run_row["sector"],
-                "macro_regime":       macro_regime,
-                "analyst_signals":    {**analyst_signals, **intel},
-                "scenario_analysis":  scenario_analysis,
-                "dcf_range":          dcf_range,
-                "value_trap_analysis":value_trap_analysis,
-                "power_law_analysis": power_law_analysis,
-                "raw_financials":     raw_financials,
-                "citation_audit":     citation_audit,
-                "industry_brief":          run_row["industry_brief_text"] or "",
-                "deep_research":           run_row["deep_research_text"] or "",
-                "deep_research_annotated": run_row["deep_research_text"] or "",
-                "deep_research_sections":  {},
-                # v3.3 — sector valuation card (Option B render).
-                "sector_card":             sector_card,
-            },
-            "decisions": decisions,
-            "vgpm":      vgpm,
+    # Reconstruct decisions dict
+    decisions: dict = {}
+    if ts:
+        decisions[ticker] = {
+            "action":            ts["final_action"],
+            "position_size_pct": ts["position_size_pct"],
+            "price_target":      ts["price_target"],
+            "stop_loss":         ts["stop_loss"],
+            "entry_range":       [ts["entry_range_low"], ts["entry_range_high"]],
+            "time_horizon":      ts["time_horizon"],
+            "rationale":         ts["pm_rationale"],
         }
-        return result
 
-    finally:
-        conn.close()
+    # ── v3 JSON blobs (use rich data if stored, fall back to scalar stubs) ─
+    def _load_json_col(col_name: str) -> Optional[dict]:
+        val = ts[col_name] if ts else None
+        if val:
+            try:
+                return json.loads(val)
+            except Exception:
+                pass
+        return None
+
+    # Scenario analysis
+    scenario_full = _load_json_col("scenario_json")
+    if scenario_full:
+        scenario_analysis: dict = {ticker: scenario_full}
+    elif ts and ts["ev_upside_pct"] is not None:
+        scenario_analysis = {
+            ticker: {
+                "upside_pct":    ts["ev_upside_pct"],
+                "expected_value": None,
+                "current_price": ts["price_at_run"],
+                "bull": {"fair_value": None, "probability": 0.25, "assumptions": ""},
+                "base": {"fair_value": None, "probability": 0.50, "assumptions": ""},
+                "bear": {"fair_value": None, "probability": 0.25, "assumptions": ""},
+            }
+        }
+    else:
+        scenario_analysis = {}
+
+    # Power law analysis
+    pl_full = _load_json_col("power_law_json")
+    if pl_full:
+        power_law_analysis: dict = {ticker: pl_full}
+    elif ts and ts["power_law_score"] is not None:
+        power_law_analysis = {
+            ticker: {"total_score": ts["power_law_score"], "score": ts["power_law_score"]}
+        }
+    else:
+        power_law_analysis = {}
+
+    # Raw financials
+    raw_financials: dict = _load_json_col("raw_financials_json") or {}
+
+    # Citation audit
+    ca_full = _load_json_col("citation_audit_json")
+    citation_audit: dict = {ticker: ca_full} if ca_full else {}
+
+    # VGPM
+    vgpm_full = _load_json_col("vgpm_json")
+    vgpm: dict = {ticker: vgpm_full} if vgpm_full else {}
+
+    # DCF range — all three scenario intrinsic values (bear/bull added in v3)
+    dcf_range: dict = {}
+    if ts and ts["dcf_base_iv"]:
+        dcf_range[ticker] = {
+            "wacc": ts["dcf_wacc"],
+            "base": {"intrinsic_value": ts["dcf_base_iv"]},
+            "bear": {"intrinsic_value": ts["dcf_bear_iv"] if "dcf_bear_iv" in ts.keys() else None},
+            "bull": {"intrinsic_value": ts["dcf_bull_iv"] if "dcf_bull_iv" in ts.keys() else None},
+        }
+
+    # Intelligence stubs from scalar columns
+    intel: dict = {}
+    if ts:
+        intel["insider_activity_agent"] = {
+            ticker: {"signal": ts["insider_signal"], "summary": ts["insider_signal"] or ""}
+        }
+        intel["analyst_revision_agent"] = {
+            ticker: {"revision_direction": ts["revision_direction"]}
+        }
+        intel["news_sentiment_agent"] = {
+            ticker: {"signal": ts["news_signal"]}
+        }
+        intel["earnings_quality_agent"] = {
+            ticker: {
+                "quality_verdict":       ts["eq_quality_verdict"],
+                "overall_quality_score": ts["eq_quality_score"],
+            }
+        }
+        intel["short_interest_agent"] = {
+            ticker: {
+                "signal":          ts["si_signal"],
+                "short_float_pct": ts["si_short_float_pct"],
+                "squeeze_risk":    bool(ts["si_squeeze_risk"]),
+                "crowded_trade":   bool(ts["si_crowded_trade"]),
+            }
+        }
+
+    # Value trap
+    value_trap_analysis: dict = {}
+    if ts and ts["value_trap_verdict"]:
+        value_trap_analysis[ticker] = {"overall_verdict": ts["value_trap_verdict"]}
+
+    # Sector card (Option B render — v3.3). When the column is missing
+    # (very old runs predating the v3.3 migration) sqlite3.Row raises
+    # IndexError on string lookup, hence the .keys() guard.
+    sector_card: dict = {}
+    if ts and "sector_card_json" in ts.keys():
+        sc_full = _load_json_col("sector_card_json")
+        if sc_full:
+            sector_card[ticker] = sc_full
+
+    # Macro regime
+    macro_regime: dict = {
+        "risk_appetite":     run_row["regime_risk_appetite"],
+        "rate_direction":    run_row["regime_rate_direction"],
+        "volatility_regime": run_row["regime_volatility"],
+        "dollar_trend":      run_row["regime_dollar"],
+        "recession_risk":    run_row["regime_recession_risk"],
+    }
+
+    result = {
+        "run_id":     run_id,
+        "ticker":     ticker,
+        "model_name": run_row["model_name"],
+        "run_at":     run_row["run_at"],
+        "source":     "cli_archive",
+        "data": {
+            "tickers":            tickers,
+            "sector":             run_row["sector"],
+            "macro_regime":       macro_regime,
+            "analyst_signals":    {**analyst_signals, **intel},
+            "scenario_analysis":  scenario_analysis,
+            "dcf_range":          dcf_range,
+            "value_trap_analysis":value_trap_analysis,
+            "power_law_analysis": power_law_analysis,
+            "raw_financials":     raw_financials,
+            "citation_audit":     citation_audit,
+            "industry_brief":          run_row["industry_brief_text"] or "",
+            "deep_research":           run_row["deep_research_text"] or "",
+            "deep_research_annotated": run_row["deep_research_text"] or "",
+            "deep_research_sections":  {},
+            # v3.3 — sector valuation card (Option B render).
+            "sector_card":             sector_card,
+        },
+        "decisions": decisions,
+        "vgpm":      vgpm,
+    }
+    return result
 
 
 def get_history(
@@ -861,353 +931,348 @@ def get_history(
     Legacy rows (NULL summary cols) fall back to json_extract so nothing is lost.
     """
     _ensure_web_runs_table()
-    db_path = _get_db_path()
-    conn = _connect(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        offset = (page - 1) * page_size
+    offset = (page - 1) * page_size
 
-        # ── 1. Web runs — filter without loading full_result_json ─────────────
-        web_where: list[str] = [
-            # Exclude checkpoint rows: prefer the fast column; fall back to json_extract
-            # for legacy rows where is_checkpoint is NULL.
-            "(w.is_checkpoint = 0 OR (w.is_checkpoint IS NULL AND "
-            "json_extract(w.full_result_json, '$.checkpoint') IS NULL))",
-            # Phase 2B: belt-and-suspenders DD exclusion. New DD reports go
-            # to the dedicated dd_reports table (NOT web_runs), so this
-            # filter is technically a no-op for fresh installs. It still
-            # catches any stragglers from the pre-Phase-2B architecture
-            # that haven't been purged yet via /admin/dd-purge-legacy-web-runs.
-            "(w.model_name IS NULL OR "
-            "(w.model_name NOT LIKE 'dd_%' AND w.model_name != 'synthetic-dd-trigger'))",
-        ]
-        web_params: list[Any] = []
+    # ── 1. Web runs — filter without loading full_result_json ─────────────
+    web_where: list[str] = [
+        # Exclude checkpoint rows: prefer the fast column; fall back to a JSON
+        # field extraction for legacy rows where is_checkpoint is NULL.
+        f"(w.is_checkpoint = 0 OR (w.is_checkpoint IS NULL AND "
+        f"{_json_field('checkpoint', col='w.full_result_json')} IS NULL))",
+        # Phase 2B: belt-and-suspenders DD exclusion. New DD reports go
+        # to the dedicated dd_reports table (NOT web_runs), so this
+        # filter is technically a no-op for fresh installs. It still
+        # catches any stragglers from the pre-Phase-2B architecture
+        # that haven't been purged yet via /admin/dd-purge-legacy-web-runs.
+        "(w.model_name IS NULL OR "
+        "(w.model_name NOT LIKE 'dd_%' AND w.model_name != 'synthetic-dd-trigger'))",
+    ]
+    web_params: list[Any] = []
 
-        if ticker:
-            web_where.append("UPPER(w.ticker) = UPPER(?)")
-            web_params.append(ticker)
-        if date_from:
-            web_where.append("w.run_at >= ?")
-            web_params.append(date_from)
-        if date_to:
-            web_where.append("w.run_at <= ?")
-            web_params.append(date_to + "T23:59:59")
-        if action:
-            # Use summary column when populated; fall back to json_extract for legacy rows
-            web_where.append(
-                "(UPPER(w.final_action) = UPPER(?) OR "
-                "(w.final_action IS NULL AND "
-                "UPPER(json_extract(w.full_result_json, '$.decisions')) LIKE UPPER(?)))"
-            )
-            web_params.extend([action, f"%{action}%"])
-        if regime:
-            web_where.append(
-                "(UPPER(w.regime) = UPPER(?) OR "
-                "(w.regime IS NULL AND "
-                "UPPER(json_extract(w.full_result_json, '$.data.macro_regime.risk_appetite')) = UPPER(?)))"
-            )
-            web_params.extend([regime, regime])
-        if user_id is not None:
-            # Show runs belonging to this user OR legacy runs with no owner (backward compat)
-            web_where.append("(w.user_id = ? OR w.user_id IS NULL)")
-            web_params.append(user_id)
-
-        if sector:
-            web_where.append(
-                "(UPPER(w.sector) = UPPER(?) OR "
-                "(w.sector IS NULL AND "
-                "UPPER(json_extract(w.full_result_json, '$.data.sector')) = UPPER(?)))"
-            )
-            web_params.extend([sector, sector])
-
-        web_where_sql = "WHERE " + " AND ".join(web_where)
-
-        # COUNT without JSON load — instant with idx_web_runs_run_at
-        web_total: int = conn.execute(
-            f"SELECT COUNT(*) FROM web_runs w {web_where_sql}", web_params
-        ).fetchone()[0]
-
-        # Fetch metadata only (no full_result_json) for all matching rows → used for total
-        web_meta_rows = conn.execute(
-            f"SELECT w.run_id, w.run_at, w.ticker, w.model_name, "
-            f"w.final_action, w.regime, w.sector "
-            f"FROM web_runs w {web_where_sql} ORDER BY w.run_at DESC",
-            web_params,
-        ).fetchall()
-
-        # ── 2. CLI archive runs (exclude any already imported via web) ────────
-        imported_archive_ids = set(
-            r[0]
-            for r in conn.execute(
-                "SELECT archive_run_id FROM web_runs WHERE archive_run_id IS NOT NULL"
-            ).fetchall()
+    if ticker:
+        web_where.append("UPPER(w.ticker) = UPPER(?)")
+        web_params.append(ticker)
+    if date_from:
+        web_where.append("w.run_at >= ?")
+        web_params.append(date_from)
+    if date_to:
+        web_where.append("w.run_at <= ?")
+        web_params.append(date_to + "T23:59:59")
+    if action:
+        # Use summary column when populated; fall back to JSON field for legacy rows
+        web_where.append(
+            "(UPPER(w.final_action) = UPPER(?) OR "
+            "(w.final_action IS NULL AND "
+            f"UPPER({_json_field('decisions', col='w.full_result_json')}) LIKE UPPER(?)))"
         )
+        web_params.extend([action, f"%{action}%"])
+    if regime:
+        web_where.append(
+            "(UPPER(w.regime) = UPPER(?) OR "
+            "(w.regime IS NULL AND "
+            f"UPPER({_json_field('data.macro_regime.risk_appetite', col='w.full_result_json')}) = UPPER(?)))"
+        )
+        web_params.extend([regime, regime])
+    if user_id is not None:
+        # Show runs belonging to this user OR legacy runs with no owner (backward compat)
+        web_where.append("(w.user_id = ? OR w.user_id IS NULL)")
+        web_params.append(user_id)
 
-        cli_where: list[str] = ["r.run_id NOT IN ({})".format(
-            ",".join("?" * len(imported_archive_ids)) if imported_archive_ids else "'__none__'"
-        )]
-        cli_params: list[Any] = list(imported_archive_ids)
+    if sector:
+        web_where.append(
+            "(UPPER(w.sector) = UPPER(?) OR "
+            "(w.sector IS NULL AND "
+            f"UPPER({_json_field('data.sector', col='w.full_result_json')}) = UPPER(?)))"
+        )
+        web_params.extend([sector, sector])
 
-        if ticker:
-            cli_where.append("UPPER(ts.ticker) = UPPER(?)")
-            cli_params.append(ticker)
-        if date_from:
-            cli_where.append("r.run_at >= ?")
-            cli_params.append(date_from)
-        if date_to:
-            cli_where.append("r.run_at <= ?")
-            cli_params.append(date_to + "T23:59:59")
-        if regime:
-            cli_where.append("UPPER(r.regime_risk_appetite) = UPPER(?)")
-            cli_params.append(regime)
-        if action:
-            cli_where.append("UPPER(ts.final_action) = UPPER(?)")
-            cli_params.append(action)
-        if outcome:
-            cli_where.append("UPPER(ts.outcome) = UPPER(?)")
-            cli_params.append(outcome)
-        if sector:
-            cli_where.append("UPPER(r.sector) = UPPER(?)")
-            cli_params.append(sector)
+    web_where_sql = "WHERE " + " AND ".join(web_where)
 
-        cli_where_sql = "WHERE " + " AND ".join(cli_where)
+    # COUNT without JSON load — instant with idx_web_runs_run_at
+    _cnt = _fetch_one(
+        f"SELECT COUNT(*) AS n FROM web_runs w {web_where_sql}", web_params
+    )
+    web_total: int = _cnt["n"] if _cnt else 0
 
-        cli_rows = conn.execute(
-            f"""
-            SELECT
-                r.run_id, r.run_at, ts.ticker, r.model_name,
-                r.regime_risk_appetite  AS regime,
-                r.sector                AS sector,
-                ts.final_action, ts.position_size_pct, ts.price_target, ts.stop_loss,
-                ts.dcf_base_iv, ts.ev_upside_pct, ts.power_law_score,
-                ts.value_trap_verdict,  ts.outcome, ts.pct_change,
-                'cli' AS source
-            FROM ticker_signals ts
-            JOIN runs r ON r.run_id = ts.run_id
-            {cli_where_sql}
-            ORDER BY r.run_at DESC
-            """,
-            cli_params,
-        ).fetchall()
+    # Fetch metadata only (no full_result_json) for all matching rows → used for total
+    web_meta_rows = _fetch(
+        f"SELECT w.run_id, w.run_at, w.ticker, w.model_name, "
+        f"w.final_action, w.regime, w.sector "
+        f"FROM web_runs w {web_where_sql} ORDER BY w.run_at DESC",
+        web_params,
+    )
 
-        # ── 3. Merge metadata (no JSON) + sort → determine page slice ─────────
-        web_light: list[dict] = [
-            {
-                "run_id":     r["run_id"],
-                "run_at":     r["run_at"],
-                "ticker":     r["ticker"],
-                "model_name": r["model_name"],
-                "source":     "web",
-                # summary cols present on new rows; None on legacy rows
-                "_final_action": r["final_action"],
-                "_regime":       r["regime"],
-                "_sector":       r["sector"],
-            }
-            for r in web_meta_rows
-        ]
+    # ── 2. CLI archive runs (exclude any already imported via web) ────────
+    imported_archive_ids = set(
+        r["archive_run_id"]
+        for r in _fetch(
+            "SELECT archive_run_id FROM web_runs WHERE archive_run_id IS NOT NULL"
+        )
+    )
 
-        cli_light: list[dict] = [
-            {
-                "run_id":           row["run_id"],
-                "run_at":           row["run_at"],
-                "ticker":           row["ticker"],
-                "model_name":       row["model_name"],
-                "source":           "cli",
-                "regime":           row["regime"] or "",
-                "sector":           row["sector"] or "",
-                "final_action":     row["final_action"] or "",
-                "position_size_pct": row["position_size_pct"],
-                "price_target":     row["price_target"],
-                "stop_loss":        row["stop_loss"],
-                "dcf_base_iv":      row["dcf_base_iv"],
-                "ev_upside_pct":    row["ev_upside_pct"],
-                "power_law_score":  row["power_law_score"],
-                "value_trap_verdict": row["value_trap_verdict"],
-                "outcome":          row["outcome"] or "PENDING",
-                "pct_change":       row["pct_change"],
-                "vgpm_grades":      {},
-            }
-            for row in cli_rows
-        ]
+    cli_where: list[str] = ["r.run_id NOT IN ({})".format(
+        ",".join("?" * len(imported_archive_ids)) if imported_archive_ids else "'__none__'"
+    )]
+    cli_params: list[Any] = list(imported_archive_ids)
 
-        all_light = web_light + cli_light
+    if ticker:
+        cli_where.append("UPPER(ts.ticker) = UPPER(?)")
+        cli_params.append(ticker)
+    if date_from:
+        cli_where.append("r.run_at >= ?")
+        cli_params.append(date_from)
+    if date_to:
+        cli_where.append("r.run_at <= ?")
+        cli_params.append(date_to + "T23:59:59")
+    if regime:
+        cli_where.append("UPPER(r.regime_risk_appetite) = UPPER(?)")
+        cli_params.append(regime)
+    if action:
+        cli_where.append("UPPER(ts.final_action) = UPPER(?)")
+        cli_params.append(action)
+    if outcome:
+        cli_where.append("UPPER(ts.outcome) = UPPER(?)")
+        cli_params.append(outcome)
+    if sector:
+        cli_where.append("UPPER(r.sector) = UPPER(?)")
+        cli_params.append(sector)
 
-        # ISO timestamp sort — strip tz suffix so naive and aware strings compare equal
-        all_light.sort(key=lambda x: x["run_at"][:26], reverse=True)
+    cli_where_sql = "WHERE " + " AND ".join(cli_where)
 
-        total = len(all_light)
-        page_slice = all_light[offset: offset + page_size]
+    cli_rows = _fetch(
+        f"""
+        SELECT
+            r.run_id, r.run_at, ts.ticker, r.model_name,
+            r.regime_risk_appetite  AS regime,
+            r.sector                AS sector,
+            ts.final_action, ts.position_size_pct, ts.price_target, ts.stop_loss,
+            ts.dcf_base_iv, ts.ev_upside_pct, ts.power_law_score,
+            ts.value_trap_verdict,  ts.outcome, ts.pct_change,
+            'cli' AS source
+        FROM ticker_signals ts
+        JOIN runs r ON r.run_id = ts.run_id
+        {cli_where_sql}
+        ORDER BY r.run_at DESC
+        """,
+        cli_params,
+    )
 
-        # ── 4. Enrich only the page slice — fetch JSON just for those run_ids ──
-        web_page_ids = [
-            item["run_id"] for item in page_slice if item["source"] == "web"
-        ]
-        json_by_id: dict[str, str] = {}
-        if web_page_ids:
-            placeholders = ",".join("?" * len(web_page_ids))
-            for row in conn.execute(
-                f"SELECT run_id, full_result_json FROM web_runs WHERE run_id IN ({placeholders})",
-                web_page_ids,
-            ).fetchall():
-                json_by_id[row["run_id"]] = row["full_result_json"]
-
-        page_items: list[dict] = []
-        for item in page_slice:
-            if item["source"] != "web":
-                page_items.append(item)
-                continue
-
-            enriched: dict = {
-                "run_id":     item["run_id"],
-                "run_at":     item["run_at"],
-                "ticker":     item["ticker"],
-                "model_name": item["model_name"],
-                "source":     "web",
-                "final_action": item["_final_action"] or "",
-                "regime":       item["_regime"] or "",
-                "sector":       item["_sector"] or "",
-            }
-
-            raw_json = json_by_id.get(item["run_id"])
-            if raw_json:
-                try:
-                    result = _sanitize_floats(json.loads(raw_json))
-                    data = result.get("data", {})
-                    tickers_list = data.get("tickers", [item["ticker"]])
-                    t = tickers_list[0] if tickers_list else item["ticker"]
-
-                    # Fill summary fields from JSON if summary cols were NULL (legacy row)
-                    if not enriched["regime"]:
-                        macro = data.get("macro_regime", {})
-                        enriched["regime"] = (
-                            macro.get("regime", {}).get("risk_appetite", "")
-                            if isinstance(macro.get("regime"), dict)
-                            else macro.get("risk_appetite", "")
-                        )
-                    if not enriched["sector"]:
-                        enriched["sector"] = data.get("sector", "") or ""
-
-                    decisions = result.get("decisions", {})
-                    if isinstance(decisions, dict):
-                        td = decisions.get(t, {})
-                        if not enriched["final_action"]:
-                            enriched["final_action"] = td.get("action", "") or ""
-                        enriched["position_size_pct"] = td.get("position_size_pct")
-                        enriched["price_target"] = td.get("price_target")
-                        enriched["stop_loss"] = td.get("stop_loss")
-
-                    dcf_range = data.get("dcf_range", {})
-                    dcf_ticker_data = dcf_range.get(t, {})
-                    if dcf_ticker_data and dcf_ticker_data.get("base"):
-                        enriched["dcf_base_iv"] = dcf_ticker_data["base"].get("intrinsic_value")
-
-                    scenario = data.get("scenario_analysis", {}).get(t, {})
-                    enriched["ev_upside_pct"] = scenario.get("upside_pct")
-
-                    power_law = data.get("power_law_analysis", {}).get(t, {})
-                    enriched["power_law_score"] = (
-                        power_law.get("total_score") or power_law.get("score")
-                    )
-
-                    value_trap = data.get("value_trap_analysis", {}).get(t, {})
-                    enriched["value_trap_verdict"] = (
-                        value_trap.get("overall_verdict") or value_trap.get("verdict")
-                    )
-
-                    vgpm = result.get("vgpm", {}).get(t, {})
-                    enriched["vgpm_grades"] = (
-                        {k: v.get("grade") for k, v in vgpm.items()} if vgpm else {}
-                    )
-                except Exception:
-                    pass
-
-            page_items.append(enriched)
-
-        return {
-            "items": page_items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
+    # ── 3. Merge metadata (no JSON) + sort → determine page slice ─────────
+    web_light: list[dict] = [
+        {
+            "run_id":     r["run_id"],
+            "run_at":     r["run_at"],
+            "ticker":     r["ticker"],
+            "model_name": r["model_name"],
+            "source":     "web",
+            # summary cols present on new rows; None on legacy rows
+            "_final_action": r["final_action"],
+            "_regime":       r["regime"],
+            "_sector":       r["sector"],
         }
-    finally:
-        conn.close()
+        for r in web_meta_rows
+    ]
+
+    cli_light: list[dict] = [
+        {
+            "run_id":           row["run_id"],
+            "run_at":           row["run_at"],
+            "ticker":           row["ticker"],
+            "model_name":       row["model_name"],
+            "source":           "cli",
+            "regime":           row["regime"] or "",
+            "sector":           row["sector"] or "",
+            "final_action":     row["final_action"] or "",
+            "position_size_pct": row["position_size_pct"],
+            "price_target":     row["price_target"],
+            "stop_loss":        row["stop_loss"],
+            "dcf_base_iv":      row["dcf_base_iv"],
+            "ev_upside_pct":    row["ev_upside_pct"],
+            "power_law_score":  row["power_law_score"],
+            "value_trap_verdict": row["value_trap_verdict"],
+            "outcome":          row["outcome"] or "PENDING",
+            "pct_change":       row["pct_change"],
+            "vgpm_grades":      {},
+        }
+        for row in cli_rows
+    ]
+
+    all_light = web_light + cli_light
+
+    # ISO timestamp sort — strip tz suffix so naive and aware strings compare equal
+    all_light.sort(key=lambda x: x["run_at"][:26], reverse=True)
+
+    total = len(all_light)
+    page_slice = all_light[offset: offset + page_size]
+
+    # ── 4. Enrich only the page slice — fetch JSON just for those run_ids ──
+    web_page_ids = [
+        item["run_id"] for item in page_slice if item["source"] == "web"
+    ]
+    json_by_id: dict[str, str] = {}
+    if web_page_ids:
+        placeholders = ",".join("?" * len(web_page_ids))
+        for row in _fetch(
+            f"SELECT run_id, full_result_json FROM web_runs WHERE run_id IN ({placeholders})",
+            web_page_ids,
+        ):
+            json_by_id[row["run_id"]] = row["full_result_json"]
+
+    page_items: list[dict] = []
+    for item in page_slice:
+        if item["source"] != "web":
+            page_items.append(item)
+            continue
+
+        enriched: dict = {
+            "run_id":     item["run_id"],
+            "run_at":     item["run_at"],
+            "ticker":     item["ticker"],
+            "model_name": item["model_name"],
+            "source":     "web",
+            "final_action": item["_final_action"] or "",
+            "regime":       item["_regime"] or "",
+            "sector":       item["_sector"] or "",
+        }
+
+        raw_json = json_by_id.get(item["run_id"])
+        if raw_json:
+            try:
+                result = _sanitize_floats(json.loads(raw_json))
+                data = result.get("data", {})
+                tickers_list = data.get("tickers", [item["ticker"]])
+                t = tickers_list[0] if tickers_list else item["ticker"]
+
+                # Fill summary fields from JSON if summary cols were NULL (legacy row)
+                if not enriched["regime"]:
+                    macro = data.get("macro_regime", {})
+                    enriched["regime"] = (
+                        macro.get("regime", {}).get("risk_appetite", "")
+                        if isinstance(macro.get("regime"), dict)
+                        else macro.get("risk_appetite", "")
+                    )
+                if not enriched["sector"]:
+                    enriched["sector"] = data.get("sector", "") or ""
+
+                decisions = result.get("decisions", {})
+                if isinstance(decisions, dict):
+                    td = decisions.get(t, {})
+                    if not enriched["final_action"]:
+                        enriched["final_action"] = td.get("action", "") or ""
+                    enriched["position_size_pct"] = td.get("position_size_pct")
+                    enriched["price_target"] = td.get("price_target")
+                    enriched["stop_loss"] = td.get("stop_loss")
+
+                dcf_range = data.get("dcf_range", {})
+                dcf_ticker_data = dcf_range.get(t, {})
+                if dcf_ticker_data and dcf_ticker_data.get("base"):
+                    enriched["dcf_base_iv"] = dcf_ticker_data["base"].get("intrinsic_value")
+
+                scenario = data.get("scenario_analysis", {}).get(t, {})
+                enriched["ev_upside_pct"] = scenario.get("upside_pct")
+
+                power_law = data.get("power_law_analysis", {}).get(t, {})
+                enriched["power_law_score"] = (
+                    power_law.get("total_score") or power_law.get("score")
+                )
+
+                value_trap = data.get("value_trap_analysis", {}).get(t, {})
+                enriched["value_trap_verdict"] = (
+                    value_trap.get("overall_verdict") or value_trap.get("verdict")
+                )
+
+                vgpm = result.get("vgpm", {}).get(t, {})
+                enriched["vgpm_grades"] = (
+                    {k: v.get("grade") for k, v in vgpm.items()} if vgpm else {}
+                )
+            except Exception:
+                pass
+
+        page_items.append(enriched)
+
+    return {
+        "items": page_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
 
 
 def get_archive_summary() -> dict:
     """Counts from both web_runs and the CLI archive."""
     _ensure_web_runs_table()
-    db_path = _get_db_path()
-    conn = _connect(db_path)
-    conn.row_factory = sqlite3.Row
-    try:
-        # Total: web runs + CLI runs not imported via web
-        imported_ids = set(
-            r[0]
-            for r in conn.execute(
-                "SELECT archive_run_id FROM web_runs WHERE archive_run_id IS NOT NULL"
-            ).fetchall()
+
+    # Total: web runs + CLI runs not imported via web
+    imported_ids = set(
+        r["archive_run_id"]
+        for r in _fetch(
+            "SELECT archive_run_id FROM web_runs WHERE archive_run_id IS NOT NULL"
         )
-        web_count = conn.execute("SELECT COUNT(*) FROM web_runs").fetchone()[0]
-        if imported_ids:
-            cli_count = conn.execute(
-                f"SELECT COUNT(DISTINCT r.run_id) FROM runs r "
-                f"WHERE r.run_id NOT IN ({','.join('?' * len(imported_ids))})",
-                list(imported_ids),
-            ).fetchone()[0]
-        else:
-            cli_count = conn.execute("SELECT COUNT(DISTINCT run_id) FROM runs").fetchone()[0]
+    )
+    _web_cnt = _fetch_one("SELECT COUNT(*) AS n FROM web_runs")
+    web_count = _web_cnt["n"] if _web_cnt else 0
+    if imported_ids:
+        _cli_cnt = _fetch_one(
+            f"SELECT COUNT(DISTINCT r.run_id) AS n FROM runs r "
+            f"WHERE r.run_id NOT IN ({','.join('?' * len(imported_ids))})",
+            list(imported_ids),
+        )
+    else:
+        _cli_cnt = _fetch_one("SELECT COUNT(DISTINCT run_id) AS n FROM runs")
+    cli_count = _cli_cnt["n"] if _cli_cnt else 0
 
-        total = web_count + cli_count
+    total = web_count + cli_count
 
-        # Sector breakdown from CLI archive
-        sector_breakdown: dict[str, int] = {}
-        action_breakdown: dict[str, int] = {}
-        outcome_breakdown: dict[str, int] = {}
+    # Sector breakdown from CLI archive
+    sector_breakdown: dict[str, int] = {}
+    action_breakdown: dict[str, int] = {}
+    outcome_breakdown: dict[str, int] = {}
 
-        cli_rows = conn.execute(
-            "SELECT r.sector, ts.final_action, ts.outcome FROM ticker_signals ts "
-            "JOIN runs r ON r.run_id = ts.run_id"
-        ).fetchall()
-        for row in cli_rows:
-            sec = row["sector"] or "Unknown"
-            act = row["final_action"] or "UNKNOWN"
-            out = row["outcome"] or "PENDING"
+    cli_rows = _fetch(
+        "SELECT r.sector, ts.final_action, ts.outcome FROM ticker_signals ts "
+        "JOIN runs r ON r.run_id = ts.run_id"
+    )
+    for row in cli_rows:
+        sec = row["sector"] or "Unknown"
+        act = row["final_action"] or "UNKNOWN"
+        out = row["outcome"] or "PENDING"
+        sector_breakdown[sec] = sector_breakdown.get(sec, 0) + 1
+        action_breakdown[act] = action_breakdown.get(act, 0) + 1
+        outcome_breakdown[out] = outcome_breakdown.get(out, 0) + 1
+
+    # Augment with web-only runs (those without archive_run_id)
+    web_only_rows = _fetch(
+        "SELECT full_result_json FROM web_runs "
+        "WHERE archive_run_id IS NULL AND full_result_json IS NOT NULL "
+        f"AND {_json_field('checkpoint')} IS NULL"
+    )
+    for row in web_only_rows:
+        # Name-based access on purpose: PG dict rows iterate KEYS, not values,
+        # so the old `for (full_json,) in rows:` tuple-unpack would break there.
+        full_json = row["full_result_json"]
+        try:
+            result = json.loads(full_json)
+            data = result.get("data", {})
+            tickers_list = data.get("tickers", [])
+            t = tickers_list[0] if tickers_list else None
+            if not t:
+                continue
+            routing = data.get("routing_decision", {})
+            sec = routing.get(t, {}).get("sector", "Unknown") if isinstance(routing, dict) else "Unknown"
+            decisions = result.get("decisions", {})
+            act = decisions.get(t, {}).get("action", "UNKNOWN") if isinstance(decisions, dict) else "UNKNOWN"
             sector_breakdown[sec] = sector_breakdown.get(sec, 0) + 1
             action_breakdown[act] = action_breakdown.get(act, 0) + 1
-            outcome_breakdown[out] = outcome_breakdown.get(out, 0) + 1
+            outcome_breakdown["PENDING"] = outcome_breakdown.get("PENDING", 0) + 1
+        except Exception:
+            pass
 
-        # Augment with web-only runs (those without archive_run_id)
-        web_only_rows = conn.execute(
-            "SELECT full_result_json FROM web_runs "
-            "WHERE archive_run_id IS NULL AND full_result_json IS NOT NULL "
-            "AND json_extract(full_result_json, '$.checkpoint') IS NULL"
-        ).fetchall()
-        for (full_json,) in web_only_rows:
-            try:
-                result = json.loads(full_json)
-                data = result.get("data", {})
-                tickers_list = data.get("tickers", [])
-                t = tickers_list[0] if tickers_list else None
-                if not t:
-                    continue
-                routing = data.get("routing_decision", {})
-                sec = routing.get(t, {}).get("sector", "Unknown") if isinstance(routing, dict) else "Unknown"
-                decisions = result.get("decisions", {})
-                act = decisions.get(t, {}).get("action", "UNKNOWN") if isinstance(decisions, dict) else "UNKNOWN"
-                sector_breakdown[sec] = sector_breakdown.get(sec, 0) + 1
-                action_breakdown[act] = action_breakdown.get(act, 0) + 1
-                outcome_breakdown["PENDING"] = outcome_breakdown.get("PENDING", 0) + 1
-            except Exception:
-                pass
-
-        return {
-            "total_runs": total,
-            "sector_breakdown": sector_breakdown,
-            "action_breakdown": action_breakdown,
-            "outcome_breakdown": outcome_breakdown,
-        }
-    finally:
-        conn.close()
+    return {
+        "total_runs": total,
+        "sector_breakdown": sector_breakdown,
+        "action_breakdown": action_breakdown,
+        "outcome_breakdown": outcome_breakdown,
+    }
 
 
 def _resolve_provider(model_name: str) -> str:

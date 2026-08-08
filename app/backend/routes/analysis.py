@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -481,55 +481,54 @@ async def get_popular_tickers(limit: int = Query(default=15, ge=1, le=50)):
     Return the most frequently analysed tickers from the run archive,
     each enriched with today's price change vs the previous close (via yfinance).
     """
-    from app.backend.services.analysis_service import _get_db_path
-    import sqlite3, yfinance as yf
+    from app.backend.services.analysis_service import _ensure_web_runs_table
+    from src.data import db as archive_db
+    import yfinance as yf
     from concurrent.futures import ThreadPoolExecutor
-
-    db_path = _get_db_path()
 
     # ── 1. Fetch top tickers by run count in the last 3 days ──────────────────
     def _fetch_popular() -> list[str]:
         try:
-            conn = sqlite3.connect(db_path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            # Only count runs from the last 3 days so the tape reflects
-            # recent interest, not historical accumulation.
-            rows = conn.execute(
+            _ensure_web_runs_table()
+            # run_at is ISO text; compare against a Python-computed cutoff —
+            # SQLite's datetime('now', '-3 days') has no Postgres equivalent,
+            # and string comparison keeps both dialects behaving identically.
+            cutoff = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S")
+            rows = archive_db.query(
                 """
                 SELECT ticker, COUNT(*) AS run_count
                 FROM (
                     SELECT ticker FROM web_runs
-                     WHERE run_at >= datetime('now', '-3 days')
+                     WHERE run_at >= ?
                     UNION ALL
                     SELECT ts.ticker
                       FROM ticker_signals ts
                       JOIN runs r ON r.run_id = ts.run_id
-                     WHERE r.run_at >= datetime('now', '-3 days')
-                )
+                     WHERE r.run_at >= ?
+                ) t
                 GROUP BY ticker
                 ORDER BY run_count DESC
                 LIMIT ?
                 """,
-                (limit,),
-            ).fetchall()
+                [cutoff, cutoff, limit],
+            )
             # Fallback: if no runs in last 3 days, widen to all-time so the
             # tape isn't empty for low-traffic deployments.
             if not rows:
-                rows = conn.execute(
+                rows = archive_db.query(
                     """
                     SELECT ticker, COUNT(*) AS run_count
                     FROM (
                         SELECT ticker FROM web_runs
                         UNION ALL
                         SELECT ticker FROM ticker_signals
-                    )
+                    ) t
                     GROUP BY ticker
                     ORDER BY run_count DESC
                     LIMIT ?
                     """,
-                    (limit,),
-                ).fetchall()
-            conn.close()
+                    [limit],
+                )
             return [r["ticker"] for r in rows]
         except Exception:
             return []
