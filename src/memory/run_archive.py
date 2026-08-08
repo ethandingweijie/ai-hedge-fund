@@ -164,6 +164,20 @@ CREATE TABLE IF NOT EXISTS ticker_routing_cache (
     raw_financials_json   TEXT,
     last_updated          TEXT NOT NULL          -- ISO-8601 timestamp
 );
+
+-- C2: persisted sector-extractor fan-out outputs, keyed by research content.
+-- A cache hit whose sections hash matches reuses these instead of re-running
+-- the LLM fan-out. Keyed on (ticker, sections_hash) rather than run_id:
+-- extraction is a pure function of sections + profile, so identical content
+-- is reusable across runs, and the writer (deep_research) does not know the
+-- run_id at extraction time (it is minted later by save_run).
+CREATE TABLE IF NOT EXISTS extractor_outputs (
+    ticker        TEXT NOT NULL,
+    sections_hash TEXT NOT NULL,                 -- sha256 of sections + profile
+    outputs_json  TEXT NOT NULL,                 -- {"results": {...}, "failures": [...]}
+    extracted_at  TEXT NOT NULL,                 -- ISO-8601 timestamp
+    PRIMARY KEY (ticker, sections_hash)
+);
 """
 
 # ── Postgres DDL (full column set — CREATE covers everything _MIGRATIONS adds,
@@ -276,6 +290,14 @@ CREATE TABLE IF NOT EXISTS ticker_routing_cache (
     routing_decision_json TEXT,
     raw_financials_json   TEXT,
     last_updated          TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS extractor_outputs (
+    ticker        TEXT NOT NULL,
+    sections_hash TEXT NOT NULL,
+    outputs_json  TEXT NOT NULL,
+    extracted_at  TEXT NOT NULL,
+    PRIMARY KEY (ticker, sections_hash)
 );
 """
 
@@ -1395,6 +1417,77 @@ def get_recent_research(
         "deep_research_text":      text,
         "deep_research_sections":  _parse_sections_inline(text),
     }
+
+
+# ── C2: persisted extractor fan-out outputs ──────────────────────────────────
+
+def save_extractor_outputs(
+    ticker: str,
+    sections_hash: str,
+    results: dict,
+    failures: list | None = None,
+) -> bool:
+    """Persist sector-extractor fan-out outputs keyed by research content.
+
+    Best-effort by contract: a persistence failure returns False and must
+    never sink the run (the caller already has the outputs in memory).
+    Upserts — a later run with identical sections may hold a more complete
+    extraction (e.g. an earlier dcf_calibration attempt timed out).
+    """
+    payload = _safe_json({"results": results or {}, "failures": failures or []})
+    if not ticker or not sections_hash or payload is None:
+        return False
+    try:
+        if db.is_postgres():
+            sql = (
+                "INSERT INTO extractor_outputs "
+                "(ticker, sections_hash, outputs_json, extracted_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (ticker, sections_hash) DO UPDATE SET "
+                "outputs_json = EXCLUDED.outputs_json, "
+                "extracted_at = EXCLUDED.extracted_at"
+            )
+        else:
+            sql = (
+                "INSERT OR REPLACE INTO extractor_outputs "
+                "(ticker, sections_hash, outputs_json, extracted_at) "
+                "VALUES (?, ?, ?, ?)"
+            )
+        _exec(sql, [ticker.upper(), sections_hash, payload,
+                    datetime.now().isoformat()])
+        return True
+    except Exception:
+        return False
+
+
+def get_extractor_outputs(ticker: str, sections_hash: str) -> dict | None:
+    """Return persisted fan-out outputs for this ticker + sections content.
+
+    Returns {"results": dict, "failures": list} or None when absent,
+    unreadable, or corrupt — the caller falls back to live extraction (the
+    pre-C2 path) in all of those cases, so a bad blob can never break a run.
+    """
+    if not ticker or not sections_hash:
+        return None
+    try:
+        row = _fetch_one(
+            "SELECT outputs_json FROM extractor_outputs "
+            "WHERE ticker = ? AND sections_hash = ?",
+            [ticker.upper(), sections_hash],
+        )
+    except Exception:
+        return None
+    if not row:
+        return None
+    try:
+        parsed = json.loads(row["outputs_json"])
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("results"), dict):
+        return None
+    failures = parsed.get("failures")
+    parsed["failures"] = failures if isinstance(failures, list) else []
+    return parsed
 
 
 def archive_summary() -> dict:

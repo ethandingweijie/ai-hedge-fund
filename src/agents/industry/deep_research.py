@@ -2750,6 +2750,29 @@ def _check_research_financial_consistency(
 
 _LIVE_RESEARCH_TIERS = ("anthropic_web", "tavily", "qwen_web")
 
+
+def _hash_research_sections(sections: dict, profile_name: str = "") -> str:
+    """C2 — deterministic content hash of the research sections.
+
+    Used to key persisted extractor outputs: extraction is a pure function of
+    the sections text and the valuation profile (which gates the extractor set
+    and its fields), so both feed the hash. Unchanged sections + unchanged
+    profile → identical hash → persisted outputs are reusable without any LLM
+    call. Dict key order is normalised via sort_keys.
+    """
+    import hashlib
+    _payload = json.dumps(
+        {
+            "sections": {
+                str(k): (v or "") for k, v in (sections or {}).items()
+            },
+            "profile": (profile_name or "").strip().lower(),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(_payload.encode("utf-8")).hexdigest()
+
 # Tiers whose search count is NOT observable. Qwen's OpenAI-compatible
 # streaming path runs a single agent-strategy call (search_strategy="agent")
 # that fans out to multiple live searches internally, but the protocol returns
@@ -3250,14 +3273,36 @@ def _research_one_ticker(
                 f"Cache HIT ({_age:.1f}d old, tier={_cached['research_tier']}) "
                 f"— reusing base research, 0 searches"
             )
-            # Re-extract citation registry and DCF calibration from cached text/sections.
-            # citation_registry is never persisted to the archive DB — only deep_research_text
-            # is stored. We rebuild it so the citation auditor gets structured source metadata
-            # (URLs, speakers, dates) rather than falling back to raw text only.
-            _cal_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
-            _dcf_cal = _extract_dcf_calibration(
-                _cal_client, _synthesis_model, _cached["deep_research_sections"], ticker
+            # ── C2: reuse persisted extractor outputs when the cached sections
+            # are unchanged. Extraction is a pure function of sections+profile,
+            # so a matching content hash means the stored JSON is exactly what
+            # a live fan-out would produce — skip every extractor LLM call.
+            _sections_hash = _hash_research_sections(
+                _cached["deep_research_sections"], profile_name
             )
+            _persisted_ext = None
+            try:
+                from src.memory.run_archive import (
+                    get_extractor_outputs as _get_persisted_ext,
+                )
+                _persisted_ext = _get_persisted_ext(ticker, _sections_hash)
+            except Exception:
+                _persisted_ext = None
+            # dcf_calibration is a universal extractor, so a persisted set
+            # with a usable value is complete; an empty one means the original
+            # extraction failed and the live path gets another chance.
+            _ext_reused = bool(
+                _persisted_ext
+                and not _is_empty_extraction(
+                    _persisted_ext["results"].get("dcf_calibration")
+                )
+            )
+
+            # Re-extract citation registry from cached text (never persisted —
+            # only deep_research_text is stored — so this always runs). We
+            # rebuild it so the citation auditor gets structured source
+            # metadata (URLs, speakers, dates) rather than raw text only.
+            _cal_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
             _citations = _extract_citation_registry(
                 _cal_client, _synthesis_model, _cached["deep_research_text"], ticker,
                 edgar_filing_ref=edgar_filing_ref,
@@ -3283,21 +3328,50 @@ def _research_one_ticker(
                         _annotated_cached[:_insert] + f"[{_ref_n}]" + _annotated_cached[_insert:]
                     )
                     _used_cached.add(_ref_n)
-            # ── C1: run the sector extractor fan-out on the cached sections.
-            # Before this, cache-hit runs (<3d) skipped ALL extractors and fed
-            # KPI-starved inputs to the DCF engine / blank sector cards. The
-            # dcf_calibration we already re-extracted above is passed as
-            # precomputed so it isn't extracted twice.
-            _ext_client = anthropic.Anthropic(
-                api_key=anthropic_key, base_url=base_url,
-                timeout=CLIENT_TIMEOUT, max_retries=4,
-            )
-            _ext_results, _ext_failures = _run_extractor_fanout(
-                _ext_client, _synthesis_model,
-                _cached["deep_research_sections"], _cached_text, ticker,
-                sector, profile_name, raw_financials,
-                precomputed={"dcf_calibration": _dcf_cal},
-            )
+
+            if _ext_reused:
+                _ext_results  = _persisted_ext["results"]
+                _ext_failures = list(_persisted_ext.get("failures") or [])
+                _dcf_cal      = _ext_results.get("dcf_calibration", {})
+                progress.update_status(
+                    agent_id, ticker,
+                    "Extractor outputs reused from archive (sections unchanged) "
+                    "— 0 LLM calls"
+                )
+                print(
+                    f"  [C2] {ticker}: extractor outputs reused from archive "
+                    f"({len(_ext_results)} extractors, 0 LLM calls)"
+                )
+            else:
+                # ── C1: run the sector extractor fan-out on the cached sections.
+                # Before this, cache-hit runs (<3d) skipped ALL extractors and fed
+                # KPI-starved inputs to the DCF engine / blank sector cards. The
+                # dcf_calibration we re-extract here is passed as precomputed so
+                # it isn't extracted twice.
+                _dcf_cal = _extract_dcf_calibration(
+                    _cal_client, _synthesis_model, _cached["deep_research_sections"], ticker
+                )
+                _ext_client = anthropic.Anthropic(
+                    api_key=anthropic_key, base_url=base_url,
+                    timeout=CLIENT_TIMEOUT, max_retries=4,
+                )
+                _ext_results, _ext_failures = _run_extractor_fanout(
+                    _ext_client, _synthesis_model,
+                    _cached["deep_research_sections"], _cached_text, ticker,
+                    sector, profile_name, raw_financials,
+                    precomputed={"dcf_calibration": _dcf_cal},
+                )
+                # C2: persist for the next cache hit (best-effort).
+                try:
+                    from src.memory.run_archive import (
+                        save_extractor_outputs as _save_persisted_ext,
+                    )
+                    if _save_persisted_ext(
+                        ticker, _sections_hash, _ext_results, _ext_failures
+                    ):
+                        print(f"  [C2] {ticker}: extractor outputs persisted for reuse")
+                except Exception:
+                    pass
             # C6: deterministic research↔books check (no LLM cost)
             _divergences = _check_research_financial_consistency(
                 _cached["deep_research_sections"], raw_financials, ticker
@@ -3417,6 +3491,20 @@ def _research_one_ticker(
                 sector, profile_name, raw_financials,
                 precomputed={"dcf_calibration": _dcf_cal_d},
             )
+            # C2: persist keyed on the MERGED sections — this merged text is
+            # what gets archived, so a follow-up run (<3d) hits the pure-cache
+            # path with identical sections and reuses these outputs.
+            try:
+                from src.memory.run_archive import (
+                    save_extractor_outputs as _save_persisted_ext,
+                )
+                _save_persisted_ext(
+                    ticker,
+                    _hash_research_sections(_merged_sections, profile_name),
+                    _ext_results_d, _ext_failures_d,
+                )
+            except Exception:
+                pass
             # C6: deterministic research↔books check on the MERGED sections
             _divergences_d = _check_research_financial_consistency(
                 _merged_sections, raw_financials, ticker
@@ -4508,6 +4596,19 @@ def _research_one_ticker(
         sdk_client, _synthesis_model, sections, final_report, ticker,
         sector, profile_name, raw_financials,
     )
+    # C2: persist the fan-out outputs keyed on these sections — the next run
+    # that cache-hits on this research reuses them with zero LLM calls.
+    try:
+        from src.memory.run_archive import (
+            save_extractor_outputs as _save_persisted_ext,
+        )
+        _save_persisted_ext(
+            ticker,
+            _hash_research_sections(sections, profile_name),
+            _results, _extractor_failures,
+        )
+    except Exception:
+        pass
 
     dcf_calibration   = _results.get("dcf_calibration", {})
     segment_scenarios = _results.get("segment_scenarios", {})
