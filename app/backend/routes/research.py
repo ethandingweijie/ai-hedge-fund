@@ -1262,6 +1262,34 @@ async def list_complacency_runs(limit: int = 20):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
+@router.get("/ideas/complacency/jobs/{job_id}")
+async def get_complacency_job(job_id: str):
+    """Return current state of a complacency background job."""
+    try:
+        job = await asyncio.to_thread(job_store.get_job, job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+        return job
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("get_complacency_job(%s) failed: %s", job_id, exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
+@router.get("/ideas/complacency/jobs")
+async def list_complacency_jobs(limit: int = 20):
+    """List recent complacency jobs across all kinds."""
+    try:
+        jobs = await asyncio.to_thread(job_store.list_recent_jobs, limit)
+        return {"jobs": jobs}
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.exception("list_complacency_jobs failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
+
+
 @router.get("/ideas/complacency/{ticker}")
 async def get_complacency_ticker(ticker: str):
     ticker = ticker.upper()
@@ -1758,34 +1786,6 @@ async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
         "started_at": None,
         "deduped":   False,
     }
-
-
-@router.get("/ideas/complacency/jobs/{job_id}")
-async def get_complacency_job(job_id: str):
-    """Return current state of a complacency background job."""
-    try:
-        job = await asyncio.to_thread(job_store.get_job, job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-        return job
-    except HTTPException:
-        raise
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.exception("get_complacency_job(%s) failed: %s", job_id, exc)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
-
-
-@router.get("/ideas/complacency/jobs")
-async def list_complacency_jobs(limit: int = 20):
-    """List recent complacency jobs across all kinds."""
-    try:
-        jobs = await asyncio.to_thread(job_store.list_recent_jobs, limit)
-        return {"jobs": jobs}
-    except Exception as exc:
-        tb = traceback.format_exc()
-        logger.exception("list_complacency_jobs failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
 @router.post("/ideas/complacency/refresh-sectors")
