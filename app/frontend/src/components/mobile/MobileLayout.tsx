@@ -1,4 +1,5 @@
 import { MobileTopBar } from './MobileTopBar';
+import { FloatingNavBar } from '@/components/layout/FloatingNavBar';
 
 interface MobileLayoutProps {
   children: React.ReactNode;
@@ -15,10 +16,12 @@ export function MobileLayout({ children }: MobileLayoutProps) {
             div never scrolls itself (the WINDOW scrolls). An overflow ancestor
             that doesn't scroll captures position:sticky and silently breaks
             every sticky header (TabHero, V2 ticker bar) on mobile. */}
-        <div className="flex-1">
+        {/* pb-24 clears the floating bottom nav bar mounted below. */}
+        <div className="flex-1 pb-24">
           {children}
         </div>
       </div>
+      <FloatingNavBar />
     </div>
   );
 }

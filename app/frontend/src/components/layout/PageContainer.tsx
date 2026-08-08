@@ -47,7 +47,7 @@ export function PageContainer({ size = 'default', className, flush = false, chil
         className={cn(
           'mx-auto w-full px-4 md:px-8',
           MAX_W[size],
-          !flush && (mode === 'mobile' ? 'pt-16 pb-20' : 'py-8 md:py-10'),
+          !flush && (mode === 'mobile' ? 'pt-16 pb-6' : 'py-8 md:py-10'),
           className,
         )}
       >

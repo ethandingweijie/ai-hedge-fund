@@ -11,6 +11,7 @@
  */
 import { useCallback, useState } from 'react';
 import { DesktopSidebar } from './DesktopSidebar';
+import { FloatingNavBar } from '@/components/layout/FloatingNavBar';
 
 const STORAGE_KEY = 'sidebar-collapsed';
 
@@ -47,9 +48,11 @@ export function DesktopLayout({ children }: { children: React.ReactNode }) {
       }}
     >
       <DesktopSidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
-      <main className="flex-1 min-w-0 overflow-y-auto">
+      {/* pb-24 keeps the tail of long pages clear of the floating dock. */}
+      <main className="flex-1 min-w-0 overflow-y-auto pb-24">
         {children}
       </main>
+      <FloatingNavBar />
     </div>
   );
 }
