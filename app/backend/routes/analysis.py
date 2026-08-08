@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import traceback
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -133,6 +134,24 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    # ── Queue mode (Phase 2d): Redis available → execute in the arq worker ──
+    # Progress streams back over progress_bus (Redis pub/sub); the runner's
+    # run_id is minted here so clients can subscribe before the job starts.
+    # Falls through to the in-process path below when Redis is unavailable or
+    # enqueueing fails, so behaviour is unchanged until the Redis addon exists.
+    from app.backend.services import queue_client
+    if await queue_client.queue_mode_enabled():
+        try:
+            _q_api_keys = ApiKeyService(db).get_api_keys_dict()
+            _queued = await _start_queue_run(
+                ticker, model_name, agents, user_id, _q_api_keys
+            )
+        except Exception as exc:
+            logger.warning("queue mode unavailable (%s) — in-process fallback", exc)
+            _queued = None
+        if _queued is not None:
+            return _queued
 
     # ── Dedup lock: prevent duplicate pipelines for the same ticker+agents ────
     # Uses a per-(ticker, agents) asyncio.Event so that concurrent requests for
@@ -373,6 +392,153 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     )
 
 
+# ── Queue-mode execution (Phase 2d) ──────────────────────────────────────────
+# With Redis available the pipeline runs in the arq worker and the SSE stream
+# is sourced from progress_bus (Redis pub/sub + replay buffer) instead of an
+# in-process asyncio.Queue. The dedup slot lives in Redis (SETNX) so it works
+# across replicas. Waiters subscribe to the RUNNER'S bus channel and receive
+# the full replayed progress history.
+
+# Terminal phases of the fixed pipeline breakdown (mirrors event_generator).
+_FIXED_DONE_COUNT = 21
+_QUEUE_STREAM_DEADLINE = 1800  # matches worker job_timeout
+
+
+async def _start_queue_run(
+    ticker: str,
+    model_name: str,
+    agents: Optional[list[str]],
+    user_id: Optional[int],
+    api_keys: dict,
+):
+    """Claim the distributed dedup slot and enqueue the pipeline.
+
+    Returns a StreamingResponse (runner or waiter flavour), or None when the
+    caller should fall back to the in-process path (claim lost to a race with
+    no readable holder, or the enqueue itself failed).
+    """
+    from app.backend.services import queue_client
+
+    agents_key = ",".join(sorted(agents or []))
+    dedup_key = f"{ticker}::{agents_key}"
+
+    run_id = str(uuid.uuid4())
+    is_runner = await queue_client.claim_run(dedup_key, run_id)
+    if not is_runner:
+        runner_id = await queue_client.get_runner_run_id(dedup_key)
+        if runner_id is None:
+            # Slot expired between our failed SETNX and GET — try to reclaim.
+            run_id = str(uuid.uuid4())
+            is_runner = await queue_client.claim_run(dedup_key, run_id)
+            if not is_runner:
+                runner_id = await queue_client.get_runner_run_id(dedup_key)
+        if not is_runner:
+            if not runner_id:
+                return None  # neither claim nor read worked — fall back
+            return StreamingResponse(
+                _queue_stream_generator(runner_id, ticker, model_name, agents, waiter=True),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
+
+    try:
+        await queue_client.enqueue_analysis(
+            ticker=ticker,
+            model_name=model_name,
+            api_keys=api_keys,
+            selected_agents=agents,
+            user_id=user_id,
+            run_id=run_id,
+        )
+    except Exception as exc:
+        logger.warning("enqueue failed (%s) — falling back to in-process run", exc)
+        await queue_client.release_run(dedup_key)
+        return None
+
+    return StreamingResponse(
+        _queue_stream_generator(run_id, ticker, model_name, agents, waiter=False),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+async def _queue_stream_generator(
+    run_id: str,
+    ticker: str,
+    model_name: str,
+    agents: Optional[list[str]],
+    waiter: bool,
+):
+    """SSE stream sourced from progress_bus. Emits the same event contract as
+    the in-process path: start / progress / heartbeat / cached / complete / error."""
+    from app.backend.services import progress_bus
+
+    if waiter:
+        yield (
+            f"event: start\ndata: "
+            f"{json.dumps({'ticker': ticker, 'model': model_name, 'total_done_phases': 0})}\n\n"
+        )
+        _wait_msg = "Analysis already in progress for " + ticker + " — awaiting result…"
+        yield (
+            f"event: progress\ndata: "
+            f"{json.dumps({'phase': 'pipeline_queued', 'status': 'running', 'summary': _wait_msg})}\n\n"
+        )
+    else:
+        investor_count = len(agents) if agents else 12
+        total_done = investor_count + _FIXED_DONE_COUNT
+        yield (
+            f"event: start\ndata: "
+            f"{json.dumps({'ticker': ticker, 'model': model_name, 'total_done_phases': total_done})}\n\n"
+        )
+
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + _QUEUE_STREAM_DEADLINE
+    stream = progress_bus.iter_events(run_id)
+    while True:
+        try:
+            event = await asyncio.wait_for(stream.__anext__(), timeout=60.0)
+        except asyncio.TimeoutError:
+            if loop.time() > deadline:
+                yield (
+                    f"event: error\ndata: "
+                    f"{json.dumps({'error': 'Timed out waiting for the analysis worker (30 min).'})}\n\n"
+                )
+                return
+            yield "event: heartbeat\ndata: {}\n\n"
+            continue
+        except StopAsyncIteration:
+            break
+
+        if event.get("completed"):
+            if event.get("phase") == "pipeline_error" or event.get("status") == "error":
+                yield (
+                    f"event: error\ndata: "
+                    f"{json.dumps({'error': event.get('summary', 'Analysis failed')})}\n\n"
+                )
+            elif waiter:
+                # Match the in-process waiter contract: hand back the cached run.
+                cached = analysis_service.get_cached_run(
+                    ticker, within_minutes=5, agents=agents
+                )
+                if cached:
+                    yield (
+                        f"event: cached\ndata: "
+                        f"{json.dumps({'run_id': cached['run_id'], 'ticker': ticker, 'run_at': cached['run_at']})}\n\n"
+                    )
+                else:
+                    yield (
+                        f"event: complete\ndata: "
+                        f"{json.dumps({'run_id': run_id, 'ticker': ticker})}\n\n"
+                    )
+            else:
+                yield (
+                    f"event: complete\ndata: "
+                    f"{json.dumps({'run_id': run_id, 'ticker': ticker})}\n\n"
+                )
+            return
+        yield f"event: progress\ndata: {json.dumps(event)}\n\n"
+
+
 # ── GET /analysis/runs ────────────────────────────────────────────────────────
 
 @router.get("/runs")
@@ -456,6 +622,26 @@ async def get_pipeline_status(ticker: str):
     Safe to call repeatedly — read-only, never triggers a new run.
     Returns null fields if no run is in progress for this ticker."""
     t = ticker.strip().upper()
+    # Queue mode (Phase 2d): the worker publishes live phases to progress_bus.
+    # Consult the bus first — when a queued run is in flight this is the only
+    # place its state lives. When nothing is there, fall through to the local
+    # in-process dicts (the only source when Redis is absent).
+    from app.backend.services import progress_bus
+
+    bus_map = await progress_bus.get_phase_map(t)
+    if bus_map:
+        latest = bus_map.get("__latest__") or {}
+        return {
+            "ticker": t,
+            "in_progress": not bool(latest.get("completed")),
+            "phase": latest.get("phase"),
+            "status": latest.get("status"),
+            "summary": latest.get("summary"),
+            "timestamp": latest.get("timestamp"),
+            "all_phases": {
+                k: v for k, v in bus_map.items() if k != "__latest__" and v
+            },
+        }
     phase_info = _live_phases.get(t)
     in_progress = False
     async with _in_flight_lock:
