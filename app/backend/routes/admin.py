@@ -23,6 +23,46 @@ def _get_db_paths() -> dict[str, str]:
     }
 
 
+@router.get("/admin/migrate-to-postgres")
+@router.post("/admin/migrate-to-postgres")
+async def migrate_to_postgres(secret: str = "", dry_run: bool = False):
+    """Copy the volume SQLite databases into PostgreSQL (one-shot, idempotent).
+
+    Runs INSIDE the container, where both the mounted SQLite files and the
+    Postgres instance are reachable. Safe to re-run: rows are inserted with
+    ON CONFLICT DO NOTHING and PK sequences are bumped afterwards.
+
+    Query params:
+      secret   — DB_UPLOAD_SECRET (required)
+      dry_run  — true = inventory only, no writes
+
+    Example:
+      curl 'https://BACKEND/admin/migrate-to-postgres?secret=***'
+      curl 'https://BACKEND/admin/migrate-to-postgres?secret=***&dry_run=true'
+    """
+    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    if not os.environ.get("DATABASE_URL"):
+        raise HTTPException(status_code=400, detail="DATABASE_URL not set — no Postgres target")
+
+    paths = _get_db_paths()
+    missing = [f"{name}: {path}" for name, path in paths.items() if not os.path.exists(path)]
+    if missing:
+        raise HTTPException(status_code=404, detail=f"SQLite source(s) not found — {missing}")
+
+    from app.backend.services import sqlite_migration
+
+    if sqlite_migration.is_busy():
+        raise HTTPException(status_code=409, detail="Migration already running")
+
+    import asyncio
+    try:
+        report = await asyncio.to_thread(sqlite_migration.run_migration, dry_run)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return report
+
+
 @router.post("/admin/backfill-convergence-cap")
 async def backfill_convergence_cap(
     secret: str = "",

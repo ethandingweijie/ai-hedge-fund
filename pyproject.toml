@@ -49,6 +49,9 @@ better-profanity = "^0.7.0"
 filelock = "^3.12.0"
 # PostgreSQL support
 psycopg = {extras = ["binary", "pool"], version = "^3.1.0"}
+# Task queue + pub/sub progress bus (Phase 2)
+redis = {extras = ["hiredis"], version = "^5.0.0"}
+arq = "^0.26.0"
 # financetoolkit removed — version resolution fails in Docker; not needed for web app
 
 [tool.poetry.group.dev.dependencies]

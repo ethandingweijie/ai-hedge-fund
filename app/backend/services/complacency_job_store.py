@@ -1,13 +1,16 @@
 """
 app/backend/services/complacency_job_store.py
 ==============================================
-SQLite-backed job tracking for long-running Complacency operations
-(cohort refresh, force-qual re-scoring). These operations can take 5-10
-min — too long for iOS Safari's fetch timeout / app-background handling.
+Job tracking for long-running Complacency operations (cohort refresh,
+force-qual re-scoring). These operations can take 5-10 min — too long for
+iOS Safari's fetch timeout / app-background handling.
+
+Storage is dual-mode via src.data.db: SQLite locally, PostgreSQL on Railway
+(shared with the web + worker processes — safe for multi-instance deploys).
 
 Pattern:
   • POST /refresh  → create_job() → return {job_id, status: pending}
-                   → backend asyncio.create_task() executes the work
+                   → backend executes the work in-process or in the worker
   • GET  /jobs/X  → returns current status (pending/running/completed/failed)
                    plus result on completion
 
@@ -32,30 +35,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import sqlite3
-import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
+from src.data import db
+
 logger = logging.getLogger(__name__)
-
-
-def _get_db_path() -> str:
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(_get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
 
 
 _DDL = """
@@ -69,59 +54,53 @@ CREATE TABLE IF NOT EXISTS complacency_jobs (
     progress_msg  TEXT,
     result_json   TEXT,
     error_msg     TEXT
-)
+);
+CREATE INDEX IF NOT EXISTS idx_complacency_jobs_status_started
+    ON complacency_jobs(status, started_at DESC);
 """
-
-_INDEXES = [
-    "CREATE INDEX IF NOT EXISTS idx_complacency_jobs_status_started "
-    "ON complacency_jobs(status, started_at DESC)",
-]
 
 
 def _ensure_table() -> None:
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect()
+    db.ensure_table(_DDL)
+
+
+def _to_dt(value) -> Optional[datetime]:
+    """Normalise started_at/finished_at (ISO str on SQLite, datetime on PG)."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
     try:
-        conn.execute(_DDL)
-        for idx in _INDEXES:
-            conn.execute(idx)
-        conn.commit()
-    finally:
-        conn.close()
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
 
 
 def create_job(kind: str, ticker: Optional[str] = None) -> str:
     """Insert a pending job, return its job_id."""
     _ensure_table()
+    import uuid
     job_id = uuid.uuid4().hex[:16]
     now = datetime.now(timezone.utc).isoformat()
-    conn = _connect()
-    try:
-        conn.execute(
-            "INSERT INTO complacency_jobs "
-            "(job_id, kind, ticker, status, started_at, progress_msg) "
-            "VALUES (?, ?, ?, 'pending', ?, 'queued')",
-            (job_id, kind, ticker, now),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute(
+        "INSERT INTO complacency_jobs "
+        "(job_id, kind, ticker, status, started_at, progress_msg) "
+        "VALUES (?, ?, ?, 'pending', ?, 'queued')",
+        [job_id, kind, ticker, now],
+    )
     return job_id
 
 
 def update_progress(job_id: str, status: str, message: str) -> None:
     """Update status + progress_msg for a running job."""
     _ensure_table()
-    conn = _connect()
-    try:
-        conn.execute(
-            "UPDATE complacency_jobs SET status = ?, progress_msg = ? WHERE job_id = ?",
-            (status, message[:500], job_id),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute(
+        "UPDATE complacency_jobs SET status = ?, progress_msg = ? WHERE job_id = ?",
+        [status, message[:500], job_id],
+    )
 
 
 def update_running_result(job_id: str, partial_result: dict) -> None:
@@ -135,53 +114,38 @@ def update_running_result(job_id: str, partial_result: dict) -> None:
     until complete_job() or fail_job() is called.
     """
     _ensure_table()
-    conn = _connect()
-    try:
-        conn.execute(
-            "UPDATE complacency_jobs SET result_json = ? WHERE job_id = ?",
-            (json.dumps(partial_result) if partial_result is not None else None, job_id),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute(
+        "UPDATE complacency_jobs SET result_json = ? WHERE job_id = ?",
+        [json.dumps(partial_result) if partial_result is not None else None, job_id],
+    )
 
 
 def complete_job(job_id: str, result: dict | None = None) -> None:
     """Mark job as completed with optional result payload."""
     _ensure_table()
-    conn = _connect()
-    try:
-        conn.execute(
-            "UPDATE complacency_jobs SET status='completed', finished_at=?, "
-            "result_json=?, progress_msg='done' WHERE job_id = ?",
-            (
-                datetime.now(timezone.utc).isoformat(),
-                json.dumps(result) if result is not None else None,
-                job_id,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute(
+        "UPDATE complacency_jobs SET status='completed', finished_at=?, "
+        "result_json=?, progress_msg='done' WHERE job_id = ?",
+        [
+            datetime.now(timezone.utc).isoformat(),
+            json.dumps(result) if result is not None else None,
+            job_id,
+        ],
+    )
 
 
 def fail_job(job_id: str, error: str) -> None:
     """Mark job as failed with error message."""
     _ensure_table()
-    conn = _connect()
-    try:
-        conn.execute(
-            "UPDATE complacency_jobs SET status='failed', finished_at=?, "
-            "error_msg=?, progress_msg='failed' WHERE job_id = ?",
-            (
-                datetime.now(timezone.utc).isoformat(),
-                str(error)[:1000],
-                job_id,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    db.execute(
+        "UPDATE complacency_jobs SET status='failed', finished_at=?, "
+        "error_msg=?, progress_msg='failed' WHERE job_id = ?",
+        [
+            datetime.now(timezone.utc).isoformat(),
+            str(error)[:1000],
+            job_id,
+        ],
+    )
 
 
 # Watchdog ceiling — jobs pending/running longer than this are auto-failed
@@ -193,45 +157,48 @@ def fail_job(job_id: str, error: str) -> None:
 _STUCK_JOB_CEILING_MINUTES = 30
 
 
-def _is_stuck(status: str, started_at: str) -> bool:
+def _is_stuck(status: str, started_at) -> bool:
     if status not in ("pending", "running"):
         return False
-    try:
-        dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        age_minutes = (datetime.now(timezone.utc) - dt).total_seconds() / 60
-        return age_minutes > _STUCK_JOB_CEILING_MINUTES
-    except Exception:
+    dt = _to_dt(started_at)
+    if dt is None:
         return False
+    age_minutes = (datetime.now(timezone.utc) - dt).total_seconds() / 60
+    return age_minutes > _STUCK_JOB_CEILING_MINUTES
+
+
+def _row_to_job(row) -> dict:
+    result_raw = row["result_json"]
+    if isinstance(result_raw, (dict, list)):
+        # Postgres JSONB columns can come back already-deserialised
+        result = result_raw
+    else:
+        result = json.loads(result_raw) if result_raw else None
+    return {
+        "job_id":       row["job_id"],
+        "kind":         row["kind"],
+        "ticker":       row["ticker"],
+        "status":       row["status"],
+        "started_at":   row["started_at"],
+        "finished_at":  row["finished_at"],
+        "progress_msg": row["progress_msg"],
+        "result":       result,
+        "error":        row["error_msg"],
+    }
 
 
 def get_job(job_id: str) -> Optional[dict]:
     """Fetch full job state. Auto-fails jobs that have been stuck >30 min."""
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            "SELECT job_id, kind, ticker, status, started_at, finished_at, "
-            "progress_msg, result_json, error_msg "
-            "FROM complacency_jobs WHERE job_id = ?",
-            (job_id,),
-        ).fetchone()
-    finally:
-        conn.close()
+    row = db.query_one(
+        "SELECT job_id, kind, ticker, status, started_at, finished_at, "
+        "progress_msg, result_json, error_msg "
+        "FROM complacency_jobs WHERE job_id = ?",
+        [job_id],
+    )
     if not row:
         return None
-    job = {
-        "job_id":       row[0],
-        "kind":         row[1],
-        "ticker":       row[2],
-        "status":       row[3],
-        "started_at":   row[4],
-        "finished_at":  row[5],
-        "progress_msg": row[6],
-        "result":       json.loads(row[7]) if row[7] else None,
-        "error":        row[8],
-    }
+    job = _row_to_job(row)
     if _is_stuck(job["status"], job["started_at"]):
         logger.warning(
             "Job %s stuck in %s state since %s — auto-failing",
@@ -243,48 +210,34 @@ def get_job(job_id: str) -> Optional[dict]:
             "Background task likely died (worker recycled / OOM / GC'd before strong-ref fix landed)."
         )
         # Re-read to surface the now-failed state
-        conn = _connect()
-        try:
-            row = conn.execute(
-                "SELECT job_id, kind, ticker, status, started_at, finished_at, "
-                "progress_msg, result_json, error_msg "
-                "FROM complacency_jobs WHERE job_id = ?",
-                (job_id,),
-            ).fetchone()
-        finally:
-            conn.close()
+        row = db.query_one(
+            "SELECT job_id, kind, ticker, status, started_at, finished_at, "
+            "progress_msg, result_json, error_msg "
+            "FROM complacency_jobs WHERE job_id = ?",
+            [job_id],
+        )
         if row:
-            job = {
-                "job_id":       row[0], "kind": row[1], "ticker": row[2],
-                "status":       row[3], "started_at": row[4], "finished_at": row[5],
-                "progress_msg": row[6],
-                "result":       json.loads(row[7]) if row[7] else None,
-                "error":        row[8],
-            }
+            job = _row_to_job(row)
     return job
 
 
 def list_recent_jobs(limit: int = 20) -> list[dict]:
     """List recent jobs across all kinds."""
     _ensure_table()
-    conn = _connect()
-    try:
-        rows = conn.execute(
-            "SELECT job_id, kind, ticker, status, started_at, finished_at, progress_msg "
-            "FROM complacency_jobs ORDER BY started_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    finally:
-        conn.close()
+    rows = db.query(
+        "SELECT job_id, kind, ticker, status, started_at, finished_at, progress_msg "
+        "FROM complacency_jobs ORDER BY started_at DESC LIMIT ?",
+        [limit],
+    )
     return [
         {
-            "job_id":       r[0],
-            "kind":         r[1],
-            "ticker":       r[2],
-            "status":       r[3],
-            "started_at":   r[4],
-            "finished_at":  r[5],
-            "progress_msg": r[6],
+            "job_id":       r["job_id"],
+            "kind":         r["kind"],
+            "ticker":       r["ticker"],
+            "status":       r["status"],
+            "started_at":   r["started_at"],
+            "finished_at":  r["finished_at"],
+            "progress_msg": r["progress_msg"],
         }
         for r in rows
     ]
@@ -301,46 +254,42 @@ def find_in_flight_job(kind: str, ticker: Optional[str] = None) -> Optional[dict
     being permanently stuck on a dead job_id.
     """
     _ensure_table()
-    conn = _connect()
-    try:
-        if ticker is None:
-            row = conn.execute(
-                "SELECT job_id, kind, ticker, status, started_at, progress_msg "
-                "FROM complacency_jobs "
-                "WHERE kind = ? AND ticker IS NULL "
-                "AND status IN ('pending','running') "
-                "ORDER BY started_at DESC LIMIT 1",
-                (kind,),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT job_id, kind, ticker, status, started_at, progress_msg "
-                "FROM complacency_jobs "
-                "WHERE kind = ? AND ticker = ? "
-                "AND status IN ('pending','running') "
-                "ORDER BY started_at DESC LIMIT 1",
-                (kind, ticker),
-            ).fetchone()
-    finally:
-        conn.close()
+    if ticker is None:
+        row = db.query_one(
+            "SELECT job_id, kind, ticker, status, started_at, progress_msg "
+            "FROM complacency_jobs "
+            "WHERE kind = ? AND ticker IS NULL "
+            "AND status IN ('pending','running') "
+            "ORDER BY started_at DESC LIMIT 1",
+            [kind],
+        )
+    else:
+        row = db.query_one(
+            "SELECT job_id, kind, ticker, status, started_at, progress_msg "
+            "FROM complacency_jobs "
+            "WHERE kind = ? AND ticker = ? "
+            "AND status IN ('pending','running') "
+            "ORDER BY started_at DESC LIMIT 1",
+            [kind, ticker],
+        )
     if not row:
         return None
-    if _is_stuck(row[3], row[4]):
+    if _is_stuck(row["status"], row["started_at"]):
         logger.warning(
             "find_in_flight: %s job %s stuck since %s — auto-failing",
-            kind, row[0], row[4],
+            kind, row["job_id"], row["started_at"],
         )
         fail_job(
-            row[0],
-            f"Watchdog: stuck in '{row[3]}' for >{_STUCK_JOB_CEILING_MINUTES} min "
+            row["job_id"],
+            f"Watchdog: stuck in '{row['status']}' for >{_STUCK_JOB_CEILING_MINUTES} min "
             "(background task likely died). Treating as not-in-flight so caller can start fresh."
         )
         return None
     return {
-        "job_id":       row[0],
-        "kind":         row[1],
-        "ticker":       row[2],
-        "status":       row[3],
-        "started_at":   row[4],
-        "progress_msg": row[5],
+        "job_id":       row["job_id"],
+        "kind":         row["kind"],
+        "ticker":       row["ticker"],
+        "status":       row["status"],
+        "started_at":   row["started_at"],
+        "progress_msg": row["progress_msg"],
     }
