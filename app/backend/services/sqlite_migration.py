@@ -327,7 +327,7 @@ def _fix_sequences(cur) -> list[str]:
         JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
         JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = a.attnum
         WHERE c.relkind = 'r' AND n.nspname = 'public'
-          AND pg_get_expr(d.adbin, d.adoid) ILIKE %s
+          AND pg_get_expr(d.adbin, d.adrelid) ILIKE %s
         """,
         ("nextval%",),
     )
@@ -409,6 +409,13 @@ def run_migration(dry_run: bool = False) -> dict:
                         sq.close()
                 if not dry_run:
                     report["sequences_fixed"] = _fix_sequences(cur)
+                    # Verify: actual Postgres row count per migrated table
+                    for t in report["tables"]:
+                        try:
+                            cur.execute(f"SELECT COUNT(*) FROM {_q(t['table'])}")
+                            t["pg_rows"] = cur.fetchone()[0]
+                        except Exception as exc:
+                            t["pg_rows"] = f"error: {exc}"
         finally:
             pg_conn.close()
     finally:
