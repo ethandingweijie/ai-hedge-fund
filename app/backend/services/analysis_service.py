@@ -945,9 +945,11 @@ def get_history(
         # catches any stragglers from the pre-Phase-2B architecture
         # that haven't been purged yet via /admin/dd-purge-legacy-web-runs.
         "(w.model_name IS NULL OR "
-        "(w.model_name NOT LIKE 'dd_%' AND w.model_name != 'synthetic-dd-trigger'))",
+        "(w.model_name NOT LIKE ? AND w.model_name != 'synthetic-dd-trigger'))",
     ]
-    web_params: list[Any] = []
+    # NB: 'dd_%' is passed as a PARAM — a literal % in the SQL text would be
+    # parsed as a placeholder prefix by psycopg and raise ProgrammingError.
+    web_params: list[Any] = ["dd_%"]
 
     if ticker:
         web_where.append("UPPER(w.ticker) = UPPER(?)")
