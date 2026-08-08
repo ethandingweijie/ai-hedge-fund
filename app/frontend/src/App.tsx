@@ -20,6 +20,7 @@ import { PricingPage } from './pages/PricingPage';
 import { LoginPage } from './pages/LoginPage';
 import { DDAlertsPage } from './pages/DDAlertsPage';
 import { RoboStrategyPage } from './pages/RoboStrategyPage';
+import { MenuPage } from './pages/MenuPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
 import { ThemeProvider } from './contexts/theme-context';
 import { AuthProvider, useAuth } from './contexts/auth-context';
@@ -86,6 +87,7 @@ export default function App() {
           <Route path="/research-ideas/idea-of-the-day/:ideaId" element={<RequireAuth><IdeaOfTheDayPage /></RequireAuth>} />
           <Route path="/research-ideas/shortlist" element={<RequireAuth><ShortlistedIdeasPage /></RequireAuth>} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/menu" element={<RequireAuth><MenuPage /></RequireAuth>} />
 
           {/* Default: redirect to login (will redirect to /report after auth) */}
           <Route path="*" element={<Navigate to="/login" replace />} />

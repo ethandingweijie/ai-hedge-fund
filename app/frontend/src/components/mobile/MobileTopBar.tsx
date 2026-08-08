@@ -1,203 +1,40 @@
-import { useState, useEffect } from 'react';
-import { Menu, X, User, LogOut, Zap } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+/**
+ * MobileTopBar.tsx
+ * =================
+ * Floating avatar button, top-right — the mobile shell's identity anchor.
+ * Replaces the old top-left hamburger: tapping it opens the full-page menu
+ * at #/menu (MenuPage) instead of a drawer overlay, so back navigation is
+ * native route behaviour and there's no z-index fight with the toaster
+ * (the hamburger used to sit at z-10000 purely to outrank long-running
+ * toasts — the avatar keeps the same stacking for the same reason).
+ */
+import { User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
-import { getHistory } from '@/lib/api';
-import { parseBackendIso } from '@/lib/utils';
-import type { RunSummary } from '@/lib/reportTypes';
-import { NAV_ITEMS, useAppNav } from '@/components/nav-config';
-import { LayoutModeToggle } from '@/components/LayoutModeToggle';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { EquitableMark } from '@/components/brand/EquitableMark';
-
-const ACTION_COLORS: Record<string, string> = {
-  BUY:   'bg-green-600 text-white',
-  SELL:  'bg-red-600 text-white',
-  SHORT: 'bg-orange-500 text-white',
-  COVER: 'bg-blue-600 text-white',
-  HOLD:  'bg-yellow-500 text-white',
-};
 
 export function MobileTopBar() {
-  const { user, logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [recentRuns, setRecentRuns] = useState<RunSummary[]>([]);
-  const location = useLocation();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const handleNav = useAppNav(() => setMenuOpen(false));
-
-  // Fetch last 5 runs when menu opens
-  useEffect(() => {
-    if (!menuOpen) return;
-    getHistory({ page: 1, page_size: 5 })
-      .then((res) => setRecentRuns(res.items.slice(0, 5)))
-      .catch(() => {});
-  }, [menuOpen]);
-
-  const handleRecentClick = (runId: string) => {
-    setMenuOpen(false);
-    navigate(`/report/${runId}`);
-  };
+  const initial = (user?.name ?? user?.email ?? '?')[0]?.toUpperCase() ?? '?';
 
   return (
-    <>
-      {/* Hamburger menu — top-left, fixed below iOS status bar.
-          z-[10000] so it floats ABOVE the persistent sonner toaster
-          (which uses z-9999) — otherwise the long-running Refresh /
-          Re-score toasts cover the hamburger and the user can't navigate
-          away while a job is running. */}
-      <div
-        className="fixed left-3 z-[10000]"
-        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+    <div
+      className="fixed right-3 z-[10000]"
+      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+    >
+      <button
+        onClick={() => navigate('/menu')}
+        aria-label="Open menu"
+        className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden shadow-md border border-border bg-primary/15 text-primary"
       >
-        <button
-          onClick={() => setMenuOpen(true)}
-          className="w-9 h-9 rounded-full flex items-center justify-center shadow-md bg-white/90 dark:bg-card border border-border"
-        >
-          <Menu size={18} className="text-foreground" />
-        </button>
-      </div>
-
-      {/* Profile icon removed — settings moved to hamburger menu */}
-
-      {/* Navigation drawer — slides from left.
-          z-[10001] so it sits above both the hamburger button (z-10000)
-          and any active toaster (z-9999). */}
-      {menuOpen && (
-        <div className="fixed inset-0 z-[10001]" onClick={() => setMenuOpen(false)}>
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50 animate-in fade-in duration-200" />
-
-          {/* Drawer panel */}
-          <div
-            className="absolute top-0 left-0 bottom-0 w-64 bg-background border-r border-border shadow-2xl animate-in slide-in-from-left duration-200 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Drawer header — respects iOS safe-area-inset-top so the Equitable
-                logo/text don't collide with the status bar (time / battery). */}
-            <div
-              className="flex items-center justify-between px-4 pb-4 border-b border-border"
-              style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}
-            >
-              <div className="flex items-center gap-2">
-                <EquitableMark size={28} />
-                <span className="text-sm font-bold tracking-wide text-foreground">Equitable</span>
-              </div>
-              <button onClick={() => setMenuOpen(false)} className="p-1 rounded-md hover:bg-muted">
-                <X size={18} className="text-muted-foreground" />
-              </button>
-            </div>
-
-            {/* Nav items */}
-            <div className="flex-1 overflow-y-auto py-2">
-              {NAV_ITEMS.map((item) => {
-                const { label, icon: Icon, path } = item;
-                const isActive = location.pathname === path && item.action !== 'new';
-                const isHistory = label === 'History';
-                return (
-                  <div key={label}>
-                    <button
-                      onClick={() => handleNav(item)}
-                      title={item.hint}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors
-                        ${isActive
-                          ? 'bg-primary/10 text-primary border-l-2 border-primary'
-                          : 'text-foreground hover:bg-muted border-l-2 border-transparent'
-                        }
-                        ${item.action === 'new' ? 'border-b border-border mb-1' : ''}`}
-                    >
-                      <Icon size={18} strokeWidth={isActive ? 2.2 : 1.6} className={isActive ? 'text-primary' : 'text-muted-foreground'} />
-                      <span className={`text-sm font-medium ${isActive ? 'text-primary' : ''}`}>{label}</span>
-                    </button>
-
-                    {/* Recent runs below History */}
-                    {isHistory && recentRuns.length > 0 && (
-                      <div className="pl-10 pr-4 py-1 space-y-0.5">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 px-1">Recent</span>
-                        {recentRuns.map((run) => (
-                          <button
-                            key={run.run_id}
-                            onClick={() => handleRecentClick(run.run_id)}
-                            className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted transition-colors text-left"
-                          >
-                            <span className="font-mono text-xs font-bold text-foreground min-w-[48px]">{run.ticker}</span>
-                            {run.final_action && (
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${ACTION_COLORS[run.final_action] ?? 'bg-muted text-muted-foreground'}`}>
-                                {run.final_action}
-                              </span>
-                            )}
-                            <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">
-                              {parseBackendIso(run.run_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Settings section at bottom */}
-            <div className="border-t border-border">
-              {/* Layout mode (Mobile / Desktop) — lets the user switch to the
-                  desktop/iPad sidebar shell and back. */}
-              <div className="px-4 py-3 border-b border-border/60">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Layout</p>
-                <LayoutModeToggle onChange={() => setMenuOpen(false)} />
-              </div>
-
-              {/* Theme toggle */}
-              <div className="px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2">Theme</p>
-                <ThemeToggle />
-              </div>
-
-              {/* Pricing link */}
-              <a
-                href="#/pricing"
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors"
-              >
-                <Zap size={16} className="text-amber-500" />
-                <span className="text-sm font-medium">Pricing</span>
-              </a>
-
-              {/* Sign out */}
-              {user && (
-                <button
-                  onClick={() => { logout(); setMenuOpen(false); }}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted transition-colors text-left"
-                >
-                  <LogOut size={16} className="text-muted-foreground" />
-                  <span className="text-sm font-medium text-muted-foreground">Sign out</span>
-                </button>
-              )}
-
-              {/* User info */}
-              {user && (
-                <div className="px-4 py-3 border-t border-border">
-                  <div className="flex items-center gap-2">
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-                        <User size={14} className="text-muted-foreground" />
-                      </div>
-                    )}
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-xs font-medium truncate">{user.name ?? user.email}</span>
-                      <span className="text-[10px] text-muted-foreground truncate">{user.email}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Profile drawer removed — settings moved to hamburger menu */}
-    </>
+        {user?.avatar_url ? (
+          <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+        ) : user ? (
+          <span className="text-sm font-bold">{initial}</span>
+        ) : (
+          <User size={18} className="text-muted-foreground" />
+        )}
+      </button>
+    </div>
   );
 }

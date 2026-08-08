@@ -2,8 +2,8 @@
  * LayoutModeToggle.tsx
  * ====================
  * Segmented Mobile / Desktop switch. Lives in BOTH the desktop sidebar and the
- * mobile hamburger drawer so a user can always get back to the other layout.
- * Styled to match the Theme segmented control in MobileTopBar.
+ * mobile menu page (MenuPage) so a user can always get back to the other layout.
+ * Styled to match the Theme segmented control in MenuPage.
  */
 import { Smartphone, Monitor } from 'lucide-react';
 import { useLayoutMode, type LayoutMode } from '@/contexts/layout-mode-context';

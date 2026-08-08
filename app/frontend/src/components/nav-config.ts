@@ -2,8 +2,8 @@
  * nav-config.ts
  * =============
  * Single source of truth for the primary navigation, shared by the mobile
- * hamburger drawer (MobileTopBar) and the desktop sidebar (DesktopSidebar)
- * so the two never drift apart.
+ * menu page (MenuPage) and the desktop sidebar (DesktopSidebar) so the two
+ * never drift apart.
  *
  * `useAppNav` encapsulates the two special-cased nav actions. These are keyed
  * off `NavItem.action` (NOT the display label) so the labels can be renamed
