@@ -80,6 +80,98 @@ async def migrate_to_postgres(request: Request, secret: str = "", dry_run: bool 
     return report
 
 
+@router.get("/admin/diag")
+async def admin_diag(request: Request, secret: str = ""):
+    """Read-only health probe for the storage stack (secret-gated).
+
+    Reports, per layer, whether it works and the exception text when it does
+    not: env presence (never values), SQLite volume opens/reads, Postgres
+    connects/reads, and the ORM session. Built to diagnose 500s without
+    shell access to the container.
+    """
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    import sqlite3 as _sqlite3
+    import traceback as _tb
+
+    out: dict = {"build_marker": "2026-08-08-diag-1"}
+
+    # 1. Env presence (names only — values never leave the container)
+    out["env"] = {
+        k: bool(os.environ.get(k))
+        for k in ("DATABASE_URL", "DATABASE_PATH", "RUN_ARCHIVE_PATH",
+                  "JWT_SECRET_KEY", "DB_UPLOAD_SECRET", "REDIS_URL")
+    }
+    out["paths"] = {}
+    for name, path in _get_db_paths().items():
+        out["paths"][name] = {"path": path, "exists": os.path.exists(path)}
+
+    # 2. SQLite open + read on each volume DB
+    out["sqlite"] = {}
+    for name, path in _get_db_paths().items():
+        try:
+            conn = _sqlite3.connect(path)
+            try:
+                n_tables = conn.execute(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
+                ).fetchone()[0]
+                out["sqlite"][name] = {"ok": True, "tables": n_tables}
+            finally:
+                conn.close()
+        except Exception:
+            out["sqlite"][name] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 3. Postgres connect + read (raw psycopg, same URL the app uses)
+    try:
+        import psycopg
+        from urllib.parse import urlparse
+
+        url = os.environ.get("DATABASE_URL", "")
+        # normalise driver suffixes like _pg_url in sqlite_migration
+        for pre in ("postgresql+psycopg://", "postgres+psycopg://"):
+            if url.startswith(pre):
+                url = "postgresql://" + url[len(pre):]
+                break
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        try:
+            parsed = urlparse(url)
+            out["pg"] = {"host": parsed.hostname, "port": parsed.port,
+                         "dbname": (parsed.path or "").lstrip("/")}
+        except Exception:
+            out["pg"] = {"url_unparseable": True}
+        conn = psycopg.connect(url, connect_timeout=10)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM information_schema.tables "
+                            "WHERE table_schema='public'")
+                out["pg"]["tables"] = cur.fetchone()[0]
+                cur.execute("SELECT to_regclass('public.web_runs') IS NOT NULL")
+                out["pg"]["web_runs_exists"] = bool(cur.fetchone()[0])
+            out["pg"]["ok"] = True
+        finally:
+            conn.close()
+    except Exception:
+        out.setdefault("pg", {})["ok"] = False
+        out["pg"]["error"] = _tb.format_exc()[-800:]
+
+    # 4. ORM session (users table)
+    try:
+        from app.backend.database.connection import SessionLocal
+        from sqlalchemy import text
+        s = SessionLocal()
+        try:
+            n = s.execute(text("SELECT COUNT(*) FROM users")).scalar()
+            out["orm"] = {"ok": True, "users": n}
+        finally:
+            s.close()
+    except Exception:
+        out["orm"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    return out
+
+
 @router.post("/admin/backfill-convergence-cap")
 async def backfill_convergence_cap(request: Request, 
     secret: str = "",
