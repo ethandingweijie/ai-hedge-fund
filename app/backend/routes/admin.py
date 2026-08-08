@@ -60,6 +60,11 @@ async def migrate_to_postgres(secret: str = "", dry_run: bool = False):
         report = await asyncio.to_thread(sqlite_migration.run_migration, dry_run)
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        # Admin-only route: surface the traceback so migration issues can be
+        # diagnosed without shell access to the container.
+        import traceback
+        raise HTTPException(status_code=500, detail=traceback.format_exc()[-4000:])
     return report
 
 

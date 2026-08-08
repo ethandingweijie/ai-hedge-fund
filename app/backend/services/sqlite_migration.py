@@ -333,13 +333,13 @@ def _fix_sequences(cur) -> list[str]:
     )
     fixed = []
     for tbl, col in cur.fetchall():
-        cur.execute("SELECT pg_get_serial_sequence(%s, %s)", (f"public.{_q(tbl)}", col))
-        seq = cur.fetchone()[0]
-        if not seq:
-            continue
         try:
+            cur.execute("SELECT pg_get_serial_sequence(%s, %s)", (f"public.{_q(tbl)}", col))
+            seq = cur.fetchone()[0]
+            if not seq:
+                continue
             cur.execute(
-                f"SELECT setval(%s, COALESCE(MAX({_q(col)}), 1), MAX({_q(col)}) IS NOT NULL) FROM {_q(tbl)}",
+                f"SELECT setval(%s::regclass, COALESCE(MAX({_q(col)}), 1), MAX({_q(col)}) IS NOT NULL) FROM {_q(tbl)}",
                 (seq,),
             )
             fixed.append(f"{tbl}.{col} -> {seq}")
