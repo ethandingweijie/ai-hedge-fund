@@ -23,6 +23,12 @@ from datetime import datetime
 
 from langchain_core.messages import HumanMessage
 
+# Context-preserving submit(). A bare executor.submit() starts the worker in a
+# fresh context, dropping the run's API-key overlay and its progress run_id tag —
+# which made concurrent web runs leak progress events into each other's SSE
+# streams. Every submit() in this module goes through this wrapper.
+from src.utils.run_config import submit as _ctx_submit
+
 from src.graph.state import AgentState
 from src.utils.progress import progress
 from src.agents.routing.macro_regime import run_macro_regime_classifier
@@ -557,9 +563,9 @@ def run_advanced_pipeline(
 
         workers = max(1, 3 - int(_power_law_cached) - int(_value_trap_cached))
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            f_scenario = executor.submit(run_scenario_agent, state_copy_a)
-            f_power = None if _power_law_cached else executor.submit(run_power_law_agent, state_copy_b)
-            f_trap  = None if _value_trap_cached else executor.submit(run_value_trap_agent, state_copy_c)
+            f_scenario = _ctx_submit(executor, run_scenario_agent, state_copy_a)
+            f_power = None if _power_law_cached else _ctx_submit(executor, run_power_law_agent, state_copy_b)
+            f_trap  = None if _value_trap_cached else _ctx_submit(executor, run_value_trap_agent, state_copy_c)
 
         state["data"]["scenario_analysis"] = f_scenario.result()["data"]["scenario_analysis"]
 
@@ -1041,11 +1047,11 @@ def _run_intelligence_agents_parallel(state: AgentState) -> AgentState:
     state_si = copy.deepcopy(state)
 
     with ThreadPoolExecutor(max_workers=5) as executor:
-        f_ia = executor.submit(run_insider_activity_agent, state_ia)
-        f_ar = executor.submit(run_analyst_revision_agent, state_ar)
-        f_ns = executor.submit(run_news_sentiment_agent, state_ns)
-        f_eq = executor.submit(run_earnings_quality_agent, state_eq)
-        f_si = executor.submit(run_short_interest_agent, state_si)
+        f_ia = _ctx_submit(executor, run_insider_activity_agent, state_ia)
+        f_ar = _ctx_submit(executor, run_analyst_revision_agent, state_ar)
+        f_ns = _ctx_submit(executor, run_news_sentiment_agent, state_ns)
+        f_eq = _ctx_submit(executor, run_earnings_quality_agent, state_eq)
+        f_si = _ctx_submit(executor, run_short_interest_agent, state_si)
 
     try:
         state["data"]["insider_activity"] = f_ia.result()["data"]["insider_activity"]
@@ -1086,7 +1092,7 @@ def _run_investor_agents_parallel(state: AgentState, active_agents: list[str]) -
 
     with ThreadPoolExecutor(max_workers=min(len(active_agents), 6)) as executor:
         futures = {
-            executor.submit(run_advanced_investor, agent_key, state): agent_key
+            _ctx_submit(executor, run_advanced_investor, agent_key, state): agent_key
             for agent_key in active_agents
         }
         for future in as_completed(futures):
@@ -1106,11 +1112,6 @@ def _run_investor_agents_parallel(state: AgentState, active_agents: list[str]) -
 def _append_to_trade_log(state: AgentState, decisions: dict) -> None:
     """Append current run decisions to trade_log.json for future Phase 10 scoring."""
     try:
-        existing: list[dict] = []
-        if os.path.exists(TRADE_LOG_PATH):
-            with open(TRADE_LOG_PATH) as f:
-                existing = json.load(f)
-
         # Store a lean version of analyst signals (skip risk manager data)
         skip_agents = {"risk_management_agent", "advanced_risk_manager"}
         lean_signals: dict = {}
@@ -1132,10 +1133,13 @@ def _append_to_trade_log(state: AgentState, decisions: dict) -> None:
             "decisions": decisions,
             "analyst_signals": lean_signals,
         }
-        existing.append(entry)
 
-        with open(TRADE_LOG_PATH, "w") as f:
-            json.dump(existing, f, indent=2)
+        def _append(existing):
+            existing.append(entry)
+            return existing
+
+        from src.utils.json_state import update_json_locked
+        update_json_locked(TRADE_LOG_PATH, _append, default=[])
 
     except Exception as e:
         print(f"  Warning: could not write trade log: {e}")

@@ -59,11 +59,11 @@ def _load_conviction_weights() -> dict[str, float]:
 
 
 def _save_conviction_weights(weights: dict[str, float], total_reviews: int) -> None:
+    from src.utils.json_state import save_json_locked
     data = dict(weights)
     data["last_updated"] = datetime.now().strftime("%Y-%m-%d")
     data["total_reviews"] = total_reviews
-    with open(CONVICTION_WEIGHTS_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    save_json_locked(CONVICTION_WEIGHTS_PATH, data)
 
 
 def run_post_trade_review(state: AgentState, review_days: int = 30) -> AgentState:

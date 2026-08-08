@@ -356,17 +356,17 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
     # Persist regime state to disk
     regime_path = os.path.join(DATA_DIR, "regime_state.json")
     try:
-        with open(regime_path, "w") as f:
-            json.dump(
-                {
-                    "last_run":          datetime.now().strftime("%Y-%m-%d"),
-                    "tickers":           state["data"]["tickers"],
-                    "regime":            regime_dict,
-                    "agent_weights":     adjusted_weights,
-                    "position_size_cap": position_size_cap,
-                },
-                f, indent=2,
-            )
+        from src.utils.json_state import save_json_locked
+        save_json_locked(
+            regime_path,
+            {
+                "last_run":          datetime.now().strftime("%Y-%m-%d"),
+                "tickers":           state["data"]["tickers"],
+                "regime":            regime_dict,
+                "agent_weights":     adjusted_weights,
+                "position_size_cap": position_size_cap,
+            },
+        )
     except Exception:
         pass  # Non-fatal; pipeline continues
 

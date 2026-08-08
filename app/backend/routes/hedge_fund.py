@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 import asyncio
+import uuid
 
 from app.backend.database import get_db
 from app.backend.models.schemas import ErrorResponse, HedgeFundRequest, BacktestRequest, BacktestDayResult, BacktestPerformanceMetrics
@@ -66,8 +67,14 @@ async def run(request_data: HedgeFundRequest, request: Request, db: Session = De
             run_task = None
             disconnect_task = None
 
-            # Simple handler to add updates to the queue
-            def progress_handler(agent_name, ticker, status, analysis, timestamp):
+            # Generate a unique run_id for this execution
+            run_id = uuid.uuid4().hex[:16]
+
+            # Handler with run_id filtering to prevent cross-run event leakage
+            def progress_handler(agent_name, ticker, status, analysis, timestamp, partial_data=None, event_run_id=None):
+                # Filter: only accept events from this run (event_run_id from ContextVar)
+                if event_run_id is not None and event_run_id != run_id:
+                    return
                 event = ProgressUpdateEvent(agent=agent_name, ticker=ticker, status=status, timestamp=timestamp, analysis=analysis)
                 progress_queue.put_nowait(event)
 
@@ -222,8 +229,14 @@ async def backtest(request_data: BacktestRequest, request: Request, db: Session 
             backtest_task = None
             disconnect_task = None
 
-            # Global progress handler to capture individual agent updates during backtest
-            def progress_handler(agent_name, ticker, status, analysis, timestamp):
+            # Generate a unique run_id for this backtest execution
+            backtest_run_id = uuid.uuid4().hex[:16]
+
+            # Progress handler with run_id filtering to prevent cross-run event leakage
+            def progress_handler(agent_name, ticker, status, analysis, timestamp, partial_data=None, event_run_id=None):
+                # Filter: only accept events from this run (event_run_id from ContextVar)
+                if event_run_id is not None and event_run_id != backtest_run_id:
+                    return
                 event = ProgressUpdateEvent(agent=agent_name, ticker=ticker, status=status, timestamp=timestamp, analysis=analysis)
                 progress_queue.put_nowait(event)
 

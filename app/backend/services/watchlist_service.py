@@ -267,15 +267,21 @@ def _write_vgpm_to_watchlist(
     Pipeline VGPM is authoritative and will not be downgraded to 'fast' by
     the stale-refresh path — see get_watchlist() for the guard logic.
     Price is only written when non-None — never overwrites a stored price with NULL.
+
+    BUG FIX: When user_id is None, we now scope to rows with user_id IS NULL
+    to prevent cross-user writes. Previously, user_id=None would update ALL
+    users' watchlists for that ticker.
     """
     conn = _connect()
     now_iso = datetime.now(timezone.utc).isoformat()
-    # Build WHERE clause — scope to user when provided
-    where = "WHERE ticker = ?"
-    params_suffix = [ticker]
+    # Build WHERE clause — ALWAYS scope to user_id to prevent cross-user writes
+    # When user_id is None, only update rows with NULL user_id (legacy rows)
     if user_id is not None:
-        where += " AND user_id = ?"
-        params_suffix.append(user_id)
+        where = "WHERE ticker = ? AND user_id = ?"
+        params_suffix = [ticker, user_id]
+    else:
+        where = "WHERE ticker = ? AND user_id IS NULL"
+        params_suffix = [ticker]
     try:
         if price is not None:
             conn.execute(

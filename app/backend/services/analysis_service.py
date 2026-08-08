@@ -24,6 +24,44 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from src.utils import run_config
+
+
+# ── .env.local (process-wide, load once) ──────────────────────────────────────
+
+_env_local_loaded = False
+_env_local_lock = threading.Lock()
+
+
+def _load_env_local_once() -> None:
+    """Load .env.local into os.environ the first time only.
+
+    Deployment config (base URLs, fallback keys) is identical for every run, so
+    it belongs in os.environ. Per-run, caller-supplied values do NOT — those go
+    through run_config's ContextVar overlay instead.
+    """
+    global _env_local_loaded
+    if _env_local_loaded:
+        return
+    with _env_local_lock:
+        if _env_local_loaded:
+            return
+        env_local = Path(__file__).parent.parent.parent.parent / ".env.local"
+        if env_local.exists():
+            try:
+                from dotenv import load_dotenv
+
+                load_dotenv(env_local, override=True)
+            except ImportError:
+                # dotenv not installed — parse manually
+                for line in env_local.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, _, v = line.partition("=")
+                        if k.strip():
+                            os.environ[k.strip()] = v.strip().strip('"').strip("'")
+        _env_local_loaded = True
+
 
 # ── Float sanitizer ───────────────────────────────────────────────────────────
 
@@ -515,13 +553,15 @@ def get_cached_run(
 
 # ── Delete helper ─────────────────────────────────────────────────────────────
 
-def delete_run(run_id: str) -> bool:
+def delete_run(run_id: str, user_id: int = None) -> bool:
     """
     Permanently delete a run from the archive.
+    Only the owner can delete a run. Legacy runs (user_id IS NULL) can be
+    deleted by any authenticated user for backward compatibility.
     Removes from web_runs first; if the row carries an archive_run_id,
     cascades to the CLI archive tables (runs, ticker_signals, agent_signals).
     Falls back to deleting directly from the CLI tables for CLI-only runs.
-    Returns True if anything was deleted, False if run_id not found.
+    Returns True if anything was deleted, False if run_id not found or not owned.
     """
     db_path = _get_db_path()
     conn = _connect(db_path, check_same_thread=False)
@@ -530,10 +570,15 @@ def delete_run(run_id: str) -> bool:
 
         # ── 1. Check web_runs ────────────────────────────────────────────────
         row = conn.execute(
-            "SELECT archive_run_id FROM web_runs WHERE run_id = ?", (run_id,)
+            "SELECT archive_run_id, user_id FROM web_runs WHERE run_id = ?", (run_id,)
         ).fetchone()
 
         if row is not None:
+            # Ownership check: only owner can delete (legacy runs have NULL user_id)
+            run_user_id = row["user_id"]
+            if run_user_id is not None and user_id is not None and run_user_id != user_id:
+                return False  # Not the owner — deny deletion
+
             archive_id = row["archive_run_id"]
             conn.execute("DELETE FROM web_runs WHERE run_id = ?", (run_id,))
             # Cascade to CLI archive if this web run was also saved there
@@ -561,11 +606,12 @@ def delete_run(run_id: str) -> bool:
 
 # ── Public read helpers ───────────────────────────────────────────────────────
 
-def get_run_result(run_id: str) -> Optional[dict]:
+def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
     """
     Return full result dict for a run.
     Checks web_runs first (full JSON stored); falls back to reconstructing
     from the CLI archive tables (runs + ticker_signals + agent_signals).
+    Ownership: user can only access their own runs (legacy runs visible to all).
     """
     _ensure_web_runs_table()
     db_path = _get_db_path()
@@ -574,10 +620,14 @@ def get_run_result(run_id: str) -> Optional[dict]:
     try:
         # ── 1. Try web_runs (full JSON) ───────────────────────────────────────
         row = conn.execute(
-            "SELECT full_result_json FROM web_runs WHERE run_id = ?",
+            "SELECT full_result_json, user_id FROM web_runs WHERE run_id = ?",
             (run_id,),
         ).fetchone()
         if row and row[0]:
+            # Ownership check: only owner can access (legacy runs have NULL user_id)
+            run_user_id = row["user_id"]
+            if run_user_id is not None and user_id is not None and run_user_id != user_id:
+                return None  # Not the owner — deny access
             return _sanitize_floats(json.loads(row[0]))
 
         # ── 2. Try reconstructing from CLI archive tables ─────────────────────
@@ -1186,24 +1236,21 @@ async def run_analysis_pipeline(
     result_container: dict = {}
     error_container: dict = {}
 
-    # ── Load .env.local so FMP_API_KEY and other keys are available ──────────
-    from pathlib import Path
-    _project_root = Path(__file__).parent.parent.parent.parent
-    _env_local = _project_root / ".env.local"
-    if _env_local.exists():
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(_env_local, override=True)   # override=True: .env.local wins over process env
-        except ImportError:
-            # dotenv not installed — parse manually
-            for _line in _env_local.read_text(encoding="utf-8").splitlines():
-                _line = _line.strip()
-                if _line and not _line.startswith("#") and "=" in _line:
-                    _k, _, _v = _line.partition("=")
-                    if _k.strip():
-                        os.environ[_k.strip()] = _v.strip().strip('"').strip("'")
+    # ── Load .env.local once, process-wide ───────────────────────────────────
+    # This is deployment-level config (same for every run), so os.environ is the
+    # right home for it — and _load_env_local_once() makes it idempotent instead
+    # of re-parsing the file on every request.
+    _load_env_local_once()
 
-    # ── Also apply any keys passed from the web UI DB (override=True) ────────
+    # ── Per-run settings overlay ─────────────────────────────────────────────
+    # These are caller-supplied and therefore differ between concurrent runs.
+    # They MUST NOT go into os.environ: that is process-global, so with two
+    # users running at once the second run's keys clobbered the first's
+    # mid-flight and User A's pipeline could execute against User B's key.
+    # run_config keeps them in a ContextVar scoped to this run; every key read
+    # downstream (src/llm/models.py, src/tools/api.py, deep_research.py) goes
+    # through run_config.getenv() and falls back to os.environ when no run
+    # context is active (CLI, schedulers).
     provider_to_env = {
         "anthropic": "ANTHROPIC_API_KEY",
         "openai": "OPENAI_API_KEY",
@@ -1214,10 +1261,10 @@ async def run_analysis_pipeline(
         "FINANCIAL_DATASETS_API_KEY": "FINANCIAL_DATASETS_API_KEY",
         "FMP_API_KEY": "FMP_API_KEY",
     }
+    _run_settings: dict[str, str] = {}
     for provider, key_value in api_keys.items():
-        env_name = provider_to_env.get(provider, provider)
         if key_value:
-            os.environ[env_name] = key_value
+            _run_settings[provider_to_env.get(provider, provider)] = key_value
 
     # ── Register progress handler ─────────────────────────────────────────────
     from src.utils.progress import progress
@@ -1271,9 +1318,12 @@ async def run_analysis_pipeline(
 
     # ── Pipeline thread ───────────────────────────────────────────────────────
     def _run_pipeline():
-        # Tag this thread so every progress.update_status() call stamps the
-        # correct run_id.  Handlers for other concurrent runs will filter it out.
+        # Install this run's settings + run_id inside the thread's own context.
+        # run_config.spawn() copies the caller's context, so these two calls
+        # apply to this run only and are inherited by every ThreadPoolExecutor
+        # worker the pipeline fans out to (submits go through run_config.submit).
         from src.utils.progress import progress as _prog
+        run_config.set_run_settings(_run_settings)
         _prog.set_run_id(run_id)
         try:
             from src.pipeline import run_advanced_pipeline
@@ -1298,7 +1348,9 @@ async def run_analysis_pipeline(
             # mode blocks function_calling / Pydantic schema compliance.
             _is_qwen = model_name.startswith("qwen")
             if _is_qwen:
-                os.environ["DEEP_RESEARCH_MODEL"] = model_name
+                # Per-run, not process-wide: a concurrent Claude run must not
+                # inherit this user's Qwen deep-research model.
+                run_config.update_run_settings({"DEEP_RESEARCH_MODEL": model_name})
                 _pipeline_model = "claude-sonnet-4-6"
                 _provider = "Anthropic"
             else:
@@ -1330,7 +1382,10 @@ async def run_analysis_pipeline(
                 )
             )
 
-    thread = threading.Thread(target=_run_pipeline, daemon=True)
+    # run_config.spawn (not threading.Thread) so the pipeline thread starts from
+    # a copy of this context — without it the ContextVars set inside
+    # _run_pipeline would not propagate to the pipeline's own worker pools.
+    thread = run_config.spawn(_run_pipeline, daemon=True)
     thread.start()
 
     # ── Drain progress queue until __done__ ───────────────────────────────────

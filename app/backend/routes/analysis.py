@@ -416,9 +416,10 @@ async def get_runs(
 # ── GET /analysis/runs/{run_id} ───────────────────────────────────────────────
 
 @router.get("/runs/{run_id}")
-async def get_run(run_id: str):
+async def get_run(run_id: str, request: Request, db: Session = Depends(get_db)):
+    user_id = _get_user_id(request, db)
     try:
-        result = await asyncio.to_thread(analysis_service.get_run_result, run_id)
+        result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
         if result is None:
             raise HTTPException(status_code=404, detail="Run not found")
         return result
@@ -433,10 +434,11 @@ async def get_run(run_id: str):
 # ── DELETE /analysis/runs/{run_id} ───────────────────────────────────────────
 
 @router.delete("/runs/{run_id}")
-async def delete_run(run_id: str):
-    """Permanently delete a single run from the archive."""
+async def delete_run(run_id: str, request: Request, db: Session = Depends(get_db)):
+    """Permanently delete a single run from the archive (only owner can delete)."""
+    user_id = _get_user_id(request, db)
     try:
-        deleted = await asyncio.to_thread(analysis_service.delete_run, run_id)
+        deleted = await asyncio.to_thread(analysis_service.delete_run, run_id, user_id=user_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Run not found")
         return {"deleted": run_id}

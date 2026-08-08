@@ -46,6 +46,7 @@ google-auth = "^2.29.0"
 anthropic = "^0.86.0"
 akshare = "^1.18.49"
 better-profanity = "^0.7.0"
+filelock = "^3.12.0"
 # financetoolkit removed — version resolution fails in Docker; not needed for web app
 
 [tool.poetry.group.dev.dependencies]

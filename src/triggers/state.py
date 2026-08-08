@@ -26,6 +26,8 @@ earnings             : key_date = the actual earnings date string.
 import json
 import os
 
+from src.utils.json_state import load_json_locked, save_json_locked
+
 _STATE_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "trigger_state.json")
 
 
@@ -39,22 +41,14 @@ def load_state(path: str | None = None) -> dict:
     they shared one JSON file.
     """
     target = path or _STATE_PATH
-    if os.path.exists(target):
-        try:
-            with open(target, encoding="utf-8") as f:
-                data = json.load(f)
-                return data if isinstance(data, dict) else {}
-        except Exception:
-            pass
-    return {}
+    data = load_json_locked(target, default={})
+    return data if isinstance(data, dict) else {}
 
 
 def save_state(state: dict, path: str | None = None) -> None:
     """Persist trigger state to disk. See load_state() for the `path` param."""
     target = path or _STATE_PATH
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    with open(target, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
+    save_json_locked(target, state)
 
 
 def already_fired(state: dict, ticker: str, trigger: str, key_date: str) -> bool:
