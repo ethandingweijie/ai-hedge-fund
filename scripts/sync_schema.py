@@ -33,8 +33,16 @@ CREATE_ALL_COVERED_REVISION = "a1b2c3d4e5f6"
 
 
 def main() -> None:
+    import os
+
     from app.backend.database.connection import Base, engine
     import app.backend.database.models  # noqa: F401 — registers models on Base
+
+    # Announce the target so it's obvious from deploy logs which DB got migrated
+    if os.environ.get("DATABASE_URL"):
+        print(f"Schema sync target: PostgreSQL ({os.environ['DATABASE_URL'].split('@')[-1]})")
+    else:
+        print("Schema sync target: SQLite (DATABASE_URL not set — local dev mode)")
 
     # 1. ORM tables (no-op for tables that already exist)
     Base.metadata.create_all(bind=engine)
