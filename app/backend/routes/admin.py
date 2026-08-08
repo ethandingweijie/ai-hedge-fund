@@ -7,13 +7,25 @@ import sys
 import sqlite3
 import json
 import logging
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 ADMIN_SECRET = os.environ.get("DB_UPLOAD_SECRET", "")
+
+def _secret_ok(request: Request, secret: str) -> bool:
+    """Accept the admin secret from the query param OR the X-Admin-Secret header.
+
+    The header form matters when the secret value itself trips an edge WAF
+    rule in a query string (Railway's Pingora edge 400s on certain patterns),
+    and the header keeps the secret out of URL access logs either way.
+    """
+    import hmac
+    presented = secret or request.headers.get("X-Admin-Secret", "")
+    return (bool(ADMIN_SECRET) and bool(presented)
+            and hmac.compare_digest(presented, ADMIN_SECRET))
 
 
 def _get_db_paths() -> dict[str, str]:
@@ -25,7 +37,7 @@ def _get_db_paths() -> dict[str, str]:
 
 @router.get("/admin/migrate-to-postgres")
 @router.post("/admin/migrate-to-postgres")
-async def migrate_to_postgres(secret: str = "", dry_run: bool = False):
+async def migrate_to_postgres(request: Request, secret: str = "", dry_run: bool = False):
     """Copy the volume SQLite databases into PostgreSQL (one-shot, idempotent).
 
     Runs INSIDE the container, where both the mounted SQLite files and the
@@ -40,7 +52,7 @@ async def migrate_to_postgres(secret: str = "", dry_run: bool = False):
       curl 'https://BACKEND/admin/migrate-to-postgres?secret=***'
       curl 'https://BACKEND/admin/migrate-to-postgres?secret=***&dry_run=true'
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
     if not os.environ.get("DATABASE_URL"):
         raise HTTPException(status_code=400, detail="DATABASE_URL not set — no Postgres target")
@@ -69,7 +81,7 @@ async def migrate_to_postgres(secret: str = "", dry_run: bool = False):
 
 
 @router.post("/admin/backfill-convergence-cap")
-async def backfill_convergence_cap(
+async def backfill_convergence_cap(request: Request, 
     secret: str = "",
     ticker: str = "",
     tickers: str = "",
@@ -93,7 +105,7 @@ async def backfill_convergence_cap(
       dry_run   — default True. When True, returns proposed changes without
                   writing. Pass dry_run=false to actually persist.
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     paths = _get_db_paths()
@@ -318,7 +330,7 @@ async def backfill_convergence_cap(
 
 
 @router.post("/admin/backfill-dcf-range")
-async def backfill_dcf_range(
+async def backfill_dcf_range(request: Request, 
     secret: str = "",
     ticker: str = "",
     tickers: str = "",
@@ -349,7 +361,7 @@ async def backfill_dcf_range(
                   already-backfilled row's calibration_note stale/wrong even
                   though dcf_range itself wasn't empty.
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     paths = _get_db_paths()
@@ -484,9 +496,9 @@ async def backfill_dcf_range(
 
 
 @router.delete("/admin/row")
-async def delete_row(secret: str = "", db: str = "run_archive", table: str = "", key_col: str = "", key_val: str = ""):
+async def delete_row(request: Request, secret: str = "", db: str = "run_archive", table: str = "", key_col: str = "", key_val: str = ""):
     """Delete a single row by primary key."""
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
     if not table or not key_col or not key_val:
         raise HTTPException(status_code=400, detail="table, key_col, key_val required")
@@ -528,9 +540,9 @@ async def delete_row(secret: str = "", db: str = "run_archive", table: str = "",
 
 
 @router.get("/admin/dashboard", response_class=HTMLResponse)
-async def admin_dashboard(secret: str = "", db: str = "run_archive", table: str = "", limit: int = 50, offset: int = 0):
+async def admin_dashboard(request: Request, secret: str = "", db: str = "run_archive", table: str = "", limit: int = 50, offset: int = 0):
     """HTML admin dashboard — one link to see everything."""
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     paths = _get_db_paths()
@@ -722,7 +734,7 @@ async def admin_dashboard(secret: str = "", db: str = "run_archive", table: str 
 # FMP_API_KEY. Remove once the backfill is complete.
 
 @router.post("/admin/backfill-reit-breakdown")
-async def backfill_reit_breakdown(
+async def backfill_reit_breakdown(request: Request, 
     secret: str = "",
     ticker: str = "",
     dry_run: bool = True,
@@ -742,7 +754,7 @@ async def backfill_reit_breakdown(
       curl -X POST 'https://BACKEND/admin/backfill-reit-breakdown?secret=XXX&ticker=DLR&dry_run=false'
       curl -X POST 'https://BACKEND/admin/backfill-reit-breakdown?secret=XXX&dry_run=false'   # all REITs
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     # Ensure repo root is on sys.path so `scripts.backfill_reit_breakdown` resolves.
@@ -778,7 +790,7 @@ async def backfill_reit_breakdown(
 # scripts/backfill_bank_breakdown.py CLI.
 
 @router.post("/admin/backfill-bank-breakdown")
-async def backfill_bank_breakdown(
+async def backfill_bank_breakdown(request: Request, 
     secret: str = "",
     ticker: str = "",
     dry_run: bool = True,
@@ -793,7 +805,7 @@ async def backfill_bank_breakdown(
     Example:
       curl -X POST 'https://BACKEND/admin/backfill-bank-breakdown?secret=XXX&ticker=JPM&dry_run=true'
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -825,7 +837,7 @@ async def backfill_bank_breakdown(
 # metrics so the sector-extractor gate can fire correctly on pre-v2.0 runs.
 
 @router.post("/admin/backfill-profile-name")
-async def backfill_profile_name(
+async def backfill_profile_name(request: Request, 
     secret: str = "",
     ticker: str = "",
     dry_run: bool = True,
@@ -852,7 +864,7 @@ async def backfill_profile_name(
       POST /admin/backfill-profile-name?secret=X&ticker=DDOG&dry_run=false
       POST /admin/backfill-profile-name?secret=X&force=true&dry_run=false
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -893,7 +905,7 @@ async def backfill_profile_name(
 # without re-running the expensive research pipeline.
 
 @router.post("/admin/reextract-metrics")
-async def reextract_metrics(
+async def reextract_metrics(request: Request, 
     secret: str = "",
     ticker: str = "",
     tickers: str = "",
@@ -921,7 +933,7 @@ async def reextract_metrics(
       POST /admin/reextract-metrics?secret=XXX&tickers=DDOG,SNOW&dry_run=false
       POST /admin/reextract-metrics?secret=XXX&run_id=abc-123&dry_run=false
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     # Mutual exclusion
@@ -987,7 +999,7 @@ async def reextract_metrics(
 
 
 @router.post("/admin/vgpm-backfill")
-async def vgpm_backfill(
+async def vgpm_backfill(request: Request, 
     secret: str = "",
     since: str = "2026-04-25T00:00:00+00:00",
     dry_run: bool = True,
@@ -1017,7 +1029,7 @@ async def vgpm_backfill(
     Returns: full summary dict with runs_examined / runs_updated /
     tickers_updated / sample grade_changes (pre→post per ticker per dim).
     """
-    if not ADMIN_SECRET or secret != ADMIN_SECRET:
+    if not _secret_ok(request, secret):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     paths = _get_db_paths()
