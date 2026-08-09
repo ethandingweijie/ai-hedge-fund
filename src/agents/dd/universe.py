@@ -139,15 +139,15 @@ def get_analyzed_universe(lookback_days: int | None = None) -> set[str]:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
 
     try:
-        from app.backend.services.analysis_service import _connect, _ensure_web_runs_table
-        _ensure_web_runs_table()
-        with _connect() as conn:
-            rows = conn.execute(
-                "SELECT DISTINCT UPPER(ticker) FROM web_runs "
-                "WHERE run_at >= ? AND ticker IS NOT NULL AND ticker != ''",
-                (cutoff,),
-            ).fetchall()
-        return {r[0].strip() for r in rows if r[0]}
+        from src.data import db as _db
+        if not _db.table_exists("web_runs"):
+            return set()
+        rows = _db.query(
+            "SELECT DISTINCT UPPER(ticker) AS ticker FROM web_runs "
+            "WHERE run_at >= ? AND ticker IS NOT NULL AND ticker != ''",
+            [cutoff],
+        )
+        return {r["ticker"].strip() for r in rows if r["ticker"]}
     except Exception as exc:
         logger.warning("universe: analyzed-universe query failed: %s", exc)
         return set()

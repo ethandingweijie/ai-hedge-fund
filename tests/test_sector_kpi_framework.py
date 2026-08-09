@@ -570,16 +570,19 @@ def test_specialist_addendum_falls_back_to_sector():
 # Legacy sub-profiles with bespoke frontend cards (must be excluded from the
 # generic sector_card render — they keep their existing UI).
 _LEGACY_PROFILES_FOR_TESTS = {
-    "Growth SaaS", "Mature SaaS", "Hyperscaler",
+    "Growth SaaS", "Mature SaaS",
     "REIT", "Pipeline (Pre-revenue Biotech)",
     "Pre-approval Biotech", "Pre-Revenue Biotech",
 }
 
 
 def test_is_legacy_profile_recognises_known_legacy():
-    # v3.4: Growth SaaS + Mature SaaS migrated off legacy. Remaining legacy
-    # set: Hyperscaler / REIT / Pre-approval Biotech variants.
-    for p in ("Hyperscaler", "REIT", "Pre-approval Biotech"):
+    # v3.4: Growth SaaS + Mature SaaS migrated off legacy. D4 (2026-08):
+    # Hyperscaler migrated too — the bare string never matched live runs
+    # (classifier emits the full "Hyperscaler / Tech Conglomerate" key) and
+    # now resolves via _PROFILE_ALIASES. Remaining legacy set: REIT /
+    # Pre-approval Biotech variants.
+    for p in ("REIT", "Pre-approval Biotech"):
         assert is_legacy_profile(p), f"{p} should be legacy"
 
 
@@ -587,6 +590,7 @@ def test_is_legacy_profile_returns_false_for_non_legacy():
     for p in (
         "Insurance", "Money Center Bank", "Mining (Major)", "Fabless",
         "Growth SaaS", "Mature SaaS",  # v3.4 — migrated off legacy
+        "Hyperscaler",                 # D4 — migrated off legacy
     ):
         assert not is_legacy_profile(p), f"{p} should NOT be legacy"
     assert not is_legacy_profile("")
@@ -682,8 +686,8 @@ def test_render_card_payload_missing_metric_state_renders_card_with_none_values(
 
 def test_render_card_payloads_for_run_excludes_legacy_tickers():
     """The multi-ticker convenience must skip remaining-legacy profile
-    tickers (Hyperscaler / REIT / Pre-approval Biotech). v3.4: Growth SaaS
-    + Mature SaaS no longer legacy — they DO get included.
+    tickers (REIT / Pre-approval Biotech). v3.4: Growth SaaS + Mature SaaS
+    no longer legacy; D4: Hyperscaler no longer legacy — they DO get included.
     """
     state = {
         "data": {

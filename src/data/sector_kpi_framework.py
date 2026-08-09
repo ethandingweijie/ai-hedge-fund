@@ -39,6 +39,20 @@ import logging
 import re
 from typing import Any
 
+# D5: FMP key resolution through the run-config overlay (per-run API keys in
+# web runs) with process-env fallback — replaces a hardcoded key.
+from src.utils.run_config import getenv as _run_getenv
+
+
+def _fmp_api_key() -> str | None:
+    """Resolve the FMP API key, or None when unset.
+
+    D5: the previous fallback was a hardcoded key committed in source. When
+    no key is configured, callers degrade gracefully (risk-KPI fetch returns
+    {}, commodity fetch returns None — both are gap-fill only).
+    """
+    return _run_getenv("FMP_API_KEY")
+
 _LOG = logging.getLogger("sector_kpi_framework")
 
 # V4-β Z-Score Engine — peer-cohort normalisation. Imported lazily in
@@ -7245,10 +7259,11 @@ def _fmp_risk_kpis(ticker: str) -> dict:
         return _FMP_RISK_CACHE[ticker]
     out: dict = {}
     try:
-        import os
         import urllib.request
         import urllib.parse
-        key = os.environ.get("FMP_API_KEY") or "UFPUuQjTht66l2GmJhQbUZzij7IfJbsx"
+        key = _fmp_api_key()
+        if not key:
+            return {}  # D5: no key configured — gap-fill degrades to nothing
         base = "https://financialmodelingprep.com/stable"
 
         def _get(path: str) -> Any:
@@ -7363,8 +7378,10 @@ def _fmp_commodity_price(symbol: str) -> float | None:
     if symbol in _FMP_COMMODITY_CACHE:
         return _FMP_COMMODITY_CACHE[symbol].get("price")
     try:
-        import os, urllib.request, urllib.parse
-        key = os.environ.get("FMP_API_KEY") or "UFPUuQjTht66l2GmJhQbUZzij7IfJbsx"
+        import urllib.request, urllib.parse
+        key = _fmp_api_key()
+        if not key:
+            return None  # D5: no key configured — commodity gap-fill skipped
         url = f"https://financialmodelingprep.com/stable/quote?symbol={urllib.parse.quote(symbol)}&apikey={key}"
         req = urllib.request.Request(url, headers={"User-Agent": "framework-fmp/1.0"})
         with urllib.request.urlopen(req, timeout=8) as r:
@@ -7646,7 +7663,14 @@ _LEGACY_PROFILES: frozenset[str] = frozenset({
     # the generic SectorValuationCard. The bespoke TechValuationPanel can
     # coexist as a richer alternate UI for SaaS — no removal, just no longer
     # the only path.
-    "Hyperscaler",
+    #
+    # D4 (2026-08) — "Hyperscaler" migrated off legacy for the same reason:
+    # the framework key "Hyperscaler / Tech Conglomerate" has a full KPI spec
+    # and V4 weights (0.60/0.35/0.05), and the classifier emits the FULL key,
+    # so the bare "Hyperscaler" legacy entry never matched live runs — it
+    # only gated old cached profile strings, whose cards then rendered
+    # nothing and whose FMP augmentation was skipped. Bare strings now
+    # resolve via _PROFILE_ALIASES below.
     "REIT",
     "Pipeline (Pre-revenue Biotech)",
     "Pre-approval Biotech",
@@ -7910,14 +7934,22 @@ for _pn in SECTOR_KPI_FRAMEWORK:
     _FRAMEWORK_KEY_NORM.setdefault(_norm, _pn)
 del _pn, _norm  # keep module namespace clean
 
+# D4: known short/legacy aliases → canonical framework keys, tried after
+# exact + normalised match. "Hyperscaler" survives in cached pre-D4 profile
+# strings; the framework key is "Hyperscaler / Tech Conglomerate".
+_PROFILE_ALIASES: dict[str, str] = {
+    "hyperscaler": "Hyperscaler / Tech Conglomerate",
+}
+
 
 def _resolve_profile_spec(profile_name: str) -> tuple[str | None, dict | None]:
     """Resolve a (possibly noisy) profile_name to its canonical framework key
     and spec. Returns (canonical_key, spec) or (None, None) if unresolvable.
 
-    Tries exact match first, then a whitespace/case-normalised match. Logs a
-    structured warning when a normalised match was needed (signals upstream
-    profile-string drift) or when the profile is unknown entirely."""
+    Tries exact match first, then a whitespace/case-normalised match, then
+    the explicit alias table (D4). Logs a structured warning when a
+    normalised/alias match was needed (signals upstream profile-string
+    drift) or when the profile is unknown entirely."""
     if not profile_name:
         return None, None
     spec = SECTOR_KPI_FRAMEWORK.get(profile_name)
@@ -7931,6 +7963,13 @@ def _resolve_profile_spec(profile_name: str) -> tuple[str | None, dict | None]:
             "normalisation — upstream profile string drift", profile_name, canon,
         )
         return canon, SECTOR_KPI_FRAMEWORK[canon]
+    alias_canon = _PROFILE_ALIASES.get(norm)
+    if alias_canon is not None and alias_canon in SECTOR_KPI_FRAMEWORK:
+        _LOG.warning(
+            "render_card_payload: legacy alias %r resolved to %r",
+            profile_name, alias_canon,
+        )
+        return alias_canon, SECTOR_KPI_FRAMEWORK[alias_canon]
     return None, None
 
 

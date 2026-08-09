@@ -28,6 +28,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+# Dual-mode DB layer (SQLite local / Postgres production) — cohort reads
+# must hit whichever store the run records were written to.
+from src.data import db as _db
+
 # Cohort fetch parameters — kept conservative to balance signal vs sample size
 DEFAULT_LOOKBACK_DAYS = 60      # how far back to scan web_runs
 DEFAULT_MIN_COHORT    = 3       # below this, skip z-scoring (band fallback)
@@ -103,37 +107,47 @@ def fetch_peer_cohort(
 
     Returns {} if cohort fetch fails or yields no data.
     """
-    conn = _connect_ro()
-    if conn is None:
-        return {}
+    rolling_cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+    explicit_floor = (
+        min_run_at_iso
+        or os.environ.get("COHORT_MIN_RUN_AT_ISO")
+        or COHORT_MIN_RUN_AT_ISO_DEFAULT
+    )
+    # Whichever is LATER wins (most restrictive cutoff)
+    cutoff_iso = max(rolling_cutoff, explicit_floor)
+    sql = """
+        SELECT ticker, run_at, full_result_json
+        FROM web_runs
+        WHERE profile_name = ?
+          AND run_at >= ?
+          AND full_result_json IS NOT NULL
+        ORDER BY run_at DESC
+        LIMIT ?
+    """
+    params = [profile_name, cutoff_iso, max_runs]
     try:
-        rolling_cutoff = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
-        explicit_floor = (
-            min_run_at_iso
-            or os.environ.get("COHORT_MIN_RUN_AT_ISO")
-            or COHORT_MIN_RUN_AT_ISO_DEFAULT
-        )
-        # Whichever is LATER wins (most restrictive cutoff)
-        cutoff_iso = max(rolling_cutoff, explicit_floor)
-        rows = conn.execute(
-            """
-            SELECT ticker, run_at, full_result_json
-            FROM web_runs
-            WHERE profile_name = ?
-              AND run_at >= ?
-              AND full_result_json IS NOT NULL
-            ORDER BY run_at DESC
-            LIMIT ?
-            """,
-            (profile_name, cutoff_iso, max_runs),
-        ).fetchall()
+        if _db.is_postgres():
+            # Production: web_runs rows are written by analysis_service via
+            # the dual-mode layer (src.data.db) — reading the volume's
+            # SQLite file here would see a stale/empty cohort forever.
+            # db.query returns dict rows → normalise to positional tuples.
+            rows = [
+                (r["ticker"], r["run_at"], r["full_result_json"])
+                for r in _db.query(sql, params)
+            ]
+        else:
+            conn = _connect_ro()
+            if conn is None:
+                return {}
+            try:
+                rows = conn.execute(sql, params).fetchall()
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
     except Exception:
         return {}
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
 
     if not rows:
         return {}

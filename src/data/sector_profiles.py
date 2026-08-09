@@ -41,7 +41,10 @@ Key corrections vs prior version (2026-03-26 recalibration):
   Financials sub-types: added — see _FINANCIALS_PROFILE_WACC
 """
 
+import logging
 import statistics
+
+_log = logging.getLogger(__name__)
 
 # ── 1. WACC ───────────────────────────────────────────────────────────────────
 
@@ -1228,6 +1231,41 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "for earlier-stage fintechs. P/E included for earnings-mature names."
             ),
         },
+        "Asset Manager": {
+            "methods": [
+                {"name": "P/E (norm)",      "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Forward P/E",     "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",       "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV", "Residual Income"],
+            "rationale": (
+                "Traditional asset managers (BLK, TROW, AB, AMG) — fee streams driven by "
+                "AUM × fee rate, asset-light with high FCF conversion. Valued on normalised "
+                "P/E (fee earnings are cyclical with markets) and FCF yield, NOT bank-style "
+                "P/BV or Residual Income (no regulatory capital constraint). Distinct from "
+                "'Alt Asset Manager' (BX/APO/KKR) which carries fee-related-earnings "
+                "complexity and higher multiples."
+            ),
+        },
+        "Fintech/Stablecoin": {
+            "methods": [
+                {"name": "Forward P/E",     "weight": 0.30, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",      "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV", "DDM"],
+            "rationale": (
+                "Stablecoin issuers (CRCL) earn reserve income on the backing assets of "
+                "their circulating stablecoins — revenue scales with circulation × short "
+                "rates, so earnings are rate-sensitive but high-margin and asset-light. "
+                "Valued as a growth fintech on forward P/E and EV/EBITDA rather than bank "
+                "P/BV (no loan book, no regulatory capital). EV/Revenue captures the "
+                "circulation-growth optionality; normalised P/E guards against rate-cycle "
+                "peak earnings."
+            ),
+        },
         "Bank / Lending Institution": {
             "methods": [
                 {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
@@ -1992,6 +2030,60 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": [],
             "rationale": "In the absence of cash, value is derived from binary success/failure probability nodes.",
         },
+        "Digital Asset Mining": {
+            "methods": [
+                {"name": "P/BV",            "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA (norm)","weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",      "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/E (norm)"],
+            "rationale": (
+                "BTC miners (MARA, RIOT, CLSK, CIFR, BTDR) are asset-backed businesses: "
+                "book value captures the BTC treasury + hashrate fleet, so P/BV anchors. "
+                "Mining EBITDA is hashprice-cyclical — the 5-yr normalised EV/EBITDA "
+                "prevents peak/trough multiple distortion. GAAP P/E excluded: net income "
+                "is dominated by BTC mark-to-market and digital-asset impairments, not "
+                "operating performance. DCF included with the sector's -10% FCF floor "
+                "for sub-breakeven hashprice years."
+            ),
+        },
+        "BTC Treasury / Proxy": {
+            "methods": [
+                {"name": "NAV Discount",    "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",      "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/E (norm)"],
+            "rationale": (
+                "BTC treasury companies (MSTR) are valued on mNAV — market cap vs the "
+                "mark-to-market value of BTC holdings plus the operating business. "
+                "NAV Discount is the implementable mNAV proxy (book × peer premium; note "
+                "GAAP book understates BTC carried at cost, so the peer pb multiple must "
+                "carry the premium). EV/EBITDA + DCF + EV/Revenue value the residual "
+                "operating business. Earnings multiples excluded — net income is "
+                "dominated by BTC fair-value swings, not operations."
+            ),
+        },
+        "Crypto Exchange": {
+            "methods": [
+                {"name": "EV/EBITDA",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EV/Revenue",      "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",     "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV"],
+            "rationale": (
+                "Crypto exchanges/brokerages (COIN, HOOD) are take-rate businesses on "
+                "trading volume — valued like fintech on EV/EBITDA and EV/Revenue, with "
+                "earnings multiples for the mature-earnings base. Normalised P/E guards "
+                "against crypto-cycle peak earnings (GAAP income includes own-crypto "
+                "marks); Forward P/E anchors on consensus through the cycle. P/BV "
+                "excluded — custodied client assets are off-balance-sheet, making book "
+                "value meaningless relative to franchise value."
+            ),
+        },
     },
 
     "RealEstate": {
@@ -2214,6 +2306,14 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Pre-approval Biotech": {"ev_ebitda": 16.0, "pe": 22.0, "ev_revenue": 5.0,  "pb": 4.0,  "fcf_yield": 0.040, "growth_avg": 0.08, "ev_rd": 6.0},
     "Telco":               {"ev_ebitda": 8.5,  "pe": 14.0, "ev_revenue": 2.0,  "pb": 2.0,  "fcf_yield": 0.060, "growth_avg": 0.03},
     "Crypto":              {"ev_ebitda": 20.0, "pe": 35.0, "ev_revenue": 8.0,  "pb": 3.0,  "fcf_yield": 0.030, "growth_avg": 0.25},
+    # Crypto sub-profiles (D1 taxonomy gap fix): lookup-assigned profiles for
+    # MSTR/MARA/RIOT/CLSK/CIFR/BTDR/COIN/HOOD previously resolved to nothing
+    # and silently fell back to DCF-only.
+    "Digital Asset Mining": {"ev_ebitda": 10.0, "pe": 18.0, "ev_revenue": 3.5, "pb": 1.3,  "fcf_yield": 0.050, "growth_avg": 0.15},
+    "BTC Treasury / Proxy": {"ev_ebitda": 14.0, "pe": 22.0, "ev_revenue": 4.5, "pb": 1.8,  "fcf_yield": 0.040, "growth_avg": 0.20},
+    "Crypto Exchange":      {"ev_ebitda": 16.0, "pe": 28.0, "ev_revenue": 8.0, "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.18},
+    "Asset Manager":        {"ev_ebitda": 13.0, "pe": 15.0, "ev_revenue": 4.5, "pb": 2.8,  "fcf_yield": 0.050, "growth_avg": 0.05},
+    "Fintech/Stablecoin":   {"ev_ebitda": 18.0, "pe": 26.0, "ev_revenue": 5.5, "pb": 3.5,  "fcf_yield": 0.040, "growth_avg": 0.15},
     "Energy":              {"ev_ebitda": 10.0, "pe": 16.0, "ev_revenue": 2.5,  "pb": 1.8,  "fcf_yield": 0.055, "growth_avg": 0.04},
     # Regulated Utility sub-profile: higher EV/EBITDA (12.5x) and P/E (18x) than
     # generic Energy (10x / 16x) because regulated rate base provides earnings
@@ -2716,6 +2816,33 @@ def compute_c_macro(macro_regime: dict) -> float:
     return max(min(c, 0.25), -0.35)
 
 
+# D3: explicit per-sector default profile for classify_valuation_profile().
+# Replaces the previous order-dependent `next(iter(profiles), "")` fallback:
+# dict-insertion order made the "default" whatever profile happened to be
+# defined first (Financials → "Mortgage/GSE", HealthcareServices →
+# "Managed Care"), silently mis-routing any ticker whose metrics missed
+# every ladder branch. Each entry below is the deliberately chosen
+# most-general profile for its sector. Every value must exist in
+# INDUSTRY_VALUATION_PROFILES[sector] (enforced by the conformance test).
+_SECTOR_PROFILE_DEFAULT = {
+    "Financials": "Holding Company",
+    "Energy": "Regulated Utility",
+    "Tech": "Mature Platform",
+    "Biopharma": "Large Cap Pharma",
+    "HealthcareServices": "Healthcare Providers / Services",
+    "Consumer": "Consumer Growth",
+    "Industrials": "Capital Goods",
+    "Telco": "Stable Growth",
+    "Crypto": "Pre-Revenue Tech",
+    "RealEstate": "REIT",
+    "Transportation": "Rail / Logistics",
+    "Materials": "Specialty Chemicals",
+    "Resources": "Mining (Major)",
+    "ProfessionalServices": "Ad / Consulting",
+    "Semiconductor": "Equipment / EDA",
+}
+
+
 def classify_valuation_profile(
     sector: str,
     revenue_cagr: float,
@@ -2729,7 +2856,8 @@ def classify_valuation_profile(
     its sector and key financial characteristics.
 
     Returns the profile key string to look up in INDUSTRY_VALUATION_PROFILES.
-    Falls back to the first (anchor) profile for that sector if no rule matches.
+    Falls back to the sector's explicit default in _SECTOR_PROFILE_DEFAULT
+    when no ladder branch matches (never order-dependent).
     """
     # Loose-match helpers (local import to avoid any load-time cycles).
     # These accept LLM classifier variants like "Technology", "Biotechnology",
@@ -2953,7 +3081,24 @@ def classify_valuation_profile(
         # Also catches mature analog: ADI (-5%, 39%), ON (-15%, 24%), NXPI (-4%, 20%)
         return "Equipment / EDA"
 
-    # Default: return first profile key for sector
+    # Default: sector's explicit default profile (D3 — never order-dependent).
+    # The previous `next(iter(profiles), "")` returned whichever profile was
+    # defined first, which silently mis-routed fall-through tickers.
+    default = _SECTOR_PROFILE_DEFAULT.get(sector_lookup, "")
+    if default and default in profiles:
+        _log.warning(
+            "[classify_valuation_profile] No ladder branch matched for "
+            "sector=%r (cagr=%.2f, fcf=%.2f, d/e=%.2f) — using explicit "
+            "default profile %r",
+            sector, revenue_cagr, fcf_margin, debt_to_equity, default,
+        )
+        return default
+    # Table miss — should never happen (conformance test covers it).
+    _log.warning(
+        "[classify_valuation_profile] _SECTOR_PROFILE_DEFAULT has no valid "
+        "entry for sector=%r — falling back to first-defined profile "
+        "(order-dependent!)", sector,
+    )
     return next(iter(profiles), "")
 
 
@@ -3467,7 +3612,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # showing FALLBACK USED on the dashboard.
     "ZTS":   ("Biopharma", "Large Cap Pharma",  "Drugs (Pharmaceutical)",    "Zoetis — animal health pharma; routed to Large Cap Pharma to avoid Managed Care misclassification"),
     "NVO":   ("Biopharma", "",               "Drugs (Pharmaceutical)", "Novo Nordisk ADR — GLP-1/obesity; 20-F filer (DKK reporting currency)"),
-    "TXG":   ("Biopharma", "LifeSciTools",   "Healthcare Products",    "10X Genomics — single-cell/spatial genomics instruments; tools co, NOT drug developer"),
+    "TXG":   ("Biopharma", "CDMO / Life Science Tools", "Healthcare Products", "10X Genomics — single-cell/spatial genomics instruments; tools co, NOT drug developer"),
     "MRK":   ("Biopharma", "",               "Drugs (Pharmaceutical)",    "Merck"),
     "VRTX":  ("Biopharma", "",               "Drugs (Biotech)",           "Vertex Pharmaceuticals"),
     "REGN":  ("Biopharma", "",               "Drugs (Biotech)",           "Regeneron"),

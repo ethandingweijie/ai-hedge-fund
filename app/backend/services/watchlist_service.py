@@ -34,6 +34,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+# Dual-mode DB layer (SQLite local / Postgres production)
+from src.data import db as _db
+
 _STABLE = "https://financialmodelingprep.com/stable"
 STALE_HOURS = 24   # refresh VGPM/price if older than this
 
@@ -158,21 +161,36 @@ def _fetch_profile(ticker: str) -> dict:
 # ── VGPM fetch (pipeline → fast) ─────────────────────────────────────────────
 
 def _get_pipeline_vgpm(tickers: list[str]) -> dict[str, dict]:
-    """Return VGPM from the latest full pipeline run in web_runs."""
+    """Return VGPM from the latest full pipeline run in web_runs.
+
+    Dual-mode: reads whichever store the run records were written to
+    (SQLite locally, Postgres production).
+    """
     if not tickers:
         return {}
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
-    try:
-        placeholders = ",".join("?" * len(tickers))
-        rows = conn.execute(
-            f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
-            f"FROM web_runs WHERE ticker IN ({placeholders}) AND full_result_json IS NOT NULL "
-            f"GROUP BY ticker",
-            tickers,
-        ).fetchall()
-    finally:
-        conn.close()
+    placeholders = ",".join("?" * len(tickers))
+    if _db.is_postgres():
+        # PG rejects bare non-aggregated columns under GROUP BY;
+        # DISTINCT ON picks the latest row per ticker instead.
+        rows = _db.query(
+            f"SELECT DISTINCT ON (ticker) ticker, full_result_json "
+            f"FROM web_runs WHERE ticker IN ({placeholders}) "
+            f"AND full_result_json IS NOT NULL "
+            f"ORDER BY ticker, run_at DESC",
+            list(tickers),
+        )
+    else:
+        conn = _connect()
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
+                f"FROM web_runs WHERE ticker IN ({placeholders}) AND full_result_json IS NOT NULL "
+                f"GROUP BY ticker",
+                tickers,
+            ).fetchall()
+        finally:
+            conn.close()
 
     result = {}
     for row in rows:

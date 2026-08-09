@@ -426,14 +426,27 @@ def purge_legacy_dd_rows_from_web_runs() -> dict:
     Idempotent. Safe to run repeatedly. Returns the count of rows purged.
     Web ticker-research rows (any model_name not starting with 'dd_' nor
     equal to 'synthetic-dd-trigger') are NEVER touched.
+
+    Dual-mode: web_runs lives in Postgres in production, so the purge must
+    hit the same store the rows were written to (src.data.db), not the
+    local SQLite file.
     """
-    with _conn() as conn:
-        cur = conn.execute(
-            "DELETE FROM web_runs "
-            "WHERE model_name LIKE 'dd_%' OR model_name = 'synthetic-dd-trigger'"
+    from src.data import db as _db
+    if _db.is_postgres():
+        # Parameterise the LIKE pattern: a literal % in the SQL string
+        # breaks psycopg placeholder parsing (same reason as commit 0c2a26f).
+        purged = _db.execute(
+            "DELETE FROM web_runs WHERE model_name LIKE ? OR model_name = ?",
+            ["dd_%", "synthetic-dd-trigger"],
         )
-        purged = cur.rowcount
-        conn.commit()
+    else:
+        with _conn() as conn:
+            cur = conn.execute(
+                "DELETE FROM web_runs "
+                "WHERE model_name LIKE 'dd_%' OR model_name = 'synthetic-dd-trigger'"
+            )
+            purged = cur.rowcount
+            conn.commit()
     return {"web_runs_purged": purged}
 
 

@@ -1009,7 +1009,8 @@ def run_advanced_pipeline(
                 state["data"]["card_qa_audit"] = {}
 
         # ----------------------------------------------------------------
-        # Episodic run archive (SQLite — src/data/run_archive.db)
+        # Episodic run archive (dual-mode: SQLite local / Postgres when
+        # DATABASE_URL is set — see src/data/db.py)
         # ----------------------------------------------------------------
         with _timed("11_save_archive"):
             _archive_run_id = save_run(state, decisions)

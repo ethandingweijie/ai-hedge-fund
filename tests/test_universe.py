@@ -121,19 +121,29 @@ def test_get_held_positions_alias_still_works(isolated_db, monkeypatch):
 
 
 def test_analyzed_universe_returns_empty_on_db_error(monkeypatch):
-    """If web_runs query throws (e.g. DB missing), return empty set, not raise."""
+    """If web_runs query throws (e.g. DB missing), return empty set, not raise.
+
+    get_analyzed_universe reads through the dual-mode layer (src.data.db),
+    so the error seam to simulate is db.query.
+    """
     with patch(
-        "app.backend.services.analysis_service._connect",
+        "src.data.db.query",
         side_effect=Exception("db gone"),
     ):
         result = get_analyzed_universe(lookback_days=30)
     assert result == set()
 
 
-def test_analyzed_universe_uses_explicit_lookback(tmp_path, monkeypatch):
+def test_analyzed_universe_uses_explicit_lookback(tmp_path, monkeypatch, request):
     """When lookback_days passed explicitly, the SQL cutoff matches."""
     db = tmp_path / "test.db"
     monkeypatch.setenv("RUN_ARCHIVE_PATH", str(db))
+
+    # The dual-mode layer caches a thread-local SQLite connection; reset it
+    # so it reopens against the tmp RUN_ARCHIVE_PATH (and clean up after).
+    from src.data import db as db_mod
+    db_mod.close_all_connections()
+    request.addfinalizer(db_mod.close_all_connections)
 
     # Reload analysis_service so it picks up the new RUN_ARCHIVE_PATH env
     import importlib

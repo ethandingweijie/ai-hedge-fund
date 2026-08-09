@@ -29,6 +29,9 @@ from typing import Optional
 
 import requests
 
+# Dual-mode DB layer (SQLite local / Postgres production)
+from src.data import db as _db
+
 _STABLE = "https://financialmodelingprep.com/stable"
 
 # FMP sector names — must match the frontend SECTORS list exactly.
@@ -676,22 +679,37 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
 # ── Pipeline VGPM lookup ───────────────────────────────────────────────────────
 
 def _get_vgpm_map(tickers: list[str]) -> dict[str, dict]:
-    """Return {ticker: {valuation, growth, profitability, momentum}} from latest web run."""
+    """Return {ticker: {valuation, growth, profitability, momentum}} from latest web run.
+
+    Dual-mode: reads whichever store the run records were written to
+    (SQLite locally, Postgres production).
+    """
     if not tickers:
         return {}
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
-    try:
-        placeholders = ",".join("?" * len(tickers))
-        rows = conn.execute(
-            f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
+    placeholders = ",".join("?" * len(tickers))
+    if _db.is_postgres():
+        # PG rejects bare non-aggregated columns under GROUP BY;
+        # DISTINCT ON picks the latest row per ticker instead.
+        rows = _db.query(
+            f"SELECT DISTINCT ON (ticker) ticker, full_result_json "
             f"FROM web_runs "
             f"WHERE ticker IN ({placeholders}) AND full_result_json IS NOT NULL "
-            f"GROUP BY ticker",
-            tickers,
-        ).fetchall()
-    finally:
-        conn.close()
+            f"ORDER BY ticker, run_at DESC",
+            list(tickers),
+        )
+    else:
+        conn = _connect()
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
+                f"FROM web_runs "
+                f"WHERE ticker IN ({placeholders}) AND full_result_json IS NOT NULL "
+                f"GROUP BY ticker",
+                tickers,
+            ).fetchall()
+        finally:
+            conn.close()
 
     result: dict[str, dict] = {}
     for row in rows:

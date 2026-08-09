@@ -3726,6 +3726,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         _preclassified_profiles = state["data"].get("profile_names") or {}
         _preclassified_name = _preclassified_profiles.get(ticker)
+        # D3: True when the intended profile did not resolve and a fallback
+        # was used. Surfaced in dcf_range[ticker]["profile_fallback_used"]
+        # so degradation is loud, not silent.
+        _profile_fallback_used = False
         if _preclassified_name:
             # Use the pre-classified profile_name from strategic_router
             from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
@@ -3735,7 +3739,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _preclassified_name, {}
             )
             if not profile_data:
-                # Pre-classified name didn't resolve — fall through to in-situ
+                # D3: pre-classified name didn't resolve — LOUD warning, then
+                # fall through to in-situ classification.
+                _profile_fallback_used = True
+                _log.warning(
+                    "[dcf] %s: pre-classified profile %r not found in "
+                    "INDUSTRY_VALUATION_PROFILES[%r] — falling back to "
+                    "in-situ classification",
+                    ticker, _preclassified_name, _sector_lookup,
+                )
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Profile fallback: {_preclassified_name!r} unresolved — "
+                    f"re-classifying from financials",
+                )
                 profile_name, profile_data = get_valuation_profile(
                     sector, revenue_cagr, fcf_margin_base, leverage, is_pre_revenue,
                     revenue_base=revenue_base,
@@ -3761,6 +3778,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 progress.update_status(
                     agent_id, ticker,
                     f"Profile override from TICKER_SECTOR_LOOKUP: {_lookup_profile}"
+                )
+            else:
+                # D3: the lookup override did not resolve in
+                # INDUSTRY_VALUATION_PROFILES — previously this was dropped
+                # SILENTLY and the ticker kept whatever profile the ladder
+                # picked. Loud warning + flag instead.
+                _profile_fallback_used = True
+                _log.warning(
+                    "[dcf] %s: TICKER_SECTOR_LOOKUP profile override %r did "
+                    "not resolve in INDUSTRY_VALUATION_PROFILES[%r] — keeping "
+                    "classified profile %r",
+                    ticker, _lookup_profile, sector, profile_name,
+                )
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Profile override {_lookup_profile!r} unresolved — "
+                    f"keeping {profile_name!r}",
                 )
 
         # v3.21 (Fix D) — write the locally-resolved profile_name back to state
@@ -4586,6 +4620,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             else:
                 # No profile found — fall back to pure DCF with C_macro scaling
                 # (composite NOT applied — pure-DCF fallback is sentiment-free)
+                # D3: flag the degradation (once per ticker, not per scenario).
+                if not _profile_fallback_used:
+                    _log.warning(
+                        "[dcf] %s: no valuation profile resolved — using pure "
+                        "DCF fallback blend", ticker,
+                    )
+                _profile_fallback_used = True
                 final_iv = iv_dcf * (1.0 + c_macro)
                 methods_used = ["DCF (fallback)"]
 
@@ -4699,6 +4740,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "weight_multi":      blend_breakdown.get("weight_multi"),
                 "composite_applied": blend_breakdown.get("composite", _composite_mult),
             }
+
+        # ── D3: profile methods the base scenario could not produce ──────
+        # The profile declares a method set; if data gaps forced the blend
+        # to run without some of them, name them explicitly in dcf_range so
+        # a silently-degraded valuation is diagnosable from the payload.
+        _methods_unavailable: list = []
+        if profile_data and profile_data.get("methods"):
+            _base_used = set((scenario_results.get("base") or {}).get("methods_used") or [])
+            _methods_unavailable = [
+                _m["name"] for _m in profile_data["methods"]
+                if _m.get("name") not in _base_used
+            ]
 
         # ── rNPV per-asset audit (Biopharma only) ────────────────────────
         # The base-scenario rNPV audit was stashed on most_recent during the
@@ -5345,6 +5398,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Bank-specific breakdown — None for non-banks. Same gating pattern
             # as reit_breakdown; frontend checks `dcfRange?.bank_breakdown`.
             "bank_breakdown":     bank_breakdown,
+            # D3: loud-degradation metadata — True when the intended profile
+            # did not resolve and a fallback path ran; list of declared
+            # profile methods that produced no value in the base scenario.
+            "profile_fallback_used": _profile_fallback_used,
+            "methods_unavailable":   _methods_unavailable,
         }
 
         base_iv = scenario_results["base"]["intrinsic_value"]

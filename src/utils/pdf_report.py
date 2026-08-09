@@ -21,6 +21,9 @@ from datetime import datetime
 
 from src.utils.company_name import fetch_company_name as _fetch_company_name_shared
 
+# Dual-mode DB layer — production run records live in Postgres.
+from src.data import db as _db
+
 # Project root = two levels up from this file (src/utils/pdf_report.py)
 _PROJECT_ROOT   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _REPORTS_FOLDER = os.path.join(_PROJECT_ROOT, "Generated Reports")
@@ -32,21 +35,32 @@ _BRIEF_ERROR_PREFIX = "[Industry brief generation incomplete"
 
 def _fetch_db_brief(tickers: list[str]) -> str:
     """
-    Query run_archive.db for the most recent deep_research_text that covers
+    Query the run archive for the most recent deep_research_text that covers
     all requested tickers.  Returns "" if not found or DB unavailable.
+
+    Dual-mode: production run records live in Postgres (run_archive.save_run
+    writes via src.data.db), so reading only the SQLite file would never see
+    them.  Locally (no DATABASE_URL) this falls back to the SQLite file.
     """
-    if not tickers or not os.path.exists(_ARCHIVE_DB):
+    if not tickers:
         return ""
+    sql = (
+        "SELECT tickers, deep_research_text FROM runs "
+        "WHERE deep_research_text IS NOT NULL "
+        "ORDER BY run_at DESC LIMIT 50"
+    )
     try:
-        conn = sqlite3.connect(_ARCHIVE_DB)
-        conn.row_factory = sqlite3.Row
-        # Find the most recent run whose tickers JSON contains every requested ticker
-        rows = conn.execute(
-            "SELECT tickers, deep_research_text FROM runs "
-            "WHERE deep_research_text IS NOT NULL "
-            "ORDER BY run_at DESC LIMIT 50"
-        ).fetchall()
-        conn.close()
+        if _db.is_postgres():
+            rows = _db.query(sql)
+        else:
+            if not os.path.exists(_ARCHIVE_DB):
+                return ""
+            conn = sqlite3.connect(_ARCHIVE_DB)
+            conn.row_factory = sqlite3.Row
+            try:
+                rows = conn.execute(sql).fetchall()
+            finally:
+                conn.close()
         import json
         for row in rows:
             try:
