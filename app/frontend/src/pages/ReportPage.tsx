@@ -880,11 +880,11 @@ export function ReportPage() {
     const { user } = useAuth();
 
     return (
-      // Fixed exactly to the visible viewport: both shells pad the content
-      // wrapper by pb-24 (6rem) to clear the floating nav bar, so we subtract
-      // that (plus safe-area insets) and the page fits with NO scroll. The
-      // flex column + spacers then pin the footer hint to the very bottom.
-      <div className="h-[calc(100dvh-6rem-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] flex flex-col bg-background relative overflow-hidden">
+      // Sized to the FULL visible viewport so the hero video reaches behind
+      // the floating bar; -mb-24 cancels the pb-24 bar-clearance padding both
+      // shells add under the page, so the frame still does NOT scroll. The
+      // root's own pb-24 keeps the footer hint clear of the bar instead.
+      <div className="h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] -mb-24 pb-24 flex flex-col bg-background relative overflow-hidden">
         {/* ── Hero video background — LIGHT MODE ──────────────────────────────
            Slow-motion looped footage recoloured toward Equitable green.
            Shared with LoginPage; playbackRate driven below via useEffect. */}
