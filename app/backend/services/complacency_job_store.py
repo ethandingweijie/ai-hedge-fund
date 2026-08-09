@@ -24,6 +24,13 @@ Schema (auto-migrated):
   job_id        TEXT PRIMARY KEY
   kind          TEXT NOT NULL          'refresh' | 'score_adhoc'
   ticker        TEXT                   nullable for cohort refresh
+  user_id       INTEGER                id of the user who triggered the job;
+                                       NULL for scheduled/service-triggered
+                                       jobs and rows created before auth.
+                                       Attribution + per-user rate limiting
+                                       only — job reads stay globally visible
+                                       because these jobs compute shared
+                                       research data (see routes/research.py).
   status        TEXT NOT NULL          'pending'|'running'|'completed'|'failed'
   started_at    TEXT NOT NULL
   finished_at   TEXT
@@ -48,6 +55,7 @@ CREATE TABLE IF NOT EXISTS complacency_jobs (
     job_id        TEXT PRIMARY KEY,
     kind          TEXT NOT NULL,
     ticker        TEXT,
+    user_id       INTEGER,
     status        TEXT NOT NULL,
     started_at    TEXT NOT NULL,
     finished_at   TEXT,
@@ -62,6 +70,8 @@ CREATE INDEX IF NOT EXISTS idx_complacency_jobs_status_started
 
 def _ensure_table() -> None:
     db.ensure_table(_DDL)
+    # Schema evolution for DBs created before the column existed
+    db.add_column_if_missing("complacency_jobs", "user_id", "INTEGER")
 
 
 def _to_dt(value) -> Optional[datetime]:
@@ -79,17 +89,22 @@ def _to_dt(value) -> Optional[datetime]:
         return None
 
 
-def create_job(kind: str, ticker: Optional[str] = None) -> str:
-    """Insert a pending job, return its job_id."""
+def create_job(kind: str, ticker: Optional[str] = None,
+               user_id: Optional[int] = None) -> str:
+    """Insert a pending job, return its job_id.
+
+    user_id stamps who triggered the job (attribution + the basis for
+    per-user rate limits). NULL = scheduled/service-triggered or pre-auth.
+    """
     _ensure_table()
     import uuid
     job_id = uuid.uuid4().hex[:16]
     now = datetime.now(timezone.utc).isoformat()
     db.execute(
         "INSERT INTO complacency_jobs "
-        "(job_id, kind, ticker, status, started_at, progress_msg) "
-        "VALUES (?, ?, ?, 'pending', ?, 'queued')",
-        [job_id, kind, ticker, now],
+        "(job_id, kind, ticker, user_id, status, started_at, progress_msg) "
+        "VALUES (?, ?, ?, ?, 'pending', ?, 'queued')",
+        [job_id, kind, ticker, user_id, now],
     )
     return job_id
 

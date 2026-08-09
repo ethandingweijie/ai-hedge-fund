@@ -12,13 +12,16 @@ from __future__ import annotations
 
 import hmac
 import os
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.backend.database import get_db
 from app.backend.services.auth_service import get_user_from_token
+
+if TYPE_CHECKING:
+    from app.backend.database.models import User
 
 
 def require_user(authorization: Optional[str] = Header(default=None),
@@ -51,9 +54,11 @@ def require_admin(
     """
     admin_secret = os.environ.get("DB_UPLOAD_SECRET", "")
 
-    # Check admin secret header
+    # Check admin secret header (UTF-8 encode: hmac.compare_digest raises
+    # TypeError on non-ASCII str operands — same bug already fixed in admin.py)
     if admin_secret and x_admin_secret:
-        if hmac.compare_digest(admin_secret, x_admin_secret):
+        if hmac.compare_digest(admin_secret.encode("utf-8"),
+                               x_admin_secret.encode("utf-8")):
             return None  # Admin access granted via secret
 
     # If no admin secret matched, check for a valid JWT user
@@ -69,4 +74,38 @@ def require_admin(
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Admin access required. Provide X-Admin-Secret header.",
+    )
+
+
+def require_user_or_service(
+    authorization: Optional[str] = Header(default=None),
+    x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),
+    db: Session = Depends(get_db),
+) -> Optional["User"]:
+    """Dependency: accept EITHER a user JWT or the shared service secret.
+
+    Returns the resolved User for JWT callers, or None for service calls
+    (X-Admin-Secret matching DB_UPLOAD_SECRET — e.g. the cron dispatcher or
+    the future Phase-4 scheduler service, which have no user identity).
+    Raises 401 when neither is presented.
+
+    Used by the research trigger endpoints: jobs are stamped with the
+    triggering user's id for attribution and per-user rate limiting, while
+    service-triggered jobs stay unowned (user_id NULL = global/scheduled).
+    """
+    admin_secret = os.environ.get("DB_UPLOAD_SECRET", "")
+    if admin_secret and x_admin_secret:
+        if hmac.compare_digest(admin_secret.encode("utf-8"),
+                               x_admin_secret.encode("utf-8")):
+            return None  # Service call — no user identity
+
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        user = get_user_from_token(token, db)
+        if user is not None:
+            return user
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required: Bearer token or X-Admin-Secret header",
     )

@@ -24,9 +24,9 @@ class _FakeJobStore:
     def find_in_flight_job(self, kind, ticker=None):
         return self.in_flight
 
-    def create_job(self, kind, ticker=None):
+    def create_job(self, kind, ticker=None, user_id=None):
         job_id = f"job-{len(self.created)}"
-        self.created.append((kind, ticker))
+        self.created.append((kind, ticker, user_id))
         return job_id
 
 
@@ -123,7 +123,7 @@ def test_idea_gen_route_enqueues_in_queue_mode(monkeypatch):
     spawned = _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "job_store", _FakeJobStore())
 
-    out = asyncio.run(R.trigger_idea_generation(mode="deep_value"))
+    out = asyncio.run(R.trigger_idea_generation(mode="deep_value", actor=None))
 
     assert out == {"job_id": "job-0", "status": "pending",
                    "started_at": None, "deduped": False, "mode": "deep_value"}
@@ -138,7 +138,7 @@ def test_idea_gen_route_spawns_when_queue_off(monkeypatch):
     spawned = _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "job_store", _FakeJobStore())
 
-    out = asyncio.run(R.trigger_idea_generation(mode=None))
+    out = asyncio.run(R.trigger_idea_generation(mode=None, actor=None))
 
     assert out["job_id"] == "job-0" and out["deduped"] is False
     assert len(spawned) == 1
@@ -152,7 +152,7 @@ def test_idea_gen_route_dedup_contract_unchanged(monkeypatch):
                 "started_at": "t", "kind": "idea_of_the_day_gen"}
     monkeypatch.setattr(R, "job_store", _FakeJobStore(in_flight=existing))
 
-    out = asyncio.run(R.trigger_idea_generation())
+    out = asyncio.run(R.trigger_idea_generation(actor=None))
 
     assert out["deduped"] is True and out["job_id"] == "job-live"
     assert pool.calls == [] and spawned == []
@@ -165,7 +165,7 @@ def test_complacency_refresh_route_enqueues(monkeypatch):
     spawned = _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "job_store", _FakeJobStore())
 
-    out = asyncio.run(R.refresh_complacency(max_workers=5))
+    out = asyncio.run(R.refresh_complacency(max_workers=5, actor=None))
 
     assert out["job_id"] == "job-0" and out["deduped"] is False
     assert pool.calls[0]["kind"] == "refresh"
@@ -180,7 +180,7 @@ def test_score_adhoc_route_enqueues_with_ticker(monkeypatch):
     spawned = _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "job_store", _FakeJobStore())
 
-    out = asyncio.run(R.score_complacency_adhoc(ticker="nvda", force_qual=True))
+    out = asyncio.run(R.score_complacency_adhoc(ticker="nvda", force_qual=True, actor=None))
 
     assert out["job_id"] == "job-0" and out["deduped"] is False
     assert pool.calls[0]["kind"] == "score_adhoc"
@@ -195,7 +195,7 @@ def test_hk50_qual_route_enqueues(monkeypatch):
     _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "job_store", _FakeJobStore())
 
-    out = asyncio.run(R.hk50_qual_deep_research(top_n=10, force_refresh=True))
+    out = asyncio.run(R.hk50_qual_deep_research(top_n=10, force_refresh=True, actor=None))
 
     assert out["deduped"] is False
     assert pool.calls[0]["kind"] == "hk50_qual"
@@ -207,7 +207,7 @@ def test_hk50_qual_ticker_route_enqueues(monkeypatch):
     _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "job_store", _FakeJobStore())
 
-    out = asyncio.run(R.hk50_qual_one_ticker(ticker="0700", force_refresh=False))
+    out = asyncio.run(R.hk50_qual_one_ticker(ticker="0700", force_refresh=False, actor=None))
 
     assert out["deduped"] is False
     assert pool.calls[0]["kind"] == "hk50_qual_ticker"
@@ -221,7 +221,7 @@ def test_hundred_q_refresh_route_enqueues(monkeypatch):
     spawned = _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "hundred_q_job_store", _FakeJobStore())
 
-    out = asyncio.run(R.refresh_hundred_q())
+    out = asyncio.run(R.refresh_hundred_q(actor=None))
 
     assert out == {"job_id": "job-0", "status": "pending"}
     assert pool.calls[0]["kind"] == "hundred_q_refresh"
@@ -234,7 +234,7 @@ def test_hundred_q_refresh_route_spawns_when_queue_off(monkeypatch):
     spawned = _capture_spawns(monkeypatch)
     monkeypatch.setattr(R, "hundred_q_job_store", _FakeJobStore())
 
-    out = asyncio.run(R.refresh_hundred_q())
+    out = asyncio.run(R.refresh_hundred_q(actor=None))
 
     assert out == {"job_id": "job-0", "status": "pending"}
     assert len(spawned) == 1

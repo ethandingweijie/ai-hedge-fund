@@ -32,8 +32,10 @@ import os
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.backend.database.models import User
+from app.backend.routes.deps import require_user_or_service
 from app.backend.services import sw46_storage, complacency_storage
 from app.backend.services import momentum_storage
 from app.backend.services import fundflow_storage
@@ -480,7 +482,10 @@ def _execute_idea_gen_job(job_id: str, mode: str | None = None) -> None:
 
 
 @router.post("/ideas/idea-of-the-day/generate")
-async def trigger_idea_generation(mode: str | None = None):
+async def trigger_idea_generation(
+    mode: str | None = None,
+    actor: User | None = Depends(require_user_or_service),
+):
     """
     Kick off a new idea-of-the-day generation as a background job.
 
@@ -503,7 +508,8 @@ async def trigger_idea_generation(mode: str | None = None):
     if in_flight:
         return {**in_flight, "deduped": True}
 
-    job_id = job_store.create_job("idea_of_the_day_gen")
+    job_id = job_store.create_job("idea_of_the_day_gen",
+                                  user_id=actor.id if actor else None)
 
     if not await _maybe_enqueue_research(job_id, "idea_of_the_day_gen", {"mode": mode}):
         async def _run():
@@ -1042,7 +1048,11 @@ def _execute_hk50_qual_job(job_id: str, top_n: int, force_refresh: bool) -> None
 
 
 @router.post("/ideas/hk50/qual-deep-research")
-async def hk50_qual_deep_research(top_n: int = 20, force_refresh: bool = False):
+async def hk50_qual_deep_research(
+    top_n: int = 20,
+    force_refresh: bool = False,
+    actor: User | None = Depends(require_user_or_service),
+):
     """
     Kick off the Phase-2 LLM qualitative (Policy + Moat) deep-research pass as
     a BACKGROUND job. The quant cards must already exist (run /refresh first).
@@ -1059,7 +1069,7 @@ async def hk50_qual_deep_research(top_n: int = 20, force_refresh: bool = False):
             "deduped": True,
         }
 
-    job_id = job_store.create_job("hk50_qual")
+    job_id = job_store.create_job("hk50_qual", user_id=actor.id if actor else None)
 
     if not await _maybe_enqueue_research(
         job_id, "hk50_qual", {"top_n": top_n, "force_refresh": force_refresh}
@@ -1226,7 +1236,11 @@ def _execute_hk50_ticker_qual_job(job_id: str, ticker: str, force_refresh: bool)
 
 
 @router.post("/ideas/hk50/qual/{ticker}")
-async def hk50_qual_one_ticker(ticker: str, force_refresh: bool = False):
+async def hk50_qual_one_ticker(
+    ticker: str,
+    force_refresh: bool = False,
+    actor: User | None = Depends(require_user_or_service),
+):
     """
     Manual deep-research for ONE HK50 cohort name. Runs the LLM Policy + Moat
     overlay for a single ticker as a BACKGROUND job, patching the cohort row
@@ -1249,7 +1263,8 @@ async def hk50_qual_one_ticker(ticker: str, force_refresh: bool = False):
             "deduped": True,
         }
 
-    job_id = job_store.create_job("hk50_qual_ticker", ticker=needle)
+    job_id = job_store.create_job("hk50_qual_ticker", ticker=needle,
+                                  user_id=actor.id if actor else None)
 
     if not await _maybe_enqueue_research(
         job_id, "hk50_qual_ticker", {"needle": needle, "force_refresh": force_refresh}
@@ -1593,7 +1608,10 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
 
 
 @router.post("/ideas/complacency/refresh")
-async def refresh_complacency(max_workers: int = 3):
+async def refresh_complacency(
+    max_workers: int = 3,
+    actor: User | None = Depends(require_user_or_service),
+):
     """
     Kicks off a full cohort refresh as a BACKGROUND task. Returns immediately
     with {job_id, status: 'pending'}. Frontend polls
@@ -1610,7 +1628,7 @@ async def refresh_complacency(max_workers: int = 3):
             "deduped":   True,
         }
 
-    job_id = job_store.create_job("refresh")
+    job_id = job_store.create_job("refresh", user_id=actor.id if actor else None)
 
     if not await _maybe_enqueue_research(job_id, "refresh", {"max_workers": max_workers}):
         async def _run():
@@ -1782,7 +1800,11 @@ def _execute_score_job(job_id: str, ticker: str, force_qual: bool) -> None:
 
 
 @router.post("/ideas/complacency/score/{ticker}")
-async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
+async def score_complacency_adhoc(
+    ticker: str,
+    force_qual: bool = False,
+    actor: User | None = Depends(require_user_or_service),
+):
     """
     Kicks off ad-hoc scoring (with optional force_qual) as a BACKGROUND task.
     Returns {job_id, status: 'pending'} immediately. Frontend polls
@@ -1809,7 +1831,8 @@ async def score_complacency_adhoc(ticker: str, force_qual: bool = False):
             "deduped":   True,
         }
 
-    job_id = job_store.create_job("score_adhoc", ticker=ticker)
+    job_id = job_store.create_job("score_adhoc", ticker=ticker,
+                                  user_id=actor.id if actor else None)
 
     if not await _maybe_enqueue_research(
         job_id, "score_adhoc", {"ticker": ticker, "force_qual": force_qual}
@@ -2273,7 +2296,9 @@ async def get_hundred_q_ticker_history(ticker: str):
 
 
 @router.post("/ideas/hundred-q/refresh")
-async def refresh_hundred_q():
+async def refresh_hundred_q(
+    actor: User | None = Depends(require_user_or_service),
+):
     """
     Kick off a fresh full-universe quant batch as a background job — the
     pilot universe (30 tickers) takes a few minutes, long enough to want
@@ -2285,7 +2310,10 @@ async def refresh_hundred_q():
         if existing:
             return {"job_id": existing["job_id"], "status": existing["status"], "resumed": True}
 
-        job_id = await asyncio.to_thread(hundred_q_job_store.create_job, "hundred_q_refresh")
+        job_id = await asyncio.to_thread(
+            hundred_q_job_store.create_job,
+            "hundred_q_refresh", None, actor.id if actor else None,
+        )
 
         if not await _maybe_enqueue_research(job_id, "hundred_q_refresh", {}):
             async def _run():
