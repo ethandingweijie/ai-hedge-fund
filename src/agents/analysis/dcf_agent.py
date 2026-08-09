@@ -319,6 +319,11 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "interest_expense":    _safe(getattr(li, "interest_expense", None)),
             "invested_capital":    _safe(getattr(li, "invested_capital", None)),
             "stock_based_compensation":   _safe(getattr(li, "stock_based_compensation", None)),
+            # R&D spend — consumed by the EV/R&D method and the rNPV future-R&D
+            # burn deduction. Was requested in search_line_items and listed in
+            # _FX_MONETARY but never copied into rows, so EV/R&D silently
+            # returned None for every biotech (discovered by D6 fixture tests).
+            "research_and_development":   _safe(getattr(li, "research_and_development", None)),
             # REIT-specific: D&A for FFO reconstruction, OCF for AFFO, cash for NAV bridge
             "depreciation_and_amortization": _safe(getattr(li, "depreciation_and_amortization", None)),
             "operating_cash_flow":  _safe(getattr(li, "operating_cash_flow", None)),
@@ -3379,6 +3384,33 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 dcf_range[ticker] = {}
                 continue
 
+        # ── Shares cross-check vs live quote (D6 data-robustness fix) ──────
+        # FMP line-item shares_outstanding occasionally diverges grossly from
+        # reality (discovered on CRWD: line items reported 1.0325e9 shares vs
+        # ~2.55e8 implied by quote marketCap/price — every per-share value
+        # came out ~4x low). When the /stable/quote marketCap+price imply a
+        # share count diverging >25% from the line items, trust the quote:
+        # marketCap/price is market-observed and cannot carry unit errors.
+        # Skipped automatically for HK/SG tickers (no quote fetched above).
+        _shares_source = "line_items"
+        if (
+            _quote_mcap and _spot_price and _spot_price > 0
+            and shares and shares > 0
+        ):
+            _shares_implied = _quote_mcap / _spot_price
+            _shares_div = abs(_shares_implied - shares) / shares
+            if _shares_div > 0.25 and _shares_implied > 0:
+                _log.warning(
+                    "dcf_agent[%s]: shares cross-check — line items %s diverge "
+                    "%.0f%% from quote-implied %s (mcap %s / price %s); "
+                    "using quote-implied shares",
+                    ticker, f"{shares:,.0f}", _shares_div * 100,
+                    f"{_shares_implied:,.0f}", f"{_quote_mcap:,.0f}",
+                    f"{_spot_price:,.2f}",
+                )
+                shares = _shares_implied
+                _shares_source = "quote_cross_check"
+
         # ── FX Conversion (ADR / cross-listed tickers) ───────────────────
         # Some tickers trade on US exchanges (ADRs or direct listings) but
         # report financials in their home currency (e.g. BABA/BIDU in CNY,
@@ -4243,7 +4275,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                   f"{type(_ce).__name__}: {_ce!r} — defaulting to 1.0x")
             _composite_mult = 1.0
 
-        for scenario in ("bear", "base", "bull"):
+        # ── Structural method availability across scenarios ──────────────
+        # Scenario analysis varies INPUTS (growth, margins, multiples), not
+        # MODEL STRUCTURE. The base scenario therefore fixes the method set:
+        # a profile method that cannot produce a positive value on base-case
+        # inputs is unavailable in EVERY scenario. Without this, a method
+        # that fires in only one scenario changes the blend composition
+        # (_blend_methods skips None values and renormalizes the weights):
+        # COIN 2026-08-09 — Forward P/E fired only in bull (consensus EPS
+        # crossed zero between eps_avg and eps_high), injecting a $16.85
+        # outlier into ~20% of the bull blend → bull IV $64.56 < bear IV
+        # $78.25. Bear/bull may still DROP a base-available method when
+        # their stressed inputs break it — that is a genuine stress signal,
+        # never a composition gain.
+        _structurally_unavailable: set = set()
+
+        # Base runs first so its method availability gates bear/bull.
+        for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
             # doesn't return low/high for this name.
@@ -4601,6 +4649,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 excluded = profile_data.get("excluded", [])
                 for ex in excluded:
                     method_values.pop(ex, None)
+
+                # ── Structural availability gate (see pre-loop note) ─────
+                # Base fixes the method set; bear/bull are restricted to it.
+                if scenario == "base":
+                    for _mn in methods_to_compute:
+                        _v = method_values.get(_mn)
+                        if _v is None or _v <= 0:
+                            _structurally_unavailable.add(_mn)
+                elif _structurally_unavailable:
+                    for _mn in _structurally_unavailable:
+                        method_values.pop(_mn, None)
 
             # ── Blended IV with C_macro, Forward Gate A, and v3.19 Composite ─
             blend_breakdown: dict = {}
@@ -5364,6 +5423,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "net_debt":           round(net_debt, 0),   # CHECK 3 fix: actual net debt ($), not D/E ratio
             "fcf_floor":          round(fcf_floor, 4),  # CHECK 3 fix: needed by sensitivity recompute
             "shares_outstanding": shares,
+            "shares_source":      _shares_source,
             "revenue_base":       revenue_base,
             "fcf_margin_base":    round(fcf_margin_base, 4),
             "data_source":        data_source,
