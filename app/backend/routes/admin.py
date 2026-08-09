@@ -100,7 +100,7 @@ async def admin_diag(request: Request, secret: str = ""):
     import sqlite3 as _sqlite3
     import traceback as _tb
 
-    out: dict = {"build_marker": "2026-08-09-diag-3"}
+    out: dict = {"build_marker": "2026-08-09-diag-4"}
 
     # 1. Env presence (names only — values never leave the container)
     out["env"] = {

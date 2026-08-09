@@ -21,6 +21,11 @@ verify_startup_config()
 # Initialize database tables (this is safe to run multiple times)
 Base.metadata.create_all(bind=engine)
 
+# create_all cannot ALTER tables that already exist — the schema guard
+# backfills columns added by later model changes (idempotent, dialect-aware).
+from app.backend.database.schema_guard import ensure_all as _ensure_schema
+_ensure_schema(engine)
+
 # Configure CORS — local dev ports + any extra origins from ALLOWED_ORIGINS env var
 _dev_origins = [
     f"http://{host}:{port}"

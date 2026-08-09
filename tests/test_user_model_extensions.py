@@ -267,3 +267,77 @@ def test_migration_downgrade_safe_on_sqlite(monkeypatch, tmp_path):
             mig.upgrade()
             mig.downgrade()  # no-op on SQLite, must not raise
     engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# 4. Runtime schema guard (boot-time self-heal, independent of Alembic)
+# ---------------------------------------------------------------------------
+
+def test_schema_guard_backfills_old_users_table(tmp_path):
+    """The production incident: model gained columns, predeploy migration
+    didn't land, every User query 500'd. The boot guard must heal it."""
+    from app.backend.database.schema_guard import ensure_user_extensions
+
+    db_path = tmp_path / "users_guard.db"
+    _create_old_schema_users(db_path)
+
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
+    ensure_user_extensions(engine)
+    engine.dispose()
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
+        row = conn.execute(
+            "SELECT role, is_active, daily_pipeline_limit, "
+            "concurrent_pipeline_limit FROM users WHERE id = 1"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert {"role", "is_active", "daily_pipeline_limit",
+            "concurrent_pipeline_limit"} <= cols
+    assert row == ("member", 1, 20, 3)
+
+
+def test_schema_guard_noop_when_columns_present(tmp_path):
+    from app.backend.database.schema_guard import ensure_user_extensions
+
+    db_path = tmp_path / "users_guard_fresh.db"
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
+    Base.metadata.create_all(engine)
+    ensure_user_extensions(engine)   # silent no-op
+    ensure_user_extensions(engine)   # still a no-op
+    engine.dispose()
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)")}
+    finally:
+        conn.close()
+    assert {"role", "is_active", "daily_pipeline_limit",
+            "concurrent_pipeline_limit"} <= cols
+
+
+def test_schema_guard_no_users_table_is_noop(tmp_path):
+    """Before create_all has run there is nothing to patch."""
+    from app.backend.database.schema_guard import ensure_user_extensions
+
+    db_path = tmp_path / "empty_guard.db"
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
+    ensure_user_extensions(engine)   # must not raise
+    engine.dispose()
+
+
+def test_ensure_all_swallows_guard_failures(monkeypatch, tmp_path):
+    """A failing guard logs but never crashes startup — a crash loop is
+    worse than serving with the diag endpoint reporting the gap."""
+    from app.backend.database import schema_guard
+
+    def _boom(engine):
+        raise RuntimeError("simulated ALTER failure")
+
+    monkeypatch.setattr(schema_guard, "ensure_user_extensions", _boom)
+    db_path = tmp_path / "guard_fail.db"
+    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
+    schema_guard.ensure_all(engine)  # must not raise
+    engine.dispose()

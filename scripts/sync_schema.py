@@ -48,6 +48,13 @@ def main() -> None:
     Base.metadata.create_all(bind=engine)
     print("create_all complete")
 
+    # 1b. Runtime guards: create_all cannot ALTER existing tables, and this
+    # is the authoritative place to backfill columns added by later model
+    # changes even if the Alembic step below no-ops.
+    from app.backend.database.schema_guard import ensure_all  # noqa: E402
+    ensure_all(engine)
+    print("schema guards complete")
+
     alembic_cfg = Config(str(ROOT / "app" / "backend" / "alembic.ini"))
     alembic_cfg.set_main_option("script_location", str(ROOT / "app" / "backend" / "alembic"))
 
