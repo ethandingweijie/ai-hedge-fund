@@ -7,7 +7,7 @@ import sys
 import sqlite3
 import json
 import logging
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ async def admin_diag(request: Request, secret: str = ""):
     import sqlite3 as _sqlite3
     import traceback as _tb
 
-    out: dict = {"build_marker": "2026-08-09-diag-5"}
+    out: dict = {"build_marker": "2026-08-09-diag-6"}
 
     # 1. Env presence (names only — values never leave the container)
     out["env"] = {
@@ -211,6 +211,165 @@ async def admin_diag(request: Request, secret: str = ""):
     except Exception:
         out["users_schema"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
+    return out
+
+
+# ── Phase 3d: user administration ────────────────────────────────────────────
+# Gate: require_admin — JWT from a role='admin' user OR X-Admin-Secret.
+# NOTE: /admin/* is on the auth middleware's public-prefix list, so this
+# dependency is the ONLY auth layer these routes have — it must stay strict.
+
+from typing import Optional as _Optional  # noqa: E402
+
+from pydantic import BaseModel as _BaseModel  # noqa: E402
+from sqlalchemy import func as _sa_func  # noqa: E402
+from sqlalchemy.orm import Session as _Session  # noqa: E402
+
+from app.backend.database import get_db as _get_db  # noqa: E402
+from app.backend.database.models import (  # noqa: E402
+    User as _UserModel,
+    HedgeFundFlowRun as _FlowRunModel,
+)
+from app.backend.routes.deps import require_admin as _require_admin  # noqa: E402
+
+_VALID_ROLES = ("admin", "member")
+
+
+class _UserPatch(_BaseModel):
+    role: _Optional[str] = None
+    is_active: _Optional[bool] = None
+    daily_pipeline_limit: _Optional[int] = None
+    concurrent_pipeline_limit: _Optional[int] = None
+
+
+def _user_to_dict(u: _UserModel) -> dict:
+    return {
+        "id": u.id,
+        "email": u.email,
+        "name": u.name,
+        "provider": u.provider,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+        "role": u.role,
+        "is_active": u.is_active,
+        "daily_pipeline_limit": u.daily_pipeline_limit,
+        "concurrent_pipeline_limit": u.concurrent_pipeline_limit,
+    }
+
+
+@router.get("/admin/users")
+async def admin_list_users(_admin=Depends(_require_admin),
+                           db: _Session = Depends(_get_db)):
+    """List all users with their roles and pipeline limits."""
+    users = db.query(_UserModel).order_by(_UserModel.id).all()
+    return {"users": [_user_to_dict(u) for u in users]}
+
+
+@router.patch("/admin/users/{user_id}")
+async def admin_update_user(user_id: int, patch: _UserPatch,
+                            admin=Depends(_require_admin),
+                            db: _Session = Depends(_get_db)):
+    """Update a user's role, is_active, and/or pipeline limits (partial)."""
+    target = db.get(_UserModel, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Lockout guard: an admin acting via JWT cannot demote or deactivate
+    # their own account (would strand the admin panel). The service-secret
+    # path (admin=None) is exempt — that's the recovery path.
+    if admin is not None and getattr(admin, "id", None) == user_id:
+        if patch.is_active is False or (
+                patch.role is not None and patch.role != "admin"):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot demote or deactivate your own account — "
+                       "use another admin or the service secret.")
+
+    if patch.role is not None:
+        if patch.role not in _VALID_ROLES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"role must be one of {list(_VALID_ROLES)}")
+        target.role = patch.role
+    if patch.is_active is not None:
+        target.is_active = patch.is_active
+    for field in ("daily_pipeline_limit", "concurrent_pipeline_limit"):
+        value = getattr(patch, field)
+        if value is not None:
+            if value < 0:
+                raise HTTPException(
+                    status_code=400, detail=f"{field} must be >= 0")
+            setattr(target, field, value)
+
+    db.commit()
+    db.refresh(target)
+    return _user_to_dict(target)
+
+
+@router.get("/admin/usage")
+async def admin_usage(_admin=Depends(_require_admin),
+                      db: _Session = Depends(_get_db)):
+    """Per-user pipeline usage counts across the three run stores.
+
+    Sources: web_runs (analysis pipelines) and complacency_jobs (research
+    jobs) in the run-archive DB, plus hedge_fund_flow_runs in the ORM DB.
+    Rows with NULL user_id (pre-auth / service-triggered) are aggregated
+    under 'unowned'. Cost tracking needs a dedicated ledger — counts only
+    for now.
+    """
+    import traceback as _tb
+    from src.data import db as _run_db
+
+    by_user: dict = {}
+    unowned: dict = {"analysis_runs": 0, "research_jobs": 0, "flow_runs": 0}
+
+    def _bump(user_id, field, n=1, last_run=None):
+        bucket = by_user.setdefault(
+            str(user_id),
+            {"analysis_runs": 0, "research_jobs": 0, "flow_runs": 0})
+        bucket[field] += n
+        if last_run and (field == "analysis_runs"):
+            if last_run > (bucket.get("last_analysis_run") or ""):
+                bucket["last_analysis_run"] = last_run
+
+    out: dict = {}
+    try:
+        rows = _run_db.query(
+            "SELECT user_id, COUNT(*) AS n, MAX(run_at) AS last_run "
+            "FROM web_runs GROUP BY user_id")
+        for r in rows:
+            if r["user_id"] is None:
+                unowned["analysis_runs"] += r["n"]
+            else:
+                _bump(r["user_id"], "analysis_runs", r["n"], r["last_run"])
+    except Exception:
+        out["web_runs_error"] = _tb.format_exc()[-400:]
+
+    try:
+        rows = _run_db.query(
+            "SELECT user_id, COUNT(*) AS n FROM complacency_jobs "
+            "GROUP BY user_id")
+        for r in rows:
+            if r["user_id"] is None:
+                unowned["research_jobs"] += r["n"]
+            else:
+                _bump(r["user_id"], "research_jobs", r["n"])
+    except Exception:
+        out["research_jobs_error"] = _tb.format_exc()[-400:]
+
+    try:
+        rows = (db.query(_FlowRunModel.user_id,
+                         _sa_func.count(_FlowRunModel.id))
+                .group_by(_FlowRunModel.user_id).all())
+        for uid, n in rows:
+            if uid is None:
+                unowned["flow_runs"] += n
+            else:
+                _bump(uid, "flow_runs", n)
+    except Exception:
+        out["flow_runs_error"] = _tb.format_exc()[-400:]
+
+    out["by_user"] = by_user
+    out["unowned"] = unowned
     return out
 
 

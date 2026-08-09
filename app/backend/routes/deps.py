@@ -47,10 +47,11 @@ def require_admin(
 
     Admin access is granted via either:
     1. X-Admin-Secret header matching DB_UPLOAD_SECRET (service-to-service)
-    2. A valid JWT from a user with role='admin' (Phase 3 — not yet implemented)
+       → returns None (no user identity).
+    2. A valid JWT from a user with role='admin' (Phase 3d) → returns User.
 
-    For Phase 0, only the admin secret is checked. This protects API key
-    management endpoints from regular authenticated users.
+    Regular members are denied even with a valid JWT. This protects API key
+    management and user administration endpoints from regular users.
     """
     admin_secret = os.environ.get("DB_UPLOAD_SECRET", "")
 
@@ -61,15 +62,12 @@ def require_admin(
                                x_admin_secret.encode("utf-8")):
             return None  # Admin access granted via secret
 
-    # If no admin secret matched, check for a valid JWT user
-    # (Phase 3 will add role check here; for now, regular users are denied)
+    # JWT path: only users promoted to role='admin' pass.
     if authorization and authorization.startswith("Bearer "):
         token = authorization.removeprefix("Bearer ").strip()
         user = get_user_from_token(token, db)
-        if user is not None:
-            # TODO Phase 3: Check user.role == 'admin'
-            # For now, deny all regular users from admin endpoints
-            pass
+        if user is not None and getattr(user, "role", "member") == "admin":
+            return user
 
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
