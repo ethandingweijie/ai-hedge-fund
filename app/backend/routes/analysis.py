@@ -85,6 +85,15 @@ def _get_user_id(request: Request, db: Session) -> Optional[int]:
     return None
 
 
+def _get_user(request: Request, db: Session):
+    """Resolve the calling User (or None) — like _get_user_id but returns
+    the full row so callers can read role / pipeline-limit columns."""
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return get_user_from_token(auth[7:], db)
+    return None
+
+
 # ── POST /analysis/run ────────────────────────────────────────────────────────
 
 @router.post("/run")
@@ -118,7 +127,8 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="ticker is required")
 
     # ── Extract authenticated user (optional — unauthenticated runs stored with NULL user_id)
-    user_id = _get_user_id(request, db)
+    _caller = _get_user(request, db)
+    user_id = _caller.id if _caller else None
 
     # ── Cache check (fast path, no lock) ─────────────────────────────────────
     cached = analysis_service.get_cached_run(ticker, within_minutes=30, agents=agents)
@@ -134,6 +144,17 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    # ── Per-user rate limits (Phase 3c) — checked after the cache fast path
+    # so cached replays don't consume quota. Counts only real pipeline
+    # starts; fails open (allows) while Redis is absent.
+    from app.backend.services import rate_limiter
+    await rate_limiter.check_limits(
+        user=_caller, scope="analysis",
+        daily_limit=_caller.daily_pipeline_limit if _caller else None,
+        concurrent_limit=_caller.concurrent_pipeline_limit if _caller else None,
+        slot_ttl_seconds=2700,  # 45-min rolling window ≈ longest pipeline
+    )
 
     # ── Queue mode (Phase 2d): Redis available → execute in the arq worker ──
     # Progress streams back over progress_bus (Redis pub/sub); the runner's

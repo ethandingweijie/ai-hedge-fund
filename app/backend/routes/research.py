@@ -40,6 +40,7 @@ from app.backend.services import sw46_storage, complacency_storage
 from app.backend.services import momentum_storage
 from app.backend.services import fundflow_storage
 from app.backend.services import complacency_job_store as job_store
+from app.backend.services import rate_limiter
 from app.backend.services import contrarian_storage
 from app.backend.services import hk50_storage
 from src.research_ideas.sw46.runner import run_sw46
@@ -507,6 +508,13 @@ async def trigger_idea_generation(
     in_flight = job_store.find_in_flight_job("idea_of_the_day_gen")
     if in_flight:
         return {**in_flight, "deduped": True}
+
+    # Per-user rate limits (Phase 3c) — after dedupe, so re-attaching to an
+    # in-flight job never consumes quota. Service calls (actor None) exempt.
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
 
     job_id = job_store.create_job("idea_of_the_day_gen",
                                   user_id=actor.id if actor else None)
@@ -1069,6 +1077,13 @@ async def hk50_qual_deep_research(
             "deduped": True,
         }
 
+    # Per-user rate limits (Phase 3c) — after dedupe, so re-attaching to an
+    # in-flight job never consumes quota. Service calls (actor None) exempt.
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
+
     job_id = job_store.create_job("hk50_qual", user_id=actor.id if actor else None)
 
     if not await _maybe_enqueue_research(
@@ -1262,6 +1277,13 @@ async def hk50_qual_one_ticker(
             "started_at": in_flight["started_at"],
             "deduped": True,
         }
+
+    # Per-user rate limits (Phase 3c) — after dedupe, so re-attaching to an
+    # in-flight job never consumes quota. Service calls (actor None) exempt.
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
 
     job_id = job_store.create_job("hk50_qual_ticker", ticker=needle,
                                   user_id=actor.id if actor else None)
@@ -1628,6 +1650,13 @@ async def refresh_complacency(
             "deduped":   True,
         }
 
+    # Per-user rate limits (Phase 3c) — after dedupe, so re-attaching to an
+    # in-flight job never consumes quota. Service calls (actor None) exempt.
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
+
     job_id = job_store.create_job("refresh", user_id=actor.id if actor else None)
 
     if not await _maybe_enqueue_research(job_id, "refresh", {"max_workers": max_workers}):
@@ -1830,6 +1859,13 @@ async def score_complacency_adhoc(
             "started_at": in_flight["started_at"],
             "deduped":   True,
         }
+
+    # Per-user rate limits (Phase 3c) — after dedupe, so re-attaching to an
+    # in-flight job never consumes quota. Service calls (actor None) exempt.
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
 
     job_id = job_store.create_job("score_adhoc", ticker=ticker,
                                   user_id=actor.id if actor else None)
@@ -2309,6 +2345,13 @@ async def refresh_hundred_q(
         existing = await asyncio.to_thread(hundred_q_job_store.find_in_flight_job, "hundred_q_refresh")
         if existing:
             return {"job_id": existing["job_id"], "status": existing["status"], "resumed": True}
+
+        # Per-user rate limits (Phase 3c) — after dedupe, so re-attaching to
+        # an in-flight job never consumes quota. Service calls exempt.
+        await rate_limiter.check_limits(
+            user=actor, scope="research",
+            daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+        )
 
         job_id = await asyncio.to_thread(
             hundred_q_job_store.create_job,

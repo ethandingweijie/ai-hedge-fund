@@ -29,6 +29,16 @@ logger = logging.getLogger(__name__)
 )
 async def run(request_data: HedgeFundRequest, request: Request, db: Session = Depends(get_db)):
     try:
+        # ── Per-user rate limits (Phase 3c): max 2 concurrent graph runs.
+        # Fails open without Redis; service calls (state.user None) exempt.
+        # HTTPException(429) passes through the except clause below unchanged.
+        from app.backend.services import rate_limiter
+        await rate_limiter.check_limits(
+            user=getattr(request.state, "user", None), scope="hedge_fund",
+            daily_limit=None, concurrent_limit=2,
+            slot_ttl_seconds=1860,  # worker job_timeout + slack
+        )
+
         # Hydrate API keys from database if not provided
         if not request_data.api_keys:
             api_key_service = ApiKeyService(db)

@@ -65,6 +65,16 @@ def captured_spawns(monkeypatch):
     return spawned
 
 
+@pytest.fixture(autouse=True)
+def _no_rate_limit(monkeypatch):
+    """Hermetic against Phase 3c: if a local Redis happens to be running,
+    the real per-user limits would start rejecting these test triggers."""
+    async def _allow(**kwargs):
+        return None
+    monkeypatch.setattr(
+        "app.backend.services.rate_limiter.check_limits", _allow)
+
+
 class _FakeUser:
     def __init__(self, user_id: int):
         self.id = user_id

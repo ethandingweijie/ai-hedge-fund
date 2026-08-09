@@ -10,8 +10,20 @@ intact in both modes.
 """
 import asyncio
 
+import pytest
+
 from app.backend.routes import research as R
 from app.backend.services import queue_client
+
+
+@pytest.fixture(autouse=True)
+def _no_rate_limit(monkeypatch):
+    """Hermetic against Phase 3c: if a local Redis happens to be running,
+    the real per-user limits would start rejecting these test triggers."""
+    async def _allow(**kwargs):
+        return None
+    monkeypatch.setattr(
+        "app.backend.services.rate_limiter.check_limits", _allow)
 
 
 # ── fakes ─────────────────────────────────────────────────────────────────────
