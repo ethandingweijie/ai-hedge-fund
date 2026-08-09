@@ -203,6 +203,14 @@ def get_user_from_token(token: str, db: Session) -> User | None:
     try:
         payload = decode_access_token(token)
         user_id = int(payload["sub"])
-        return db.query(User).filter(User.id == user_id).first()
+        user = db.query(User).filter(User.id == user_id).first()
+        if user is not None and user.is_active is False:
+            # Phase 3b soft-disable: a deactivated user's still-unexpired
+            # tokens stop working immediately. Only an explicit False
+            # denies — a NULL (shouldn't happen; migration backfills)
+            # stays treated as active rather than locking everyone out.
+            logger.info("User %s is deactivated — rejecting valid token", user_id)
+            return None
+        return user
     except (JWTError, KeyError, ValueError):
         return None

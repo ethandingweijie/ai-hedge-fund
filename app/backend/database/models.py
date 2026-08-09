@@ -21,6 +21,14 @@ class User(Base):
     # Provider's own user identifier (sub from Google, sub from Apple)
     provider_sub = Column(String(255), nullable=False, index=True)
 
+    # RBAC + per-user limits (Phase 3b). The Alembic migration backfills
+    # these server defaults onto pre-existing rows, so no user row is ever
+    # NULL here; the Python defaults cover ORM-created rows.
+    role = Column(String(20), nullable=False, default="member")  # "admin" | "member"
+    is_active = Column(Boolean, nullable=False, default=True)  # False = soft-disabled (token rejected)
+    daily_pipeline_limit = Column(Integer, nullable=False, default=20)
+    concurrent_pipeline_limit = Column(Integer, nullable=False, default=3)
+
 
 class HedgeFundFlow(Base):
     """Table to store React Flow configurations (nodes, edges, viewport)"""

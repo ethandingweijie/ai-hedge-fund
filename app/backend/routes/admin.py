@@ -100,7 +100,7 @@ async def admin_diag(request: Request, secret: str = ""):
     import sqlite3 as _sqlite3
     import traceback as _tb
 
-    out: dict = {"build_marker": "2026-08-09-diag-2"}
+    out: dict = {"build_marker": "2026-08-09-diag-3"}
 
     # 1. Env presence (names only — values never leave the container)
     out["env"] = {
@@ -185,6 +185,31 @@ async def admin_diag(request: Request, secret: str = ""):
         }
     except Exception:
         out["research_jobs"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 6. Users schema (Phase 3b role/is_active/limits columns). Verifies
+    # the Alembic migration ran on predeploy and backfilled existing rows.
+    try:
+        from sqlalchemy import inspect as _sa_inspect
+        from sqlalchemy import text as _text
+        from app.backend.database.connection import engine as _orm_engine
+        from app.backend.database.connection import SessionLocal as _SessionLocal
+        _cols = {c["name"] for c in _sa_inspect(_orm_engine).get_columns("users")}
+        _want = ("role", "is_active", "daily_pipeline_limit",
+                 "concurrent_pipeline_limit")
+        out["users_schema"] = {c: (c in _cols) for c in _want}
+        if all(c in _cols for c in _want):
+            _s = _SessionLocal()
+            try:
+                _null_rows = _s.execute(_text(
+                    "SELECT COUNT(*) FROM users WHERE role IS NULL "
+                    "OR is_active IS NULL OR daily_pipeline_limit IS NULL "
+                    "OR concurrent_pipeline_limit IS NULL"
+                )).scalar()
+                out["users_schema"]["unbackfilled_rows"] = int(_null_rows or 0)
+            finally:
+                _s.close()
+    except Exception:
+        out["users_schema"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
     return out
 
