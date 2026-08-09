@@ -13,15 +13,20 @@
  * WhatsApp-style: big icons + labels, fully-rounded pill, capsule highlight on
  * the active tab, hugging the bottom edge above the iOS home indicator.
  * z-50: below the avatar button (z-10000).
+ *
+ * The History item shows a count badge for ongoing research runs (sourced
+ * from ActiveRunContext — the same state that drives HistoryPage's Ongoing
+ * cards), so a running analysis is visible from every screen.
  */
-import { Filter, Lightbulb, BookMarked, Wallet, History } from 'lucide-react';
+import { Filter, Lightbulb, Microscope, Wallet, History } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
+import { useActiveRun } from '@/contexts/active-run-context';
 
 const ITEMS = [
   { label: 'Screener',  icon: Filter,     path: '/screener' },
   { label: 'Research',  icon: Lightbulb,  path: '/research-ideas' },
-  { label: 'Watchlist', icon: BookMarked, path: '/watchlist' },
+  { label: 'Analysis',  icon: Microscope, path: '/report' },
   { label: 'Robo',      icon: Wallet,     path: '/robo-strategy' },
   { label: 'History',   icon: History,    path: '/history' },
 ];
@@ -30,6 +35,8 @@ export function FloatingNavBar() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
+  const { activeRuns } = useActiveRun();
+  const ongoing = activeRuns.length;
 
   return (
     <nav
@@ -59,7 +66,18 @@ export function FloatingNavBar() {
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
               }`}
             >
-              <Icon size={24} strokeWidth={active ? 2.4 : 2} />
+              <span className="relative">
+                <Icon size={24} strokeWidth={active ? 2.4 : 2} />
+                {/* Ongoing-research count badge — right side of the History icon */}
+                {path === '/history' && ongoing > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none flex items-center justify-center shadow-sm"
+                    aria-label={`${ongoing} ongoing research run${ongoing === 1 ? '' : 's'}`}
+                  >
+                    {ongoing > 9 ? '9+' : ongoing}
+                  </span>
+                )}
+              </span>
               <span className={`text-[11px] leading-none ${active ? 'font-semibold' : 'font-medium'}`}>{label}</span>
             </button>
           );
