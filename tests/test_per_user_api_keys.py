@@ -190,6 +190,27 @@ def test_get_global_and_user_key_lists_are_disjoint(orm_db):
     assert len(repo.get_all_api_keys()) == 3  # admin listing sees all owners
 
 
+def test_owner_targeted_delete_and_deactivate(orm_db):
+    """Admin CRUD with an explicit user_id hits ONLY that owner's row."""
+    alice = _make_user(orm_db, 1)
+    repo = ApiKeyRepository(orm_db)
+    repo.create_or_update_api_key("P", "global-v")
+    repo.create_or_update_api_key("P", "alice-v", user_id=alice.id)
+
+    assert repo.deactivate_api_key("P", user_id=alice.id) is True
+    assert repo.get_api_key_by_provider("P").key_value == "global-v"
+    # Just-deactivated row is still fetchable with include_inactive —
+    # the deactivate ROUTE re-fetches it for its response body.
+    assert repo.get_api_key_by_provider(
+        "P", user_id=alice.id) is None
+    assert repo.get_api_key_by_provider(
+        "P", user_id=alice.id, include_inactive=True).is_active is False
+
+    assert repo.delete_api_key("P", user_id=alice.id) is True
+    assert repo.get_api_key_by_provider("P").key_value == "global-v"
+    assert repo.get_user_api_keys(alice.id) == []
+
+
 # ---------------------------------------------------------------------------
 # 3. Service: resolution chain
 # ---------------------------------------------------------------------------

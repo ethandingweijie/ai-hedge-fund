@@ -91,11 +91,12 @@ async def get_api_keys(include_inactive: bool = False, db: Session = Depends(get
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def get_api_key(provider: str, db: Session = Depends(get_db)):
-    """Get a specific API key by provider"""
+async def get_api_key(provider: str, user_id: int = None, db: Session = Depends(get_db)):
+    """Get a specific API key by provider. user_id selects a per-user
+    row (Phase 3e); omitted = the global key."""
     try:
         repo = ApiKeyRepository(db)
-        api_key = repo.get_api_key_by_provider(provider)
+        api_key = repo.get_api_key_by_provider(provider, user_id=user_id)
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
         return _to_response(api_key)
@@ -114,15 +115,17 @@ async def get_api_key(provider: str, db: Session = Depends(get_db)):
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def update_api_key(provider: str, request: ApiKeyUpdateRequest, db: Session = Depends(get_db), _admin=Depends(require_admin)):
-    """Update an existing API key (admin only)"""
+async def update_api_key(provider: str, request: ApiKeyUpdateRequest, user_id: int = None, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """Update an existing API key (admin only). user_id selects a
+    per-user row (Phase 3e); omitted = the global key."""
     try:
         repo = ApiKeyRepository(db)
         api_key = repo.update_api_key(
             provider=provider,
             key_value=request.key_value,
             description=request.description,
-            is_active=request.is_active
+            is_active=request.is_active,
+            user_id=user_id
         )
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
@@ -142,11 +145,12 @@ async def update_api_key(provider: str, request: ApiKeyUpdateRequest, db: Sessio
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def delete_api_key(provider: str, db: Session = Depends(get_db), _admin=Depends(require_admin)):
-    """Delete an API key (admin only)"""
+async def delete_api_key(provider: str, user_id: int = None, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """Delete an API key (admin only). user_id selects a per-user row
+    (Phase 3e); omitted = the global key."""
     try:
         repo = ApiKeyRepository(db)
-        success = repo.delete_api_key(provider)
+        success = repo.delete_api_key(provider, user_id=user_id)
         if not success:
             raise HTTPException(status_code=404, detail="API key not found")
         return {"message": "API key deleted successfully"}
@@ -165,16 +169,19 @@ async def delete_api_key(provider: str, db: Session = Depends(get_db), _admin=De
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def deactivate_api_key(provider: str, db: Session = Depends(get_db), _admin=Depends(require_admin)):
-    """Deactivate an API key without deleting it (admin only)"""
+async def deactivate_api_key(provider: str, user_id: int = None, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """Deactivate an API key without deleting it (admin only). user_id
+    selects a per-user row (Phase 3e); omitted = the global key."""
     try:
         repo = ApiKeyRepository(db)
-        success = repo.deactivate_api_key(provider)
+        success = repo.deactivate_api_key(provider, user_id=user_id)
         if not success:
             raise HTTPException(status_code=404, detail="API key not found")
-        
-        # Return the updated key
-        api_key = repo.get_api_key_by_provider(provider)
+
+        # Return the updated key (include_inactive: it was JUST deactivated,
+        # so an active-only re-fetch would return None and 500 the route)
+        api_key = repo.get_api_key_by_provider(
+            provider, user_id=user_id, include_inactive=True)
         return ApiKeySummaryResponse.from_orm(api_key)
     except HTTPException:
         raise
@@ -219,11 +226,12 @@ async def bulk_update_api_keys(request: ApiKeyBulkUpdateRequest, db: Session = D
         500: {"model": ErrorResponse, "description": "Internal server error"},
     },
 )
-async def update_last_used(provider: str, db: Session = Depends(get_db), _admin=Depends(require_admin)):
-    """Update the last used timestamp for an API key (admin only)"""
+async def update_last_used(provider: str, user_id: int = None, db: Session = Depends(get_db), _admin=Depends(require_admin)):
+    """Update the last used timestamp for an API key (admin only).
+    user_id selects a per-user row (Phase 3e); omitted = the global key."""
     try:
         repo = ApiKeyRepository(db)
-        success = repo.update_last_used(provider)
+        success = repo.update_last_used(provider, user_id=user_id)
         if not success:
             raise HTTPException(status_code=404, detail="API key not found")
         return {"message": "Last used timestamp updated"}

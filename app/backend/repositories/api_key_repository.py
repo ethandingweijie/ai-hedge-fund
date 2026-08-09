@@ -60,13 +60,20 @@ class ApiKeyRepository:
             self.db.refresh(api_key)
             return api_key
 
-    def get_api_key_by_provider(self, provider: str) -> Optional[ApiKey]:
-        """Get the GLOBAL API key by provider name"""
-        return self.db.query(ApiKey).filter(
-            ApiKey.provider == provider,
-            ApiKey.user_id.is_(None),
-            ApiKey.is_active == True
-        ).first()
+    def get_api_key_by_provider(self, provider: str,
+                                 user_id: Optional[int] = None,
+                                 include_inactive: bool = False) -> Optional[ApiKey]:
+        """Get an API key by provider + owner (None = global row).
+        Active rows only unless include_inactive."""
+        if user_id is None:
+            owner_filter = ApiKey.user_id.is_(None)
+        else:
+            owner_filter = ApiKey.user_id == user_id
+        query = self.db.query(ApiKey).filter(
+            ApiKey.provider == provider, owner_filter)
+        if not include_inactive:
+            query = query.filter(ApiKey.is_active == True)
+        return query.first()
 
     def get_global_api_keys(self, include_inactive: bool = False) -> List[ApiKey]:
         """Global (admin-managed, user_id NULL) keys — the fallback layer
@@ -96,12 +103,17 @@ class ApiKeyRepository:
         provider: str,
         key_value: str = None,
         description: str = None,
-        is_active: bool = None
+        is_active: bool = None,
+        user_id: Optional[int] = None
     ) -> Optional[ApiKey]:
-        """Update an existing GLOBAL API key"""
+        """Update an existing API key for (provider, owner). user_id=None
+        targets the global row."""
+        if user_id is None:
+            owner_filter = ApiKey.user_id.is_(None)
+        else:
+            owner_filter = ApiKey.user_id == user_id
         api_key = self.db.query(ApiKey).filter(
-            ApiKey.provider == provider,
-            ApiKey.user_id.is_(None)).first()
+            ApiKey.provider == provider, owner_filter).first()
         if not api_key:
             return None
 
@@ -117,11 +129,15 @@ class ApiKeyRepository:
         self.db.refresh(api_key)
         return api_key
 
-    def delete_api_key(self, provider: str) -> bool:
-        """Delete a GLOBAL API key by provider"""
+    def delete_api_key(self, provider: str,
+                       user_id: Optional[int] = None) -> bool:
+        """Delete an API key by provider + owner (None = global row)."""
+        if user_id is None:
+            owner_filter = ApiKey.user_id.is_(None)
+        else:
+            owner_filter = ApiKey.user_id == user_id
         api_key = self.db.query(ApiKey).filter(
-            ApiKey.provider == provider,
-            ApiKey.user_id.is_(None)).first()
+            ApiKey.provider == provider, owner_filter).first()
         if not api_key:
             return False
 
@@ -129,11 +145,15 @@ class ApiKeyRepository:
         self.db.commit()
         return True
 
-    def deactivate_api_key(self, provider: str) -> bool:
-        """Deactivate a GLOBAL API key instead of deleting it"""
+    def deactivate_api_key(self, provider: str,
+                           user_id: Optional[int] = None) -> bool:
+        """Deactivate an API key instead of deleting it (None = global)."""
+        if user_id is None:
+            owner_filter = ApiKey.user_id.is_(None)
+        else:
+            owner_filter = ApiKey.user_id == user_id
         api_key = self.db.query(ApiKey).filter(
-            ApiKey.provider == provider,
-            ApiKey.user_id.is_(None)).first()
+            ApiKey.provider == provider, owner_filter).first()
         if not api_key:
             return False
 
@@ -142,11 +162,16 @@ class ApiKeyRepository:
         self.db.commit()
         return True
 
-    def update_last_used(self, provider: str) -> bool:
-        """Update the last_used timestamp for the GLOBAL API key"""
+    def update_last_used(self, provider: str,
+                         user_id: Optional[int] = None) -> bool:
+        """Update the last_used timestamp for an API key (None = global)."""
+        if user_id is None:
+            owner_filter = ApiKey.user_id.is_(None)
+        else:
+            owner_filter = ApiKey.user_id == user_id
         api_key = self.db.query(ApiKey).filter(
             ApiKey.provider == provider,
-            ApiKey.user_id.is_(None),
+            owner_filter,
             ApiKey.is_active == True
         ).first()
         if not api_key:
