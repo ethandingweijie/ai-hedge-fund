@@ -100,7 +100,7 @@ async def admin_diag(request: Request, secret: str = ""):
     import sqlite3 as _sqlite3
     import traceback as _tb
 
-    out: dict = {"build_marker": "2026-08-09-diag-6"}
+    out: dict = {"build_marker": "2026-08-09-diag-7"}
 
     # 1. Env presence (names only — values never leave the container)
     out["env"] = {
@@ -210,6 +210,24 @@ async def admin_diag(request: Request, secret: str = ""):
                 _s.close()
     except Exception:
         out["users_schema"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 7. api_keys schema (Phase 3e per-user keys): user_id owner column
+    # and the composite (user_id, provider) uniqueness that replaces the
+    # old provider-only UNIQUE.
+    try:
+        from sqlalchemy import inspect as _sa_inspect
+        from app.backend.database.connection import engine as _orm_engine
+        _insp = _sa_inspect(_orm_engine)
+        _ak_cols = {c["name"] for c in _insp.get_columns("api_keys")}
+        _ak_uq = {tuple(uc["column_names"])
+                  for uc in _insp.get_unique_constraints("api_keys")}
+        out["api_keys_schema"] = {
+            "user_id_column": "user_id" in _ak_cols,
+            "composite_unique": ("user_id", "provider") in _ak_uq,
+            "provider_only_unique": ("provider",) in _ak_uq,
+        }
+    except Exception:
+        out["api_keys_schema"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
     return out
 

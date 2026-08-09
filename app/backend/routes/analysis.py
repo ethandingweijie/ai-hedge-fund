@@ -164,7 +164,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     from app.backend.services import queue_client
     if await queue_client.queue_mode_enabled():
         try:
-            _q_api_keys = ApiKeyService(db).get_api_keys_dict()
+            _q_api_keys = ApiKeyService(db).get_api_keys_dict(user_id)
             _queued = await _start_queue_run(
                 ticker, model_name, agents, user_id, _q_api_keys
             )
@@ -266,9 +266,9 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         )
 
     # ── Runner path: we hold the dedup slot, proceed with the pipeline ────────
-    # Load API keys from DB
+    # Load API keys from DB — the caller's own keys override globals (3e)
     api_key_svc = ApiKeyService(db)
-    api_keys = api_key_svc.get_api_keys_dict()
+    api_keys = api_key_svc.get_api_keys_dict(user_id)
 
     async def event_generator():
         result_container: dict = {}

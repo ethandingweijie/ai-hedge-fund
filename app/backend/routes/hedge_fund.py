@@ -39,10 +39,14 @@ async def run(request_data: HedgeFundRequest, request: Request, db: Session = De
             slot_ttl_seconds=1860,  # worker job_timeout + slack
         )
 
-        # Hydrate API keys from database if not provided
+        # Hydrate API keys from database if not provided — the caller's
+        # own keys override globals (Phase 3e); service/unauthenticated
+        # calls (state.user None) get globals only.
         if not request_data.api_keys:
+            _key_user = getattr(request.state, "user", None)
             api_key_service = ApiKeyService(db)
-            request_data.api_keys = api_key_service.get_api_keys_dict()
+            request_data.api_keys = api_key_service.get_api_keys_dict(
+                _key_user.id if _key_user else None)
 
         # ── Queue mode (Phase 2f): Redis available → execute in the arq worker.
         # API keys are already hydrated into the payload above (the worker has
@@ -292,10 +296,13 @@ async def _queue_stream_generator(run_id: str, job):
 async def backtest(request_data: BacktestRequest, request: Request, db: Session = Depends(get_db)):
     """Run a continuous backtest over a time period with streaming updates."""
     try:
-        # Hydrate API keys from database if not provided
+        # Hydrate API keys from database if not provided — the caller's
+        # own keys override globals (Phase 3e)
         if not request_data.api_keys:
+            _key_user = getattr(request.state, "user", None)
             api_key_service = ApiKeyService(db)
-            request_data.api_keys = api_key_service.get_api_keys_dict()
+            request_data.api_keys = api_key_service.get_api_keys_dict(
+                _key_user.id if _key_user else None)
 
         # Convert model_provider to string if it's an enum
         model_provider = request_data.model_provider

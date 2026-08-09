@@ -33,6 +33,7 @@ def _to_response(api_key) -> ApiKeyResponse:
         created_at=api_key.created_at,
         updated_at=api_key.updated_at,
         last_used=api_key.last_used,
+        user_id=api_key.user_id,
     )
 
 
@@ -46,14 +47,19 @@ def _to_response(api_key) -> ApiKeyResponse:
     },
 )
 async def create_or_update_api_key(request: ApiKeyCreateRequest, db: Session = Depends(get_db), _admin=Depends(require_admin)):
-    """Create a new API key or update existing one (admin only)"""
+    """Create a new API key or update existing one (admin only).
+
+    user_id omitted/NULL targets the GLOBAL key; a user_id assigns a
+    per-user override (Phase 3e).
+    """
     try:
         repo = ApiKeyRepository(db)
         api_key = repo.create_or_update_api_key(
             provider=request.provider,
             key_value=request.key_value,
             description=request.description,
-            is_active=request.is_active
+            is_active=request.is_active,
+            user_id=request.user_id
         )
         return _to_response(api_key)
     except Exception as e:

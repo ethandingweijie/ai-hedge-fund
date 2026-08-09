@@ -63,12 +63,54 @@ def ensure_user_extensions(engine: sa.engine.Engine) -> None:
     )
 
 
+def ensure_api_key_user_scope(engine: sa.engine.Engine) -> None:
+    """Phase 3e per-user API keys: api_keys.user_id owner column (NULL =
+    global key). On PostgreSQL also swaps the provider-only UNIQUE
+    constraint for the composite (user_id, provider) so per-user
+    overrides can coexist with the global key for the same provider.
+    SQLite can't drop constraints without a table rebuild — dev-only, so
+    the column backfill is all it gets (fresh SQLite DBs get the
+    composite constraint from create_all)."""
+    inspector = sa.inspect(engine)
+    if "api_keys" not in inspector.get_table_names():
+        return  # nothing to patch — create_all hasn't produced the table yet
+    cols = {c["name"] for c in inspector.get_columns("api_keys")}
+
+    if "user_id" not in cols:
+        with engine.begin() as conn:
+            conn.execute(sa.text(
+                "ALTER TABLE api_keys ADD COLUMN user_id INTEGER "
+                "REFERENCES users(id)"))
+        logger.info("Schema guard: added api_keys.user_id column")
+
+    if engine.dialect.name != "postgresql":
+        return
+
+    # Constraint swap (inspect-then-act, idempotent).
+    inspector = sa.inspect(engine)
+    drop_names = [uc["name"] for uc in inspector.get_unique_constraints("api_keys")
+                  if uc["column_names"] == ["provider"]]
+    have_composite = any(uc["name"] == "uq_api_keys_user_provider"
+                         for uc in inspector.get_unique_constraints("api_keys"))
+    if not drop_names and have_composite:
+        return
+    with engine.begin() as conn:
+        for name in drop_names:
+            conn.execute(sa.text(
+                f'ALTER TABLE api_keys DROP CONSTRAINT "{name}"'))
+        if not have_composite:
+            conn.execute(sa.text(
+                "ALTER TABLE api_keys ADD CONSTRAINT "
+                "uq_api_keys_user_provider UNIQUE (user_id, provider)"))
+    logger.info("Schema guard: api_keys uniqueness now (user_id, provider)")
+
+
 def ensure_all(engine: sa.engine.Engine) -> None:
     """Run every runtime schema guard. Called at boot (main.py) and by
     scripts/sync_schema.py. Failures are logged, not raised — a startup
     crash loop is worse than serving with the diag endpoint reporting
     the missing columns."""
-    for guard in (ensure_user_extensions,):
+    for guard in (ensure_user_extensions, ensure_api_key_user_scope):
         try:
             guard(engine)
         except Exception:

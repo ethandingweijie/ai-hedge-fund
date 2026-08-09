@@ -137,18 +137,35 @@ class ResearchSummaryCache(Base):
 
 
 class ApiKey(Base):
-    """Table to store API keys for various services"""
+    """Table to store API keys for various services.
+
+    user_id = NULL rows are GLOBAL admin-managed keys (the fallback for
+    every run). Non-NULL rows are per-user overrides (Phase 3e): key
+    resolution merges globals first, then the user's own rows, per
+    provider. The old provider-only UNIQUE constraint is replaced by the
+    composite (user_id, provider) so a global key and per-user keys for
+    the same provider can coexist.
+    """
     __tablename__ = "api_keys"
-    
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider",
+                         name="uq_api_keys_user_provider"),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    # API key details
-    provider = Column(String(100), nullable=False, unique=True, index=True)  # e.g., "ANTHROPIC_API_KEY"
+
+    # API key details — provider is indexed but no longer UNIQUE on its
+    # own (per-user overrides share provider names with global keys).
+    provider = Column(String(100), nullable=False, index=True)  # e.g., "ANTHROPIC_API_KEY"
     key_value = Column(Text, nullable=False)  # The actual API key (encrypted in production)
     is_active = Column(Boolean, default=True)  # Enable/disable without deletion
-    
+
+    # Owner — NULL = global/admin key; otherwise the user this key
+    # belongs to (nullable: global keys predate per-user scoping).
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
     # Optional metadata
     description = Column(Text, nullable=True)  # Human-readable description
     last_used = Column(DateTime(timezone=True), nullable=True)  # Track usage

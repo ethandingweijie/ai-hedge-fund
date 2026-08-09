@@ -247,6 +247,9 @@ class ApiKeyCreateRequest(BaseModel):
     key_value: str = Field(..., min_length=1)
     description: Optional[str] = None
     is_active: bool = True
+    # Phase 3e: NULL/omitted = global admin key; otherwise the user this
+    # key belongs to (per-user override of the global key).
+    user_id: Optional[int] = None
 
 
 class ApiKeyUpdateRequest(BaseModel):
@@ -273,6 +276,8 @@ class ApiKeyResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime]
     last_used: Optional[datetime]
+    # Phase 3e owner: NULL = global admin-managed key
+    user_id: Optional[int] = None
 
     class Config:
         from_attributes = True
@@ -288,6 +293,8 @@ class ApiKeySummaryResponse(BaseModel):
     updated_at: Optional[datetime]
     last_used: Optional[datetime]
     has_key: bool = True  # Indicates if a key is set
+    # Phase 3e owner: NULL = global admin-managed key
+    user_id: Optional[int] = None
 
     class Config:
         from_attributes = True

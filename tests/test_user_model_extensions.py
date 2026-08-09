@@ -173,7 +173,7 @@ def test_migration_is_sole_head_and_chains(monkeypatch, tmp_path):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     cfg = _alembic_config(tmp_path / "chain_check.db")
     heads = ScriptDirectory.from_config(cfg).get_heads()
-    assert heads == ["e6a7b8c9d0e1"], f"unexpected alembic heads: {heads}"
+    assert heads == ["f8c9d0e1a2b3"], f"unexpected alembic heads: {heads}"
 
 
 def test_migration_backfills_old_users_schema(monkeypatch, tmp_path):
