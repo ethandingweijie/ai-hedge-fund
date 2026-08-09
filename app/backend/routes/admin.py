@@ -100,7 +100,7 @@ async def admin_diag(request: Request, secret: str = ""):
     import sqlite3 as _sqlite3
     import traceback as _tb
 
-    out: dict = {"build_marker": "2026-08-08-diag-1"}
+    out: dict = {"build_marker": "2026-08-09-diag-2"}
 
     # 1. Env presence (names only — values never leave the container)
     out["env"] = {
@@ -173,6 +173,18 @@ async def admin_diag(request: Request, secret: str = ""):
             s.close()
     except Exception:
         out["orm"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 5. Research-jobs schema (Phase 3a user_id attribution column).
+    # Read-only: column_exists never creates the table, so this stays
+    # side-effect-free even if no job has run yet.
+    try:
+        from src.data import db as _run_db
+        out["research_jobs"] = {
+            "user_id_column": bool(
+                _run_db.column_exists("complacency_jobs", "user_id")),
+        }
+    except Exception:
+        out["research_jobs"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
     return out
 
