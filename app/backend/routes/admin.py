@@ -100,7 +100,7 @@ async def admin_diag(request: Request, secret: str = ""):
     import sqlite3 as _sqlite3
     import traceback as _tb
 
-    out: dict = {"build_marker": "2026-08-09-diag-7"}
+    out: dict = {"build_marker": "2026-08-10-diag-8"}
 
     # 1. Env presence (names only — values never leave the container)
     out["env"] = {
@@ -228,6 +228,32 @@ async def admin_diag(request: Request, secret: str = ""):
         }
     except Exception:
         out["api_keys_schema"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
+    # 8. Redis + arq queue visibility (Phase 2 ops). Answers, from the WEB
+    # process's own Redis: are jobs sitting unclaimed, and is a live arq
+    # worker attached to THIS Redis? The worker writes a health-check key
+    # (arq:queue:health-check) every 60s with a 61s TTL — absent/expired
+    # means no healthy worker is consuming this queue.
+    try:
+        from app.backend.services import redis_client as _rc
+        _ready = await _rc.redis_ready(force=True)
+        if not _ready:
+            out["queue"] = {"redis_ready": False}
+        else:
+            _r = await _rc.get_redis()
+            _hc = await _r.get("arq:queue:health-check")
+            out["queue"] = {
+                "redis_ready": True,
+                "queued": await _r.zcard("arq:queue"),
+                "worker_health": _hc,
+                "worker_health_ttl_ms": await _r.pttl("arq:queue:health-check"),
+            }
+            _in_prog = []
+            async for _k in _r.scan_iter(match="arq:in-progress:*", count=200):
+                _in_prog.append(_k)
+            out["queue"]["in_progress"] = _in_prog[:10]
+    except Exception:
+        out["queue"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
     return out
 
