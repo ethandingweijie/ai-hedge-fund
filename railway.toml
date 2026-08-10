@@ -1,15 +1,11 @@
-# NOTE: This file applies to EVERY service built from this repo (web AND
-# worker). Service-specific settings — dockerfilePath, predeployCommand,
-# healthcheck — live in the Railway DASHBOARD per service, because code
-# config always overrides the dashboard and the two services need
-# different Dockerfiles/healthchecks.
-#
-#   web    (ai-hedge-fund): Builder=Dockerfile, path docker/Dockerfile.web,
-#          predeploy "python scripts/sync_schema.py", healthcheck "/" (300s)
-#   worker:                Builder=Dockerfile, path docker/Dockerfile.worker,
-#          no predeploy, no healthcheck (it has no HTTP port)
-#
-# Only settings that are identical for all services stay here.
+[build]
+dockerfilePath = "docker/Dockerfile.web"
+
 [deploy]
+# Runs before each deploy rolls out: creates missing ORM tables, then applies
+# any new Alembic migrations (idempotent — safe to run on every deploy).
+predeployCommand = "python scripts/sync_schema.py"
+healthcheckPath = "/"
+healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
