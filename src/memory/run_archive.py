@@ -250,6 +250,8 @@ CREATE TABLE IF NOT EXISTS ticker_signals (
     dcf_range_json        TEXT,
     value_trap_json       TEXT,
     sector_card_json      TEXT,
+    sector_card_hash      TEXT,
+    card_qa_json          TEXT,
     UNIQUE(run_id, ticker)
 );
 
@@ -396,6 +398,14 @@ _MIGRATIONS = [
     # the rendered JSON (not just the raw metric values) means historical
     # runs continue to render correctly even if the framework spec changes.
     ("ticker_signals", "sector_card_json",    "TEXT"),  # full sector_card[ticker] dict
+
+    # v3.4 — R5 card-QA delta check (Workstream E speed round 2).
+    # sector_card_hash: sha256 over rendered sector_card[ticker] + deep research
+    # text, computed in pipeline phase 10_5. card_qa_json: the full
+    # card_qa_audit[ticker] dict. Together they let an unchanged re-run skip
+    # the QA LLM pass and reuse the prior clean audit.
+    ("ticker_signals", "sector_card_hash",    "TEXT"),
+    ("ticker_signals", "card_qa_json",        "TEXT"),
 ]
 
 
@@ -691,6 +701,13 @@ def save_run(state: dict, decisions: dict) -> str:
                 sector_card_t = (data.get("sector_card") or {}).get(ticker)
                 sc_json = _safe_json(sector_card_t) if sector_card_t is not None else None
 
+                # v3.4 — R5 card-QA delta check: persist the card content hash
+                # and the QA audit so an unchanged future re-run can reuse the
+                # audit instead of re-running the QA LLM pass.
+                sc_hash = (data.get("sector_card_hash") or {}).get(ticker)
+                card_qa_t = (data.get("card_qa_audit") or {}).get(ticker)
+                cq_json = _safe_json(card_qa_t) if card_qa_t is not None else None
+
                 # raw_financials lives at state["data"]["raw_financials"] (LLM-formatted,
                 # keyed by FY year) — store as-is so FinancialsTable can render it
                 raw_fin = data.get("raw_financials") or {}
@@ -751,7 +768,7 @@ def save_run(state: dict, decisions: dict) -> str:
                             "value_trap_verdict", "ev_upside_pct", "power_law_score",
                             "power_law_json", "scenario_json", "raw_financials_json",
                             "citation_audit_json", "vgpm_json", "dcf_range_json", "value_trap_json",
-                            "sector_card_json",
+                            "sector_card_json", "sector_card_hash", "card_qa_json",
                         ],
                         "run_id, ticker",
                     ),
@@ -793,6 +810,8 @@ def save_run(state: dict, decisions: dict) -> str:
                         dcf_rng_json,
                         vt_json,
                         sc_json,
+                        sc_hash,
+                        cq_json,
                     ),
                 )
 
@@ -1068,6 +1087,8 @@ def get_phase_cache(
         power_law      (dict | None) — full power_law_analysis[ticker] dict
         citation_audit (dict | None) — full citation_audit[ticker] dict
         scenario       (dict | None) — full scenario_analysis[ticker] dict
+        sector_card_hash (str | None) — R5 card-QA content hash (v3.4+)
+        card_qa_audit  (dict | None) — full card_qa_audit[ticker] dict (v3.4+)
 
     Returns None if no qualifying run is found.
     """
@@ -1085,7 +1106,9 @@ def get_phase_cache(
                 ts.dcf_range_json,
                 ts.citation_audit_json,
                 ts.scenario_json,
-                ts.value_trap_json
+                ts.value_trap_json,
+                ts.sector_card_hash,
+                ts.card_qa_json
             FROM runs r
             JOIN ticker_signals ts ON r.run_id = ts.run_id AND ts.ticker = ?
             WHERE r.run_at >= ?
@@ -1121,6 +1144,8 @@ def get_phase_cache(
             "citation_audit": _load_json("citation_audit_json"),
             "scenario":       _load_json("scenario_json"),
             "value_trap":     _load_json("value_trap_json"),
+            "sector_card_hash": row["sector_card_hash"] or None,
+            "card_qa_audit":  _load_json("card_qa_json"),
         }
 
     except Exception as exc:
@@ -1324,14 +1349,22 @@ def _parse_sections_inline(text: str) -> dict[str, str]:
     Self-contained Section 2 parser — mirrors deep_research._extract_sections().
 
     Kept here to avoid a circular import (run_archive → deep_research).
-    Returns {"2a": ..., "2b": ..., ..., "2f": ...} or {"full": text} if no
-    section headers are found.
+    Returns {"2a": ..., "2b": ..., ..., "2f": ..., "brief": ...} or
+    {"full": text} if no section headers are found.
+
+    MUST stay in lock-step with deep_research._extract_sections(): the C2
+    extractor cache keys on a hash of these sections, and a fresh run hashes
+    _extract_sections()' output while a cache-hit run hashes THIS re-parse of
+    the archived text. Any drift (boundary regex, SECTION 7 handling) makes
+    the hashes disagree and silently disables extractor reuse. Sync points:
+      * boundary regex (2026-04 broadening: non-word prefixes, Section/Part prose)
+      * SECTION 7 brief extraction + spanning-section trim (R1, 2026-08)
     """
     import re
     # Widened to tolerate LLM formatting variants — kept in lock-step with
     # deep_research._extract_sections(). See that function's docstring.
     boundary = re.compile(
-        r"(?:^|\n)[ \t#─>*]*\*{0,2}\b(2[A-F])[\.\:—\-\)\s]",
+        r"(?:^|\n)[^\w\n]*\*{0,2}(?:section\s+|part\s+)?\b(2[A-F])\b[\.\:—\-\)\*\s]",
         re.IGNORECASE | re.MULTILINE,
     )
     positions: list[tuple[str, int]] = []
@@ -1346,6 +1379,22 @@ def _parse_sections_inline(text: str) -> dict[str, str]:
     for i, (key, start) in enumerate(positions):
         end = positions[i + 1][1] if i + 1 < len(positions) else len(text)
         sections[key] = text[start:end].strip()
+
+    # R1: SECTION 7 — Industry Intelligence Brief (same regex/trim as
+    # _extract_sections): surface under "brief" and trim the spanning section.
+    _brief_m = re.search(
+        r"(?:^|\n)[^\w\n]*(?:SECTION\s*7[^\n]*?)?INDUSTRY\s+INTELLIGENCE\s+BRIEF",
+        text,
+        re.IGNORECASE,
+    )
+    if _brief_m:
+        _bstart = _brief_m.start()
+        sections["brief"] = text[_bstart:].strip()
+        _spanning = [k for k, s in positions if s <= _bstart]
+        if _spanning:
+            _last_key = _spanning[-1]
+            _last_start = dict(positions)[_last_key]
+            sections[_last_key] = text[_last_start:_bstart].strip()
     return sections
 
 

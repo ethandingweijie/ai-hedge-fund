@@ -19,7 +19,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.data.models import IndustryBriefOutput
 from src.data.sector_profiles import get_wacc
 from src.graph.state import AgentState
-from src.tools.api import get_financial_metrics, get_market_cap
+from src.tools.api import get_analyst_estimates, get_financial_metrics, get_market_cap
 from src.utils.llm import call_llm
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
@@ -913,6 +913,176 @@ def _parse_sector_kpis(sector: str, raw: dict) -> dict:
         return {k: v for k, v in parser(raw).items() if v is not None}
     except Exception:
         return {}
+
+
+def _fmt_num(v, pct: bool = False, nd: int = 1) -> str:
+    """Small formatter for deterministic indicator lines."""
+    if v is None:
+        return "N/A"
+    try:
+        fv = float(v)
+    except (TypeError, ValueError):
+        return "N/A"
+    if pct:
+        return f"{fv * 100:.{nd}f}%"
+    return f"{fv:.{nd}f}"
+
+
+def assemble_industry_brief_merged(state: AgentState) -> bool:
+    """Speed round 2 (R1): deterministic industry-brief assembly — zero LLM calls.
+
+    Consumes SECTION 7 — Industry Intelligence Brief produced inside the deep
+    research Tier-1 call (INDUSTRY_BRIEF_MODE=merged), computes the universal
+    indicators in pure Python from FMP data, and pulls typed sector KPIs from
+    the already-run extractor framework metrics. Writes the same state keys as
+    ``run_industry_specialist`` (industry_brief, industry_kpis, sector_kpis,
+    industry_footnotes), so no consumer changes.
+
+    Returns True on success. Returns False when the deep-research output has
+    no SECTION 7 (e.g. archived research predating the merge feature) — the
+    caller then falls back to ``run_industry_specialist``.
+    """
+    agent_id = "industry_specialist"
+    ticker = state["data"].get("primary_ticker", state["data"]["tickers"][0])
+    sector = state["data"].get("sector", "Tech")
+    end_date = state["data"]["end_date"]
+
+    sections = state["data"].get("deep_research_sections") or {}
+    brief_text = (sections.get("brief") or "").strip()
+    if not brief_text:
+        return False   # no merged brief available → specialist fallback
+
+    progress.update_status(agent_id, ticker, "Assembling industry brief (merged mode)")
+
+    # ── Universal indicators — pure Python from FMP ─────────────────────────
+    api_key = get_api_key_from_state(state, "FINANCIAL_DATASETS_API_KEY")
+    metrics_list: list = []
+    market_cap = None
+    eps_fwd = None
+    try:
+        metrics_list = get_financial_metrics(ticker, end_date, period="ttm", limit=1, api_key=api_key)
+    except Exception as _e:
+        print(f"  [brief-merged] get_financial_metrics failed for {ticker}: {_e}")
+    try:
+        market_cap = get_market_cap(ticker, end_date, api_key=api_key)
+    except Exception as _e:
+        print(f"  [brief-merged] get_market_cap failed for {ticker}: {_e}")
+    try:
+        _est = get_analyst_estimates(ticker, end_date, period="annual", limit=1, api_key=api_key)
+        if _est:
+            eps_fwd = getattr(_est[0], "eps_avg", None)
+    except Exception as _e:
+        print(f"  [brief-merged] get_analyst_estimates failed for {ticker}: {_e}")
+
+    m = metrics_list[0] if metrics_list else None
+    _is_financial = sector == "Financials"
+    _is_reit = sector in ("RealEstate", "REIT")
+
+    # Trailing P/E
+    pe = getattr(m, "price_to_earnings_ratio", None) if m else None
+    if pe is None:
+        pe_line = "Trailing P/E: N/A — not available"
+    elif pe <= 0:
+        pe_line = "Trailing P/E: N/A — earnings are negative"
+    else:
+        pe_line = f"Trailing P/E: {pe:.1f}" + (
+            " (financial intermediary — interpret alongside P/TBV)" if _is_financial else ""
+        )
+
+    # Forward P/E (price implied from trailing P/E × TTM EPS; forward consensus EPS)
+    eps_ttm = getattr(m, "earnings_per_share", None) if m else None
+    fwd_line = "Forward P/E: N/A — no forward consensus EPS"
+    if pe and pe > 0 and eps_ttm and eps_ttm > 0 and eps_fwd and eps_fwd > 0:
+        _price = pe * eps_ttm
+        fwd_line = f"Forward P/E: {_price / eps_fwd:.1f} (consensus EPS {eps_fwd:.2f})"
+
+    # EV/EBITDA
+    eve = getattr(m, "enterprise_value_to_ebitda_ratio", None) if m else None
+    if _is_financial:
+        eve_line = "EV/EBITDA: Not applicable — financial intermediary; use P/TBV or P/E on adjusted earnings"
+    elif eve is None:
+        eve_line = "EV/EBITDA: N/A — not available"
+    elif eve <= 0:
+        eve_line = "EV/EBITDA: N/A — pre-profitability"
+    else:
+        eve_line = f"EV/EBITDA: {eve:.1f}" + (
+            " (REIT — interpret alongside EV/FFO)" if _is_reit else ""
+        )
+
+    # ROIC vs WACC (WACC anchor: same sector-calibrated rate the specialist used)
+    roic = getattr(m, "return_on_invested_capital", None) if m else None
+    _val_profile = state["data"].get("valuation_profile", "") or ""
+    try:
+        _wacc = get_wacc(sector, leverage=0.0, profile=_val_profile)
+    except Exception:
+        _wacc = None
+    if roic is None:
+        roic_line = "ROIC vs WACC: N/A — invested capital unavailable"
+    elif _wacc is None:
+        roic_line = f"ROIC: {_fmt_num(roic, pct=True)} | WACC: N/A"
+    else:
+        _spread = roic - _wacc
+        _tag = "value creation" if _spread > 0 else ("value destruction" if _spread < 0 else "at cost of capital")
+        roic_line = (
+            f"ROIC {_fmt_num(roic, pct=True)} vs WACC {_fmt_num(_wacc, pct=True)} "
+            f"→ spread {_fmt_num(abs(_spread), pct=True)} {_tag}"
+        )
+
+    # FCF margin = (FCF/share ÷ EPS) × net margin (per-share derivation avoids
+    # a second revenue fetch; degrades to N/A when any leg is missing)
+    fcf_ps = getattr(m, "free_cash_flow_per_share", None) if m else None
+    net_margin = getattr(m, "net_margin", None) if m else None
+    if fcf_ps is not None and eps_ttm and eps_ttm > 0 and net_margin is not None and net_margin != 0:
+        _fcf_margin = (fcf_ps / eps_ttm) * net_margin
+        fcf_line = f"FCF Margin: {_fmt_num(_fcf_margin, pct=True)}"
+    else:
+        fcf_line = "FCF Margin: N/A — insufficient data"
+
+    indicators_block = (
+        "UNIVERSAL INDICATORS (computed deterministically from Financial Data API):\n"
+        f"- {fwd_line}\n- {pe_line}\n- {eve_line}\n- {roic_line}\n- {fcf_line}"
+    )
+
+    # ── Typed sector KPIs ← extractor framework metrics (already in state) ──
+    _fm_all = state["data"].get("framework_metrics") or {}
+    _fm = _fm_all.get(ticker) or {}
+    sector_kpis: dict = {
+        k: v for k, v in _fm.items()
+        if isinstance(v, (int, float)) and not k.startswith("_")
+    }
+
+    # Numeric industry KPIs for investor-prompt injection (same shape as the
+    # specialist's freeform key_kpis dict: flat str→number)
+    industry_kpis: dict = dict(sector_kpis)
+    if pe and pe > 0:
+        industry_kpis["trailing_pe"] = round(pe, 2)
+    if eve and eve > 0 and not _is_financial:
+        industry_kpis["ev_ebitda"] = round(eve, 2)
+    if roic is not None:
+        industry_kpis["roic"] = round(roic, 4)
+
+    kpi_table = ""
+    if sector_kpis:
+        # Raw values as-is (no % guessing — framework KPIs carry mixed scales)
+        _rows = "\n".join(f"| {k} | {v} |" for k, v in list(sector_kpis.items())[:25])
+        kpi_table = f"\n\nKEY SECTOR METRICS (extractor-derived):\n| KPI | Value |\n|---|---|\n{_rows}"
+
+    state["data"]["industry_brief"] = (
+        f"{brief_text}\n\n{indicators_block}{kpi_table}"
+    )
+    state["data"]["industry_kpis"] = industry_kpis
+    state["data"]["sector_kpis"] = sector_kpis
+    # Merged brief reuses the deep-research [n] markers; citation_registry is
+    # already in state from phase 3 — no specialist footnotes to merge.
+    state["data"]["industry_footnotes"] = []
+
+    progress.update_status(
+        agent_id, ticker,
+        f"✓ Brief assembled (merged mode, {len(sector_kpis)} sector KPIs, 0 LLM calls)"
+    )
+    print(f"  [brief-merged] Industry brief assembled deterministically for {ticker} "
+          f"({len(brief_text)} chars brief + {len(sector_kpis)} sector KPIs)")
+    return True
 
 
 def run_industry_specialist(state: AgentState) -> AgentState:

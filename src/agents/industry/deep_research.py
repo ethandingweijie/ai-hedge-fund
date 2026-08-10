@@ -502,6 +502,26 @@ def _extract_sections(report_text: str) -> dict[str, str]:
         end = positions[i + 1][1] if i + 1 < len(positions) else len(report_text)
         sections[key] = report_text[start:end].strip()
 
+    # ── Speed round 2 (R1): SECTION 7 — Industry Intelligence Brief ──────
+    # INDUSTRY_BRIEF_MODE=merged appends "SECTION 7 — INDUSTRY INTELLIGENCE
+    # BRIEF" after 2F. Surface it under the "brief" key (phase 4 deterministic
+    # assembly consumes it) and trim the 2x section that spans its header so
+    # 2A–2F consumers don't see brief text. All downstream section access is
+    # keyed (.get("2a") etc.), so the extra key is inert elsewhere.
+    _brief_m = re.search(
+        r"(?:^|\n)[^\w\n]*(?:SECTION\s*7[^\n]*?)?INDUSTRY\s+INTELLIGENCE\s+BRIEF",
+        report_text,
+        re.IGNORECASE,
+    )
+    if _brief_m:
+        _bstart = _brief_m.start()
+        sections["brief"] = report_text[_bstart:].strip()
+        _spanning = [k for k, s in positions if s <= _bstart]
+        if _spanning:
+            _last_key = _spanning[-1]
+            _last_start = dict(positions)[_last_key]
+            sections[_last_key] = report_text[_last_start:_bstart].strip()
+
     return sections
 
 
@@ -2091,6 +2111,140 @@ def _build_research_system(
     tier_driver_appendix = render_tier_driver_block(profile_name, sector)
     if tier_driver_appendix:
         kpi_framework_block = kpi_framework_block + tier_driver_appendix
+
+    # ── Speed round 2 (R2/R1) — env-gated prompt profile ─────────────────
+    # DEEP_RESEARCH_SEARCH_PROFILE:
+    #   "valuation_focused" (default) — the 8 searches downstream valuation
+    #     actually consumes (management/guidance → DCF calibration; share +
+    #     competitors → scenarios; market size → cycle; regulatory + one-offs
+    #     → bear case; 2F KPIs → anchor monitoring), with 2A value-chain and
+    #     2C moat compressed to verdict-sized outputs.
+    #   "full" — legacy 13-query, full-prose prompt (rollback knob).
+    # INDUSTRY_BRIEF_MODE:
+    #   "merged" (default) — append SECTION 7 (industry intelligence brief)
+    #     so phase 4 is a deterministic assembly with no specialist LLM call.
+    #   "legacy" — omit SECTION 7; the specialist agent runs as before.
+    _search_profile = os.environ.get(
+        "DEEP_RESEARCH_SEARCH_PROFILE", "valuation_focused").strip().lower()
+    _brief_mode = os.environ.get(
+        "INDUSTRY_BRIEF_MODE", "merged").strip().lower()
+
+    if _search_profile == "full":
+        _search_seq_header = "Suggested search sequence (adapt as findings dictate):"
+        _search_sequence = f"""  1. "[Ticker] CEO management commentary strategy outlook {ym1} {year} earnings call"   [RECENT]
+  2. "[Ticker] market share competitive landscape {ym1} {year}"                         [RECENT]
+  3. "[Ticker] earnings call transcript key quotes guidance {ym1} {year}"               [RECENT]
+  4. "[Ticker] competitor analysis market positioning {year} {y1}"                      [FORWARD]
+  5. "[Industry] market size growth rate {year} {y1} IDC Gartner"                      [FORWARD]
+  6. "[Ticker] product launches AI strategy new products {ym1} {year}"                  [RECENT]
+  7. "[Ticker] regulatory government policy ruling {ym1} {year}"                        [RECENT]
+  8. "[Ticker] analyst price target consensus upgrade downgrade {ym1} {year}"           [RECENT]
+     → When reporting analyst price targets, always include the date of the most recent
+       revision. Flag any consensus PT that has not been updated within the last 6 months
+       as STALE — stale targets may not reflect the current price level or recent earnings.
+  9. "[Ticker] material event impairment restructuring asset sale write-down {ym1} {year}" [RECENT]
+ 10. "[Industry] M&A acquisition merger deal completed EV EBITDA comparable multiple {ym1} {year}" [RECENT]
+ 11. "[Ticker] GAAP revenue vs adjusted revenue reconciliation {ym1} {year} 10-K"      [RECENT]
+ 12. "[Ticker] customer wins losses major contract partnership {ym1} {year}"            [RECENT]
+ 13. "[Ticker] management guidance EBITDA revenue outlook forecast FY{y1} {year}"      [FORWARD]
+     → CRITICAL: Extract any quantitative forward guidance from earnings calls, investor
+       presentations, or press releases. Report EBITDA guidance range (low/mid/high),
+       revenue guidance, capex guidance, and margin targets as exact dollar figures.
+       Format as: "EBITDA guidance: $X.XB–$X.XB (mid $X.XB)" so DCF agent can parse it.
+  + additional searches to fill gaps in any sub-section"""
+        _section_2a_opening = """2A.1 Draw the value chain — every step from raw input to end customer.
+For each step estimate: gross margin range (%), who controls it (concentrated /
+fragmented), whether margin is expanding/stable/compressing, and capital
+intensity (asset-heavy / asset-light).
+
+2A.2 Where does this company sit in the chain? Is it moving up or down
+(vertical integration trend)? What is its stated rationale — margin capture,
+data control, customer lock-in, or defensive reaction?"""
+        _section_2c = """2C.1 Moat type — identify the PRIMARY source (one only):
+network effects / switching costs / cost advantage / intangible assets /
+efficient scale.
+
+2C.2 Moat evidence — the test (choose appropriate for moat type):
+- Network effects: LTV trend, CAC trend (3-year data)
+- Switching costs: churn rate, what customer loses by switching, price
+  increase test results
+- Cost advantage: unit cost vs competitor over 3 years, widening or narrowing
+- Intangible assets: patent expiry, licence terms, NPS / brand value trend,
+  data proprietary and monetised?
+- Efficient scale: minimum efficient scale, could a second entrant earn CoC?
+
+2C.3 Moat direction — score each over 3 years (widening + / stable = / narrowing −):
+gross margin trend, customer retention trend, pricing power realised,
+market share trend, ROIC vs WACC spread.
+Flag "Moat Erosion Risk" if 3+ narrowing; "Moat Expansion" if 3+ widening.
+
+2C.4 Moat stress test — what specific scenario destroys the primary moat?
+Describe the attack vector for each moat type."""
+    else:
+        _search_seq_header = (
+            "Required search sequence (exactly 8 searches — the complete set "
+            "downstream valuation consumes):"
+        )
+        _search_sequence = f"""  1. "[Ticker] CEO management commentary strategy outlook {ym1} {year} earnings call"   [RECENT]
+  2. "[Ticker] market share competitive landscape {ym1} {year}"                         [RECENT]
+  3. "[Ticker] earnings call transcript key quotes guidance {ym1} {year}"               [RECENT]
+  4. "[Ticker] competitor analysis market positioning {year} {y1}"                      [FORWARD]
+  5. "[Industry] market size growth rate {year} {y1} IDC Gartner"                      [FORWARD]
+  6. "[Ticker] regulatory government policy ruling {ym1} {year}"                        [RECENT]
+  7. "[Ticker] material event impairment restructuring asset sale write-down {ym1} {year}" [RECENT]
+  8. "[Ticker] management guidance EBITDA revenue outlook forecast FY{y1} {year}"      [FORWARD]
+     → CRITICAL: Extract any quantitative forward guidance from earnings calls, investor
+       presentations, or press releases. Report EBITDA guidance range (low/mid/high),
+       revenue guidance, capex guidance, and margin targets as exact dollar figures.
+       Format as: "EBITDA guidance: $X.XB–$X.XB (mid $X.XB)" so DCF agent can parse it.
+Each search maps to a downstream valuation consumer — run all 8. Only add an
+extra search if one of these returns nothing useful and a reformulated query
+is needed."""
+        _section_2a_opening = """2A.1 Value chain — ONE verdict line per step (no prose paragraphs), format:
+"[step]: [gross margin band %] | [concentrated/fragmented] | [expanding/stable/compressing] | [asset-heavy/asset-light]"
+
+2A.2 Company position — ONE line: where this company sits in the chain,
+whether it is moving up or down (vertical integration), and the stated
+rationale (margin capture / data control / customer lock-in / defensive)."""
+        _section_2c = """2C.1 PRIMARY moat source (choose exactly one): network effects / switching
+costs / cost advantage / intangible assets / efficient scale.
+
+2C.2 Moat verdict — compact block, no prose paragraphs:
+- Evidence: the single strongest datapoint supporting the moat (source + date).
+- Direction (3-yr): gross margin [+ / = / −], retention [+ / = / −], pricing
+  power [+ / = / −], market share [+ / = / −], ROIC vs WACC spread [+ / = / −].
+  Flag "Moat Erosion Risk" if 3+ narrowing; "Moat Expansion" if 3+ widening.
+- Stress test: ONE sentence — the specific scenario that destroys this moat."""
+
+    if _brief_mode == "merged":
+        _brief_section_spec = """
+════════════════════════════════════════════
+SECTION 7 — INDUSTRY INTELLIGENCE BRIEF
+════════════════════════════════════════════
+After 2F, write an investment-committee brief synthesising 2A–2F.
+
+FORMAT — 8 to 12 bullets. Each bullet is:
+- an ASSERTION-HEADED first line: an investment conclusion, not a topic label.
+  BAD: "Competition"  |  GOOD: "Price-Driven Share Gains Cap Margin Recovery"
+- followed by one or two sentences of evidence + the valuation/thesis so-what.
+- Reuse the inline [n] footnote markers already cited in 2A–2F — do NOT create
+  new reference numbers and do NOT add a REFERENCES block to Section 7.
+
+GROUNDING — every figure must already appear in your searches above or in the
+pre-loaded FMP data. Do NOT introduce numbers from training knowledge.
+
+COVER (one or more bullets each): competitive position and share dynamics;
+growth durability and cycle exposure; margin / returns trajectory; balance
+sheet or one-off risks; management guidance vs consensus; the single biggest
+thesis risk and what would change the view.
+
+Do NOT include a BUY/SELL recommendation.
+"""
+        _brief_output_note = ", followed by SECTION 7 — Industry Intelligence Brief"
+    else:
+        _brief_section_spec = ""
+        _brief_output_note = ""
+
     return f"""
 TOOL ENVIRONMENT (read first — non-negotiable):
 - You have exactly ONE tool: web_search. That is the only tool in this context.
@@ -2149,7 +2303,7 @@ SOURCE QUALITY STANDARDS (mandatory — applies to every claim in this report):
 - All regulatory, grid, energy, drug, or spectrum data MUST cite the relevant
   government agency (EIA, NRC, FERC, FDA, FCC) — NOT a third-party summary.
 
-Suggested search sequence (adapt as findings dictate):
+{_search_seq_header}
 Note: revenue, margins, FCF, capex, and insider trade data are PRE-LOADED above
 from Financial Datasets API. Do NOT search for those — use all searches for
 qualitative intelligence that FMP cannot provide.
@@ -2157,27 +2311,7 @@ Year guidance: searches marked [RECENT] use {ym1}–{year} to capture both the
 prior year and current year. Searches marked [FORWARD] use {year}–{y1} for
 outlook data. Do not restrict results to a single year — older context is fine.
 
-  1. "[Ticker] CEO management commentary strategy outlook {ym1} {year} earnings call"   [RECENT]
-  2. "[Ticker] market share competitive landscape {ym1} {year}"                         [RECENT]
-  3. "[Ticker] earnings call transcript key quotes guidance {ym1} {year}"               [RECENT]
-  4. "[Ticker] competitor analysis market positioning {year} {y1}"                      [FORWARD]
-  5. "[Industry] market size growth rate {year} {y1} IDC Gartner"                      [FORWARD]
-  6. "[Ticker] product launches AI strategy new products {ym1} {year}"                  [RECENT]
-  7. "[Ticker] regulatory government policy ruling {ym1} {year}"                        [RECENT]
-  8. "[Ticker] analyst price target consensus upgrade downgrade {ym1} {year}"           [RECENT]
-     → When reporting analyst price targets, always include the date of the most recent
-       revision. Flag any consensus PT that has not been updated within the last 6 months
-       as STALE — stale targets may not reflect the current price level or recent earnings.
-  9. "[Ticker] material event impairment restructuring asset sale write-down {ym1} {year}" [RECENT]
- 10. "[Industry] M&A acquisition merger deal completed EV EBITDA comparable multiple {ym1} {year}" [RECENT]
- 11. "[Ticker] GAAP revenue vs adjusted revenue reconciliation {ym1} {year} 10-K"      [RECENT]
- 12. "[Ticker] customer wins losses major contract partnership {ym1} {year}"            [RECENT]
- 13. "[Ticker] management guidance EBITDA revenue outlook forecast FY{y1} {year}"      [FORWARD]
-     → CRITICAL: Extract any quantitative forward guidance from earnings calls, investor
-       presentations, or press releases. Report EBITDA guidance range (low/mid/high),
-       revenue guidance, capex guidance, and margin targets as exact dollar figures.
-       Format as: "EBITDA guidance: $X.XB–$X.XB (mid $X.XB)" so DCF agent can parse it.
-  + additional searches to fill gaps in any sub-section
+{_search_sequence}
 
 Your output feeds directly into downstream valuation and risk agents:
   2A (Profit pool)   → informs variant perception analysis
@@ -2201,14 +2335,7 @@ Purpose: Establish WHERE the money is made in this industry before analysing
 competition. Many companies compete fiercely for low-margin segments while
 ignoring high-margin ones.
 
-2A.1 Draw the value chain — every step from raw input to end customer.
-For each step estimate: gross margin range (%), who controls it (concentrated /
-fragmented), whether margin is expanding/stable/compressing, and capital
-intensity (asset-heavy / asset-light).
-
-2A.2 Where does this company sit in the chain? Is it moving up or down
-(vertical integration trend)? What is its stated rationale — margin capture,
-data control, customer lock-in, or defensive reaction?
+{_section_2a_opening}
 
 2A.3 Material one-time events: Flag any facility fires, regulatory shutdowns,
 asset write-downs, or force-majeure events in the last 18 months. For each,
@@ -2281,26 +2408,7 @@ that has prevented entry so far.
 Purpose: Determine whether this company's competitive advantage is durable,
 widening, or eroding. Moats are not binary — they have direction and velocity.
 
-2C.1 Moat type — identify the PRIMARY source (one only):
-network effects / switching costs / cost advantage / intangible assets /
-efficient scale.
-
-2C.2 Moat evidence — the test (choose appropriate for moat type):
-- Network effects: LTV trend, CAC trend (3-year data)
-- Switching costs: churn rate, what customer loses by switching, price
-  increase test results
-- Cost advantage: unit cost vs competitor over 3 years, widening or narrowing
-- Intangible assets: patent expiry, licence terms, NPS / brand value trend,
-  data proprietary and monetised?
-- Efficient scale: minimum efficient scale, could a second entrant earn CoC?
-
-2C.3 Moat direction — score each over 3 years (widening + / stable = / narrowing −):
-gross margin trend, customer retention trend, pricing power realised,
-market share trend, ROIC vs WACC spread.
-Flag "Moat Erosion Risk" if 3+ narrowing; "Moat Expansion" if 3+ widening.
-
-2C.4 Moat stress test — what specific scenario destroys the primary moat?
-Describe the attack vector for each moat type.
+{_section_2c}
 
 ──────────────────────────────────────────
 2D. INDUSTRY CYCLE POSITIONING
@@ -2350,12 +2458,12 @@ For each: the single evidence point supporting your view AND the single data
 point that would change your mind.
 
 {kpi_framework_block}
-
+{_brief_section_spec}
 ════════════════════════════════════════════
 OUTPUT FORMAT & CITATION REQUIREMENTS
 ════════════════════════════════════════════
 After completing your searches, write the full Section 2 report using the
-sub-section headers above (2A through 2F). Each sub-section must be populated
+sub-section headers above (2A through 2F){_brief_output_note}. Each sub-section must be populated
 with real data from your searches — do not leave placeholders. Do NOT include
 a BUY/SELL recommendation.
 
@@ -3801,10 +3909,19 @@ def _research_one_ticker(
     except Exception:
         pass   # logging only — must not block pipeline
 
+    # Speed round 2 (R1): when the industry brief is merged into deep
+    # research (INDUSTRY_BRIEF_MODE=merged, default), ask Tier-1 to append
+    # SECTION 7 so phase 4 needs no separate specialist LLM call.
+    _brief_directive = (
+        ", followed by SECTION 7 — Industry Intelligence Brief"
+        if os.environ.get("INDUSTRY_BRIEF_MODE", "merged").strip().lower() == "merged"
+        else ""
+    )
+
     human_msg = (
         _base_context
         + f"Research {company_display} ({sector} sector) using the web_search tool and produce "
-        f"the full Section 2 — Industry Structure report (sub-sections 2A through 2F). "
+        f"the full Section 2 — Industry Structure report (sub-sections 2A through 2F){_brief_directive}. "
         f"Focus on information from {int(year)-2}–{year}, with priority on {int(year)-1}–{year}. "
         f"IMPORTANT: This analysis is specifically about {company_display} — not any other "
         f"company that shares a similar ticker symbol. Confirm you are researching the correct "
@@ -3820,11 +3937,11 @@ def _research_one_ticker(
         f"outages, contract wins/losses). Cite all web-sourced claims with source name and date.\n\n"
         f"Use at least 8 searches — start broad on industry structure, then drill into the most "
         f"material findings for each sub-section. After your searches, write the complete "
-        f"Section 2 report with all sub-sections 2A through 2F fully populated."
+        f"Section 2 report with all sub-sections 2A through 2F fully populated{_brief_directive}."
     )
     human_msg_kb = (
         _base_context
-        + f"Produce the full Section 2 — Industry Structure report (sub-sections 2A through 2F) "
+        + f"Produce the full Section 2 — Industry Structure report (sub-sections 2A through 2F){_brief_directive} "
         f"for {company_display} ({sector} sector). "
         f"IMPORTANT: This analysis is specifically about {company_display} — not any other "
         f"company that shares a similar ticker symbol.\n\n"
@@ -4824,14 +4941,11 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     end_date       = state["data"]["end_date"]
 
     # Default model for US tickers.
-    # Priority: DEEP_RESEARCH_MODEL env var (set by analysis_service when user
-    # selects Qwen — structured pipeline runs on Claude but deep research should
-    # still use Qwen for superior web search) → pipeline model → claude-sonnet-4-6.
-    _us_model: str = (
-        _cfg_getenv("DEEP_RESEARCH_MODEL")
-        or state["metadata"].get("model_name")
-        or "claude-sonnet-4-6"
-    )
+    # Priority: DEEP_RESEARCH_MODEL env/run-overlay → qwen3.6-plus.
+    # Deep research deliberately does NOT inherit the run model: live runs must
+    # research on Qwen's native web search (user directive 2026-08-09), so a
+    # missing env var falls back to qwen3.6-plus instead of the run's Claude.
+    _us_model: str = _cfg_getenv("DEEP_RESEARCH_MODEL") or "qwen3.6-plus"
 
     # FMP data is fetched by strategic_router for the primary ticker only.
     # Secondary tickers run without pre-loaded financials (web searches pick up the gap).

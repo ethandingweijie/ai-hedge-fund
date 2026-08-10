@@ -1,10 +1,36 @@
 """Helper functions for LLM"""
 
 import json
+import os
 from pydantic import BaseModel
 from src.llm.models import get_model, get_model_info, ModelProvider
 from src.utils.progress import progress
 from src.graph.state import AgentState
+
+# ── Speed round 2 (R4): model-tiering for non-research agents ─────────────
+# The fast tier applies to short-form synthesis agents that do not need the
+# run's research-grade model. Research-facing calls (deep research Tier-1,
+# extractors, DCF calibration, citation registry) are NOT in this group.
+_FAST_TIER_AGENT_NAMES = frozenset({"scenario_agent", "power_law_agent", "value_trap_agent"})
+_FAST_TIER_PREFIXES = ("investor_",)
+# Default fast model; set PIPELINE_FAST_MODEL to override, or to an empty
+# string to disable tiering entirely (all agents use the run model).
+# qwen3.6-plus = the Alibaba haiku-equivalent on this deployment: the fast,
+# cheap tier already proven for high-volume roles (card-QA DEFAULT_QA_MODEL).
+# The ALIBABA client branch carries timeout=120 + max_retries=3 tuned for
+# DashScope's limit_burst_rate 429s. Rollback: PIPELINE_FAST_MODEL=claude-haiku-4-5.
+_DEFAULT_FAST_MODEL = "qwen3.6-plus"
+
+
+def _resolve_env_model(model_name: str) -> tuple[str, str | None]:
+    """Resolve (model_name, provider) for an env-specified model via the
+    registry. Provider is None when the model is unknown — callers must fall
+    back rather than route to a broken client."""
+    from src.llm.models import find_model_by_name
+    _info = find_model_by_name(model_name)
+    if _info is not None:
+        return model_name, _info.provider.value
+    return model_name, None
 
 
 def call_llm(
@@ -173,22 +199,56 @@ def get_agent_model_config(state, agent_name):
     Get model configuration for a specific agent from the state.
     Falls back to global model configuration if agent-specific config is not available.
     Always returns valid model_name and model_provider values.
+
+    Override precedence (speed round 2, R4):
+      1. Env AGENT_MODEL_<AGENT_NAME_UPPER> — exact per-agent override
+         (e.g. AGENT_MODEL_SCENARIO_AGENT=qwen3.6-plus).
+      2. Request-level per-agent config (API callers).
+      3. Env PIPELINE_FAST_MODEL (default qwen3.6-plus) for the fast-tier
+         group: investor_* agents, scenario_agent, power_law_agent.
+         Set PIPELINE_FAST_MODEL="" to disable tiering.
+      4. Global run model.
     """
+    # 1. Exact env override
+    if agent_name:
+        _env_key = "AGENT_MODEL_" + str(agent_name).upper().replace("-", "_")
+        _env_model = os.environ.get(_env_key, "").strip()
+        if _env_model:
+            _name, _provider = _resolve_env_model(_env_model)
+            if _provider:
+                return _name, _provider
+            print(f"  [model-config] AGENT_MODEL override '{_env_model}' for "
+                  f"'{agent_name}' not found in registry — using run model")
+
     request = state.get("metadata", {}).get("request")
-    
+
     if request and hasattr(request, 'get_agent_model_config'):
         # Get agent-specific model configuration
         model_name, model_provider = request.get_agent_model_config(agent_name)
         # Ensure we have valid values
         if model_name and model_provider:
             return model_name, model_provider.value if hasattr(model_provider, 'value') else str(model_provider)
-    
+
+    # 3. Fast-tier group override (investors / scenario / trap agents)
+    if agent_name:
+        _fast_env = os.environ.get("PIPELINE_FAST_MODEL")
+        _fast_model = (_fast_env if _fast_env is not None else _DEFAULT_FAST_MODEL).strip()
+        if _fast_model and (
+            agent_name in _FAST_TIER_AGENT_NAMES
+            or str(agent_name).startswith(_FAST_TIER_PREFIXES)
+        ):
+            _name, _provider = _resolve_env_model(_fast_model)
+            if _provider:
+                return _name, _provider
+            print(f"  [model-config] PIPELINE_FAST_MODEL '{_fast_model}' not found "
+                  f"in registry — '{agent_name}' keeps the run model")
+
     # Fall back to global configuration (system defaults)
     model_name = state.get("metadata", {}).get("model_name") or "gpt-4.1"
     model_provider = state.get("metadata", {}).get("model_provider") or "OPENAI"
-    
+
     # Convert enum to string if necessary
     if hasattr(model_provider, 'value'):
         model_provider = model_provider.value
-    
+
     return model_name, model_provider

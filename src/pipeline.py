@@ -41,7 +41,7 @@ from src.agents.intelligence.analyst_revision_agent import run_analyst_revision_
 from src.agents.intelligence.news_sentiment_agent import run_news_sentiment_agent
 from src.agents.intelligence.earnings_quality_agent import run_earnings_quality_agent
 from src.agents.intelligence.short_interest_agent import run_short_interest_agent
-from src.agents.industry.specialist import run_industry_specialist
+from src.agents.industry.specialist import assemble_industry_brief_merged, run_industry_specialist
 from src.agents.industry.data_router import run_data_router
 from src.agents.analysis.dcf_agent import run_dcf_agent
 from src.agents.analysis.peer_comparison import run_peer_comparison
@@ -60,6 +60,56 @@ from src.utils.pdf_report import _compute_vgpm
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TRADE_LOG_PATH = os.path.join(DATA_DIR, "trade_log.json")
+
+# Speed round 2 (R3): default investor panel for automated runs — balanced
+# across bull/bear/value/growth. All 12 INVESTOR_PERSONAS remain registered
+# and selectable; user selections are validated and capped at 6 inside
+# run_advanced_pipeline so the investor phase is always a single wave.
+_DEFAULT_INVESTOR_SIX = ["buffett", "damodaran", "burry", "cathie_wood", "ackman", "graham"]
+assert set(_DEFAULT_INVESTOR_SIX) <= set(INVESTOR_PERSONAS), \
+    "default investor panel drifted from INVESTOR_PERSONAS keys"
+
+# Speed round 2 (R5): card-QA delta check — how far back to look for a prior
+# run whose card+research inputs match this one. Reuse only happens when the
+# stored hash, QA version and clean-audit conditions all hold (see
+# src.agents.audit.card_qa_agent.should_reuse_card_qa). Env gate:
+# CARD_QA_DELTA=true (default) | false.
+_CARD_QA_REUSE_DAYS = 7
+
+# Speed round 2 (R3): single-wave cap on active investors. The worker-pool
+# cap for this account is 6 (429s above it), so ≤6 active investors is always
+# exactly one wave (12 personas used to run 2 serial waves ≈ +2–2.5 min).
+_MAX_INVESTORS = 6
+
+
+def _resolve_investor_panel(selected_agents: list[str] | None) -> list[str]:
+    """Resolve the active investor panel for a run (speed round 2, R3).
+
+    All 12 INVESTOR_PERSONAS stay registered. Selection rules:
+      - User selection: validated against INVESTOR_PERSONAS (unknown names
+        dropped), capped at _MAX_INVESTORS.
+      - No selection: env PIPELINE_INVESTOR_PERSONAS (comma list, validated
+        and capped; "all" restores the full 12), defaulting to the balanced
+        6 (bull/bear/value/growth spread).
+    """
+    if selected_agents:
+        _valid = [a for a in selected_agents if a in INVESTOR_PERSONAS]
+        _dropped = [a for a in selected_agents if a not in INVESTOR_PERSONAS]
+        if _dropped:
+            print(f"  [investors] ignoring unknown agent name(s): {', '.join(_dropped)}")
+        if len(_valid) > _MAX_INVESTORS:
+            print(f"  [investors] capping user selection {len(_valid)} → {_MAX_INVESTORS} "
+                  f"(one-wave limit); keeping: {', '.join(_valid[:_MAX_INVESTORS])}")
+        return _valid[:_MAX_INVESTORS] or list(_DEFAULT_INVESTOR_SIX)
+
+    _env_personas = os.environ.get("PIPELINE_INVESTOR_PERSONAS", "").strip().lower()
+    if _env_personas == "all":
+        return list(INVESTOR_PERSONAS.keys())
+    if _env_personas:
+        _env_valid = [p.strip() for p in _env_personas.split(",") if p.strip()]
+        _env_valid = [p for p in _env_valid if p in INVESTOR_PERSONAS][:_MAX_INVESTORS]
+        return _env_valid or list(_DEFAULT_INVESTOR_SIX)
+    return list(_DEFAULT_INVESTOR_SIX)
 
 
 def run_advanced_pipeline(
@@ -111,7 +161,11 @@ def run_advanced_pipeline(
             },
         }
 
-        active_agents = selected_agents if selected_agents else list(INVESTOR_PERSONAS.keys())
+        # ── Investor selection (speed round 2, R3) ─────────────────────
+        # Validation + cap logic lives in _resolve_investor_panel (unit
+        # tested): user picks capped at 6, default balanced 6, env
+        # PIPELINE_INVESTOR_PERSONAS override ("all" = full 12).
+        active_agents = _resolve_investor_panel(selected_agents)
         primary_ticker = tickers[0] if tickers else ""
         print(f"  Active investor agents ({len(active_agents)}): {', '.join(active_agents)}")
 
@@ -439,7 +493,22 @@ def run_advanced_pipeline(
                                        f"[cache] Loaded from archive ({_phase_cache[tickers[0]]['age_days']:.1f}d old)")  # type: ignore[index]
                 print(f"  [cache] Industry brief loaded from archive — skipping LLM call")
             else:
-                state = run_industry_specialist(state)
+                # Speed round 2 (R1): merged mode assembles the brief
+                # deterministically from deep-research SECTION 7 + FMP
+                # indicators — zero LLM calls (was a ~3.5 min specialist
+                # call). Falls back to the specialist when the research has
+                # no SECTION 7 (archived runs pre-dating the merge) or the
+                # INDUSTRY_BRIEF_MODE=legacy rollback knob is set.
+                _brief_mode = os.environ.get("INDUSTRY_BRIEF_MODE", "merged").strip().lower()
+                _merged_ok = False
+                if _brief_mode == "merged":
+                    try:
+                        _merged_ok = assemble_industry_brief_merged(state)
+                    except Exception as _bm_err:
+                        print(f"  [brief-merged] deterministic assembly failed "
+                              f"({type(_bm_err).__name__}: {_bm_err}) — falling back to specialist")
+                if not _merged_ok:
+                    state = run_industry_specialist(state)
         brief_lines = state["data"].get("industry_brief", "").splitlines()
         for line in brief_lines[:80]:
             print(f"  {line}")
@@ -986,13 +1055,48 @@ def run_advanced_pipeline(
         # ----------------------------------------------------------------
         with _timed("10_5_card_qa"):
             try:
-                from src.agents.audit.card_qa_agent import run_card_qa_agent  # type: ignore
+                from src.agents.audit.card_qa_agent import (  # type: ignore
+                    compute_card_qa_hash,
+                    run_card_qa_agent,
+                    should_reuse_card_qa,
+                )
+                # R5 delta check: skip the QA LLM pass when this run's card +
+                # deep-research inputs are byte-identical to a recent run that
+                # produced a clean audit of the current QA_VERSION.
+                _qa_delta_on = os.getenv("CARD_QA_DELTA", "true").strip().lower() != "false"
                 _qa_audits: dict[str, dict] = {}
+                _card_hashes: dict[str, str] = {}
+                _dr_text = state["data"].get("deep_research") or ""
                 for _qa_ticker in tickers:
                     if not _qa_ticker:
                         continue
+                    _card_hashes[_qa_ticker] = compute_card_qa_hash(
+                        (_sector_card or {}).get(_qa_ticker), _dr_text,
+                    )
+                    _reused_audit: dict | None = None
+                    if _qa_delta_on:
+                        try:
+                            _prior = get_phase_cache(_qa_ticker, max_age_days=_CARD_QA_REUSE_DAYS)
+                            if _prior is not None and should_reuse_card_qa(
+                                _prior.get("card_qa_audit"),
+                                _prior.get("sector_card_hash"),
+                                _card_hashes[_qa_ticker],
+                            ):
+                                _reused_audit = dict(_prior["card_qa_audit"])
+                        except Exception as _delta_e:
+                            print(f"  [card_qa] delta check failed for {_qa_ticker}: "
+                                  f"{_delta_e!r} — running full QA")
+                    if _reused_audit is not None:
+                        _reused_audit["qa_reused"] = True
+                        _qa_audits[_qa_ticker] = _reused_audit
+                        print(f"  [card_qa] {_qa_ticker}: inputs unchanged — reused "
+                              f"prior clean audit (R5 delta)")
+                        continue
                     _qa_audits[_qa_ticker] = run_card_qa_agent(state, _qa_ticker)
                 state["data"]["card_qa_audit"] = _qa_audits
+                # Persisted by save_run → ticker_signals.sector_card_hash /
+                # card_qa_json so the next run can delta-check against it.
+                state["data"]["sector_card_hash"] = _card_hashes
             except Exception as _qa_exc:
                 import traceback as _qa_tb
                 _qa_trace = "".join(

@@ -18,6 +18,8 @@ itself should always produce a valid dict).
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -37,6 +39,60 @@ logger = logging.getLogger(__name__)
 
 QA_VERSION = "v1"
 DEFAULT_QA_MODEL = "qwen3.6-plus"
+
+
+# ── R5 delta check (Workstream E speed round 2) ─────────────────────────────
+
+def compute_card_qa_hash(sector_card_ticker: Any, deep_research_text: str) -> str:
+    """Stable content hash of the audited inputs for one ticker.
+
+    Covers the rendered sector-card payload and the deep-research text —
+    the two inputs the QA audit actually reads. If this hash is unchanged
+    across runs, a prior clean audit is still valid for the current run.
+    """
+    try:
+        card_json = json.dumps(sector_card_ticker, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        card_json = repr(sector_card_ticker)
+    dr_digest = hashlib.sha256((deep_research_text or "").encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{card_json}|{dr_digest}".encode("utf-8")).hexdigest()
+
+
+def should_reuse_card_qa(
+    prior_audit: dict | None,
+    prior_hash: str | None,
+    current_hash: str,
+) -> bool:
+    """R5 delta decision — is the prior audit reusable for this run?
+
+    Reuse requires ALL of:
+      - a prior audit exists and its qa_version matches the current QA_VERSION,
+      - identical content hash (sector card + deep research unchanged),
+      - the prior audit was clean: meta_check passed, no
+        classification_likely_wrong flag, and qa_budget_hit false
+        (a budget-hit audit may be incomplete).
+
+    Advisory flags (value_out_of_sane_range etc.) do NOT block reuse —
+    identical inputs would reproduce them verbatim.
+    """
+    if not isinstance(prior_audit, dict) or not prior_audit:
+        return False
+    if not isinstance(prior_hash, str) or not prior_hash or prior_hash != current_hash:
+        return False
+    if prior_audit.get("qa_version") != QA_VERSION:
+        return False
+    meta = prior_audit.get("meta_check")
+    if not isinstance(meta, dict) or not meta.get("passed", False):
+        return False
+    flags = prior_audit.get("human_review_flags") or []
+    if any(
+        isinstance(f, dict) and f.get("reason") == "classification_likely_wrong"
+        for f in flags
+    ):
+        return False
+    if prior_audit.get("qa_budget_hit"):
+        return False
+    return True
 
 
 # ── Path-walking helpers ────────────────────────────────────────────────────
