@@ -584,6 +584,26 @@ def _canonicalize_requested_agents(agents: list[str]) -> list[str]:
     return out
 
 
+# Reverse map: full agent_id → bare persona key. Current pipelines key
+# investor signals by the bare short name ('damodaran'), while legacy
+# archived runs stored full agent_ids ('aswath_damodaran_agent').
+_AGENT_ID_TO_SHORT = {v: k for k, v in _FRONTEND_SHORT_TO_AGENT_ID.items()}
+
+
+def _canonical_agent_key(name: str) -> str:
+    """Normalise any agent-name spelling to the bare persona key that
+    analyst_signals actually stores.
+    'damodaran' / 'aswath_damodaran_agent' / 'damodaran_agent' → 'damodaran'.
+    Unknown names pass through with a trailing '_agent' stripped."""
+    if name in _FRONTEND_SHORT_TO_AGENT_ID:
+        return name                        # already the bare short name
+    if name in _AGENT_ID_TO_SHORT:
+        return _AGENT_ID_TO_SHORT[name]    # full agent_id → short name
+    if name.endswith("_agent"):
+        return name[:-6]                   # legacy suffixed spelling
+    return name
+
+
 def get_cached_run(
     ticker: str,
     within_minutes: int = 30,
@@ -640,10 +660,18 @@ def get_cached_run(
     if agents:
         cached_data    = result["full_result_json"].get("data", {})
         cached_signals = cached_data.get("analyst_signals", {})
+        # Compare both sides in ONE namespace: the bare persona keys that
+        # analyst_signals stores ('damodaran', 'graham', …). Pre-fix the
+        # requested side was normalised to full agent_ids
+        # ('aswath_damodaran_agent') which never matched the bare stored
+        # keys → the 30-min endpoint cache missed on EVERY user-selected
+        # re-run. _canonical_agent_key() accepts every historical spelling
+        # on both sides (bare short, full agent_id, legacy '<name>_agent').
         cached_investor_agents = sorted(
-            k for k in cached_signals if k not in _CACHE_SYSTEM_AGENTS
+            _canonical_agent_key(k)
+            for k in cached_signals if k not in _CACHE_SYSTEM_AGENTS
         )
-        requested_normalised = sorted(_canonicalize_requested_agents(agents))
+        requested_normalised = sorted(_canonical_agent_key(a) for a in agents)
         if cached_investor_agents != requested_normalised:
             return None   # different agent selection — force fresh run
 
