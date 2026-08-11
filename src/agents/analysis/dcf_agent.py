@@ -469,6 +469,31 @@ def _mean_fcf_margin(series: list[dict], field: str = "free_cash_flow") -> Optio
     return med
 
 
+def _median_positive_fcf_margin(
+    series: list[dict], field: str = "free_cash_flow"
+) -> Optional[float]:
+    """Median of the POSITIVE per-year FCF margins over the last 5 years.
+
+    SW50 cascade input (task #18): when the trailing mean margin is ≤ 0,
+    the median of the positive years is the most defensible proxy for the
+    business's demonstrated owner-earnings power — robust to one-off
+    blow-up years, unlike the mean. Returns None when no year was
+    positive; the caller then disables the DCF family rather than letting
+    the FCF floor manufacture a fake near-zero anchor.
+    """
+    margins = []
+    for row in series[-5:]:
+        rev = row.get("revenue")
+        fcf = row.get(field)
+        if fcf is not None and rev and rev > 0:
+            m = fcf / rev
+            if m > 0:
+                margins.append(m)
+    if not margins:
+        return None
+    return statistics.median(margins)
+
+
 def _analyst_revenue_growth(estimates: list, revenue_base: float) -> Optional[float]:
     if not estimates or not revenue_base:
         return None
@@ -2122,11 +2147,9 @@ def _compute_method_value(
     sm = scenario_mult.get(scenario, 1.0)
 
     # ── DCF / DCF variants ─────────────────────────────────────────────────
-    dcf_family = {"DCF", "DCF (2-stage)", "DCF (FCF+)", "DCF (Levered)", "DCF (5-yr)",
-                  "DCF (LTG)", "NRR-adj DCF", "Rev DCF (ARR)", "Backlog DCF",
-                  "PPA-backed DCF", "Unit Econ DCF", "Rev DCF (GMV)", "Rev DCF",
-                  "Power Price DCF", "Reverse DCF", "Rev DCF (Mkt Sh)"}
-    if method_name in dcf_family:
+    # _DCF_PROJECTION_FAMILY (module constant, defined below) — every name
+    # here projects via _project_dcf and therefore consumes fcf_margin_base.
+    if method_name in _DCF_PROJECTION_FAMILY:
         iv, _, _, _ = _project_dcf(
             revenue_base, fcf_margin_base, growth_base, 0.0,
             wacc, tgr, fcf_floor, net_debt, shares,
@@ -2871,6 +2894,16 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
     "DCF (Levered)", "Rev DCF (Mkt Sh)",
 })
 
+#: Every method name _compute_method_value routes into _project_dcf. A
+#: superset of _DCF_FAMILY_NAMES (the blend's dcf-bucket membership test):
+#: several revenue-DCF variants are bucketed with the multiples by
+#: _blend_methods but still PROJECT via fcf_margin_base. The OE≤0 disable
+#: gate (task #18) must knock out exactly the projecting set, so the
+#: dispatcher and the gate share this one constant and can never drift.
+_DCF_PROJECTION_FAMILY: frozenset[str] = _DCF_FAMILY_NAMES | frozenset({
+    "DCF (5-yr)", "DCF (LTG)", "Rev DCF (GMV)", "Rev DCF",
+})
+
 
 def _blend_methods(
     profile_methods: list[dict],
@@ -3599,6 +3632,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         )
         if fcf_margin_owner is not None and _sbc_years >= 3:
             fcf_margin_base = fcf_margin_owner
+            _oe_basis_label = "owner-earnings"
+            _oe_basis_field = "fcf_owner_earnings"
             _drag_bps = int(round((fcf_margin_reported - fcf_margin_owner) * 10000))
             if _drag_bps > 0:
                 ticker_forward_flags.append(
@@ -3608,6 +3643,47 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
         else:
             fcf_margin_base = fcf_margin_reported
+            _oe_basis_label = "reported-FCF"
+            _oe_basis_field = "free_cash_flow"
+
+        # ── SW50 cascade: owner-earnings basis ≤ 0 (task #18) ─────────────
+        # Reference: src/research_ideas/sw46/iv15.py::_resolve_base_oe.
+        # A non-positive trailing owner-earnings margin used to flow into
+        # _project_dcf, where the per-year FCF floor (FCF_MARGIN_FLOOR,
+        # typically −5%) converted it into a small positive IV that was
+        # really only discounted net cash — yet it still sat in the blend
+        # at full profile weight and dragged the IV toward zero (CRWD
+        # 2026-08: baseline IV $13.69 vs multiples ~$26). Instead of
+        # letting the floor manufacture a fake anchor:
+        #   1. If the chosen basis field has ANY positive-margin years in
+        #      the 5-year window, use their MEDIAN as the DCF basis (the
+        #      business has demonstrated it can generate owner earnings;
+        #      the median is robust to one-off blow-up years) — flagged.
+        #   2. If it has none, disable every DCF-projection method (None
+        #      → _blend_methods renormalizes onto the multiples bucket;
+        #      the structural gate + methods_unavailable name the excluded
+        #      methods) — flagged.
+        # Profile classification below (get_valuation_profile) deliberately
+        # keeps the PRE-cascade trailing margin — the profile choice must
+        # reflect demonstrated economics, not the repaired DCF basis.
+        _fcf_margin_for_classify = fcf_margin_base
+        _dcf_family_disabled = False
+        if fcf_margin_base <= 0:
+            _pos_median = _median_positive_fcf_margin(series, field=_oe_basis_field)
+            if _pos_median is not None:
+                ticker_forward_flags.append(
+                    f"OE≤0 cascade: trailing {_oe_basis_label} margin "
+                    f"{fcf_margin_base:.1%} ≤ 0 → DCF basis = median of "
+                    f"positive years {_pos_median:.1%}"
+                )
+                fcf_margin_base = _pos_median
+            else:
+                _dcf_family_disabled = True
+                ticker_forward_flags.append(
+                    f"OE≤0: no positive {_oe_basis_label} margin year in the "
+                    f"5y window → DCF-family methods disabled, blend is "
+                    f"multiples-only"
+                )
 
         # ── Analyst estimates (fetched eagerly — cached) ──────────────────
         # Pulled BEFORE the growth waterfall so dispersion bands are available
@@ -3786,13 +3862,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"re-classifying from financials",
                 )
                 profile_name, profile_data = get_valuation_profile(
-                    sector, revenue_cagr, fcf_margin_base, leverage, is_pre_revenue,
-                    revenue_base=revenue_base,
+                    sector, revenue_cagr, _fcf_margin_for_classify, leverage,
+                    is_pre_revenue, revenue_base=revenue_base,
                 )
         else:
             profile_name, profile_data = get_valuation_profile(
-                sector, revenue_cagr, fcf_margin_base, leverage, is_pre_revenue,
-                revenue_base=revenue_base,
+                sector, revenue_cagr, _fcf_margin_for_classify, leverage,
+                is_pre_revenue, revenue_base=revenue_base,
             )
 
         # ── Guardrail 4: ticker-level profile override ─────────────────────
@@ -4445,7 +4521,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             tv_fraction = (pv_tv / total_iv) if total_iv > 0 else 0.0
 
             # ── Build per-method value map ────────────────────────────────
-            method_values: dict[str, Optional[float]] = {"DCF": iv_dcf}
+            # OE≤0 cascade (task #18): when no defensible owner-earnings
+            # basis exists, the core DCF projection is excluded exactly like
+            # any profile method — None here flows through the structural
+            # gate and methods_unavailable.
+            method_values: dict[str, Optional[float]] = {
+                "DCF": None if _dcf_family_disabled else iv_dcf
+            }
             if profile_data:
                 methods_to_compute = set()
                 for m in profile_data.get("methods", []):
@@ -4585,27 +4667,35 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
                 for method_name in methods_to_compute:
                     if method_name not in method_values:
-                        method_values[method_name] = _compute_method_value(
-                            method_name=method_name,
-                            most_recent=most_recent,
-                            revenue_base=revenue_base,
-                            shares=shares,
-                            net_debt=net_debt,
-                            market_cap=revenue_base * 10,   # rough proxy if not available
-                            wacc=wacc,
-                            growth_base=g,
-                            fcf_margin_base=fcf_margin_base,
-                            tgr=tgr,
-                            fcf_floor=fcf_floor,
-                            sector=sector,
-                            scenario=scenario,
-                            reported_currency=reported_currency,
-                            is_hk=_is_hk,
-                            growth_premium=growth_premium,
-                            sbc_pe_discount=_sbc_discount,
-                            profile_name=profile_name,
-                            forward_consensus=forward_consensus,
-                        )
+                        if (_dcf_family_disabled
+                                and method_name in _DCF_PROJECTION_FAMILY):
+                            # OE≤0 cascade (task #18): no positive
+                            # owner-earnings year to anchor a projection —
+                            # DCF-family methods return None and
+                            # _blend_methods renormalizes onto multiples.
+                            method_values[method_name] = None
+                        else:
+                            method_values[method_name] = _compute_method_value(
+                                method_name=method_name,
+                                most_recent=most_recent,
+                                revenue_base=revenue_base,
+                                shares=shares,
+                                net_debt=net_debt,
+                                market_cap=revenue_base * 10,   # rough proxy if not available
+                                wacc=wacc,
+                                growth_base=g,
+                                fcf_margin_base=fcf_margin_base,
+                                tgr=tgr,
+                                fcf_floor=fcf_floor,
+                                sector=sector,
+                                scenario=scenario,
+                                reported_currency=reported_currency,
+                                is_hk=_is_hk,
+                                growth_premium=growth_premium,
+                                sbc_pe_discount=_sbc_discount,
+                                profile_name=profile_name,
+                                forward_consensus=forward_consensus,
+                            )
 
                 # ── Shadow-compute Forward P/E, Forward EV/EBITDA (Feature 1b)
                 # and SOTP segments (Feature 3). Values surface in the per-method
@@ -4672,6 +4762,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     dcf_tv_fraction=tv_fraction,
                     composite_mult=_composite_mult,  # v3.19: biases multi only
                 )
+                # (If the OE≤0 cascade disabled the DCF family AND every
+                # multiples method also failed, blended_iv is None and this
+                # falls back to the floored projection — the degradation is
+                # loud via the OE≤0 forward flags + methods_unavailable.)
                 final_iv = blended_iv if blended_iv is not None else iv_dcf
                 methods_used = [m["name"] for m in profile_data["methods"]
                                 if method_values.get(m.get("proxy", m["name"])) is not None

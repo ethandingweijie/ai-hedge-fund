@@ -537,5 +537,140 @@ def test_scenario_method_set_structurally_consistent(seams):
     )
 
 
+# ── Task #18: SW50 owner-earnings≤0 cascade ─────────────────────────────────
+# Pre-fix pathology (CRWD 2026-08): a ≤0 trailing owner-earnings margin was
+# floored per-year by FCF_MARGIN_FLOOR inside _project_dcf, producing a tiny
+# positive "IV" that was really only discounted net cash — blended at full
+# profile weight it dragged IV toward zero ($13.69 vs multiples ~$26). The
+# cascade: median of the positive years of the chosen basis field when any
+# exist; otherwise every DCF-projection method returns None and the blend
+# renormalizes onto the multiples bucket (reference: sw46/iv15.py
+# ::_resolve_base_oe).
+
+def _cyber_rows_sbc(sbc_pcts: list[float], fcf_pct: float = 0.16):
+    """Cyber-SaaS line items with per-year SBC as a fraction of revenue and
+    no buybacks — owner earnings = FCF − unfunded SBC − 37% RSU withholding."""
+    revs = [2.2e9, 2.6e9, 3.0e9, 3.4e9]
+    return _mk_rows(
+        revs,
+        free_cash_flow=[r * fcf_pct for r in revs],
+        net_income=[r * 0.10 for r in revs],
+        ebitda=[r * 0.20 for r in revs],
+        ebit=[r * 0.16 for r in revs],
+        stock_based_compensation=[r * p for r, p in zip(revs, sbc_pcts)],
+        capital_expenditure=[r * 0.05 for r in revs],
+        gross_profit=[r * 0.78 for r in revs],
+        shares_outstanding=2.5e8,
+        net_debt=2.0e8, total_debt=6.0e8, cash_and_equivalents=4.0e8,
+        total_equity=1.6e9, total_assets=3.0e9, invested_capital=1.5e9,
+        book_value_per_share=6.4, debt_to_equity=0.4,
+        interest_expense=2.0e7, dividends_per_share=0.0,
+    )
+
+
+def test_oe_cascade_median_of_positive_years(seams):
+    """Mean owner-earnings margin ≤ 0 but one positive year → DCF basis
+    becomes the median of the positive years and the DCF family fires."""
+    # Owner-earnings margins: FY22-24 at 16% − 20% − 37%×20% = −11.4%,
+    # FY25 at 16% − 8% − 37%×8% = +5.04% → mean ≈ −7.4% ≤ 0 → cascade.
+    seams["rows"]["FIXOE1"] = _cyber_rows_sbc([0.20, 0.20, 0.20, 0.08])
+    seams["price"]["FIXOE1"] = 350.0
+    seams["mcap"]["FIXOE1"] = 350.0 * 2.5e8
+
+    state = _state("FIXOE1", "Tech", "Cybersecurity / Mission-Critical SaaS")
+    out = run_dcf_agent(state)
+    entry = out["data"]["dcf_range"].get("FIXOE1")
+    assert entry, f"engine skipped FIXOE1: {out['data'].get('dcf_skip_reasons')}"
+
+    base = entry["base"]
+    expected_median = 0.16 - 0.08 - 0.37 * 0.08          # the single + year
+    assert base["fcf_margin_start"] == pytest.approx(expected_median, abs=1e-3), (
+        f"cascade basis {base['fcf_margin_start']} != median of positive "
+        f"years {expected_median:.4f}"
+    )
+    assert any("OE≤0 cascade" in f for f in base["forward_flags"]), (
+        f"cascade flag missing: {base['forward_flags']}"
+    )
+    # The DCF anchor now projects off a real (if conservative) basis.
+    assert "DCF (FCF+)" in base["methods_used"]
+    assert base["intrinsic_value"] > 0
+    assert entry["methods_unavailable"] == []
+    # Trailing reality still classified the profile (pre-cascade margin).
+    assert entry["profile"] == "Cybersecurity / Mission-Critical SaaS"
+
+
+def test_oe_all_negative_disables_dcf_family(seams):
+    """No positive owner-earnings year in the window → every DCF-projection
+    method returns None, the blend renormalizes onto multiples only, and the
+    excluded methods are named in methods_unavailable."""
+    # Owner-earnings margin = 16% − 25% − 37%×25% = −18.25% every year.
+    seams["rows"]["FIXOE2"] = _cyber_rows_sbc([0.25] * 4)
+    seams["price"]["FIXOE2"] = 350.0
+    seams["mcap"]["FIXOE2"] = 350.0 * 2.5e8
+
+    state = _state("FIXOE2", "Tech", "Cybersecurity / Mission-Critical SaaS")
+    out = run_dcf_agent(state)
+    entry = out["data"]["dcf_range"].get("FIXOE2")
+    assert entry, f"engine skipped FIXOE2: {out['data'].get('dcf_skip_reasons')}"
+
+    base = entry["base"]
+    assert any("OE≤0" in f and "disabled" in f for f in base["forward_flags"]), (
+        f"disable flag missing: {base['forward_flags']}"
+    )
+    base_used = set(base["methods_used"])
+    assert base_used, "multiples methods must still fire when DCF is disabled"
+    assert "DCF (FCF+)" not in base_used
+    assert "NRR-adj DCF" not in base_used
+    assert set(entry["methods_unavailable"]) == {"DCF (FCF+)", "NRR-adj DCF"}
+    # Blend is multiples-only: the DCF bucket is empty.
+    assert base["weight_dcf"] == 0.0
+    assert base["weight_multi"] == pytest.approx(1.0)
+    assert base["iv_dcf"] is None
+    assert base["intrinsic_value"] > 0
+    # Structural gate: identical method set in every scenario.
+    for scen in ("bear", "bull"):
+        assert set(entry[scen]["methods_used"]) == base_used, (
+            f"FIXOE2: {scen} method set diverges from base after DCF disable"
+        )
+
+
+def test_oe_cascade_reported_path_when_sbc_untrusted(seams):
+    """SBC disclosed in <3 of 5 years → owner path not trusted → the cascade
+    runs on the reported-FCF field instead (mean ≤ 0, two positive years)."""
+    revs = [2.2e9, 2.6e9, 3.0e9, 3.4e9]
+    seams["rows"]["FIXOE3"] = _mk_rows(
+        revs,
+        free_cash_flow=[r * m for r, m in
+                        zip(revs, [-0.08, -0.06, 0.04, 0.02])],
+        net_income=[r * 0.10 for r in revs],
+        ebitda=[r * 0.20 for r in revs],
+        ebit=[r * 0.16 for r in revs],
+        capital_expenditure=[r * 0.05 for r in revs],
+        gross_profit=[r * 0.78 for r in revs],
+        shares_outstanding=2.5e8,
+        net_debt=2.0e8, total_debt=6.0e8, cash_and_equivalents=4.0e8,
+        total_equity=1.6e9, total_assets=3.0e9, invested_capital=1.5e9,
+        book_value_per_share=6.4, debt_to_equity=0.4,
+        interest_expense=2.0e7, dividends_per_share=0.0,
+    )
+    seams["price"]["FIXOE3"] = 350.0
+    seams["mcap"]["FIXOE3"] = 350.0 * 2.5e8
+
+    state = _state("FIXOE3", "Tech", "Cybersecurity / Mission-Critical SaaS")
+    out = run_dcf_agent(state)
+    entry = out["data"]["dcf_range"].get("FIXOE3")
+    assert entry, f"engine skipped FIXOE3: {out['data'].get('dcf_skip_reasons')}"
+
+    base = entry["base"]
+    # Reported margins mean = −2% ≤ 0 → median of [+4%, +2%] = 3%.
+    assert base["fcf_margin_start"] == pytest.approx(0.03, abs=1e-3)
+    assert any("OE≤0 cascade" in f and "reported-FCF" in f
+               for f in base["forward_flags"]), (
+        f"reported-path cascade flag missing: {base['forward_flags']}"
+    )
+    assert "DCF (FCF+)" in base["methods_used"]
+    assert base["intrinsic_value"] > 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
