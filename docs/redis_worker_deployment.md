@@ -13,12 +13,23 @@ can be deployed at any time with zero behaviour change.
 
 | Piece | Image | Command | Needs |
 |---|---|---|---|
-| web (existing service) | `docker/Dockerfile.web` | `uvicorn app.backend.main:app` | `REDIS_URL` to enable queue mode |
-| worker (new service) | `docker/Dockerfile.worker` | `arq app.backend.worker.WorkerSettings` | `REDIS_URL`, `DATABASE_URL`, same API-key env vars as web |
+| web (existing service) | `docker/Dockerfile.web` | `uvicorn app.backend.main:app` (START_CMD unset) | `REDIS_URL` to enable queue mode |
+| worker (new service) | `docker/Dockerfile.web` | `python -m app.backend.worker_main` (via `START_CMD` Variable) | `REDIS_URL`, `DATABASE_URL`, `JWT_SECRET_KEY`, same API-key env vars as web |
+| scheduler (Phase 4) | `docker/Dockerfile.web` | `python -m app.backend.scheduler_service` (via `START_CMD` Variable) | `REDIS_URL`, `DATABASE_URL` (predeploy schema sync) |
 | Redis (Railway plugin) | — | — | nothing |
 
+One `railway.toml` applies to EVERY service and code config overrides the
+dashboard, so all services inherit `docker/Dockerfile.web`, the
+`sync_schema` predeploy, and the `healthcheckPath = "/"` probe. Per-service
+divergence happens ONLY through the `START_CMD` env var (the image CMD
+expands `${START_CMD:-uvicorn ...}`). Non-HTTP processes run
+`app/backend/health_responder.py` on `$PORT` so the inherited healthcheck
+passes. The dashboard Builder / Start Command fields are NOT reliable here —
+do not use them.
+
 Worker limits (see `WorkerSettings` in `app/backend/worker.py`):
-`max_jobs=10` concurrent, `job_timeout=1800s`, results kept 1 h,
+`max_jobs=10` concurrent, `job_timeout=3600s` (a full VGPM backfill can
+exceed 30 min; the timeout is a cap, not a delay), results kept 1 h,
 no automatic retries (failures are surfaced to the client stream).
 
 ## Rollout order (important)
@@ -32,14 +43,16 @@ order:
 2. **Add the Redis plugin** to the Railway project.
 3. **Create the worker service**:
    - New service → GitHub repo → same repository, same `main` branch.
-   - Settings → Build → Dockerfile path: `docker/Dockerfile.worker`.
-   - No predeploy command (schema sync stays on the web service only).
+   - Build settings are inherited from `railway.toml` (Dockerfile.web).
+     Set Variables: `START_CMD=python -m app.backend.worker_main`, a
+     reference to the Redis plugin's `REDIS_URL`, a reference to the
+     Postgres plugin's `DATABASE_URL` (the inherited predeploy runs
+     `scripts/sync_schema.py`), `JWT_SECRET_KEY`, and the same API-key
+     variables as web.
    - No public domain needed.
-   - Variables: reference the Redis plugin's `REDIS_URL`, and copy the web
-     service's `DATABASE_URL`, `JWT_SECRET_KEY`, API-key variables, and
-     anything else the pipeline reads. **Do not set `PORT`-dependent vars.**
 4. **Verify the worker started** — its logs should show:
-   `arq worker started: queue=arq:queue max_jobs=10 job_timeout=1800s`.
+   `health responder listening on :<PORT>` followed by
+   `arq worker started: queue=arq:queue max_jobs=10 job_timeout=3600s`.
 5. **Only now add `REDIS_URL` to the WEB service** (reference the same
    plugin variable) and redeploy. Queue mode activates.
 
@@ -66,3 +79,44 @@ In-flight queued runs are abandoned — re-run them from the UI.
   replicas don't double-run.
 - Redis is single-point for queue + progress; a Redis outage degrades web to
   in-process mode automatically (`redis_ready()` fails → fallback path).
+
+## Phase 4 — Scheduler service
+
+The 7 fire schedules (VGPM backfill, idea-of-the-day, IV15 sweep, weekly
+fund-flow brief, and the three 100-Q schedulers) run in a dedicated
+`scheduler` service (`app/backend/scheduler_service.py`) instead of web
+daemon threads. It owns fire TIMES only: each fire acquires a Redis slot
+lock (`sched_lock:{name}:{slot}`, SET NX EX) and enqueues the matching
+`run_*_task` for the worker. Every task keeps the legacy DB-timestamp
+idempotency gate, so even a lock bypass (Redis down) can't double-run a
+cycle.
+
+**Rollout order (no gap at fire times):**
+
+1. Deploy the additive commit (worker tasks + scheduler service exist; web
+   still runs its in-process schedulers). Overlap is safe: worker-side
+   idempotency makes any double fire a no-op.
+2. **Create the `scheduler` service**:
+   - Same repo/branch; build settings inherited from `railway.toml`.
+   - Variables: `START_CMD=python -m app.backend.scheduler_service`,
+     `REDIS_URL` (Redis plugin reference), `DATABASE_URL` (Postgres plugin
+     reference — the inherited predeploy runs `sync_schema`). No API keys
+     needed: the scheduler never calls LLM/market APIs itself, it only
+     enqueues.
+   - No public domain needed.
+3. **Verify boot logs**: `health responder listening on :<PORT>`, then
+   `scheduler service starting: 7 schedules (...)`, then one
+   `schedule '<name>' started` line per schedule, plus catch-up enqueue
+   lines for `vgpm_backfill` / `hundred_q_daily_sweep` (the tasks skip
+   worker-side if today's window is already filled).
+4. Remove the scheduler block from the web service (second commit) and
+   redeploy web.
+
+**Kill switches** (Variables on the scheduler service, hot-re-read):
+`SCHEDULER_SERVICE_DISABLED=true` (whole service), `VGPM_BACKFILL_DISABLED`,
+and the legacy `IDEA_SCHEDULER_DISABLED` / `IV15_ALERT_DISABLED` /
+`FUNDFLOW_SCHEDULER_DISABLED` / `HUNDRED_Q_*_DISABLED` names.
+
+**Ops:** `GET /admin/diag?secret=...` section 8 shows queue depth and the
+worker health key; scheduled job ids are `sched:{name}:{slot}` and slot
+locks are `sched_lock:{name}:{slot}` in Redis.

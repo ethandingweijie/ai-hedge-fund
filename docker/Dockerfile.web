@@ -21,8 +21,9 @@ ENV PORT=8000
 EXPOSE 8000
 
 # Railway sets PORT dynamically — use shell form so $PORT is expanded at runtime.
-# START_CMD branches per service (one railway.toml serves both, and the
+# START_CMD branches per service (one railway.toml serves all services, and the
 # dashboard start-command field proved unreliable): web leaves it unset and
 # runs uvicorn; the worker service sets START_CMD=python -m app.backend.worker_main
-# in its Variables, which starts the health responder + arq worker.
+# and the scheduler service sets START_CMD=python -m app.backend.scheduler_service
+# in their Variables (both start the $PORT health responder first).
 CMD sh -c "${START_CMD:-uvicorn app.backend.main:app --host 0.0.0.0 --port $PORT}"

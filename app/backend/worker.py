@@ -364,6 +364,99 @@ async def run_hedge_fund_graph_task(
             "final_data": final_data}
 
 
+# ── Tasks 4-10: scheduled jobs (Phase 4) ─────────────────────────────────────
+# The dedicated scheduler service (app/backend/scheduler_service.py) owns the
+# fire TIMES and enqueues these at each slot; the heavy work runs here. Every
+# cycle function keeps its own DB-timestamp idempotency check, so a double
+# enqueue (overlapping deploys, accidental second replica) is a cheap no-op.
+
+async def run_vgpm_backfill_task(ctx: dict) -> dict:
+    """Daily VGPM master-universe backfill (ex-web-process as of Phase 4).
+
+    Idempotency moved verbatim from main.py::_should_backfill_now: skip if
+    master_universe was already backfilled since today's 09:00 UTC slot
+    (Railway containers run UTC, matching the old in-web behaviour).
+    """
+    def _should_run() -> bool:
+        from app.backend.services.screener_service import _connect, _ensure_tables
+        try:
+            _ensure_tables()
+            conn = _connect()
+            row = conn.execute(
+                "SELECT cached_at FROM master_universe LIMIT 1").fetchone()
+            conn.close()
+        except Exception:
+            return True  # introspection failed — let the backfill itself decide
+        if not (row and row[0]):
+            return True
+        try:
+            last = datetime.fromisoformat(row[0])
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            slot = datetime.now(timezone.utc).replace(
+                hour=9, minute=0, second=0, microsecond=0)
+            return last < slot
+        except Exception:
+            return True
+
+    if not await asyncio.to_thread(_should_run):
+        logger.info("vgpm backfill task: already ran since today's 09:00 UTC slot — skipping")
+        return {"ran": False}
+
+    def _run():
+        from app.backend.services.screener_service import backfill_master_universe
+        logger.info("vgpm backfill task: starting full backfill...")
+        return backfill_master_universe(batch_size=50, passes=5, delay=8)
+
+    result = await asyncio.to_thread(_run)
+    logger.info("vgpm backfill task: complete — %d/%d scored",
+                result.get("scored", 0), result.get("total", 0))
+    return {"ran": True, "scored": result.get("scored"), "total": result.get("total")}
+
+
+async def run_idea_of_the_day_task(ctx: dict) -> dict:
+    """Daily research-idea generation. The cycle self-gates on its 20h
+    idempotency window and handles its own Slack notification."""
+    from src.research_ideas.contrarian.scheduler import _generate_and_notify
+    await asyncio.to_thread(_generate_and_notify)
+    return {"ran": True}
+
+
+async def run_iv15_sweep_task(ctx: dict) -> dict:
+    """Daily IV15 fair-value sweep. Self-gates on its 20h window."""
+    from src.research_ideas.alerts.iv15_scheduler import _run_sweep_cycle
+    await asyncio.to_thread(_run_sweep_cycle)
+    return {"ran": True}
+
+
+async def run_fundflow_brief_task(ctx: dict) -> dict:
+    """Weekly geographic fund-flow brief. Self-gates on its ~6-day window."""
+    from src.research_ideas.fundflow.scheduler import run_weekly_cycle
+    payload = await asyncio.to_thread(run_weekly_cycle)
+    return {"ran": payload is not None}
+
+
+async def run_hundred_q_daily_sweep_task(ctx: dict) -> dict:
+    """Daily 100-Q event-trigger sweep. Self-gates on its 20h window."""
+    from src.research_ideas.hundred_q.scheduler import run_daily_sweep_cycle
+    fired = await asyncio.to_thread(run_daily_sweep_cycle)
+    return {"ran": fired is not None}
+
+
+async def run_hundred_q_weekly_batch_task(ctx: dict) -> dict:
+    """Weekly 100-Q full quant batch. Self-gates on its ~6-day window."""
+    from src.research_ideas.hundred_q.scheduler import run_weekly_batch_cycle
+    cohort = await asyncio.to_thread(run_weekly_batch_cycle)
+    return {"ran": cohort is not None}
+
+
+async def run_hundred_q_backstop_task(ctx: dict) -> dict:
+    """Quarterly 100-Q annual backstop. Self-gates on its ~80-day window."""
+    from src.research_ideas.hundred_q.scheduler import run_backstop_cycle
+    touched = await asyncio.to_thread(run_backstop_cycle)
+    return {"ran": touched is not None}
+
+
 def _log_publish_outcome(task: asyncio.Task) -> None:
     if not task.cancelled() and task.exception():
         logger.warning("worker: progress publish failed: %s", task.exception())
@@ -392,11 +485,20 @@ class WorkerSettings:
         run_analysis_pipeline_task,
         run_research_job_task,
         run_hedge_fund_graph_task,
+        # Phase 4 — scheduled jobs enqueued by app/backend/scheduler_service.py
+        run_vgpm_backfill_task,
+        run_idea_of_the_day_task,
+        run_iv15_sweep_task,
+        run_fundflow_brief_task,
+        run_hundred_q_daily_sweep_task,
+        run_hundred_q_weekly_batch_task,
+        run_hundred_q_backstop_task,
     ]
     queue_name = QUEUE_NAME
     redis_settings = build_redis_settings()
     max_jobs = 10            # plan: 10 concurrent pipelines per worker
-    job_timeout = 1800       # 30 min — deep-research runs take 10-12 min
+    job_timeout = 3600       # 60 min — deep research ~12 min, full VGPM backfill
+                             # can exceed 30 min; timeout is a cap, not a delay
     keep_result = 3600       # results retrievable for 1 h after completion
     retry_jobs = False       # failed pipelines are surfaced, not silently retried
     health_check_interval = 60
