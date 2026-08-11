@@ -3,14 +3,15 @@ src/research_ideas/fundflow/scheduler.py
 =========================================
 WEEKLY auto-generation of the geographic fund-flow brief.
 
-Mirrors src/research_ideas/contrarian/scheduler.py, with a weekly cadence
-instead of daily. Self-running background thread; survives FastAPI restarts
-(recomputes next-fire on startup) and skips the slot if a run already
-completed inside the current week (idempotency).
-
 Default fire: Monday 00:00 UTC = Monday 08:00 Singapore Time. Monday morning
 SGT lands after Friday's US close and before the new US week opens, so the
 brief summarises a complete week of flows rather than a half-formed one.
+
+As of Phase 4 the FIRE TIME lives in the dedicated scheduler service
+(app/backend/scheduler_service.py), which enqueues run_fundflow_brief_task
+on the arq worker; the worker calls run_weekly_cycle() below. Skipping the
+slot when a run already completed inside the current week (idempotency)
+happens inside the cycle.
 
 On a successful run:
   • Cohort persisted via fundflow_storage.save_fundflow_run()
@@ -18,7 +19,8 @@ On a successful run:
   • Slack push fired via notifier.notify_slack() if SLACK_WEBHOOK_URL set
 
 Env knobs:
-  FUNDFLOW_SCHEDULER_DISABLED=true  — disable the weekly run
+  FUNDFLOW_SCHEDULER_DISABLED=true  — disable the weekly run (read by the
+                                      scheduler service)
   FUNDFLOW_SCHEDULER_WEEKDAY=0      — 0=Mon … 6=Sun (default 0)
   FUNDFLOW_SCHEDULER_HOUR_UTC=0     — UTC fire hour (default 0 = SGT 08:00)
   SLACK_WEBHOOK_URL=https://...     — omit to skip the Slack push
@@ -28,8 +30,6 @@ from __future__ import annotations
 
 import logging
 import os
-import threading
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 _FIRE_HOUR_UTC = int(os.environ.get("FUNDFLOW_SCHEDULER_HOUR_UTC", "0"))
 _FIRE_WEEKDAY = int(os.environ.get("FUNDFLOW_SCHEDULER_WEEKDAY", "0"))  # 0 = Monday
-_DISABLED = os.environ.get("FUNDFLOW_SCHEDULER_DISABLED", "false").lower() == "true"
 
 # A run inside this window means the week's slot is already filled. Set below
 # a full week so a restart on the fire day cannot double-post, but high enough
@@ -114,44 +113,3 @@ def run_weekly_cycle(force: bool = False, notify: bool = True) -> Optional[dict]
     except Exception as exc:
         logger.exception("fundflow scheduler: weekly cycle failed: %s", exc)
         return None
-
-
-def _run_forever() -> None:
-    """Background-thread loop. Sleeps until the next weekly slot, then runs."""
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    logger.info(
-        "Fund-flow WEEKLY scheduler started — fires %s %02d:00 UTC. Disabled=%s.",
-        days[_FIRE_WEEKDAY % 7], _FIRE_HOUR_UTC, _DISABLED,
-    )
-    while True:
-        if _DISABLED:
-            # Sleep-and-recheck rather than exit, so the env toggle can be
-            # flipped without restarting the app.
-            time.sleep(3600)
-            continue
-        wait_s = _seconds_until_next_fire()
-        logger.info(
-            "fundflow scheduler: sleeping %.0fs until next fire (%.1fh / %.1f days)",
-            wait_s, wait_s / 3600, wait_s / 86400,
-        )
-        time.sleep(wait_s + 5)   # +5s to land past the boundary
-        run_weekly_cycle()
-
-
-def start_fundflow_scheduler() -> Optional[threading.Thread]:
-    """
-    Spawn the weekly scheduler daemon thread. Called once at FastAPI startup.
-
-    Returns the thread (or None if disabled). daemon=True so it dies with the
-    process; the module-level list holds a strong reference so it is not GC'd.
-    """
-    if _DISABLED:
-        logger.info("Fund-flow weekly scheduler DISABLED via FUNDFLOW_SCHEDULER_DISABLED")
-        return None
-    t = threading.Thread(target=_run_forever, name="fundflow-scheduler", daemon=True)
-    t.start()
-    _SCHEDULER_THREAD_REF.append(t)
-    return t
-
-
-_SCHEDULER_THREAD_REF: list = []

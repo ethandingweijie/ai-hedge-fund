@@ -10,6 +10,7 @@ alert for any name whose live price has fallen to/below IV15 (live P/IV15 <=
 trigger band). Hysteresis (re-arm band) means each name alerts ONCE per
 downward cross, not every day it sits cheap.
 
-Fired daily at 08:00 SGT by iv15_scheduler.start_iv15_scheduler() (registered
-at FastAPI startup).
+Fired daily at 08:00 SGT: the scheduler service (app/backend/scheduler_service.py)
+enqueues run_iv15_sweep_task on the arq worker, which runs
+iv15_scheduler._run_sweep_cycle().
 """

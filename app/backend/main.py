@@ -54,69 +54,19 @@ app.include_router(api_router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Startup event to check Ollama availability and kick off VGPM backfill."""
+    """Startup event — checks Ollama availability.
+
+    Scheduled jobs (VGPM backfill, idea-of-the-day, IV15 sweep, fund-flow
+    brief, the three 100-Q schedules) do NOT run here: as of Phase 4 the
+    dedicated scheduler service (app/backend/scheduler_service.py) owns the
+    fire times and enqueues them on the arq worker. This keeps web restarts
+    from re-triggering catch-up work and makes the web tier horizontally
+    scalable.
+    """
     if os.environ.get("DISABLE_OLLAMA", "").lower() in ("1", "true", "yes"):
         logger.info("Ollama disabled via DISABLE_OLLAMA env var — skipping check")
     else:
         await _check_ollama()
-
-    # Start VGPM backfill scheduler in background thread.
-    import threading
-    t = threading.Thread(target=_backfill_scheduler, daemon=True)
-    t.start()
-
-    # Start "Research Idea of the Day" scheduler — fires daily at
-    # SGT 08:00 (= UTC 00:00). Idempotent: skips today's slot if an
-    # idea was already generated in the last 20 hours. Disable via
-    # IDEA_SCHEDULER_DISABLED=true.
-    try:
-        from src.research_ideas.contrarian.scheduler import start_scheduler
-        start_scheduler()
-        logger.info("Idea-of-the-day daily scheduler started")
-    except Exception as exc:
-        logger.warning("Idea-of-the-day scheduler failed to start: %s", exc)
-
-    # Start the IV15 "price reached fair value" sweep — fires daily at
-    # SGT 08:00 (= UTC 00:00). Compares a fresh live quote for every
-    # SW46 + HK50 name against its stored per-share IV15 and pushes a
-    # Slack alert for any name that has fallen to/below fair value
-    # (P/IV15 <= 1.00), with hysteresis so each name alerts once per
-    # downward cross. Idempotent: skips today's slot if a sweep already
-    # ran in the last 20 hours. Disable via IV15_ALERT_DISABLED=true.
-    try:
-        from src.research_ideas.alerts.iv15_scheduler import start_iv15_scheduler
-        start_iv15_scheduler()
-        logger.info("IV15 alert daily scheduler started")
-    except Exception as exc:
-        logger.warning("IV15 alert scheduler failed to start: %s", exc)
-
-    # Start the geographic fund-flow brief — fires WEEKLY on Monday at
-    # SGT 08:00 (= Mon UTC 00:00), which lands after Friday's US close so
-    # the brief covers a complete week. Scores the nine geographies, has
-    # DeepSeek write the summary, persists, and pushes a Block Kit digest
-    # to SLACK_WEBHOOK_URL. Idempotent: skips the slot if a run completed
-    # in the last 6 days. Disable via FUNDFLOW_SCHEDULER_DISABLED=true.
-    try:
-        from src.research_ideas.fundflow.scheduler import start_fundflow_scheduler
-        start_fundflow_scheduler()
-        logger.info("Fund-flow weekly scheduler started")
-    except Exception as exc:
-        logger.warning("Fund-flow weekly scheduler failed to start: %s", exc)
-
-    # Start the 100-Question screener's three schedulers: a daily event-
-    # trigger sweep (new filings / insider buys / earnings / price shocks
-    # across the watchlist), a weekly full quant re-score of the pilot
-    # universe, and a quarterly qualitative "annual backstop" for
-    # Active/On-Deck tickers with stale (>365d) qual answers. Each is
-    # independently idempotent and independently disable-able — see
-    # src/research_ideas/hundred_q/scheduler.py. Disable all three via
-    # HUNDRED_Q_SCHEDULER_DISABLED=true.
-    try:
-        from src.research_ideas.hundred_q.scheduler import start_hundred_q_schedulers
-        start_hundred_q_schedulers()
-        logger.info("100-Question screener schedulers started")
-    except Exception as exc:
-        logger.warning("100-Question screener schedulers failed to start: %s", exc)
 
 
 async def _check_ollama():
@@ -141,115 +91,4 @@ async def _check_ollama():
     except Exception as e:
         logger.warning(f"Could not check Ollama status: {e}")
         logger.info("ℹ Ollama integration is available if you install it later")
-
-
-# ── VGPM Backfill Scheduler ──────────────────────────────────────────────────
-
-BACKFILL_HOUR = 9   # 9am local time daily
-BACKFILL_MINUTE = 0
-
-
-def _get_last_backfill_time():
-    """Read the most recent cached_at from master_universe table."""
-    try:
-        from app.backend.services.screener_service import _connect, _ensure_tables
-        _ensure_tables()
-        conn = _connect()
-        row = conn.execute("SELECT cached_at FROM master_universe LIMIT 1").fetchone()
-        conn.close()
-        if row and row[0]:
-            from datetime import datetime, timezone
-            return datetime.fromisoformat(row[0]).replace(tzinfo=timezone.utc)
-    except Exception:
-        pass
-    return None
-
-
-def _should_backfill_now():
-    """Return True if today's scheduled backfill hasn't run yet.
-
-    Logic:
-    - If no backfill has ever run → True
-    - If last backfill was before today's 9am → True
-    - Otherwise → False (already ran today)
-    """
-    from datetime import datetime, timezone, timedelta
-    import time as _time
-
-    last = _get_last_backfill_time()
-    if last is None:
-        logger.info("VGPM backfill: no previous backfill found — running now")
-        return True
-
-    # Compute today's 9am in local time, convert to UTC for comparison
-    now_local = datetime.now()
-    today_9am_local = now_local.replace(
-        hour=BACKFILL_HOUR, minute=BACKFILL_MINUTE, second=0, microsecond=0
-    )
-
-    # Convert local 9am to UTC for comparison with cached_at (which is UTC)
-    local_offset = datetime.now(timezone.utc).astimezone().utcoffset()
-    today_9am_utc = today_9am_local.replace(tzinfo=timezone.utc) - local_offset
-
-    if last < today_9am_utc:
-        logger.info(
-            "VGPM backfill: last ran %s, before today's 9am — running now",
-            last.strftime("%Y-%m-%d %H:%M"),
-        )
-        return True
-
-    logger.info(
-        "VGPM backfill: already ran today at %s — next run at %d:%02d tomorrow",
-        last.strftime("%H:%M"), BACKFILL_HOUR, BACKFILL_MINUTE,
-    )
-    return False
-
-
-def _run_backfill():
-    """Execute the backfill and log results."""
-    try:
-        from app.backend.services.screener_service import backfill_master_universe
-        logger.info("VGPM backfill starting...")
-        # delay=8s (was 30s): the shared FMP token bucket (src/tools/api.py,
-        # ~700/min) now does the rate smoothing itself, so the old fixed
-        # inter-batch sleep only needs to avoid pathological bursts, not
-        # carry the whole throttling burden — this roughly halves full-
-        # backfill wall time.
-        result = backfill_master_universe(batch_size=50, passes=5, delay=8)
-        logger.info(
-            "VGPM backfill complete: %d/%d tickers scored",
-            result.get("scored", 0), result.get("total", 0),
-        )
-    except Exception as e:
-        logger.warning("VGPM backfill failed (non-fatal): %s", e)
-
-
-def _seconds_until_next_9am():
-    """Return seconds until the next 9am local time."""
-    from datetime import datetime, timedelta
-    now = datetime.now()
-    next_9am = now.replace(hour=BACKFILL_HOUR, minute=BACKFILL_MINUTE, second=0, microsecond=0)
-    if now >= next_9am:
-        next_9am += timedelta(days=1)
-    delta = (next_9am - now).total_seconds()
-    return delta
-
-
-def _backfill_scheduler():
-    """Background thread: run backfill on startup if needed, then daily at 9am."""
-    import time
-
-    # ── Startup check: run immediately if today's backfill hasn't happened
-    if _should_backfill_now():
-        _run_backfill()
-
-    # ── Daily loop: sleep until next 9am, then run
-    while True:
-        wait = _seconds_until_next_9am()
-        logger.info(
-            "VGPM backfill scheduler: next run in %.1f hours (%d:%02d)",
-            wait / 3600, BACKFILL_HOUR, BACKFILL_MINUTE,
-        )
-        time.sleep(wait)
-        _run_backfill()
 

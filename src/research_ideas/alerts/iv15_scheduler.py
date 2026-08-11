@@ -3,10 +3,12 @@ src/research_ideas/alerts/iv15_scheduler.py
 ============================================
 Daily auto-run of the IV15 "price reached fair value" sweep.
 
-Fires once per day at Singapore Time 8:00 AM (= UTC 00:00). Self-running
-background thread; survives FastAPI restarts (computes next-fire on startup)
-and skips today's slot if a sweep already ran today (idempotency via the
-iv15_sweep_log table), so a restart near the boundary won't double-fire.
+Fires once per day at Singapore Time 8:00 AM (= UTC 00:00). As of Phase 4
+the FIRE TIME lives in the dedicated scheduler service
+(app/backend/scheduler_service.py), which enqueues run_iv15_sweep_task on
+the arq worker; the worker calls _run_sweep_cycle() below. Skipping today's
+slot when a sweep already ran (idempotency via the iv15_sweep_log table)
+happens inside the cycle, so a restart near the boundary won't double-fire.
 
 On each fire it runs run_iv15_sweep(dry_run=False), which compares a fresh
 live quote for every SW46 + HK50 name against that name's stored per-share
@@ -16,7 +18,8 @@ means each name alerts once per downward cross, not every morning it sits
 cheap.
 
 Env knobs:
-  IV15_ALERT_DISABLED=true   — disable the daily sweep
+  IV15_ALERT_DISABLED=true   — disable the daily sweep (read by the
+                               scheduler service)
   IV15_ALERT_HOUR_UTC=0      — override UTC fire hour (default 0 = SGT 8am)
   IV15_ALERT_BAND=1.00       — trigger band on live P/IV15 (see iv15_monitor)
   IV15_REARM_BAND=1.05       — re-arm band on live P/IV15
@@ -27,17 +30,13 @@ from __future__ import annotations
 
 import logging
 import os
-import threading
-import time
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 # Fire at 00:00 UTC = 08:00 Singapore Time (SGT is UTC+8 year-round)
 _FIRE_HOUR_UTC = int(os.environ.get("IV15_ALERT_HOUR_UTC", "0"))
-_DISABLED = os.environ.get("IV15_ALERT_DISABLED", "false").lower() == "true"
 
 # How recently a sweep must have run to count as "already done today".
 _IDEMPOTENCY_HOURS = 20.0
@@ -85,42 +84,3 @@ def _run_sweep_cycle() -> None:
     except Exception as exc:
         logger.exception("iv15_scheduler: sweep cycle failed: %s", exc)
 
-
-def _run_forever() -> None:
-    """Background-thread loop. Sleeps until next fire then runs the sweep."""
-    logger.info(
-        "IV15 alert scheduler started — next fire at %02d:00 UTC daily "
-        "(SGT 08:00 if fire-hour-UTC=0). Disabled=%s.",
-        _FIRE_HOUR_UTC, _DISABLED,
-    )
-    while True:
-        if _DISABLED:
-            # Toggled off via env — keep looping so it can be hot-enabled.
-            time.sleep(3600)
-            continue
-        wait_s = _seconds_until_next_fire()
-        logger.info(
-            "iv15_scheduler: sleeping %.0fs until next fire (%.1fh)",
-            wait_s, wait_s / 3600,
-        )
-        time.sleep(wait_s + 5)  # +5s to ensure we're past the boundary
-        _run_sweep_cycle()
-
-
-def start_iv15_scheduler() -> Optional[threading.Thread]:
-    """
-    Spawn the IV15-sweep daemon thread. Called once at FastAPI startup.
-
-    Returns the thread (or None if disabled). The thread is daemon=True so it
-    dies cleanly with the process. A module-level strong reference prevents GC.
-    """
-    if _DISABLED:
-        logger.info("IV15 alert scheduler DISABLED via IV15_ALERT_DISABLED env")
-        return None
-    t = threading.Thread(target=_run_forever, name="iv15-alert-scheduler", daemon=True)
-    t.start()
-    _SCHEDULER_THREAD_REF.append(t)  # strong ref
-    return t
-
-
-_SCHEDULER_THREAD_REF: list = []

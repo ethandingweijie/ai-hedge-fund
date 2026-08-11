@@ -1,19 +1,19 @@
 """
 src/research_ideas/hundred_q/scheduler.py
 ============================================
-Phase 3 — three self-running background-thread schedulers, mirroring
-src/research_ideas/contrarian/scheduler.py (daily) and
-src/research_ideas/fundflow/scheduler.py (weekly). Each is independently
-idempotent (via storage.get_latest_run_by_type) and independently
-disable-able via env var, matching this repo's existing scheduler
-conventions rather than inventing a 4th pattern (see the approved plan's
-justification for in-process daemon threads over the DD-style Railway
-cron-dispatcher: this feature writes heavily to SQLite per run, at a much
-lower frequency than 5-minute intraday polling).
+Three scheduled cycles for the 100-Question screener. As of Phase 4 the
+FIRE TIMES live in the dedicated scheduler service
+(app/backend/scheduler_service.py), which enqueues run_hundred_q_*_task on
+the arq worker; the worker calls the cycle functions below. Each cycle is
+independently idempotent (via storage.get_latest_run_by_type) and
+independently disable-able via env var (read by the scheduler service).
 
 1. Daily event-trigger sweep   — fires ~00:30 UTC (SGT 08:30), checks
    new-filing/insider-buy/earnings/price-shock detectors across the
    watchlist. Idempotent: skips if a sweep completed in the last ~20h.
+   Startup catch-up (the web-era thread ran a missed sweep on boot) is
+   preserved by the scheduler service enqueuing this task once at start;
+   the 20h gate below decides whether it actually runs.
 2. Weekly full quant batch     — fires Sunday 01:00 UTC, rescoring the
    entire pilot universe (cheap — reads through the Knowledge Graph
    cache). Idempotent: skips if a weekly_quant run completed in the
@@ -23,7 +23,7 @@ lower frequency than 5-minute intraday polling).
    Active/On-Deck tickers only. Idempotent: skips if a backstop cycle
    completed in the last ~80 days.
 
-Env knobs:
+Env knobs (read by the scheduler service, hot-re-read each iteration):
   HUNDRED_Q_SCHEDULER_DISABLED=true        — disable all three
   HUNDRED_Q_DAILY_SWEEP_DISABLED=true      — disable #1 only
   HUNDRED_Q_WEEKLY_BATCH_DISABLED=true     — disable #2 only
@@ -33,17 +33,10 @@ from __future__ import annotations
 
 import logging
 import os
-import threading
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
-
-_ALL_DISABLED = os.environ.get("HUNDRED_Q_SCHEDULER_DISABLED", "false").lower() == "true"
-_DAILY_DISABLED = _ALL_DISABLED or os.environ.get("HUNDRED_Q_DAILY_SWEEP_DISABLED", "false").lower() == "true"
-_WEEKLY_DISABLED = _ALL_DISABLED or os.environ.get("HUNDRED_Q_WEEKLY_BATCH_DISABLED", "false").lower() == "true"
-_BACKSTOP_DISABLED = _ALL_DISABLED or os.environ.get("HUNDRED_Q_BACKSTOP_DISABLED", "false").lower() == "true"
 
 _DAILY_FIRE_HOUR_UTC = int(os.environ.get("HUNDRED_Q_DAILY_SWEEP_HOUR_UTC", "0"))
 _DAILY_FIRE_MINUTE_UTC = 30
@@ -101,23 +94,6 @@ def run_daily_sweep_cycle(force: bool = False) -> Optional[list[dict]]:
         return None
 
 
-def _run_daily_forever() -> None:
-    logger.info(
-        "hundred_q daily trigger-sweep scheduler started — fires %02d:%02d UTC daily. Disabled=%s.",
-        _DAILY_FIRE_HOUR_UTC, _DAILY_FIRE_MINUTE_UTC, _DAILY_DISABLED,
-    )
-    if not _already_ran_within("daily_trigger_sweep", hours=_DAILY_IDEMPOTENCY_HOURS):
-        run_daily_sweep_cycle()
-    while True:
-        if _DAILY_DISABLED:
-            time.sleep(3600)
-            continue
-        wait_s = _seconds_until_next_daily_fire()
-        logger.info("hundred_q daily sweep: sleeping %.0fs until next fire (%.1fh)", wait_s, wait_s / 3600)
-        time.sleep(wait_s + 5)
-        run_daily_sweep_cycle()
-
-
 # ── 2. Weekly full quant batch ───────────────────────────────────────────────
 
 def _seconds_until_next_weekly_fire() -> float:
@@ -146,22 +122,6 @@ def run_weekly_batch_cycle(force: bool = False) -> Optional[dict]:
     except Exception as exc:
         logger.exception("hundred_q: weekly quant batch failed: %s", exc)
         return None
-
-
-def _run_weekly_forever() -> None:
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    logger.info(
-        "hundred_q weekly quant-batch scheduler started — fires %s %02d:00 UTC. Disabled=%s.",
-        days[_WEEKLY_FIRE_WEEKDAY], _WEEKLY_FIRE_HOUR_UTC, _WEEKLY_DISABLED,
-    )
-    while True:
-        if _WEEKLY_DISABLED:
-            time.sleep(3600)
-            continue
-        wait_s = _seconds_until_next_weekly_fire()
-        logger.info("hundred_q weekly batch: sleeping %.0fs until next fire (%.1f days)", wait_s, wait_s / 86400)
-        time.sleep(wait_s + 5)
-        run_weekly_batch_cycle()
 
 
 # ── 3. Quarterly annual backstop ─────────────────────────────────────────────
@@ -194,53 +154,3 @@ def run_backstop_cycle(force: bool = False) -> Optional[list[dict]]:
     except Exception as exc:
         logger.exception("hundred_q: annual backstop failed: %s", exc)
         return None
-
-
-def _run_backstop_forever() -> None:
-    logger.info(
-        "hundred_q quarterly annual-backstop scheduler started — fires 1st of Jan/Apr/Jul/Oct at %02d:00 UTC. Disabled=%s.",
-        _BACKSTOP_FIRE_HOUR_UTC, _BACKSTOP_DISABLED,
-    )
-    while True:
-        if _BACKSTOP_DISABLED:
-            time.sleep(3600)
-            continue
-        wait_s = _seconds_until_next_quarterly_fire()
-        logger.info("hundred_q annual backstop: sleeping %.0fs until next fire (%.1f days)", wait_s, wait_s / 86400)
-        time.sleep(wait_s + 5)
-        run_backstop_cycle()
-
-
-# ── Entry point ───────────────────────────────────────────────────────────
-
-_SCHEDULER_THREAD_REFS: list[threading.Thread] = []
-
-
-def start_hundred_q_schedulers() -> list[threading.Thread]:
-    """Spawn all three daemon-thread schedulers. Called once at FastAPI
-    startup. Each is independently disable-able; a strong module-level
-    reference to the threads prevents GC."""
-    started: list[threading.Thread] = []
-    if not _DAILY_DISABLED:
-        t = threading.Thread(target=_run_daily_forever, name="hundred-q-daily-sweep", daemon=True)
-        t.start()
-        started.append(t)
-    else:
-        logger.info("hundred_q daily trigger-sweep scheduler DISABLED via env")
-
-    if not _WEEKLY_DISABLED:
-        t = threading.Thread(target=_run_weekly_forever, name="hundred-q-weekly-batch", daemon=True)
-        t.start()
-        started.append(t)
-    else:
-        logger.info("hundred_q weekly quant-batch scheduler DISABLED via env")
-
-    if not _BACKSTOP_DISABLED:
-        t = threading.Thread(target=_run_backstop_forever, name="hundred-q-annual-backstop", daemon=True)
-        t.start()
-        started.append(t)
-    else:
-        logger.info("hundred_q annual-backstop scheduler DISABLED via env")
-
-    _SCHEDULER_THREAD_REFS.extend(started)
-    return started
