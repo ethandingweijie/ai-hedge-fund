@@ -107,7 +107,13 @@ async def get_live_prices(
 
 # ── Admin: VGPM backfill ──────────────────────────────────────────────────────
 
-_backfill_running = False
+# Phase 5 (multi-replica web): the in-process `_backfill_running` flag only
+# protected ONE replica. The guard is now a Redis lock shared with the arq
+# worker's scheduled run_vgpm_backfill_task, so the daily job and an admin
+# trigger can never run concurrently on ANY replica. When Redis is
+# unavailable we degrade to the old per-process flag (single-replica
+# semantics, same as pre-Phase 5).
+_backfill_running_local = False
 
 
 @router.post("/admin/backfill-universe")
@@ -121,21 +127,39 @@ async def backfill_universe(
 
     First run takes ~20-25 min (1,400 tickers × 8 FMP calls each).
     Subsequent runs with warm raw_metrics_cache complete in seconds.
+
+    Returns 409 when a backfill is already running — on any web replica or
+    in the arq worker (daily scheduled run).
     """
-    global _backfill_running
-    if _backfill_running:
+    global _backfill_running_local
+
+    from app.backend.services.redis_locks import (
+        VGPM_BACKFILL_LOCK_NAME,
+        VGPM_BACKFILL_LOCK_TTL_S,
+        try_lock,
+        unlock,
+    )
+
+    acquired, token = await try_lock(VGPM_BACKFILL_LOCK_NAME, VGPM_BACKFILL_LOCK_TTL_S)
+    if not acquired:
         raise HTTPException(status_code=409, detail="Backfill already in progress")
+    if token is None:
+        # Redis unavailable — fail-open degraded path: per-process guard only.
+        if _backfill_running_local:
+            raise HTTPException(status_code=409, detail="Backfill already in progress")
+        _backfill_running_local = True
 
     def _run() -> dict:
-        global _backfill_running
-        _backfill_running = True
-        try:
-            return screener_service.backfill_master_universe(
-                batch_size=batch_size,
-                passes=passes,
-                delay=delay,
-            )
-        finally:
-            _backfill_running = False
+        return screener_service.backfill_master_universe(
+            batch_size=batch_size,
+            passes=passes,
+            delay=delay,
+        )
 
-    return await asyncio.to_thread(_run)
+    try:
+        return await asyncio.to_thread(_run)
+    finally:
+        if token is not None:
+            await unlock(VGPM_BACKFILL_LOCK_NAME, token)
+        else:
+            _backfill_running_local = False

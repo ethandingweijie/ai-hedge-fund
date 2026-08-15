@@ -120,3 +120,51 @@ and the legacy `IDEA_SCHEDULER_DISABLED` / `IV15_ALERT_DISABLED` /
 **Ops:** `GET /admin/diag?secret=...` section 8 shows queue depth and the
 worker health key; scheduled job ids are `sched:{name}:{slot}` and slot
 locks are `sched_lock:{name}:{slot}` in Redis.
+
+## Phase 5 — Multi-replica web
+
+The queue-mode web process is stateless: JWT auth is stateless, run dedup
+and rate limiting live in Redis, progress streams over Redis pub/sub, and
+all persistent state is in Postgres. Two (or more) replicas can serve
+behind Railway's load balancer with no sticky sessions required.
+
+**Fixes made for replica safety:**
+
+- `/screener/admin/backfill-universe` used an in-process `_backfill_running`
+  flag — only one replica was protected. It now takes the Redis lock
+  `lock:vgpm_backfill` (SET NX EX, TTL 2h, released early on completion)
+  via `app/backend/services/redis_locks.py`. The worker's scheduled
+  `run_vgpm_backfill_task` takes the SAME lock, so an admin trigger and
+  the daily 09:00 UTC job can never overlap on any replica (they share
+  one FMP token bucket). Fails open to the old per-process flag when
+  Redis is unavailable.
+- Dead `POST /storage/save-json` route removed (wrote files to the web
+  container's local disk — per-replica and unreachable by the other
+  replica; the frontend never called it). `routes/storage.py` deleted,
+  router deregistered, frontend `saveJsonFile` removed.
+
+**Audit findings left as-is (deliberately):**
+
+- `routes/analysis.py` in-process `_in_flight`/`_live_phases` dicts —
+  only used when queue mode is OFF (Redis down); queue-mode path is
+  Redis-backed. Degraded single-replica semantics are acceptable.
+- `routes/research.py` `_BACKGROUND_TASKS` + heartbeat threads —
+  fallback path only; job state lives in Postgres (`job_store`).
+- `routes/dd_alerts.py` agent threads — request-scoped; results persist
+  to Postgres via `_upsert_dd_report`/`alert_dedup`.
+- `routes/hedge_fund.py` backtest SSE — request-scoped stream.
+- `sqlite_migration` `_busy` flag — one-shot admin op, already run.
+
+**Rollout:**
+
+1. Check the web service for a mounted volume (diag lists `/data/*.db`).
+   SQLite is dormant in PG mode; detach any volume BEFORE adding replicas
+   (Railway volumes are single-instance — a second replica cannot mount
+   the same volume, and nothing reads those files in PG mode).
+2. Deploy this commit, verify diag + a normal run on 1 replica.
+3. Bump the web service to 2 replicas (Settings → Networking/Replicas).
+4. Verify: hit `/admin/diag` repeatedly — both replicas should answer
+   (log the instance id / boot time per response if exposed); start a
+   run and confirm the SSE stream survives whichever replica answers.
+5. Rollback: set replicas back to 1. No schema or env changes are
+   involved, so rollback is instant.

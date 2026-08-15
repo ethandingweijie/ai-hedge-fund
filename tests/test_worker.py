@@ -221,6 +221,37 @@ def _patch_screener(monkeypatch, cached_at):
     monkeypatch.setattr(ss, "_connect", lambda: _FakeConn(cached_at))
 
 
+class _LockStubRedis:
+    """Just enough of redis.asyncio for redis_locks.try_lock/unlock."""
+
+    def __init__(self):
+        self.store: dict = {}
+        self.set_calls: list = []
+        self.eval_calls: list = []
+
+    async def set(self, key, value, nx=False, ex=None):
+        self.set_calls.append({"key": key, "value": value, "nx": nx, "ex": ex})
+        if nx and key in self.store:
+            return None
+        self.store[key] = value
+        return True
+
+    async def eval(self, script, numkeys, *keys_and_args):
+        self.eval_calls.append(keys_and_args)
+        key, token = keys_and_args[0], keys_and_args[1]
+        if self.store.get(key) == token:
+            del self.store[key]
+            return 1
+        return 0
+
+
+def _patch_lock_redis(monkeypatch, client):
+    async def _get_redis():
+        return client
+
+    monkeypatch.setattr("app.backend.services.redis_client.get_redis", _get_redis)
+
+
 def test_vgpm_backfill_task_skips_when_already_ran_today(monkeypatch):
     from datetime import datetime, timedelta, timezone
 
@@ -243,6 +274,7 @@ def test_vgpm_backfill_task_skips_when_already_ran_today(monkeypatch):
 
 def test_vgpm_backfill_task_runs_when_stale(monkeypatch):
     _patch_screener(monkeypatch, "2020-01-01T00:00:00+00:00")
+    _patch_lock_redis(monkeypatch, _LockStubRedis())
 
     import app.backend.services.screener_service as ss
     monkeypatch.setattr(
@@ -255,6 +287,7 @@ def test_vgpm_backfill_task_runs_when_stale(monkeypatch):
 
 def test_vgpm_backfill_task_runs_when_never_backfilled(monkeypatch):
     _patch_screener(monkeypatch, None)
+    _patch_lock_redis(monkeypatch, _LockStubRedis())
 
     import app.backend.services.screener_service as ss
     monkeypatch.setattr(
@@ -263,6 +296,64 @@ def test_vgpm_backfill_task_runs_when_never_backfilled(monkeypatch):
 
     out = asyncio.run(worker.run_vgpm_backfill_task({}))
     assert out["ran"] is True
+
+
+def test_vgpm_backfill_task_skips_when_lock_held(monkeypatch):
+    """Phase 5: a backfill already running on a web replica (admin trigger)
+    must suppress the scheduled worker run."""
+    _patch_screener(monkeypatch, "2020-01-01T00:00:00+00:00")  # stale → wants to run
+
+    stub = _LockStubRedis()
+    stub.store["lock:vgpm_backfill"] = "held-elsewhere"
+    _patch_lock_redis(monkeypatch, stub)
+
+    import app.backend.services.screener_service as ss
+    monkeypatch.setattr(
+        ss, "backfill_master_universe",
+        lambda **kw: pytest.fail("backfill must not run while the lock is held"))
+
+    out = asyncio.run(worker.run_vgpm_backfill_task({}))
+    assert out == {"ran": False}
+
+
+def test_vgpm_backfill_task_acquires_and_releases_shared_lock(monkeypatch):
+    """The task must take the SAME lock the admin route uses (canonical
+    name + TTL) and release it when done."""
+    _patch_screener(monkeypatch, None)
+    stub = _LockStubRedis()
+    _patch_lock_redis(monkeypatch, stub)
+
+    import app.backend.services.screener_service as ss
+    monkeypatch.setattr(
+        ss, "backfill_master_universe",
+        lambda **kw: {"scored": 1, "total": 1})
+
+    out = asyncio.run(worker.run_vgpm_backfill_task({}))
+    assert out["ran"] is True
+
+    acquire = stub.set_calls[0]
+    assert acquire["key"] == "lock:vgpm_backfill"
+    assert acquire["nx"] is True
+    assert acquire["ex"] == 7200
+    assert "lock:vgpm_backfill" not in stub.store      # released
+    assert stub.eval_calls, "release must go through compare-and-delete"
+
+
+def test_vgpm_backfill_task_releases_lock_on_failure(monkeypatch):
+    _patch_screener(monkeypatch, None)
+    stub = _LockStubRedis()
+    _patch_lock_redis(monkeypatch, stub)
+
+    import app.backend.services.screener_service as ss
+
+    def _boom(**kw):
+        raise RuntimeError("FMP down")
+
+    monkeypatch.setattr(ss, "backfill_master_universe", _boom)
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(worker.run_vgpm_backfill_task({}))
+    assert "lock:vgpm_backfill" not in stub.store
 
 
 def test_scheduled_tasks_delegate_to_cycle_functions(monkeypatch):

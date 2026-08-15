@@ -403,12 +403,32 @@ async def run_vgpm_backfill_task(ctx: dict) -> dict:
         logger.info("vgpm backfill task: already ran since today's 09:00 UTC slot — skipping")
         return {"ran": False}
 
+    # Phase 5 (multi-replica web): same Redis lock the admin route
+    # /screener/admin/backfill-universe takes. If an admin-triggered backfill
+    # is running on a web replica, skip this scheduled run — they share one
+    # FMP token bucket and must not overlap. Fail-open when Redis is down
+    # (the DB-timestamp gate above still provides idempotency).
+    from app.backend.services.redis_locks import (
+        VGPM_BACKFILL_LOCK_NAME,
+        VGPM_BACKFILL_LOCK_TTL_S,
+        try_lock,
+        unlock,
+    )
+
+    acquired, token = await try_lock(VGPM_BACKFILL_LOCK_NAME, VGPM_BACKFILL_LOCK_TTL_S)
+    if not acquired:
+        logger.info("vgpm backfill task: lock held (admin backfill in progress) — skipping")
+        return {"ran": False}
+
     def _run():
         from app.backend.services.screener_service import backfill_master_universe
         logger.info("vgpm backfill task: starting full backfill...")
         return backfill_master_universe(batch_size=50, passes=5, delay=8)
 
-    result = await asyncio.to_thread(_run)
+    try:
+        result = await asyncio.to_thread(_run)
+    finally:
+        await unlock(VGPM_BACKFILL_LOCK_NAME, token)
     logger.info("vgpm backfill task: complete — %d/%d scored",
                 result.get("scored", 0), result.get("total", 0))
     return {"ran": True, "scored": result.get("scored"), "total": result.get("total")}
