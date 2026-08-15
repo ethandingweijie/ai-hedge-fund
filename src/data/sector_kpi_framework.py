@@ -6456,7 +6456,8 @@ def extract_via_framework(
             out["evidence"] = str(parsed["evidence"])[:300]
 
         return validate_extractor_output(profile_name, out)
-    except Exception:
+    except Exception as _exc:
+        print(f"  [framework_metrics[{profile_name}] {ticker}] extractor FAILED: {type(_exc).__name__}: {_exc}")
         return {}
 
 

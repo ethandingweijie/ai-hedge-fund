@@ -749,6 +749,10 @@ def _extract_dcf_calibration(
             "notes":            parsed.get("notes", ""),
         }
     except Exception as exc:
+        # Fail loud: this dict looks like a successful extraction downstream,
+        # so also log the real error (2026-08-12 ZTS incident: prod worker
+        # missing DEEP_RESEARCH_BASE_URL → 401 on every extractor, invisible).
+        print(f"  [dcf_calibration {ticker}] extractor FAILED: {type(exc).__name__}: {exc}")
         return {"growth_rate_adj": None, "margin_direction": "stable",
                 "risk_flag": "MEDIUM", "notes": f"Extraction failed: {exc}"}
 
@@ -890,7 +894,8 @@ def _extract_segment_scenarios(
                 "confidence": str(block.get("confidence", "medium")).lower(),
             }
         return out
-    except Exception:
+    except Exception as _exc:
+        print(f"  [segment_scenarios {ticker}] extractor FAILED: {type(_exc).__name__}: {_exc}")
         return {}
 
 
@@ -1358,7 +1363,8 @@ def _extract_bank_metrics(
                 out[k] = str(parsed[k])[:max_len]
 
         return out
-    except Exception:
+    except Exception as _exc:
+        print(f"  [bank_metrics {ticker}] extractor FAILED: {type(_exc).__name__}: {_exc}")
         return {}
 
 
@@ -1411,8 +1417,9 @@ def _extract_insurance_metrics(
                 profile_name="Insurance",
                 retry_directive=retry_directive,
             )
-    except Exception:
-        pass   # fall through to legacy body
+    except Exception as _exc:
+        print(f"  [insurance_metrics {ticker}] framework delegation FAILED: {type(_exc).__name__}: {_exc}")
+        # fall through to legacy body
 
     if not deep_research and not sections:
         return {}
@@ -1509,7 +1516,8 @@ def _extract_insurance_metrics(
             out["evidence"] = str(parsed["evidence"])[:300]
 
         return out
-    except Exception:
+    except Exception as _exc:
+        print(f"  [insurance_metrics {ticker}] extractor FAILED: {type(_exc).__name__}: {_exc}")
         return {}
 
 
@@ -1744,7 +1752,8 @@ def _extract_reit_metrics(
             out["evidence"] = str(parsed["evidence"])[:300]
 
         return out
-    except Exception:
+    except Exception as _exc:
+        print(f"  [reit_metrics {ticker}] extractor FAILED: {type(_exc).__name__}: {_exc}")
         return {}
 
 
@@ -1895,7 +1904,8 @@ def _extract_pipeline_assets(
                 "evidence":       str(a.get("evidence", ""))[:300],
             })
         return out[:15]
-    except Exception:
+    except Exception as _exc:
+        print(f"  [pipeline_assets {ticker}] extractor FAILED: {type(_exc).__name__}: {_exc}")
         return []
 
 
@@ -3172,7 +3182,8 @@ def _run_extractor_fanout(
                 profile_name=profile_name,
                 retry_directive=retry_directive,
             )
-        except Exception:
+        except Exception as _exc:
+            print(f"  [framework_metrics {ticker}] dispatch FAILED: {type(_exc).__name__}: {_exc}")
             return {}
 
     # Sector-aware extractor gating — skips extractors that would almost
