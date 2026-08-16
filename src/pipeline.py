@@ -44,7 +44,13 @@ from src.agents.intelligence.short_interest_agent import run_short_interest_agen
 from src.agents.industry.specialist import assemble_industry_brief_merged, run_industry_specialist
 from src.agents.industry.data_router import run_data_router
 from src.agents.analysis.dcf_agent import run_dcf_agent
-from src.agents.analysis.sotp_extractor import run_sotp_extractor
+# SOTP extractor is IDE-only until reproducibility is proven; some deploys
+# legitimately lack the module. Guard the import so a partial deploy keeps
+# the prior pipeline behavior instead of crashing at startup.
+try:
+    from src.agents.analysis.sotp_extractor import run_sotp_extractor
+except Exception:  # ImportError or any missing transitive dependency
+    run_sotp_extractor = None
 from src.agents.analysis.peer_comparison import run_peer_comparison
 from src.agents.analysis.debate_round import run_debate_round, should_trigger_debate
 from src.agents.analysis.scenario_agent import run_scenario_agent
@@ -603,6 +609,10 @@ def run_advanced_pipeline(
                     and d["ai_input_allowed"] for d in _manifest)
             except Exception:
                 _sotp_docs = False
+        if _sotp_docs and run_sotp_extractor is None:
+            print("[4.4/10] SOTP extractor requested but module not deployed "
+                  "— skipping (legacy pipeline behavior).")
+            _sotp_docs = False
         if _sotp_docs:
             print(f"\n{'='*60}")
             print("[4.4/10] SOTP Assumption Extractor (GS-style)")
