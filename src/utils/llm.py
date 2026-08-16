@@ -1,11 +1,21 @@
 """Helper functions for LLM"""
 
 import json
+import logging
 import os
+import time
+
 from pydantic import BaseModel
 from src.llm.models import get_model, get_model_info, ModelProvider
 from src.utils.progress import progress
 from src.graph.state import AgentState
+from src.utils import llm_retry
+from src.research_ideas.complacency.qwen_throttle import (
+    acquire as _qwen_throttle_acquire,
+    report_429_from_exception as _qwen_throttle_report_429,
+)
+
+logger = logging.getLogger(__name__)
 
 # ── Speed round 2 (R4): model-tiering for non-research agents ─────────────
 # The fast tier applies to short-form synthesis agents that do not need the
@@ -55,6 +65,18 @@ def call_llm(
 
     Returns:
         An instance of the specified Pydantic model
+
+    Retry behaviour (R1 reliability batch): errors are classified via
+    src/utils/llm_retry — retryable (rate-limit/timeout/connection) errors
+    sleep an exponential backoff before retrying; non-retryable errors
+    (auth, bad request, missing keys) give up immediately instead of
+    burning attempts. Malformed-LLM-output errors (OutputParserException /
+    ValidationError) are retried too — they are transient, and pre-R1 this
+    call retried every exception. When the resolved provider is ALIBABA,
+    calls go through the cooperative qwen_throttle bucket (same one the
+    research sweeps use) so concurrent agents stop re-hammering DashScope's
+    limit_burst_rate. Final failure still returns a synthetic default, but
+    it is no longer silent: a logger.warning names agent, model and cause.
     """
     
     # Extract model configuration if state is provided and agent_name is available
@@ -79,8 +101,17 @@ def call_llm(
         except ValueError:
             pass  # leave as string; get_model will fail gracefully
 
+    _is_qwen = model_provider == ModelProvider.ALIBABA or model_provider == "ALIBABA"
+
     model_info = get_model_info(model_name, model_provider)
-    llm = get_model(model_name, model_provider, api_keys)
+    try:
+        llm = get_model(model_name, model_provider, api_keys)
+    except ValueError as e:
+        # Missing API key / unknown model — keep the raising semantics for
+        # callers, but leave a loud trail instead of a bare traceback.
+        logger.error("call_llm[%s]: cannot initialise %s/%s: %s",
+                     agent_name, model_name, model_provider, e)
+        raise
 
     if llm is None:
         print(f"Error: could not initialise LLM for model={model_name} provider={model_provider}")
@@ -100,8 +131,14 @@ def call_llm(
             method="json_mode",
         )
 
-    # Call the LLM with retries
+    # Call the LLM with retries — classification + backoff come from
+    # src/utils/llm_retry (same rules as deep_research's proven wrapper).
+    _give_up_reason = "retries-exhausted"
     for attempt in range(max_retries):
+        if _is_qwen:
+            # Cooperative process-wide DashScope throttle. acquire() blocks
+            # at most its max-wait safety cap; QWEN_THROTTLE_DISABLED kills it.
+            _qwen_throttle_acquire()
         try:
             # Call the LLM
             result = llm.invoke(prompt)
@@ -143,17 +180,65 @@ def call_llm(
                 except Exception:
                     pass  # fall through to normal retry
 
+            if llm_retry.is_parse_error(e):
+                # The model answered but its output didn't parse/validate —
+                # transient; retrying the same prompt usually works. Pre-R1
+                # code retried every exception, so classifying this as
+                # "other" would be a regression (observed in the 2026-08-16
+                # E2E: investor_buffett on qwen3.6-plus gave up on attempt 1).
+                retryable, kind = True, llm_retry.KIND_PARSE
+            else:
+                retryable, kind = llm_retry.classify_llm_error(e)
+            if _is_qwen:
+                # No-op unless this really is a 429 — then the shared bucket
+                # cools down so sibling threads stop piling into the wall.
+                _qwen_throttle_report_429(e)
+
+            if not retryable:
+                # Auth / bad request etc. — retrying just burns attempts and
+                # re-hammers the same failure.
+                logger.warning(
+                    "call_llm[%s] non-retryable error on %s/%s (attempt %d/%d), "
+                    "giving up: %s: %s",
+                    agent_name, model_name, model_provider, attempt + 1,
+                    max_retries, type(e).__name__, str(e)[:300],
+                )
+                _give_up_reason = f"non-retryable-{kind}"
+                break
+
             if agent_name:
-                progress.update_status(agent_name, None, f"Error - retry {attempt + 1}/{max_retries}")
+                progress.update_status(
+                    agent_name, None,
+                    f"Error ({kind}) - retry {attempt + 1}/{max_retries}",
+                )
 
             if attempt == max_retries - 1:
-                print(f"Error in LLM call after {max_retries} attempts: {e}")
-                # Use default_factory if provided, otherwise create a basic default
-                if default_factory:
-                    return default_factory()
-                return create_default_response(pydantic_model)
+                logger.warning(
+                    "call_llm[%s] retries exhausted on %s/%s after %d attempts: %s: %s",
+                    agent_name, model_name, model_provider, max_retries,
+                    type(e).__name__, str(e)[:300],
+                )
+                break
 
-    # This should never be reached due to the retry logic above
+            # Back off before the next attempt; never hammer sooner than an
+            # upstream Retry-After asked for.
+            wait = llm_retry.compute_backoff(attempt)
+            retry_after = llm_retry.retry_after_from(e)
+            if retry_after is not None:
+                wait = max(wait, retry_after)
+            time.sleep(wait)
+
+    # Exhausted (or gave up on a permanent error). Callers still receive a
+    # synthetic default — but it is no longer silent: the warnings above name
+    # the agent, model and cause, so degraded decisions are grep-able.
+    logger.warning(
+        "call_llm[%s] injecting synthetic default for %s/%s (%s) — downstream "
+        "decisions may be degraded",
+        agent_name, model_name, model_provider, _give_up_reason,
+    )
+    # Use default_factory if provided, otherwise create a basic default
+    if default_factory:
+        return default_factory()
     return create_default_response(pydantic_model)
 
 
@@ -252,3 +337,63 @@ def get_agent_model_config(state, agent_name):
         model_provider = model_provider.value
 
     return model_name, model_provider
+
+
+# ── Vision support (SOTP extractor raster-table reading) ────────────────────
+
+def build_vision_messages(system_text: str, human_text: str,
+                          images: list | None = None, provider=None) -> list:
+    """LangChain message pair with optional base64 image blocks.
+
+    Anthropic uses {"type": "image", "source": {base64}}; OpenAI-compatible
+    providers (OPENAI / ALIBABA / OPENROUTER) use image_url data URLs. No
+    images → plain text messages.
+    """
+    from langchain_core.messages import SystemMessage, HumanMessage
+    images = images or []
+    if not images:
+        return [SystemMessage(content=system_text),
+                HumanMessage(content=human_text)]
+    prov = provider.value if hasattr(provider, "value") else str(provider or "")
+    blocks: list[dict] = [{"type": "text", "text": human_text}]
+    for img in images:
+        b64 = img.get("data_b64") or ""
+        mime = img.get("mime", "image/png")
+        if not b64:
+            continue
+        if prov.upper() == "ANTHROPIC":
+            blocks.append({"type": "image",
+                           "source": {"type": "base64", "media_type": mime,
+                                      "data": b64}})
+        else:
+            blocks.append({"type": "image_url",
+                           "image_url": {"url": f"data:{mime};base64,{b64}"}})
+    return [SystemMessage(content=system_text), HumanMessage(content=blocks)]
+
+
+def call_llm_vision(system_text: str, human_text: str,
+                    images: list | None,
+                    pydantic_model: type[BaseModel],
+                    agent_name: str | None = None,
+                    state: AgentState | None = None,
+                    default_factory=None,
+                    max_tokens: int | None = None) -> BaseModel:
+    """call_llm with raster-table page images attached (Exhibit-style SOTP
+    tables that carry no extractable text). Degrades to text-only when no
+    images are supplied; provider-incompatible image blocks surface as
+    non-retryable errors inside call_llm and collapse to the synthetic
+    default, which callers already treat as "source unavailable".
+    """
+    if state and agent_name:
+        _name, _provider = get_agent_model_config(state, agent_name)
+    else:
+        _provider = "OPENAI"
+    messages = build_vision_messages(system_text, human_text, images, _provider)
+    return call_llm(
+        prompt=messages,
+        pydantic_model=pydantic_model,
+        agent_name=agent_name,
+        state=state,
+        default_factory=default_factory,
+        max_tokens=max_tokens,
+    )

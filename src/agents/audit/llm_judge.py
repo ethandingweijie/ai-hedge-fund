@@ -28,9 +28,10 @@ Reuses utilities from `src/agents/industry/deep_research.py`:
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from typing import Any
+
+from src.utils import run_config
 
 from src.agents.audit.cost_cap import CostCap
 
@@ -250,8 +251,10 @@ def call_qwen_capped(
     # Build client lazily so tests can inject without importing anthropic.
     if sdk_client is None:
         import anthropic                                    # type: ignore
-        api_key  = os.environ.get("DEEP_RESEARCH_API_KEY")
-        base_url = os.environ.get(
+        # run_config.getenv: per-run key overlay first, then process env —
+        # concurrent web runs with different API keys stay isolated.
+        api_key  = run_config.getenv("DEEP_RESEARCH_API_KEY")
+        base_url = run_config.getenv(
             "DEEP_RESEARCH_BASE_URL",
             "https://dashscope-intl.aliyuncs.com/apps/anthropic",
         )
@@ -267,8 +270,8 @@ def call_qwen_capped(
         )
 
     if model_name is None:
-        model_name = os.environ.get("DEEP_RESEARCH_SYNTHESIS_MODEL") \
-            or os.environ.get("DEEP_RESEARCH_MODEL") \
+        model_name = run_config.getenv("DEEP_RESEARCH_SYNTHESIS_MODEL") \
+            or run_config.getenv("DEEP_RESEARCH_MODEL") \
             or "qwen3.6-plus"
 
     # Late import to avoid pulling deep_research module on every audit import

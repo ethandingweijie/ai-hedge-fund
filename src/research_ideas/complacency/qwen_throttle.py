@@ -16,7 +16,10 @@ in the process. Workers must acquire() before any Qwen call. When a
 back off cooperatively.
 
 Used by:
-  • src/llm/models.py (ChatOpenAI for qualitative first-pass scoring)
+  • src/utils/llm.py call_llm — every pipeline agent whose model resolves
+    to the ALIBABA provider (e.g. the qwen3.6-plus fast tier). Wired by
+    the R1 reliability batch; an earlier docstring claimed src/llm/models.py
+    was wired here, which was never true.
   • src/research_ideas/complacency/web_research.py (qwen_web_search,
     deep_research_indicator, fetch_earnings_qa)
   • src/research_ideas/contrarian/chat_agent.py (IoTD chat)

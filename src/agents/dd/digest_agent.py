@@ -23,13 +23,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
 import anthropic
 from pydantic import BaseModel, Field, ValidationError
+
+from src.utils import run_config
 
 from src.agents.industry.deep_research import (
     _call_llm_with_rate_retry,
@@ -202,9 +203,10 @@ def run_digest_agent(*, utc_date: str | None = None) -> DigestNarrative:
         watchlist_size=watchlist_size,
     )
 
-    # Build Qwen client (same DashScope endpoint as dd_agent + sector_dd_agent)
-    api_key  = os.environ.get("DEEP_RESEARCH_API_KEY")
-    base_url = os.environ.get("DEEP_RESEARCH_BASE_URL")
+    # Build Qwen client (same DashScope endpoint as dd_agent + sector_dd_agent).
+    # run_config.getenv: per-run key overlay first, then process env.
+    api_key  = run_config.getenv("DEEP_RESEARCH_API_KEY")
+    base_url = run_config.getenv("DEEP_RESEARCH_BASE_URL")
     if not api_key or not base_url:
         raise DDAgentError(
             "DEEP_RESEARCH_API_KEY and DEEP_RESEARCH_BASE_URL must be set"
@@ -213,7 +215,7 @@ def run_digest_agent(*, utc_date: str | None = None) -> DigestNarrative:
         api_key=api_key, base_url=base_url,
         timeout=DD_CLIENT_TIMEOUT_SEC, max_retries=4,
     )
-    model = os.environ.get("DD_AGENT_MODEL") or os.environ.get("DEEP_RESEARCH_MODEL") or DD_DEFAULT_MODEL
+    model = run_config.getenv("DD_AGENT_MODEL") or run_config.getenv("DEEP_RESEARCH_MODEL") or DD_DEFAULT_MODEL
 
     try:
         response = _call_llm_with_rate_retry(

@@ -98,6 +98,24 @@ def test_release_run_clears_slot(monkeypatch):
     assert asyncio.run(queue_client.get_runner_run_id("MSFT::")) is None
 
 
+def test_build_dedup_key_is_canonical():
+    """Web claim site and worker release MUST build the same key: sorted
+    agents, None == []."""
+    assert queue_client.build_dedup_key("MSFT", ["b", "a"]) == "MSFT::a,b"
+    assert queue_client.build_dedup_key("MSFT", None) == "MSFT::"
+    assert queue_client.build_dedup_key("MSFT", []) == "MSFT::"
+    assert queue_client.build_dedup_key("MSFT", ["solo"]) == "MSFT::solo"
+
+
+def test_dedup_ttl_outlives_worker_job_timeout():
+    """R1 fix: a 35-60 min run used to lose its slot mid-flight
+    (DEDUP_TTL 1800 < job_timeout 3600) and a duplicate could be enqueued."""
+    from app.backend import worker as W
+
+    assert queue_client.DEDUP_TTL > W.WorkerSettings.job_timeout
+    assert queue_client.ENQUEUE_EXPIRES == 1800  # unclaimed-job expiry, kept
+
+
 # ── _queue_stream_generator SSE contract ──────────────────────────────────────
 
 def test_runner_stream_start_progress_complete(monkeypatch):

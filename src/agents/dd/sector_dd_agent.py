@@ -17,12 +17,13 @@ the dashboard can render both as the same AlertCard component.
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import anthropic
 from pydantic import BaseModel, Field, ValidationError
+
+from src.utils import run_config
 
 from src.agents.industry.deep_research import (
     _call_llm_with_rate_retry,
@@ -165,9 +166,10 @@ def run_sector_dd_agent(
     if etf_ctx:
         user_message += f"\n\n## Sector ETF context\n{etf_ctx}\n"
 
-    # Build Qwen client (reuse env vars from dd_agent — same DashScope endpoint)
-    api_key  = os.environ.get("DEEP_RESEARCH_API_KEY")
-    base_url = os.environ.get("DEEP_RESEARCH_BASE_URL")
+    # Build Qwen client (reuse env vars from dd_agent — same DashScope endpoint).
+    # run_config.getenv: per-run key overlay first, then process env.
+    api_key  = run_config.getenv("DEEP_RESEARCH_API_KEY")
+    base_url = run_config.getenv("DEEP_RESEARCH_BASE_URL")
     if not api_key or not base_url:
         raise DDAgentError(
             "DEEP_RESEARCH_API_KEY and DEEP_RESEARCH_BASE_URL must be set"
@@ -176,7 +178,7 @@ def run_sector_dd_agent(
         api_key=api_key, base_url=base_url,
         timeout=DD_CLIENT_TIMEOUT_SEC, max_retries=4,
     )
-    model = os.environ.get("DD_AGENT_MODEL") or os.environ.get("DEEP_RESEARCH_MODEL") or DD_DEFAULT_MODEL
+    model = run_config.getenv("DD_AGENT_MODEL") or run_config.getenv("DEEP_RESEARCH_MODEL") or DD_DEFAULT_MODEL
 
     # Invoke
     try:

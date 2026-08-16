@@ -38,12 +38,13 @@ not 429 for rate limits — the SDK's built-in retry doesn't catch it).
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import anthropic
 from pydantic import BaseModel, Field, ValidationError
+
+from src.utils import run_config
 
 # Reuse battle-tested helpers from deep_research.py:
 #   _call_llm_with_rate_retry — DashScope 403 retry + Retry-After
@@ -120,12 +121,15 @@ class DDAgentError(RuntimeError):
 def _build_qwen_client() -> tuple[anthropic.Anthropic, str]:
     """Return (Anthropic SDK client pointing at DashScope, model name).
 
-    Reads DEEP_RESEARCH_API_KEY and DEEP_RESEARCH_BASE_URL from env. Mirrors
-    deep_research.py's pattern. Raises DDAgentError if either env var missing
+    Reads DEEP_RESEARCH_API_KEY and DEEP_RESEARCH_BASE_URL via
+    run_config.getenv (per-run overlay first, then process env — so
+    concurrent web runs with different API keys don't cross-contaminate;
+    outside a run context this behaves exactly like os.environ). Mirrors
+    deep_research.py's pattern. Raises DDAgentError if either var missing
     (fail-fast — caller falls back to synthetic).
     """
-    api_key  = os.environ.get("DEEP_RESEARCH_API_KEY")
-    base_url = os.environ.get("DEEP_RESEARCH_BASE_URL")
+    api_key  = run_config.getenv("DEEP_RESEARCH_API_KEY")
+    base_url = run_config.getenv("DEEP_RESEARCH_BASE_URL")
     if not api_key or not base_url:
         raise DDAgentError(
             "DEEP_RESEARCH_API_KEY and DEEP_RESEARCH_BASE_URL must be set "
@@ -138,7 +142,7 @@ def _build_qwen_client() -> tuple[anthropic.Anthropic, str]:
         timeout=DD_CLIENT_TIMEOUT_SEC,
         max_retries=4,
     )
-    model = os.environ.get("DD_AGENT_MODEL") or os.environ.get("DEEP_RESEARCH_MODEL") or DD_DEFAULT_MODEL
+    model = run_config.getenv("DD_AGENT_MODEL") or run_config.getenv("DEEP_RESEARCH_MODEL") or DD_DEFAULT_MODEL
     return client, model
 
 

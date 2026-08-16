@@ -10,7 +10,7 @@ route falls back to the in-process execution path — so production keeps
 working identically until the Redis addon exists.
 
 Redis keys:
-- analysis_dedup:{ticker}::{agents}   STRING run_id, SETNX, TTL 30 min
+- analysis_dedup:{ticker}::{agents}   STRING run_id, SETNX, TTL 65 min
   Distributed replacement for the in-memory _in_flight dict: the value is
   the runner's run_id so waiters can subscribe to the same bus channel.
 """
@@ -24,7 +24,25 @@ from app.backend.services.redis_client import get_redis, redis_ready
 logger = logging.getLogger(__name__)
 
 DEDUP_PREFIX = "analysis_dedup:"
-DEDUP_TTL = 1800  # 30 min — matches the worker's job_timeout
+# The dedup slot must outlive the longest job the worker may run
+# (WorkerSettings.job_timeout = 3600s) — a 35-60 min run that lost its slot
+# mid-flight allowed a duplicate pipeline for the same ticker to be
+# enqueued (previously 1800 < 3600). The worker releases the slot in a
+# finally-block on completion/failure; the TTL only has to cover runs that
+# die hard (worker kill/crash) and never get the chance.
+DEDUP_TTL = 3900  # 65 min — worker job_timeout (60 min) + 5 min slack
+ENQUEUE_EXPIRES = 1800  # 30 min — unclaimed jobs expire out of the queue
+
+
+def build_dedup_key(ticker: str, selected_agents: Optional[list[str]]) -> str:
+    """Canonical dedup slot key for one analysis run.
+
+    MUST stay identical between the web claim site (routes/analysis.py) and
+    the worker release (worker.run_analysis_pipeline_task): sorted agent
+    list so [A, B] and [B, A] dedupe to the same slot, None == [].
+    """
+    agents_key = ",".join(sorted(selected_agents or []))
+    return f"{ticker}::{agents_key}"
 
 _arq_pool = None
 
@@ -90,7 +108,7 @@ async def enqueue_analysis(
         run_id=run_id,
         _job_id=f"analysis:{run_id}",
         _queue_name=QUEUE_NAME,
-        _expires=DEDUP_TTL,
+        _expires=ENQUEUE_EXPIRES,
     )
 
 
@@ -112,7 +130,7 @@ async def enqueue_research_job(job_id: str, kind: str, params: dict) -> None:
         params=params,
         _job_id=f"research:{job_id}",
         _queue_name=QUEUE_NAME,
-        _expires=DEDUP_TTL,
+        _expires=ENQUEUE_EXPIRES,
     )
 
 
@@ -133,5 +151,5 @@ async def enqueue_hedge_fund_run(run_id: str, user_id: Optional[int],
         request_payload=request_payload,
         _job_id=f"hedgefund:{run_id}",
         _queue_name=QUEUE_NAME,
-        _expires=DEDUP_TTL,
+        _expires=ENQUEUE_EXPIRES,
     )

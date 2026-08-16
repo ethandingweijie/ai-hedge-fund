@@ -82,35 +82,20 @@ def _call_llm_with_rate_retry(
     """
     import time as _time
 
+    from src.utils.llm_retry import (
+        KIND_TIMEOUT,
+        classify_llm_error,
+        compute_backoff,
+        retry_after_from,
+    )
+
     last_exc = None
     for attempt in range(max_retries + 1):
         try:
             return sdk_client.messages.create(**create_kwargs)
         except Exception as exc:
-            msg = str(exc).lower()
-            exc_name = type(exc).__name__.lower()
-            is_rate_limit = (
-                "rate limit" in msg
-                or "ratelimit" in msg
-                or "rate_limit" in msg
-                or "quota" in msg
-                or "throttl" in msg
-                or "accessdenied" in msg
-                or "access_denied" in msg
-            )
-            # APITimeoutError / connection drops from Qwen — treat as retryable
-            # transient failures (same category as rate limits operationally).
-            # Observed on DDOG 2026-04-24: Qwen hung beyond 60s client timeout
-            # → APITimeoutError → extractor returned {} silently. Retry gives
-            # Qwen a second chance with fresh connection.
-            is_timeout = (
-                "timeout" in msg
-                or "timed out" in msg
-                or "connection" in msg
-                or "apitimeouterror" in exc_name
-                or "apiconnectionerror" in exc_name
-            )
-            if not is_rate_limit and not is_timeout:
+            retryable, kind = classify_llm_error(exc)
+            if not retryable:
                 # Not retryable — propagate (auth errors, bad request, etc.)
                 raise
             last_exc = exc
@@ -123,22 +108,12 @@ def _call_llm_with_rate_retry(
                 raise
 
             # Exponential backoff
-            computed_wait = min(base_backoff * (2 ** attempt), max_wait)
+            computed_wait = compute_backoff(attempt, base=base_backoff, cap=max_wait)
 
             # Respect server's Retry-After if present (openai SDK exposes
             # this on APIStatusError.response.headers; anthropic SDK has
             # it on BadRequestError.response too but naming varies)
-            retry_after_seconds: float | None = None
-            try:
-                response = getattr(exc, "response", None)
-                if response is not None:
-                    headers = getattr(response, "headers", None)
-                    if headers is not None:
-                        ra = headers.get("Retry-After") or headers.get("retry-after")
-                        if ra:
-                            retry_after_seconds = float(ra)
-            except (ValueError, TypeError, AttributeError):
-                retry_after_seconds = None
+            retry_after_seconds = retry_after_from(exc)
 
             if retry_after_seconds is not None:
                 # Take the larger of (server guidance, our backoff) — we
@@ -150,7 +125,7 @@ def _call_llm_with_rate_retry(
                 wait = computed_wait
                 wait_source = "exponential"
 
-            failure_kind = "timeout" if is_timeout and not is_rate_limit else "rate-limited"
+            failure_kind = "timeout" if kind == KIND_TIMEOUT else "rate-limited"
             print(
                 f"  [llm_rate_retry] {extractor_name}{' ' + ticker if ticker else ''} "
                 f"{failure_kind} (attempt {attempt + 1}/{max_retries + 1}), "

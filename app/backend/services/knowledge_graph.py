@@ -22,15 +22,24 @@ captured against (`annual_as_of_earnings_date`) so a row is treated stale
 the moment a newer earnings date is observed — even inside the 24h TTL
 window — since that's the only real-world event that changes reported
 annual financials.
+
+Storage (R1 reliability batch): dual-mode via src.data.db — SQLite locally,
+Postgres in production — same pattern as the 2026-08-16 screener fix
+(f311cd5). The old raw-sqlite3 access broke the same way in prod once the
+/data volume was detached for multi-replica web, and left each replica with
+its own orphaned cache. The KG is a TTL cache (24h), so no data migration
+is needed — rows regenerate on first use per backend.
 """
 from __future__ import annotations
 
 import json
-import os
-import sqlite3
+import logging
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional
+
+from src.data import db as _db
+
+_logger = logging.getLogger(__name__)
 
 _TTL_HOURS = 24
 
@@ -38,23 +47,6 @@ _ANNUAL_LINE_ITEM_FIELDS = [
     "revenue", "net_income", "operating_cash_flow", "net_debt",
     "capital_expenditure", "free_cash_flow", "total_assets", "total_liabilities",
 ]
-
-
-def _get_db_path() -> str:
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect(path: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(path or _get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
 
 
 _DDL = """
@@ -80,16 +72,24 @@ _INDEX = (
 )
 
 
+# DDL target memo so CREATE TABLE IF NOT EXISTS runs once per database
+# (per-process in PG mode, per-file in SQLite mode) — same pattern as
+# screener_service._ensure_tables.
+_tables_ready_key: Optional[tuple] = None
+
+
 def _ensure_table() -> None:
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect(db_path)
+    global _tables_ready_key
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key == _tables_ready_key:
+        return
     try:
-        conn.execute(_DDL)
-        conn.execute(_INDEX)
-        conn.commit()
-    finally:
-        conn.close()
+        _db.execute_script(";".join([_DDL, _INDEX]))
+        _tables_ready_key = key
+    except Exception as exc:
+        # A concurrent CREATE TABLE IF NOT EXISTS race at boot is harmless;
+        # anything persistent surfaces loudly on the first real query.
+        _logger.warning("knowledge_graph _ensure_table: %s", exc)
 
 
 # ── TTM metrics (screener's 28 VGPM sub-factors) ────────────────────────────
@@ -100,18 +100,13 @@ def get_ttm_metrics_cached(tickers: list[str]) -> dict[str, dict]:
     if not tickers:
         return {}
     _ensure_table()
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
     now_iso = datetime.now(timezone.utc).isoformat()
-    try:
-        placeholders = ",".join("?" * len(tickers))
-        rows = conn.execute(
-            f"SELECT ticker, ttm_metrics_json, ttm_expires_at "
-            f"FROM kg_ticker_metrics WHERE ticker IN ({placeholders})",
-            tickers,
-        ).fetchall()
-    finally:
-        conn.close()
+    placeholders = ",".join("?" * len(tickers))
+    rows = _db.query(
+        f"SELECT ticker, ttm_metrics_json, ttm_expires_at "
+        f"FROM kg_ticker_metrics WHERE ticker IN ({placeholders})",
+        list(tickers),
+    )
     result: dict[str, dict] = {}
     for row in rows:
         if not row["ttm_metrics_json"] or not row["ttm_expires_at"]:
@@ -123,6 +118,22 @@ def get_ttm_metrics_cached(tickers: list[str]) -> dict[str, dict]:
         except Exception:
             continue
     return result
+
+
+_TTM_UPSERT_SQL = """
+INSERT INTO kg_ticker_metrics
+    (ticker, sector, industry, ttm_metrics_json, ttm_fetched_at, ttm_expires_at,
+     last_earnings_date, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(ticker) DO UPDATE SET
+    sector             = excluded.sector,
+    industry           = excluded.industry,
+    ttm_metrics_json   = excluded.ttm_metrics_json,
+    ttm_fetched_at     = excluded.ttm_fetched_at,
+    ttm_expires_at     = excluded.ttm_expires_at,
+    last_earnings_date = COALESCE(excluded.last_earnings_date, kg_ticker_metrics.last_earnings_date),
+    source             = excluded.source
+"""
 
 
 def set_ttm_metrics(
@@ -140,31 +151,12 @@ def set_ttm_metrics(
     now_iso = now.isoformat()
     sector_map = sector_map or {}
     industry_map = industry_map or {}
-    conn = _connect()
-    try:
-        for t, metrics in data.items():
-            last_earnings = metrics.get("last_earnings_date")
-            conn.execute(
-                """
-                INSERT INTO kg_ticker_metrics
-                    (ticker, sector, industry, ttm_metrics_json, ttm_fetched_at, ttm_expires_at,
-                     last_earnings_date, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(ticker) DO UPDATE SET
-                    sector             = excluded.sector,
-                    industry           = excluded.industry,
-                    ttm_metrics_json   = excluded.ttm_metrics_json,
-                    ttm_fetched_at     = excluded.ttm_fetched_at,
-                    ttm_expires_at     = excluded.ttm_expires_at,
-                    last_earnings_date = COALESCE(excluded.last_earnings_date, kg_ticker_metrics.last_earnings_date),
-                    source             = excluded.source
-                """,
-                (t, sector_map.get(t), industry_map.get(t), json.dumps(metrics),
-                 now_iso, expires, last_earnings, source),
-            )
-        conn.commit()
-    finally:
-        conn.close()
+    params_list = [
+        (t, sector_map.get(t), industry_map.get(t), json.dumps(metrics),
+         now_iso, expires, metrics.get("last_earnings_date"), source)
+        for t, metrics in data.items()
+    ]
+    _db.executemany(_TTM_UPSERT_SQL, params_list)
 
 
 # ── Annual line items (live-pipeline VGPM ROIC-proxy input) ────────────────
@@ -173,18 +165,13 @@ def get_annual_line_items_cached(ticker: str) -> Optional[dict]:
     """Fresh {"<report_period>": {field: value, ...}} for one ticker, or None
     if missing, TTL-expired, or a newer earnings date has since been seen."""
     _ensure_table()
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
     now_iso = datetime.now(timezone.utc).isoformat()
-    try:
-        row = conn.execute(
-            "SELECT annual_line_items_json, annual_expires_at, "
-            "       last_earnings_date, annual_as_of_earnings_date "
-            "FROM kg_ticker_metrics WHERE ticker = ?",
-            (ticker,),
-        ).fetchone()
-    finally:
-        conn.close()
+    row = _db.query_one(
+        "SELECT annual_line_items_json, annual_expires_at, "
+        "       last_earnings_date, annual_as_of_earnings_date "
+        "FROM kg_ticker_metrics WHERE ticker = ?",
+        [ticker],
+    )
     if not row or not row["annual_line_items_json"] or not row["annual_expires_at"]:
         return None
     if row["annual_expires_at"] <= now_iso:
@@ -196,6 +183,21 @@ def get_annual_line_items_cached(ticker: str) -> Optional[dict]:
         return json.loads(row["annual_line_items_json"])
     except Exception:
         return None
+
+
+_ANNUAL_UPSERT_SQL = """
+INSERT INTO kg_ticker_metrics
+    (ticker, sector, annual_line_items_json, annual_fetched_at, annual_expires_at,
+     annual_as_of_earnings_date, source)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(ticker) DO UPDATE SET
+    sector                     = COALESCE(kg_ticker_metrics.sector, excluded.sector),
+    annual_line_items_json     = excluded.annual_line_items_json,
+    annual_fetched_at          = excluded.annual_fetched_at,
+    annual_expires_at          = excluded.annual_expires_at,
+    annual_as_of_earnings_date = excluded.annual_as_of_earnings_date,
+    source                     = excluded.source
+"""
 
 
 def set_annual_line_items(
@@ -211,31 +213,15 @@ def set_annual_line_items(
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=ttl_hours)).isoformat()
     now_iso = now.isoformat()
-    conn = _connect()
-    try:
-        existing = conn.execute(
-            "SELECT last_earnings_date FROM kg_ticker_metrics WHERE ticker = ?", (ticker,)
-        ).fetchone()
-        as_of_earnings = existing[0] if existing else None
-        conn.execute(
-            """
-            INSERT INTO kg_ticker_metrics
-                (ticker, sector, annual_line_items_json, annual_fetched_at, annual_expires_at,
-                 annual_as_of_earnings_date, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(ticker) DO UPDATE SET
-                sector                     = COALESCE(kg_ticker_metrics.sector, excluded.sector),
-                annual_line_items_json     = excluded.annual_line_items_json,
-                annual_fetched_at          = excluded.annual_fetched_at,
-                annual_expires_at          = excluded.annual_expires_at,
-                annual_as_of_earnings_date = excluded.annual_as_of_earnings_date,
-                source                     = excluded.source
-            """,
-            (ticker, sector, json.dumps(annual), now_iso, expires, as_of_earnings, source),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    existing = _db.query_one(
+        "SELECT last_earnings_date FROM kg_ticker_metrics WHERE ticker = ?",
+        [ticker],
+    )
+    as_of_earnings = existing["last_earnings_date"] if existing else None
+    _db.execute(
+        _ANNUAL_UPSERT_SQL,
+        [ticker, sector, json.dumps(annual), now_iso, expires, as_of_earnings, source],
+    )
 
 
 def get_kg_annual_line_items(ticker: str, end_date: str, sector: Optional[str] = None) -> dict:
@@ -287,11 +273,7 @@ def delete_ticker(ticker: str) -> None:
     """Drop the cached row for one ticker (e.g. after a live pipeline run
     produces fresher data that should force a re-fetch next time)."""
     _ensure_table()
-    conn = _connect()
     try:
-        conn.execute("DELETE FROM kg_ticker_metrics WHERE ticker = ?", (ticker,))
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        conn.close()
+        _db.execute("DELETE FROM kg_ticker_metrics WHERE ticker = ?", [ticker])
+    except Exception as exc:
+        _logger.warning("knowledge_graph delete_ticker(%s): %s", ticker, exc)

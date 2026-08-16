@@ -128,53 +128,67 @@ async def run_analysis_pipeline_task(
         q.put_nowait((event, phase_event, (ev_ticker or ticker).upper()))
 
     try:
-        rid, _result = await analysis_service.run_analysis_pipeline(
-            ticker=ticker,
-            model_name=model_name,
-            api_keys=api_keys,
-            on_phase=on_phase,
-            selected_agents=selected_agents,
-            user_id=user_id,
-            run_id=run_id,
-        )
-    except Exception as exc:
-        q.put_nowait(None)
-        await fwd
-        err = {
-            "phase": "pipeline_error",
-            "status": "error",
-            "summary": f"{type(exc).__name__}: {exc}",
-            "run_id": run_id,
-            "completed": True,
-        }
-        await progress_bus.publish_event(run_id, err)
-        await progress_bus.set_phase_event(ticker_key, "pipeline_error", err)
-        raise
-    finally:
-        # Ensure the forwarder never outlives the task even on odd exits.
-        if not fwd.done():
+        try:
+            rid, _result = await analysis_service.run_analysis_pipeline(
+                ticker=ticker,
+                model_name=model_name,
+                api_keys=api_keys,
+                on_phase=on_phase,
+                selected_agents=selected_agents,
+                user_id=user_id,
+                run_id=run_id,
+            )
+        except Exception as exc:
             q.put_nowait(None)
             await fwd
+            err = {
+                "phase": "pipeline_error",
+                "status": "error",
+                "summary": f"{type(exc).__name__}: {exc}",
+                "run_id": run_id,
+                "completed": True,
+            }
+            await progress_bus.publish_event(run_id, err)
+            await progress_bus.set_phase_event(ticker_key, "pipeline_error", err)
+            raise
+        finally:
+            # Ensure the forwarder never outlives the task even on odd exits.
+            if not fwd.done():
+                q.put_nowait(None)
+                await fwd
 
-    marker = {
-        "phase": "pipeline_complete",
-        "status": "done",
-        "summary": f"Run completed: {rid}",
-        "timestamp": _utcnow_iso(),
-        "run_id": rid,
-        "completed": True,
-    }
-    await progress_bus.publish_event(run_id, marker)
-    await progress_bus.set_phase_event(ticker_key, "pipeline_complete", marker)
+        marker = {
+            "phase": "pipeline_complete",
+            "status": "done",
+            "summary": f"Run completed: {rid}",
+            "timestamp": _utcnow_iso(),
+            "run_id": rid,
+            "completed": True,
+        }
+        await progress_bus.publish_event(run_id, marker)
+        await progress_bus.set_phase_event(ticker_key, "pipeline_complete", marker)
 
-    # Mirror the web route: keep the ticker's live-phase state around for
-    # ~2 min so reconnecting/polling clients can observe completion.
-    async def _cleanup() -> None:
-        await asyncio.sleep(120)
-        await progress_bus.clear_ticker(ticker)
+        # Mirror the web route: keep the ticker's live-phase state around for
+        # ~2 min so reconnecting/polling clients can observe completion.
+        async def _cleanup() -> None:
+            await asyncio.sleep(120)
+            await progress_bus.clear_ticker(ticker)
 
-    loop.create_task(_cleanup())
-    return {"run_id": rid, "ticker": ticker, "ok": True}
+        loop.create_task(_cleanup())
+        return {"run_id": rid, "ticker": ticker, "ok": True}
+    finally:
+        # Release the distributed dedup slot on EVERY exit path (success,
+        # pipeline error, unexpected exception) — otherwise an immediate
+        # re-run of the same ticker waits out the full 65-min DEDUP_TTL, and
+        # a crashed run leaves its slot locked until expiry. In-process runs
+        # never claim a Redis slot, so the DEL is a no-op there;
+        # release_run also swallows Redis failures itself.
+        try:
+            from app.backend.services import queue_client
+            await queue_client.release_run(
+                queue_client.build_dedup_key(ticker, selected_agents))
+        except Exception as exc:
+            logger.warning("worker: dedup release failed: %s", exc)
 
 
 # ── Task 2: research jobs ──────────────────────────────────────────────────────

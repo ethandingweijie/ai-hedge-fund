@@ -381,10 +381,23 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
 
         pipeline_task = asyncio.create_task(_run())
 
+        # Same 30-min cap as queue mode (_QUEUE_STREAM_DEADLINE): without it
+        # a hung in-process run keeps this stream heartbeating forever and
+        # the client never sees an error. On expiry the pipeline task keeps
+        # running in the background (its result still lands in history) and
+        # the in-process dedup slot is released by _run()'s finally block.
+        _loop = asyncio.get_event_loop()
+        _stream_deadline = _loop.time() + _QUEUE_STREAM_DEADLINE
         while True:
             try:
                 event = await asyncio.wait_for(phase_events.get(), timeout=60.0)
             except asyncio.TimeoutError:
+                if _loop.time() > _stream_deadline:
+                    yield (
+                        f"event: error\ndata: "
+                        f"{json.dumps({'error': 'Timed out waiting for the analysis to complete (30 min).'})}\n\n"
+                    )
+                    return
                 yield "event: heartbeat\ndata: {}\n\n"
                 continue
 
@@ -422,7 +435,11 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
 
 # Terminal phases of the fixed pipeline breakdown (mirrors event_generator).
 _FIXED_DONE_COUNT = 21
-_QUEUE_STREAM_DEADLINE = 1800  # matches worker job_timeout
+# 30-min cap on a CLIENT STREAM. The worker job_timeout is 60 min, so a
+# long run keeps running after this fires — but the client is released with
+# an error instead of heartbeating forever (and can pick the run up from
+# history). Applies to both the queue-mode stream and the in-process stream.
+_QUEUE_STREAM_DEADLINE = 1800
 
 
 async def _start_queue_run(
@@ -440,8 +457,9 @@ async def _start_queue_run(
     """
     from app.backend.services import queue_client
 
-    agents_key = ",".join(sorted(agents or []))
-    dedup_key = f"{ticker}::{agents_key}"
+    # Canonical key construction — MUST match the worker-side release in
+    # worker.run_analysis_pipeline_task (queue_client.build_dedup_key).
+    dedup_key = queue_client.build_dedup_key(ticker, agents)
 
     run_id = str(uuid.uuid4())
     is_runner = await queue_client.claim_run(dedup_key, run_id)

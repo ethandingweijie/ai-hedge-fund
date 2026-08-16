@@ -381,3 +381,67 @@ def test_fundflow_task_reports_skip(monkeypatch):
         "src.research_ideas.fundflow.scheduler.run_weekly_cycle",
         lambda: None)
     assert asyncio.run(worker.run_fundflow_brief_task({})) == {"ran": False}
+
+
+# ── R1: dedup slot release on every exit path ─────────────────────────────────
+
+class _DeleteTrackerRedis:
+    """Just enough of redis.asyncio for queue_client.release_run."""
+
+    def __init__(self):
+        self.deleted: list = []
+
+    async def delete(self, key):
+        self.deleted.append(key)
+        return 1
+
+
+def _patch_queue_redis(monkeypatch):
+    tracker = _DeleteTrackerRedis()
+
+    async def _get_redis():
+        return tracker
+
+    monkeypatch.setattr(
+        "app.backend.services.queue_client.get_redis", _get_redis)
+    return tracker
+
+
+def test_analysis_task_releases_dedup_slot_on_success(monkeypatch):
+    rec = _BusRecorder()
+    _patch_bus(monkeypatch, rec)
+    tracker = _patch_queue_redis(monkeypatch)
+
+    async def fake_pipeline(**kwargs):
+        return kwargs.get("run_id"), {}
+
+    monkeypatch.setattr(
+        "app.backend.services.analysis_service.run_analysis_pipeline",
+        fake_pipeline)
+
+    out = asyncio.run(worker.run_analysis_pipeline_task(
+        {}, ticker="msft", model_name="m", api_keys={},
+        selected_agents=["b_agent", "a_agent"], run_id="run-9"))
+
+    assert out["ok"] is True
+    # Canonical key — sorted agents, same construction as the web claim site
+    assert tracker.deleted == ["analysis_dedup:msft::a_agent,b_agent"]
+
+
+def test_analysis_task_releases_dedup_slot_on_failure(monkeypatch):
+    rec = _BusRecorder()
+    _patch_bus(monkeypatch, rec)
+    tracker = _patch_queue_redis(monkeypatch)
+
+    async def boom(**kwargs):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(
+        "app.backend.services.analysis_service.run_analysis_pipeline", boom)
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(worker.run_analysis_pipeline_task(
+            {}, ticker="aapl", model_name="m", api_keys={},
+            selected_agents=None, run_id="run-err"))
+
+    assert tracker.deleted == ["analysis_dedup:aapl::"]

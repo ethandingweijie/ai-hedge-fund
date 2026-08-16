@@ -44,6 +44,7 @@ from src.agents.intelligence.short_interest_agent import run_short_interest_agen
 from src.agents.industry.specialist import assemble_industry_brief_merged, run_industry_specialist
 from src.agents.industry.data_router import run_data_router
 from src.agents.analysis.dcf_agent import run_dcf_agent
+from src.agents.analysis.sotp_extractor import run_sotp_extractor
 from src.agents.analysis.peer_comparison import run_peer_comparison
 from src.agents.analysis.debate_round import run_debate_round, should_trigger_debate
 from src.agents.analysis.scenario_agent import run_scenario_agent
@@ -60,6 +61,62 @@ from src.utils.pdf_report import _compute_vgpm
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TRADE_LOG_PATH = os.path.join(DATA_DIR, "trade_log.json")
+
+
+def _env_seconds(name: str, default: float) -> float:
+    """Env-tunable timeout in seconds; invalid values fall back to default."""
+    try:
+        _v = os.environ.get(name, "").strip()
+        return float(_v) if _v else default
+    except ValueError:
+        return default
+
+
+# Hard wall-clock caps on the parallel-block joins (R1 reliability batch).
+# Before this, a hung dependency (FMP/yfinance/Tavily never returning) hung
+# the run forever — ThreadPoolExecutor joins blocked without a timeout and
+# the in-process SSE stream heartbeated indefinitely. A bounded join converts
+# the hang into a fail-fast RuntimeError: the dedup slot is released, the
+# user sees a clear error and can retry immediately.
+# Front block: Claude client timeout 600s x retry headroom.
+_FRONT_BLOCK_TIMEOUT_S = _env_seconds("PIPELINE_FRONT_BLOCK_TIMEOUT_S", 1500.0)
+# Phase-7 trio: fast-tier Qwen ~120s calls x retry headroom.
+_PHASE7_TIMEOUT_S = _env_seconds("PIPELINE_PHASE7_TIMEOUT_S", 900.0)
+
+
+def _bounded_join(executor, futures: list, timeout_s: float, label: str) -> list:
+    """Join `futures` against ONE shared wall-clock deadline.
+
+    Returns the results in submission order. On deadline expiry the queued
+    futures are cancelled and RuntimeError('<label> timed out ...') is
+    raised — a hung dependency becomes a bounded failure instead of an
+    infinite block. Exceptions raised INSIDE a future propagate unchanged
+    (fail semantics identical to the sequential pipeline).
+
+    The executor is shut down here (callers must NOT use a `with` block:
+    its shutdown(wait=True) on exit would block until every future
+    completes, defeating the deadline).
+    """
+    deadline = time.monotonic() + timeout_s
+    try:
+        results = []
+        for _f in futures:
+            _remaining = deadline - time.monotonic()
+            if _remaining <= 0:
+                raise TimeoutError
+            results.append(_f.result(timeout=_remaining))
+    except TimeoutError:
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise RuntimeError(
+            f"{label} timed out after {timeout_s:.0f}s — a dependency hung; "
+            f"run aborted")
+    except BaseException:
+        # A phase raised: keep the old `with`-block semantics — join the
+        # sibling phases before propagating so no threads are orphaned.
+        executor.shutdown(wait=True)
+        raise
+    executor.shutdown(wait=True)
+    return results
 
 # Speed round 2 (R3): default investor panel for automated runs — balanced
 # across bull/bear/value/growth. All 12 INVESTOR_PERSONAS remain registered
@@ -246,22 +303,25 @@ def run_advanced_pipeline(
         _st_intel  = _copy.deepcopy(state)
         _st_edgar  = _copy.deepcopy(state)
 
-        with ThreadPoolExecutor(max_workers=4) as _front_ex:
-            _f_macro  = _ctx_submit(_front_ex, _timed_call, "1_macro_regime",
-                                    run_macro_regime_classifier, _st_macro)
-            _f_router = _ctx_submit(_front_ex, _timed_call, "2_strategic_router",
-                                    run_strategic_router, _st_router)
-            _f_intel  = _ctx_submit(_front_ex, _timed_call, "2_5_intelligence",
-                                    _run_intelligence_agents_parallel, _st_intel)
-            _f_edgar  = _ctx_submit(_front_ex, _timed_call, "2_7_edgar_hkex",
-                                    run_edgar_hkex_resolver, _st_edgar)
+        # NOTE: manual executor lifecycle — a `with` context manager's
+        # shutdown(wait=True) would block until every future completes and
+        # defeat the deadline. _bounded_join owns shutdown and raises
+        # RuntimeError("<block> timed out ...") on a hang instead of
+        # blocking forever. Exceptions from phases re-raise at the join
+        # exactly as the sequential pipeline would have raised mid-phase.
+        _front_ex = ThreadPoolExecutor(max_workers=4)
+        _f_macro  = _ctx_submit(_front_ex, _timed_call, "1_macro_regime",
+                                run_macro_regime_classifier, _st_macro)
+        _f_router = _ctx_submit(_front_ex, _timed_call, "2_strategic_router",
+                                run_strategic_router, _st_router)
+        _f_intel  = _ctx_submit(_front_ex, _timed_call, "2_5_intelligence",
+                                _run_intelligence_agents_parallel, _st_intel)
+        _f_edgar  = _ctx_submit(_front_ex, _timed_call, "2_7_edgar_hkex",
+                                run_edgar_hkex_resolver, _st_edgar)
 
-        # Join — an exception re-raises here exactly as the sequential
-        # pipeline would have raised mid-phase (fail semantics unchanged).
-        _st_macro  = _f_macro.result()
-        _st_router = _f_router.result()
-        _st_intel  = _f_intel.result()
-        _st_edgar  = _f_edgar.result()
+        _st_macro, _st_router, _st_intel, _st_edgar = _bounded_join(
+            _front_ex, [_f_macro, _f_router, _f_intel, _f_edgar],
+            _FRONT_BLOCK_TIMEOUT_S, "Front block (macro/router/intel/edgar)")
 
         # Merge: router's copy is the base (carries the most downstream
         # keys); graft the other three phases' disjoint key sets on top.
@@ -523,6 +583,52 @@ def run_advanced_pipeline(
                 print(f"  [checkpoint] industry_brief save failed (non-fatal): {_ck_err}")
 
         # ----------------------------------------------------------------
+        # PHASE 4.4 — SOTP Assumption Extractor (GS-style SOTP inputs)
+        # Sourced by assumption nature: reported facts from FMP line items,
+        # segment revenues anchored to FMP product segmentation where
+        # available, economics + multiples via two targeted LLM passes,
+        # policy constants for China internet. Gated: runs only when
+        # sotp_enabled is set on the request or licensed PDF evidence is
+        # attached for a ticker (zero-cost otherwise). Output feeds the
+        # "SOTP (analyst)" shadow method in the DCF engine.
+        # ----------------------------------------------------------------
+        _sotp_docs = bool(state["data"].get("sotp_enabled"))
+        if not _sotp_docs:
+            try:
+                from src.utils.research_pdf import load_research_manifest
+                _manifest = load_research_manifest(
+                    os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+                _sotp_docs = any(
+                    d["ticker"].upper() in {t.upper() for t in tickers}
+                    and d["ai_input_allowed"] for d in _manifest)
+            except Exception:
+                _sotp_docs = False
+        if _sotp_docs:
+            print(f"\n{'='*60}")
+            print("[4.4/10] SOTP Assumption Extractor (GS-style)")
+            print('='*60)
+            with _timed("4_4_sotp_extractor"):
+                try:
+                    state = run_sotp_extractor(state)
+                except Exception as _sotp_err:
+                    import traceback as _tb
+                    print(f"[ERROR] SOTP extractor failed (non-fatal): "
+                          f"{type(_sotp_err).__name__}: {_sotp_err}")
+                    print(_tb.format_exc()[:1200])
+                    state["data"]["sotp_assumptions"] = {}
+            _sotp_res = state["data"].get("sotp_assumptions", {})
+            for ticker in tickers:
+                _sa = _sotp_res.get(ticker)
+                if _sa:
+                    print(f"  {ticker}: {len(_sa.get('segments', []))} segments, "
+                          f"holdco {_sa.get('holdco_discount_pct', 0):.0%}, "
+                          f"sources={_sa.get('_sources', {})}")
+                else:
+                    print(f"  {ticker}: no SOTP assumptions assembled")
+        else:
+            state["data"]["sotp_assumptions"] = state["data"].get("sotp_assumptions", {})
+
+        # ----------------------------------------------------------------
         # PHASE 4.5 — DCF Engine (deterministic, no LLM)
         # Cache: reuse dcf_range if all tickers have a <3-day cached run.
         # (Shorter window — financials can move fast.)
@@ -727,18 +833,28 @@ def run_advanced_pipeline(
             state_copy_c = copy.deepcopy(state)
 
             workers = max(1, 3 - int(_power_law_cached) - int(_value_trap_cached))
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                f_scenario = _ctx_submit(executor, run_scenario_agent, state_copy_a)
-                f_power = None if _power_law_cached else _ctx_submit(executor, run_power_law_agent, state_copy_b)
-                f_trap  = None if _value_trap_cached else _ctx_submit(executor, run_value_trap_agent, state_copy_c)
+            # Manual executor lifecycle — see front block note; the join
+            # deadline is enforced by _bounded_join.
+            executor = ThreadPoolExecutor(max_workers=workers)
+            f_scenario = _ctx_submit(executor, run_scenario_agent, state_copy_a)
+            f_power = None if _power_law_cached else _ctx_submit(executor, run_power_law_agent, state_copy_b)
+            f_trap  = None if _value_trap_cached else _ctx_submit(executor, run_value_trap_agent, state_copy_c)
 
-            state["data"]["scenario_analysis"] = f_scenario.result()["data"]["scenario_analysis"]
-
+            _p7_futures = [f_scenario]
             if not _value_trap_cached:
-                state["data"]["value_trap_analysis"] = f_trap.result()["data"]["value_trap_analysis"]  # type: ignore[union-attr]
-
+                _p7_futures.append(f_trap)
             if not _power_law_cached:
-                state["data"]["power_law_analysis"] = f_power.result()["data"]["power_law_analysis"]  # type: ignore[union-attr]
+                _p7_futures.append(f_power)
+            _p7_joined = _bounded_join(
+                executor, _p7_futures, _PHASE7_TIMEOUT_S,
+                "Phase 7 (scenario/power-law/value-trap)")
+
+            _p7_it = iter(_p7_joined)
+            state["data"]["scenario_analysis"] = next(_p7_it)["data"]["scenario_analysis"]
+            if not _value_trap_cached:
+                state["data"]["value_trap_analysis"] = next(_p7_it)["data"]["value_trap_analysis"]
+            if not _power_law_cached:
+                state["data"]["power_law_analysis"] = next(_p7_it)["data"]["power_law_analysis"]
 
         for ticker in tickers:
             scen = state["data"]["scenario_analysis"].get(ticker, {})
