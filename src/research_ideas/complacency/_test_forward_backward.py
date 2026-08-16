@@ -43,15 +43,8 @@ def main():
     ticker = sys.argv[1] if len(sys.argv) > 1 else "CRWD"
 
     # Invalidate the per-indicator cache so the forward test actually re-scores.
-    from app.backend.services import qualitative_storage
-    import sqlite3
-    db_path = qualitative_storage._get_db_path()
-    conn = sqlite3.connect(db_path)
-    try:
-        conn.execute("DELETE FROM complacency_qualitative WHERE ticker = ?", (ticker.upper(),))
-        conn.commit()
-    finally:
-        conn.close()
+    from src.data import db as _db
+    _db.execute("DELETE FROM complacency_qualitative WHERE ticker = ?", [ticker.upper()])
     print(f"[Cache cleared for {ticker} so forward test re-scores]")
 
     # ── FORWARD: cold run ────────────────────────────────────────────────

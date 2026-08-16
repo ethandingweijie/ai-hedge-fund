@@ -9,36 +9,25 @@ call. Default 7-day TTL.
 
 One row per (ticker, indicator, scored_at). Older rows kept for drift
 analysis (we may quarterly compare a re-score vs the prior month).
+
+Storage (S1 batch, 2026-08-16): dual-mode via src.data.db — SQLite locally,
+Postgres in production. The qual cache is written by the worker (refresh
+runs queued since Phase 2e) and read by the web replicas when the drawer
+opens, so a per-process SQLite file meant every replica re-paid for the
+same LLM scores. complacency_qualitative was already copied to PG by the
+2026-08 migration.
 """
 from __future__ import annotations
 
 import json
 import logging
 import math
-import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Optional
 
+from src.data import db as _db
+
 logger = logging.getLogger(__name__)
-
-
-def _get_db_path() -> str:
-    import os
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect(path: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(path or _get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
 
 
 _DDL = """
@@ -62,18 +51,23 @@ _INDEXES = [
 ]
 
 
+# DDL target memo so CREATE TABLE IF NOT EXISTS runs once per database
+# (per-process in PG mode, per-file in SQLite mode).
+_tables_ready_key: Optional[tuple] = None
+
+
 def _ensure_table() -> None:
-    import os
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect(db_path)
+    global _tables_ready_key
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key == _tables_ready_key:
+        return
     try:
-        conn.execute(_DDL)
-        for idx in _INDEXES:
-            conn.execute(idx)
-        conn.commit()
-    finally:
-        conn.close()
+        _db.execute_script(";".join([_DDL] + _INDEXES))
+        _tables_ready_key = key
+    except Exception as exc:
+        # A concurrent CREATE TABLE IF NOT EXISTS race at boot is harmless;
+        # anything persistent surfaces loudly on the first real query.
+        logger.warning("qualitative_storage _ensure_table: %s", exc)
 
 
 def _sanitize(v: Any) -> Any:
@@ -84,6 +78,22 @@ def _sanitize(v: Any) -> Any:
     if isinstance(v, list):
         return [_sanitize(x) for x in v]
     return v
+
+
+# ON CONFLICT form works on BOTH SQLite and Postgres (no INSERT OR REPLACE).
+_SAVE_SQL = """
+INSERT INTO complacency_qualitative
+    (ticker, indicator, scored_at, score, confidence, summary,
+     evidence_json, model_used, cost_usd)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(ticker, indicator, scored_at) DO UPDATE SET
+    score = excluded.score,
+    confidence = excluded.confidence,
+    summary = excluded.summary,
+    evidence_json = excluded.evidence_json,
+    model_used = excluded.model_used,
+    cost_usd = excluded.cost_usd
+"""
 
 
 def save_qualitative_score(
@@ -99,25 +109,15 @@ def save_qualitative_score(
 ) -> None:
     _ensure_table()
     ts = scored_at or datetime.now(timezone.utc).isoformat()
-    conn = _connect()
-    try:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO complacency_qualitative
-                (ticker, indicator, scored_at, score, confidence, summary,
-                 evidence_json, model_used, cost_usd)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                ticker.upper(), indicator, ts,
-                int(score), float(confidence), summary,
-                json.dumps(_sanitize(evidence)),
-                model_used, float(cost_usd),
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _db.execute(
+        _SAVE_SQL,
+        [
+            ticker.upper(), indicator, ts,
+            int(score), float(confidence), summary,
+            json.dumps(_sanitize(evidence)),
+            model_used, float(cost_usd),
+        ],
+    )
 
 
 def get_latest_qualitative_score(
@@ -127,25 +127,19 @@ def get_latest_qualitative_score(
 ) -> Optional[dict]:
     """Returns the latest non-stale score, or None if missing/stale."""
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            """
-            SELECT scored_at, score, confidence, summary, evidence_json, model_used, cost_usd
-            FROM complacency_qualitative
-            WHERE ticker = ? AND indicator = ?
-            ORDER BY scored_at DESC
-            LIMIT 1
-            """,
-            (ticker.upper(), indicator),
-        ).fetchone()
-    finally:
-        conn.close()
+    row = _db.query_one(
+        "SELECT scored_at, score, confidence, summary, evidence_json, model_used, cost_usd "
+        "FROM complacency_qualitative "
+        "WHERE ticker = ? AND indicator = ? "
+        "ORDER BY scored_at DESC "
+        "LIMIT 1",
+        [ticker.upper(), indicator],
+    )
     if not row:
         return None
 
     try:
-        dt = datetime.fromisoformat(row[0].replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(row["scored_at"].replace("Z", "+00:00"))
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         age_days = (datetime.now(timezone.utc) - dt).total_seconds() / 86400
@@ -158,13 +152,13 @@ def get_latest_qualitative_score(
     return {
         "ticker": ticker.upper(),
         "indicator": indicator,
-        "scored_at": row[0],
-        "score": row[1],
-        "confidence": row[2],
-        "summary": row[3],
-        "evidence": json.loads(row[4] or "[]"),
-        "model_used": row[5],
-        "cost_usd": row[6],
+        "scored_at": row["scored_at"],
+        "score": row["score"],
+        "confidence": row["confidence"],
+        "summary": row["summary"],
+        "evidence": json.loads(row["evidence_json"] or "[]"),
+        "model_used": row["model_used"],
+        "cost_usd": row["cost_usd"],
         "age_days": age_days,
     }
 
@@ -172,23 +166,17 @@ def get_latest_qualitative_score(
 def list_all_for_ticker(ticker: str, max_age_days: int = 7) -> list[dict]:
     """All cached indicators for a ticker that are still fresh."""
     _ensure_table()
-    conn = _connect()
-    try:
-        rows = conn.execute(
-            """
-            SELECT indicator, MAX(scored_at) AS latest
-            FROM complacency_qualitative
-            WHERE ticker = ?
-            GROUP BY indicator
-            """,
-            (ticker.upper(),),
-        ).fetchall()
-    finally:
-        conn.close()
+    rows = _db.query(
+        "SELECT indicator, MAX(scored_at) AS latest "
+        "FROM complacency_qualitative "
+        "WHERE ticker = ? "
+        "GROUP BY indicator",
+        [ticker.upper()],
+    )
 
     out: list[dict] = []
-    for indicator, _latest in rows:
-        cached = get_latest_qualitative_score(ticker, indicator, max_age_days)
+    for r in rows:
+        cached = get_latest_qualitative_score(ticker, r["indicator"], max_age_days)
         if cached:
             out.append(cached)
     return out

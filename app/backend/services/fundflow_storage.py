@@ -1,42 +1,27 @@
 """
 app/backend/services/fundflow_storage.py
 =========================================
-SQLite persistence for the geographic fund-flow screen's cohort runs. Mirrors
-momentum_storage.py — shared run_archive.db, auto-migrating table,
-skip-empty-cohort guard on the "latest" query.
+Persistence for the geographic fund-flow screen's cohort runs.
+
+Storage (S1 batch, 2026-08-16): dual-mode via src.data.db — SQLite locally,
+Postgres in production. The old raw-sqlite3 access gave every Railway
+process its own private file, so a refresh (or the Monday scheduled cycle,
+which runs in the worker) stayed invisible to the web replicas — the
+research-ideas main page showed stale summaries. fundflow_runs was already
+copied to PG by the 2026-08 migration.
 """
 from __future__ import annotations
 
 import json
 import logging
 import math
-import sqlite3
-from pathlib import Path
 from typing import Any, Optional
 
+from src.data import db as _db
 from src.research_ideas.fundflow.schemas import FundFlowCohortResult
 
 
 logger = logging.getLogger(__name__)
-
-
-def _get_db_path() -> str:
-    import os
-
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect(path: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(path or _get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
 
 
 _DDL = """
@@ -66,19 +51,23 @@ _COLS = (
 )
 
 
-def _ensure_table() -> None:
-    import os
+# DDL target memo so CREATE TABLE IF NOT EXISTS runs once per database
+# (per-process in PG mode, per-file in SQLite mode).
+_tables_ready_key: Optional[tuple] = None
 
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect(db_path)
+
+def _ensure_table() -> None:
+    global _tables_ready_key
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key == _tables_ready_key:
+        return
     try:
-        conn.execute(_DDL)
-        for idx in _INDEXES:
-            conn.execute(idx)
-        conn.commit()
-    finally:
-        conn.close()
+        _db.execute_script(";".join([_DDL] + _INDEXES))
+        _tables_ready_key = key
+    except Exception as exc:
+        # A concurrent CREATE TABLE IF NOT EXISTS race at boot is harmless;
+        # anything persistent surfaces loudly on the first real query.
+        logger.warning("fundflow_storage _ensure_table: %s", exc)
 
 
 def _sanitize(obj: Any) -> Any:
@@ -93,31 +82,43 @@ def _sanitize(obj: Any) -> Any:
     return obj
 
 
+# ON CONFLICT form works on BOTH SQLite and Postgres (no INSERT OR REPLACE).
+_SAVE_SQL = (
+    f"INSERT INTO fundflow_runs ({_COLS}) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "ON CONFLICT(run_id) DO UPDATE SET "
+    "created_at = excluded.created_at, "
+    "as_of = excluded.as_of, "
+    "universe = excluded.universe, "
+    "region_count = excluded.region_count, "
+    "inflow_count = excluded.inflow_count, "
+    "outflow_count = excluded.outflow_count, "
+    "summary = excluded.summary, "
+    "regions = excluded.regions, "
+    "benchmarks = excluded.benchmarks, "
+    "failed_regions = excluded.failed_regions"
+)
+
+
 def save_fundflow_run(cohort: FundFlowCohortResult) -> None:
     _ensure_table()
     payload = _sanitize(cohort.model_dump())
-    conn = _connect()
-    try:
-        conn.execute(
-            f"INSERT OR REPLACE INTO fundflow_runs ({_COLS}) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                cohort.run_id,
-                cohort.created_at,
-                cohort.as_of,
-                cohort.universe,
-                cohort.region_count,
-                cohort.inflow_count,
-                cohort.outflow_count,
-                json.dumps(payload.get("summary")),
-                json.dumps(payload.get("regions", [])),
-                json.dumps(payload.get("benchmarks", [])),
-                json.dumps(payload.get("failed_regions", [])),
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _db.execute(
+        _SAVE_SQL,
+        [
+            cohort.run_id,
+            cohort.created_at,
+            cohort.as_of,
+            cohort.universe,
+            cohort.region_count,
+            cohort.inflow_count,
+            cohort.outflow_count,
+            json.dumps(payload.get("summary")),
+            json.dumps(payload.get("regions", [])),
+            json.dumps(payload.get("benchmarks", [])),
+            json.dumps(payload.get("failed_regions", [])),
+        ],
+    )
 
 
 def get_latest_fundflow_run() -> Optional[dict]:
@@ -127,71 +128,59 @@ def get_latest_fundflow_run() -> Optional[dict]:
     absolute-latest only when no non-empty cohort exists (fresh install).
     """
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            f"SELECT {_COLS} FROM fundflow_runs WHERE region_count > 0 "
-            "ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
-        if not row:
-            row = conn.execute(
-                f"SELECT {_COLS} FROM fundflow_runs ORDER BY created_at DESC LIMIT 1"
-            ).fetchone()
-    finally:
-        conn.close()
+    row = _db.query_one(
+        f"SELECT {_COLS} FROM fundflow_runs WHERE region_count > 0 "
+        "ORDER BY created_at DESC LIMIT 1"
+    )
+    if not row:
+        row = _db.query_one(
+            f"SELECT {_COLS} FROM fundflow_runs ORDER BY created_at DESC LIMIT 1"
+        )
     return _row_to_dict(row) if row else None
 
 
 def get_fundflow_run(run_id: str) -> Optional[dict]:
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            f"SELECT {_COLS} FROM fundflow_runs WHERE run_id = ?", (run_id,)
-        ).fetchone()
-    finally:
-        conn.close()
+    row = _db.query_one(
+        f"SELECT {_COLS} FROM fundflow_runs WHERE run_id = ?", [run_id]
+    )
     return _row_to_dict(row) if row else None
 
 
 def list_fundflow_runs(limit: int = 20) -> list[dict]:
     _ensure_table()
-    conn = _connect()
-    try:
-        rows = conn.execute(
-            "SELECT run_id, created_at, as_of, universe, region_count, "
-            "inflow_count, outflow_count, failed_regions "
-            "FROM fundflow_runs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    finally:
-        conn.close()
+    rows = _db.query(
+        "SELECT run_id, created_at, as_of, universe, region_count, "
+        "inflow_count, outflow_count, failed_regions "
+        "FROM fundflow_runs ORDER BY created_at DESC LIMIT ?",
+        [limit],
+    )
     return [
         {
-            "run_id": r[0],
-            "created_at": r[1],
-            "as_of": r[2],
-            "universe": r[3],
-            "region_count": r[4],
-            "inflow_count": r[5],
-            "outflow_count": r[6],
-            "failed_regions": json.loads(r[7] or "[]"),
+            "run_id": r["run_id"],
+            "created_at": r["created_at"],
+            "as_of": r["as_of"],
+            "universe": r["universe"],
+            "region_count": r["region_count"],
+            "inflow_count": r["inflow_count"],
+            "outflow_count": r["outflow_count"],
+            "failed_regions": json.loads(r["failed_regions"] or "[]"),
         }
         for r in rows
     ]
 
 
-def _row_to_dict(row: tuple) -> dict:
+def _row_to_dict(row) -> dict:
     return {
-        "run_id": row[0],
-        "created_at": row[1],
-        "as_of": row[2],
-        "universe": row[3],
-        "region_count": row[4],
-        "inflow_count": row[5],
-        "outflow_count": row[6],
-        "summary": json.loads(row[7]) if row[7] else None,
-        "regions": json.loads(row[8] or "[]"),
-        "benchmarks": json.loads(row[9] or "[]"),
-        "failed_regions": json.loads(row[10] or "[]"),
+        "run_id": row["run_id"],
+        "created_at": row["created_at"],
+        "as_of": row["as_of"],
+        "universe": row["universe"],
+        "region_count": row["region_count"],
+        "inflow_count": row["inflow_count"],
+        "outflow_count": row["outflow_count"],
+        "summary": json.loads(row["summary"]) if row["summary"] else None,
+        "regions": json.loads(row["regions"] or "[]"),
+        "benchmarks": json.loads(row["benchmarks"] or "[]"),
+        "failed_regions": json.loads(row["failed_regions"] or "[]"),
     }

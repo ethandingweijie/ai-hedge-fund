@@ -20,8 +20,8 @@ Tavily dependency. Two public capabilities:
         ENRICHED layer the caller can use to override low-confidence
         zeros with substantive findings.
 
-Both are cached in SQLite (`complacency_web_research`) keyed by
-(ticker, indicator/kind, scope) with configurable TTL.
+Both are cached in the dual-mode DB (`complacency_web_research` table via
+src.data.db) keyed by (ticker, indicator/kind, scope) with configurable TTL.
 
 Implementation notes (from src/agents/industry/deep_research.py):
   - DashScope's enable_search requires `stream=True` (non-streaming = 400).
@@ -35,11 +35,11 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sqlite3
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
+
+from src.data import db as _db
 
 logger = logging.getLogger(__name__)
 
@@ -178,69 +178,64 @@ def qwen_web_search(
     return None
 
 
-# ─── SQLite cache (shared with qualitative_storage's DB) ──────────────────
-
-
-def _get_db_path() -> str:
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(_get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
-
+# ─── Cache (dual-mode via src.data.db, same database as the cohort) ──────
+#
+# S1 batch, 2026-08-16: was raw sqlite3 against RUN_ARCHIVE_PATH — a
+# per-process private file on Railway, so a web-research result cached by
+# the worker (where the complacency refresh runs in queue mode) was
+# invisible to the web replicas and vice versa. complacency_web_research
+# was already copied to PG by the 2026-08 migration.
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS complacency_web_research (
     ticker     TEXT NOT NULL,
-    kind       TEXT NOT NULL,         -- 'earnings_qa' or 'deep_indicator'
-    scope      TEXT NOT NULL,         -- '' for earnings_qa; indicator_code for deep
+    kind       TEXT NOT NULL,
+    scope      TEXT NOT NULL,
     cached_at  TEXT NOT NULL,
-    payload    TEXT NOT NULL,         -- JSON
+    payload    TEXT NOT NULL,
     PRIMARY KEY (ticker, kind, scope)
 )
 """
+# kind: 'earnings_qa' or 'deep_indicator'; scope: '' for earnings_qa,
+# indicator_code for deep. payload is JSON.
+
+
+# DDL target memo so CREATE TABLE IF NOT EXISTS runs once per database
+# (per-process in PG mode, per-file in SQLite mode).
+_tables_ready_key: Optional[tuple] = None
 
 
 def _ensure_table() -> None:
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect()
+    global _tables_ready_key
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key == _tables_ready_key:
+        return
     try:
-        conn.execute(_DDL)
-        conn.commit()
-    finally:
-        conn.close()
+        _db.execute_script(_DDL)
+        _tables_ready_key = key
+    except Exception as exc:
+        # A concurrent CREATE TABLE IF NOT EXISTS race at boot is harmless;
+        # anything persistent surfaces loudly on the first real query.
+        logger.warning("complacency web_research _ensure_table: %s", exc)
 
 
 def _cache_get(ticker: str, kind: str, scope: str, max_age_days: int) -> Optional[dict]:
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            "SELECT cached_at, payload FROM complacency_web_research "
-            "WHERE ticker = ? AND kind = ? AND scope = ?",
-            (ticker.upper(), kind, scope),
-        ).fetchone()
-    finally:
-        conn.close()
+    row = _db.query_one(
+        "SELECT cached_at, payload FROM complacency_web_research "
+        "WHERE ticker = ? AND kind = ? AND scope = ?",
+        [ticker.upper(), kind, scope],
+    )
     if not row:
         return None
     try:
-        cached_at = datetime.fromisoformat(row[0])
+        cached_at = datetime.fromisoformat(row["cached_at"])
         if cached_at.tzinfo is None:
             cached_at = cached_at.replace(tzinfo=timezone.utc)
         age_days = (datetime.now(timezone.utc) - cached_at).total_seconds() / 86400
         if age_days > max_age_days:
             return None
-        payload = json.loads(row[1])
+        payload = json.loads(row["payload"])
         payload["_cached_age_days"] = round(age_days, 2)
         return payload
     except Exception as exc:
@@ -248,22 +243,27 @@ def _cache_get(ticker: str, kind: str, scope: str, max_age_days: int) -> Optiona
         return None
 
 
+# ON CONFLICT form works on BOTH SQLite and Postgres (no INSERT OR REPLACE).
+_CACHE_PUT_SQL = """
+INSERT INTO complacency_web_research
+    (ticker, kind, scope, cached_at, payload)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(ticker, kind, scope) DO UPDATE SET
+    cached_at = excluded.cached_at,
+    payload = excluded.payload
+"""
+
+
 def _cache_put(ticker: str, kind: str, scope: str, payload: dict) -> None:
     _ensure_table()
-    conn = _connect()
-    try:
-        conn.execute(
-            "INSERT OR REPLACE INTO complacency_web_research "
-            "(ticker, kind, scope, cached_at, payload) VALUES (?, ?, ?, ?, ?)",
-            (
-                ticker.upper(), kind, scope,
-                datetime.now(timezone.utc).isoformat(),
-                json.dumps(payload),
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _db.execute(
+        _CACHE_PUT_SQL,
+        [
+            ticker.upper(), kind, scope,
+            datetime.now(timezone.utc).isoformat(),
+            json.dumps(payload),
+        ],
+    )
 
 
 # ─── Priority 2: Earnings call Q&A digest ─────────────────────────────────

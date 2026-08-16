@@ -185,20 +185,20 @@ def _rehydrate_qual_from_cache(ticker: str, max_age_days: int = 7):
 
     Returns None if no fresh cached indicators exist for the ticker.
     """
-    import sqlite3
     from datetime import datetime, timezone
     from src.research_ideas.complacency.schemas import (
         QualitativeAssessment, QualIndicatorScore, QualEvidence,
     )
-    from app.backend.services.qualitative_storage import _get_db_path
+    from src.data import db as _db
 
     cutoff = (datetime.now(timezone.utc).timestamp() - max_age_days * 86400)
 
-    conn = sqlite3.connect(_get_db_path())
-    conn.execute("PRAGMA busy_timeout=5000")
+    # S1 dual-mode: was a raw sqlite3 single-connection fast path against
+    # RUN_ARCHIVE_PATH — a per-process private file on Railway, so the web
+    # replicas never saw the worker-written cache. Same single-query shape,
+    # now through src/data/db (SQLite locally, Postgres in production).
     try:
-        # One query: latest row per indicator for this ticker.
-        rows = conn.execute(
+        rows = _db.query(
             """
             SELECT q.indicator, q.score, q.confidence, q.summary,
                    q.evidence_json, q.model_used, q.scored_at
@@ -211,19 +211,24 @@ def _rehydrate_qual_from_cache(ticker: str, max_age_days: int = 7):
             ) m ON q.indicator = m.indicator AND q.scored_at = m.latest
             WHERE q.ticker = ?
             """,
-            (ticker.upper(), ticker.upper()),
-        ).fetchall()
+            [ticker.upper(), ticker.upper()],
+        )
     except Exception:
         return None
-    finally:
-        conn.close()
 
     if not rows:
         return None
 
     import json as _json
     cached_scores: dict[str, QualIndicatorScore] = {}
-    for indicator, score, confidence, summary, evidence_json, model_used, scored_at in rows:
+    for row in rows:
+        indicator = row["indicator"]
+        score = row["score"]
+        confidence = row["confidence"]
+        summary = row["summary"]
+        evidence_json = row["evidence_json"]
+        model_used = row["model_used"]
+        scored_at = row["scored_at"]
         # Freshness filter
         try:
             dt = datetime.fromisoformat(str(scored_at).replace("Z", "+00:00"))

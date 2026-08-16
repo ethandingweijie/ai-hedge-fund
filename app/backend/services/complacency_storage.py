@@ -1,41 +1,26 @@
 """
 app/backend/services/complacency_storage.py
 ============================================
-SQLite persistence for Complacency screener cohorts. Mirrors sw46_storage.py
-patterns — shared run_archive.db, auto-migrating table.
+Persistence for Complacency screener cohorts.
+
+Storage (S1 batch, 2026-08-16): dual-mode via src.data.db — SQLite locally,
+Postgres in production. The old raw-sqlite3 access gave every Railway
+process its own private file; since the complacency refresh runs on the
+worker in queue mode, the web replicas kept serving stale cohorts.
+complacency_runs was already copied to PG by the 2026-08 migration.
 """
 from __future__ import annotations
 
 import json
 import logging
 import math
-import sqlite3
-from pathlib import Path
 from typing import Any, Optional
 
+from src.data import db as _db
 from src.research_ideas.complacency.schemas import ComplacencyCohortResult
 
 
 logger = logging.getLogger(__name__)
-
-
-def _get_db_path() -> str:
-    import os
-
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    here = Path(__file__).resolve()
-    project_root = here.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect(path: str | None = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(path or _get_db_path())
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
 
 
 _DDL = """
@@ -55,20 +40,29 @@ _INDEXES = [
     "ON complacency_runs(created_at DESC)",
 ]
 
+_COLS = (
+    "run_id, created_at, universe, ticker_count, gate_passers, "
+    "failed_tickers, results"
+)
+
+
+# DDL target memo so CREATE TABLE IF NOT EXISTS runs once per database
+# (per-process in PG mode, per-file in SQLite mode).
+_tables_ready_key: Optional[tuple] = None
+
 
 def _ensure_table() -> None:
-    import os
-
-    db_path = _get_db_path()
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = _connect(db_path)
+    global _tables_ready_key
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key == _tables_ready_key:
+        return
     try:
-        conn.execute(_DDL)
-        for idx in _INDEXES:
-            conn.execute(idx)
-        conn.commit()
-    finally:
-        conn.close()
+        _db.execute_script(";".join([_DDL] + _INDEXES))
+        _tables_ready_key = key
+    except Exception as exc:
+        # A concurrent CREATE TABLE IF NOT EXISTS race at boot is harmless;
+        # anything persistent surfaces loudly on the first real query.
+        logger.warning("complacency_storage _ensure_table: %s", exc)
 
 
 def _sanitize(obj: Any) -> Any:
@@ -81,33 +75,39 @@ def _sanitize(obj: Any) -> Any:
     return obj
 
 
+# ON CONFLICT form works on BOTH SQLite and Postgres (no INSERT OR REPLACE).
+_SAVE_SQL = """
+INSERT INTO complacency_runs
+    (run_id, created_at, universe, ticker_count, gate_passers,
+     failed_tickers, results)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(run_id) DO UPDATE SET
+    created_at = excluded.created_at,
+    universe = excluded.universe,
+    ticker_count = excluded.ticker_count,
+    gate_passers = excluded.gate_passers,
+    failed_tickers = excluded.failed_tickers,
+    results = excluded.results
+"""
+
+
 def save_complacency_run(cohort: ComplacencyCohortResult) -> None:
     _ensure_table()
     payload = _sanitize(cohort.model_dump())
     results_json = json.dumps(payload.get("results", []))
     failed_json = json.dumps(payload.get("failed_tickers", []))
-    conn = _connect()
-    try:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO complacency_runs
-                (run_id, created_at, universe, ticker_count, gate_passers,
-                 failed_tickers, results)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                cohort.run_id,
-                cohort.created_at,
-                cohort.universe,
-                cohort.ticker_count,
-                cohort.gate_passers,
-                failed_json,
-                results_json,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _db.execute(
+        _SAVE_SQL,
+        [
+            cohort.run_id,
+            cohort.created_at,
+            cohort.universe,
+            cohort.ticker_count,
+            cohort.gate_passers,
+            failed_json,
+            results_json,
+        ],
+    )
 
 
 def get_latest_complacency_run() -> Optional[dict]:
@@ -122,23 +122,17 @@ def get_latest_complacency_run() -> Optional[dict]:
     non-empty cohort exists at all (fresh install).
     """
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            "SELECT run_id, created_at, universe, ticker_count, gate_passers, "
-            "failed_tickers, results FROM complacency_runs "
-            "WHERE ticker_count > 0 "
+    row = _db.query_one(
+        f"SELECT {_COLS} FROM complacency_runs "
+        "WHERE ticker_count > 0 "
+        "ORDER BY created_at DESC LIMIT 1"
+    )
+    if not row:
+        # No non-empty cohort — fall back to absolute latest (may be empty)
+        row = _db.query_one(
+            f"SELECT {_COLS} FROM complacency_runs "
             "ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
-        if not row:
-            # No non-empty cohort — fall back to absolute latest (may be empty)
-            row = conn.execute(
-                "SELECT run_id, created_at, universe, ticker_count, gate_passers, "
-                "failed_tickers, results FROM complacency_runs "
-                "ORDER BY created_at DESC LIMIT 1"
-            ).fetchone()
-    finally:
-        conn.close()
+        )
     if not row:
         return None
     return _row_to_dict(row)
@@ -146,15 +140,10 @@ def get_latest_complacency_run() -> Optional[dict]:
 
 def get_complacency_run(run_id: str) -> Optional[dict]:
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            "SELECT run_id, created_at, universe, ticker_count, gate_passers, "
-            "failed_tickers, results FROM complacency_runs WHERE run_id = ?",
-            (run_id,),
-        ).fetchone()
-    finally:
-        conn.close()
+    row = _db.query_one(
+        f"SELECT {_COLS} FROM complacency_runs WHERE run_id = ?",
+        [run_id],
+    )
     if not row:
         return None
     return _row_to_dict(row)
@@ -162,23 +151,19 @@ def get_complacency_run(run_id: str) -> Optional[dict]:
 
 def list_complacency_runs(limit: int = 20) -> list[dict]:
     _ensure_table()
-    conn = _connect()
-    try:
-        rows = conn.execute(
-            "SELECT run_id, created_at, universe, ticker_count, gate_passers, failed_tickers "
-            "FROM complacency_runs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    finally:
-        conn.close()
+    rows = _db.query(
+        "SELECT run_id, created_at, universe, ticker_count, gate_passers, failed_tickers "
+        "FROM complacency_runs ORDER BY created_at DESC LIMIT ?",
+        [limit],
+    )
     return [
         {
-            "run_id": r[0],
-            "created_at": r[1],
-            "universe": r[2],
-            "ticker_count": r[3],
-            "gate_passers": r[4],
-            "failed_tickers": json.loads(r[5] or "[]"),
+            "run_id": r["run_id"],
+            "created_at": r["created_at"],
+            "universe": r["universe"],
+            "ticker_count": r["ticker_count"],
+            "gate_passers": r["gate_passers"],
+            "failed_tickers": json.loads(r["failed_tickers"] or "[]"),
         }
         for r in rows
     ]
@@ -199,44 +184,39 @@ def update_ticker_in_latest_cohort(updated_result: dict) -> bool:
     ticker = str(updated_result["ticker"]).upper()
 
     _ensure_table()
-    conn = _connect()
+    row = _db.query_one(
+        "SELECT run_id, results FROM complacency_runs "
+        "ORDER BY created_at DESC LIMIT 1"
+    )
+    if not row:
+        return False
+    run_id = row["run_id"]
     try:
-        row = conn.execute(
-            "SELECT run_id, results FROM complacency_runs "
-            "ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
-        if not row:
-            return False
-        run_id = row[0]
-        try:
-            results = json.loads(row[1] or "[]")
-        except Exception:
-            return False
+        results = json.loads(row["results"] or "[]")
+    except Exception:
+        return False
 
-        replaced = False
-        for i, r in enumerate(results):
-            if (r.get("ticker") or "").upper() == ticker:
-                # Preserve rank from existing row (the on-the-fly score won't
-                # have a sensible rank — and the cohort ordering shouldn't
-                # change just because qual was added).
-                existing_rank = r.get("rank")
-                merged = _sanitize(updated_result)
-                if existing_rank is not None and merged.get("rank") is None:
-                    merged["rank"] = existing_rank
-                results[i] = merged
-                replaced = True
-                break
-        if not replaced:
-            return False
+    replaced = False
+    for i, r in enumerate(results):
+        if (r.get("ticker") or "").upper() == ticker:
+            # Preserve rank from existing row (the on-the-fly score won't
+            # have a sensible rank — and the cohort ordering shouldn't
+            # change just because qual was added).
+            existing_rank = r.get("rank")
+            merged = _sanitize(updated_result)
+            if existing_rank is not None and merged.get("rank") is None:
+                merged["rank"] = existing_rank
+            results[i] = merged
+            replaced = True
+            break
+    if not replaced:
+        return False
 
-        conn.execute(
-            "UPDATE complacency_runs SET results = ? WHERE run_id = ?",
-            (json.dumps(results), run_id),
-        )
-        conn.commit()
-        return True
-    finally:
-        conn.close()
+    _db.execute(
+        "UPDATE complacency_runs SET results = ? WHERE run_id = ?",
+        [json.dumps(results), run_id],
+    )
+    return True
 
 
 def update_ticker_in_latest_cohort_partial_qual(
@@ -264,81 +244,76 @@ def update_ticker_in_latest_cohort_partial_qual(
     """
     ticker_u = ticker.upper()
     _ensure_table()
-    conn = _connect()
-    try:
-        row = conn.execute(
-            "SELECT run_id, results FROM complacency_runs "
-            "ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
-        if not row:
-            return False
-        run_id = row[0]
-        try:
-            results = json.loads(row[1] or "[]")
-        except Exception:
-            return False
-
-        for i, r in enumerate(results):
-            if (r.get("ticker") or "").upper() != ticker_u:
-                continue
-            # Ensure qualitative dict exists
-            qual = r.get("qualitative") or {
-                "indicators": {},
-                "composite": 0,
-                "max_possible": 0,
-                "composite_normalized": 0.0,
-                "conviction_label": "PASS",
-                "assessed_at": None,
-                "cost_usd": 0.0,
-                "incomplete": True,  # incomplete while streaming
-            }
-            indicators = qual.get("indicators") or {}
-            indicators[indicator_code] = _sanitize(indicator_score)
-            qual["indicators"] = indicators
-
-            # Recompute composite + aggregate
-            composite = sum(int(v.get("score") or 0) for v in indicators.values())
-            max_possible = 5 * len(indicators)
-            qual["composite"] = composite
-            qual["max_possible"] = max_possible
-            qual["composite_normalized"] = (
-                composite / max_possible if max_possible else 0.0
-            )
-
-            # Recompute aggregate based on current quant + partial qual
-            from datetime import datetime, timezone
-            quant_composite = float(r.get("composite") or 0.0)
-            quant_pts = (max(0.0, min(quant_composite, 8.0)) / 8.0) * 50.0
-            qual_pts = 0.0
-            if max_possible > 0:
-                qual_pts = (composite / max_possible) * 50.0
-
-            r["qualitative"] = qual
-            r["aggregate_score"] = round(quant_pts + qual_pts, 1)
-            r["aggregate_quant_pts"] = round(quant_pts, 1)
-            r["aggregate_qual_pts"] = round(qual_pts, 1)
-            qual["assessed_at"] = datetime.now(timezone.utc).isoformat()
-
-            results[i] = r
-
-            conn.execute(
-                "UPDATE complacency_runs SET results = ? WHERE run_id = ?",
-                (json.dumps(results), run_id),
-            )
-            conn.commit()
-            return True
+    row = _db.query_one(
+        "SELECT run_id, results FROM complacency_runs "
+        "ORDER BY created_at DESC LIMIT 1"
+    )
+    if not row:
         return False
-    finally:
-        conn.close()
+    run_id = row["run_id"]
+    try:
+        results = json.loads(row["results"] or "[]")
+    except Exception:
+        return False
+
+    for i, r in enumerate(results):
+        if (r.get("ticker") or "").upper() != ticker_u:
+            continue
+        # Ensure qualitative dict exists
+        qual = r.get("qualitative") or {
+            "indicators": {},
+            "composite": 0,
+            "max_possible": 0,
+            "composite_normalized": 0.0,
+            "conviction_label": "PASS",
+            "assessed_at": None,
+            "cost_usd": 0.0,
+            "incomplete": True,  # incomplete while streaming
+        }
+        indicators = qual.get("indicators") or {}
+        indicators[indicator_code] = _sanitize(indicator_score)
+        qual["indicators"] = indicators
+
+        # Recompute composite + aggregate
+        composite = sum(int(v.get("score") or 0) for v in indicators.values())
+        max_possible = 5 * len(indicators)
+        qual["composite"] = composite
+        qual["max_possible"] = max_possible
+        qual["composite_normalized"] = (
+            composite / max_possible if max_possible else 0.0
+        )
+
+        # Recompute aggregate based on current quant + partial qual
+        from datetime import datetime, timezone
+        quant_composite = float(r.get("composite") or 0.0)
+        quant_pts = (max(0.0, min(quant_composite, 8.0)) / 8.0) * 50.0
+        qual_pts = 0.0
+        if max_possible > 0:
+            qual_pts = (composite / max_possible) * 50.0
+
+        r["qualitative"] = qual
+        r["aggregate_score"] = round(quant_pts + qual_pts, 1)
+        r["aggregate_quant_pts"] = round(quant_pts, 1)
+        r["aggregate_qual_pts"] = round(qual_pts, 1)
+        qual["assessed_at"] = datetime.now(timezone.utc).isoformat()
+
+        results[i] = r
+
+        _db.execute(
+            "UPDATE complacency_runs SET results = ? WHERE run_id = ?",
+            [json.dumps(results), run_id],
+        )
+        return True
+    return False
 
 
-def _row_to_dict(row: tuple) -> dict:
+def _row_to_dict(row) -> dict:
     return {
-        "run_id": row[0],
-        "created_at": row[1],
-        "universe": row[2],
-        "ticker_count": row[3],
-        "gate_passers": row[4],
-        "failed_tickers": json.loads(row[5] or "[]"),
-        "results": json.loads(row[6] or "[]"),
+        "run_id": row["run_id"],
+        "created_at": row["created_at"],
+        "universe": row["universe"],
+        "ticker_count": row["ticker_count"],
+        "gate_passers": row["gate_passers"],
+        "failed_tickers": json.loads(row["failed_tickers"] or "[]"),
+        "results": json.loads(row["results"] or "[]"),
     }
