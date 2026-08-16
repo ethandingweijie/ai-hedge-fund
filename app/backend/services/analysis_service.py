@@ -15,6 +15,7 @@ Key design:
 
 import asyncio
 import json
+import logging
 import math
 import os
 import sqlite3
@@ -26,6 +27,8 @@ from typing import Any, Callable, Optional
 
 from src.utils import run_config
 from src.data import db
+
+logger = logging.getLogger(__name__)
 
 
 # ── .env.local (process-wide, load once) ──────────────────────────────────────
@@ -464,6 +467,124 @@ def _save_partial_web_run(
         print(f"  [checkpoint] DB write failed ({checkpoint_name}): {e}")
 
 
+# ── R2: checkpoint resume + cleanup ───────────────────────────────────────────
+
+#: A checkpoint row newer than this is not resumable — it may belong to a run
+#: that is STILL EXECUTING under a different dedup key (selected_agents is
+#: part of the web-run dedup key, so two runs of the same ticker can coexist;
+#: only the abandoned one's row is stale enough to borrow from).
+_RESUME_MIN_AGE_S = 20 * 60
+
+
+def _build_resume_bundle(
+    ticker: str,
+    model_name: str,
+    current_run_id: str,
+) -> Optional[dict]:
+    """
+    Find a recent crashed-run checkpoint row for `ticker` and shape it into a
+    resume bundle the pipeline can seed its skip gates from.
+
+    A web_runs row keeps is_checkpoint=1 only while its run is incomplete —
+    the successful final save upserts the SAME row to is_checkpoint=0 — so an
+    is_checkpoint=1 row inside the window is by definition an abandoned /
+    crashed run whose expensive Phase 3/4 output we can reuse. Phases 5+
+    always rerun fresh.
+
+    Returns:
+        {"checkpoint", "run_id", "run_at", "age_days", "data"} where `data`
+        is the checkpoint's partial state subset (deep_research,
+        industry_brief, dcf_range, ...), or None when resume is disabled or
+        no qualifying row exists.
+
+    Env knobs: RESUME_FROM_CHECKPOINT=false (kill switch),
+               RESUME_WINDOW_H (default 6).
+    """
+    if os.environ.get("RESUME_FROM_CHECKPOINT", "true").lower() == "false":
+        return None
+    try:
+        window_h = float(os.environ.get("RESUME_WINDOW_H", "6"))
+    except ValueError:
+        window_h = 6.0
+    if window_h <= 0:
+        return None
+
+    try:
+        _ensure_web_runs_table()
+        row = _fetch_one(
+            "SELECT run_id, run_at, model_name, full_result_json "
+            "FROM web_runs WHERE ticker = ? AND is_checkpoint = 1 "
+            "ORDER BY run_at DESC LIMIT 1",
+            [ticker.upper()],
+        )
+    except Exception:
+        return None
+    if not row or not row["full_result_json"]:
+        return None
+    if row["run_id"] == current_run_id:
+        return None  # our own in-flight row, not a crashed predecessor
+    if (row["model_name"] or "") != (model_name or ""):
+        return None  # outputs are model-specific; don't cross models
+
+    # Age window [min age, window]. The run_at column is a naive local-time
+    # ISO string (written with datetime.now()), so compare against the same
+    # clock — production containers run UTC, where local == UTC.
+    try:
+        ran_at = datetime.fromisoformat(row["run_at"])
+        age_s = (datetime.now().replace(tzinfo=None) - ran_at.replace(tzinfo=None)).total_seconds()
+    except Exception:
+        return None
+    if age_s < _RESUME_MIN_AGE_S or age_s > window_h * 3600:
+        return None
+
+    try:
+        payload = json.loads(row["full_result_json"])
+    except Exception:
+        return None
+    data = payload.get("data") or {}
+    tickers = data.get("tickers") or [ticker]
+    if len(tickers) != 1:
+        return None  # v1 resumes single-ticker runs only
+    if not data.get("deep_research") and not data.get("industry_brief"):
+        return None  # predates Phase 3 — nothing expensive to reuse
+
+    return {
+        "checkpoint": payload.get("checkpoint"),
+        "run_id": row["run_id"],
+        "run_at": row["run_at"],
+        "age_days": round(age_s / 86400.0, 4),
+        "data": data,
+    }
+
+
+def cleanup_stale_checkpoints(retention_days: Optional[float] = None) -> int:
+    """
+    Delete abandoned checkpoint rows older than the retention window.
+
+    A successful run upserts its web_runs row to is_checkpoint=0, so a row
+    still carrying is_checkpoint=1 after the window is a crashed / abandoned
+    run whose partial JSON nobody can resume from anymore. Final rows
+    (is_checkpoint=0) are never touched. Returns the number of rows deleted.
+
+    Env knob: CHECKPOINT_RETENTION_DAYS (default 14).
+    """
+    if retention_days is None:
+        try:
+            retention_days = float(os.environ.get("CHECKPOINT_RETENTION_DAYS", "14"))
+        except ValueError:
+            retention_days = 14.0
+    _ensure_web_runs_table()
+    # Same naive-local ISO format as the writer → lexicographic string
+    # comparison is chronological on both SQLite and Postgres.
+    cutoff = (datetime.now().replace(tzinfo=None) - timedelta(days=retention_days)).strftime(
+        "%Y-%m-%dT%H:%M:%S.%f")
+    try:
+        return _exec("DELETE FROM web_runs WHERE is_checkpoint = 1 AND run_at < ?", [cutoff])
+    except Exception as e:
+        logger.warning("[cleanup] stale-checkpoint prune failed: %s", e)
+        return 0
+
+
 def _save_web_run(
     run_id: str,
     ticker: str,
@@ -473,6 +594,13 @@ def _save_web_run(
     user_id: Optional[int] = None,
 ):
     _ensure_web_runs_table()
+    if not archive_run_id:
+        # R2 failure surfacing: the final save reached but save_run() failed
+        # upstream (it prints + returns ""), so this run has no archive link.
+        logger.warning(
+            "[archive] run %s (%s) saved WITHOUT archive link — save_run failed upstream",
+            run_id, ticker,
+        )
     final_action, regime, sector, profile_name = _extract_web_run_summary(result, ticker)
     # Workstream A — persist per-phase timing JSON in a dedicated column (it
     # also lives inside full_result_json). NULL when absent (legacy/CLI runs).
@@ -1470,6 +1598,17 @@ async def run_analysis_pipeline(
                 _pipeline_model = model_name
                 _provider = "Anthropic"  # default for Claude/other models
 
+            # R2: resume from a recent crashed run's checkpoint when eligible.
+            # Compares against the user-facing model_name — that is what
+            # _on_checkpoint stores in web_runs.model_name.
+            resume_bundle = _build_resume_bundle(ticker.upper(), model_name, run_id)
+            if resume_bundle:
+                print(
+                    f"  [resume] checkpoint '{resume_bundle['checkpoint']}' from run "
+                    f"{resume_bundle['run_id'][:8]} ({resume_bundle['age_days'] * 24:.1f}h old)"
+                    " — seeding phase caches, phases 5+ rerun fresh"
+                )
+
             state = run_advanced_pipeline(
                 tickers=[ticker.upper()],
                 start_date="2020-01-01",
@@ -1481,6 +1620,7 @@ async def run_analysis_pipeline(
                 show_reasoning=True,
                 enable_post_trade_review=False,
                 on_checkpoint=_on_checkpoint,
+                resume_bundle=resume_bundle,
             )
             result_container["state"] = state
         except Exception as e:

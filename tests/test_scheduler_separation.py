@@ -45,10 +45,10 @@ def test_registry_shape():
     from app.backend.scheduler_service import build_schedules
 
     specs = build_schedules()
-    assert len(specs) == 7
+    assert len(specs) == 8  # 7 scheduled jobs + R2 daily maintenance
 
     names = [s.name for s in specs]
-    assert len(set(names)) == 7  # unique lock/job-id namespaces
+    assert len(set(names)) == 8  # unique lock/job-id namespaces
 
     catch_up = {s.name for s in specs if s.catch_up}
     # Only these two had startup catch-up in the web-era code — preserved.

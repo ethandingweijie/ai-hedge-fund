@@ -30,6 +30,7 @@ Schema version: 2  (added industry_brief, deep_research, DCF, debate, PM rationa
 """
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -39,6 +40,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from src.data import db
+
+logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -845,6 +848,11 @@ def save_run(state: dict, decisions: dict) -> str:
         return run_id
 
     except Exception as exc:
+        # R2 failure surfacing: this used to be print-only, so a save_run
+        # failure was invisible in Railway logs and the run's archive link
+        # silently went missing. The print stays for CLI runs.
+        logger.warning("[archive] save_run FAILED for %s: %s",
+                       (state.get("data") or {}).get("tickers"), exc)
         print(f"  [archive] Warning: could not save run: {exc}")
         return ""
 

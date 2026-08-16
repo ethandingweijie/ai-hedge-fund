@@ -31,6 +31,8 @@ def test_worker_settings_shape():
         "run_hundred_q_daily_sweep_task",
         "run_hundred_q_weekly_batch_task",
         "run_hundred_q_backstop_task",
+        # R2 — daily housekeeping (stale-checkpoint prune)
+        "run_maintenance_task",
     }
     assert ws.max_jobs == 10
     assert ws.job_timeout == 3600       # 60 min — VGPM backfill can exceed 30
@@ -341,15 +343,25 @@ def test_vgpm_backfill_task_releases_lock_on_failure(monkeypatch):
 
 def test_scheduled_tasks_delegate_to_cycle_functions(monkeypatch):
     """Each scheduled task must call the legacy cycle function (which keeps
-    its own idempotency gate) — never a reimplemented copy of the work."""
+    its own idempotency gate) — never a reimplemented copy of the work.
+
+    R2: a falsy cycle outcome is classified via the SAME idempotency gate
+    the scheduler's recheck loop uses, so the gates are stubbed True here
+    to model a successful cycle (a real success writes its gate)."""
     calls = []
 
     monkeypatch.setattr(
         "src.research_ideas.contrarian.scheduler._generate_and_notify",
         lambda: calls.append("idea"))
     monkeypatch.setattr(
+        "src.research_ideas.contrarian.scheduler._idea_already_generated_today",
+        lambda: True)
+    monkeypatch.setattr(
         "src.research_ideas.alerts.iv15_scheduler._run_sweep_cycle",
         lambda: calls.append("iv15"))
+    monkeypatch.setattr(
+        "src.research_ideas.alerts.iv15_scheduler._swept_today",
+        lambda: True)
     monkeypatch.setattr(
         "src.research_ideas.fundflow.scheduler.run_weekly_cycle",
         lambda: calls.append("fundflow") or {"run_id": "ff-1"})

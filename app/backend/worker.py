@@ -384,35 +384,61 @@ async def run_hedge_fund_graph_task(
 # cycle function keeps its own DB-timestamp idempotency check, so a double
 # enqueue (overlapping deploys, accidental second replica) is a cheap no-op.
 
+def _sched_gate_outcome(name: str, gate_fn) -> bool:
+    """R2 — classify a scheduled cycle whose result was falsy/absent.
+
+    Returns True when the slot's idempotency gate is satisfied (the cycle
+    succeeded OR was a legitimate duplicate skip). Returns False when the
+    gate is still open — the cycle silently failed — and logs a loud,
+    grep-able warning; the scheduler service's recheck loop retries such
+    slots until the gate is written or the slot rolls over.
+    """
+    try:
+        done = bool(gate_fn())
+    except Exception as exc:
+        logger.warning("[sched] %s: gate check failed (%s) — treating slot as open",
+                       name, exc)
+        return False
+    if not done:
+        logger.warning(
+            "[sched] %s: cycle returned no result and its gate is still open "
+            "— scheduler recheck will retry", name)
+    return done
+
+
+def _vgpm_backfill_due() -> bool:
+    """VGPM idempotency gate — True when master_universe has NOT been
+    backfilled since today's 09:00 UTC slot (Railway containers run UTC,
+    matching the old in-web behaviour). Module-level so the scheduler
+    service's recheck loop can call the same gate the worker uses."""
+    from app.backend.services.screener_service import (
+        _ensure_tables, _get_master_universe_cached_at,
+    )
+    try:
+        _ensure_tables()
+        cached_at = _get_master_universe_cached_at()
+    except Exception:
+        return True  # introspection failed — let the backfill itself decide
+    if not cached_at:
+        return True
+    try:
+        last = datetime.fromisoformat(cached_at)
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        slot = datetime.now(timezone.utc).replace(
+            hour=9, minute=0, second=0, microsecond=0)
+        return last < slot
+    except Exception:
+        return True
+
+
 async def run_vgpm_backfill_task(ctx: dict) -> dict:
     """Daily VGPM master-universe backfill (ex-web-process as of Phase 4).
 
     Idempotency moved verbatim from main.py::_should_backfill_now: skip if
-    master_universe was already backfilled since today's 09:00 UTC slot
-    (Railway containers run UTC, matching the old in-web behaviour).
+    master_universe was already backfilled since today's 09:00 UTC slot.
     """
-    def _should_run() -> bool:
-        from app.backend.services.screener_service import (
-            _ensure_tables, _get_master_universe_cached_at,
-        )
-        try:
-            _ensure_tables()
-            cached_at = _get_master_universe_cached_at()
-        except Exception:
-            return True  # introspection failed — let the backfill itself decide
-        if not cached_at:
-            return True
-        try:
-            last = datetime.fromisoformat(cached_at)
-            if last.tzinfo is None:
-                last = last.replace(tzinfo=timezone.utc)
-            slot = datetime.now(timezone.utc).replace(
-                hour=9, minute=0, second=0, microsecond=0)
-            return last < slot
-        except Exception:
-            return True
-
-    if not await asyncio.to_thread(_should_run):
+    if not await asyncio.to_thread(_vgpm_backfill_due):
         logger.info("vgpm backfill task: already ran since today's 09:00 UTC slot — skipping")
         return {"ran": False}
 
@@ -449,45 +475,105 @@ async def run_vgpm_backfill_task(ctx: dict) -> dict:
 
 async def run_idea_of_the_day_task(ctx: dict) -> dict:
     """Daily research-idea generation. The cycle self-gates on its 20h
-    idempotency window and handles its own Slack notification."""
-    from src.research_ideas.contrarian.scheduler import _generate_and_notify
-    await asyncio.to_thread(_generate_and_notify)
-    return {"ran": True}
+    idempotency window and handles its own Slack notification. R2: a falsy
+    outcome is classified via the gate so silent failures surface."""
+    from src.research_ideas.contrarian import scheduler as _s
+    try:
+        await asyncio.to_thread(_s._generate_and_notify)
+    except Exception as exc:
+        logger.warning("[sched] idea_of_the_day raised %s: %s", type(exc).__name__, exc)
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "idea_of_the_day", _s._idea_already_generated_today)
+    return {"ran": ran}
 
 
 async def run_iv15_sweep_task(ctx: dict) -> dict:
     """Daily IV15 fair-value sweep. Self-gates on its 20h window."""
-    from src.research_ideas.alerts.iv15_scheduler import _run_sweep_cycle
-    await asyncio.to_thread(_run_sweep_cycle)
-    return {"ran": True}
+    from src.research_ideas.alerts import iv15_scheduler as _s
+    try:
+        await asyncio.to_thread(_s._run_sweep_cycle)
+    except Exception as exc:
+        logger.warning("[sched] iv15_sweep raised %s: %s", type(exc).__name__, exc)
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "iv15_sweep", _s._swept_today)
+    return {"ran": ran}
 
 
 async def run_fundflow_brief_task(ctx: dict) -> dict:
     """Weekly geographic fund-flow brief. Self-gates on its ~6-day window."""
-    from src.research_ideas.fundflow.scheduler import run_weekly_cycle
-    payload = await asyncio.to_thread(run_weekly_cycle)
-    return {"ran": payload is not None}
+    from src.research_ideas.fundflow import scheduler as _s
+    payload = None
+    try:
+        payload = await asyncio.to_thread(_s.run_weekly_cycle)
+    except Exception as exc:
+        logger.warning("[sched] fundflow_brief raised %s: %s", type(exc).__name__, exc)
+    if payload is not None:
+        return {"ran": True}
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "fundflow_brief", _s._already_ran_this_week)
+    return {"ran": ran}
 
 
 async def run_hundred_q_daily_sweep_task(ctx: dict) -> dict:
     """Daily 100-Q event-trigger sweep. Self-gates on its 20h window."""
-    from src.research_ideas.hundred_q.scheduler import run_daily_sweep_cycle
-    fired = await asyncio.to_thread(run_daily_sweep_cycle)
-    return {"ran": fired is not None}
+    from src.research_ideas.hundred_q import scheduler as _s
+    fired = None
+    try:
+        fired = await asyncio.to_thread(_s.run_daily_sweep_cycle)
+    except Exception as exc:
+        logger.warning("[sched] hundred_q_daily_sweep raised %s: %s", type(exc).__name__, exc)
+    if fired is not None:
+        return {"ran": True}
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "hundred_q_daily_sweep",
+        lambda: _s._already_ran_within("daily_trigger_sweep", hours=_s._DAILY_IDEMPOTENCY_HOURS))
+    return {"ran": ran}
 
 
 async def run_hundred_q_weekly_batch_task(ctx: dict) -> dict:
     """Weekly 100-Q full quant batch. Self-gates on its ~6-day window."""
-    from src.research_ideas.hundred_q.scheduler import run_weekly_batch_cycle
-    cohort = await asyncio.to_thread(run_weekly_batch_cycle)
-    return {"ran": cohort is not None}
+    from src.research_ideas.hundred_q import scheduler as _s
+    cohort = None
+    try:
+        cohort = await asyncio.to_thread(_s.run_weekly_batch_cycle)
+    except Exception as exc:
+        logger.warning("[sched] hundred_q_weekly_batch raised %s: %s", type(exc).__name__, exc)
+    if cohort is not None:
+        return {"ran": True}
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "hundred_q_weekly_batch",
+        lambda: _s._already_ran_within("weekly_quant", hours=_s._WEEKLY_IDEMPOTENCY_HOURS))
+    return {"ran": ran}
 
 
 async def run_hundred_q_backstop_task(ctx: dict) -> dict:
     """Quarterly 100-Q annual backstop. Self-gates on its ~80-day window."""
-    from src.research_ideas.hundred_q.scheduler import run_backstop_cycle
-    touched = await asyncio.to_thread(run_backstop_cycle)
-    return {"ran": touched is not None}
+    from src.research_ideas.hundred_q import scheduler as _s
+    touched = None
+    try:
+        touched = await asyncio.to_thread(_s.run_backstop_cycle)
+    except Exception as exc:
+        logger.warning("[sched] hundred_q_backstop raised %s: %s", type(exc).__name__, exc)
+    if touched is not None:
+        return {"ran": True}
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "hundred_q_backstop",
+        lambda: _s._already_ran_within("annual_backstop", days=_s._BACKSTOP_IDEMPOTENCY_DAYS))
+    return {"ran": ran}
+
+
+async def run_maintenance_task(ctx: dict) -> dict:
+    """R2 — daily housekeeping: prune abandoned web_runs checkpoint rows.
+
+    A successful run upserts its row to is_checkpoint=0, so rows still
+    carrying is_checkpoint=1 past CHECKPOINT_RETENTION_DAYS (default 14) are
+    crashed/abandoned runs nobody can resume from anymore. Final rows are
+    never touched.
+    """
+    from app.backend.services.analysis_service import cleanup_stale_checkpoints
+    deleted = await asyncio.to_thread(cleanup_stale_checkpoints)
+    logger.info("[sched] maintenance: removed %d stale checkpoint rows", deleted)
+    return {"ran": True, "deleted": deleted}
 
 
 def _log_publish_outcome(task: asyncio.Task) -> None:
@@ -526,6 +612,8 @@ class WorkerSettings:
         run_hundred_q_daily_sweep_task,
         run_hundred_q_weekly_batch_task,
         run_hundred_q_backstop_task,
+        # R2 — daily housekeeping (stale-checkpoint prune etc.)
+        run_maintenance_task,
     ]
     queue_name = QUEUE_NAME
     redis_settings = build_redis_settings()

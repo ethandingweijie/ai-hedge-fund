@@ -3317,6 +3317,64 @@ def _run_extractor_fanout(
 
 # ── Per-ticker research worker ────────────────────────────────────────────────
 
+def _resolve_research_cache(
+    ticker: str,
+    resume_research: dict | None = None,
+) -> dict | None:
+    """Resolve the archive-first gate's cached research for `ticker`.
+
+    Preference order:
+      1. R2 resume bundle — the crashed predecessor run's own research
+         (minutes/hours old; model-matched upstream by the bundle builder).
+         Accepted only when it is a well-formed LIVE-tier result.
+      2. run_archive.get_recent_research — the usual _FRESH_DAYS archive
+         lookup.
+
+    knowledge_only results are discarded from EITHER source: they lack live
+    web data and must be re-run with the current web-search model.
+    """
+    agent_id = "deep_research"
+    _cached: dict | None = None
+
+    if (
+        resume_research
+        and resume_research.get("deep_research_text")
+        and resume_research.get("research_tier") in _LIVE_RESEARCH_TIERS
+    ):
+        _cached = dict(resume_research)
+        if not _cached.get("deep_research_sections"):
+            try:
+                from src.memory.run_archive import _parse_sections_inline
+                _cached["deep_research_sections"] = _parse_sections_inline(
+                    _cached["deep_research_text"])
+            except Exception:
+                _cached["deep_research_sections"] = {}
+        progress.update_status(
+            agent_id, ticker,
+            f"[resume] reusing crashed run's research "
+            f"({(_cached.get('age_days') or 0) * 24:.1f}h old, "
+            f"tier={_cached.get('research_tier')}) — 0 searches"
+        )
+    else:
+        try:
+            from src.memory.run_archive import get_recent_research as _get_recent
+            _cached = _get_recent(ticker, max_age_days=_FRESH_DAYS)
+        except Exception:
+            _cached = None
+
+    # Never reuse knowledge_only results from cache — they lack live web data
+    # and should be re-run with the current model (now Qwen with web search).
+    if _cached is not None and _cached.get("research_tier") == "knowledge_only":
+        progress.update_status(
+            agent_id, ticker,
+            f"Cache contains knowledge_only result ({_cached['age_days']:.1f}d old) "
+            f"— discarding, will run fresh with live web search"
+        )
+        _cached = None
+
+    return _cached
+
+
 def _research_one_ticker(
     ticker: str,
     sector: str,
@@ -3330,6 +3388,7 @@ def _research_one_ticker(
     base_url: str | None = None,
     synthesis_model: str | None = None,
     profile_name: str = "",
+    resume_research: dict | None = None,
 ) -> dict:
     """
     Run the full archive-gate + three-tier research pipeline for a single ticker.
@@ -3351,22 +3410,9 @@ def _research_one_ticker(
     # For US tickers both are the same Claude model.
     _synthesis_model = synthesis_model or model_name
 
-    # ── Archive-first gate ────────────────────────────────────────────────────
-    try:
-        from src.memory.run_archive import get_recent_research as _get_recent
-        _cached = _get_recent(ticker, max_age_days=_FRESH_DAYS)
-    except Exception:
-        _cached = None
-
-    # Never reuse knowledge_only results from cache — they lack live web data
-    # and should be re-run with the current model (now Qwen with web search).
-    if _cached is not None and _cached.get("research_tier") == "knowledge_only":
-        progress.update_status(
-            agent_id, ticker,
-            f"Cache contains knowledge_only result ({_cached['age_days']:.1f}d old) "
-            f"— discarding, will run fresh with live web search"
-        )
-        _cached = None
+    # ── Archive-first gate (R2: a crashed run's resume bundle wins over the
+    # archive; knowledge_only results are discarded from either source) ──────
+    _cached = _resolve_research_cache(ticker, resume_research=resume_research)
 
     if _cached is not None:
         _age = _cached["age_days"]
@@ -4540,6 +4586,8 @@ def _research_one_ticker(
 
     except Exception as t1_err:
         print(f"\n  [deep_research] Tier 1 failed for {ticker}: {type(t1_err).__name__}: {t1_err}")
+        logger.warning("[deep_research] Tier 1 fallback for %s: %s: %s",
+                       ticker, type(t1_err).__name__, t1_err)
         progress.update_status(
             agent_id, ticker,
             f"Tier 1 failed ({type(t1_err).__name__}: {str(t1_err)[:120]})"
@@ -4568,6 +4616,8 @@ def _research_one_ticker(
 
             except Exception as t2_err:
                 print(f"\n  [deep_research] Tier 2 failed for {ticker}: {type(t2_err).__name__}: {t2_err}")
+                logger.warning("[deep_research] Tier 2 fallback for %s: %s: %s",
+                               ticker, type(t2_err).__name__, t2_err)
                 progress.update_status(
                     agent_id, ticker,
                     f"Tier 2 failed ({type(t2_err).__name__}: {str(t2_err)[:100]}) — falling to Tier 3 knowledge-only..."
@@ -4578,6 +4628,8 @@ def _research_one_ticker(
                     research_tier = "knowledge_only"
                     search_count = 0
                 except Exception as kb_err:
+                    logger.warning("[deep_research] ALL tiers failed for %s: %s: %s",
+                                   ticker, type(kb_err).__name__, kb_err)
                     progress.update_status(agent_id, ticker, f"All tiers failed ({kb_err}) — skipping deep research")
                     return {
                         "deep_research": "", "deep_research_sections": {},
@@ -4901,6 +4953,12 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
 
     agent_id = "deep_research"
 
+    # R2 checkpoint resume — seeded by the pipeline from a crashed predecessor
+    # run's checkpoint (shaped like run_archive.get_recent_research's return).
+    # Popped FIRST (before any early return) so it never leaks into the saved
+    # run JSON; consumed for the PRIMARY ticker only.
+    _resume_research = state["data"].pop("_resume_research", None)
+
     # US tickers → Anthropic (claude-sonnet-4-6, no base_url override)
     # HK tickers → Qwen3-max via Alibaba Cloud (DEEP_RESEARCH_* env vars)
     # Per-run overlay first (see src/utils/run_config.py), then process env.
@@ -4993,6 +5051,7 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
             news_sentiment_data=_ns_data,
             base_url=_base_url,
             synthesis_model=_synthesis_model,
+            resume_research=(_resume_research if t == primary_ticker else None),
         )
         return t, result
 

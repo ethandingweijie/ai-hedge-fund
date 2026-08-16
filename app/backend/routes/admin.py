@@ -100,7 +100,7 @@ async def admin_diag(request: Request, secret: str = ""):
     import sqlite3 as _sqlite3
     import traceback as _tb
 
-    out: dict = {"build_marker": "2026-08-10-diag-8"}
+    out: dict = {"build_marker": "2026-08-16-diag-9"}
 
     # 1. Env presence (names only — values never leave the container)
     out["env"] = {
@@ -255,7 +255,80 @@ async def admin_diag(request: Request, secret: str = ""):
     except Exception:
         out["queue"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
+    # 9. Archive health (R2): abandoned checkpoint rows + final runs that
+    # lost their archive link (save_run failed upstream). Both are the
+    # durable traces of pipeline failures — normally invisible.
+    try:
+        import asyncio as _aio
+        from datetime import datetime as _dt, timedelta as _td
+        from app.backend.services import analysis_service as _asvc
+
+        try:
+            _ret = float(os.environ.get("CHECKPOINT_RETENTION_DAYS", "14"))
+        except ValueError:
+            _ret = 14.0
+
+        def _archive_counts() -> dict:
+            _asvc._ensure_web_runs_table()
+            _fmt = "%Y-%m-%dT%H:%M:%S.%f"
+            _stale_cut = (_dt.now() - _td(days=_ret)).strftime(_fmt)
+            _7d_cut = (_dt.now() - _td(days=7)).strftime(_fmt)
+            _total_cp = _asvc._fetch_one(
+                "SELECT COUNT(*) AS n FROM web_runs WHERE is_checkpoint = 1")
+            _stale_cp = _asvc._fetch_one(
+                "SELECT COUNT(*) AS n FROM web_runs WHERE is_checkpoint = 1 "
+                "AND run_at < ?", [_stale_cut])
+            _missing = _asvc._fetch_one(
+                "SELECT COUNT(*) AS n FROM web_runs WHERE is_checkpoint = 0 "
+                "AND run_at >= ? AND (archive_run_id IS NULL OR archive_run_id = '')",
+                [_7d_cut])
+            return {
+                "total_checkpoint_rows": int(_total_cp["n"]) if _total_cp else 0,
+                "stale_checkpoint_rows": int(_stale_cp["n"]) if _stale_cp else 0,
+                "stale_retention_days": _ret,
+                "runs_missing_archive_7d": int(_missing["n"]) if _missing else 0,
+            }
+
+        out["archive"] = await _aio.to_thread(_archive_counts)
+        out["archive"]["ok"] = True
+    except Exception:
+        out["archive"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
     return out
+
+
+@router.post("/admin/cleanup-stale-checkpoints")
+async def admin_cleanup_stale_checkpoints(
+    request: Request,
+    secret: str = "",
+    retention_days: float | None = None,
+):
+    """R2 — prune abandoned web_runs checkpoint rows NOW (secret-gated).
+
+    The worker's daily maintenance task does this automatically at 03:10
+    UTC; this endpoint exists to backfill-clean historical rows right after
+    deploy without waiting. Only rows still carrying is_checkpoint=1 past
+    the retention window are deleted — a successful run upserts its row to
+    is_checkpoint=0, so final runs are never touched.
+
+    Query params:
+      secret         — DB_UPLOAD_SECRET (required)
+      retention_days — override CHECKPOINT_RETENTION_DAYS (min 1)
+    """
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    if retention_days is not None and retention_days < 1:
+        raise HTTPException(status_code=400, detail="retention_days must be >= 1")
+
+    import asyncio
+    from app.backend.services.analysis_service import cleanup_stale_checkpoints
+    try:
+        deleted = await asyncio.to_thread(cleanup_stale_checkpoints, retention_days)
+    except Exception:
+        import traceback
+        raise HTTPException(status_code=500, detail=traceback.format_exc()[-800:])
+    logger.info("[cleanup] admin-triggered stale-checkpoint prune deleted %d rows", deleted)
+    return {"deleted": deleted}
 
 
 # ── Phase 3d: user administration ────────────────────────────────────────────

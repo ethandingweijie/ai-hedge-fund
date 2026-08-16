@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections import deque
 from typing import AsyncIterator, Optional
 
@@ -46,6 +47,21 @@ _LIVE_TTL = 600             # 10 min — matches the old 120s cleanup + grace
 _local_hubs: dict[str, set[asyncio.Queue]] = {}
 _local_buf: dict[str, deque] = {}
 _local_live: dict[str, dict] = {}
+
+# R2 failure surfacing — the livestatus Redis failures below used to be
+# silent except:pass, so a flapping Redis left frontend phase panels frozen
+# with no trace in the logs. Warn once per window per process.
+_LIVE_WARN_AT = 0.0
+_LIVE_WARN_INTERVAL_S = 300.0
+
+
+def _warn_live_redis_failure(where: str, exc: Exception) -> None:
+    global _LIVE_WARN_AT
+    now = time.monotonic()
+    if now - _LIVE_WARN_AT >= _LIVE_WARN_INTERVAL_S:
+        _LIVE_WARN_AT = now
+        logger.warning("progress_bus: %s Redis op failed (%s: %s) — "
+                       "livestatus degraded", where, type(exc).__name__, exc)
 
 
 def _encode(event: dict) -> str:
@@ -190,8 +206,8 @@ async def get_phase_map(ticker: str) -> dict:
             raw = await r.hgetall(_LIVE_PREFIX + key)
             if raw:
                 return {phase: _decode(payload) for phase, payload in raw.items()}
-        except Exception:
-            pass
+        except Exception as exc:
+            _warn_live_redis_failure("get_phase_map", exc)
         return {}
     local = _local_live.get(key, {})
     return {phase: _decode(payload) for phase, payload in local.items()}
@@ -211,8 +227,8 @@ async def clear_ticker(ticker: str) -> None:
         try:
             r = await get_redis()
             await r.delete(_LIVE_PREFIX + key)
-        except Exception:
-            pass
+        except Exception as exc:
+            _warn_live_redis_failure("clear_ticker", exc)
 
 
 def drop_run_buffer(run_id: str) -> None:

@@ -36,6 +36,12 @@ logger = logging.getLogger(__name__)
 
 _KEY_PREFIX = "ratelimit"
 
+# R2 failure surfacing — the Redis-absent fail-open branch used to be
+# silent, so a dead Redis quietly disabled ALL rate limits with no trace.
+# Warn throttled to once per window (per request would spam while down).
+_FAIL_OPEN_WARNED_AT = 0.0
+_FAIL_OPEN_WARN_INTERVAL_S = 300.0
+
 # Lua: prune expired slots, then acquire one if below the limit.
 # KEYS[1]=sorted-set key; ARGV: prune_cutoff, limit, now_score, token, key_ttl
 _SLOT_ACQUIRE_LUA = """
@@ -94,6 +100,12 @@ async def check_limits(
     try:
         r = await _redis_or_none()
         if r is None:
+            global _FAIL_OPEN_WARNED_AT
+            _now = time.monotonic()
+            if _now - _FAIL_OPEN_WARNED_AT >= _FAIL_OPEN_WARN_INTERVAL_S:
+                _FAIL_OPEN_WARNED_AT = _now
+                logger.warning(
+                    "rate_limiter: Redis unavailable — limits NOT enforced (fail open)")
             return  # no Redis → no limits (queue mode is dormant anyway)
 
         user_id = user.id

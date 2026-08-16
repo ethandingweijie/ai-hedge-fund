@@ -23,9 +23,12 @@ Gate: composite ≥ 6 AND every pillar score ≥ 1.
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from src.research_ideas.complacency.data_fetch import ComplacencyBundle
+
+logger = logging.getLogger(__name__)
 
 
 # ─── Sector medians ────────────────────────────────────────────────────────
@@ -50,6 +53,11 @@ SECTOR_EV_SALES_MEDIAN_FALLBACK: dict[str, float] = {
 # Back-compat alias — preserves any callers that still reference the old name.
 SECTOR_EV_SALES_MEDIAN = SECTOR_EV_SALES_MEDIAN_FALLBACK
 
+# R2 failure surfacing — warn once per process per (sector, metric) when
+# scoring degrades to the static Nov-2025 fallback medians. A 50-ticker
+# sweep in one sector must not spam the log: module-level seen set.
+_FALLBACK_WARNED: set[tuple[str, str]] = set()
+
 
 def resolve_sector_median(sector: Optional[str], metric: str = "ev_sales") -> Optional[float]:
     """
@@ -68,7 +76,13 @@ def resolve_sector_median(sector: Optional[str], metric: str = "ev_sales") -> Op
         # Storage layer may not be initialized in some test contexts; fall through.
         pass
     if metric == "ev_sales":
-        return SECTOR_EV_SALES_MEDIAN_FALLBACK.get(sector)
+        fallback = SECTOR_EV_SALES_MEDIAN_FALLBACK.get(sector)
+        if fallback is not None and (sector, metric) not in _FALLBACK_WARNED:
+            _FALLBACK_WARNED.add((sector, metric))
+            logger.warning(
+                "[complacency] sector_medians cache miss — scoring %s/%s with the "
+                "static Nov-2025 fallback (%.1f)", sector, metric, fallback)
+        return fallback
     return None
 
 

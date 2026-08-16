@@ -175,6 +175,67 @@ def _resolve_investor_panel(selected_agents: list[str] | None) -> list[str]:
     return list(_DEFAULT_INVESTOR_SIX)
 
 
+def _merge_resume_into_phase_cache(
+    phase_cache: dict,
+    resume_bundle: dict | None,
+    tickers: list[str],
+) -> bool:
+    """R2 checkpoint resume — fill GAPS in the archive phase cache with a
+    crashed predecessor run's checkpoint outputs.
+
+    Archive entries always win: they come from COMPLETED runs. Checkpoint
+    values only fill keys the archive left missing/empty, so the existing
+    `_all_cached` skip gates (power_law / value_trap / industry_brief /
+    dcf_range) fire unchanged. Returns True if anything was seeded.
+    """
+    if not resume_bundle:
+        return False
+    data = resume_bundle.get("data") or {}
+    if not data:
+        return False
+
+    # checkpoint payload field -> phase-cache key, per-ticker or global
+    _PER_TICKER = {
+        "dcf_range":           "dcf_range",
+        "power_law_analysis":  "power_law",
+        "value_trap_analysis": "value_trap",
+    }
+    _GLOBAL = {
+        "industry_brief": "industry_brief",
+        "deep_research":  "deep_research",
+    }
+
+    seeded = False
+    for t in tickers:
+        entry = phase_cache.get(t)
+        if not entry:
+            entry = {
+                "run_id":           resume_bundle.get("run_id") or "",
+                "run_at":           resume_bundle.get("run_at") or "",
+                "age_days":         resume_bundle.get("age_days") or 0.0,
+                "industry_brief":   None,
+                "deep_research":    None,
+                "power_law":        None,
+                "dcf_range":        None,
+                "citation_audit":   None,
+                "scenario":         None,
+                "value_trap":       None,
+                "sector_card_hash": None,
+                "card_qa_audit":    None,
+            }
+            phase_cache[t] = entry
+        for src_key, cache_key in _GLOBAL.items():
+            if not entry.get(cache_key) and data.get(src_key):
+                entry[cache_key] = data[src_key]
+                seeded = True
+        for src_key, cache_key in _PER_TICKER.items():
+            val = (data.get(src_key) or {}).get(t)
+            if not entry.get(cache_key) and val:
+                entry[cache_key] = val
+                seeded = True
+    return seeded
+
+
 def run_advanced_pipeline(
     tickers: list[str],
     start_date: str,
@@ -187,13 +248,20 @@ def run_advanced_pipeline(
     enable_post_trade_review: bool = False,
     management_guidance: dict[str, dict] | None = None,
     on_checkpoint: "callable | None" = None,
+    resume_bundle: dict | None = None,
 ) -> dict:
     """
     Run the full 10-phase advanced pipeline.
 
-    on_checkpoint, if provided, is called after Phase 3 (deep research) and
-    Phase 4 (industry brief) so the caller can persist partial results early.
+    on_checkpoint, if provided, is called after the deep_research,
+    industry_brief, investor_signals and final_calculation checkpoints so the
+    caller can persist partial results early.
     Signature: on_checkpoint(state: AgentState, checkpoint_name: str) -> None
+
+    resume_bundle, if provided (see analysis_service._build_resume_bundle),
+    is a crashed predecessor run's checkpoint payload. Its Phase 3/4 outputs
+    seed the phase cache so the expensive skip gates fire; Phase 5+ always
+    reruns fresh.
     Returns a result dict compatible with print_trading_output().
     """
     progress.start()
@@ -411,6 +479,33 @@ def run_advanced_pipeline(
                           f"dcf={'✓' if _c.get('dcf_range') else '✗'} "
                           f"power_law={'✓' if _c.get('power_law') else '✗'} "
                           f"citation={'✓' if _c.get('citation_audit') else '✗'}")
+
+            # R2 checkpoint resume — seed gaps from a crashed predecessor's
+            # checkpoint so the expensive Phase 3/4 skip gates fire.
+            if resume_bundle:
+                _rb_data = resume_bundle.get("data") or {}
+                if _merge_resume_into_phase_cache(_phase_cache, resume_bundle, tickers):
+                    print(f"  [resume] phase cache seeded from checkpoint "
+                          f"'{resume_bundle.get('checkpoint')}' (run "
+                          f"{str(resume_bundle.get('run_id') or '')[:8]}, "
+                          f"{(resume_bundle.get('age_days') or 0) * 24:.1f}h old)")
+                    progress.update_status(
+                        "archive_cache", primary_ticker,
+                        f"[resume] recovered checkpoint '{resume_bundle.get('checkpoint')}' "
+                        f"— reusing Phase 3/4 outputs")
+                if _rb_data.get("deep_research"):
+                    # Shaped exactly like run_archive.get_recent_research's
+                    # return so deep_research's pure-cache path consumes it
+                    # unchanged (popped inside run_deep_research_agent).
+                    state["data"]["_resume_research"] = {
+                        "run_id":                 resume_bundle.get("run_id"),
+                        "run_at":                 resume_bundle.get("run_at"),
+                        "analysis_date":          end_date,
+                        "age_days":               resume_bundle.get("age_days") or 0.0,
+                        "research_tier":          _rb_data.get("research_tier"),
+                        "deep_research_text":     _rb_data.get("deep_research"),
+                        "deep_research_sections": _rb_data.get("deep_research_sections") or {},
+                    }
 
         def _all_cached(key: str, age_days: float = 7.0) -> bool:
             """True if every ticker has a fresh-enough, non-empty cache entry for key.
