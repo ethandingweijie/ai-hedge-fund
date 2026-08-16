@@ -79,26 +79,20 @@ def update_cached_prices(quotes: dict[str, dict]) -> None:
     """Write live prices back into every screener_cache entry so the 24-h cache stays fresh."""
     if not quotes:
         return
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
-    try:
-        rows = conn.execute("SELECT cache_key, results_json FROM screener_cache").fetchall()
-        for row in rows:
-            items = json.loads(row["results_json"])
-            changed = False
-            for item in items:
-                q = quotes.get(item.get("symbol", ""))
-                if q:
-                    _overlay_live(item, q)
-                    changed = True
-            if changed:
-                conn.execute(
-                    "UPDATE screener_cache SET results_json = ? WHERE cache_key = ?",
-                    (json.dumps(items), row["cache_key"]),
-                )
-        conn.commit()
-    finally:
-        conn.close()
+    rows = _db.query("SELECT cache_key, results_json FROM screener_cache")
+    for row in rows:
+        items = json.loads(row["results_json"])
+        changed = False
+        for item in items:
+            q = quotes.get(item.get("symbol", ""))
+            if q:
+                _overlay_live(item, q)
+                changed = True
+        if changed:
+            _db.execute(
+                "UPDATE screener_cache SET results_json = ? WHERE cache_key = ?",
+                [json.dumps(items), row["cache_key"]],
+            )
 
 
 import logging as _logging
@@ -261,18 +255,56 @@ CREATE TABLE IF NOT EXISTS master_universe (
 """
 
 
+# DDL target memo so CREATE TABLE IF NOT EXISTS runs once per database
+# (per-process in PG mode, per-file in SQLite mode).
+_tables_ready_key: Optional[tuple] = None
+
+
 def _ensure_tables():
-    conn = _connect()
+    """Create the screener cache tables if missing.
+
+    Dual-mode (SQLite local / Postgres production) via src.data.db — the old
+    raw-sqlite3 version 500'd on 2026-08-16 when the /data volume was
+    detached from the (now multi-replica) web service.
+    """
+    global _tables_ready_key
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key == _tables_ready_key:
+        return
     try:
-        conn.execute(_DDL_SCREENER)
-        conn.execute(_DDL_FAST_VGPM)
-        conn.execute(_DDL_RAW_METRICS)
-        conn.execute(_DDL_LOOKUP_CACHE)
-        conn.execute(_DDL_COMPANY_NAME_CACHE)
-        conn.execute(_DDL_MASTER_UNIVERSE)
-        conn.commit()
-    finally:
-        conn.close()
+        _db.execute_script(";".join([
+            _DDL_SCREENER, _DDL_FAST_VGPM, _DDL_RAW_METRICS,
+            _DDL_LOOKUP_CACHE, _DDL_COMPANY_NAME_CACHE, _DDL_MASTER_UNIVERSE,
+        ]))
+        _tables_ready_key = key
+    except Exception as exc:
+        # A concurrent CREATE TABLE IF NOT EXISTS race at boot is harmless;
+        # anything persistent surfaces loudly on the first real query.
+        _sqlog.warning("screener _ensure_tables: %s", exc)
+
+
+def _upsert_sql(table: str, conflict_col: str, columns: list[str]) -> str:
+    """INSERT-with-replace SQL for the active DB mode."""
+    ph = ", ".join("?" * len(columns))
+    if _db.is_postgres():
+        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in columns if c != conflict_col)
+        return (
+            f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({ph}) "
+            f"ON CONFLICT ({conflict_col}) DO UPDATE SET {updates}"
+        )
+    return f"INSERT OR REPLACE INTO {table} ({', '.join(columns)}) VALUES ({ph})"
+
+
+def _upsert(table: str, conflict_col: str, columns: list[str], values: list) -> None:
+    _db.execute(_upsert_sql(table, conflict_col, columns), list(values))
+
+
+def _upsert_many(table: str, conflict_col: str, columns: list[str], rows: list) -> None:
+    if rows:
+        _db.executemany(
+            _upsert_sql(table, conflict_col, columns),
+            [list(r) for r in rows],
+        )
 
 
 def _make_cache_key(params: dict) -> str:
@@ -281,35 +313,25 @@ def _make_cache_key(params: dict) -> str:
 
 
 def _get_cached(cache_key: str) -> Optional[list]:
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
-    try:
-        row = conn.execute(
-            "SELECT results_json, expires_at FROM screener_cache WHERE cache_key = ?",
-            (cache_key,),
-        ).fetchone()
-        if not row:
-            return None
-        if datetime.now(timezone.utc).isoformat() > row["expires_at"]:
-            return None
-        return json.loads(row["results_json"])
-    finally:
-        conn.close()
+    row = _db.query_one(
+        "SELECT results_json, expires_at FROM screener_cache WHERE cache_key = ?",
+        [cache_key],
+    )
+    if not row:
+        return None
+    if datetime.now(timezone.utc).isoformat() > row["expires_at"]:
+        return None
+    return json.loads(row["results_json"])
 
 
 def _set_cached(cache_key: str, results: list, ttl_hours: int = 24):
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=ttl_hours)).isoformat()
-    conn = _connect()
-    try:
-        conn.execute(
-            "INSERT OR REPLACE INTO screener_cache "
-            "(cache_key, fetched_at, expires_at, results_json) VALUES (?, ?, ?, ?)",
-            (cache_key, now.isoformat(), expires, json.dumps(results)),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _upsert(
+        "screener_cache", "cache_key",
+        ["cache_key", "fetched_at", "expires_at", "results_json"],
+        [cache_key, now.isoformat(), expires, json.dumps(results)],
+    )
 
 
 # ── Fast VGPM per-ticker cache ─────────────────────────────────────────────────
@@ -317,18 +339,13 @@ def _set_cached(cache_key: str, results: list, ttl_hours: int = 24):
 def _get_fast_vgpm_cached(tickers: list[str]) -> dict[str, dict]:
     if not tickers:
         return {}
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
     now_iso = datetime.now(timezone.utc).isoformat()
-    try:
-        placeholders = ",".join("?" * len(tickers))
-        rows = conn.execute(
-            f"SELECT ticker, data_json FROM fast_vgpm_cache "
-            f"WHERE ticker IN ({placeholders}) AND expires_at > ?",
-            [*tickers, now_iso],
-        ).fetchall()
-    finally:
-        conn.close()
+    placeholders = ",".join("?" * len(tickers))
+    rows = _db.query(
+        f"SELECT ticker, data_json FROM fast_vgpm_cache "
+        f"WHERE ticker IN ({placeholders}) AND expires_at > ?",
+        [*tickers, now_iso],
+    )
     return {row["ticker"]: json.loads(row["data_json"]) for row in rows}
 
 
@@ -338,16 +355,11 @@ def _set_fast_vgpm_cached(data: dict[str, dict], ttl_hours: int = 24):
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=ttl_hours)).isoformat()
     now_iso = now.isoformat()
-    conn = _connect()
-    try:
-        conn.executemany(
-            "INSERT OR REPLACE INTO fast_vgpm_cache (ticker, cached_at, expires_at, data_json) "
-            "VALUES (?, ?, ?, ?)",
-            [(t, now_iso, expires, json.dumps(v)) for t, v in data.items()],
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    _upsert_many(
+        "fast_vgpm_cache", "ticker",
+        ["ticker", "cached_at", "expires_at", "data_json"],
+        [(t, now_iso, expires, json.dumps(v)) for t, v in data.items()],
+    )
 
 
 # ── Raw metrics cache ──────────────────────────────────────────────────────
@@ -488,18 +500,13 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
 
             # Check cache first
             if not force_refresh:
-                conn = _connect()
-                conn.row_factory = sqlite3.Row
                 now_iso = datetime.now(timezone.utc).isoformat()
-                try:
-                    row = conn.execute(
-                        "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
-                        (ticker, now_iso),
-                    ).fetchone()
-                    if row:
-                        return json.loads(row["item_json"])
-                finally:
-                    conn.close()
+                row = _db.query_one(
+                    "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
+                    [ticker, now_iso],
+                )
+                if row:
+                    return json.loads(row["item_json"])
 
             # Resolve sector: TICKER_SECTOR_LOOKUP first, yfinance info fallback
             sector = "Unknown"
@@ -569,15 +576,11 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
 
             now     = datetime.now(timezone.utc)
             expires = (now + timedelta(hours=24)).isoformat()
-            conn = _connect()
-            try:
-                conn.execute(
-                    "INSERT OR REPLACE INTO screener_lookup_cache VALUES (?,?,?,?)",
-                    (ticker, now.isoformat(), expires, json.dumps(item)),
-                )
-                conn.commit()
-            finally:
-                conn.close()
+            _upsert(
+                "screener_lookup_cache", "symbol",
+                ["symbol", "fetched_at", "expires_at", "item_json"],
+                [ticker, now.isoformat(), expires, json.dumps(item)],
+            )
 
             return item
     except Exception as _hk_err:
@@ -589,23 +592,18 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
         return None
 
     if not force_refresh:
-        conn = _connect()
-        conn.row_factory = sqlite3.Row
         now_iso = datetime.now(timezone.utc).isoformat()
-        try:
-            row = conn.execute(
-                "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
-                (ticker, now_iso),
-            ).fetchone()
-            if row:
-                item = json.loads(row["item_json"])
-                # Always overlay live quote data — not cached so it stays fresh
-                live = get_live_quotes([ticker])
-                if ticker in live:
-                    _overlay_live(item, live[ticker])
-                return item
-        finally:
-            conn.close()
+        row = _db.query_one(
+            "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
+            [ticker, now_iso],
+        )
+        if row:
+            item = json.loads(row["item_json"])
+            # Always overlay live quote data — not cached so it stays fresh
+            live = get_live_quotes([ticker])
+            if ticker in live:
+                _overlay_live(item, live[ticker])
+            return item
 
     try:
         pr = requests.get(f"{_STABLE}/profile", params={"symbol": ticker, **base}, timeout=10)
@@ -655,16 +653,11 @@ def lookup_ticker(symbol: str, force_refresh: bool = False) -> Optional[dict]:
 
         now = datetime.now(timezone.utc)
         expires = (now + timedelta(hours=24)).isoformat()
-        conn = _connect()
-        try:
-            conn.execute(
-                "INSERT OR REPLACE INTO screener_lookup_cache (symbol, fetched_at, expires_at, item_json) "
-                "VALUES (?, ?, ?, ?)",
-                (ticker, now.isoformat(), expires, json.dumps(item)),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        _upsert(
+            "screener_lookup_cache", "symbol",
+            ["symbol", "fetched_at", "expires_at", "item_json"],
+            [ticker, now.isoformat(), expires, json.dumps(item)],
+        )
 
         # Overlay live quote data after caching base item — always fresh, never cached
         live = get_live_quotes([ticker])
@@ -698,18 +691,13 @@ def _get_vgpm_map(tickers: list[str]) -> dict[str, dict]:
             list(tickers),
         )
     else:
-        conn = _connect()
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(
-                f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
-                f"FROM web_runs "
-                f"WHERE ticker IN ({placeholders}) AND full_result_json IS NOT NULL "
-                f"GROUP BY ticker",
-                tickers,
-            ).fetchall()
-        finally:
-            conn.close()
+        rows = _db.query(
+            f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
+            f"FROM web_runs "
+            f"WHERE ticker IN ({placeholders}) AND full_result_json IS NOT NULL "
+            f"GROUP BY ticker",
+            tickers,
+        )
 
     result: dict[str, dict] = {}
     for row in rows:
@@ -1421,16 +1409,12 @@ def invalidate_for_ticker(ticker: str):
     Clears lookup cache, fast VGPM cache, raw metrics cache, and all screener
     cache entries so the next request reflects the new pipeline VGPM.
     """
-    conn = _connect()
     try:
-        conn.execute("DELETE FROM screener_lookup_cache WHERE symbol = ?", (ticker,))
-        conn.execute("DELETE FROM fast_vgpm_cache WHERE ticker = ?", (ticker,))
-        conn.execute("DELETE FROM screener_cache")
-        conn.commit()
+        _db.execute("DELETE FROM screener_lookup_cache WHERE symbol = ?", [ticker])
+        _db.execute("DELETE FROM fast_vgpm_cache WHERE ticker = ?", [ticker])
+        _db.execute("DELETE FROM screener_cache")
     except Exception:
         pass
-    finally:
-        conn.close()
 
     try:
         from app.backend.services import knowledge_graph as _kg
@@ -1443,22 +1427,18 @@ def invalidate_for_ticker(ticker: str):
 
 def _get_master_universe() -> Optional[list[dict]]:
     """Return all rows from master_universe if not expired, else None."""
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
+        row = _db.query_one(
             "SELECT data_json, expires_at FROM master_universe LIMIT 1"
-        ).fetchone()
-        if not rows:
+        )
+        if not row:
             return None
-        if datetime.now(timezone.utc).isoformat() > rows["expires_at"]:
+        if datetime.now(timezone.utc).isoformat() > row["expires_at"]:
             return None
-        all_rows = conn.execute("SELECT data_json FROM master_universe").fetchall()
+        all_rows = _db.query("SELECT data_json FROM master_universe")
         return [json.loads(r["data_json"]) for r in all_rows]
     except Exception:
         return None
-    finally:
-        conn.close()
 
 
 def _set_master_universe(stocks: list[dict], ttl_hours: int = 24):
@@ -1466,18 +1446,23 @@ def _set_master_universe(stocks: list[dict], ttl_hours: int = 24):
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=ttl_hours)).isoformat()
     now_iso = now.isoformat()
-    conn = _connect()
+    _db.execute("DELETE FROM master_universe")
+    _db.executemany(
+        "INSERT INTO master_universe (symbol, data_json, cached_at, expires_at) "
+        "VALUES (?, ?, ?, ?)",
+        [[s.get("symbol", ""), json.dumps(s), now_iso, expires]
+         for s in stocks if s.get("symbol")],
+    )
+
+
+def _get_master_universe_cached_at() -> Optional[str]:
+    """cached_at of the current master_universe rows (a backfill stamps every
+    row with the same timestamp), or None when the table is empty/absent."""
     try:
-        conn.execute("DELETE FROM master_universe")
-        conn.executemany(
-            "INSERT INTO master_universe (symbol, data_json, cached_at, expires_at) "
-            "VALUES (?, ?, ?, ?)",
-            [(s.get("symbol", ""), json.dumps(s), now_iso, expires)
-             for s in stocks if s.get("symbol")],
-        )
-        conn.commit()
-    finally:
-        conn.close()
+        row = _db.query_one("SELECT cached_at FROM master_universe LIMIT 1")
+        return row["cached_at"] if row else None
+    except Exception:
+        return None
 
 
 def _build_screener_items(
@@ -1841,60 +1826,58 @@ def get_company_names(tickers: list[str]) -> dict[str, dict]:
     result: dict[str, dict] = {}
     misses: list[str] = []
 
-    conn = _connect()
-    try:
-        for ticker in tickers:
-            row = conn.execute(
-                "SELECT name, sector, industry FROM company_name_cache "
-                "WHERE ticker = ? AND expires_at > ?",
-                (ticker, now_iso),
-            ).fetchone()
-            if row:
-                result[ticker] = {"name": row[0], "sector": row[1], "industry": row[2]}
-            else:
-                misses.append(ticker)
+    for ticker in tickers:
+        row = _db.query_one(
+            "SELECT name, sector, industry FROM company_name_cache "
+            "WHERE ticker = ? AND expires_at > ?",
+            [ticker, now_iso],
+        )
+        if row:
+            result[ticker] = {
+                "name": row["name"], "sector": row["sector"], "industry": row["industry"],
+            }
+        else:
+            misses.append(ticker)
 
-        # Try screener_lookup_cache for misses
-        still_missing: list[str] = []
-        for ticker in misses:
-            row = conn.execute(
-                "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
-                (ticker, now_iso),
-            ).fetchone()
-            if row:
-                item = json.loads(row[0])
-                result[ticker] = {
-                    "name":     item.get("companyName") or ticker,
-                    "sector":   item.get("sector"),
-                    "industry": item.get("industry"),
-                }
-            else:
-                still_missing.append(ticker)
+    # Try screener_lookup_cache for misses
+    still_missing: list[str] = []
+    for ticker in misses:
+        row = _db.query_one(
+            "SELECT item_json FROM screener_lookup_cache WHERE symbol = ? AND expires_at > ?",
+            [ticker, now_iso],
+        )
+        if row:
+            item = json.loads(row["item_json"])
+            result[ticker] = {
+                "name":     item.get("companyName") or ticker,
+                "sector":   item.get("sector"),
+                "industry": item.get("industry"),
+            }
+        else:
+            still_missing.append(ticker)
 
-        # Try screener_cache items for still-missing tickers
-        if still_missing:
-            missing_set = set(still_missing)
-            for (data_json,) in conn.execute(
-                "SELECT results_json FROM screener_cache WHERE expires_at > ?", (now_iso,)
-            ).fetchall():
-                if not missing_set:
-                    break
-                try:
-                    items_list = json.loads(data_json)
-                    for item in items_list:
-                        sym = item.get("symbol", "")
-                        if sym in missing_set:
-                            result[sym] = {
-                                "name":     item.get("companyName") or sym,
-                                "sector":   item.get("sector"),
-                                "industry": item.get("industry"),
-                            }
-                            missing_set.discard(sym)
-                except Exception:
-                    pass
-            still_missing = list(missing_set)
-    finally:
-        conn.close()
+    # Try screener_cache items for still-missing tickers
+    if still_missing:
+        missing_set = set(still_missing)
+        for row in _db.query(
+            "SELECT results_json FROM screener_cache WHERE expires_at > ?", [now_iso]
+        ):
+            if not missing_set:
+                break
+            try:
+                items_list = json.loads(row["results_json"])
+                for item in items_list:
+                    sym = item.get("symbol", "")
+                    if sym in missing_set:
+                        result[sym] = {
+                            "name":     item.get("companyName") or sym,
+                            "sector":   item.get("sector"),
+                            "industry": item.get("industry"),
+                        }
+                        missing_set.discard(sym)
+            except Exception:
+                pass
+        still_missing = list(missing_set)
 
     # yfinance fallback for true cache misses (parallel, max 10 workers)
     def _fetch_one(ticker: str) -> tuple[str, dict]:
@@ -1919,18 +1902,13 @@ def get_company_names(tickers: list[str]) -> dict[str, dict]:
     newly_fetched = [t for t in tickers if t in result and t in (misses)]
     if newly_fetched:
         expires = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
-        conn2 = _connect()
-        try:
-            for ticker in newly_fetched:
-                d = result[ticker]
-                conn2.execute(
-                    "INSERT OR REPLACE INTO company_name_cache (ticker, name, sector, industry, expires_at) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (ticker, d.get("name") or ticker, d.get("sector"), d.get("industry"), expires),
-                )
-            conn2.commit()
-        finally:
-            conn2.close()
+        for ticker in newly_fetched:
+            d = result[ticker]
+            _upsert(
+                "company_name_cache", "ticker",
+                ["ticker", "name", "sector", "industry", "expires_at"],
+                [ticker, d.get("name") or ticker, d.get("sector"), d.get("industry"), expires],
+            )
 
     return result
 

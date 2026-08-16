@@ -197,28 +197,11 @@ def test_hundred_q_refresh_success(monkeypatch):
 
 # ── Phase 4 scheduled tasks ───────────────────────────────────────────────────
 
-class _FakeConn:
-    def __init__(self, cached_at):
-        self._cached_at = cached_at
-
-    def execute(self, sql):
-        conn = self
-
-        class _Row:
-            def fetchone(self):
-                return (conn._cached_at,) if conn._cached_at is not None else None
-
-        return _Row()
-
-    def close(self):
-        pass
-
-
 def _patch_screener(monkeypatch, cached_at):
     import app.backend.services.screener_service as ss
 
     monkeypatch.setattr(ss, "_ensure_tables", lambda: None)
-    monkeypatch.setattr(ss, "_connect", lambda: _FakeConn(cached_at))
+    monkeypatch.setattr(ss, "_get_master_universe_cached_at", lambda: cached_at)
 
 
 class _LockStubRedis:

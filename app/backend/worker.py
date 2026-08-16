@@ -378,19 +378,18 @@ async def run_vgpm_backfill_task(ctx: dict) -> dict:
     (Railway containers run UTC, matching the old in-web behaviour).
     """
     def _should_run() -> bool:
-        from app.backend.services.screener_service import _connect, _ensure_tables
+        from app.backend.services.screener_service import (
+            _ensure_tables, _get_master_universe_cached_at,
+        )
         try:
             _ensure_tables()
-            conn = _connect()
-            row = conn.execute(
-                "SELECT cached_at FROM master_universe LIMIT 1").fetchone()
-            conn.close()
+            cached_at = _get_master_universe_cached_at()
         except Exception:
             return True  # introspection failed — let the backfill itself decide
-        if not (row and row[0]):
+        if not cached_at:
             return True
         try:
-            last = datetime.fromisoformat(row[0])
+            last = datetime.fromisoformat(cached_at)
             if last.tzinfo is None:
                 last = last.replace(tzinfo=timezone.utc)
             slot = datetime.now(timezone.utc).replace(
