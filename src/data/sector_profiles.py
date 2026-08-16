@@ -2059,9 +2059,11 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "rationale": (
                 "BTC treasury companies (MSTR) are valued on mNAV — market cap vs the "
                 "mark-to-market value of BTC holdings plus the operating business. "
-                "NAV Discount is the implementable mNAV proxy (book × peer premium; note "
-                "GAAP book understates BTC carried at cost, so the peer pb multiple must "
-                "carry the premium). EV/EBITDA + DCF + EV/Revenue value the residual "
+                "NAV Discount is the implementable mNAV proxy: book value/share × the "
+                "live mNAV_multiple from the framework extractor (post ASU 2023-08 the "
+                "GAAP book carries BTC at fair value, so book × mNAV IS the market's "
+                "treasury valuation); with no live mNAV extracted it falls back to "
+                "book × peer P/B premium. EV/EBITDA + DCF + EV/Revenue value the residual "
                 "operating business. Earnings multiples excluded — net income is "
                 "dominated by BTC fair-value swings, not operations."
             ),

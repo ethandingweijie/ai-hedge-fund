@@ -2519,6 +2519,32 @@ def _compute_method_value(
             cr_mult *= 0.95
         return bvps * peer.get("pb", 1.5) * cr_mult * sm * growth_premium
 
+    # ── NAV Discount — live-mNAV anchor (BTC Treasury / Proxy) ─────────────
+    # Treasury-company value IS book × mNAV. When the framework extractor
+    # supplies a live mNAV_multiple (attached to most_recent via
+    # attach_overrides), anchor on it directly: the static peer P/B premium
+    # (~3.0) was calibrated for the pre-2025 premium era and — with BTC now
+    # carried at fair value on the balance sheet (ASU 2023-08) — manufactures
+    # an IV several times the market (MSTR 2026-08: $527 vs ~$93 spot).
+    # Scenario spread comes from sm (same pattern as Embedded Value);
+    # growth_premium is NOT re-applied — the market-observed mNAV already
+    # prices growth expectations, re-multiplying would double-count.
+    # Missing or grossly out-of-band mNAV falls through to the generic
+    # peer-P/B path below.
+    if method_name == "NAV Discount":
+        try:
+            _mnav = float(most_recent.get("mNAV_multiple"))
+        except (TypeError, ValueError):
+            _mnav = None
+        if _mnav and 0.1 <= _mnav <= 8.0:
+            mult = _mnav * sm
+            if bvps and bvps > 0:
+                return bvps * mult
+            # fallback basis: total_equity / shares (mirrors the generic path)
+            if total_equity and total_equity > 0 and shares > 0:
+                return (total_equity / shares) * mult
+        # no live mNAV → fall through to the peer-P/B path below
+
     if method_name in {"P/BV", "P/Rate Base", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
         mult = peer.get("pb", 2.0) * sm * growth_premium
@@ -4086,6 +4112,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 ticker_forward_flags.append(
                     f"Framework attach skipped ({type(_exc).__name__}: {str(_exc)[:80]})"
                 )
+
+        # Live-mNAV audit line — the NAV Discount branch of
+        # _compute_method_value consumes most_recent["mNAV_multiple"] when
+        # present. Appended pre-loop so it lands in the per-scenario
+        # forward_flags snapshot and is visible in the payload/PDF.
+        try:
+            _mnav_live = float(most_recent.get("mNAV_multiple"))
+        except (TypeError, ValueError):
+            _mnav_live = None
+        if _mnav_live and 0.1 <= _mnav_live <= 8.0:
+            ticker_forward_flags.append(
+                f"NAV Discount anchor: live mNAV {_mnav_live:.2f}× book "
+                f"(framework extractor; static peer P/B premium not used)"
+            )
 
         # ── WACC (hybrid: Damodaran sector base + live credit overlay) ───
         # The sector base WACC preserves all existing calibration (Damodaran

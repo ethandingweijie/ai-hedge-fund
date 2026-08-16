@@ -439,6 +439,78 @@ def test_dcf_fixture_profile(ticker, sector, profile, builder, seams):
     assert entry["calibration_note"]
 
 
+def test_nav_discount_consumes_live_mnav(seams):
+    """Forward gate (2026-08-16): NAV Discount anchors on the framework
+    extractor's live mNAV_multiple — book × mNAV × sm — instead of the
+    static peer P/B premium. The peer pb (~3.0) was calibrated for the
+    pre-2025 premium era; on a fair-value book (ASU 2023-08) it produced
+    MSTR IV $527 vs ~$93 spot. mNAV arrives on most_recent via
+    attach_overrides from state.data.framework_metrics."""
+    spec = _case_btc_treasury()
+    seams["rows"]["FIXTC2"] = spec["rows"]
+    seams["price"]["FIXTC2"] = spec["price"]
+    seams["mcap"]["FIXTC2"] = spec["mcap"]
+
+    state = _state(
+        "FIXTC2", "Crypto", "BTC Treasury / Proxy",
+        extra={"framework_metrics": {"FIXTC2": {"mNAV_multiple": 0.55}}},
+    )
+    out = run_dcf_agent(state)
+
+    entry = out["data"]["dcf_range"].get("FIXTC2")
+    assert entry, f"engine skipped FIXTC2: {out['data'].get('dcf_skip_reasons')}"
+    base = entry["base"]
+    assert "NAV Discount" in base["methods_used"]
+
+    # Exact anchor value: bvps 133.0 × mNAV 0.55 (× sm 1.0 base, no
+    # growth_premium re-application).
+    nav_iv = base["method_iv_table"]["NAV Discount"]
+    assert abs(nav_iv - 133.0 * 0.55) < 0.01, (
+        f"NAV Discount base IV {nav_iv} != book × mNAV = {133.0 * 0.55}"
+    )
+    # Scenario spread preserved via sm: bear 0.75× / bull 1.25×.
+    bear_iv = entry["bear"]["method_iv_table"]["NAV Discount"]
+    bull_iv = entry["bull"]["method_iv_table"]["NAV Discount"]
+    assert abs(bear_iv - 133.0 * 0.55 * 0.75) < 0.01
+    assert abs(bull_iv - 133.0 * 0.55 * 1.25) < 0.01
+    # Audit flag surfaced (pre-loop so it lands in scenario forward_flags).
+    assert any(f.startswith("NAV Discount anchor: live mNAV 0.55")
+               for f in base["forward_flags"]), (
+        f"live-mNAV audit flag missing: {base['forward_flags']}"
+    )
+
+
+def test_nav_discount_falls_back_without_mnav(seams):
+    """Backward gate: with no framework_metrics (extractor down / cached
+    legacy run) NAV Discount keeps the legacy peer-P/B path — bvps × peer
+    pb × growth_premium — and no live-mNAV flag is emitted. (The
+    parametrized FIXTC case covers the same path at blend level.)"""
+    spec = _case_btc_treasury()
+    seams["rows"]["FIXTC3"] = spec["rows"]
+    seams["price"]["FIXTC3"] = spec["price"]
+    seams["mcap"]["FIXTC3"] = spec["mcap"]
+
+    state = _state("FIXTC3", "Crypto", "BTC Treasury / Proxy")
+    out = run_dcf_agent(state)
+
+    entry = out["data"]["dcf_range"].get("FIXTC3")
+    assert entry, f"engine skipped FIXTC3: {out['data'].get('dcf_skip_reasons')}"
+    base = entry["base"]
+    assert "NAV Discount" in base["methods_used"]
+
+    peer_pb = dcf_agent.get_sector_peer_multiples(
+        "Crypto", is_hk=False, profile_name="BTC Treasury / Proxy"
+    ).get("pb", 2.0)
+    expected = 133.0 * peer_pb * base["growth_premium"]
+    nav_iv = base["method_iv_table"]["NAV Discount"]
+    assert abs(nav_iv - expected) / expected < 0.01, (
+        f"NAV Discount fallback IV {nav_iv} != book × peer pb × growth "
+        f"premium = {expected:.2f}"
+    )
+    assert not any(f.startswith("NAV Discount anchor")
+                   for f in base["forward_flags"])
+
+
 def test_rd_field_copied_into_series():
     """Regression for the D6 discovery: EV/R&D and the rNPV R&D-burn read
     most_recent['research_and_development'], so _extract_annual_series must
