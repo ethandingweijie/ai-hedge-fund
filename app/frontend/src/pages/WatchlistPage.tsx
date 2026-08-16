@@ -244,14 +244,14 @@ export function WatchlistPage() {
           </form>
           {addError && <p className="text-xs text-red-500 dark:text-red-400">{addError}</p>}
 
-          {/* Column headers — aligned over VGPM in cards */}
+          {/* Column headers — V/G/P/M letters once; row grades align beneath */}
           <div className="flex items-center px-3 mb-1">
             <div className="flex-1" />
             <div className="flex items-center gap-0">
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Valuation</span>
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Growth</span>
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Profit.</span>
-              <span className="w-[52px] text-center text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">Momentum</span>
+              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">V</span>
+              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">G</span>
+              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">P</span>
+              <span className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">M</span>
             </div>
           </div>
 
@@ -261,15 +261,15 @@ export function WatchlistPage() {
           ) : items.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Your watchlist is empty. Add a ticker above.</div>
           ) : (
-            <div className="space-y-2">
-              {items.map(item => {
+            <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
+              {items.map((item, i) => {
                 const price = livePrices[item.ticker] ?? item.price;
                 const pct = liveChangePcts[item.ticker] ?? item.change_pct;
                 return (
                   <SwipeableCard
                     key={item.ticker}
                     onClick={() => navigate(`/report/${item.ticker}`)}
-                    className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-left flex items-center shadow-sm cursor-pointer"
+                    className={`w-full bg-card px-3 py-4 text-left flex items-center cursor-pointer ${i > 0 ? 'border-t border-border/60' : ''}`}
                     actions={[
                       {
                         icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
@@ -305,10 +305,10 @@ export function WatchlistPage() {
                       )}
                     </div>
 
-                    {/* Right: V G P M — uses shared GradeChip to match HistoryPage / ScreenerPage */}
+                    {/* Right: V G P M — bare grades under the column header */}
                     <div className="flex items-center gap-0 ml-auto">
                       {VGPM_DIMS.map(dim => (
-                        <div key={dim} className="w-[52px] flex items-center justify-center">
+                        <div key={dim} className="w-9 flex items-center justify-center">
                           <GradeChip grade={item.vgpm?.[dim]?.grade} />
                         </div>
                       ))}

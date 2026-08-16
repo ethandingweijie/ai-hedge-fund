@@ -284,11 +284,16 @@ export function ScreenerPage() {
         </div>
 
         <div className="rounded-lg border border-border bg-card overflow-hidden shadow-sm">
-          {/* Header row */}
-          <div className="px-3 py-2 border-b border-border/60 bg-muted/50 grid grid-cols-12 items-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+          {/* Header row — gap-2 must match the body rows' grid so the
+              12-column tracks line up exactly under each row. */}
+          <div className="px-3 py-2 border-b border-border/60 bg-muted/50 grid grid-cols-12 items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
             <span className="col-span-5">Ticker · Sector</span>
             <span className="col-span-2 text-right">Score</span>
-            <span className="col-span-5 text-right pr-1">V · G · P · M</span>
+            <div className="col-span-5 flex justify-end">
+              {['V', 'G', 'P', 'M'].map(l => (
+                <span key={l} className="w-9 text-center">{l}</span>
+              ))}
+            </div>
           </div>
 
           {loading && !data ? (
@@ -318,7 +323,7 @@ export function ScreenerPage() {
                   },
                 ]}
               >
-                <div className="w-full text-left grid grid-cols-12 items-center gap-2 px-3 py-2.5 active:bg-muted/60 transition-colors">
+                <div className="w-full text-left grid grid-cols-12 items-center gap-2 px-3 py-4 active:bg-muted/60 transition-colors">
                   <div className="col-span-5 min-w-0">
                     <div className="text-[12.5px] font-semibold text-foreground tabular-nums truncate">{r.symbol}</div>
                     <div className="text-[11px] text-muted-foreground truncate">{r.companyName}</div>
@@ -345,11 +350,12 @@ export function ScreenerPage() {
                       />
                     </div>
                   </div>
-                  <div className="col-span-5 flex items-center justify-end gap-2">
-                    <GradeChip grade={r.vgpm?.valuation?.grade}     label="V"/>
-                    <GradeChip grade={r.vgpm?.growth?.grade}        label="G"/>
-                    <GradeChip grade={r.vgpm?.profitability?.grade} label="P"/>
-                    <GradeChip grade={r.vgpm?.momentum?.grade}      label="M"/>
+                  {/* Bare grades under the V/G/P/M column header */}
+                  <div className="col-span-5 flex items-center justify-end gap-0">
+                    <div className="w-9 flex justify-center"><GradeChip grade={r.vgpm?.valuation?.grade}/></div>
+                    <div className="w-9 flex justify-center"><GradeChip grade={r.vgpm?.growth?.grade}/></div>
+                    <div className="w-9 flex justify-center"><GradeChip grade={r.vgpm?.profitability?.grade}/></div>
+                    <div className="w-9 flex justify-center"><GradeChip grade={r.vgpm?.momentum?.grade}/></div>
                   </div>
                 </div>
               </SwipeRow>
