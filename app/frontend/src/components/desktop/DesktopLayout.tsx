@@ -48,11 +48,16 @@ export function DesktopLayout({ children }: { children: React.ReactNode }) {
       }}
     >
       <DesktopSidebar collapsed={collapsed} onToggleCollapse={toggleCollapse} />
-      {/* pb-24 keeps the tail of long pages clear of the floating dock. */}
-      <main className="flex-1 min-w-0 overflow-y-auto pb-24">
+      {/* pb-24 keeps the tail of long pages clear of the floating dock —
+          only needed while the dock is visible (sidebar collapsed). With the
+          sidebar expanded the dock is hidden, so pages keep a normal pb. */}
+      <main className={`flex-1 min-w-0 overflow-y-auto ${collapsed ? 'pb-24' : 'pb-6'}`}>
         {children}
       </main>
-      <FloatingNavBar />
+      {/* The dock duplicates the sidebar's destinations, so on desktop it
+          only appears when the sidebar is collapsed (e.g. iPad portrait).
+          With the full sidebar visible it would just cover content. */}
+      {collapsed && <FloatingNavBar />}
     </div>
   );
 }
