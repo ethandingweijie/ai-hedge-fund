@@ -18,7 +18,6 @@ import { IdeaOfTheDayPage } from './pages/IdeaOfTheDayPage';
 import { ShortlistedIdeasPage } from './pages/ShortlistedIdeasPage';
 import { PricingPage } from './pages/PricingPage';
 import { LoginPage } from './pages/LoginPage';
-import { DDAlertsPage } from './pages/DDAlertsPage';
 import { RoboStrategyPage } from './pages/RoboStrategyPage';
 import { MenuPage } from './pages/MenuPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
@@ -76,7 +75,6 @@ export default function App() {
           <Route path="/discuss" element={<RequireAuth><DiscussPage /></RequireAuth>} />
           <Route path="/discuss/:ticker" element={<RequireAuth><TickerChatPage /></RequireAuth>} />
           <Route path="/robo-strategy" element={<RequireAuth><RoboStrategyPage /></RequireAuth>} />
-          <Route path="/dd-alerts" element={<RequireAuth><DDAlertsPage /></RequireAuth>} />
           <Route path="/research-ideas" element={<RequireAuth><ResearchIdeasPage /></RequireAuth>} />
           <Route path="/research-ideas/sw46" element={<RequireAuth><SW46Page /></RequireAuth>} />
           <Route path="/research-ideas/hk50" element={<RequireAuth><HK50Page /></RequireAuth>} />

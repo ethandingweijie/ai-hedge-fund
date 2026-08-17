@@ -8,9 +8,9 @@ clients from env (card-QA judge, digest agent, FMP augmentation) silently
 make live paid calls — each hanging up to a 60 s timeout and burning tokens.
 
 Tests that need these vars set fake values themselves via
-``monkeypatch.setenv`` (see test_dd_agent.py, test_digest_agent.py), so
-stripping the real ones at session start is safe and keeps the suite
-hermetic and offline.
+``monkeypatch.setenv`` (e.g. the dual-mode suites point RUN_ARCHIVE_PATH at a
+tmp file), so stripping the real ones at session start is safe and keeps the
+suite hermetic and offline.
 """
 from __future__ import annotations
 

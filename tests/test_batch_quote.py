@@ -1,15 +1,11 @@
-"""Tests for src/agents/dd/batch_quote.py — FMP /stable/quote bulk wrapper."""
+"""Tests for src/research_ideas/alerts/batch_quote.py — FMP /stable/quote bulk wrapper."""
 from __future__ import annotations
 
 from unittest.mock import patch
 
 import pytest
 
-from src.agents.dd.batch_quote import (
-    BatchQuote,
-    detect_breaches,
-    fetch_batch_quotes,
-)
+from src.research_ideas.alerts.batch_quote import fetch_batch_quotes
 
 
 # ── fetch_batch_quotes ──────────────────────────────────────────────────────
@@ -190,58 +186,3 @@ def test_fetch_falls_back_to_per_ticker_when_batch_returns_empty():
     assert len(per_ticker_calls) == 2
     # Both tickers should have data despite bulk-empty
     assert set(out.keys()) == {"AAPL", "MSFT"}
-
-
-# ── detect_breaches ─────────────────────────────────────────────────────────
-
-
-def _q(ticker: str, pct: float, price: float = 100.0) -> BatchQuote:
-    return BatchQuote(ticker=ticker, price=price, changes_percentage=pct, raw={})
-
-
-def test_detect_breaches_at_threshold():
-    """exactly ±10% qualifies."""
-    quotes = {
-        "AAPL": _q("AAPL", -0.10),
-        "MSFT": _q("MSFT", 0.10),
-        "BORD": _q("BORD", -0.099),     # 9.9% — under
-    }
-    breaches = detect_breaches(quotes, threshold_pct=0.10)
-    tickers = [b.ticker for b in breaches]
-    assert "AAPL" in tickers
-    assert "MSFT" in tickers
-    assert "BORD" not in tickers
-
-
-def test_detect_breaches_bidirectional():
-    """Both DROPS and PUMPS surface."""
-    quotes = {
-        "DROP1": _q("DROP1", -0.15),
-        "PUMP1": _q("PUMP1",  0.12),
-        "FLAT1": _q("FLAT1",  0.05),
-    }
-    breaches = detect_breaches(quotes, threshold_pct=0.10)
-    assert len(breaches) == 2
-
-
-def test_detect_breaches_sorted_by_abs_magnitude():
-    """Largest moves first, regardless of sign."""
-    quotes = {
-        "MED": _q("MED", -0.12),
-        "BIG": _q("BIG",  0.25),
-        "SML": _q("SML", -0.11),
-    }
-    breaches = detect_breaches(quotes, threshold_pct=0.10)
-    assert [b.ticker for b in breaches] == ["BIG", "MED", "SML"]
-
-
-def test_detect_breaches_empty_when_nothing_qualifies():
-    quotes = {"X": _q("X", 0.05), "Y": _q("Y", -0.04)}
-    assert detect_breaches(quotes, threshold_pct=0.10) == []
-
-
-def test_detect_breaches_custom_threshold():
-    """Caller can pass a different threshold (e.g. 5% for tier1_held)."""
-    quotes = {"A": _q("A", -0.07), "B": _q("B", 0.04)}
-    breaches = detect_breaches(quotes, threshold_pct=0.05)
-    assert {b.ticker for b in breaches} == {"A"}

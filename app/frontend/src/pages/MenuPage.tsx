@@ -17,7 +17,7 @@
  */
 import { useEffect, useState } from 'react';
 import {
-  ChevronLeft, Plus, BarChart2, MessageSquare, BellRing, Zap, LogOut,
+  ChevronLeft, Plus, BarChart2, MessageSquare, Zap, LogOut,
   Sun, Moon, Monitor, User, type LucideIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -160,7 +160,6 @@ export function MenuPage() {
           <SectionLabel>Explore</SectionLabel>
           <Card>
             <Row icon={MessageSquare} label="Discuss" onClick={() => handleNav(byPath('/discuss'))} />
-            <Row icon={BellRing} label="Auto Due-D" onClick={() => handleNav(byPath('/dd-alerts'))} />
             <Row icon={Zap} label="Pricing" onClick={() => navigate('/pricing')} />
           </Card>
         </section>

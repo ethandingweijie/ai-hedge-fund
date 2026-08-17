@@ -18,7 +18,7 @@ Accepted credentials
    /auth/apple. Resolved to a User and attached to ``request.state.user``.
 2. The shared admin secret (``DB_UPLOAD_SECRET``), as ``X-Admin-Secret`` header
    or ``?secret=`` query param — for service-to-service callers with no user
-   session, e.g. the dd-dispatcher cron service. Never accepted when the env
+   session. Never accepted when the env
    var is unset, so a missing secret cannot degrade into "anything passes".
 
 Escape hatch
@@ -61,7 +61,7 @@ PUBLIC_PATHS: frozenset[str] = frozenset({
 
 # Prefix matches. /admin/* is exempt because each of those routes performs its
 # own DB_UPLOAD_SECRET check and fails closed when the env var is unset — see
-# admin.py, db_upload.py, power_law_migrate.py, dd_alerts.py.
+# admin.py, db_upload.py, power_law_migrate.py.
 PUBLIC_PREFIXES: tuple[str, ...] = (
     "/admin/",
 )
@@ -158,5 +158,5 @@ def verify_startup_config() -> None:
     if not os.environ.get("DB_UPLOAD_SECRET"):
         logger.warning(
             "DB_UPLOAD_SECRET is unset — /admin/* routes and service-to-service "
-            "calls (dd-dispatcher) will be rejected."
+            "calls will be rejected."
         )

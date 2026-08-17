@@ -1,5 +1,5 @@
 """
-batch_quote.py — FMP /stable/quote bulk wrapper for the DD cron dispatcher.
+batch_quote.py — FMP /stable/quote bulk wrapper.
 
 FMP's /stable/quote endpoint accepts comma-separated symbols. With proper
 batching (100 tickers per request) we can quote a 600-ticker universe with
@@ -8,18 +8,17 @@ batching (100 tickers per request) we can quote a 600-ticker universe with
 Public surface:
   fetch_batch_quotes(tickers) → dict[ticker, BatchQuote]
 
-Each BatchQuote captures the fields the dispatcher needs to detect breaches:
+Each BatchQuote captures:
   - price            (current/last)
   - changes_percentage  (signed pct as DECIMAL, e.g. -0.115 for -11.5%)
                      ── note: FMP returns this as a percent value (e.g. -11.5),
-                              we normalize to decimal for downstream consistency
-                              with alert_dedup which expects -0.115.
+                              we normalize to decimal for downstream consistency.
 
 Failure modes:
-  - FMP down / 401 / 402 → returns {} (dispatcher logs + skips this tick)
+  - FMP down / 401 / 402 → returns {} (caller logs + skips this tick)
   - Partial response (some tickers missing from FMP's reply) → returned dict
     only contains tickers FMP knew about; missing ones treated as "no data"
-    by dispatcher (no alert fires, no false positive)
+    by the caller (no alert fires, no false positive)
 """
 
 from __future__ import annotations
@@ -39,11 +38,10 @@ _MAX_BATCH_SIZE = 100
 
 @dataclass(frozen=True)
 class BatchQuote:
-    """One ticker's quote, normalized for the DD dispatcher.
+    """One ticker's quote, normalized.
 
     `changes_percentage` is in DECIMAL form (e.g. -0.115 = -11.5%), NOT the
-    raw FMP percent. This matches alert_dedup.check_alert_eligibility's
-    `current_pct` argument and the EXTREME_PCT_THRESHOLD = 0.10 constant.
+    raw FMP percent.
     """
     ticker: str
     price:  float
@@ -105,26 +103,6 @@ def fetch_batch_quotes(tickers: Iterable[str]) -> dict[str, BatchQuote]:
         len(syms), len(out), len(syms) - len(out),
     )
     return out
-
-
-def detect_breaches(
-    quotes: dict[str, BatchQuote],
-    *,
-    threshold_pct: float = 0.10,
-) -> list[BatchQuote]:
-    """Filter quotes → list of breaches (|changes_percentage| >= threshold).
-
-    Args:
-      quotes:        result of fetch_batch_quotes()
-      threshold_pct: decimal trigger threshold (e.g. 0.10 = ±10%)
-
-    Returns:
-      List of BatchQuotes ordered by absolute pct DESC (largest moves first).
-      Bidirectional: includes both DROPS (negative) and PUMPS (positive).
-    """
-    breaches = [q for q in quotes.values() if abs(q.changes_percentage) >= threshold_pct]
-    breaches.sort(key=lambda q: abs(q.changes_percentage), reverse=True)
-    return breaches
 
 
 # ── Internals ───────────────────────────────────────────────────────────────

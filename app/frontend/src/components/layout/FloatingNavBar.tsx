@@ -4,8 +4,7 @@
  * Common floating bottom bar, rendered on every authenticated screen in both
  * shells (mounted by MobileLayout / DesktopLayout). Replaces the old
  * home-page squircle grid: the five primary destinations are always one tap
- * away instead of only on the main page. Auto Due-D stays in the
- * sidebar/drawer nav.
+ * away instead of only on the main page.
  *
  *   • mobile mode  — full-width floating pill aligned to the 430px phone frame
  *   • desktop mode — compact centred dock

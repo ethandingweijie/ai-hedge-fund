@@ -14,7 +14,6 @@ from app.backend.routes.auth import router as auth_router
 from app.backend.routes.db_upload import router as db_upload_router
 from app.backend.routes.admin import router as admin_router
 from app.backend.routes.power_law_migrate import router as power_law_migrate_router
-from app.backend.routes.dd_alerts import router as dd_alerts_router
 from app.backend.routes.research import router as research_router
 from app.backend.routes.robo_strategy import router as robo_strategy_router
 from app.backend.routes.chat import router as chat_router
@@ -37,7 +36,6 @@ api_router.include_router(auth_router, tags=["auth"])
 api_router.include_router(db_upload_router, tags=["admin"])
 api_router.include_router(admin_router, tags=["admin"])
 api_router.include_router(power_law_migrate_router, tags=["admin"])
-api_router.include_router(dd_alerts_router, tags=["dd-alerts"])
 api_router.include_router(research_router, prefix="/research", tags=["research"])
 api_router.include_router(robo_strategy_router, prefix="/robo-strategy", tags=["robo-strategy"])
 api_router.include_router(chat_router, tags=["chat"])

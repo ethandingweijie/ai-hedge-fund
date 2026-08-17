@@ -187,7 +187,7 @@ def run_iv15_sweep(*, dry_run: bool = False) -> SweepResult:
     testing. dry_run=False persists the hysteresis state and posts a single
     consolidated Slack message for the names that newly crossed below IV15.
     """
-    from src.agents.dd.batch_quote import fetch_batch_quotes
+    from src.research_ideas.alerts.batch_quote import fetch_batch_quotes
 
     result = SweepResult()
 

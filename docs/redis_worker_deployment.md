@@ -150,8 +150,6 @@ behind Railway's load balancer with no sticky sessions required.
   Redis-backed. Degraded single-replica semantics are acceptable.
 - `routes/research.py` `_BACKGROUND_TASKS` + heartbeat threads —
   fallback path only; job state lives in Postgres (`job_store`).
-- `routes/dd_alerts.py` agent threads — request-scoped; results persist
-  to Postgres via `_upsert_dd_report`/`alert_dedup`.
 - `routes/hedge_fund.py` backtest SSE — request-scoped stream.
 - `sqlite_migration` `_busy` flag — one-shot admin op, already run.
 

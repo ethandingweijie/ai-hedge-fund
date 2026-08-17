@@ -2,7 +2,7 @@
  * TabHero.tsx
  * ===========
  * Grab-style sticky page hero for the main tabs (Screener, Watchlist,
- * Research Ideas, Auto Due-D, History), shared by mobile and desktop.
+ * Research Ideas, History), shared by mobile and desktop.
  *
  * Behaviour modelled on Grab's Finance header (reference screenshots):
  *   - At rest: a tall deep-green band with a large bold light title

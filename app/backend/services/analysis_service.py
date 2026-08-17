@@ -103,7 +103,7 @@ def _connect(path: str | None = None, **kwargs) -> sqlite3.Connection:
     """Open run_archive.db with WAL mode, NORMAL sync, and a 5-second busy timeout.
 
     SQLite path only. Kept importable for modules that still read their own
-    SQLite tables through this connection factory (e.g. routes/dd_alerts.py).
+    SQLite tables through this connection factory.
     Production Postgres traffic goes through src.data.db — see _fetch/_exec.
     """
     conn = sqlite3.connect(path or _get_db_path(), **kwargs)
@@ -1095,11 +1095,9 @@ def get_history(
         # field extraction for legacy rows where is_checkpoint is NULL.
         f"(w.is_checkpoint = 0 OR (w.is_checkpoint IS NULL AND "
         f"{_json_field('checkpoint', col='w.full_result_json')} IS NULL))",
-        # Phase 2B: belt-and-suspenders DD exclusion. New DD reports go
-        # to the dedicated dd_reports table (NOT web_runs), so this
-        # filter is technically a no-op for fresh installs. It still
-        # catches any stragglers from the pre-Phase-2B architecture
-        # that haven't been purged yet via /admin/dd-purge-legacy-web-runs.
+        # Historical DD exclusion: the auto-DD feature was removed on
+        # 2026-08-17, but legacy DD-triggered rows remain in web_runs.
+        # This filter keeps them out of the user-facing report list.
         "(w.model_name IS NULL OR "
         "(w.model_name NOT LIKE ? AND w.model_name != 'synthetic-dd-trigger'))",
     ]
