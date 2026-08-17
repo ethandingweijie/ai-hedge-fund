@@ -239,6 +239,31 @@ function mapGeographyWeights(raw: Record<string, number>): Record<string, number
   };
 }
 
+/** Scale a weight map to non-negative integers summing to exactly 100
+ * (largest-remainder method; zero entries stay zero). Mirrors the
+ * prototype's normalizeWeights() — some ported templates don't sum to 100
+ * (Boglehead's raw sector weights sum to 96), and the Generate button
+ * stays disabled unless both weight sets total exactly 100. */
+function normalizeTo100(weights: Record<string, number>): Record<string, number> {
+  const entries = Object.entries(weights);
+  const total = entries.reduce((sum, [, v]) => sum + Math.max(v, 0), 0);
+  if (entries.length === 0 || total <= 0) return weights;
+  const scaled = entries.map(([key, v]) => {
+    const exact = (Math.max(v, 0) / total) * 100;
+    return { key, value: Math.floor(exact), frac: exact - Math.floor(exact) };
+  });
+  let remainder = 100 - scaled.reduce((sum, e) => sum + e.value, 0);
+  const byLargestFrac = scaled
+    .map((_, i) => i)
+    .sort((a, b) => scaled[b].frac - scaled[a].frac);
+  for (const i of byLargestFrac) {
+    if (remainder <= 0) break;
+    scaled[i].value += 1;
+    remainder -= 1;
+  }
+  return Object.fromEntries(scaled.map((e) => [e.key, e.value]));
+}
+
 /** Selecting a template pre-fills the questionnaire with its prescribed
  * allocation, mapped onto canonical taxonomy and re-normalized to sum to
  * exactly 100 (mirrors the prototype's own normalize-on-select behaviour) —
@@ -250,8 +275,8 @@ export function templateToQuestionnaire(
   return {
     risk_tolerance: template.riskLevel,
     time_horizon: template.timeHorizon as RoboTimeHorizon,
-    sector_preferences: mapSectorWeights(template.sectorWeights),
-    geography_preferences: mapGeographyWeights(template.geographyWeights),
+    sector_preferences: normalizeTo100(mapSectorWeights(template.sectorWeights)),
+    geography_preferences: normalizeTo100(mapGeographyWeights(template.geographyWeights)),
     investment_amount: investmentAmount || 10000,
   };
 }
