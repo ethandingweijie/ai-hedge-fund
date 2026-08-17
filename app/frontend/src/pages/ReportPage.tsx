@@ -243,7 +243,10 @@ export function ReportPage() {
   } = useActiveRun();
 
   // ── Form state ───────────────────────────────────────────────────────────────
-  const [ticker, setTicker]           = useState(activeRun?.ticker ?? '');
+  // Fresh "New Analysis" requests start with an empty ticker — inheriting the
+  // ongoing run's ticker would pre-fill (and visually tie) the new-analysis
+  // form to the run that is still in flight.
+  const [ticker, setTicker]           = useState(isFreshRequest ? '' : (activeRun?.ticker ?? ''));
   const [model]                       = useState('qwen3.6-plus');
   const [profileIdx, setProfileIdx]   = useState(1); // default: Deep Value (skip Full Committee)
   const [customAgents]                = useState<string[]>([]);
@@ -262,9 +265,19 @@ export function ReportPage() {
   const heroVideoRef                       = useRef<HTMLVideoElement>(null);
   const heroVideoDarkRef                   = useRef<HTMLVideoElement>(null);
 
+  // ── Fresh-landing hold (task #18) ───────────────────────────────────────────
+  // True while the user has explicitly opened "New Analysis". Bookkeeping
+  // effects (notably the liveMode sync below) must NOT snap the view back to
+  // the ongoing run while this is set — the background run keeps running in
+  // ActiveRunContext; the user just wants the landing form. Cleared when the
+  // user takes an action that intentionally returns to a live view (submits
+  // the form, clicks Current Analysis / a History row, etc.).
+  const freshHoldRef = useRef(false);
+
   // ── Fresh ticker: clear everything and show landing page ────────────────────
   // Must run before liveMode init so state is clean on first render.
   if (isFreshRequest) {
+    freshHoldRef.current = true;
     // Synchronously clear sessionStorage so auto-reconnect won't fire
     try {
       sessionStorage.removeItem('activeRun');
@@ -307,6 +320,7 @@ export function ReportPage() {
   useEffect(() => {
     const s = location.state as { fresh?: boolean; resume?: boolean; switchTicker?: string } | null;
     if (s?.fresh) {
+      freshHoldRef.current = true;  // keep bookkeeping effects off the live view
       setLiveMode(false);
       setTicker('');
       window.history.replaceState({}, '');
@@ -314,6 +328,7 @@ export function ReportPage() {
       // User clicked a specific ongoing ticker in History — switch view to it.
       // Do NOT call start() — pipeline is already running on the server.
       // Poll for progress instead of triggering a duplicate run.
+      freshHoldRef.current = false; // explicit live-view intent
       const switchTo = s.switchTicker.toUpperCase();
       setTicker(switchTo);
       setLiveMode(true);
@@ -321,7 +336,11 @@ export function ReportPage() {
       poll(switchTo);  // polls /analysis/status for progress, no new POST
       window.history.replaceState({}, '');
     } else if (s?.resume && state !== 'idle') {
+      freshHoldRef.current = false; // explicit live-view intent
       setLiveMode(true);
+      // A fresh landing cleared the ticker input; restore focus to the
+      // ongoing run's ticker so the live view (and live-price fetch) work.
+      setTicker(prev => prev || (activeRun?.ticker ?? ''));
       window.history.replaceState({}, '');
     }
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -441,6 +460,10 @@ export function ReportPage() {
 
   // ── Sync liveMode when stream completes (e.g. user navigated back after done) ─
   useEffect(() => {
+    // Fresh-landing hold: the user explicitly opened "New Analysis" — an
+    // ongoing background run must not yank them back into the live view.
+    // They can still reach it via "Current Analysis" or History.
+    if (freshHoldRef.current) return;
     if (isComplete || state === 'running') setLiveMode(true);
   }, [isComplete, state]);
 
@@ -482,6 +505,7 @@ export function ReportPage() {
     requestNotificationPermission();  // iOS requires user gesture for permission prompt
     start(t, model, agentsToSend);  // resetStream() is called inside startStream; clears liveResult too
     markRunStarted(t);
+    freshHoldRef.current = false;  // user launched their own run — follow it live
     setLiveMode(true);
     setLivePrice(null);
   };
@@ -506,6 +530,7 @@ export function ReportPage() {
     runStartedAt.current = new Date().toISOString();
     start(t, model, agentsToSend);
     markRunStarted(t);
+    freshHoldRef.current = false;  // screener analyse intent — follow the new run live
     setLiveMode(true);
     setLivePrice(null);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -521,6 +546,7 @@ export function ReportPage() {
     runStartedAt.current = new Date().toISOString();
     start(t, model, agentsToSend);
     markRunStarted(t);
+    freshHoldRef.current = false;  // watchlist analyse intent — follow the new run live
     setLiveMode(true);
     setLivePrice(null);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
