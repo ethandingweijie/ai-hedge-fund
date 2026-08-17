@@ -203,6 +203,7 @@ RESEARCH_KINDS = {
     "refresh",
     "score_adhoc",
     "hundred_q_refresh",
+    "qual_sweep",
 }
 
 
@@ -239,6 +240,8 @@ async def run_research_job_task(
             job_id, int(params.get("max_workers", 3))),
         "score_adhoc": lambda: R._execute_score_job(
             job_id, params["ticker"], bool(params.get("force_qual", False))),
+        "qual_sweep": lambda: R._execute_qual_sweep_job(
+            job_id, bool(params.get("force", False))),
     }
     fn = runners.get(kind)
     if fn is None:

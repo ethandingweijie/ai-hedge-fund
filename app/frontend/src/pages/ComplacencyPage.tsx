@@ -15,10 +15,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   getComplacencyCohort, refreshComplacency, scoreComplacencyTickerAdhoc,
+  sweepComplacency,
   type ComplacencyCohort, type ComplacencyTickerResult, type ComplacencyVerdict,
   type QualitativeAssessment, type QualConvictionLabel,
 } from '@/lib/api';
-import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, Plus } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, Plus, Radar } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
 
@@ -128,6 +129,9 @@ export function ComplacencyPage() {
   // Ad-hoc scored tickers — appended to the displayed table but NOT persisted.
   const [adhoc, setAdhoc] = useState<ComplacencyTickerResult[]>([]);
   const [scoringAdhoc, setScoringAdhoc] = useState(false);
+  // On-demand full-table qualitative sweep (Q2) — longer-running than a
+  // refresh (30-60 min worst case) but cache-first and resumable.
+  const [sweeping, setSweeping] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -278,6 +282,104 @@ export function ComplacencyPage() {
     }
   };
 
+  // On-demand qualitative sweep of the FULL universe (gate-passers first).
+  // Cache-first: tickers whose 10 indicators are all fresh + high-conf are
+  // skipped server-side. Scored tickers are patched into the cohort
+  // immediately by the backend, so we reload the table on heartbeats just
+  // like Phase 2 of a refresh.
+  const handleSweep = async () => {
+    setSweeping(true);
+
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        if (Notification.permission === 'default') {
+          await Notification.requestPermission();
+        }
+      } catch {
+        // ignore — permission can be denied or unavailable
+      }
+    }
+
+    const toastId = toast.loading(
+      'Qualitative sweep starting — full table, gate-passers first. Can take 30-60 mins.',
+      {
+        duration: Infinity,
+        style: {
+          fontSize: '15px',
+          padding: '16px 20px',
+          fontWeight: 500,
+        },
+      },
+    );
+
+    // Debounced cohort reload so rows light up as each ticker is scored.
+    let lastReload = 0;
+    const reloadCohortDebounced = async () => {
+      const now = Date.now();
+      if (now - lastReload < 5000) return;  // 5s debounce
+      lastReload = now;
+      try { await load(); } catch { /* swallow — toast still shows */ }
+    };
+
+    try {
+      const sweepResult = await sweepComplacency({
+        onProgress: (s) => {
+          if (s.progress_msg) {
+            toast.loading(
+              `Sweep · ${s.progress_msg}`,
+              {
+                id: toastId,
+                duration: Infinity,
+                style: { fontSize: '15px', padding: '16px 20px', fontWeight: 500 },
+              },
+            );
+          }
+          if (s.progress_msg?.includes('sweep ')) {
+            void reloadCohortDebounced();
+          }
+        },
+      });
+      await load();
+      toast.dismiss(toastId);
+
+      const failedN = sweepResult.failed?.length ?? 0;
+      const completionMsg =
+        `Qualitative sweep complete · ${sweepResult.scored} scored, `
+        + `${sweepResult.fresh_skipped} fresh-skipped`
+        + (failedN > 0 ? `, ${failedN} failed` : '')
+        + ` (of ${sweepResult.universe} tickers).`;
+
+      toast.success(completionMsg, {
+        duration: 14000,
+        style: { fontSize: '14px', padding: '16px 20px', fontWeight: 500 },
+      });
+      // Push notification — fires even if the user has switched away.
+      if (
+        typeof window !== 'undefined'
+        && 'Notification' in window
+        && Notification.permission === 'granted'
+      ) {
+        try {
+          new Notification('Complacency Detector', {
+            body: completionMsg,
+            icon: '/favicon.ico',
+            tag: 'complacency-sweep',
+          });
+        } catch {
+          // ignore — some browsers throw if not in a secure context
+        }
+      }
+    } catch (e) {
+      toast.dismiss(toastId);
+      toast.error((e as Error).message, {
+        duration: 10000,
+        style: { fontSize: '15px', padding: '16px 20px' },
+      });
+    } finally {
+      setSweeping(false);
+    }
+  };
+
   // Merge cohort results with ad-hoc scored tickers; ad-hoc overrides cohort
   // for the same ticker (so re-scoring a cohort name in the search bar shows
   // the fresh values).
@@ -380,7 +482,16 @@ export function ComplacencyPage() {
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Last run</span>
             <span className="text-xs text-foreground">{formatRunTime(cohort?.created_at ?? null)}</span>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleSweep}
+              disabled={sweeping || refreshing}
+              title="On-demand qualitative deep-research over the full table (gate-passers first). Cache-first: fresh + high-confidence indicators are skipped."
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card text-foreground text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              {sweeping ? <Loader2 size={14} className="animate-spin" /> : <Radar size={14} />}
+              {sweeping ? 'Sweeping…' : 'Qualitative sweep'}
+            </button>
             <button
               onClick={handleRefresh}
               disabled={refreshing}

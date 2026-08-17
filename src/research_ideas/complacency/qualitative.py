@@ -25,11 +25,16 @@ from __future__ import annotations
 import json
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from concurrent.futures import (
+    FIRST_COMPLETED,
+    ThreadPoolExecutor,
+    wait as _fut_wait,
+)
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.llm.models import ModelProvider, get_model
 from src.tools.api import _fmp_get, _safe_float, _STABLE
@@ -74,6 +79,16 @@ QUAL_MODEL_NAME = os.environ.get("COMPLACENCY_QUAL_MODEL", "qwen3.6-plus")
 QUAL_MODEL_PROVIDER = ModelProvider.ALIBABA
 QUAL_TEMPERATURE = 0.2   # low — we want consistent, conservative scoring
 QUAL_CACHE_TTL_DAYS = 7
+
+# Scoring mode (Workstream Q1):
+#   bundled       — ONE shared evidence pass + ONE structured LLM call
+#                   scores all indicators for the ticker (~6-15 min →
+#                   ~1-3 min per ticker). Missing/invalid indicators in
+#                   the bundle output fall back to the per-indicator path,
+#                   so a partial bundle never regresses coverage.
+#   per_indicator — legacy: one evidence gather + one LLM call per
+#                   indicator (10 calls). Kept intact for rollback.
+QUAL_MODE = os.environ.get("COMPLACENCY_QUAL_MODE", "bundled").lower()
 
 
 # ─── Pydantic output model for LLM ────────────────────────────────────────
@@ -128,6 +143,80 @@ class _LLMIndicatorOutput(BaseModel):
     evidence: list[_LLMEvidence] = Field(
         default_factory=list,
         description="Step 2: Verbatim source quotes backing the extracted_facts. Required unless score=0."
+    )
+
+
+class _LLMBundledIndicator(BaseModel):
+    """One indicator's entry inside the bundled multi-indicator output.
+
+    Same chain-of-thought scaffold as _LLMIndicatorOutput — the rubrics,
+    strict rules, and confidence policy are identical; only the transport
+    changes (N indicators in one response instead of N calls).
+    """
+    indicator: str = Field(
+        description="Exact indicator code being scored, e.g. 'A1_single_thesis_dependence'."
+    )
+    extracted_facts: list[_LLMExtractedFact] = Field(
+        default_factory=list,
+        description=(
+            "Step 1: 3-5 facts from the evidence relevant to THIS indicator, "
+            "each tagged with the rubric anchor it supports and source tier. "
+            "No extractable facts → score 0 with confidence < 0.4."
+        ),
+    )
+    evidence: list[_LLMEvidence] = Field(
+        default_factory=list,
+        description="Step 2: Verbatim source quotes backing the extracted_facts. Required unless score=0."
+    )
+    score: int = Field(ge=0, le=5, description="Step 3: Final score 0-5 per this indicator's rubric.")
+    confidence: float = Field(
+        ge=0.0, le=1.0,
+        description=(
+            "Step 4: 0=no confidence, 1=certain. Cap at 0.50 if all facts are "
+            "Tier-3. Use < 0.4 if extracted_facts is empty."
+        ),
+    )
+    summary: str = Field(description="Step 5: One-line takeaway, ≤ 200 chars")
+
+    @field_validator("extracted_facts", mode="before")
+    @classmethod
+    def _coerce_extracted_facts(cls, v):
+        # LIVE FINDING (CRWD, 2026-08-16): qwen3.6-plus occasionally emits
+        # facts as plain strings ("fact: ...", "source_tier: 1") instead of
+        # {fact, rubric_anchor, source_tier} objects. Under strict parsing,
+        # ONE such entry failed the WHOLE 10-indicator bundle parse and
+        # forced a full per-indicator fallback. The scaffold is a CoT
+        # artifact — never persisted or consumed downstream — so coerce
+        # junk entries instead of rejecting the batch.
+        if not isinstance(v, list):
+            return []
+        out = []
+        for item in v:
+            if isinstance(item, str):
+                out.append({"fact": item[:300], "rubric_anchor": "",
+                            "source_tier": 3})
+            elif isinstance(item, dict):
+                entry = dict(item)
+                entry["fact"] = str(entry.get("fact") or "")[:300]
+                entry.setdefault("rubric_anchor", "")
+                try:
+                    tier = int(entry.get("source_tier", 3))
+                except (TypeError, ValueError):
+                    tier = 3
+                entry["source_tier"] = max(1, min(3, tier))
+                out.append(entry)
+            # other junk types: silently dropped
+        return out
+
+
+class _LLMBundledOutput(BaseModel):
+    """JSON-mode output for the bundled scoring call: all indicators at once."""
+    indicators: list[_LLMBundledIndicator] = Field(
+        description=(
+            "One entry per indicator listed in the request — NEVER omit one. "
+            "If there is no evidence for an indicator, include it with score=0 "
+            "and confidence < 0.4."
+        ),
     )
 
 
@@ -434,6 +523,183 @@ def _call_qwen_indicator(
     return result, cost
 
 
+# Bundle output budget. LIVE FINDINGS (2026-08-16 gate runs):
+# ARM run: qwen3.6-plus is a REASONING model — the first bundle attempt
+# burned 7,104 hidden reasoning tokens out of an 8k budget and truncated
+# the JSON mid-object. Defenses: enable_thinking=False (the chain-of-thought
+# is already enforced IN the output schema via extracted_facts) + 16k token
+# headroom so even if the flag is ignored the JSON still fits.
+# AMD run: get_model's Alibaba client carries max_retries=3 — a timed-out
+# bundle attempt retried up to 3x INSIDE one invoke hid ~9 minutes of
+# latency. openai>=1.x create() does not accept max_retries as a
+# per-request override, so _call_qwen_bundled rebuilds its own client with
+# max_retries=0 instead of binding: fail fast through the layers
+# (structured → raw retry → per-indicator ratchet), never stall.
+# A clean bundle generation measures 2.5-4.5 min for 10 indicators, so the
+# timeout gives headroom without letting one hung call eat the sweep.
+_BUNDLE_MAX_TOKENS = 16000
+_BUNDLE_TIMEOUT_S = 480
+_BUNDLE_EXTRA_BODY = {"enable_thinking": False}
+
+# LIVE FINDING (MRVL, 2026-08-16): even fanned out, ONE pathological
+# primitive (a huge 10-K/DEF-14A full-text download — requests' read
+# timeout only fires BETWEEN bytes, so a slow steady stream never trips
+# it) held the gather for 732.5s. Gather is best-effort by design, so it
+# gets an overall wall deadline: anything not done in time is dropped from
+# THIS bundle (its thread keeps running and still writes its cache for the
+# next run). 150s clears every normal gather (SNOW 9.1s / PANW 11.9s /
+# NET 26.2s) with wide margin.
+_GATHER_DEADLINE_S = 150.0
+
+
+def _salvage_bundle_output(text: str) -> Optional[_LLMBundledOutput]:
+    """Parse bundle JSON tolerantly: strict first, then per-indicator salvage.
+
+    One malformed indicator entry must never discard the other nine —
+    _score_indicators_bundled ratchets any missing code back to the
+    per-indicator path, so partial salvage is always strictly better than
+    returning None (which re-scores ALL indicators individually).
+    """
+    if not text:
+        return None
+    start = text.find("{")
+    end = text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        blob = json.loads(text[start : end + 1])
+    except Exception:
+        return None
+    try:
+        return _LLMBundledOutput(**blob)
+    except Exception:
+        pass
+    entries = blob.get("indicators") if isinstance(blob, dict) else None
+    if not isinstance(entries, list):
+        return None
+    kept = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            kept.append(_LLMBundledIndicator(**entry))
+        except Exception as exc:
+            logger.warning(
+                "Bundle salvage: dropped indicator %r (%s)",
+                entry.get("indicator"), exc,
+            )
+    if not kept:
+        return None
+    return _LLMBundledOutput(indicators=kept)
+
+
+def _call_qwen_bundled(
+    system_prompt: str,
+    user_prompt: str,
+) -> tuple[Optional[_LLMBundledOutput], float]:
+    """
+    One Qwen call that scores ALL requested indicators against one shared
+    evidence library (Workstream Q1). Returns (parsed_output, cost_usd).
+
+    Same client/throttle/retry plumbing as _call_qwen_indicator; only the
+    output schema (multi-indicator) and the output/timeout budget differ.
+    """
+    api_keys = None  # let get_model resolve from env (DEEP_RESEARCH_API_KEY)
+    llm = get_model(QUAL_MODEL_NAME, QUAL_MODEL_PROVIDER, api_keys)
+    if llm is None:
+        logger.warning(
+            "Qwen LLM unavailable (DEEP_RESEARCH_API_KEY missing?). "
+            "Qualitative scoring disabled."
+        )
+        return None, 0.0
+
+    # Dedicated client for this one call (LIVE FIX, AMD 2026-08-16):
+    # get_model's Alibaba branch builds ChatOpenAI(timeout=120, max_retries=3).
+    # max_retries is NOT a per-request option on openai>=1.x (create()
+    # rejects unknown kwargs), so it cannot be overridden via bind() — we
+    # rebuild the client instead. max_retries=0 = fail fast: the raw retry
+    # and the per-indicator ratchet in _score_indicators_bundled catch every
+    # failure, so hidden in-call retry chains only add latency.
+    try:
+        from langchain_openai import ChatOpenAI as _BundleChatOpenAI
+        bundle_llm = _BundleChatOpenAI(
+            model=llm.model_name,
+            api_key=llm.openai_api_key,
+            base_url=llm.openai_api_base,
+            timeout=_BUNDLE_TIMEOUT_S,
+            max_retries=0,
+        )
+    except Exception as exc:
+        logger.warning("Bundle client rebuild failed (%s); using shared client.", exc)
+        bundle_llm = llm
+
+    # Bind structured output (json_mode) to enforce the schema, then bind
+    # the larger output budget for this one big call. bind() kwargs flow
+    # through to the openai create() call (verified on langchain-openai
+    # 0.3.x: structured-output runnable is a RunnableSequence; kwargs are
+    # forwarded to the model invoke). enable_thinking=False stops the
+    # hidden reasoning tokens that truncated the first live attempt.
+    # include_raw=True (LIVE FIX, CRWD 2026-08-16): a schema-validation
+    # failure now surfaces as parsed=None + the raw text instead of raising,
+    # so _salvage_bundle_output can recover the valid indicators WITHOUT
+    # paying for a second LLM call.
+    structured = bundle_llm.with_structured_output(
+        _LLMBundledOutput, method="json_mode", include_raw=True,
+    ).bind(
+        max_tokens=_BUNDLE_MAX_TOKENS,
+        extra_body=_BUNDLE_EXTRA_BODY,
+    )
+
+    messages = [
+        ("system", system_prompt),
+        ("human", user_prompt),
+    ]
+
+    from src.research_ideas.complacency import qwen_throttle
+    qwen_throttle.acquire(weight=1.0)
+
+    result = None
+    try:
+        out = structured.invoke(messages)
+        result = out.get("parsed") if isinstance(out, dict) else out
+        if result is None:
+            raw_msg = out.get("raw") if isinstance(out, dict) else None
+            text = getattr(raw_msg, "content", "") or ""
+            logger.warning(
+                "Qwen bundled structured parse failed (%s); salvaging raw text.",
+                out.get("parsing_error") if isinstance(out, dict)
+                else "no parsed result",
+            )
+            result = _salvage_bundle_output(text)
+    except Exception as exc:
+        qwen_throttle.report_429_from_exception(exc)
+        logger.warning("Qwen bundled structured-output failed (%s); retrying raw.", exc)
+        try:
+            qwen_throttle.acquire(weight=1.0)
+            raw_llm = bundle_llm.bind(
+                max_tokens=_BUNDLE_MAX_TOKENS,
+                extra_body=_BUNDLE_EXTRA_BODY,
+            )
+            raw = raw_llm.invoke(messages)
+            text = raw.content if hasattr(raw, "content") else str(raw)
+            result = _salvage_bundle_output(text)
+        except Exception as exc2:
+            qwen_throttle.report_429_from_exception(exc2)
+            logger.exception("Qwen bundled raw retry failed: %s", exc2)
+            return None, 0.0
+
+    if result is None or not result.indicators:
+        return None, 0.0
+
+    # Cost approximation — same rates as the per-indicator path, but the
+    # output is ~600 tokens PER INDICATOR (facts + evidence + summary each).
+    approx_input_tokens = len(system_prompt + user_prompt) // 3
+    approx_output_tokens = 600 * max(1, len(result.indicators) if result else 10)
+    cost = (approx_input_tokens * 4e-6) + (approx_output_tokens * 12e-6)
+
+    return result, cost
+
+
 # ─── Indicator definitions (rubrics + evidence-gathering hooks) ────────────
 
 
@@ -496,6 +762,86 @@ OUTPUT FORMAT (JSON only):
   "score": <0-5 integer>,
   "confidence": <0-1 float>,
   "summary": "<≤ 200 char takeaway>"
+}
+"""
+
+
+_RUBRIC_BUNDLED_INSTRUCTIONS = """
+You are a forensic short-seller scoring EVERY qualitative indicator listed in the request, each on its own 0-5 scale, from ONE shared evidence library.
+
+STRICT RULES (apply to EACH indicator independently):
+1. Use ONLY the evidence provided to you. Do NOT make up facts.
+2. A score must be supported by at least one direct quote. If you cannot find evidence in the provided context for an indicator, return score=0 with confidence < 0.4 for THAT indicator.
+3. Trust a single high-quality citation (10-K direct quote, 8-K filing, DEF 14A, official press release) at face value.
+   Otherwise require 2 independent sources.
+4. Evidence quotes must be VERBATIM (copy-paste from the provided text).
+5. Be conservative — when in doubt, score lower and set lower confidence.
+6. Score each indicator against ITS OWN rubric. Evidence relevant to one indicator may be irrelevant to another.
+
+SOURCE QUALITY TIERS (weight your confidence accordingly):
+  Tier 1 (high trust)  : SEC filings (10-K, 10-Q, 8-K, DEF 14A, Form 4/144),
+                          FMP /grades-consensus, official corporate press releases
+                          (PR Newsweek, BusinessWire from the company itself),
+                          WSJ, Bloomberg, Reuters, FT.
+  Tier 2 (medium trust): sell-side equity research, FMP earnings calendar,
+                          mainstream business news (CNBC, MarketWatch).
+  Tier 3 (low trust)   : Tavily web results from unknown blogs, Seeking Alpha
+                          opinion articles (NOT analyst-curated Seeking Alpha
+                          Pro), Instagram/X excerpts, market-commentary sites.
+
+When an indicator's evidence is exclusively Tier 3, cap that indicator's
+confidence at 0.50 and add a "speculative — needs Tier-1 corroboration"
+note to its summary. When you have a Tier-1 source contradicting Tier-3
+chatter, prefer the Tier-1 view.
+
+REASONING PROCESS (repeat Steps 1-5 for EACH indicator, in order):
+
+  Step 1 — EXTRACT 2-4 facts from the evidence into that indicator's
+           `extracted_facts`. For each fact: state it concisely, tag the
+           rubric score (0-5) it most directly supports, AND tag its
+           source tier (1/2/3). No extractable facts → score = 0,
+           confidence < 0.4.
+
+  Step 2 — Copy the VERBATIM source quote backing each fact into `evidence`.
+
+  Step 3 — Score 0-5 by selecting the rubric anchor that BEST matches the
+           weight of facts in `extracted_facts`. Use the strongest-supported
+           anchor; do not split the difference.
+
+  Step 4 — Set `confidence`:
+             • If every fact is Tier-1 and they corroborate → 0.80-0.95
+             • If mixed Tier-1 / Tier-2 → 0.60-0.80
+             • If only Tier-3 → cap at 0.50
+             • If facts contradict each other → 0.30-0.50
+             • If `extracted_facts` is empty → < 0.40
+
+  Step 5 — Write a one-line `summary` (≤ 140 chars).
+
+BREVITY: this is ONE call scoring every indicator, so the output budget is
+shared. Keep facts ≤ 150 chars, quotes ≤ 220 chars (trim with ellipses,
+never paraphrase), summaries ≤ 140 chars. Prefer the 2 STRONGEST facts and
+quotes per indicator over exhaustive lists.
+
+COMPLETENESS: return exactly one entry per indicator listed in the request,
+using the exact indicator codes. NEVER omit an indicator — if there is no
+evidence for it, include it with score=0 and confidence < 0.4.
+
+OUTPUT FORMAT (JSON only):
+{
+  "indicators": [
+    {
+      "indicator": "<exact indicator code>",
+      "extracted_facts": [
+        {"fact": "<≤ 150 chars>", "rubric_anchor": "score N: <reason>", "source_tier": 1|2|3}
+      ],
+      "evidence": [
+        {"source": "<source label>", "quote": "<verbatim ≤ 220 chars>", "date": "yyyy-mm-dd"}
+      ],
+      "score": <0-5 integer>,
+      "confidence": <0-1 float>,
+      "summary": "<≤ 140 char takeaway>"
+    }
+  ]
 }
 """
 
@@ -1223,6 +1569,502 @@ INDICATORS: dict[str, dict] = {
 }
 
 
+# ─── Bundled scoring (Workstream Q1) ──────────────────────────────────────
+# ONE shared evidence pass + ONE structured LLM call scores all indicators
+# for a ticker (10 calls → 1). Per-indicator focus hints below carry the
+# emphasis the old per-indicator gatherers encoded in their pack selection;
+# the rubrics themselves are used verbatim.
+
+_BUNDLE_FOCUS_HINTS: dict[str, str] = {
+    "A1_single_thesis_dependence": (
+        "Bull-narrative dependence on a single assumption. Watch the earnings "
+        "Q&A for management defending the thesis, and news framing of TAM / AI "
+        "moat / hyperscaler capex."
+    ),
+    "A2_catalyst_proximity": (
+        "Near-term catalysts that could re-rate the stock down: days to next "
+        "earnings (calendar pack), guidance-pressure language, stacked "
+        "catalysts (earnings + regulatory + contract expiry)."
+    ),
+    "A3_consensus_uniformity": (
+        "Sell-side unanimity: ratings tally, price-target clustering (low CV = "
+        "crowded), chase ratios (last-month avg vs all-time avg), downgrade news."
+    ),
+    "B1_customer_concentration": (
+        "Customer/revenue concentration disclosed in 10-K risk factors; peer "
+        "context on deferred-revenue stickiness informs substitution ease."
+    ),
+    "B2_competitive_disintermediation": (
+        "Competitive displacement: risk-factor language, below-cohort growth / "
+        "gross margin (peer benchmark), AI-native / hyperscaler rivals, "
+        "competition exchanges in the earnings Q&A."
+    ),
+    "B3_pricing_power_erosion": (
+        "Pricing power: NRR / ASP / deferred-revenue signals, the 8-quarter "
+        "trajectory (blip vs sustained deterioration), below-cohort gross margin."
+    ),
+    "C1_disclosure_deterioration": (
+        "Disclosure deterioration: new 10-Q risk language, 8-K Items 4.01/4.02 "
+        "(auditor change / non-reliance), new KAMs, auditor/CFO changes."
+    ),
+    "C2_accounting_aggressiveness": (
+        "Accounting aggressiveness: KAM content, goodwill / DSO / capitalized-"
+        "expense signals, restatement or impairment news."
+    ),
+    "D1_management_red_flags": (
+        "Management red flags: 8-K Item 5.02 departures, DEF 14A pay ratio + "
+        "related-party items, 10-K controls weaknesses, scandal/investigation news."
+    ),
+    "D2_insider_behavior_depth": (
+        "WHO is selling: Form 144 proposed sales (leading indicator), CEO/CFO "
+        "discretionary dispositions vs automated 10b5-1 schedules."
+    ),
+}
+
+# Tavily queries per indicator — same queries the legacy gatherers fire,
+# trimmed to 3 results each to keep the shared bundle inside budget.
+_BUNDLE_TAVILY_QUERIES: dict[str, tuple[str, int, int]] = {
+    "A1_single_thesis_dependence": (
+        '"{ticker}" bull case OR investment thesis OR TAM OR AI moat OR hyperscaler', 120, 3,
+    ),
+    "A2_catalyst_proximity": (
+        '"{ticker}" earnings preview OR guidance OR catalyst OR contract loss OR regulatory', 60, 3,
+    ),
+    "A3_consensus_uniformity": (
+        '"{ticker}" analyst downgrade OR price target OR initiates coverage OR upgrade', 60, 3,
+    ),
+    "B1_customer_concentration": (
+        '"{ticker}" largest customer OR customer concentration OR top customer OR loses contract', 180, 3,
+    ),
+    "B2_competitive_disintermediation": (
+        '"{ticker}" competitor OR AI-native OR disrupt OR hyperscaler bundle OR open-source alternative', 120, 3,
+    ),
+    "B3_pricing_power_erosion": (
+        '"{ticker}" pricing power OR net retention OR NRR OR billings OR deferred revenue OR ARR', 120, 3,
+    ),
+    "C1_disclosure_deterioration": (
+        '"{ticker}" restatement OR auditor change OR SEC inquiry OR material weakness OR going concern OR CFO change', 270, 3,
+    ),
+    "C2_accounting_aggressiveness": (
+        '"{ticker}" restatement OR goodwill impairment OR channel stuffing OR accounting concerns', 180, 3,
+    ),
+    "D1_management_red_flags": (
+        '"{ticker}" CEO OR CFO OR executive scandal OR departure OR investigation OR lawsuit OR resign', 180, 3,
+    ),
+}
+
+# Union of the per-indicator focus_topics the legacy gatherers passed to the
+# earnings-QA pack — used for the single shared Q&A pack's topic note.
+_BUNDLE_QA_FOCUS_TOPICS = {
+    "ai_threat", "competition", "guidance", "regulatory",
+    "restatement", "pricing", "exec_departure",
+}
+
+# Size budget for the shared evidence library. ~42k chars ≈ 11-13k input
+# tokens — comfortably inside qwen3.6-plus context, keeps the bundle call
+# near the module's ~$0.08/ticker cost model. SEC + computed evidence is
+# appended first (highest tier); news/press/Tavily are dropped first under
+# budget pressure.
+_BUNDLE_EVIDENCE_BUDGET_CHARS = 42000
+
+
+def _gather_shared_evidence(ticker: str) -> dict:
+    """
+    ONE evidence pass per ticker. Each underlying primitive is called once
+    (the legacy path re-called overlapping primitives across 10 gatherers:
+    10-K risk factors 3x, financial signals 4x, peer context 3x, earnings
+    Q&A 4x...). Every primitive is best-effort — one failure degrades the
+    bundle, never aborts it.
+    """
+    art: dict = {}
+
+    def _try(key: str, fn):
+        try:
+            art[key] = fn()
+        except Exception as exc:
+            logger.warning("shared evidence %s/%s failed: %s", ticker, key, exc)
+            art[key] = None
+
+    # LIVE FINDING (DDOG, 2026-08-16): run sequentially, the 16 primitives
+    # stack their latencies — a filing-heavy ticker on cold cache took
+    # 671.8s to gather (SEC 8-K + Form-144 windows alone fetch up to 30
+    # docs at ≤30s each), vs 18s for a filing-light name (NBIS). All
+    # primitives are mutually independent (the legacy per-indicator
+    # gatherers already ran them concurrently), so fan out: gather wall
+    # time becomes the slowest single primitive, not the sum.
+    _PARALLEL_PRIMITIVES = [
+        ("sec_10k", lambda: fetch_sec_10k_sections(ticker)),
+        ("q_diff", lambda: fetch_sec_10q_diff(ticker)),
+        # 270d/15 is the superset of the legacy C1 (270d/15) and D1
+        # (180d/12) windows; per-indicator item filters are applied at
+        # pack assembly.
+        ("filings_8k", lambda: fetch_sec_recent_8k(ticker, days=270, limit=15)),
+        ("proxy", lambda: fetch_sec_def14a_excerpt(ticker)),
+        ("form144", lambda: fetch_sec_recent_form144(ticker, days=90, limit=15)),
+        ("insider_trades", lambda: _fetch_insider_recent_trades(ticker, days=180, limit=40)),
+        ("signals", lambda: compute_financial_signals(ticker)),
+        ("quarterly_trends", lambda: compute_quarterly_trends(ticker, n_quarters=8)),
+        ("recs", lambda: _fetch_analyst_recommendations(ticker)),
+        ("pt_consensus", lambda: fetch_price_target_consensus(ticker)),
+        ("pt_summary", lambda: fetch_price_target_summary(ticker)),
+        ("earnings_cal", lambda: _fetch_earnings_calendar(ticker)),
+        # Superset windows of the legacy per-indicator fetches (news:
+        # 90d/8 covers A1 90d/6, A2 45d/4, A3 45d/4; press: 270d/8
+        # covers A2 60d/3, C1 270d/6, C2 180d/4).
+        ("news", lambda: fetch_stock_news(ticker, days=90, limit=8)),
+        ("press", lambda: fetch_press_releases(ticker, days=270, limit=8)),
+        # Q0 dedup lock inside fetch_earnings_qa coalesces any concurrent
+        # callers; its Qwen web call is bounded via client_opts below.
+        ("qa", lambda: fetch_earnings_qa(ticker, n_quarters=2)),
+    ]
+    # Per-primitive timing + an overall deadline (see _GATHER_DEADLINE_S).
+    # Explicit executor + shutdown(wait=False) instead of a `with` block —
+    # the context manager's __exit__ does shutdown(wait=True) and would
+    # block on exactly the hung primitive we are trying to bound (same
+    # pattern as _score_indicators_parallel below).
+    _prim_elapsed: dict[str, float] = {}
+
+    def _wrap(key, fn):
+        def _run():
+            _t0 = time.monotonic()
+            try:
+                return fn()
+            finally:
+                _prim_elapsed[key] = time.monotonic() - _t0
+        return _run
+
+    ex = ThreadPoolExecutor(max_workers=8, thread_name_prefix=f"ev-{ticker}")
+    try:
+        futs = {ex.submit(_wrap(key, fn)): key
+                for key, fn in _PARALLEL_PRIMITIVES}
+        _fut_wait(list(futs), timeout=_GATHER_DEADLINE_S)
+        for fut, key in futs.items():
+            if not fut.done():
+                logger.warning(
+                    "shared evidence %s/%s exceeded %.0fs gather deadline — "
+                    "dropped from this bundle (still caching in background)",
+                    ticker, key, _GATHER_DEADLINE_S)
+                art[key] = None
+                continue
+            try:
+                art[key] = fut.result()
+            except Exception as exc:
+                logger.warning(
+                    "shared evidence %s/%s failed: %s", ticker, key, exc)
+                art[key] = None
+    finally:
+        ex.shutdown(wait=False)
+
+    _slow = {k: round(v, 1) for k, v in sorted(
+        _prim_elapsed.items(), key=lambda kv: -kv[1]) if v >= 10.0}
+    if _slow:
+        logger.info("shared evidence %s slow primitives: %s", ticker, _slow)
+
+    sig = art.get("signals") or {}
+    if isinstance(sig, dict) and any(v is not None for v in sig.values()):
+        _try("peer_ctx", lambda: get_peer_context(ticker, sig))
+    else:
+        art["peer_ctx"] = None
+
+    tav: dict[str, list] = {}
+    for code, (query, days, mx) in _BUNDLE_TAVILY_QUERIES.items():
+        try:
+            tav[code] = _tavily_packs(query.format(ticker=ticker), days=days, max_results=mx)
+        except Exception as exc:
+            logger.warning("shared evidence %s/tavily(%s) failed: %s", ticker, code, exc)
+            tav[code] = []
+    art["tavily"] = tav
+    return art
+
+
+def _format_insider_trades_text(ticker: str, trades: list[dict]) -> str:
+    """Insider-trade summary block (same text the legacy D2 gatherer builds)."""
+    ceo_cfo = [t for t in trades if any(k in (t["owner_type"] or "").lower() for k in (
+        "chief executive", "chief financial", "ceo", "cfo",
+    ))]
+    directors = [t for t in trades if "director" in (t["owner_type"] or "").lower()]
+    plan_marker = sum(1 for t in trades if "10b5-1" in (t.get("transaction_type") or "").lower())
+    total_value_disp = sum(t["value"] for t in trades if t["acq_disp"] == "D")
+    total_value_acq = sum(t["value"] for t in trades if t["acq_disp"] == "A")
+    text = (
+        f"Last 180 days insider trades for {ticker}:\n"
+        f"  total transactions: {len(trades)} (CEO/CFO: {len(ceo_cfo)}, Directors: {len(directors)})\n"
+        f"  total Disposition $: ${total_value_disp:,.0f}\n"
+        f"  total Acquisition $: ${total_value_acq:,.0f}\n"
+        f"  10b5-1 flagged: {plan_marker}\n\n"
+        f"Top 10 transactions by value:\n"
+    )
+    top = sorted(trades, key=lambda t: t["value"], reverse=True)[:10]
+    for t in top:
+        text += (
+            f"  {t['date']:<11s} {t['owner_name'][:25]:<25s} ({t['owner_type'][:25]:<25s}) "
+            f"{t['acq_disp']} {t['shares']:>10,.0f} @ ${t['price']:.2f} = ${t['value']:,.0f}\n"
+        )
+    return text
+
+
+def _chase_label(r) -> str:
+    """Price-target chase-ratio label (same bands as the legacy A3 pack)."""
+    if r is None:
+        return "n/a"
+    if r >= 1.50:
+        return "AGGRESSIVE CHASING (+50% vs baseline)"
+    if r >= 1.20:
+        return "CHASING (+20-50%)"
+    if r >= 1.05:
+        return "drifting up (+5-20%)"
+    if r >= 0.95:
+        return "stable (±5%)"
+    if r >= 0.80:
+        return "drifting down (-5-20%)"
+    return "RESETTING DOWN (>-20%)"
+
+
+def _build_bundle_evidence_packs(ticker: str, art: dict) -> list[dict]:
+    """Assemble the shared evidence library — each source ONCE, at the max
+    cap any legacy gatherer used, under a total size budget."""
+    packs: list[dict] = []
+    used = 0
+
+    def add(source: str, dt: str, text: str) -> None:
+        nonlocal used
+        text = (text or "").strip()
+        if not text:
+            return
+        if used + len(text) > _BUNDLE_EVIDENCE_BUDGET_CHARS:
+            logger.info(
+                "bundle evidence budget (%d ch) reached for %s — dropping pack %r",
+                _BUNDLE_EVIDENCE_BUDGET_CHARS, ticker, source[:70],
+            )
+            return
+        packs.append({"source": source, "date": dt or "", "text": text})
+        used += len(text)
+
+    sec = art.get("sec_10k") or {}
+    filed = sec.get("_filed_date", "?")
+    if sec.get("kam"):
+        add(f"SEC 10-K Critical Audit Matters (filed {filed})",
+            sec.get("_filed_date", ""), sec["kam"])
+    if sec.get("risk_factors"):
+        # 6000 = max of the legacy caps (B1 6000, B2 5000, C2 4000)
+        add(f"SEC 10-K Risk Factors (filed {filed})",
+            sec.get("_filed_date", ""), sec["risk_factors"][:6000])
+    if sec.get("controls"):
+        add(f"SEC 10-K Controls & Procedures (filed {filed})",
+            sec.get("_filed_date", ""), sec["controls"][:3000])
+
+    q_diff = art.get("q_diff")
+    if q_diff and ((q_diff.get("new_risk_factors") or []) or (q_diff.get("new_mda") or [])):
+        add(
+            f"SEC 10-Q diff (current {q_diff.get('_curr_filed_date','?')} "
+            f"vs prior {q_diff.get('_prev_filed_date','?')})",
+            q_diff.get("_curr_filed_date", ""),
+            format_10q_diff_for_prompt(q_diff),
+        )
+
+    filings_8k = art.get("filings_8k") or []
+    if filings_8k:
+        def _item_codes(f):
+            return [
+                (it.get("code", "") if isinstance(it, dict) else str(it))
+                for it in (f.get("items") or [])
+            ]
+        exec_relevant = [
+            f for f in filings_8k
+            if any(c.startswith(("5.0", "5.1", "1.01")) for c in _item_codes(f))
+        ]
+        if exec_relevant:
+            add("SEC 8-K filings (last 270 days, exec/governance items)",
+                filings_8k[0].get("filed_date", ""),
+                format_8k_filings_for_prompt(exec_relevant))
+        disclosure_relevant = [
+            f for f in filings_8k
+            if any(c.startswith(("4.0", "8.01", "2.06")) for c in _item_codes(f))
+        ]
+        if disclosure_relevant:
+            add("SEC 8-K filings (last 270 days, accounting/disclosure items)",
+                filings_8k[0].get("filed_date", ""),
+                format_8k_filings_for_prompt(disclosure_relevant))
+
+    proxy = art.get("proxy")
+    if proxy:
+        sections = proxy.get("sections") or {}
+        body_parts = []
+        for key in ("ceo_pay_ratio", "related_party", "executive_compensation"):
+            snip = sections.get(key)
+            if snip:
+                body_parts.append(f"## {key.upper()}\n{snip[:1500]}")
+        if body_parts:
+            add(f"SEC DEF 14A proxy (filed {proxy.get('_filed_date','?')})",
+                proxy.get("_filed_date", ""), "\n\n".join(body_parts))
+
+    form144 = art.get("form144")
+    if form144:
+        add("SEC Form 144 — proposed insider sales (last 90 days)",
+            form144[0].get("filed_date", ""), format_form144_for_prompt(form144))
+
+    trades = art.get("insider_trades")
+    if trades:
+        add("FMP /insider-trading/search (180-day window)",
+            date.today().isoformat(), _format_insider_trades_text(ticker, trades))
+
+    sig = art.get("signals") or {}
+    if isinstance(sig, dict) and any(v is not None for v in sig.values()):
+        add("Derived financial signals (FMP 4yr statements)",
+            date.today().isoformat(), format_financial_signals_for_prompt(sig))
+
+    qt = art.get("quarterly_trends") or {}
+    if qt.get("quarters"):
+        add("Derived quarterly trends (FMP 8-quarter trajectory)",
+            date.today().isoformat(), format_quarterly_trends_for_prompt(qt))
+
+    ctx = art.get("peer_ctx")
+    if ctx:
+        add("Peer benchmark (complacency cohort medians)",
+            date.today().isoformat(), format_peer_context_for_prompt(ctx))
+
+    recs = art.get("recs")
+    if recs:
+        add(
+            "FMP analyst consensus (/grades-consensus)",
+            date.today().isoformat(),
+            f"Sell-side ratings tally: "
+            f"strongBuy={recs['strong_buy']} buy={recs['buy']} "
+            f"hold={recs['hold']} sell={recs['sell']} strongSell={recs['strong_sell']}. "
+            f"Total {recs['total']} analysts; {recs['pct_buy_or_strong']*100:.0f}% Buy+StrongBuy.",
+        )
+
+    pt = art.get("pt_consensus")
+    if pt and pt.get("cv_estimate") is not None:
+        cv = pt["cv_estimate"]
+        crowded = (
+            "extremely uniform (≤ 10%)" if cv <= 0.10
+            else "uniform (10-20%)"        if cv <= 0.20
+            else "moderate dispersion (20-30%)" if cv <= 0.30
+            else "wide dispersion (> 30%)"
+        )
+        add(
+            "FMP price-target consensus (/price-target-consensus)",
+            date.today().isoformat(),
+            f"Sell-side price targets: high=${pt['target_high']}, low=${pt['target_low']}, "
+            f"avg=${pt['target_avg']:.2f}, median=${pt['target_median']}. "
+            f"Half-range / mean = {cv*100:.1f}% — {crowded}. "
+            f"(Low CV = tight target clustering = crowded long view)",
+        )
+
+    pts = art.get("pt_summary")
+    if pts and pts.get("all_time_avg"):
+        chase_m = pts.get("chase_ratio_month_vs_alltime")
+        chase_q = pts.get("chase_ratio_quarter_vs_year")
+        text = (
+            f"Sell-side price-target time series:\n"
+            f"  last month   : ${pts.get('last_month_avg')}  ({pts.get('last_month_count')} analysts)\n"
+            f"  last quarter : ${pts.get('last_quarter_avg')}  ({pts.get('last_quarter_count')} analysts)\n"
+            f"  last year    : ${pts.get('last_year_avg')}  ({pts.get('last_year_count')} analysts)\n"
+            f"  all-time avg : ${pts.get('all_time_avg')}  ({pts.get('all_time_count')} analysts)\n"
+            f"  chase ratio month/alltime    : "
+            f"{chase_m:.2f}x → {_chase_label(chase_m)}\n"
+            if chase_m is not None else
+            f"Sell-side price-target time series: last month=${pts.get('last_month_avg')} "
+            f"alltime=${pts.get('all_time_avg')}; chase-ratio n/a.\n"
+        )
+        if chase_q is not None:
+            text += f"  chase ratio quarter/year     : {chase_q:.2f}x → {_chase_label(chase_q)}\n"
+        publishers = pts.get("publishers") or []
+        if publishers:
+            text += f"  publishers ({len(publishers)})           : {', '.join(publishers[:8])}"
+            if len(publishers) > 8:
+                text += f" +{len(publishers)-8} more"
+        add("FMP price-target summary (/price-target-summary)",
+            date.today().isoformat(), text)
+
+    cal = art.get("earnings_cal")
+    if cal:
+        days = None
+        try:
+            d = date.fromisoformat(cal["next_earnings_date"])
+            days = (d - date.today()).days
+        except Exception:
+            pass
+        add(
+            "FMP earnings calendar", cal["next_earnings_date"],
+            f"Next earnings date: {cal['next_earnings_date']} "
+            f"({days} days from today). EPS est: {cal.get('eps_estimate')}, "
+            f"Revenue est: {cal.get('revenue_estimate')}",
+        )
+
+    for p in _fmp_news_packs(art.get("news") or []):
+        add(p["source"], p["date"], p["text"])
+    for p in _fmp_news_packs(art.get("press") or []):
+        add(p["source"], p["date"], p["text"])
+
+    qa = art.get("qa")
+    if qa and qa.get("digest"):
+        text = format_earnings_qa_for_prompt(qa)
+        relevant = _BUNDLE_QA_FOCUS_TOPICS & set(qa.get("topics_flagged") or [])
+        if relevant:
+            text = (
+                f"  [↑ This Q&A surfaced topics relevant to multiple indicators: "
+                f"{', '.join(sorted(relevant))}]\n" + text
+            )
+        add(f"Earnings-call Q&A (Qwen web search; {qa.get('source_hint','?')})",
+            qa.get("fetched_at", "")[:10], text)
+
+    # Tavily last — lowest tier, dropped first under budget pressure.
+    for code, tp in (art.get("tavily") or {}).items():
+        for p in tp:
+            add(f"[for {code}] {p.get('source', 'Tavily')}",
+                p.get("date", ""), p.get("text", ""))
+
+    return packs
+
+
+def _build_bundle_user_prompt(
+    ticker: str,
+    name: str,
+    sector: str | None,
+    codes: list[str],
+    packs: list[dict],
+) -> str:
+    """Bundle user prompt: shared evidence library + per-indicator rubrics."""
+    parts = [
+        f"TICKER: {ticker}  ({name})",
+        f"SECTOR: {sector or 'unknown'}",
+        "",
+        f"You are scoring {len(codes)} qualitative indicators for this company "
+        f"from ONE shared evidence library below. Score each indicator "
+        f"independently against its own rubric.",
+        "",
+        "════ SHARED EVIDENCE LIBRARY ════",
+    ]
+    if not packs:
+        parts.append("(none — return score=0, confidence < 0.4 for every indicator)")
+    else:
+        for i, pack in enumerate(packs, 1):
+            parts.append(f"--- Source {i}: {pack.get('source','?')} ({pack.get('date','?')}) ---")
+            parts.append(pack.get("text", "").strip())
+            parts.append("")
+    parts.append("════ INDICATORS TO SCORE ════")
+    for code in codes:
+        cfg = INDICATORS[code]
+        parts.append("")
+        parts.append(
+            f"INDICATOR: {code} — {cfg.get('label', code)} "
+            f"(theme: {cfg.get('theme', '')})"
+        )
+        hint = _BUNDLE_FOCUS_HINTS.get(code)
+        if hint:
+            parts.append(f"FOCUS: {hint}")
+        parts.append("RUBRIC:")
+        parts.append(cfg["rubric"].strip())
+    parts.append("")
+    parts.append(
+        "Now return the JSON object with one entry per indicator listed "
+        "above, using the exact indicator codes."
+    )
+    return "\n".join(parts)
+
+
 # ─── Single-indicator scorer (cache-aware) ────────────────────────────────
 
 
@@ -1286,6 +2128,167 @@ def _deep_research_count_reset() -> None:
         _DEEP_RESEARCH_COUNT = 0
 
 
+def _check_indicator_cache(
+    ticker: str,
+    indicator_code: str,
+    force_refresh: bool,
+    enable_deep_research: bool = True,
+) -> Optional[QualIndicatorScore]:
+    """
+    7-day cache check with the low-conf deep-bypass rule. Returns the cached
+    score when it should be used as-is; None on cache miss OR when the entry
+    is bypass-eligible (low-conf, deep-eligible, never deep-attempted) and
+    the caller must (re-)score the indicator.
+
+    Shared by the legacy per-indicator path and the bundled path so both
+    apply byte-identical cache semantics.
+    """
+    from app.backend.services.qualitative_storage import (
+        get_latest_qualitative_score,
+    )
+    if force_refresh:
+        return None
+    cached = get_latest_qualitative_score(ticker, indicator_code, QUAL_CACHE_TTL_DAYS)
+    if not cached:
+        return None
+    # Auto-bypass cache for low-conf entries that NEVER ran through
+    # the deep-research path. Without this, scores cached BEFORE the
+    # deep-research feature shipped (or any low-conf miss) are
+    # returned as-is forever — defeating the new path entirely.
+    #
+    # Bypass conditions (ALL must hold):
+    #   1. Indicator is eligible for deep research
+    #   2. Cached confidence ≤ the deep-research floor
+    #   3. The cached score's model_used does NOT already record
+    #      a deep-research attempt (otherwise we'd loop forever
+    #      retrying when the deep path itself can't improve conf).
+    already_deep = "deep" in (cached.get("model_used") or "").lower()
+    eligible = (
+        enable_deep_research
+        and indicator_code in DEEP_RESEARCH_INDICATORS
+        and (cached.get("confidence") or 0.0) <= DEEP_RESEARCH_CONF_FLOOR
+        and not already_deep
+    )
+    if eligible:
+        logger.info(
+            "Cached %s/%s conf %.2f ≤ floor %.2f & no deep-attempt — "
+            "bypassing cache to fire deep-research path.",
+            ticker, indicator_code,
+            cached.get("confidence") or 0.0, DEEP_RESEARCH_CONF_FLOOR,
+        )
+        return None
+    return QualIndicatorScore(
+        indicator=indicator_code,
+        score=cached["score"],
+        confidence=cached["confidence"],
+        summary=cached["summary"],
+        evidence=[QualEvidence(**e) for e in cached["evidence"]],
+        scored_at=cached["scored_at"],
+        model_used=cached["model_used"],
+    )
+
+
+def _maybe_deep_escalate(
+    ticker: str,
+    name: str,
+    sector: str | None,
+    indicator_code: str,
+    score: int,
+    confidence: float,
+    summary: str,
+    evidence: list[dict],
+    enable_deep_research: bool = True,
+) -> tuple[int, float, str, list[dict], bool, float]:
+    """
+    Priority-3 deep-research escalation for a low-confidence first-pass
+    result. Returns (score, confidence, summary, evidence, deep_adopted,
+    extra_cost). When the deep pass improves confidence, its findings
+    replace the first pass and deep_adopted=True.
+
+    Shared by the legacy per-indicator path and the bundled path.
+    """
+    if not (
+        enable_deep_research
+        and indicator_code in DEEP_RESEARCH_INDICATORS
+        and confidence <= DEEP_RESEARCH_CONF_FLOOR
+        and _deep_research_count_get() < DEEP_RESEARCH_MAX_PER_TICKER
+    ):
+        return score, confidence, summary, evidence, False, 0.0
+
+    cfg = INDICATORS[indicator_code]
+    n = _deep_research_count_inc()
+    logger.info(
+        "Indicator %s/%s first-pass conf %.2f ≤ floor %.2f — escalating to "
+        "deep-research (Qwen web search) [budget %d/%d].",
+        ticker, indicator_code, confidence, DEEP_RESEARCH_CONF_FLOOR,
+        n, DEEP_RESEARCH_MAX_PER_TICKER,
+    )
+    try:
+        deep = deep_research_indicator(
+            ticker=ticker,
+            name=name,
+            sector=sector,
+            indicator_code=indicator_code,
+            indicator_label=cfg.get("label", indicator_code),
+            rubric=cfg["rubric"],
+            initial_score=score,
+            initial_confidence=confidence,
+            initial_summary=summary,
+            initial_evidence=evidence,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Deep-research escalation for %s/%s failed: %s — falling back.",
+            ticker, indicator_code, exc,
+        )
+        return score, confidence, summary, evidence, False, 0.0
+
+    if deep and deep.get("confidence", 0.0) > confidence:
+        # Adopt the deeper finding (higher confidence)
+        logger.info(
+            "Deep-research for %s/%s improved conf %.2f → %.2f "
+            "(score %d → %d).",
+            ticker, indicator_code, confidence, deep["confidence"],
+            score, deep["score"],
+        )
+        deep_evidence = [
+            {
+                "source": e.get("source", "web search"),
+                "quote": e.get("quote", ""),
+                "date": e.get("date"),
+                "url": e.get("url"),
+            }
+            for e in (deep.get("evidence") or [])
+        ]
+        deep_summary = (
+            f"{deep.get('summary','')} "
+            f"[deep-research: {deep.get('reasoning','')[:120]}]"
+        ).strip()
+        # ~$0.05 rough Qwen deep-search call estimate
+        return deep["score"], deep["confidence"], deep_summary, deep_evidence, True, 0.05
+    if deep:
+        logger.info(
+            "Deep-research for %s/%s did not improve conf "
+            "(deep %.2f ≤ first-pass %.2f) — keeping first pass.",
+            ticker, indicator_code, deep.get("confidence", 0.0), confidence,
+        )
+    return score, confidence, summary, evidence, False, 0.0
+
+
+def _fire_indicator_callback(on_indicator_done, ticker: str, code: str,
+                             result: QualIndicatorScore) -> None:
+    """Fire the per-indicator callback without letting it kill the run."""
+    if not on_indicator_done:
+        return
+    try:
+        on_indicator_done(code, result)
+    except Exception as exc:
+        logger.warning(
+            "on_indicator_done callback failed for %s/%s: %s",
+            ticker, code, exc,
+        )
+
+
 def score_indicator(
     ticker: str,
     name: str,
@@ -1308,47 +2311,13 @@ def score_indicator(
         logger.warning("Unknown indicator: %s", indicator_code)
         return None
 
-    # Check cache
-    from app.backend.services.qualitative_storage import (
-        get_latest_qualitative_score, save_qualitative_score,
+    # Check cache (shared helper: identical semantics for the bundled path)
+    from app.backend.services.qualitative_storage import save_qualitative_score
+    cached_score = _check_indicator_cache(
+        ticker, indicator_code, force_refresh, enable_deep_research,
     )
-    if not force_refresh:
-        cached = get_latest_qualitative_score(ticker, indicator_code, QUAL_CACHE_TTL_DAYS)
-        if cached:
-            # Auto-bypass cache for low-conf entries that NEVER ran through
-            # the deep-research path. Without this, scores cached BEFORE the
-            # deep-research feature shipped (or any low-conf miss) are
-            # returned as-is forever — defeating the new path entirely.
-            #
-            # Bypass conditions (ALL must hold):
-            #   1. Indicator is eligible for deep research
-            #   2. Cached confidence ≤ the deep-research floor
-            #   3. The cached score's model_used does NOT already record
-            #      a deep-research attempt (otherwise we'd loop forever
-            #      retrying when the deep path itself can't improve conf).
-            already_deep = "deep" in (cached.get("model_used") or "").lower()
-            eligible = (
-                enable_deep_research
-                and indicator_code in DEEP_RESEARCH_INDICATORS
-                and (cached.get("confidence") or 0.0) <= DEEP_RESEARCH_CONF_FLOOR
-                and not already_deep
-            )
-            if not eligible:
-                return QualIndicatorScore(
-                    indicator=indicator_code,
-                    score=cached["score"],
-                    confidence=cached["confidence"],
-                    summary=cached["summary"],
-                    evidence=[QualEvidence(**e) for e in cached["evidence"]],
-                    scored_at=cached["scored_at"],
-                    model_used=cached["model_used"],
-                )
-            logger.info(
-                "Cached %s/%s conf %.2f ≤ floor %.2f & no deep-attempt — "
-                "bypassing cache to fire deep-research path.",
-                ticker, indicator_code,
-                cached.get("confidence") or 0.0, DEEP_RESEARCH_CONF_FLOOR,
-            )
+    if cached_score is not None:
+        return cached_score
 
     # Gather evidence
     cfg = INDICATORS[indicator_code]
@@ -1377,69 +2346,17 @@ def score_indicator(
     # escalations for this assess_qualitative() run. Without the cap, a
     # ticker with many low-conf indicators (NVDA hit this) burns 10-15+ min
     # cumulatively in deep research and ties up the parallel pool.
-    if (
-        enable_deep_research
-        and indicator_code in DEEP_RESEARCH_INDICATORS
-        and final_conf <= DEEP_RESEARCH_CONF_FLOOR
-        and _deep_research_count_get() < DEEP_RESEARCH_MAX_PER_TICKER
-    ):
-        n = _deep_research_count_inc()
-        logger.info(
-            "Indicator %s/%s first-pass conf %.2f ≤ floor %.2f — escalating to "
-            "deep-research (Qwen web search) [budget %d/%d].",
-            ticker, indicator_code, final_conf, DEEP_RESEARCH_CONF_FLOOR,
-            n, DEEP_RESEARCH_MAX_PER_TICKER,
-        )
-        try:
-            deep = deep_research_indicator(
-                ticker=ticker,
-                name=name,
-                sector=sector,
-                indicator_code=indicator_code,
-                indicator_label=cfg.get("label", indicator_code),
-                rubric=cfg["rubric"],
-                initial_score=final_score,
-                initial_confidence=final_conf,
-                initial_summary=final_summary,
-                initial_evidence=final_evidence,
-            )
-            if deep and deep.get("confidence", 0.0) > final_conf:
-                # Adopt the deeper finding (higher confidence)
-                logger.info(
-                    "Deep-research for %s/%s improved conf %.2f → %.2f "
-                    "(score %d → %d).",
-                    ticker, indicator_code, final_conf, deep["confidence"],
-                    final_score, deep["score"],
-                )
-                final_score = deep["score"]
-                final_conf = deep["confidence"]
-                final_summary = (
-                    f"{deep.get('summary','')} "
-                    f"[deep-research: {deep.get('reasoning','')[:120]}]"
-                ).strip()
-                # Convert deep evidence to the QualEvidence shape
-                final_evidence = [
-                    {
-                        "source": e.get("source", "web search"),
-                        "quote": e.get("quote", ""),
-                        "date": e.get("date"),
-                        "url": e.get("url"),
-                    }
-                    for e in (deep.get("evidence") or [])
-                ]
-                model_used = f"{QUAL_MODEL_NAME}+deep_web_search"
-                cost += 0.05  # rough Qwen deep-search call estimate
-            elif deep:
-                logger.info(
-                    "Deep-research for %s/%s did not improve conf "
-                    "(deep %.2f ≤ first-pass %.2f) — keeping first pass.",
-                    ticker, indicator_code, deep.get("confidence", 0.0), final_conf,
-                )
-        except Exception as exc:
-            logger.warning(
-                "Deep-research escalation for %s/%s failed: %s — falling back.",
-                ticker, indicator_code, exc,
-            )
+    (
+        final_score, final_conf, final_summary, final_evidence,
+        deep_adopted, deep_cost,
+    ) = _maybe_deep_escalate(
+        ticker, name, sector, indicator_code,
+        final_score, final_conf, final_summary, final_evidence,
+        enable_deep_research=enable_deep_research,
+    )
+    if deep_adopted:
+        model_used = f"{QUAL_MODEL_NAME}+deep_web_search"
+        cost += deep_cost
 
     scored_at = datetime.now(timezone.utc).isoformat()
     # Persist to cache (always store the BEST result we have)
@@ -1467,6 +2384,274 @@ def score_indicator(
         scored_at=scored_at,
         model_used=model_used,
     )
+
+
+def _score_indicators_bundled(
+    ticker: str,
+    name: str,
+    sector: str | None,
+    indicator_codes: list[str],
+    force_refresh: bool,
+    on_indicator_done=None,
+) -> tuple[dict[str, QualIndicatorScore], float, bool]:
+    """
+    Bundled-mode scoring (Workstream Q1):
+      1. Satisfy fresh cache hits first (identical semantics to the legacy
+         path — they fire the callback and cost nothing).
+      2. ONE shared evidence pass for the remaining indicators.
+      3. ONE structured LLM call scoring them all.
+      4. Fallback ratchet: any indicator missing/invalid in the bundle
+         output is scored via the legacy per-indicator path, so a partial
+         bundle never regresses coverage.
+      5. Deep-research escalation + per-indicator cache writes run on the
+         final results exactly as in the legacy path (model_used is
+         suffixed "(bundled)" so cache rows stay diagnosable).
+
+    Returns (scored, total_cost, incomplete).
+    """
+    from app.backend.services.qualitative_storage import save_qualitative_score
+
+    scored: dict[str, QualIndicatorScore] = {}
+    total_cost = 0.0
+    incomplete = False
+
+    # 1) Cache pass
+    to_bundle: list[str] = []
+    for code in indicator_codes:
+        cached_score = _check_indicator_cache(ticker, code, force_refresh)
+        if cached_score is not None:
+            scored[code] = cached_score
+            _fire_indicator_callback(on_indicator_done, ticker, code, cached_score)
+            continue
+        to_bundle.append(code)
+    if not to_bundle:
+        return scored, total_cost, incomplete
+
+    # 2) One shared evidence pass
+    t0 = time.monotonic()
+    artifacts = _gather_shared_evidence(ticker)
+    packs = _build_bundle_evidence_packs(ticker, artifacts)
+    logger.info(
+        "Bundled qual %s: shared evidence gathered in %.1fs — %d packs, "
+        "%d chars, scoring %d indicator(s) in one call",
+        ticker, time.monotonic() - t0, len(packs),
+        sum(len(p["text"]) for p in packs), len(to_bundle),
+    )
+
+    # 3) One bundled LLM call
+    user_prompt = _build_bundle_user_prompt(ticker, name, sector, to_bundle, packs)
+    bundle_out, cost = _call_qwen_bundled(_RUBRIC_BUNDLED_INSTRUCTIONS, user_prompt)
+    total_cost += cost
+
+    bundle_by_code: dict[str, object] = {}
+    if bundle_out:
+        for entry in bundle_out.indicators:
+            code = (entry.indicator or "").strip()
+            if code in to_bundle and code not in bundle_by_code:
+                bundle_by_code[code] = entry
+        logger.info(
+            "Bundled qual %s: one call returned %d/%d indicators",
+            ticker, len(bundle_by_code), len(to_bundle),
+        )
+    else:
+        logger.warning(
+            "Bundled qual call for %s returned nothing — falling back to "
+            "per-indicator scoring for all %d indicator(s).",
+            ticker, len(to_bundle),
+        )
+
+    # 4+5) Finalize per indicator
+    per_share = cost / max(1, len(bundle_by_code)) if bundle_by_code else 0.0
+    for code in to_bundle:
+        entry = bundle_by_code.get(code)
+        if entry is None or not (0 <= int(entry.score) <= 5):
+            logger.info(
+                "Bundle %s: indicator %s missing/invalid — per-indicator fallback.",
+                ticker, code,
+            )
+            try:
+                fb = score_indicator(ticker, name, sector, code, force_refresh)
+            except Exception as exc:
+                logger.exception(
+                    "Fallback score_indicator %s/%s failed: %s", ticker, code, exc,
+                )
+                fb = None
+            if fb is None:
+                incomplete = True
+                continue
+            scored[code] = fb
+            _fire_indicator_callback(on_indicator_done, ticker, code, fb)
+            continue
+
+        final_score = int(entry.score)
+        final_conf = float(entry.confidence)
+        final_summary = entry.summary
+        final_evidence = [e.model_dump() for e in entry.evidence]
+        (
+            final_score, final_conf, final_summary, final_evidence,
+            deep_adopted, deep_cost,
+        ) = _maybe_deep_escalate(
+            ticker, name, sector, code,
+            final_score, final_conf, final_summary, final_evidence,
+        )
+        model_used = f"{QUAL_MODEL_NAME}(bundled)"
+        if deep_adopted:
+            model_used = f"{QUAL_MODEL_NAME}(bundled)+deep_web_search"
+        total_cost += deep_cost
+
+        scored_at = datetime.now(timezone.utc).isoformat()
+        try:
+            save_qualitative_score(
+                ticker=ticker,
+                indicator=code,
+                score=final_score,
+                confidence=final_conf,
+                summary=final_summary,
+                evidence=final_evidence,
+                model_used=model_used,
+                cost_usd=per_share + deep_cost,
+                scored_at=scored_at,
+            )
+        except Exception as exc:
+            logger.warning("Persist bundled qualitative score failed: %s", exc)
+
+        result = QualIndicatorScore(
+            indicator=code,
+            score=final_score,
+            confidence=final_conf,
+            summary=final_summary,
+            evidence=[QualEvidence(**e) for e in final_evidence],
+            scored_at=scored_at,
+            model_used=model_used,
+        )
+        scored[code] = result
+        deep_marker = " ★DEEP" if deep_adopted else ""
+        logger.info(
+            "Bundled indicator done — %s/%s = %d/5 conf %.0f%%%s",
+            ticker, code, final_score, final_conf * 100, deep_marker,
+        )
+        _fire_indicator_callback(on_indicator_done, ticker, code, result)
+
+    return scored, total_cost, incomplete
+
+
+def _score_indicators_parallel(
+    ticker: str,
+    name: str,
+    sector: str | None,
+    indicator_codes: list[str],
+    force_refresh: bool,
+    max_workers: int,
+    per_indicator_timeout_s: int,
+    on_indicator_done,
+    started_at_ts: float,
+) -> tuple[dict[str, QualIndicatorScore], bool]:
+    """
+    Legacy per-indicator parallel scoring pool (one LLM call per indicator).
+    Returns (scored, incomplete).
+    """
+    scored: dict[str, QualIndicatorScore] = {}
+    incomplete = False
+
+    # Use explicit try/finally instead of `with ThreadPoolExecutor() as ex`
+    # — the context manager's __exit__ calls shutdown(wait=True) which
+    # blocks until all RUNNING futures complete. With force_qual hitting
+    # the per-indicator timeout, we want to return PARTIAL results
+    # immediately, not wait an extra 2-3 min for stragglers to fail
+    # their own internal timeouts.
+    ex = ThreadPoolExecutor(max_workers=max_workers)
+    try:
+        # Stagger submissions by 1.5s each to avoid 3 simultaneous Qwen
+        # calls hitting DashScope's burst-rate limiter at t=0. The
+        # parallel pool still runs 3 concurrent at steady state, but the
+        # first 3 calls now start 0s / 1.5s / 3s apart — well outside
+        # the burst window.
+        futures: dict = {}
+        for i, code in enumerate(indicator_codes):
+            futures[ex.submit(score_indicator, ticker, name, sector, code, force_refresh)] = code
+            if i < max_workers - 1:
+                time.sleep(1.5)
+        try:
+            # Enforced per-indicator timeout via wait(FIRST_COMPLETED). The
+            # old code iterated as_completed() and called
+            # fut.result(timeout=per_indicator_timeout_s) on futures that
+            # were ALREADY done — the timeout could never fire, so a single
+            # hung Qwen/FMP call blocked its worker slot all the way to the
+            # outer cap (240s × ceil(10/3) = 960s) while the pool made no
+            # progress. Now each pass waits for the NEXT completion, capped
+            # at per_indicator_timeout_s; a pass that returns nothing means
+            # every remaining future has been hung for at least that long,
+            # so we abandon them (their worker threads drain harmlessly and
+            # any late cache write just pre-fills the next run — see the
+            # shutdown note below).
+            pending = set(futures.keys())
+            while pending:
+                done_batch, pending = _fut_wait(
+                    pending,
+                    timeout=per_indicator_timeout_s,
+                    return_when=FIRST_COMPLETED,
+                )
+                if not done_batch:
+                    hung = sorted(futures[f] for f in pending)
+                    logger.warning(
+                        "assess_qualitative %s: %d indicator(s) hung past the "
+                        "%ds per-indicator budget — abandoning: %s",
+                        ticker, len(hung), per_indicator_timeout_s,
+                        ", ".join(hung),
+                    )
+                    incomplete = True
+                    break
+                for fut in done_batch:
+                    code = futures[fut]
+                    try:
+                        result = fut.result()
+                    except Exception as exc:
+                        logger.exception(
+                            "score_indicator %s failed: %s", code, exc,
+                        )
+                        incomplete = True
+                        continue
+                    if result is None:
+                        incomplete = True
+                        continue
+                    scored[code] = result
+                    elapsed_min = (time.time() - started_at_ts) / 60
+                    deep_marker = " ★DEEP" if "deep" in (result.model_used or "").lower() else ""
+                    logger.info(
+                        "Indicator %d/%d done — %s/%s = %d/5 conf %.0f%%%s "
+                        "(elapsed %.1f min, %d remaining)",
+                        len(scored), len(indicator_codes),
+                        ticker, code,
+                        result.score, result.confidence * 100, deep_marker,
+                        elapsed_min,
+                        len(indicator_codes) - len(scored),
+                    )
+                    # Two-phase architecture: fire callback so caller can
+                    # persist incremental progress (patch cohort row with
+                    # the newly scored indicator). If callback throws,
+                    # don't kill the whole assessment — just log.
+                    _fire_indicator_callback(on_indicator_done, ticker, code, result)
+        except Exception as exc:
+            logger.warning(
+                "assess_qualitative for %s aborted after %.1f min "
+                "(%d/%d indicators scored): %s — abandoning unfinished",
+                ticker, (time.time() - started_at_ts) / 60,
+                len(scored), len(indicator_codes), exc,
+            )
+            incomplete = True
+    finally:
+        # cancel_futures cancels PENDING futures (not yet picked up).
+        # wait=False returns immediately; orphaned worker threads finish
+        # on their own and write to the cache when their internal call-
+        # level timeout fires (120s ChatOpenAI / 180s OpenAI client).
+        # Those late writes are harmless — they just populate the cache
+        # for the next force-rescore.
+        try:
+            ex.shutdown(wait=False, cancel_futures=True)
+        except TypeError:
+            ex.shutdown(wait=False)  # pre-3.9 fallback
+
+    return scored, incomplete
 
 
 # ─── Full assessment (parallelized across indicators) ─────────────────────
@@ -1564,86 +2749,25 @@ def assess_qualitative(
                 ticker,
             )
 
-    # Use explicit try/finally instead of `with ThreadPoolExecutor() as ex`
-    # — the context manager's __exit__ calls shutdown(wait=True) which
-    # blocks until all RUNNING futures complete. With force_qual hitting
-    # the per-indicator timeout, we want to return PARTIAL results
-    # immediately, not wait an extra 2-3 min for stragglers to fail
-    # their own internal timeouts.
-    ex = ThreadPoolExecutor(max_workers=max_workers)
-    try:
-        # Stagger submissions by 1.5s each to avoid 3 simultaneous Qwen
-        # calls hitting DashScope's burst-rate limiter at t=0. The
-        # parallel pool still runs 3 concurrent at steady state, but the
-        # first 3 calls now start 0s / 1.5s / 3s apart — well outside
-        # the burst window.
-        futures: dict = {}
-        for i, code in enumerate(indicator_codes):
-            futures[ex.submit(score_indicator, ticker, name, sector, code, force_refresh)] = code
-            if i < max_workers - 1:
-                _time.sleep(1.5)
-        try:
-            # Total cap = per_indicator_timeout_s * ceil(N / max_workers)
-            # i.e. 240s × ceil(10/4) = 240 × 3 = 720s = 12 min worst case
-            total_timeout = per_indicator_timeout_s * (
-                (len(futures) + max_workers - 1) // max_workers
-            )
-            for fut in as_completed(futures, timeout=total_timeout):
-                code = futures[fut]
-                try:
-                    result = fut.result(timeout=per_indicator_timeout_s)
-                except Exception as exc:
-                    logger.exception(
-                        "score_indicator %s failed: %s", code, exc,
-                    )
-                    incomplete = True
-                    continue
-                if result is None:
-                    incomplete = True
-                    continue
-                scored[code] = result
-                elapsed_min = (_time.time() - started_at_ts) / 60
-                deep_marker = " ★DEEP" if "deep" in (result.model_used or "").lower() else ""
-                logger.info(
-                    "Indicator %d/%d done — %s/%s = %d/5 conf %.0f%%%s "
-                    "(elapsed %.1f min, %d remaining)",
-                    len(scored), len(INDICATORS),
-                    ticker, code,
-                    result.score, result.confidence * 100, deep_marker,
-                    elapsed_min,
-                    len(INDICATORS) - len(scored),
-                )
-                # Two-phase architecture: fire callback so caller can
-                # persist incremental progress (patch cohort row with
-                # the newly scored indicator). If callback throws,
-                # don't kill the whole assessment — just log.
-                if on_indicator_done:
-                    try:
-                        on_indicator_done(code, result)
-                    except Exception as exc:
-                        logger.warning(
-                            "on_indicator_done callback failed for %s/%s: %s",
-                            ticker, code, exc,
-                        )
-        except Exception as exc:
-            logger.warning(
-                "assess_qualitative for %s hit outer timeout after %.1f min "
-                "(%d/%d indicators scored): %s — abandoning unfinished",
-                ticker, (_time.time() - started_at_ts) / 60,
-                len(scored), len(indicator_codes), exc,
-            )
-            incomplete = True
-    finally:
-        # cancel_futures cancels PENDING futures (not yet picked up).
-        # wait=False returns immediately; orphaned worker threads finish
-        # on their own and write to the cache when their internal call-
-        # level timeout fires (120s ChatOpenAI / 180s OpenAI client).
-        # Those late writes are harmless — they just populate the cache
-        # for the next force-rescore.
-        try:
-            ex.shutdown(wait=False, cancel_futures=True)
-        except TypeError:
-            ex.shutdown(wait=False)  # pre-3.9 fallback
+    if QUAL_MODE == "bundled" and len(indicator_codes) >= 2:
+        # Q1 bundled path: ONE shared evidence pass + ONE LLM call scores
+        # all indicators (~1-3 min/ticker instead of ~6-15). Missing or
+        # invalid bundle entries ratchet back to the per-indicator path
+        # inside _score_indicators_bundled, so coverage never regresses.
+        # Rollback: COMPLACENCY_QUAL_MODE=per_indicator.
+        bundle_scored, bundle_cost, incomplete = _score_indicators_bundled(
+            ticker, name, sector, indicator_codes, force_refresh,
+            on_indicator_done,
+        )
+        scored.update(bundle_scored)
+        total_cost += bundle_cost
+    else:
+        scored_par, incomplete = _score_indicators_parallel(
+            ticker, name, sector, indicator_codes, force_refresh,
+            max_workers, per_indicator_timeout_s, on_indicator_done,
+            started_at_ts,
+        )
+        scored.update(scored_par)
 
     if not scored:
         return QualitativeAssessment(

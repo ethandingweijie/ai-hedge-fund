@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 import time
 from datetime import date, timedelta
 from typing import Optional
@@ -222,6 +223,20 @@ def _get_tavily_client():
         return None
 
 
+# Circuit breaker: while the Tavily plan quota is exhausted EVERY call
+# still pays a failing HTTP round-trip (~1-2 s each), and each indicator
+# gatherer fires 3-6 targeted queries — ~15-20 dead round-trips per
+# ticker. After _TAVILY_FAIL_THRESHOLD consecutive failures we skip all
+# Tavily calls for _TAVILY_SKIP_MINUTES, returning [] immediately (the
+# same value every caller already treats as "no Tavily evidence").
+# One success resets the streak.
+_TAVILY_FAIL_THRESHOLD = 3
+_TAVILY_SKIP_MINUTES = 60.0
+_tavily_guard = threading.Lock()
+_tavily_fail_streak = 0
+_tavily_skip_until = 0.0  # monotonic timestamp
+
+
 def tavily_search(
     query: str,
     days: int = 90,
@@ -231,8 +246,14 @@ def tavily_search(
     """
     Targeted news/web search via Tavily. Returns a list of:
       [{title, url, content, published_date, score}, ...]
-    Returns [] on failure (key missing, network error).
+    Returns [] on failure (key missing, network error, breaker open).
     """
+    global _tavily_fail_streak, _tavily_skip_until
+
+    with _tavily_guard:
+        if _tavily_skip_until and time.monotonic() < _tavily_skip_until:
+            return []  # breaker open — skip the dead round-trip
+
     client = _get_tavily_client()
     if client is None:
         return []
@@ -254,9 +275,23 @@ def tavily_search(
                 "published_date": r.get("published_date") or "",
                 "score": r.get("score") or 0.0,
             })
+        with _tavily_guard:
+            _tavily_fail_streak = 0  # any success closes the breaker
         return out
     except Exception as exc:
-        logger.warning("Tavily search failed for %r: %s", query, exc)
+        with _tavily_guard:
+            _tavily_fail_streak += 1
+            streak = _tavily_fail_streak
+            if streak >= _TAVILY_FAIL_THRESHOLD and time.monotonic() >= _tavily_skip_until:
+                _tavily_skip_until = time.monotonic() + _TAVILY_SKIP_MINUTES * 60
+                logger.warning(
+                    "Tavily circuit breaker OPEN: %d consecutive failures "
+                    "(latest: %s) — skipping Tavily for %.0f min "
+                    "(quota likely exhausted).",
+                    streak, exc, _TAVILY_SKIP_MINUTES,
+                )
+        if streak < _TAVILY_FAIL_THRESHOLD:
+            logger.warning("Tavily search failed for %r: %s", query, exc)
         return []
 
 

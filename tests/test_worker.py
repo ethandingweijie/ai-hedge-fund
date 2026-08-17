@@ -44,6 +44,8 @@ def test_research_kinds_cover_spawn_points():
     assert worker.RESEARCH_KINDS == {
         "idea_of_the_day_gen", "hk50_qual", "hk50_qual_ticker",
         "refresh", "score_adhoc", "hundred_q_refresh",
+        # Workstream Q2 — on-demand full-table qualitative sweep
+        "qual_sweep",
     }
 
 

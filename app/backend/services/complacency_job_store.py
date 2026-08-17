@@ -35,6 +35,7 @@ Schema (auto-migrated):
   started_at    TEXT NOT NULL
   finished_at   TEXT
   progress_msg  TEXT                   free-form progress label
+  progress_at   TEXT                   last heartbeat time (watchdog anchor)
   result_json   TEXT                   JSON of the operation result
   error_msg     TEXT                   only set when status='failed'
 """
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS complacency_jobs (
     started_at    TEXT NOT NULL,
     finished_at   TEXT,
     progress_msg  TEXT,
+    progress_at   TEXT,
     result_json   TEXT,
     error_msg     TEXT
 );
@@ -72,6 +74,7 @@ def _ensure_table() -> None:
     db.ensure_table(_DDL)
     # Schema evolution for DBs created before the column existed
     db.add_column_if_missing("complacency_jobs", "user_id", "INTEGER")
+    db.add_column_if_missing("complacency_jobs", "progress_at", "TEXT")
 
 
 def _to_dt(value) -> Optional[datetime]:
@@ -102,19 +105,25 @@ def create_job(kind: str, ticker: Optional[str] = None,
     now = datetime.now(timezone.utc).isoformat()
     db.execute(
         "INSERT INTO complacency_jobs "
-        "(job_id, kind, ticker, user_id, status, started_at, progress_msg) "
-        "VALUES (?, ?, ?, ?, 'pending', ?, 'queued')",
-        [job_id, kind, ticker, user_id, now],
+        "(job_id, kind, ticker, user_id, status, started_at, progress_at, progress_msg) "
+        "VALUES (?, ?, ?, ?, 'pending', ?, ?, 'queued')",
+        [job_id, kind, ticker, user_id, now, now],
     )
     return job_id
 
 
 def update_progress(job_id: str, status: str, message: str) -> None:
-    """Update status + progress_msg for a running job."""
+    """Update status + progress_msg for a running job.
+
+    Also stamps progress_at — the watchdog measures stuckness from the
+    LAST heartbeat, not job start, so legitimately long jobs (full-table
+    qual sweeps) survive as long as they keep reporting progress.
+    """
     _ensure_table()
     db.execute(
-        "UPDATE complacency_jobs SET status = ?, progress_msg = ? WHERE job_id = ?",
-        [status, message[:500], job_id],
+        "UPDATE complacency_jobs SET status = ?, progress_msg = ?, progress_at = ? "
+        "WHERE job_id = ?",
+        [status, message[:500], datetime.now(timezone.utc).isoformat(), job_id],
     )
 
 
@@ -163,22 +172,30 @@ def fail_job(job_id: str, error: str) -> None:
     )
 
 
-# Watchdog ceiling — jobs pending/running longer than this are auto-failed
+# Watchdog ceiling — jobs whose LAST HEARTBEAT (progress_at, falling back
+# to started_at for pre-migration rows) is older than this are auto-failed
 # at read time. Covers cases where the background task died silently
 # (uvicorn worker restart, OOM kill, asyncio task GC'd before the
 # strong-reference fix landed, etc.) so the user gets a definitive
 # "failed" instead of an indefinite "pending" that the poll layer waits
 # on until its own 25-min timeout fires.
+#
+# Measured from the last progress update, NOT job start: a full-table
+# qual sweep legitimately runs 30-60 min but heartbeats every few
+# minutes — it must not be killed mid-flight (previously a 30-min wall
+# from started_at auto-failed long master refreshes while the worker
+# thread kept running, flipping the job failed → completed).
 _STUCK_JOB_CEILING_MINUTES = 30
 
 
-def _is_stuck(status: str, started_at) -> bool:
+def _is_stuck(status: str, started_at, progress_at=None) -> bool:
     if status not in ("pending", "running"):
         return False
-    dt = _to_dt(started_at)
-    if dt is None:
+    # Last heartbeat wins; pre-migration rows fall back to started_at.
+    anchor = _to_dt(progress_at) or _to_dt(started_at)
+    if anchor is None:
         return False
-    age_minutes = (datetime.now(timezone.utc) - dt).total_seconds() / 60
+    age_minutes = (datetime.now(timezone.utc) - anchor).total_seconds() / 60
     return age_minutes > _STUCK_JOB_CEILING_MINUTES
 
 
@@ -206,22 +223,22 @@ def get_job(job_id: str) -> Optional[dict]:
     """Fetch full job state. Auto-fails jobs that have been stuck >30 min."""
     _ensure_table()
     row = db.query_one(
-        "SELECT job_id, kind, ticker, status, started_at, finished_at, "
-        "progress_msg, result_json, error_msg "
+        "SELECT job_id, kind, ticker, status, started_at, progress_at, "
+        "finished_at, progress_msg, result_json, error_msg "
         "FROM complacency_jobs WHERE job_id = ?",
         [job_id],
     )
     if not row:
         return None
     job = _row_to_job(row)
-    if _is_stuck(job["status"], job["started_at"]):
+    if _is_stuck(job["status"], row["started_at"], row["progress_at"]):
         logger.warning(
-            "Job %s stuck in %s state since %s — auto-failing",
-            job_id, job["status"], job["started_at"],
+            "Job %s stuck in %s state since last heartbeat %s — auto-failing",
+            job_id, job["status"], row["progress_at"] or row["started_at"],
         )
         fail_job(
             job_id,
-            f"Watchdog: job stuck in '{job['status']}' state for >{_STUCK_JOB_CEILING_MINUTES} min. "
+            f"Watchdog: no progress heartbeat for >{_STUCK_JOB_CEILING_MINUTES} min. "
             "Background task likely died (worker recycled / OOM / GC'd before strong-ref fix landed)."
         )
         # Re-read to surface the now-failed state
@@ -264,14 +281,14 @@ def find_in_flight_job(kind: str, ticker: Optional[str] = None) -> Optional[dict
     Used to dedupe: if the user clicks Refresh twice, return the existing
     in-flight job instead of starting a duplicate.
 
-    Stuck jobs (pending/running > 30 min) are auto-failed and treated as
+    Stuck jobs (no heartbeat for >30 min) are auto-failed and treated as
     NOT in-flight, so the user's next click starts a fresh task instead of
     being permanently stuck on a dead job_id.
     """
     _ensure_table()
     if ticker is None:
         row = db.query_one(
-            "SELECT job_id, kind, ticker, status, started_at, progress_msg "
+            "SELECT job_id, kind, ticker, status, started_at, progress_at, progress_msg "
             "FROM complacency_jobs "
             "WHERE kind = ? AND ticker IS NULL "
             "AND status IN ('pending','running') "
@@ -280,7 +297,7 @@ def find_in_flight_job(kind: str, ticker: Optional[str] = None) -> Optional[dict
         )
     else:
         row = db.query_one(
-            "SELECT job_id, kind, ticker, status, started_at, progress_msg "
+            "SELECT job_id, kind, ticker, status, started_at, progress_at, progress_msg "
             "FROM complacency_jobs "
             "WHERE kind = ? AND ticker = ? "
             "AND status IN ('pending','running') "
@@ -289,14 +306,14 @@ def find_in_flight_job(kind: str, ticker: Optional[str] = None) -> Optional[dict
         )
     if not row:
         return None
-    if _is_stuck(row["status"], row["started_at"]):
+    if _is_stuck(row["status"], row["started_at"], row["progress_at"]):
         logger.warning(
-            "find_in_flight: %s job %s stuck since %s — auto-failing",
-            kind, row["job_id"], row["started_at"],
+            "find_in_flight: %s job %s no heartbeat since %s — auto-failing",
+            kind, row["job_id"], row["progress_at"] or row["started_at"],
         )
         fail_job(
             row["job_id"],
-            f"Watchdog: stuck in '{row['status']}' for >{_STUCK_JOB_CEILING_MINUTES} min "
+            f"Watchdog: no heartbeat for >{_STUCK_JOB_CEILING_MINUTES} min "
             "(background task likely died). Treating as not-in-flight so caller can start fresh."
         )
         return None

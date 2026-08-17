@@ -881,7 +881,7 @@ export interface ComplacencyJobHandle {
 
 export interface ComplacencyJobStatus {
   job_id: string;
-  kind: 'refresh' | 'score_adhoc';
+  kind: 'refresh' | 'score_adhoc' | 'qual_sweep';
   ticker: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   started_at: string;
@@ -921,6 +921,20 @@ export function startComplacencyRefresh(opts: { maxWorkers?: number } = {}): Pro
   if (opts.maxWorkers != null) q.set('max_workers', String(opts.maxWorkers));
   return fetchJson(
     `${BASE}/research/ideas/complacency/refresh?${q}`,
+    { method: 'POST' },
+  );
+}
+
+/**
+ * Kick off an on-demand qualitative sweep of the FULL 50-ticker universe
+ * (gate-passers first). Cache-first: tickers whose 10 indicators are all
+ * fresh + high-confidence are skipped unless force=true.
+ */
+export function startComplacencyQualSweep(opts: { force?: boolean } = {}): Promise<ComplacencyJobHandle> {
+  const q = new URLSearchParams();
+  if (opts.force) q.set('force', 'true');
+  return fetchJson(
+    `${BASE}/research/ideas/complacency/qual-sweep?${q}`,
     { method: 'POST' },
   );
 }
@@ -1035,6 +1049,38 @@ export async function refreshComplacency(opts: {
     ticker_count: number;
     gate_passers: number;
     failed_tickers: Array<{ ticker: string; reason: string }>;
+  };
+}
+
+/**
+ * On-demand qualitative sweep of the full universe (gate-passers first).
+ * The 50-ticker sweep can run 30-60+ min (3-ticker parallelism, ~1-3 min
+ * per scored ticker), so the poll timeout is 90 min — well above the 15-min
+ * default. Heartbeats arrive via onProgress from the job's progress_msg.
+ */
+export async function sweepComplacency(opts: {
+  force?: boolean;
+  onProgress?: (s: ComplacencyJobStatus) => void;
+} = {}): Promise<{
+  universe: number;
+  scored: number;
+  fresh_skipped: number;
+  failed: Array<{ ticker: string; reason: string }>;
+  force: boolean;
+  gate_passers_first: string[];
+}> {
+  const handle = await startComplacencyQualSweep({ force: opts.force });
+  const final = await pollComplacencyJob(handle.job_id, {
+    onProgress: opts.onProgress,
+    timeoutMs: 90 * 60 * 1000,
+  });
+  return final.result as {
+    universe: number;
+    scored: number;
+    fresh_skipped: number;
+    failed: Array<{ ticker: string; reason: string }>;
+    force: boolean;
+    gate_passers_first: string[];
   };
 }
 

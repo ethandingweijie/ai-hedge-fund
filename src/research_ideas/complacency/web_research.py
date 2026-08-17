@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -51,6 +52,14 @@ QWEN_RESEARCH_MODEL = os.environ.get(
     "COMPLACENCY_RESEARCH_MODEL",
     os.environ.get("DEEP_RESEARCH_MODEL", "qwen3.6-plus"),
 )
+
+
+# LIVE FINDING (DDOG, 2026-08-16): fetch_earnings_qa runs inside the
+# shared-evidence gather. With the client-level timeout=180 ×
+# max_retries=3, one stalled QA call can hide ~12 min inside the gather
+# wall. Bound it: 150s per attempt, 1 retry → worst case ≈ 5 min, and
+# the parallel gather (Q2.5) means that is the floor, not a stack.
+_QA_REQUEST_TIMEOUT_S = 150.0
 
 
 def _qwen_client():
@@ -88,15 +97,27 @@ def qwen_web_search(
     system_prompt: str = "You are a forensic equity research analyst.",
     max_chars: int = 12000,
     retries: int = 1,
+    request_timeout_s: float | None = None,
 ) -> Optional[str]:
     """
     Single-shot Qwen call with native web search enabled. Streams to get
     around the DashScope non-streaming 400, then returns the final text
     (after discarding the reasoning_content phase). None on failure.
+
+    request_timeout_s: latency-sensitive callers (evidence gather) bound
+    the per-call wall here — the shared client's timeout=180/max_retries=3
+    can otherwise hide ~12 min inside one call (same hidden-retry
+    pathology as the Q1 bundle client).
     """
     client = _qwen_client()
     if client is None:
         return None
+    if request_timeout_s is not None:
+        try:
+            client = client.with_options(
+                timeout=request_timeout_s, max_retries=1)
+        except Exception:  # very old openai SDK — keep client defaults
+            pass
 
     last_exc: Exception | None = None
     from src.research_ideas.complacency import qwen_throttle
@@ -271,6 +292,30 @@ def _cache_put(ticker: str, kind: str, scope: str, payload: dict) -> None:
 
 EARNINGS_QA_CACHE_TTL_DAYS = 30   # earnings calls happen quarterly
 
+# In-flight dedup: the four indicator gatherers that want the earnings Q&A
+# (A1, A2, B2, D1) run on parallel threads and ALL call fetch_earnings_qa
+# before any of them has written the SQLite cache — without a per-ticker
+# lock they fire 4 identical 30-90 s Qwen web searches for the same
+# transcript on a cold cache. The lock coalesces them: the first thread
+# runs the search, the rest block briefly then read the cache it wrote.
+# Negative results ("no transcript found") aren't persisted to SQLite
+# (they retry in 3 days by design), so they're memoized in-process for
+# 10 min to keep waiters from serially re-running the dead search.
+_QA_TICKER_LOCKS: dict[str, threading.Lock] = {}
+_QA_LOCKS_GUARD = threading.Lock()
+_QA_NEG_MEMO: dict[str, tuple[float, dict]] = {}   # ticker -> (monotonic_ts, payload)
+_QA_NEG_MEMO_TTL_S = 600.0
+
+
+def _qa_ticker_lock(ticker: str) -> threading.Lock:
+    key = ticker.upper()
+    with _QA_LOCKS_GUARD:
+        lk = _QA_TICKER_LOCKS.get(key)
+        if lk is None:
+            lk = threading.Lock()
+            _QA_TICKER_LOCKS[key] = lk
+        return lk
+
 
 def fetch_earnings_qa(
     ticker: str,
@@ -297,82 +342,100 @@ def fetch_earnings_qa(
       _cached_age_days: float | absent
     } or None on failure.
 
-    Cached 30 days per ticker.
+    Cached 30 days per ticker. Concurrent callers for the same ticker
+    coalesce onto a single web search (see _qa_ticker_lock).
     """
     if not force_refresh:
         cached = _cache_get(ticker, "earnings_qa", "", EARNINGS_QA_CACHE_TTL_DAYS)
         if cached:
             return cached
+        neg = _QA_NEG_MEMO.get(ticker.upper())
+        if neg and (time.monotonic() - neg[0]) <= _QA_NEG_MEMO_TTL_S:
+            return neg[1]
 
-    system = (
-        "You are a forensic short-seller research analyst. You have access "
-        "to web search via a tool that returns Google-quality results. Use "
-        "it to find earnings call transcripts and extract the most "
-        "consequential analyst Q&A exchanges."
-    )
+    # Serialize same-ticker callers: the winner runs the search, waiters
+    # re-check the cache (or negative memo) the winner just wrote.
+    with _qa_ticker_lock(ticker):
+        if not force_refresh:
+            cached = _cache_get(ticker, "earnings_qa", "", EARNINGS_QA_CACHE_TTL_DAYS)
+            if cached:
+                return cached
+            neg = _QA_NEG_MEMO.get(ticker.upper())
+            if neg and (time.monotonic() - neg[0]) <= _QA_NEG_MEMO_TTL_S:
+                return neg[1]
 
-    user = (
-        f"TASK: For {ticker}, find the {n_quarters} most-recent earnings "
-        f"conference call transcripts (try Motley Fool fool.com, Seeking "
-        f"Alpha seekingalpha.com free articles, the company's investor "
-        f"relations page, MarketBeat, Reuters, or Bloomberg coverage). "
-        f"Search the web — DO NOT make up content.\n\n"
+        system = (
+            "You are a forensic short-seller research analyst. You have access "
+            "to web search via a tool that returns Google-quality results. Use "
+            "it to find earnings call transcripts and extract the most "
+            "consequential analyst Q&A exchanges."
+        )
 
-        f"FROM THE Q&A SECTION (not management prepared remarks), extract "
-        f"the 5 most consequential analyst questions and management's "
-        f"answers VERBATIM. Prioritise questions about: competitive "
-        f"pressure, pricing power / NRR / discounting, customer churn, "
-        f"AI threat (hyperscalers, open-source), guidance changes, "
-        f"goodwill / restructuring, regulatory inquiries, or executive "
-        f"departures.\n\n"
+        user = (
+            f"TASK: For {ticker}, find the {n_quarters} most-recent earnings "
+            f"conference call transcripts (try Motley Fool fool.com, Seeking "
+            f"Alpha seekingalpha.com free articles, the company's investor "
+            f"relations page, MarketBeat, Reuters, or Bloomberg coverage). "
+            f"Search the web — DO NOT make up content.\n\n"
 
-        f"OUTPUT (STRICT JSON, no other text):\n"
-        f"{{\n"
-        f'  "summary": "<200-300 char one-paragraph headline of the Q&A>",\n'
-        f'  "digest": "<2000-4000 char structured Q&A: each entry as '
-        f'\\"Q (analyst, firm): ...\\\\n A (exec): ...\\\\n\\\\n\\">",\n'
-        f'  "topics_flagged": ["<topic1>", "<topic2>", ...],  '
-        f'  // from: competition, pricing, churn, ai_threat, guidance, '
-        f'restatement, regulatory, exec_departure\n'
-        f'  "source_hint": "<which transcript URL or publisher you used>"\n'
-        f"}}\n\n"
-        f"If you cannot find a real transcript (don't fabricate), return:\n"
-        f'  {{"summary": "no transcript found", "digest": "", '
-        f'"topics_flagged": [], "source_hint": ""}}\n'
-    )
+            f"FROM THE Q&A SECTION (not management prepared remarks), extract "
+            f"the 5 most consequential analyst questions and management's "
+            f"answers VERBATIM. Prioritise questions about: competitive "
+            f"pressure, pricing power / NRR / discounting, customer churn, "
+            f"AI threat (hyperscalers, open-source), guidance changes, "
+            f"goodwill / restructuring, regulatory inquiries, or executive "
+            f"departures.\n\n"
 
-    raw = qwen_web_search(user, system_prompt=system, max_chars=8000)
-    if not raw:
-        return None
+            f"OUTPUT (STRICT JSON, no other text):\n"
+            f"{{\n"
+            f'  "summary": "<200-300 char one-paragraph headline of the Q&A>",\n'
+            f'  "digest": "<2000-4000 char structured Q&A: each entry as '
+            f'\\"Q (analyst, firm): ...\\\\n A (exec): ...\\\\n\\\\n\\">",\n'
+            f'  "topics_flagged": ["<topic1>", "<topic2>", ...],  '
+            f'  // from: competition, pricing, churn, ai_threat, guidance, '
+            f'restatement, regulatory, exec_departure\n'
+            f'  "source_hint": "<which transcript URL or publisher you used>"\n'
+            f"}}\n\n"
+            f"If you cannot find a real transcript (don't fabricate), return:\n"
+            f'  {{"summary": "no transcript found", "digest": "", '
+            f'"topics_flagged": [], "source_hint": ""}}\n'
+        )
 
-    # Extract JSON from the response
-    try:
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start < 0 or end <= start:
-            logger.warning("fetch_earnings_qa(%s): no JSON in response", ticker)
+        raw = qwen_web_search(user, system_prompt=system, max_chars=8000,
+                              request_timeout_s=_QA_REQUEST_TIMEOUT_S)
+        if not raw:
             return None
-        parsed = json.loads(raw[start : end + 1])
-    except Exception as exc:
-        logger.warning("fetch_earnings_qa(%s) JSON parse failed: %s", ticker, exc)
-        return None
 
-    if not parsed.get("digest"):
-        # LLM said no transcript found — cache the negative result briefly
-        # (3 days) so we don't keep retrying, but not the full 30
-        parsed_neg = {
-            "summary": parsed.get("summary", "no transcript found"),
-            "digest": "",
-            "topics_flagged": [],
-            "source_hint": "",
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
-        }
-        # Don't cache permanently — let it retry in 3 days
-        return parsed_neg
+        # Extract JSON from the response
+        try:
+            start = raw.find("{")
+            end = raw.rfind("}")
+            if start < 0 or end <= start:
+                logger.warning("fetch_earnings_qa(%s): no JSON in response", ticker)
+                return None
+            parsed = json.loads(raw[start : end + 1])
+        except Exception as exc:
+            logger.warning("fetch_earnings_qa(%s) JSON parse failed: %s", ticker, exc)
+            return None
 
-    parsed["fetched_at"] = datetime.now(timezone.utc).isoformat()
-    _cache_put(ticker, "earnings_qa", "", parsed)
-    return parsed
+        if not parsed.get("digest"):
+            # LLM said no transcript found — cache the negative result briefly
+            # (3 days) so we don't keep retrying, but not the full 30
+            parsed_neg = {
+                "summary": parsed.get("summary", "no transcript found"),
+                "digest": "",
+                "topics_flagged": [],
+                "source_hint": "",
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+            # In-process memo so same-run waiters don't re-run the dead
+            # search; SQLite persistence deliberately skipped (3-day retry).
+            _QA_NEG_MEMO[ticker.upper()] = (time.monotonic(), parsed_neg)
+            return parsed_neg
+
+        parsed["fetched_at"] = datetime.now(timezone.utc).isoformat()
+        _cache_put(ticker, "earnings_qa", "", parsed)
+        return parsed
 
 
 def format_earnings_qa_for_prompt(qa: dict) -> str:

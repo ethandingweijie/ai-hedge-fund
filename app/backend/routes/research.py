@@ -1413,7 +1413,9 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
     from src.research_ideas.complacency.schemas import (
         ComplacencyCohortResult, ComplacencyTickerResult,
     )
-    from src.research_ideas.complacency.qualitative import assess_qualitative
+    from src.research_ideas.complacency.qualitative import (
+        assess_qualitative, INDICATORS, QUAL_CACHE_TTL_DAYS,
+    )
     from datetime import datetime, timezone
     import uuid
 
@@ -1545,26 +1547,112 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
         return
 
     gate_tickers = [r for r in results_list if r.verdict in ("Strong-Short", "Watch")]
+    # Q2: refresh Phase 2 is cache-first, bounded-inline by default.
+    #   cache_first_bounded — inline-score ONLY gate-passers with ZERO
+    #     fresh cached indicators (newly gated names), capped at
+    #     COMPLACENCY_REFRESH_INLINE_BUDGET (default 2, ~2 min each on
+    #     the bundled path). Partially-cached names are deferred to the
+    #     on-demand qual sweep (which completes them with one bundled
+    #     call each). Fully-cached names still run assess_qualitative —
+    #     pure cache hits, zero LLM — so their aggregate patch lands and
+    #     low-conf deep-bypass upgrades still happen.
+    #   full_legacy — the pre-Q2 behavior: every gate-passer scored
+    #     inline, sequentially.
+    REFRESH_QUAL_MODE = _os.environ.get(
+        "COMPLACENCY_REFRESH_QUAL", "cache_first_bounded",
+    ).lower()
+    INLINE_BUDGET = int(_os.environ.get("COMPLACENCY_REFRESH_INLINE_BUDGET", "2"))
     # Verification accounting — surfaced in the completion result so the
     # user can see EXACTLY what Phase 2 did (was deep research run, or
     # cache reused, etc.) without guessing.
     phase2_summary = {
+        "mode": REFRESH_QUAL_MODE,
         "gate_tickers": [t.ticker for t in gate_tickers],
         "qual_scored": [],            # tickers that got a qual assessment
         "deep_research_by_ticker": {},  # ticker -> # indicators that used deep web search
         "total_deep_escalations": 0,
         "fully_cached": [],           # tickers where qual came entirely from cache (no deep)
+        "deferred_to_sweep": [],      # Q2: gate-passers left for POST /qual-sweep
+        "inline_budget": INLINE_BUDGET if REFRESH_QUAL_MODE == "cache_first_bounded" else None,
     }
+    inline_used = 0
     for i, gate_result in enumerate(gate_tickers, 1):
         tkr = gate_result.ticker
+        # Per-ticker indicator counter for the heartbeat label (callback
+        # fires for preloaded-from-cache indicators too).
+        ind_done = {"n": 0}
 
-        def _patch_partial(code, indicator_score, ticker=tkr):
+        def _patch_partial(code, indicator_score, ticker=tkr, idx=i,
+                           total=len(gate_tickers)):
             try:
                 complacency_storage.update_ticker_in_latest_cohort_partial_qual(
                     ticker, code, indicator_score.model_dump(),
                 )
             except Exception as exc:
                 logger.warning("Partial qual patch %s/%s: %s", ticker, code, exc)
+            # Q0: per-indicator heartbeat. Before this, the refresh label
+            # only advanced per TICKER — users saw "qual 1/9 · ARM" frozen
+            # for 5-15 min. Now each landed indicator updates the toast
+            # within seconds AND keeps the progress-based watchdog alive
+            # through long indicators.
+            try:
+                ind_done["n"] += 1
+                deep = " ★DEEP" if "deep" in (indicator_score.model_used or "").lower() else ""
+                job_store.update_progress(
+                    job_id, "running",
+                    f"phase 2: qual {idx}/{total} · {ticker} · "
+                    f"{ind_done['n']}/{len(INDICATORS)} {code} = "
+                    f"{indicator_score.score}/5 conf "
+                    f"{indicator_score.confidence:.0%}{deep}",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Per-indicator heartbeat for %s/%s failed: %s",
+                    ticker, code, exc,
+                )
+
+        # ── Q2 cache-first gate ───────────────────────────────────────
+        if REFRESH_QUAL_MODE == "cache_first_bounded":
+            from app.backend.services.qualitative_storage import (
+                list_all_for_ticker,
+            )
+            try:
+                n_fresh = len(list_all_for_ticker(tkr, QUAL_CACHE_TTL_DAYS))
+            except Exception as exc:
+                logger.warning(
+                    "qual cache probe for %s failed (%s) — treating as uncached",
+                    tkr, exc,
+                )
+                n_fresh = 0
+            if 0 < n_fresh < len(INDICATORS):
+                # Partially cached: the Phase-1 row already carries the
+                # fresh indicators (rehydrated); the sweep completes the
+                # rest with one bundled call. Don't spend inline budget.
+                phase2_summary["deferred_to_sweep"].append({
+                    "ticker": tkr,
+                    "reason": f"partially cached ({n_fresh}/{len(INDICATORS)}) — sweep completes",
+                })
+                job_store.update_progress(
+                    job_id, "running",
+                    f"phase 2: qual {i}/{len(gate_tickers)} · {tkr} · "
+                    f"deferred to sweep ({n_fresh}/{len(INDICATORS)} cached)",
+                )
+                continue
+            if n_fresh == 0 and inline_used >= INLINE_BUDGET:
+                phase2_summary["deferred_to_sweep"].append({
+                    "ticker": tkr,
+                    "reason": "no fresh cache and inline budget exhausted",
+                })
+                job_store.update_progress(
+                    job_id, "running",
+                    f"phase 2: qual {i}/{len(gate_tickers)} · {tkr} · "
+                    f"deferred to sweep (inline budget {INLINE_BUDGET} used)",
+                )
+                continue
+            if n_fresh == 0:
+                inline_used += 1
+            # n_fresh == len(INDICATORS): fully cached → fall through to
+            # the free cache path (aggregate patch + deep-bypass upgrades).
 
         job_store.update_progress(
             job_id, "running",
@@ -1622,10 +1710,192 @@ def _execute_refresh_job(job_id: str, max_workers: int) -> None:
     })
     logger.info(
         "Master refresh job %s complete: %d tickers, %d gate passers, "
-        "%d qual-scored, %d total deep-research escalations",
+        "%d qual-scored, %d deferred to sweep, %d total deep-research escalations",
         job_id, cohort.ticker_count, gate_passers,
         len(phase2_summary["qual_scored"]),
+        len(phase2_summary["deferred_to_sweep"]),
         phase2_summary["total_deep_escalations"],
+    )
+
+
+# ─── Q2: on-demand fleet-wide qualitative sweep ──────────────────────────
+# Confidence at which a fresh cached indicator counts as "done" for the
+# sweep's skip check (same bar as the idempotent-restart preload ratchet).
+_SWEEP_HIGH_CONF = 0.70
+
+
+def _execute_qual_sweep_job(job_id: str, force: bool = False) -> None:
+    """
+    On-demand qualitative sweep over the FULL complacency universe (Q2).
+
+    Ordering: latest-cohort gate-passers (Strong-Short / Watch) first by
+    composite desc, then the rest — an interrupted sweep has always
+    covered the names that matter most.
+
+    Resumable: the 7-day per-(ticker, indicator) cache is the checkpoint.
+    Tickers whose indicators are ALL fresh and high-conf are skipped in
+    O(1) unless force=true; a killed sweep resumes where it stopped.
+
+    Scoring is the bundled path (1 shared evidence pass + 1 LLM call per
+    ticker, ~1-3 min). Ticker-level parallelism is capped at
+    COMPLACENCY_SWEEP_MAX_WORKERS (default 3): bundled mode keeps each
+    ticker at ~1-2 Qwen calls in flight, so 3 tickers ≈ 3-6 calls —
+    inside DashScope's burst window; the shared qwen_throttle bucket is
+    the second defense.
+
+    force=true passes force_refresh=True AND keep_high_conf_on_force=
+    False, so genuinely everything is re-scored (the usual force-refresh
+    high-conf preload would keep every fresh high-conf indicator and
+    make a force-sweep of a fresh ticker a no-op).
+    """
+    import os as _os
+    from src.research_ideas.complacency.universe import (
+        list_tickers, get_ticker_metadata,
+    )
+    from src.research_ideas.complacency.qualitative import (
+        assess_qualitative, INDICATORS, QUAL_CACHE_TTL_DAYS,
+    )
+    from src.research_ideas.complacency.runner import _compute_aggregate
+    from app.backend.services.qualitative_storage import list_all_for_ticker
+
+    max_workers = int(_os.environ.get("COMPLACENCY_SWEEP_MAX_WORKERS", "3"))
+    total_indicator_count = len(INDICATORS)
+
+    latest = complacency_storage.get_latest_complacency_run()
+    rows: dict = {}
+    if latest:
+        for r in (latest.get("results") or []):
+            t = (r.get("ticker") or "").upper()
+            if t:
+                rows[t] = r
+
+    universe = list_tickers()
+    gate_tickers: set = set()
+
+    def _ordering_key(t):
+        row = rows.get(t) or {}
+        if (row.get("verdict") or "") in ("Strong-Short", "Watch"):
+            gate_tickers.add(t)
+            return (0, -(row.get("composite") or 0.0), t)
+        return (1, -(row.get("composite") or 0.0), t)
+
+    ordered = sorted(universe, key=_ordering_key)
+    n_total = len(ordered)
+
+    def _sweep_one(tkr: str):
+        meta = get_ticker_metadata(tkr) or {}
+        row = rows.get(tkr) or {}
+
+        # Skip check — all 10 fresh AND high-conf (unless force).
+        if not force:
+            try:
+                fresh = list_all_for_ticker(tkr, QUAL_CACHE_TTL_DAYS)
+            except Exception as exc:
+                logger.warning("sweep cache probe %s failed: %s", tkr, exc)
+                fresh = []
+            if (
+                len(fresh) >= total_indicator_count
+                and all(
+                    (c.get("confidence") or 0.0) >= _SWEEP_HIGH_CONF
+                    for c in fresh
+                )
+            ):
+                return tkr, "fresh", None
+
+        def _on_indicator_done(code, indicator_score, _tkr=tkr):
+            try:
+                complacency_storage.update_ticker_in_latest_cohort_partial_qual(
+                    _tkr, code, indicator_score.model_dump(),
+                )
+            except Exception as exc:
+                logger.warning("sweep partial patch %s/%s: %s", _tkr, code, exc)
+            try:
+                job_store.update_progress(
+                    job_id, "running",
+                    f"sweep · {_tkr} · {code} = {indicator_score.score}/5 "
+                    f"conf {indicator_score.confidence:.0%}",
+                )
+            except Exception:
+                pass
+
+        qual = assess_qualitative(
+            ticker=tkr,
+            name=meta.get("name") or row.get("name") or tkr,
+            sector=meta.get("sector") or row.get("sector"),
+            quant_passes_gate=bool(row.get("passes_gate", False)),
+            quant_composite=float(row.get("composite") or 0.0),
+            force_refresh=force,
+            keep_high_conf_on_force=not force,
+            on_indicator_done=_on_indicator_done,
+        )
+        if qual is None or not qual.indicators:
+            return tkr, "failed", "no indicators scored"
+
+        # Patch the scored ticker into the latest cohort immediately.
+        try:
+            payload = dict(row) if row else {
+                "ticker": tkr,
+                "name": meta.get("name") or tkr,
+                "sector": meta.get("sector"),
+            }
+            payload["qualitative"] = qual.model_dump()
+            if payload.get("composite") is not None:
+                payload.update(_compute_aggregate(payload["composite"], qual))
+            complacency_storage.update_ticker_in_latest_cohort(payload)
+        except Exception as exc:
+            logger.warning("sweep cohort patch for %s failed: %s", tkr, exc)
+        n_deep = sum(
+            1 for s in qual.indicators.values()
+            if "deep" in (s.model_used or "").lower()
+        )
+        return tkr, "scored", {
+            "indicators": len(qual.indicators),
+            "deep_escalations": n_deep,
+            "cost_usd": round(qual.cost_usd, 4),
+            "incomplete": qual.incomplete,
+        }
+
+    scored_n = fresh_n = 0
+    failed: list = []
+    job_store.update_progress(
+        job_id, "running",
+        f"sweep starting · {n_total} tickers · force={force} · "
+        f"{len(gate_tickers)} gate-passers first · workers={max_workers}",
+    )
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(_sweep_one, t): t for t in ordered}
+        done_n = 0
+        for fut in as_completed(futures):
+            tkr = futures[fut]
+            done_n += 1
+            try:
+                _, outcome, detail = fut.result()
+            except Exception as exc:
+                logger.exception("qual sweep ticker %s failed: %s", tkr, exc)
+                outcome, detail = "failed", f"{type(exc).__name__}: {exc}"[:200]
+            if outcome == "scored":
+                scored_n += 1
+            elif outcome == "fresh":
+                fresh_n += 1
+            else:
+                failed.append({"ticker": tkr, "reason": str(detail)[:200]})
+            job_store.update_progress(
+                job_id, "running",
+                f"sweep {done_n}/{n_total} · {tkr} · {outcome}",
+            )
+
+    job_store.complete_job(job_id, {
+        "universe": n_total,
+        "scored": scored_n,
+        "fresh_skipped": fresh_n,
+        "failed": failed,
+        "force": force,
+        "gate_passers_first": sorted(gate_tickers),
+    })
+    logger.info(
+        "Qual sweep job %s complete: %d tickers, %d scored, %d fresh-skipped, "
+        "%d failed (force=%s)",
+        job_id, n_total, scored_n, fresh_n, len(failed), force,
     )
 
 
@@ -1826,6 +2096,53 @@ def _execute_score_job(job_id: str, ticker: str, force_qual: bool) -> None:
         logger.warning("Final cohort patch for %s failed: %s", ticker, exc)
 
     job_store.complete_job(job_id, final_payload)
+
+
+@router.post("/ideas/complacency/qual-sweep")
+async def complacency_qual_sweep(
+    force: bool = False,
+    actor: User | None = Depends(require_user_or_service),
+):
+    """
+    Q2: on-demand qualitative sweep of the FULL complacency universe.
+
+    Refresh Phase 2 is cache-first/bounded-inline — names it defers (and
+    any partially-cached gate-passers) are completed here on demand.
+    Gate-passers first; fresh high-conf tickers skipped unless force.
+
+    Returns {job_id, status: 'pending'} immediately; poll
+    GET /research/ideas/complacency/jobs/{job_id}.
+    """
+    in_flight = job_store.find_in_flight_job("qual_sweep")
+    if in_flight:
+        return {
+            "job_id":    in_flight["job_id"],
+            "status":    in_flight["status"],
+            "started_at": in_flight["started_at"],
+            "deduped":   True,
+        }
+
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
+
+    job_id = job_store.create_job("qual_sweep",
+                                  user_id=actor.id if actor else None)
+
+    if not await _maybe_enqueue_research(
+        job_id, "qual_sweep", {"force": force}
+    ):
+        async def _run():
+            await asyncio.to_thread(_execute_qual_sweep_job, job_id, force)
+
+        _spawn_background(_run())
+    return {
+        "job_id":    job_id,
+        "status":    "pending",
+        "started_at": None,
+        "deduped":   False,
+    }
 
 
 @router.post("/ideas/complacency/score/{ticker}")
