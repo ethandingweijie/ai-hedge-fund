@@ -24,6 +24,7 @@ Plus the complacency runner's qual-cache rehydration fast path, which was
 a separate raw-sqlite call site against the same tables.
 """
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -451,8 +452,10 @@ def _median_rows():
 
 
 def test_sector_medians_batch_and_lookup(medians):
-    n = medians.save_sector_medians_batch("2026-08-16T00:00:00+00:00",
-                                          _median_rows())
+    # Seed a fresh timestamp (not a hardcoded date) so the age_days
+    # assertion below stays valid whenever the suite runs.
+    as_of = datetime.now(timezone.utc).isoformat()
+    n = medians.save_sector_medians_batch(as_of, _median_rows())
     assert n == 2
     got = medians.get_latest_sector_median("Technology", "ev_sales")
     assert got["median"] == 5.8 and got["p25"] == 3.1
