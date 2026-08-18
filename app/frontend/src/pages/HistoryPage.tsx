@@ -358,15 +358,18 @@ export function HistoryPage() {
           </span>
         </div>
 
-        {/* V/G/P/M column headers (mobile list) — grades in each row align
-            under these letters instead of repeating the letter per chip. */}
+        {/* Column headers (mobile list) — the price column's "Target" label
+            and the V/G/P/M letters live here once, instead of repeating on
+            every row. */}
         {/* Wraps the four letters in a container that mirrors the row's
             grade cluster (flex, no gap, four w-9 cells) so each letter sits
             exactly above its column. The outer gap-2 matches the row wrapper's
             mobile gap. */}
-        <div className={`items-center gap-2 px-3 pb-1 ${isDesktop ? 'hidden' : 'flex'}`}>
+        <div className={`items-center gap-2 px-3 mx-px pb-1 ${isDesktop ? 'hidden' : 'flex'}`}>
           <div className="flex-1" />
-          <div className="w-[72px] shrink-0" />
+          <div className="w-[72px] shrink-0 text-right text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+            Target
+          </div>
           <div className="flex items-center shrink-0">
             {['V', 'G', 'P', 'M'].map(l => (
               <div key={l} className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
@@ -375,6 +378,33 @@ export function HistoryPage() {
             ))}
           </div>
         </div>
+
+        {/* Desktop column headers — mirrors the 2-col card grid so each
+            card's price and grade columns sit under a shared label row.
+            Geometry matches the row exactly (px-4, gap-5, w-24 price column,
+            four w-8 grade cells with gap-2.5). Below lg the grid is
+            single-column, so the second header cluster hides until lg. */}
+        {isDesktop && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pb-1">
+            {[0, 1].map(i => (
+              // mx-px compensates for the card's 1px border so the header's
+              // px-4 lines up exactly with the row content inside the card.
+              <div key={i} className={`items-center gap-5 px-4 mx-px ${i === 1 ? 'hidden lg:flex' : 'flex'}`}>
+                <div className="flex-1" />
+                <div className="w-24 shrink-0 text-right text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                  Target
+                </div>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  {['V', 'G', 'P', 'M'].map(l => (
+                    <div key={l} className="w-8 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                      {l}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* History list. Desktop: 2-column grid of self-contained run cards
             (denser, uses the wider column). Mobile: single bordered card with
@@ -481,9 +511,9 @@ function HistoryRow({
             the right (right-aligned price) — this kills the dead middle gap
             the mobile fixed-% columns leave on the wider 2-col cards, and
             bumps fonts up so the cards don't read as sparse.
-            Mobile: generous py-4 row rhythm (broker-portfolio style); the
-            four grades sit in fixed w-9 cells under the list's V/G/P/M
-            column header, so the letters aren't repeated on every row. */}
+            Mobile: generous py-4 row rhythm (broker-portfolio style).
+            Both shells: price ("Target") and grade letters are labeled once
+            in the list's column header row, not repeated per row. */}
         <div data-tap="open" className="min-w-0 flex-1 active:bg-muted/60 rounded-md -m-1 p-1 cursor-pointer">
           <div className="flex items-center gap-1.5">
             <span className={`font-semibold text-foreground tabular-nums tracking-tight ${isDesktop ? 'text-[15px]' : 'text-[13px]'}`}>
@@ -506,37 +536,40 @@ function HistoryRow({
             </span>
           </div>
         </div>
+        {/* Price column — the "Target" label lives in the list's column
+            header (both shells), so the cell is just price + upside. */}
         <div className={isDesktop ? 'shrink-0 w-24 text-right' : 'w-[72px] shrink-0 text-right'}>
           {row.price_target != null ? (
             <>
-              <div className={`font-semibold text-foreground tabular-nums ${isDesktop ? 'text-[15px]' : 'text-[12px]'}`}>
+              <div className={`font-semibold text-foreground tabular-nums ${isDesktop ? 'text-[17px]' : 'text-[13px]'}`}>
                 ${row.price_target.toLocaleString(undefined, {
                   maximumFractionDigits: row.price_target < 10 ? 2 : 0,
                 })}
               </div>
               <div className={isDesktop ? 'text-[12px]' : 'text-[10px]'}><Delta v={upside}/></div>
-              <div className={`text-muted-foreground/70 mt-0.5 uppercase tracking-wider ${isDesktop ? 'text-[10px]' : 'text-[10px]'}`}>
-                Target
-              </div>
             </>
           ) : (
             <div className="text-[10px] text-muted-foreground/70">—</div>
           )}
         </div>
+        {/* Grade cluster — chips are unlabeled (letters are in the column
+            header) and sit in fixed-width cells so every row lines up under
+            the header: w-8 cells with gap-2.5 on desktop (mirrors the header
+            cluster), w-9 cells on mobile. */}
         <div className={`flex items-center ${isDesktop ? 'gap-2.5 shrink-0' : 'shrink-0'}`}>
           {isDesktop ? (
             <>
-              <GradeChip grade={row.vgpm_grades?.valuation}     label="V"/>
-              <GradeChip grade={row.vgpm_grades?.growth}        label="G"/>
-              <GradeChip grade={row.vgpm_grades?.profitability} label="P"/>
-              <GradeChip grade={row.vgpm_grades?.momentum}      label="M"/>
+              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.valuation}     size="md"/></div>
+              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.growth}        size="md"/></div>
+              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.profitability} size="md"/></div>
+              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.momentum}      size="md"/></div>
             </>
           ) : (
             <>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.valuation}/></div>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.growth}/></div>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.profitability}/></div>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.momentum}/></div>
+              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.valuation}     size="md"/></div>
+              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.growth}        size="md"/></div>
+              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.profitability} size="md"/></div>
+              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.momentum}      size="md"/></div>
             </>
           )}
         </div>

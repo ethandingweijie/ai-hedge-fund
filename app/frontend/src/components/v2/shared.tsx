@@ -125,14 +125,19 @@ function gradeStyle(grade?: string | null) {
   };
 }
 
-export function GradeChip({ grade, label, tooltip }: { grade?: string | null; label?: string; tooltip?: string }) {
+export function GradeChip({ grade, label, tooltip, size = 'sm' }: { grade?: string | null; label?: string; tooltip?: string; size?: 'sm' | 'md' }) {
   const s = gradeStyle(grade);
+  // 'sm' is the original compact chip (screener rows, report cards). 'md' is
+  // a step up for list rows where the chip is a primary column value (History).
+  const pill = size === 'md'
+    ? 'min-w-[24px] h-[22px] px-2 text-[13px]'
+    : 'min-w-[22px] h-[20px] px-1.5 text-[11.5px]';
   return (
     <div className="flex flex-col items-center gap-1 min-w-[28px]">
       {label && <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
       <span
         title={tooltip}
-        className={`inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-md text-[11.5px] font-bold tabular-nums ${tooltip ? 'cursor-help' : ''} ${s.text} ${s.bg}`}
+        className={`inline-flex items-center justify-center rounded-md font-bold tabular-nums ${pill} ${tooltip ? 'cursor-help' : ''} ${s.text} ${s.bg}`}
       >
         {grade || '—'}
       </span>
