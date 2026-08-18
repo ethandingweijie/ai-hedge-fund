@@ -783,11 +783,16 @@ async def get_popular_tickers(limit: int = Query(default=15, ge=1, le=50)):
             from src.tools.hk.ticker import is_hk_ticker as _is_hk, to_yfinance_code as _to_yf
             yf_sym = _to_yf(ticker) if _is_hk(ticker) else ticker
             hist = yf.Ticker(yf_sym).history(period="5d")
-            if len(hist) >= 2:
-                prev  = float(hist["Close"].iloc[-2])
-                curr  = float(hist["Close"].iloc[-1])
-                # Reject rows where yfinance returned NaN/Inf (~0.5% of fetches)
-                if _math.isnan(prev) or _math.isnan(curr) or _math.isinf(prev) or _math.isinf(curr):
+            # yfinance >= 1.x passes Yahoo's trailing incomplete bar straight
+            # through — the current/pre-open session arrives as a row with a
+            # NaN close. Drop incomplete rows and use the last two FINALIZED
+            # closes, otherwise every chip blanks out until mid-session.
+            closes = hist["Close"].dropna()
+            if len(closes) >= 2:
+                prev  = float(closes.iloc[-2])
+                curr  = float(closes.iloc[-1])
+                # Reject rows where yfinance returned Inf (~0.5% of fetches)
+                if _math.isinf(prev) or _math.isinf(curr):
                     raise ValueError(f"yfinance returned non-finite close for {ticker}")
                 chg   = curr - prev
                 chg_pct = (chg / prev) * 100 if prev else 0.0
