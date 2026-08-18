@@ -334,7 +334,9 @@ def sotp_elasticities(assumptions: dict, shares: Optional[float] = None,
 
 def sotp_scenario_tps(assumptions: dict, scenarios: dict,
                       shares: Optional[float] = None,
-                      fx: float = 1.0) -> dict:
+                      fx: float = 1.0,
+                      net_debt: Optional[float] = None,
+                      tier: str = "default") -> dict:
     """Bear/bull TPs from per-segment multiple overrides.
 
     ``scenarios`` shape (from deep-research 2A.5 SCENARIO lines, surfaced on
@@ -347,6 +349,11 @@ def sotp_scenario_tps(assumptions: dict, scenarios: dict,
     ``normalize_key`` (equality or substring, both directions), applies the
     one-metric rule (both multiples cleared, then the override's set), and
     re-runs the engine. Cases with no matched override are omitted.
+
+    ``net_debt``/``tier`` thread through to ``_sotp_analyst_style`` so the
+    caller can run the scenario engine with the same configuration as the
+    base table (task #25: the blended-IV dispatcher passes both, keeping
+    the scenario SOTP values consistent with the base-case one).
     """
     shares = shares or assumptions.get("_shares")
     if not assumptions or not scenarios or not shares or shares <= 0:
@@ -386,7 +393,8 @@ def sotp_scenario_tps(assumptions: dict, scenarios: dict,
             applied.append(str(target.get("name", "")))
         if not applied:
             continue
-        t = _sotp_analyst_style(a, shares=shares, fx_to_reporting=fx)
+        t = _sotp_analyst_style(a, shares=shares, fx_to_reporting=fx,
+                                net_debt=net_debt, tier=tier)
         if t is not None:
             out[case] = {
                 "per_share": t["per_share"],
@@ -400,15 +408,19 @@ def sotp_scenario_tps(assumptions: dict, scenarios: dict,
 
 def build_sotp_breakdown(assumptions: dict, reporting_ccy: str = "USD",
                          shares: Optional[float] = None,
-                         table: Optional[dict] = None) -> Optional[dict]:
+                         table: Optional[dict] = None,
+                         net_debt: Optional[float] = None,
+                         tier: str = "default") -> Optional[dict]:
     """Assemble the full ``sotp_breakdown`` payload for the report.
 
     ``table`` may be passed pre-computed (the shadow-method table stored on
     ``most_recent["sotp_analyst_table"]``) so the breakdown is guaranteed
     consistent with the "SOTP (analyst)" row in the per-method table; when
-    omitted it is recomputed from the assumptions. Returns None when the
-    engine cannot run (missing shares/segments) — the caller stores None and
-    the frontend feature-flags off ``dcfRange?.sotp_breakdown``.
+    omitted it is recomputed from the assumptions. ``net_debt``/``tier``
+    configure any engine re-run (recomputed table, scenario TPs) with the
+    same settings the DCF dispatcher uses. Returns None when the engine
+    cannot run (missing shares/segments) — the caller stores None and the
+    frontend feature-flags off ``dcfRange?.sotp_breakdown``.
     """
     if not assumptions:
         return None
@@ -418,7 +430,8 @@ def build_sotp_breakdown(assumptions: dict, reporting_ccy: str = "USD",
     fx = float(assumptions.get("fx_usd_to_reporting") or 1.0)
     if table is None:
         table = _sotp_analyst_style(assumptions, shares=shares,
-                                    fx_to_reporting=fx)
+                                    fx_to_reporting=fx, net_debt=net_debt,
+                                    tier=tier)
     if table is None:
         return None
 
@@ -468,7 +481,7 @@ def build_sotp_breakdown(assumptions: dict, reporting_ccy: str = "USD",
         "elasticities": sotp_elasticities(assumptions, shares=shares, fx=fx),
         "scenarios": sotp_scenario_tps(
             assumptions, assumptions.get("_scenarios") or {},
-            shares=shares, fx=fx),
+            shares=shares, fx=fx, net_debt=net_debt, tier=tier),
         "snapshot": build_sotp_snapshot(assumptions, table),
         "multiple_basis": basis_compact,
         "sources": dict(assumptions.get("_sources") or {}),

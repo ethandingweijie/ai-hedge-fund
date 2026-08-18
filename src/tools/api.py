@@ -2193,7 +2193,10 @@ def get_fx_rate(
     Priority:
         1. FMP /stable/batch-forex-quotes (live; full ~1500-pair batch cached
            process-wide for 5 min — single-pair /stable/fx-quote was retired).
-        2. _FX_FALLBACK_RATES hardcoded table (Jan 2026 midpoints)
+           Direct pair first, then inverse pair (1/XXYY).
+        2. _FX_FALLBACK_RATES hardcoded table (Mar 2026 midpoints): direct
+           pair, then inverse of a table pair, then USD cross of two table
+           pairs (e.g. CNYHKD = CNYUSD/HKDUSD).
         3. 1.0 with a warning (unknown pair — caller should flag in output)
 
     Used by dcf_agent.py to normalise ADR financials reported in non-USD
@@ -2238,6 +2241,24 @@ def get_fx_rate(
     rate = _FX_FALLBACK_RATES.get(pair)
     if rate:
         print(f"  [FX] {pair} — fallback rate {rate:.6f} (FMP unavailable; Mar 2026 midpoint)")
+        return rate
+
+    # ── 2b. Inverse of a fallback pair (e.g. USDHKD = 1/HKDUSD) ──────────
+    inv_rate = _FX_FALLBACK_RATES.get(inverse_pair)
+    if inv_rate:
+        rate = 1.0 / inv_rate
+        print(f"  [FX] {pair} — fallback rate {rate:.6f} (inverse of {inverse_pair}={inv_rate:.4f})")
+        return rate
+
+    # ── 2c. USD cross from two fallback pairs (e.g. CNYHKD = CNYUSD/HKDUSD) ──
+    # Without this, non-USD crosses like CNYHKD fall through to 1.0 whenever
+    # the FMP batch is throttled, leaving HK-listed CNY reporters unscaled.
+    f_usd = _FX_FALLBACK_RATES.get(f"{from_currency}USD")
+    t_usd = _FX_FALLBACK_RATES.get(f"{to_currency}USD")
+    if f_usd and t_usd:
+        rate = f_usd / t_usd
+        print(f"  [FX] {pair} — fallback rate {rate:.6f} (USD cross: "
+              f"{from_currency}USD={f_usd:.4f} / {to_currency}USD={t_usd:.4f})")
         return rate
 
     # ── 3. Unknown pair ───────────────────────────────────────────────────

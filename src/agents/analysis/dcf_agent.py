@@ -51,6 +51,7 @@ Fallback behaviour:
 from __future__ import annotations
 
 import logging
+import os
 import random
 import statistics
 import time
@@ -494,13 +495,20 @@ def _median_positive_fcf_margin(
     return statistics.median(margins)
 
 
-def _analyst_revenue_growth(estimates: list, revenue_base: float) -> Optional[float]:
+def _analyst_revenue_growth(
+    estimates: list, revenue_base: float, fx_rate: float = 1.0
+) -> Optional[float]:
     if not estimates or not revenue_base:
         return None
     rev_est = _safe(estimates[0].revenue_avg)
     if rev_est is None or rev_est <= 0:
         return None
-    return (rev_est / revenue_base) - 1
+    # FMP returns estimates in the company's REPORTING currency while
+    # revenue_base is already converted to the target currency. Multiply by
+    # the same fx_rate applied to the historical series (task #26: raw-CNY
+    # estimates ÷ USD base produced +700% phantom growth on China ADRs).
+    _fxm = fx_rate if (fx_rate and fx_rate > 0) else 1.0
+    return ((rev_est * _fxm) / revenue_base) - 1
 
 
 # ── Segment-type EV/Revenue multiples (for SOTP method) ──────────────────────
@@ -1020,6 +1028,7 @@ def _analyst_growth_bands(
     estimates: list,
     revenue_base: float,
     min_analysts: int = 3,
+    fx_rate: float = 1.0,
 ) -> Optional[dict]:
     """Derive bear / base / bull revenue growth rates from analyst dispersion.
 
@@ -1027,6 +1036,12 @@ def _analyst_growth_bands(
     (and the analyst-count quality gate) to produce asymmetric scenario growth
     rates that reflect actual market disagreement, rather than the symmetric
     ±45% multiplier used when dispersion data is unavailable.
+
+    ``fx_rate`` converts the estimate revenue figures (reported in the
+    company's REPORTING currency by FMP) into the target currency of
+    ``revenue_base`` before the ratio is taken. Task #26: without this,
+    raw-CNY estimates ÷ USD-converted base implied +700% growth that
+    clamped every band to +100% on China ADRs.
 
     Returns a dict ``{"bear","base","bull","analyst_count"}`` or None if:
       - estimates list empty / no revenue_base
@@ -1051,6 +1066,10 @@ def _analyst_growth_bands(
         return None
     if lo <= 0 or av <= 0 or hi <= 0 or not (lo <= av <= hi):
         return None
+    # Positivity / monotonicity are invariant under a positive scale, so the
+    # checks above run on raw values; convert before taking the ratio.
+    _fxm = fx_rate if (fx_rate and fx_rate > 0) else 1.0
+    lo, av, hi = lo * _fxm, av * _fxm, hi * _fxm
 
     def _implied(rev_est: float) -> float:
         return max(min((rev_est / revenue_base) - 1.0, 1.0), -0.30)
@@ -2399,26 +2418,57 @@ def _compute_method_value(
     # Consumes assumptions assembled by the SOTP extractor (or a hand-built
     # fixture) on most_recent["sotp_assumptions"]. Per segment: higher of
     # P/E-on-NOPAT and EV/Rev; + associates + net cash; − holdco discount.
-    # Shadow-computed only (surfaced in the per-method table) until the
-    # producibility gate promotes it into the blend.
-    if method_name in {"SOTP (analyst)", "Analyst SOTP"}:
+    # Task #25: promoted into the blend at _SOTP_ANALYST_BLEND_WEIGHT via
+    # the profile overlay in run_dcf_agent when assumptions exist; tickers
+    # without assumptions never see the method. The base table is computed
+    # once and cached on most_recent (the scenario loop and the Tier 1
+    # report breakdown both reuse it). Bear/bull prefer the Tier 3.8
+    # scenario TPs (per-segment multiple overrides from the extractor's
+    # _scenarios block) over the flat base value when available, so the
+    # scenario IVs carry the same scenario awareness as the other methods.
+    if method_name in _SOTP_ANALYST_METHOD_NAMES:
         assumptions = most_recent.get("sotp_assumptions")
         if not assumptions or shares <= 0:
             return None
-        table = _sotp_analyst_style(
-            assumptions,
-            shares=shares,
-            net_debt=net_debt,
-            fx_to_reporting=float(
-                assumptions.get("fx_usd_to_reporting")
-                or most_recent.get("_sotp_usd_reporting_fx")
-                or 1.0
-            ),
-            tier=_resolve_segment_tier(sector, profile_name),
-        )
+        table = most_recent.get("sotp_analyst_table")
         if table is None:
-            return None
-        most_recent["sotp_analyst_table"] = table
+            table = _sotp_analyst_style(
+                assumptions,
+                shares=shares,
+                net_debt=net_debt,
+                fx_to_reporting=float(
+                    assumptions.get("fx_usd_to_reporting")
+                    or most_recent.get("_sotp_usd_reporting_fx")
+                    or 1.0
+                ),
+                tier=_resolve_segment_tier(sector, profile_name),
+            )
+            if table is None:
+                return None
+            most_recent["sotp_analyst_table"] = table
+        if scenario in ("bear", "bull") and assumptions.get("_scenarios"):
+            if "_sotp_analyst_scenario_tps" not in most_recent:
+                try:
+                    from src.agents.analysis.sotp_report_extras import (
+                        sotp_scenario_tps,
+                    )
+                    most_recent["_sotp_analyst_scenario_tps"] = (
+                        sotp_scenario_tps(
+                            assumptions,
+                            assumptions.get("_scenarios") or {},
+                            shares=shares,
+                            fx=float(table.get("fx_to_reporting") or 1.0),
+                            net_debt=net_debt,
+                            tier=_resolve_segment_tier(sector, profile_name),
+                        ) or {}
+                    )
+                except Exception:
+                    most_recent["_sotp_analyst_scenario_tps"] = {}
+            _scen = (most_recent["_sotp_analyst_scenario_tps"]
+                     .get(scenario) or {})
+            _scen_ps = _scen.get("per_share_reporting")
+            if _scen_ps and _scen_ps > 0:
+                return float(_scen_ps)
         return table["per_share_reporting"]
 
     # ── EV/Revenue and variants ────────────────────────────────────────────
@@ -3077,6 +3127,59 @@ _DCF_PROJECTION_FAMILY: frozenset[str] = _DCF_FAMILY_NAMES | frozenset({
 })
 
 
+# ── SOTP (analyst) blend promotion (task #25) ───────────────────────────────
+# Weight the analyst SOTP method carries once promoted into the blend.
+# Profile weights sum to 1.0, so a weight of w buys a w/(1+w) share of the
+# blended IV — 3.0 → exactly 75%: the analyst SOTP carries three quarters
+# and the DCF+multiples blend keeps one quarter, internally renormalized
+# (user-chosen for the 3690.HK/BABA/PDD/JD/MSFT/AMZN SOTP coverage; the
+# method lands in the multi bucket so the v3.19 composite applies to it
+# like every other peer-relative method). Override via the env var
+# (1.0 → 50/50, the original setting); 0 keeps the method shadow-only
+# (pre-promotion behaviour).
+try:
+    _SOTP_ANALYST_BLEND_WEIGHT = max(
+        0.0, float(os.getenv("SOTP_ANALYST_BLEND_WEIGHT", "3.0")))
+except (TypeError, ValueError):
+    _SOTP_ANALYST_BLEND_WEIGHT = 3.0
+
+_SOTP_ANALYST_METHOD_NAMES: frozenset[str] = frozenset(
+    {"SOTP (analyst)", "Analyst SOTP"})
+
+
+def _promote_sotp_analyst_profile(profile_data: Optional[dict],
+                                  has_assumptions: bool) -> Optional[dict]:
+    """Promote "SOTP (analyst)" into the resolved valuation profile.
+
+    When the ticker carries extractor-built ``sotp_assumptions`` and the
+    blend weight is positive, returns a COPY of ``profile_data`` with the
+    method appended. Profile dicts are direct references into
+    INDUSTRY_VALUATION_PROFILES and must never be mutated in place (that
+    would leak the method into every later ticker sharing the profile).
+
+    Returns the input object unchanged when there is nothing to promote
+    (no assumptions, zero weight, empty profile, or the method already
+    present) — tickers without SOTP evidence keep bit-identical blends.
+    """
+    if (_SOTP_ANALYST_BLEND_WEIGHT <= 0
+            or not has_assumptions
+            or not profile_data
+            or not profile_data.get("methods")):
+        return profile_data
+    methods = profile_data["methods"]
+    if any(m.get("name") in _SOTP_ANALYST_METHOD_NAMES for m in methods):
+        return profile_data
+    return {
+        **profile_data,
+        "methods": list(methods) + [{
+            "name": "SOTP (analyst)",
+            "weight": _SOTP_ANALYST_BLEND_WEIGHT,
+            "anchor": False,
+            "implementable": True,
+        }],
+    }
+
+
 def _blend_methods(
     profile_methods: list[dict],
     method_values: dict[str, Optional[float]],
@@ -3681,6 +3784,25 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"FX rate unavailable for {reported_currency}→{_target_ccy} — values unscaled"
                 )
 
+        # Task #25 — HK blends run in HKD but the analyst SOTP assumptions
+        # are USD-based. Tell the SOTP dispatcher which currency the blend
+        # actually carries so its per-share leg is converted to match:
+        # USD→HKD when the conversion above succeeded, else USD→reporting
+        # currency (blend stayed unconverted). No-op for non-HK tickers
+        # (their blend is USD, same as the assumptions).
+        if _is_hk and not most_recent.get("_sotp_usd_reporting_fx"):
+            _blend_ccy = (
+                _target_ccy if (fx_rate != 1.0 and fx_rate > 0)
+                else reported_currency
+            )
+            if _blend_ccy != "USD":
+                try:
+                    _usd_blend_fx = get_fx_rate("USD", _blend_ccy, api_key)
+                    if _usd_blend_fx and _usd_blend_fx > 0 and _usd_blend_fx != 1.0:
+                        most_recent["_sotp_usd_reporting_fx"] = _usd_blend_fx
+                except Exception:
+                    pass
+
         # ── Ticker-level forward flags (seed; all subsequent blocks append) ──
         ticker_forward_flags: list[str] = []
 
@@ -3905,7 +4027,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if growth_base is not None:
             data_source = "guided"
         else:
-            growth_base = _analyst_revenue_growth(estimates, revenue_base)
+            growth_base = _analyst_revenue_growth(
+                estimates, revenue_base, fx_rate=fx_rate
+            )
             if growth_base is not None:
                 data_source = "analyst"
 
@@ -3938,7 +4062,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # revenue low/avg/high when ≥3 analysts cover the name. Replaces the
         # symmetric ±45% multiplier used when dispersion is unavailable.
         # Per-ticker value — does not vary across the three scenarios.
-        _analyst_bands = _analyst_growth_bands(estimates, revenue_base)
+        _analyst_bands = _analyst_growth_bands(
+            estimates, revenue_base, fx_rate=fx_rate
+        )
         if _analyst_bands is not None:
             ticker_forward_flags.append(
                 f"Analyst dispersion ({_analyst_bands['analyst_count']} analysts): "
@@ -4097,6 +4223,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"Profile override {_lookup_profile!r} unresolved — "
                     f"keeping {profile_name!r}",
                 )
+
+        # ── SOTP (analyst) blend promotion (task #25) ────────────────────
+        # With extractor-built assumptions on this ticker, lift the shadow
+        # method into the resolved profile at _SOTP_ANALYST_BLEND_WEIGHT
+        # (weight 3.0 → exactly 75% of the blended IV; the DCF+multiples
+        # blend keeps the other 25%, internally renormalized). Copy-on-
+        # write — the shared INDUSTRY_VALUATION_PROFILES dict is never
+        # mutated. The T-1 backward gate below receives the overlay too,
+        # but its historical t1_row carries no sotp_assumptions → method
+        # value None → skipped and renormalized → T-1 calibration and
+        # every no-SOTP ticker stay bit-identical.
+        profile_data = _promote_sotp_analyst_profile(
+            profile_data, bool(most_recent.get("sotp_assumptions")))
 
         # v3.21 (Fix D) — write the locally-resolved profile_name back to state
         # so late-pipeline consumers (sector_card render, reextract path, audit
@@ -4500,7 +4639,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # bear=1.00 / base=1.00 / bull=1.00, all identical). Fall back to
         # CAGR-based growth which handles the ticker normally.
         if _analyst_bands is not None:
-            _band_values = list(_analyst_bands.values())
+            # Only the three scenario values participate in the dispersion
+            # check — including "analyst_count" in .values() made max−min ≈
+            # the analyst count, so this guard could never fire (task #26).
+            _band_values = [_analyst_bands[k] for k in ("bear", "base", "bull")]
             _dispersion = max(_band_values) - min(_band_values)
             if _dispersion < 0.005:
                 print(
@@ -5732,6 +5874,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     reporting_ccy=_output_currency,
                     shares=shares,
                     table=most_recent.get("sotp_analyst_table"),
+                    net_debt=net_debt,
+                    tier=_resolve_segment_tier(sector, profile_name),
                 )
             except Exception as _sotp_x_err:
                 _log.warning("[dcf] %s: sotp_breakdown build failed: %s",
