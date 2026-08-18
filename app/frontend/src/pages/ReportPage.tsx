@@ -36,6 +36,7 @@ import { REITValuationPanel }  from '@/components/report/reit/REITValuationPanel
 import { BankValuationPanel }  from '@/components/report/bank/BankValuationPanel';
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
+import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { DebatePanel }         from '@/components/report/DebatePanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
@@ -1434,6 +1435,15 @@ export function ReportPage() {
               renderSection('valuation', 'Valuation', (
                 <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={liveTicker} />
               ))
+            )}
+            {/* ── GS-style SOTP report card (task #28) ────────────────────────
+                Present only when the DCF engine ran with SOTP (analyst)
+                assumptions (dcf_range[ticker].sotp_breakdown): business-unit
+                breakdown, NAV bridge, multiple basis, scenario TPs. Stacks
+                below whichever valuation branch rendered above, mirroring
+                V2ReportView; the DCF methodology panel follows. */}
+            {dcfRange?.sotp_breakdown && (
+              <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />
             )}
             {/* Sits directly below the DCF ladder in the same column instead of
                 as its own full-width strip — fills the column's remaining
