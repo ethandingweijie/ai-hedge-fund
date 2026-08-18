@@ -367,12 +367,12 @@ export function HistoryPage() {
             mobile gap. */}
         <div className={`items-center gap-2 px-3 mx-px pb-1 ${isDesktop ? 'hidden' : 'flex'}`}>
           <div className="flex-1" />
-          <div className="w-[72px] shrink-0 text-right text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+          <div className="w-[72px] shrink-0 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
             Target
           </div>
           <div className="flex items-center shrink-0">
             {['V', 'G', 'P', 'M'].map(l => (
-              <div key={l} className="w-9 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+              <div key={l} className="w-10 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                 {l}
               </div>
             ))}
@@ -391,12 +391,12 @@ export function HistoryPage() {
               // px-4 lines up exactly with the row content inside the card.
               <div key={i} className={`items-center gap-5 px-4 mx-px ${i === 1 ? 'hidden lg:flex' : 'flex'}`}>
                 <div className="flex-1" />
-                <div className="w-24 shrink-0 text-right text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                <div className="w-24 shrink-0 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                   Target
                 </div>
                 <div className="flex items-center gap-2.5 shrink-0">
                   {['V', 'G', 'P', 'M'].map(l => (
-                    <div key={l} className="w-8 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                    <div key={l} className="w-10 text-center text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                       {l}
                     </div>
                   ))}
@@ -531,14 +531,11 @@ function HistoryRow({
           <div className="mt-1 flex items-center gap-1.5">
             <ActionPill action={row.final_action || null} />
             <AgeBadge runAt={row.run_at} />
-            <span className={`text-muted-foreground/70 ${isDesktop ? 'text-[11px]' : 'text-[10px]'}`}>
-              {daysAgo(row.run_at)}
-            </span>
           </div>
         </div>
-        {/* Price column — the "Target" label lives in the list's column
-            header (both shells), so the cell is just price + upside. */}
-        <div className={isDesktop ? 'shrink-0 w-24 text-right' : 'w-[72px] shrink-0 text-right'}>
+        {/* Price column — centred under the header's "Target" label; the
+            per-row label is gone (it lives in the column header now). */}
+        <div className={isDesktop ? 'shrink-0 w-24 text-center' : 'w-[72px] shrink-0 text-center'}>
           {row.price_target != null ? (
             <>
               <div className={`font-semibold text-foreground tabular-nums ${isDesktop ? 'text-[17px]' : 'text-[13px]'}`}>
@@ -553,23 +550,23 @@ function HistoryRow({
           )}
         </div>
         {/* Grade cluster — chips are unlabeled (letters are in the column
-            header) and sit in fixed-width cells so every row lines up under
-            the header: w-8 cells with gap-2.5 on desktop (mirrors the header
-            cluster), w-9 cells on mobile. */}
+            header) and sit in fixed-width w-10 cells so every row lines up
+            under the header with breathing room between pills: gap-2.5
+            between cells on desktop, none on mobile (w-10 alone spaces them). */}
         <div className={`flex items-center ${isDesktop ? 'gap-2.5 shrink-0' : 'shrink-0'}`}>
           {isDesktop ? (
             <>
-              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.valuation}     size="md"/></div>
-              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.growth}        size="md"/></div>
-              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.profitability} size="md"/></div>
-              <div className="w-8 flex justify-center"><GradeChip grade={row.vgpm_grades?.momentum}      size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.valuation}     size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.growth}        size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.profitability} size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.momentum}      size="md"/></div>
             </>
           ) : (
             <>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.valuation}     size="md"/></div>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.growth}        size="md"/></div>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.profitability} size="md"/></div>
-              <div className="w-9 flex justify-center"><GradeChip grade={row.vgpm_grades?.momentum}      size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.valuation}     size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.growth}        size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.profitability} size="md"/></div>
+              <div className="w-10 flex justify-center"><GradeChip grade={row.vgpm_grades?.momentum}      size="md"/></div>
             </>
           )}
         </div>
