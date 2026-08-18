@@ -1,0 +1,21 @@
+2A.5 SOTP ASSUMPTION SET — Amazon.com (AMZN), NTM+1 (per GS convention as of 31 Jul 2026)
+
+Reconstructed GS-style SOTP block replicating the published GS valuation
+(GS 31 Jul 2026: PT $375, NTM+1 SOTP — North America 16x EV/GAAP EBIT,
+International 1.25x EV/Sales, AWS 29x EV/GAAP EBIT, less net debt $59,220mn,
+divided by 10,974mn diluted shares). GS applies EV/EBIT-style multiples to
+pre-tax GAAP EBIT, hence group tax rate 0 in the engine (no double tax
+adjustment). Segment EBITs are GS NTM+1 estimates (NA $52,251mn, AWS
+$105,842mn); revenues shown for value-split display — NA/AWS from GS CY27E
+segment estimates ($518,601mn / $248,890mn), International as published on
+the NTM+1 EV/Sales basis ($209,723mn). GS downside/upside scenarios: 12x/20x
+NA, 1.0x/1.5x Intl, 16x/34x AWS -> $200/$475.
+
+SOTP_BLOCK_START
+SEGMENT | name=North America | rev_fwd_usd_bn=518.601 | ebit_margin_pct=10.075 | unit_economics=NA retail (1P + 3P + advertising + subscriptions + physical stores) NTM+1 GAAP EBIT $52,251mn (Source: GS SOTP Exhibit 3, 31 Jul 2026) | multiple_ref=16x P/E on NTM+1 GAAP EBIT (Source: GS SOTP Exhibit 3, 31 Jul 2026)
+SEGMENT | name=International | rev_fwd_usd_bn=209.723 | ebit_margin_pct=UNKNOWN | unit_economics=NA; valued on a revenue basis per GS method (Source: GS SOTP Exhibit 3, 31 Jul 2026) | multiple_ref=1.25x EV/Sales on NTM+1 revenue (Source: GS SOTP Exhibit 3, 31 Jul 2026)
+SEGMENT | name=AWS | rev_fwd_usd_bn=248.890 | ebit_margin_pct=42.526 | unit_economics=cloud NTM+1 GAAP EBIT $105,842mn, ~42.5% margin on GS CY27E revenue (Source: GS SOTP Exhibit 3, 31 Jul 2026) | multiple_ref=29x P/E on NTM+1 GAAP EBIT (Source: GS SOTP Exhibit 3, 31 Jul 2026)
+NET_CASH | usd_bn=-59.22 | as_of=2Q26 (GS net debt line: debt + finance leases less cash; Source: GS SOTP Exhibit 3, 31 Jul 2026)
+HOLDCO_DISCOUNT | pct=0 | convention=none (US single-class operating company)
+TAX_RATE | pct=0 | convention=EV/EBIT multiples applied to pre-tax GAAP EBIT per GS method
+SOTP_BLOCK_END

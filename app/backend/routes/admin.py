@@ -294,7 +294,193 @@ async def admin_diag(request: Request, secret: str = ""):
     except Exception:
         out["archive"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
+    # 10. M1 recency-loop memory: report recaps + agent lessons. Counts +
+    # kill-switch states only — lesson content is browseable via
+    # /admin/agent-lessons.
+    try:
+        import asyncio as _aio
+
+        def _m1_counts() -> dict:
+            from src.data import db as _db
+            from src.memory import report_recap as _rc
+            from src.memory import agent_lessons as _al
+            _rc._ensure_table()
+            _al._ensure_table()
+            _recaps = _db.query_one("SELECT COUNT(*) AS n FROM report_recaps")
+            _lessons_active = _db.query_one(
+                "SELECT COUNT(*) AS n FROM agent_lessons WHERE active = 1")
+            _lessons_total = _db.query_one(
+                "SELECT COUNT(*) AS n FROM agent_lessons")
+            return {
+                "report_recaps": int(_recaps["n"]) if _recaps else 0,
+                "lessons_active": int(_lessons_active["n"]) if _lessons_active else 0,
+                "lessons_total": int(_lessons_total["n"]) if _lessons_total else 0,
+                "recaps_enabled": _rc.recaps_enabled(),
+                "lessons_enabled": _al.lessons_enabled(),
+                "freshness_delta_enabled": os.environ.get(
+                    "FRESHNESS_DELTA_SEARCH", "true").strip().lower()
+                    not in ("0", "false", "no", "off", ""),
+            }
+
+        out["m1_memory"] = await _aio.to_thread(_m1_counts)
+        out["m1_memory"]["ok"] = True
+    except Exception:
+        out["m1_memory"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
     return out
+
+
+# ── M1: report recap backfill + agent lesson browsing ───────────────────────
+
+@router.post("/admin/recap-backfill")
+async def recap_backfill(
+    request: Request,
+    secret: str = "",
+    limit: int = 20,
+    dry_run: bool = True,
+    ticker: str = "",
+):
+    """Retro-fit report recaps for finalized web_runs that predate M1.
+
+    Recaps are normally generated when a run completes (analysis_service);
+    this backfill walks the most recent finalized runs that have no recap
+    row yet and builds one from the stored payload. One fast-tier LLM pass
+    per recap — keep `limit` modest.
+
+    Query params:
+      secret   — DB_UPLOAD_SECRET (required)
+      limit    — max finalized runs to consider, newest first (default 20)
+      dry_run  — default True; pass dry_run=false to actually write
+      ticker   — optional single-ticker filter (e.g. 'CRWD')
+    """
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    import asyncio
+
+    limit = max(1, min(int(limit or 20), 200))
+    ticker_filter = ticker.strip().upper()
+
+    def _do_backfill() -> dict:
+        from app.backend.services import analysis_service as _asvc
+        from src.memory import report_recap
+
+        _asvc._ensure_web_runs_table()
+        sql = (
+            "SELECT run_id, ticker, run_at, full_result_json FROM web_runs "
+            "WHERE full_result_json IS NOT NULL AND is_checkpoint = 0 "
+        )
+        params: list = []
+        if ticker_filter:
+            sql += "AND UPPER(ticker) = ? "
+            params.append(ticker_filter)
+        sql += "ORDER BY run_at DESC LIMIT ?"
+        params.append(limit)
+        rows = _asvc._fetch(sql, params)
+
+        summary = {
+            "dry_run": dry_run,
+            "rows_considered": 0,
+            "rows_skipped_existing": 0,
+            "rows_skipped_unparseable": 0,
+            "recaps_built": 0,
+            "recaps_failed": 0,
+            "details": [],
+        }
+        for row in rows:
+            summary["rows_considered"] += 1
+            run_id, t = row["run_id"], (row["ticker"] or "").upper()
+            if report_recap.has_recap(t, run_id):
+                summary["rows_skipped_existing"] += 1
+                continue
+            try:
+                payload = json.loads(row["full_result_json"] or "{}")
+            except (TypeError, ValueError):
+                summary["rows_skipped_unparseable"] += 1
+                continue
+            if dry_run:
+                summary["recaps_built"] += 1
+                summary["details"].append({
+                    "run_id": run_id, "ticker": t,
+                    "run_at": row["run_at"], "status": "would_build",
+                })
+                continue
+            saved = report_recap.build_and_save_recap(
+                payload, t, run_id=run_id, run_at=row["run_at"])
+            if saved:
+                summary["recaps_built"] += 1
+                summary["details"].append({
+                    "run_id": run_id, "ticker": t,
+                    "run_at": row["run_at"], "status": "built",
+                })
+            else:
+                summary["recaps_failed"] += 1
+                summary["details"].append({
+                    "run_id": run_id, "ticker": t,
+                    "run_at": row["run_at"], "status": "failed",
+                })
+        return summary
+
+    return await asyncio.to_thread(_do_backfill)
+
+
+@router.get("/admin/agent-lessons")
+async def agent_lessons_list(
+    request: Request,
+    secret: str = "",
+    agent_key: str = "",
+    include_inactive: bool = False,
+):
+    """Browse the M1 agent-lesson store (secret-gated). Filter with
+    agent_key=dcf_engine|sotp_extractor; include_inactive=true also shows
+    deactivated/capped rows."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    import asyncio
+
+    def _list() -> dict:
+        from src.memory import agent_lessons
+        key = agent_key.strip().lower() or None
+        if key and key not in agent_lessons.AGENT_KEYS:
+            raise ValueError(f"agent_key must be one of {agent_lessons.AGENT_KEYS}")
+        lessons = agent_lessons.list_lessons(
+            agent_key=key, include_inactive=include_inactive)
+        return {
+            "count": len(lessons),
+            "agent_key_filter": key,
+            "include_inactive": include_inactive,
+            "lessons_enabled": agent_lessons.lessons_enabled(),
+            "lessons": lessons,
+        }
+
+    try:
+        return await asyncio.to_thread(_list)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/admin/agent-lessons/deactivate")
+async def agent_lessons_deactivate(
+    request: Request,
+    secret: str = "",
+    lesson_id: str = "",
+):
+    """Soft-delete one lesson (kept for audit; stops being injected into
+    prompts immediately)."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    if not lesson_id.strip():
+        raise HTTPException(status_code=400, detail="lesson_id required")
+
+    import asyncio
+    from src.memory import agent_lessons
+
+    ok = await asyncio.to_thread(
+        agent_lessons.deactivate_lesson, lesson_id.strip())
+    if not ok:
+        raise HTTPException(status_code=500, detail="deactivation failed")
+    return {"ok": True, "lesson_id": lesson_id.strip()}
 
 
 @router.post("/admin/cleanup-stale-checkpoints")

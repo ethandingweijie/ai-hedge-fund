@@ -236,6 +236,152 @@ def _merge_resume_into_phase_cache(
     return seeded
 
 
+# ── M1 recency loop: freshness delta ─────────────────────────────────────────
+# One cheap web search per ticker that has a prior report recap, classifying
+# whether anything MATERIAL changed since that report. User-triggered by
+# design (runs inside the requested pipeline — nothing runs unattended).
+# Every failure mode is soft: the run always continues.
+
+def _classify_delta(ticker: str, prior: dict, snippets: str) -> dict | None:
+    """Fast-tier LLM pass over one search result set. Returns
+    {material, events, verdict} or None on any failure (soft-fail)."""
+    try:
+        from pydantic import BaseModel, Field
+
+        class DeltaEvent(BaseModel):
+            headline: str = ""
+            date: str = ""
+            relevance: str = ""
+
+        class DeltaClassification(BaseModel):
+            material: bool = Field(
+                default=False,
+                description="True if any event meaningfully changes the prior thesis")
+            events: list[DeltaEvent] = Field(default_factory=list)
+            verdict: str = Field(
+                default="",
+                description="One sentence: is the prior report still current and why")
+
+        from src.llm.models import ModelProvider, get_model
+        from src.memory.report_recap import RECAP_MODEL_NAME
+        provider = ModelProvider.ALIBABA
+        if RECAP_MODEL_NAME.lower().startswith(("gpt", "o1", "o3", "o4")):
+            provider = ModelProvider.OPENAI
+        llm = get_model(RECAP_MODEL_NAME, provider, None)
+        if llm is None:
+            return None
+
+        recap_json = prior.get("recap_json") or {}
+        assumptions = "; ".join((recap_json.get("assumptions") or [])[:5]) or "(none recorded)"
+        catalysts = "; ".join((recap_json.get("catalysts") or [])[:5]) or "(none recorded)"
+
+        system = (
+            "You check whether a prior equity research report is still current. "
+            "Compare fresh news against the prior thesis. Be strict: only "
+            "earnings, guidance, M&A, regulatory, macro-sector or thesis-level "
+            "developments count as material — routine price moves do not. "
+            "Respond in JSON format."
+        )
+        human = (
+            f"Ticker: {ticker}\n"
+            f"Prior report ({str(prior.get('run_at') or '')[:10]}): "
+            f"{prior.get('final_action') or 'N/A'}, "
+            f"price target {recap_json.get('price_target')} — "
+            f"{(prior.get('recap_text') or '')[:400]}\n"
+            f"Key assumptions: {assumptions}\n"
+            f"Watched catalysts: {catalysts}\n\n"
+            f"Fresh search results since then:\n{snippets[:4000]}\n\n"
+            "Classify: material (bool), events (max 5, only genuinely material "
+            "ones, each with headline/date/relevance to the prior thesis), "
+            "verdict (one sentence on whether the prior report is still current).\n"
+            "Return a JSON object: {\"material\": true|false, \"events\": "
+            "[{\"headline\": \"...\", \"date\": \"...\", \"relevance\": \"...\"}], "
+            "\"verdict\": \"...\"}"
+        )
+        messages = [("system", system), ("human", human)]
+        try:
+            from src.research_ideas.complacency import qwen_throttle
+            qwen_throttle.acquire(weight=1.0)
+        except Exception:
+            pass  # throttle is a courtesy; never block the delta check on it
+
+        structured_llm = llm.with_structured_output(DeltaClassification, method="json_mode")
+        try:
+            out = structured_llm.invoke(messages)
+        except Exception:
+            import json as _json
+            raw = llm.invoke(messages)
+            text = raw.content if hasattr(raw, "content") else str(raw)
+            start, end = text.find("{"), text.rfind("}")
+            if start < 0 or end <= start:
+                return None
+            out = DeltaClassification(**_json.loads(text[start:end + 1]))
+
+        return {
+            "material": bool(out.material),
+            "events": [
+                {"headline": (e.headline or "")[:200],
+                 "date": (e.date or "")[:16],
+                 "relevance": (e.relevance or "")[:300]}
+                for e in (out.events or [])[:5]
+            ],
+            "verdict": (out.verdict or "")[:500],
+        }
+    except Exception as exc:
+        print(f"  [delta] {ticker}: classification failed: {exc}")
+        return None
+
+
+def _delta_for_ticker(ticker: str, prior: dict, tavily_key: str | None) -> dict:
+    """One bounded search + classification for a single ticker. Soft-fail:
+    always returns a well-formed delta dict."""
+    base = {
+        "material": None,
+        "events": [],
+        "verdict": "check unavailable",
+        "based_on_run": prior.get("run_id"),
+        "prior_run_at": prior.get("run_at"),
+    }
+    if not tavily_key:
+        return base
+    try:
+        from src.agents.industry.deep_research import _search_web
+        since = str(prior.get("run_at") or "")[:10] or "the last report"
+        snippets = _search_web(
+            f"{ticker} stock material news earnings guidance M&A regulatory since {since}",
+            tavily_key,
+        )
+        if not snippets or snippets.startswith(("Search error", "No results")):
+            base["verdict"] = "no fresh results"
+            return base
+        classified = _classify_delta(ticker, prior, snippets)
+        if classified:
+            base.update(classified)
+        return base
+    except Exception as exc:
+        print(f"  [delta] {ticker}: freshness check failed: {exc}")
+        return base
+
+
+def _run_freshness_delta(
+    tickers: list[str],
+    prior_reports: dict[str, dict],
+) -> dict[str, dict]:
+    """M1 phase 2.9 — freshness delta for every ticker with a prior recap.
+    Kill switch: FRESHNESS_DELTA_SEARCH=false."""
+    if os.environ.get("FRESHNESS_DELTA_SEARCH", "true").strip().lower() in (
+            "0", "false", "no", "off", ""):
+        return {}
+    tavily_key = os.environ.get("TAVILY_API_KEY")
+    deltas: dict[str, dict] = {}
+    for t in tickers:
+        prior = prior_reports.get(t)
+        if not prior:
+            continue
+        deltas[t] = _delta_for_ticker(t, prior, tavily_key)
+    return deltas
+
+
 def run_advanced_pipeline(
     tickers: list[str],
     start_date: str,
@@ -506,6 +652,84 @@ def run_advanced_pipeline(
                         "deep_research_text":     _rb_data.get("deep_research"),
                         "deep_research_sections": _rb_data.get("deep_research_sections") or {},
                     }
+
+            # ── M1 recency loop: load each ticker's last report recap ──────
+            # Feeds phase 2.9 (freshness delta), the deep-research/PM prompt
+            # injections and the saved payload's data.prior_recap. A ticker
+            # with no archive/resume cache entry gets a minimal dict: the
+            # oversized age_days keeps every _all_cached skip gate inert,
+            # while resume-seeded entries keep their own (usable) age.
+            try:
+                from src.memory import report_recap as _report_recap
+                if _report_recap.recaps_enabled():
+                    for _t in tickers:
+                        _pr = _report_recap.get_recent_recap(_t)
+                        if not _pr:
+                            continue
+                        if _phase_cache[_t] is None:
+                            _phase_cache[_t] = {"age_days": 999.0}
+                        _phase_cache[_t]["prior_report"] = _pr
+                        print(f"  [recap] {_t}: prior report recap loaded "
+                              f"({_pr.get('final_action') or 'N/A'}, "
+                              f"{_pr.get('age_days', 0):.1f}d old)")
+            except Exception as _recap_exc:
+                print(f"  [recap] prior recap load failed: {_recap_exc}")
+
+        # ----------------------------------------------------------------
+        # 2_9 FRESHNESS DELTA (M1 recency loop) — for every ticker with a
+        # prior report recap: one bounded web search since that report +
+        # one fast-tier classification of what materially changed. Lazy by
+        # construction: this only runs because a user asked about the
+        # ticker — nothing runs unattended. Every failure mode is soft;
+        # the run always continues.
+        # ----------------------------------------------------------------
+        with _timed("2_9_freshness_delta"):
+            _prior_reports: dict[str, dict] = {}
+            for _t in tickers:
+                _pr = (_phase_cache.get(_t) or {}).get("prior_report")
+                if _pr:
+                    _prior_reports[_t] = _pr
+                    _pr_px = _pr.get("price_at_run")
+                    progress.update_status(
+                        "archive_cache", _t,
+                        f"[recap] prior: {_pr.get('final_action') or 'N/A'}"
+                        + (f" @ ${_pr_px}" if _pr_px else "")
+                        + f" ({_pr.get('age_days') or 0:.1f}d old)")
+            state["data"]["prior_recap"] = dict(_prior_reports)
+            if _prior_reports:
+                _deltas = _run_freshness_delta(list(tickers), _prior_reports)
+                state["data"]["freshness_delta"] = _deltas
+                for _t, _d in _deltas.items():
+                    _n_ev = len(_d.get("events") or [])
+                    _mat = _d.get("material")
+                    if _mat is None:
+                        _label = "check unavailable"
+                    elif _mat:
+                        _label = f"MATERIAL change ({_n_ev} event(s))"
+                    else:
+                        _label = "no material change"
+                    print(f"  [delta] {_t}: {_label} since "
+                          f"{str(_d.get('prior_run_at') or '')[:10]} — "
+                          f"{(_d.get('verdict') or '')[:160]}")
+                    progress.update_status("archive_cache", _t, f"[delta] {_label}")
+            else:
+                state["data"]["freshness_delta"] = {}
+                print("  [delta] no prior report recaps — freshness check skipped")
+
+            # ── M1 agent lessons: post-mortem any detected gap ─────────────
+            # Detection reads each ticker's last SCORED archive run
+            # (INCORRECT outcome or DCF calibration error); no gap → no LLM
+            # call at all, and a gap that already produced lessons is
+            # skipped too. Lazy/user-triggered exactly like the freshness
+            # check above; failures are logged and never break the run.
+            try:
+                from src.memory import agent_lessons as _agent_lessons
+                if _agent_lessons.lessons_enabled():
+                    for _t in tickers:
+                        _agent_lessons.maybe_generate_lessons(
+                            _t, _prior_reports.get(_t))
+            except Exception as _lessons_exc:
+                print(f"  [lessons] lesson generation failed: {_lessons_exc}")
 
         def _all_cached(key: str, age_days: float = 7.0) -> bool:
             """True if every ticker has a fresh-enough, non-empty cache entry for key.
@@ -1464,6 +1688,12 @@ def run_advanced_pipeline(
             # cards silently hide even when Qwen produced rich 2F content.
             "deep_research_sections": state["data"].get("deep_research_sections", {}),
             "research_tier":          state["data"].get("research_tier"),
+            # ── M1 recency loop: prior report recap + freshness delta ───────
+            # Per-ticker dicts ({ticker: {...}}) like every other data.* key.
+            # Must be listed here or they never reach web_runs.full_result_json
+            # and the frontend "Since last report" card stays hidden.
+            "prior_recap":            state["data"].get("prior_recap", {}),
+            "freshness_delta":        state["data"].get("freshness_delta", {}),
             # Sector-specific valuation card payload (Option B render). Must
             # be in this return dict — see commit 1ac5490 / sector_kpi_framework
             # render_card_payload docstring for why state-only writes get lost.

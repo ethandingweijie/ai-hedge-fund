@@ -10,6 +10,34 @@ from src.utils.progress import progress
 from src.utils.llm import call_llm
 
 
+# Tier 2.7 — thesis-density rule for the Summary-tab rationale. Sell-side
+# theses open with a handful of numbered themes, each carrying cited figures
+# and an implication — not three generic bullets. The constant is module-level
+# so the contract test can pin the wording without running the agent.
+_PM_RATIONALE_SYSTEM_PROMPT = (
+    "You are a senior portfolio advisor. Write the rationale as a numbered "
+    "thesis: at most FIVE themes, each prefixed \"1. \", \"2. \", ... and "
+    "1-2 lines of plain English, no jargon.\n"
+    "Thesis-density rule — every theme MUST:\n"
+    "- open with the theme itself (no heading labels),\n"
+    "- cite at least TWO specific figures with units (e.g. \"rev +18% y/y\", "
+    "\"24x fwd P/E\", \"$15.5B net cash\", \"PT $186\"),\n"
+    "- end with the implication for the stock (what it means for the "
+    "position).\n"
+    "Theme 1 states the single dominant theme driving the stock right now. "
+    "Among the themes, cover whether the dominant theme is priced in, "
+    "sustainable, or at risk, and cover price target, structural moat "
+    "quality, and the primary risk. Use FEWER themes rather than padding — "
+    "three dense themes beat five thin ones. Do NOT use bullet glyphs; "
+    "number only.\n"
+    "Continuity rule — if prior-report context is supplied and this decision "
+    "DIFFERS from the prior action, open theme 1 by naming the change and "
+    "why (e.g. \"Upgraded from HOLD — ...\"). If the action is unchanged, do "
+    "not mention the prior report.\n"
+    "Output JSON only."
+)
+
+
 class PortfolioDecision(BaseModel):
     action: Literal["buy", "sell", "short", "cover", "hold"]
     quantity: int = Field(description="Number of shares to trade")
@@ -522,23 +550,59 @@ def run_advanced_portfolio_manager(state) -> dict:
             state["data"].get("debate_result", {}).get(ticker, "No debate")
         )[:300]
 
-        # LLM writes the rationale as 3 structured bullet points
+        # ── M1 recency: prior report recap + freshness delta ────────────────
+        # Continuity with the last report on this ticker (if any) so the PM
+        # can explicitly upgrade/downgrade vs the prior call instead of
+        # deciding from amnesia. Absent on first-ever runs.
+        _prior_recap = (state["data"].get("prior_recap") or {}).get(ticker) or {}
+        _delta = (state["data"].get("freshness_delta") or {}).get(ticker) or {}
+        if _prior_recap:
+            _pr_bits = [
+                f"Prior report ({str(_prior_recap.get('run_at') or '')[:10]}, "
+                f"{_prior_recap.get('age_days', 0):.1f}d old): "
+                f"{_prior_recap.get('final_action') or 'N/A'}"
+            ]
+            _pr_json = _prior_recap.get("recap_json") or {}
+            if _pr_json.get("price_target"):
+                _pr_bits.append(f"| prior PT {_pr_json['price_target']}")
+            if _prior_recap.get("price_at_run"):
+                _pr_bits.append(f"@ ${_prior_recap['price_at_run']}")
+            _prior_block = " ".join(_pr_bits)
+            _thesis = (_prior_recap.get("recap_text") or "").strip()
+            if _thesis:
+                _prior_block += f"\nPrior thesis: {_thesis[:400]}"
+            if _delta:
+                _mat = _delta.get("material")
+                if _mat is None:
+                    _prior_block += "\nSince then: freshness check unavailable."
+                elif _mat:
+                    _evs = "; ".join(
+                        (e.get("headline") or "")[:80]
+                        for e in (_delta.get("events") or [])[:3]
+                    )
+                    _prior_block += (
+                        f"\nSince then: MATERIAL change — {_evs}. "
+                        f"{(_delta.get('verdict') or '')[:200]}"
+                    )
+                else:
+                    _prior_block += (
+                        "\nSince then: no material change — prior report "
+                        "still current."
+                    )
+        else:
+            _prior_block = "No prior report on this ticker (first run)."
+
+        # LLM writes the rationale as numbered thesis themes (Tier 2.7
+        # thesis-density rule — see _PM_RATIONALE_SYSTEM_PROMPT).
         template = ChatPromptTemplate.from_messages([
-            ("system",
-                "You are a senior portfolio advisor. Write the rationale as EXACTLY 3 bullet "
-                "points (• prefix). Each bullet is 1-2 lines max, proper English, no jargon.\n"
-                "Bullet 1: State the single dominant theme driving the stock right now.\n"
-                "Bullet 2: Your view — is this priced in, sustainable, or at risk?\n"
-                "Bullet 3: Price target, structural moat quality, and primary risk.\n"
-                "Do NOT label the bullets with headings. Just write naturally.\n"
-                "Output JSON only."
-            ),
+            ("system", _PM_RATIONALE_SYSTEM_PROMPT),
             ("human", (
                 "Ticker: {ticker} | Action: {action} | Size: {size_pct:.1%}\n"
                 "Signal: {ws:.1f}/10 | EV upside: {ev:.1f}% | Power Law: {pl}/10 | Trap: {trap}\n"
                 "Base scenario: {base_assumptions}\n"
                 "Bull catalyst: {bull_assumptions}\n"
-                "Top theses:\n{top_theses}\n\n"
+                "Top theses:\n{top_theses}\n"
+                "Prior report context:\n{prior_block}\n\n"
                 "Output:\n"
                 '{{\n'
                 '  "action": "{action}",\n'
@@ -547,7 +611,7 @@ def run_advanced_portfolio_manager(state) -> dict:
                 '  "stop_loss": {stop_loss},\n'
                 '  "price_target": {price_target},\n'
                 '  "time_horizon": "short"|"medium"|"long",\n'
-                '  "rationale": "• ...\\n• ...\\n• ..."\n'
+                '  "rationale": "1. ...\\n2. ...\\n3. ..."\n'
                 "}}"
             )),
         ])
@@ -563,6 +627,7 @@ def run_advanced_portfolio_manager(state) -> dict:
             "base_assumptions": _base_assumptions,
             "bull_assumptions": _bull_assumptions,
             "top_theses": _top_theses,
+            "prior_block": _prior_block,
             "stop_loss": stop_loss,
             "price_target": price_target,
         })

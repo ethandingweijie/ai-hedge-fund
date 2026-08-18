@@ -1161,6 +1161,58 @@ def get_phase_cache(
         return None
 
 
+def get_last_scored_signal(ticker: str) -> dict | None:
+    """
+    M1 lessons — most recent ticker_signals row for `ticker` whose outcome
+    has been scored (CORRECT / INCORRECT / NEUTRAL, i.e. NOT PENDING), plus
+    the DCF calibration flag parsed from its dcf_range_json. This is the
+    gap-detection source for agent_lessons: an INCORRECT outcome or a
+    calibration_error means the valuation/extractor stack missed.
+
+    Returns None when the ticker has no scored run yet (or on any failure —
+    lesson detection must never break a run).
+    """
+    try:
+        row = _fetch_one(
+            """
+            SELECT ts.run_id, r.run_at, ts.ticker, ts.final_action,
+                   ts.pm_rationale, ts.price_at_run, ts.price_at_review,
+                   ts.pct_change, ts.outcome, ts.dcf_base_iv, ts.dcf_wacc,
+                   ts.dcf_range_json
+            FROM ticker_signals ts
+            JOIN runs r ON r.run_id = ts.run_id
+            WHERE ts.ticker = ? AND ts.outcome != 'PENDING'
+            ORDER BY r.run_at DESC
+            LIMIT 1
+            """,
+            [ticker.upper()],
+        )
+        if not row:
+            return None
+        dcf_range = None
+        try:
+            dcf_range = json.loads(row["dcf_range_json"]) if row["dcf_range_json"] else None
+        except (TypeError, ValueError):
+            dcf_range = None
+        return {
+            "run_id":            row["run_id"],
+            "run_at":            row["run_at"],
+            "ticker":            row["ticker"],
+            "final_action":      row["final_action"],
+            "pm_rationale":      row["pm_rationale"] or "",
+            "price_at_run":      row["price_at_run"],
+            "price_at_review":   row["price_at_review"],
+            "pct_change":        row["pct_change"],
+            "outcome":           row["outcome"],
+            "dcf_base_iv":       row["dcf_base_iv"],
+            "dcf_wacc":          row["dcf_wacc"],
+            "calibration_error": bool((dcf_range or {}).get("calibration_error")),
+        }
+    except Exception as exc:
+        print(f"  [archive] Warning: get_last_scored_signal({ticker}) failed: {exc}")
+        return None
+
+
 # ── Routing cache ─────────────────────────────────────────────────────────────
 
 def get_routing_cache(

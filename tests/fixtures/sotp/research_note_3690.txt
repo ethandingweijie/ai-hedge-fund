@@ -1,0 +1,15 @@
+2A. PROFIT POOL MAP — excerpt (simulated deep-research output for repeatability test)
+
+The company operates four reportable business segments. Forward figures below
+reconcile to the group FY+1 revenue total of ~$50.7bn.
+
+SOTP_BLOCK_START
+SEGMENT | name=Food Delivery | rev_fwd_usd_bn=23.251 | ebit_margin_pct=UNKNOWN | unit_economics=67mn daily orders x Rmb1.1 profit per order x 365 days (Source: GS Research, Aug 2026) | multiple_ref=12x P/E referencing single-digit revenue growth outlook (Source: GS Research SOTP, Aug 2026)
+SEGMENT | name=Instashopping | rev_fwd_usd_bn=5.711 | ebit_margin_pct=UNKNOWN | unit_economics=15mn daily pieces x Rmb0.7 profit per piece x 365 days (Source: GS Research, Aug 2026) | multiple_ref=25x P/E referencing 20%+ revenue growth outlook (Source: GS Research SOTP, Aug 2026)
+SEGMENT | name=In-store Hotel and Travel | rev_fwd_usd_bn=9.853 | ebit_margin_pct=25 | unit_economics=NA | multiple_ref=10x P/E referencing mid-single-digit growth, profitable cash cow (Source: GS Research SOTP, Aug 2026)
+SEGMENT | name=New initiatives | rev_fwd_usd_bn=11.836 | ebit_margin_pct=UNKNOWN | unit_economics=NA | multiple_ref=1.3x EV/Rev, loss-making keeta overseas (Source: GS Research SOTP, Aug 2026)
+ASSOCIATES | fair_value_usd_bn=12.339 | basis=unlisted investments at fair value per broker SOTP (Source: GS Research, Aug 2026)
+NET_CASH | usd_bn=15.455 | as_of=2Q26 (Source: GS Research, Aug 2026)
+HOLDCO_DISCOUNT | pct=15 | convention=in-line with 15% holdco discount for China Internet (Source: GS Research, Aug 2026)
+TAX_RATE | pct=15
+SOTP_BLOCK_END

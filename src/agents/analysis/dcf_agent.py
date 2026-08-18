@@ -846,6 +846,126 @@ def _sotp_12m_probabilistic(
     }
 
 
+# ── SOTP (analyst) — GS-style segment P/E + EV/Rev SOTP ─────────────────────
+# Mirrors sell-side SOTP tables (e.g. GS "Navigating China Internet"
+# Exhibit 17, Meituan, 10 Aug 2026): each segment is valued at the higher
+# of (a) forward EBIT x (1 - tax) x P/E and (b) forward revenue x EV/Rev;
+# segments with no positive EBIT / no P/E fall to EV/Rev, with the keyword-
+# classified multiple as last resort. Associates/investments and net cash
+# are added as separate lines and a holding-company discount is applied to
+# NAV. Pure function of the assumptions dict — deterministic by construction
+# (no sampling, no time-dependent inputs).
+
+def _sotp_analyst_style(
+    assumptions: dict,
+    shares: float,
+    net_debt: Optional[float] = None,
+    fx_to_reporting: float = 1.0,
+    tier: str = "default",
+) -> Optional[dict]:
+    """GS-style analyst SOTP; see comment above for methodology.
+
+    ``assumptions`` schema (mirrors SOTPAssumptionsOutput):
+        segments: [{name, revenue_fwd, ebit?, unit_economics?{volume_annual,
+                    profit_per_unit, fx_to_usd?}, tax_rate?, pe_multiple?,
+                    ev_rev_multiple?, rationale?}]
+        default_tax_rate?, holdco_discount_pct?, associates_investments?,
+        net_cash?, fx_usd_to_reporting?
+
+    Returns an Exhibit-17-shaped dict (rows + nav + holdco + final +
+    per_share_reporting), or None when preconditions fail.
+    """
+    if not assumptions or not shares or shares <= 0:
+        return None
+    segments = assumptions.get("segments") or []
+    if not segments:
+        return None
+    # None check, not truthiness: tax 0.0 is a valid researched value
+    # (EV/EBIT-style multiples apply to pre-tax EBIT — GS AMZN replication).
+    _dt = assumptions.get("default_tax_rate")
+    default_tax = float(_dt) if _dt is not None else 0.15
+
+    rows: list[dict] = []
+    total_seg_value = 0.0
+    for seg in segments:
+        if not isinstance(seg, dict):
+            continue
+        rev = _safe(seg.get("revenue_fwd"))
+        if rev is None or rev <= 0:
+            continue
+        tax = _safe(seg.get("tax_rate"))
+        tax = default_tax if tax is None else tax
+        ebit = _safe(seg.get("ebit"))
+        if ebit is None:
+            ue = seg.get("unit_economics") or {}
+            vol = _safe(ue.get("volume_annual"))
+            ppu = _safe(ue.get("profit_per_unit"))
+            if vol is not None and ppu is not None:
+                ebit = vol * ppu * float(ue.get("fx_to_usd") or 1.0)
+        if ebit is None:
+            margin = _safe(seg.get("ebit_margin"))
+            if margin is not None:
+                ebit = rev * margin
+        pe = _safe(seg.get("pe_multiple"))
+        evrev = _safe(seg.get("ev_rev_multiple"))
+
+        # Sell-side convention: anchor on the higher of the P/E-on-NOPAT and
+        # EV/Rev paths (GS tables show both columns and effectively adopt the
+        # higher anchor per segment).
+        anchors: list[tuple[str, float, float]] = []
+        if pe and pe > 0 and ebit is not None and ebit > 0:
+            anchors.append(("P/E", pe, ebit * (1.0 - tax) * pe))
+        if evrev and evrev > 0:
+            anchors.append(("EV/Rev", evrev, rev * evrev))
+        if not anchors:
+            _, mult = _classify_segment(str(seg.get("name", "")), tier=tier)
+            anchors.append(("EV/Rev (fallback)", mult, rev * mult))
+        method, mult, value = max(anchors, key=lambda a: a[2])
+
+        total_seg_value += value
+        rows.append({
+            "name":          str(seg.get("name", "segment")),
+            "revenue_fwd":   rev,
+            "ebit":          ebit,
+            "method":        method,
+            "multiple":      mult,
+            "value":         value,
+            "implied_evrev": value / rev if rev else None,
+            "rationale":     str(seg.get("rationale", "")),
+        })
+
+    if not rows:
+        return None
+
+    associates = _safe(assumptions.get("associates_investments")) or 0.0
+    net_cash = _safe(assumptions.get("net_cash"))
+    if net_cash is None:
+        net_cash = -net_debt if (net_debt is not None and net_debt < 0) else 0.0
+    nav = total_seg_value + associates + net_cash
+    holdco_pct = float(assumptions.get("holdco_discount_pct", 0.0) or 0.0)
+    holdco_value = nav * holdco_pct
+    final = nav - holdco_value
+    fx = float(fx_to_reporting or 1.0)
+
+    for row in rows:
+        row["value_split_pct"] = (row["value"] / nav) if nav else None
+
+    return {
+        "rows":                rows,
+        "segment_value":       total_seg_value,
+        "associates":          associates,
+        "net_cash":            net_cash,
+        "nav":                 nav,
+        "holdco_discount_pct": holdco_pct,
+        "holdco_discount":     holdco_value,
+        "final":               final,
+        "per_share":           final / shares,
+        "per_share_reporting": final * fx / shares,
+        "fx_to_reporting":     fx,
+        "shares":              shares,
+    }
+
+
 def _normalized_earnings(
     series: list[dict],
     field: str,
@@ -2275,6 +2395,32 @@ def _compute_method_value(
         pct_key = {"bear": "p10", "base": "p50", "bull": "p90"}.get(scenario, "p50")
         return dist.get(pct_key)
 
+    # ── SOTP (analyst) — GS-style segment P/E + EV/Rev SOTP ──────────────
+    # Consumes assumptions assembled by the SOTP extractor (or a hand-built
+    # fixture) on most_recent["sotp_assumptions"]. Per segment: higher of
+    # P/E-on-NOPAT and EV/Rev; + associates + net cash; − holdco discount.
+    # Shadow-computed only (surfaced in the per-method table) until the
+    # producibility gate promotes it into the blend.
+    if method_name in {"SOTP (analyst)", "Analyst SOTP"}:
+        assumptions = most_recent.get("sotp_assumptions")
+        if not assumptions or shares <= 0:
+            return None
+        table = _sotp_analyst_style(
+            assumptions,
+            shares=shares,
+            net_debt=net_debt,
+            fx_to_reporting=float(
+                assumptions.get("fx_usd_to_reporting")
+                or most_recent.get("_sotp_usd_reporting_fx")
+                or 1.0
+            ),
+            tier=_resolve_segment_tier(sector, profile_name),
+        )
+        if table is None:
+            return None
+        most_recent["sotp_analyst_table"] = table
+        return table["per_share_reporting"]
+
     # ── EV/Revenue and variants ────────────────────────────────────────────
     # EV/NTM Revenue: forward-looking — uses analyst consensus revenue for the
     # nearest forward fiscal year (bear=low, base=avg, bull=high from FMP's
@@ -3202,6 +3348,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
     _primary_sector = state["data"].get("sector", "Tech")
     mgmt_guidance_all      = state["data"].get("management_guidance", {})
     segment_scenarios_all  = state["data"].get("segment_scenarios", {})
+    # Per-ticker GS-style SOTP assumptions assembled by the SOTP extractor
+    # (src/agents/analysis/sotp_extractor.py) or injected from a fixture.
+    sotp_assumptions_all   = state["data"].get("sotp_assumptions", {})
     # Per-ticker Biopharma pipeline assets for the rNPV method.
     # Produced by _extract_pipeline_assets() in deep_research.py.
     pipeline_assets_all    = state["data"].get("pipeline_assets", {})
@@ -3605,6 +3754,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"Segment scenarios ({len(_ticker_scenarios)} segments, "
                         f"conf={_block.get('confidence','?')}): " + ", ".join(_scen_mix)
                     )
+
+        # ── Attach GS-style SOTP assumptions (feeds "SOTP (analyst)") ───────
+        # Assumptions are USD-denominated; resolve USD→target-currency FX so
+        # the per-share IV lands in the listing currency like every other
+        # method. Shadow-only today; blend promotion is a later phase.
+        _ticker_sotp = sotp_assumptions_all.get(ticker)
+        if _ticker_sotp:
+            if not _ticker_sotp.get("fx_usd_to_reporting"):
+                _ticker_sotp = dict(_ticker_sotp)
+                _usd_fx = get_fx_rate("USD", _target_ccy, api_key)
+                _ticker_sotp["fx_usd_to_reporting"] = _usd_fx if _usd_fx and _usd_fx > 0 else 1.0
+            most_recent["sotp_assumptions"] = _ticker_sotp
+            _segs = _ticker_sotp.get("segments") or []
+            ticker_forward_flags.append(
+                f"SOTP (analyst): {len(_segs)} segments, "
+                f"holdco {_ticker_sotp.get('holdco_discount_pct', 0):.0%}, "
+                f"sources={_ticker_sotp.get('_sources', 'unknown')}"
+            )
 
         # ── Attach Biopharma pipeline assets for rNPV method ────────────────
         # Deep research extractor produces a list of {name, phase, peak_sales_usd,
@@ -4751,6 +4918,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     # back to flat growth = growth_base (attached below).
                     most_recent["_sotp_fallback_growth"] = g
                     _shadow_methods.append("SOTP 12m (probabilistic)")
+                if most_recent.get("sotp_assumptions"):
+                    _shadow_methods.append("SOTP (analyst)")
                 for _shadow_name in _shadow_methods:
                     if _shadow_name not in method_values:
                         method_values[_shadow_name] = _compute_method_value(
@@ -5545,6 +5714,29 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "loans_history":         _bb_loans_hist,
             }
 
+        # ── Tier 1 report package for the GS-style SOTP (shadow method):
+        # valuation sentence, segment table, fwd estimates, elasticities,
+        # bear/bull scenario TPs and the assumption snapshot the save step
+        # diffs against the previous run (New-vs-Old revisions). Lazy import
+        # + try/except: a partial deploy must never take the DCF agent down
+        # (precedent: 8b24603 SOTP import guard).
+        sotp_breakdown = None
+        _sotp_a = most_recent.get("sotp_assumptions")
+        if _sotp_a:
+            try:
+                from src.agents.analysis.sotp_report_extras import (
+                    build_sotp_breakdown,
+                )
+                sotp_breakdown = build_sotp_breakdown(
+                    _sotp_a,
+                    reporting_ccy=_output_currency,
+                    shares=shares,
+                    table=most_recent.get("sotp_analyst_table"),
+                )
+            except Exception as _sotp_x_err:
+                _log.warning("[dcf] %s: sotp_breakdown build failed: %s",
+                             ticker, _sotp_x_err)
+
         dcf_range[ticker] = {
             **scenario_results,
             "wacc":               round(wacc, 4),
@@ -5592,6 +5784,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Bank-specific breakdown — None for non-banks. Same gating pattern
             # as reit_breakdown; frontend checks `dcfRange?.bank_breakdown`.
             "bank_breakdown":     bank_breakdown,
+            # GS-style SOTP report package (Tier 1) — None unless the SOTP
+            # extractor produced assumptions for this ticker. Frontend checks
+            # `dcfRange?.sotp_breakdown`. Rides the existing persistence chain
+            # (pipeline allowlist → analysis_service → web_runs) untouched.
+            "sotp_breakdown":     sotp_breakdown,
             # D3: loud-degradation metadata — True when the intended profile
             # did not resolve and a fallback path ran; list of declared
             # profile methods that produced no value in the base scenario.

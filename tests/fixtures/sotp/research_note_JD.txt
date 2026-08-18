@@ -1,0 +1,19 @@
+2A.5 SOTP ASSUMPTION SET — JD.com (JD), FY2026E (calendar year ending Dec-2026)
+
+Reconstructed GS-style SOTP block. Sources: GS "Navigating China Internet"
+10 Aug 2026 — 12m SOTP-based TP US$43/HK$169, Buy rated; GSe 2Q26: JD Retail
+profit Rmb13.5bn at 4.6% margin (2Q), new business loss Rmb-9.7bn, group net
+income Rmb8.5bn; FY26E blended Retail margin set below the strong 2Q print.
+FMP revenue-product-segmentation (JD Retail / JD Logistics / New Businesses)
+scaled to FY26E group revenue of ~US$185bn equivalent (CNY at 0.1376).
+15% holdco discount per China internet convention.
+
+SOTP_BLOCK_START
+SEGMENT | name=JD Retail | rev_fwd_usd_bn=152.0 | ebit_margin_pct=4.0 | unit_economics=1P+3P retail; FY26E blended margin below 2Q26 print of 4.6% as JD reinvests in price competitiveness (Source: GS 2Q26 preview, 10 Aug 2026) | multiple_ref=9x P/E on FY26E NOPAT (Source: sell-side SOTP convention for mature 1P retail)
+SEGMENT | name=JD Logistics | rev_fwd_usd_bn=26.0 | ebit_margin_pct=3.0 | unit_economics=integrated supply-chain logistics, external customers ~2/3 of revenue (Source: FMP FY25 segmentation scaled) | multiple_ref=10x P/E on FY26E NOPAT (Source: sell-side SOTP convention)
+SEGMENT | name=New Businesses (food delivery, Joybuy international, Dada) | rev_fwd_usd_bn=7.0 | ebit_margin_pct=UNKNOWN | unit_economics=loss-making: GSe 2Q26 new business loss Rmb-9.7bn, investment cycle through 2H26 (Source: GS 2Q26 preview, 10 Aug 2026) | multiple_ref=0.8x EV/Rev (Source: sell-side SOTP convention for loss-making new initiatives)
+ASSOCIATES | fair_value_usd_bn=2.0 | basis=minority investments at market value
+NET_CASH | usd_bn=25.0 | as_of=FY25 balance sheet, strong FCF cycle (Source: GS-style SOTP; FMP line items corroborate)
+HOLDCO_DISCOUNT | pct=15 | convention=China internet holdco discount
+TAX_RATE | pct=15
+SOTP_BLOCK_END

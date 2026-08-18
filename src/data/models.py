@@ -688,3 +688,95 @@ class CitationAuditOutput(BaseModel):
 
     audit_score: int = Field(default=5, ge=1, le=10)
     # Data provenance score: 10 = 100% primary sources, 1 = mostly AI-generated
+
+
+# ---------------------------------------------------------------------------
+# Phase 7g — SOTP Assumption Extractor Output (GS-style SOTP inputs)
+# ---------------------------------------------------------------------------
+
+class SOTPSegmentAssumption(BaseModel):
+    """One segment's valuation assumptions for the analyst-style SOTP."""
+    name: str = ""
+    revenue_fwd: float | None = None
+    # Forward (NTM/FY+1) segment revenue, USD. Pinned to the FMP anchor when
+    # one exists; otherwise researched.
+    ebit: float | None = None
+    # Forward segment EBIT, USD — when directly available.
+    ebit_margin: float | None = None
+    # Forward EBIT margin when unit economics are not disclosed; engine
+    # converts to EBIT = revenue_fwd x ebit_margin.
+    unit_economics: dict = Field(default_factory=dict)
+    # {volume_annual: float, profit_per_unit: float, fx_to_usd: float}
+    # e.g. Meituan food delivery: 67mn daily orders x 365 x Rmb1.1/order.
+    tax_rate: float | None = None
+    pe_multiple: float | None = None
+    ev_rev_multiple: float | None = None
+    rationale: str = ""
+    # Sell-side style justification: growth outlook + peer reference.
+    evidence: str = ""
+    source: str = ""
+    # "fmp_anchor" | "research_llm" | "pdf_evidence" | "fixture"
+
+    @field_validator("unit_economics", mode="before")
+    @classmethod
+    def _null_unit_economics_to_empty(cls, v):
+        # Models told to "omit unit_economics when not applicable" routinely
+        # emit explicit null instead — treat null as absent.
+        return v or {}
+
+    @field_validator("name", "rationale", "evidence", "source", mode="before")
+    @classmethod
+    def _null_str_to_empty(cls, v):
+        return v if isinstance(v, str) else ("" if v is None else str(v))
+
+
+class SOTPEconomicsOutput(BaseModel):
+    """Pass 1 — segment economics (nature: operational KPIs / broker ests)."""
+    segments: list[SOTPSegmentAssumption] = Field(default_factory=list)
+    default_tax_rate: float = 0.15
+    confidence: str = "medium"
+    data_limitations: str = ""
+
+    @field_validator("segments", mode="before")
+    @classmethod
+    def _null_segments_to_empty(cls, v):
+        return v or []
+
+    @field_validator("default_tax_rate", mode="before")
+    @classmethod
+    def _null_tax_to_default(cls, v):
+        return 0.15 if v is None else v
+
+    @field_validator("confidence", "data_limitations", mode="before")
+    @classmethod
+    def _null_str_to_empty(cls, v):
+        return v if isinstance(v, str) else ("" if v is None else str(v))
+
+
+class SOTPMultiplesOutput(BaseModel):
+    """Pass 2 — multiples & balance-sheet add-ons (nature: comparative
+    judgments + reported facts the deterministic path could not source)."""
+    segments: list[SOTPSegmentAssumption] = Field(default_factory=list)
+    # Only name + pe_multiple + ev_rev_multiple + rationale are read.
+    associates_investments: float | None = None
+    associates_rationale: str = ""
+    holdco_discount_pct: float = 0.0
+    holdco_rationale: str = ""
+    confidence: str = "medium"
+    data_limitations: str = ""
+
+    @field_validator("segments", mode="before")
+    @classmethod
+    def _null_segments_to_empty(cls, v):
+        return v or []
+
+    @field_validator("holdco_discount_pct", mode="before")
+    @classmethod
+    def _null_holdco_to_zero(cls, v):
+        return 0.0 if v is None else v
+
+    @field_validator("associates_rationale", "holdco_rationale",
+                     "confidence", "data_limitations", mode="before")
+    @classmethod
+    def _null_str_to_empty(cls, v):
+        return v if isinstance(v, str) else ("" if v is None else str(v))

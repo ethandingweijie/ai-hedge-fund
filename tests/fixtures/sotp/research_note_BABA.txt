@@ -1,0 +1,21 @@
+2A.5 SOTP ASSUMPTION SET — Alibaba Group (BABA), FY2027E (year ending Mar-2027)
+
+Reconstructed GS-style SOTP block. Sources: FMP revenue-product-segmentation
+FY26 (period 2026-03-31, CNY converted at 0.1376), FMP FY26 reported revenue,
+GS "Navigating China Internet" 10 Aug 2026 (SOTP-based 12m TP US$186/HK$180,
+Buy rated; key risks: GMV growth vs macro/competition, China retail
+monetization, cloud deceleration), sell-side SOTP conventions for China
+internet (15% holdco discount convention). Segment revenues scaled from the
+FY26 reported segment mix to FY27E group revenue of ~US$143bn (±5% reconciles).
+
+SOTP_BLOCK_START
+SEGMENT | name=Taobao and Tmall Group (China Commerce) | rev_fwd_usd_bn=67.0 | ebit_margin_pct=45 | unit_economics=CMR take-rate on GMV, high-margin customer management revenue (Source: FMP FY26 segmentation scaled to FY27E) | multiple_ref=12x P/E on FY27E NOPAT, core cash cow with single-digit growth (Source: sell-side SOTP convention)
+SEGMENT | name=Cloud Intelligence Group | rev_fwd_usd_bn=20.0 | ebit_margin_pct=9 | unit_economics=AI-driven IaaS+PaaS growth re-accelerating 30%+ yoy (Source: FMP FY26 Cloud Services 112bn CNY scaled) | multiple_ref=5.0x EV/Rev forward sales, re-rated on AI demand (Source: GS cloud re-rating, Aug 2025-2026)
+SEGMENT | name=Alibaba International Digital Commerce | rev_fwd_usd_bn=20.0 | ebit_margin_pct=UNKNOWN | unit_economics=NA, near breakeven (AliExpress/Choice + Lazada) | multiple_ref=1.2x EV/Rev (Source: sell-side SOTP convention)
+SEGMENT | name=Cainiao Smart Logistics | rev_fwd_usd_bn=14.0 | ebit_margin_pct=UNKNOWN | unit_economics=NA, thin-margin logistics | multiple_ref=0.7x EV/Rev (Source: sell-side SOTP convention)
+SEGMENT | name=All Others (Local Services + Digital Media + Membership) | rev_fwd_usd_bn=22.0 | ebit_margin_pct=UNKNOWN | unit_economics=NA, Ele.me/Amap/Youku mix | multiple_ref=1.0x EV/Rev (Source: sell-side SOTP convention)
+ASSOCIATES | fair_value_usd_bn=40.0 | basis=33% Ant Group stake at market value plus listed/unlisted investments (Source: sell-side SOTP convention, broker SOTP)
+NET_CASH | usd_bn=45.0 | as_of=FY26 balance sheet (Source: GS-style SOTP; FMP line items corroborate)
+HOLDCO_DISCOUNT | pct=15 | convention=China internet holdco discount
+TAX_RATE | pct=15
+SOTP_BLOCK_END

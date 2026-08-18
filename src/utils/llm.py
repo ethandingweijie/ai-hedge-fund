@@ -51,6 +51,7 @@ def call_llm(
     max_retries: int = 3,
     default_factory=None,
     max_tokens: int | None = None,
+    temperature: float | None = None,
 ) -> BaseModel:
     """
     Makes an LLM call with retry logic, handling both JSON supported and non-JSON supported models.
@@ -121,8 +122,13 @@ def call_llm(
 
     # Cap output tokens when the caller specifies a limit (e.g. agents that only
     # need a small JSON response and must not generate 10k+ token outputs).
+    _bind_kwargs = {}
     if max_tokens is not None:
-        llm = llm.bind(max_tokens=max_tokens)
+        _bind_kwargs["max_tokens"] = max_tokens
+    if temperature is not None:
+        _bind_kwargs["temperature"] = temperature
+    if _bind_kwargs:
+        llm = llm.bind(**_bind_kwargs)
 
     # For non-JSON support models, we can use structured output
     if not (model_info and not model_info.has_json_mode()):
@@ -377,7 +383,8 @@ def call_llm_vision(system_text: str, human_text: str,
                     agent_name: str | None = None,
                     state: AgentState | None = None,
                     default_factory=None,
-                    max_tokens: int | None = None) -> BaseModel:
+                    max_tokens: int | None = None,
+                    temperature: float | None = None) -> BaseModel:
     """call_llm with raster-table page images attached (Exhibit-style SOTP
     tables that carry no extractable text). Degrades to text-only when no
     images are supplied; provider-incompatible image blocks surface as
@@ -396,4 +403,5 @@ def call_llm_vision(system_text: str, human_text: str,
         state=state,
         default_factory=default_factory,
         max_tokens=max_tokens,
+        temperature=temperature,
     )

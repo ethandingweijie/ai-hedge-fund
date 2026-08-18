@@ -585,6 +585,94 @@ def cleanup_stale_checkpoints(retention_days: Optional[float] = None) -> int:
         return 0
 
 
+def _build_pt_history(ticker: str, limit: int = 12) -> list[dict]:
+    """Past-run price-target track record (GS-style accountability strip).
+
+    Per past finalized run: base IV, 12m base PT, price-at-run, decision PT
+    and final action. Called BEFORE _save_web_run upserts the current run,
+    so the query naturally excludes it. Returns oldest-first for left→right
+    charting.
+    """
+    rows = _fetch(
+        "SELECT run_at, full_result_json FROM web_runs "
+        "WHERE UPPER(ticker) = UPPER(?) AND full_result_json IS NOT NULL "
+        f"AND (is_checkpoint = 0 OR (is_checkpoint IS NULL AND "
+        f"{_json_field('checkpoint')} IS NULL)) "
+        "ORDER BY run_at DESC LIMIT ?",
+        [ticker, limit],
+    )
+    out: list[dict] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["full_result_json"] or "{}")
+        except (TypeError, ValueError):
+            continue
+        data = payload.get("data") or {}
+        dr = (data.get("dcf_range") or {}).get(ticker.upper()) or {}
+        base = dr.get("base") or {}
+        t12 = dr.get("12m_targets") or {}
+        dec = (payload.get("decisions") or {}).get(ticker.upper()) or {}
+        out.append({
+            "run_at": row["run_at"],
+            "intrinsic_value": base.get("intrinsic_value"),
+            "price_target": t12.get("base") or dec.get("price_target"),
+            "decision_pt": dec.get("price_target"),
+            "price_at_run": (data.get("current_prices") or {}).get(ticker.upper()),
+            "action": dec.get("action"),
+        })
+    out.reverse()  # newest-first from SQL → oldest-first for charting
+    return out
+
+
+def _enrich_sotp_report_extras(run_id: str, ticker: str, result: dict) -> None:
+    """Save-time report enrichment (Tier 1.2 revisions + Tier 2.6 PT history).
+
+    Runs immediately before _save_web_run so the enrichment rides into
+    ``full_result_json``. Strictly additive and exception-safe — enrichment
+    must never block the save itself.
+    """
+    data = result.get("data") or {}
+    t = ticker.upper()
+
+    # Tier 2.6 — past-run PT track record (every ticker, SOTP or not).
+    try:
+        hist = _build_pt_history(t)
+        if hist:
+            data.setdefault("price_target_history", {})[t] = hist
+    except Exception as e:
+        logger.warning("[report-extras] %s: PT history build failed: %s", t, e)
+
+    # Tier 1.2 — SOTP New-vs-Old assumption revisions vs the previous run.
+    breakdown = ((data.get("dcf_range") or {}).get(t) or {}).get("sotp_breakdown")
+    curr_snap = (breakdown or {}).get("snapshot")
+    if not breakdown or not curr_snap:
+        return
+    try:
+        from src.agents.analysis.sotp_report_extras import diff_sotp_snapshots
+        prev_row = _fetch_one(
+            "SELECT full_result_json FROM web_runs "
+            "WHERE UPPER(ticker) = UPPER(?) AND run_id != ? "
+            "AND full_result_json IS NOT NULL "
+            f"AND (is_checkpoint = 0 OR (is_checkpoint IS NULL AND "
+            f"{_json_field('checkpoint')} IS NULL)) "
+            "ORDER BY run_at DESC LIMIT 1",
+            [t, run_id],
+        )
+        if not prev_row:
+            return
+        prev_payload = json.loads(prev_row["full_result_json"] or "{}")
+        prev_snap = (((prev_payload.get("data") or {}).get("dcf_range") or {})
+                     .get(t) or {}).get("sotp_breakdown", {}).get("snapshot")
+        revisions = diff_sotp_snapshots(prev_snap, curr_snap)
+        if revisions:
+            breakdown["revisions"] = revisions
+            prev_run_at = prev_payload.get("run_at")
+            if prev_run_at:
+                breakdown["revisions_prev_run_at"] = prev_run_at
+    except Exception as e:
+        logger.warning("[report-extras] %s: SOTP revision diff failed: %s", t, e)
+
+
 def _save_web_run(
     run_id: str,
     ticker: str,
@@ -1701,6 +1789,29 @@ async def run_analysis_pipeline(
     # We link to that existing row rather than calling save_run() again (which would
     # create a duplicate CLI-archive row that shows up as a second history entry).
     archive_run_id = pipeline_result.get("_archive_run_id")
+    # Tier 1.2 / 2.6 save-time enrichment (SOTP New-vs-Old revisions + PT
+    # history strip) — runs before the save so it rides into full_result_json;
+    # internally exception-safe, and doubly guarded here so the save itself
+    # can never be blocked by enrichment.
+    try:
+        _enrich_sotp_report_extras(run_id, t, result)
+    except Exception as _enr_err:
+        logger.warning("[report-extras] %s: enrichment failed: %s", t, _enr_err)
     _save_web_run(run_id, t, model_name, result, archive_run_id=archive_run_id, user_id=user_id)
+
+    # ── M1: recap of the just-finished report ─────────────────────────────
+    # Feeds the recency loop — the NEXT run on this ticker loads this recap
+    # (pipeline phases 2.8/2.9) so reports become a continuous thread instead
+    # of isolated snapshots. Runs in a worker thread (blocking LLM + DB),
+    # fire-and-log: a recap failure must never fail the run itself.
+    try:
+        from src.memory import report_recap
+        if report_recap.recaps_enabled():
+            await asyncio.to_thread(
+                report_recap.build_and_save_recap,
+                result, t, run_id, result.get("run_at"),
+            )
+    except Exception as _recap_err:
+        logger.warning("[recap] %s: recap generation failed: %s", t, _recap_err)
 
     return run_id, result

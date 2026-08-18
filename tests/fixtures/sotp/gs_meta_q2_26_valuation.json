@@ -1,0 +1,56 @@
+{
+  "_meta": {
+    "source": "Goldman Sachs, Meta Platforms Inc. (META) Q2'26 Review (Sheridan et al.), 30 Jul 2026, Exhibit 4",
+    "ticker": "META",
+    "company": "Meta Platforms",
+    "gs_12m_tp_usd": 725,
+    "prior_tp_usd": 815,
+    "price_at_note_usd": 585.61,
+    "shares_ntm_ending": 2608000000,
+    "method": "Equal blend of (1) EV/GAAP-EBIT x NTM+1 EBIT and (2) EV/FCF-SBC x NTM+4 estimates discounted back 3 years at 12% CAPM",
+    "note": "META is valued at GROUP level (no SOTP exhibit in the note). Method 1 maps to the analyst-style engine as a single segment with 26.0x on NTM+1 GAAP EBIT at 0% tax (EV/EBIT, pre-tax). Method 2 (FCF-SBC) is a distinct method family computed deterministically in the check script. Exhibit-4 row label says 'EV derived from GAAP EBITDA' but the applied metric is GAAP EBIT (note quirk, preserved as-is). Scenarios: Downside 355 / Base 725 / Upside 935.",
+    "scenarios": {"downside": 355, "base": 725, "upside": 935}
+  },
+  "methods": {
+    "ev_ebit": {
+      "ebit_ntm_plus1": 101307000000,
+      "ev_ebit_multiple": 26.0,
+      "ebit_margin_pct": 29.9,
+      "weight": 0.5,
+      "exhibit_ev": 2633975000000
+    },
+    "ev_fcf_sbc": {
+      "fcf_sbc_ntm_plus4": 36932000000,
+      "ev_fcf_sbc_multiple": 45.0,
+      "fcf_sbc_to_growth": 2.25,
+      "discount_rate": 0.12,
+      "discount_years": 3,
+      "weight": 0.5,
+      "exhibit_ev_ntm3": 1661961000000,
+      "exhibit_ev_discounted": 1182951000000
+    }
+  },
+  "capital_structure": {
+    "adjusted_net_debt_ntm_ending": 20520000000,
+    "dividends": 5470000000
+  },
+  "assumptions": {
+    "default_tax_rate": 0.0,
+    "segments": [
+      {
+        "name": "Meta Group",
+        "revenue_fwd": 338862000000,
+        "ebit": 101307000000,
+        "pe_multiple": 26.0,
+        "rationale": "26.0x EV/GAAP EBIT (unchanged) applied to NTM+1 GAAP EBIT estimates of $101,307mm; revenue_fwd interpolates GS FY27E/FY28E for the NTM+1 window. Pre-tax EBIT basis -> 0% tax in engine terms."
+      }
+    ]
+  },
+  "gs_published": {
+    "blend_ev_usdmn": 1908463,
+    "adjusted_net_debt_usdmn": 20520,
+    "dividends_usdmn": 5470,
+    "shares_mn": 2608,
+    "tp_usd": 725
+  }
+}

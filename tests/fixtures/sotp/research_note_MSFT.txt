@@ -1,0 +1,22 @@
+2A.5 SOTP ASSUMPTION SET — Microsoft (MSFT), SNTM (second-next-twelve-months = FY28, year ending Jun-2028)
+
+Reconstructed GS-style block replicating the published GS valuation method
+(GS 29 Jul 2026: PT $640 = 28x P/E on SNTM adjusted net income). GS applies
+a single group-level multiple to FY28E adjusted net income ($171,207mn;
+diluted EPS $22.97 on 7,453.1mn diluted shares) with no balance-sheet
+adjustment (MSFT net position immaterial vs market cap; EV approximates
+market cap in the GS framework), so this block is one group segment carrying
+FY28E group revenue ($470,524mn per GS estimates) and the EBIT margin that
+reconciles to GS FY28E pre-exceptionals profit at a 20% effective tax:
+28 x $22.97 = $643 -> GS PT $640 (+63.9% vs $390.54). Segment-level
+cross-check (Productivity & Business Processes / Intelligent Cloud / More
+Personal Computing; 4Q26 revenues $37,847mn +14% / $39,306mn +32% /
+$12,854mn -4%; group adjusted OI $40,603mn at 45% margin) belongs to the
+FMP-anchored mode, not this replication block.
+
+SOTP_BLOCK_START
+SEGMENT | name=Microsoft Group | rev_fwd_usd_bn=470.524 | ebit_margin_pct=45.483 | unit_economics=FY28E adjusted net income $171,207mn reached at 20% effective tax on group EBIT; FY28E group revenue per GS estimates (Source: GS model, 29 Jul 2026) | multiple_ref=28x P/E on SNTM adjusted net income (Source: GS PT methodology, 29 Jul 2026)
+NET_CASH | usd_bn=0 | as_of=FY26 (GS single-multiple method makes no balance-sheet adjustment; MSFT net position immaterial vs market cap)
+HOLDCO_DISCOUNT | pct=0 | convention=none
+TAX_RATE | pct=20 | convention=effective tax bridging group EBIT to GS adjusted net income
+SOTP_BLOCK_END

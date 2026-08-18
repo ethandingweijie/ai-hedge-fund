@@ -1,0 +1,21 @@
+2A.5 SOTP ASSUMPTION SET — PDD Holdings (PDD), FY2026E (calendar year ending Dec-2026)
+
+Reconstructed GS-style SOTP block replicating the published GS TP method
+(GS "Navigating China Internet" 10 Aug 2026: 12m TP US$145 = 12x 2026E PDD
+domestic core profit + 25x Temu ex-US full-entrusted). PDD discloses no
+segment P&L (FMP revenue-product-segmentation is revenue-line only: online
+marketing services RMB217.8bn + transaction services RMB214.1bn, FY25), so
+the two businesses are proxied here and scaled to FY26E consensus revenue
+RMB482.6bn / net income RMB106.5bn (Source: FMP analyst estimates, period
+2026-12-31, CNY at 0.1376). Domestic core carries the high-take-rate
+main-site marketplace economics; Temu ex-US full-entrusted is the
+margin-accretive growth leg per the GS framing. 15% holdco per China
+internet convention.
+
+SOTP_BLOCK_START
+SEGMENT | name=PDD Domestic Core | rev_fwd_usd_bn=48.5 | ebit_margin_pct=36.4 | unit_economics=Pinduoduo main site: online marketing + transaction services; FY26E group consensus rev RMB482.6bn, NI RMB106.5bn; domestic core profit per GS framing (Source: FMP analyst estimates 2026-12-31; GS TP methodology 10 Aug 2026) | multiple_ref=12x P/E on FY26E NOPAT (Source: GS TP methodology, Navigating China Internet, 10 Aug 2026)
+SEGMENT | name=Temu (ex-US full-entrusted) | rev_fwd_usd_bn=17.9 | ebit_margin_pct=10.5 | unit_economics=ex-US full-entrusted model, margin accretive as US exposure is de-risked (Source: GS methodology framing, 10 Aug 2026) | multiple_ref=25x P/E on FY26E NOPAT (Source: GS TP methodology, Navigating China Internet, 10 Aug 2026)
+NET_CASH | usd_bn=17.8 | as_of=1Q26 (cash + short-term investments less debt; Source: GS-style SOTP balance-sheet adjustment)
+HOLDCO_DISCOUNT | pct=15 | convention=China internet holdco discount
+TAX_RATE | pct=15
+SOTP_BLOCK_END

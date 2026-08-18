@@ -1,0 +1,69 @@
+{
+  "_meta": {
+    "source": "Goldman Sachs, Navigating China Internet, 10 Aug 2026, Exhibit 17",
+    "ticker": "3690.HK",
+    "company": "Meituan",
+    "gs_12m_tp_hkd": 123,
+    "shares": 6250000000,
+    "fx_usd_to_hkd": 7.77,
+    "default_tax_rate": 0.15,
+    "note": "EBIT figures back-solved from GS published segment values (value = EBIT x (1-tax) x P/E where a P/E is applied). Unit-economics narrative kept verbatim in rationale for the extractor benchmark."
+  },
+  "assumptions": {
+    "default_tax_rate": 0.15,
+    "holdco_discount_pct": 0.15,
+    "associates_investments": 12339000000,
+    "net_cash": 15455000000,
+    "segments": [
+      {
+        "name": "Food Delivery",
+        "revenue_fwd": 23251000000,
+        "ebit": 3919800000,
+        "pe_multiple": 12,
+        "ev_rev_multiple": 1.7,
+        "rationale": "Assuming 67mn daily orders in 2026E and Rmb1.1 per order non-GAAP EBIT (from Rmb1.0), 15% tax rate, 12x P/E referencing single-digit revenue growth outlook"
+      },
+      {
+        "name": "Meituan Instashopping",
+        "revenue_fwd": 5711000000,
+        "ebit": 550200000,
+        "pe_multiple": 25,
+        "ev_rev_multiple": 2.0,
+        "rationale": "Assuming 15mn daily pieces in 2026E and Rmb0.7 per piece non-GAAP EBIT (2026-30E), 15% tax rate, 25x P/E referencing 20%+ revenue growth outlook"
+      },
+      {
+        "name": "In-store, hotel & travel",
+        "revenue_fwd": 9853000000,
+        "ebit": 2492800000,
+        "pe_multiple": 10,
+        "ev_rev_multiple": 2.2,
+        "rationale": "2026E non-GAAP NOPAT (25% EBIT margin, 2026E); 10x P/E on slower growth/referencing eCommerce sector"
+      },
+      {
+        "name": "New initiatives",
+        "revenue_fwd": 11836000000,
+        "ev_rev_multiple": 1.3,
+        "rationale": "Implied 1.3X EV/Revenue"
+      }
+    ]
+  },
+  "gs_published": {
+    "rows": [
+      {"name": "Core Commerce", "rev_usdmn": 38815, "value_usdmn": 72863, "val_hkdmn": 566146, "per_share_hkd": 91, "split_pct": 63},
+      {"name": "Food Delivery", "rev_usdmn": 23251, "implied_evrev": 1.7, "pe": 12, "value_usdmn": 39982, "val_hkdmn": 310663, "per_share_hkd": 50, "split_pct": 34},
+      {"name": "Meituan Instashopping", "rev_usdmn": 5711, "implied_evrev": 2.0, "pe": 25, "value_usdmn": 11691, "val_hkdmn": 90843, "per_share_hkd": 15, "split_pct": 10},
+      {"name": "In-store, hotel & travel", "rev_usdmn": 9853, "implied_evrev": 2.2, "pe": 10, "value_usdmn": 21189, "val_hkdmn": 164640, "per_share_hkd": 26, "split_pct": 18},
+      {"name": "New initiatives", "rev_usdmn": 11836, "implied_evrev": 1.3, "pe": null, "value_usdmn": 15387, "val_hkdmn": 119555, "per_share_hkd": 19, "split_pct": 13},
+      {"name": "Associates/investments affiliates", "value_usdmn": 12339, "val_hkdmn": 95878, "per_share_hkd": 15, "split_pct": 11},
+      {"name": "Net cash", "value_usdmn": 15455, "val_hkdmn": 120082, "per_share_hkd": 19, "split_pct": 13}
+    ],
+    "nav_usdmn": 116044,
+    "nav_hkdmn": 901660,
+    "nav_per_share_hkd": 144,
+    "holdco_discount_pct": 15,
+    "holdco_discount_usdmn": 17407,
+    "final_usdmn": 98637,
+    "final_hkdmn": 766411,
+    "final_per_share_hkd": 123
+  }
+}

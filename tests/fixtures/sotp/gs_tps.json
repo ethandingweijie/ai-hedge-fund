@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "source": "Goldman Sachs: Navigating China Internet 10 Aug 2026 (TP history + methodology); Amazon initiation/update 31 Jul 2026 (Exhibit 3 SOTP); Microsoft 29 Jul 2026 (PT methodology)",
+    "as_of": "2026-08-10"
+  },
+  "tps": {
+    "3690.HK": {"company": "Meituan",  "tp": 123, "currency": "HKD", "method": "2026E SOTP"},
+    "0700.HK": {"company": "Tencent",  "tp": 700, "currency": "HKD", "method": "12-m SOTP"},
+    "9988.HK": {"company": "Alibaba",  "tp": 180, "currency": "HKD", "method": "SOTP"},
+    "BABA":    {"company": "Alibaba",  "tp": 186, "currency": "USD", "method": "SOTP"},
+    "JD":      {"company": "JD.com",   "tp": 43,  "currency": "USD", "method": "SOTP"},
+    "PDD":     {"company": "PDD",      "tp": 145, "currency": "USD", "method": "12x P/E 2026E PDD domestic core profit + 25x P/E Temu (ex. US full-entrusted)"},
+    "AMZN":    {"company": "Amazon",   "tp": 375, "currency": "USD", "method": "NTM+1 SOTP: NA 16x EV/GAAP EBIT, Intl 1.25x EV/Sales, AWS 29x EV/GAAP EBIT, less net debt 59,220mn, / 10,974mn diluted"},
+    "MSFT":    {"company": "Microsoft","tp": 640, "currency": "USD", "method": "28x P/E on SNTM adjusted net income (FY28E adj EPS 22.97)"}
+  }
+}

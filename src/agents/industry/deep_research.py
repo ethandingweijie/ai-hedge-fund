@@ -675,6 +675,22 @@ def _extract_dcf_calibration(
         return {"growth_rate_adj": None, "margin_direction": "stable",
                 "risk_flag": "MEDIUM", "notes": "No deep research sections available."}
 
+    # M1 self-improvement: dcf_engine lessons distilled from past valuation
+    # misses (src/memory/agent_lessons). Pure prompt-append on the one LLM
+    # surface that feeds the DCF engine — the engine's hard clamps are
+    # unaffected. [] when the kill switch is off or nothing is stored.
+    try:
+        from src.memory.agent_lessons import get_active_lessons
+        _dcf_lessons = get_active_lessons("dcf_engine")
+    except Exception:
+        _dcf_lessons = []
+    _lessons_block = ""
+    if _dcf_lessons:
+        _lessons_block = (
+            "\n\nPast misses to avoid (post-mortems of prior valuation errors):\n"
+            + "\n".join(f"  - {l}" for l in _dcf_lessons)
+        )
+
     try:
         resp = _call_llm_with_rate_retry(
             sdk_client,
@@ -702,7 +718,7 @@ def _extract_dcf_calibration(
                 "  historical CAGR (e.g. backlog doubling, TAM expansion), use the higher end of the range.\n\n"
                 "risk_flag rules: HIGH = binary event risk / regulatory overhang / leverage concern; "
                 "MEDIUM = normal business risk; LOW = visible cash flow, long contracts, high moat."
-            ),
+            ) + _lessons_block,
             messages=[{
                 "role": "user",
                 "content": (
@@ -2300,6 +2316,7 @@ outlook data. Do not restrict results to a single year — older context is fine
 
 Your output feeds directly into downstream valuation and risk agents:
   2A (Profit pool)   → informs variant perception analysis
+  2A.5 (SOTP block)  → parsed verbatim by the segment-valuation (SOTP) engine
   2B (Competition)   → informs scenario assumptions (bull/base/bear)
   2C (Moat)          → informs WACC and terminal growth rate
   2D (Cycle)         → informs mid-cycle normalisation
@@ -2346,6 +2363,34 @@ basis for growth, label it "(non-GAAP)" and provide the GAAP equivalent.
 2A.4 Identify the "toll booth" in this industry — the single chokepoint where
 a player can extract rent regardless of who wins downstream. Who owns it?
 Does this company?
+
+2A.5 SOTP ASSUMPTION SET (mandatory for every multi-business company):
+Research the inputs a sell-side analyst needs for a sum-of-the-parts
+valuation and emit them in EXACTLY this machine-readable block (downstream
+tooling parses it verbatim — do not reformat). Use forward (next fiscal
+year) figures in USD billions; if a figure cannot be substantiated from a
+citable source write UNKNOWN and say what is missing. One SEGMENT line per
+major business segment:
+SOTP_BLOCK_START
+SEGMENT | name=<segment name> | rev_fwd_usd_bn=<number> | ebit_margin_pct=<number or UNKNOWN> | unit_economics=<volume x profit-per-unit with units, or NA> | multiple_ref=<peer/benchmark multiple with source, e.g. "12x P/E vs DoorDash 30x (Source: ...)">
+ASSOCIATES | fair_value_usd_bn=<number or NA> | basis=<how derived: stakes x market caps / carrying value / broker estimate, with source>
+NET_CASH | usd_bn=<number, negative = net debt> | as_of=<report date>
+HOLDCO_DISCOUNT | pct=<number> | convention=<e.g. "15% China internet convention">
+TAX_RATE | pct=<effective rate number>
+SCENARIO | case=<bear or bull> | multiples=<Segment Name:12x P/E; Other Segment:1.0x EV/Sales; ...>
+SOTP_BLOCK_END
+Rules: segment revenues must reconcile to group total revenue within ±15%
+(state the group total you used). For holding companies and megacaps the
+ASSOCIATES line is MANDATORY — mark listed stakes at MARKET value (shares x
+current price), never balance-sheet carrying value. Cite every figure inline
+(Source: publisher, date). Where no sell-side SOTP is publicly available,
+derive each line from disclosed segment reporting, management guidance and
+peer multiples, and flag your derivation in multiple_ref / basis.
+SCENARIO lines are OPTIONAL — emit them only when you can substantiate a
+differentiated bear/bull multiple per segment (e.g. a published bear-case
+SOTP, or a peer multiple that anchors the downside). One line per case
+(bear / bull); segment names must match the SEGMENT lines above, and each
+entry uses the same multiple_ref format ("Name:12x P/E (Source: ...)").
 
 ──────────────────────────────────────────
 2B. COMPETITIVE LANDSCAPE
@@ -3389,6 +3434,8 @@ def _research_one_ticker(
     synthesis_model: str | None = None,
     profile_name: str = "",
     resume_research: dict | None = None,
+    prior_recap: dict | None = None,
+    freshness_delta: dict | None = None,
 ) -> dict:
     """
     Run the full archive-gate + three-tier research pipeline for a single ticker.
@@ -3887,6 +3934,54 @@ def _research_one_ticker(
             "    the revenue inflection? Those qualitative answers cannot come from this data.\n"
             + _fmp_block + "\n"
         )
+
+    # ── M1 recency: prior report recap + freshness delta (live path only) ──
+    # Continuity with the last report on this ticker: the analyst is told
+    # what the prior report concluded and what has happened since, so the
+    # new research can confirm, update, or refute it instead of starting
+    # from amnesia. Cache paths never see this — a cached report is reused
+    # verbatim and needs no reframing.
+    if prior_recap:
+        _pr_block = (
+            f"\nPRIOR REPORT CONTEXT — our last report on {ticker} "
+            f"({str(prior_recap.get('run_at') or '')[:10]}, "
+            f"{prior_recap.get('age_days', 0):.1f}d old) concluded: "
+            f"{prior_recap.get('final_action') or 'N/A'}"
+        )
+        _pr_json = prior_recap.get("recap_json") or {}
+        if _pr_json.get("price_target"):
+            _pr_block += f", price target {_pr_json['price_target']}"
+        _pr_block += ".\n"
+        _pr_assumptions = _pr_json.get("assumptions") or []
+        if _pr_assumptions:
+            _pr_block += (
+                "Key assumptions then: "
+                + "; ".join(str(a)[:120] for a in _pr_assumptions[:4]) + "\n"
+            )
+        _pr_catalysts = _pr_json.get("catalysts") or []
+        if _pr_catalysts:
+            _pr_block += (
+                "Catalysts it was watching: "
+                + "; ".join(str(c)[:120] for c in _pr_catalysts[:4]) + "\n"
+            )
+        if freshness_delta:
+            _fd_mat = freshness_delta.get("material")
+            if _fd_mat:
+                _fd_evs = "; ".join(
+                    (e.get("headline") or "")[:100]
+                    for e in (freshness_delta.get("events") or [])[:4]
+                )
+                _pr_block += (
+                    f"Since that report, MATERIAL events occurred: {_fd_evs}. "
+                    f"Assess whether they confirm, update, or refute the prior "
+                    f"thesis, and quantify the change where possible.\n"
+                )
+            elif _fd_mat is False:
+                _pr_block += (
+                    "No material developments since that report — verify "
+                    "this still holds.\n"
+                )
+        _base_context += _pr_block
 
     # Pre-compute REIT sub-type for finer-grained Section 2F prompt selection.
     # For non-REIT tickers this is None and the sector/profile_name routing alone
@@ -5052,6 +5147,8 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
             base_url=_base_url,
             synthesis_model=_synthesis_model,
             resume_research=(_resume_research if t == primary_ticker else None),
+            prior_recap=(state["data"].get("prior_recap") or {}).get(t),
+            freshness_delta=(state["data"].get("freshness_delta") or {}).get(t),
         )
         return t, result
 

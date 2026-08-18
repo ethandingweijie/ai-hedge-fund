@@ -1,0 +1,357 @@
+{
+  "version": 1,
+  "fit_end_date": "2026-08-18",
+  "n_obs": 46,
+  "archetypes": [
+    "ads",
+    "cloud",
+    "ecommerce_core",
+    "fintech_payments",
+    "food_delivery",
+    "games_media",
+    "growth_commerce",
+    "international_commerce",
+    "logistics",
+    "low_margin_logistics",
+    "ota_travel"
+  ],
+  "archetype_n": {
+    "ota_travel": 3,
+    "cloud": 4,
+    "low_margin_logistics": 4,
+    "ecommerce_core": 6,
+    "ads": 5,
+    "growth_commerce": 4,
+    "international_commerce": 3,
+    "food_delivery": 4,
+    "games_media": 5,
+    "logistics": 4,
+    "fintech_payments": 4
+  },
+  "targets": {
+    "pe": {
+      "feature_names": [
+        "intercept",
+        "arch:cloud",
+        "arch:ecommerce_core",
+        "arch:fintech_payments",
+        "arch:food_delivery",
+        "arch:games_media",
+        "arch:growth_commerce",
+        "arch:international_commerce",
+        "arch:logistics",
+        "arch:low_margin_logistics",
+        "arch:ota_travel",
+        "g_fwd_pct",
+        "log_revenue_scale",
+        "china"
+      ],
+      "coeffs": [
+        1.1210445636312285,
+        -0.03297978689166886,
+        0.523930523812239,
+        -0.6971136199597775,
+        0.4157594817636041,
+        0.736326853063622,
+        0.5339667454527707,
+        0.6316442449082424,
+        0.35161166210232786,
+        0.6163817711567323,
+        0.27511758380611095,
+        0.008694092591259233,
+        0.05733484941661117,
+        -0.5467564115275139
+      ],
+      "n_obs": 44,
+      "residual_std": 0.3665,
+      "r2": 0.6402
+    },
+    "ev_rev": {
+      "feature_names": [
+        "intercept",
+        "arch:cloud",
+        "arch:ecommerce_core",
+        "arch:fintech_payments",
+        "arch:food_delivery",
+        "arch:games_media",
+        "arch:growth_commerce",
+        "arch:international_commerce",
+        "arch:logistics",
+        "arch:low_margin_logistics",
+        "arch:ota_travel",
+        "g_fwd_pct",
+        "log_revenue_scale",
+        "china"
+      ],
+      "coeffs": [
+        -0.7483964837272088,
+        0.2083063730515705,
+        -0.589292495727713,
+        -0.3262078878971373,
+        -0.22116741103149345,
+        0.6401943468422036,
+        -0.8789766788208435,
+        -0.8789766788208437,
+        -0.492125425463323,
+        -0.6261668346055584,
+        0.5299989721558844,
+        0.023449031376457725,
+        0.05746279490922465,
+        0.0
+      ],
+      "n_obs": 40,
+      "residual_std": 0.6211,
+      "r2": 0.5043
+    },
+    "margin": {
+      "feature_names": [
+        "intercept",
+        "arch:cloud",
+        "arch:ecommerce_core",
+        "arch:fintech_payments",
+        "arch:food_delivery",
+        "arch:games_media",
+        "arch:growth_commerce",
+        "arch:international_commerce",
+        "arch:logistics",
+        "arch:low_margin_logistics",
+        "arch:ota_travel",
+        "g_fwd_pct",
+        "log_revenue_scale",
+        "china"
+      ],
+      "coeffs": [
+        -0.5701305353262939,
+        0.08867338844440278,
+        -0.14652203536491565,
+        0.03818328850181228,
+        -0.06128042969413485,
+        -0.022888997935308783,
+        -0.07413028706857062,
+        -0.1005941748660587,
+        -0.0736601553157682,
+        -0.11752757240761705,
+        0.11196407026633758,
+        -0.0001356540207909562,
+        0.029974628594263177,
+        -0.015151909603020559
+      ],
+      "n_obs": 46,
+      "residual_std": 0.1221,
+      "r2": 0.4323
+    }
+  },
+  "observations": [
+    {
+      "ticker": "3690.HK",
+      "segment": "Food Delivery",
+      "archetype": "food_delivery",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 12,
+      "margin": 0.16858629736355427,
+      "source": "research_note"
+    },
+    {
+      "ticker": "3690.HK",
+      "segment": "Meituan Instashopping",
+      "archetype": "growth_commerce",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 25,
+      "margin": 0.09634039572754334,
+      "source": "research_note"
+    },
+    {
+      "ticker": "3690.HK",
+      "segment": "In-store, hotel & travel",
+      "archetype": "ota_travel",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 10,
+      "margin": 0.2529990865726175,
+      "source": "research_note"
+    },
+    {
+      "ticker": "3690.HK",
+      "segment": "New initiatives",
+      "archetype": "low_margin_logistics",
+      "metric": "ev_rev",
+      "basis": "ev_rev",
+      "value": 1.3,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "META",
+      "segment": "Meta Group",
+      "archetype": "ads",
+      "metric": "ev_ebit",
+      "basis": "ev_ebit",
+      "value": 26.0,
+      "margin": 0.29896240947642405,
+      "source": "research_note"
+    },
+    {
+      "ticker": "3690.HK",
+      "segment": "Instashopping",
+      "archetype": "growth_commerce",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 25.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "3690.HK",
+      "segment": "In-store Hotel and Travel",
+      "archetype": "ota_travel",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 10.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "AMZN",
+      "segment": "North America",
+      "archetype": "ecommerce_core",
+      "metric": "pe",
+      "basis": "ev_ebit",
+      "value": 16.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "AMZN",
+      "segment": "International",
+      "archetype": "international_commerce",
+      "metric": "ev_rev",
+      "basis": "ev_rev",
+      "value": 1.25,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "AMZN",
+      "segment": "AWS",
+      "archetype": "cloud",
+      "metric": "pe",
+      "basis": "ev_ebit",
+      "value": 29.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "BABA",
+      "segment": "Taobao and Tmall Group (China Commerce)",
+      "archetype": "ecommerce_core",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 12.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "BABA",
+      "segment": "Cloud Intelligence Group",
+      "archetype": "cloud",
+      "metric": "ev_rev",
+      "basis": "ev_rev",
+      "value": 5.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "BABA",
+      "segment": "Alibaba International Digital Commerce",
+      "archetype": "international_commerce",
+      "metric": "ev_rev",
+      "basis": "ev_rev",
+      "value": 1.2,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "BABA",
+      "segment": "Cainiao Smart Logistics",
+      "archetype": "logistics",
+      "metric": "ev_rev",
+      "basis": "ev_rev",
+      "value": 0.7,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "BABA",
+      "segment": "All Others (Local Services + Digital Media + Membership)",
+      "archetype": null,
+      "metric": "ev_rev",
+      "basis": "ev_rev",
+      "value": 1.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "JD",
+      "segment": "JD Retail",
+      "archetype": "ecommerce_core",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 9.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "JD",
+      "segment": "JD Logistics",
+      "archetype": "logistics",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 10.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "JD",
+      "segment": "New Businesses (food delivery, Joybuy international, Dada)",
+      "archetype": null,
+      "metric": "ev_rev",
+      "basis": "ev_rev",
+      "value": 0.8,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "MSFT",
+      "segment": "Microsoft Group",
+      "archetype": null,
+      "metric": "pe",
+      "basis": "pe",
+      "value": 28.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "PDD",
+      "segment": "PDD Domestic Core",
+      "archetype": "ecommerce_core",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 12.0,
+      "margin": null,
+      "source": "research_note"
+    },
+    {
+      "ticker": "PDD",
+      "segment": "Temu (ex-US full-entrusted)",
+      "archetype": "international_commerce",
+      "metric": "pe",
+      "basis": "pe",
+      "value": 25.0,
+      "margin": null,
+      "source": "research_note"
+    }
+  ],
+  "outcome_corrections": {}
+}
