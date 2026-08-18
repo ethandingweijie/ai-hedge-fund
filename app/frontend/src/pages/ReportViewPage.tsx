@@ -29,6 +29,7 @@ import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
 import { StockPanel } from '@/components/report/StockPanel';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { NewsPanel } from '@/components/report/NewsPanel';
+import { PriorReportCard } from '@/components/report/PriorReportCard';
 
 const SECTIONS = [
   { id: 'summary',       label: 'Summary'    },
@@ -210,6 +211,13 @@ export function ReportViewPage() {
           />
           <StockPanel ticker={ticker} />
         </div>
+
+        {/* ── M1 recency — what the last report said + what changed since ── */}
+        <PriorReportCard
+          prior={data.prior_recap?.[ticker]}
+          delta={data.freshness_delta?.[ticker]}
+          ticker={ticker}
+        />
 
         {/* ── Valuation ──────────────────────────────────────────────────── */}
         {/* REIT branch: when dcfRange.reit_breakdown is populated (backend    */}

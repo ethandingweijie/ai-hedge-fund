@@ -98,6 +98,28 @@ function daysAgo(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/* ───────── Report age badge (M1 recency) ─────────
+   Green while a report is fresh (<7d), amber once stale (7d+). Staleness
+   is a visual hint only — re-running stays the user's call (no auto-run). */
+function AgeBadge({ runAt }: { runAt: string }) {
+  const d = parseBackendIso(runAt);
+  const age = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const fresh = age < 7;
+  const label = age <= 0 ? 'today' : `${age}d`;
+  return (
+    <span
+      title={fresh ? 'Report is fresh (under 7 days)' : 'Report is 7+ days old — consider re-running'}
+      className={`text-[9px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
+        fresh
+          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+          : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function HistoryPage() {
   const navigate = useNavigate();
   const { activeRuns, recentlyCompleted, clearCompleted, byTicker } = useActiveRun();
@@ -478,6 +500,7 @@ function HistoryRow({
           </div>
           <div className="mt-1 flex items-center gap-1.5">
             <ActionPill action={row.final_action || null} />
+            <AgeBadge runAt={row.run_at} />
             <span className={`text-muted-foreground/70 ${isDesktop ? 'text-[11px]' : 'text-[10px]'}`}>
               {daysAgo(row.run_at)}
             </span>

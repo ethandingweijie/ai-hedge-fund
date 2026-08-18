@@ -271,6 +271,148 @@ export interface SaasMetrics {
   evidence?: string | null;
 }
 
+// ── GS-style SOTP breakdown (Tier 1 report package) ─────────────────────────
+// Emitted by src/agents/analysis/sotp_report_extras.build_sotp_breakdown at
+// dcf_range[ticker].sotp_breakdown; null/absent for tickers without SOTP
+// assumptions. Frontend gates on `dcfRange?.sotp_breakdown`.
+export interface SotpRow {
+  name: string;
+  revenue_fwd?: number | null;
+  ebit?: number | null;
+  method?: string;
+  multiple?: number | null;
+  value?: number | null;
+  implied_evrev?: number | null;
+  rationale?: string;
+  value_split_pct?: number | null;
+}
+
+export interface SotpFwdEstimate {
+  period_end?: string;
+  revenue?: number | null;
+  ebit?: number | null;
+  ebitda?: number | null;
+  net_income?: number | null;
+  source?: string;
+}
+
+export interface SotpElasticity {
+  label: string;
+  segment?: string | null;
+  parameter?: string;
+  base_value?: number | null;
+  impact_per_share?: number | null;
+  impact_pct?: number | null;
+  elasticity?: number | null;
+}
+
+export interface SotpRevision {
+  item: string;
+  section?: string;
+  old?: number | string | null;
+  new?: number | string | null;
+  delta_pct?: number | null;
+}
+
+export interface SotpScenario {
+  per_share?: number | null;
+  per_share_reporting?: number | null;
+  applied?: string[];
+}
+
+export interface SotpBreakdown {
+  method?: string;
+  sentence?: string;
+  reporting_currency?: string;
+  rows?: SotpRow[];
+  segment_value?: number | null;
+  associates?: number | null;
+  net_cash?: number | null;
+  nav?: number | null;
+  holdco_discount_pct?: number | null;
+  holdco_discount?: number | null;
+  final?: number | null;
+  per_share?: number | null;
+  per_share_reporting?: number | null;
+  shares?: number | null;
+  fx_to_reporting?: number | null;
+  forward_estimates?: SotpFwdEstimate[];
+  elasticities?: SotpElasticity[];
+  scenarios?: Partial<Record<'bear' | 'bull', SotpScenario>>;
+  snapshot?: Record<string, unknown> | null;
+  revisions?: SotpRevision[];
+  revisions_prev_run_at?: string;
+  multiple_basis?: {
+    summary?: string | null;
+    jurisdiction?: { value?: number | null; basis?: string | null } | null;
+    divergence_flags?: string[];
+    segments?: Record<string, Record<string, unknown>>;
+  } | null;
+  sources?: Record<string, unknown>;
+  confidence?: Record<string, unknown>;
+  data_limitations?: string;
+}
+
+// ── Tier 2.6: past-run PT track record (GS-style accountability strip) ──────
+export interface PtHistoryPoint {
+  run_at?: string;
+  intrinsic_value?: number | null;
+  price_target?: number | null;
+  decision_pt?: number | null;
+  price_at_run?: number | null;
+  action?: string | null;
+}
+
+// ── M1 recency loop: prior report recap + freshness delta ────────────────────
+// Emitted by src/pipeline.py phases 2.8/2.9 (data.prior_recap / data.freshness_delta,
+// per-ticker dicts). Absent on first-ever runs for a ticker.
+export interface PriorRecapJson {
+  final_action?: string | null;
+  price_target?: number | null;
+  stop_loss?: number | null;
+  entry_range?: Array<number | null>;
+  position_size_pct?: number | null;
+  time_horizon?: string | null;
+  rationale?: string | null;
+  price_at_run?: number | null;
+  dcf_base_iv?: number | null;
+  dcf_bear_iv?: number | null;
+  dcf_bull_iv?: number | null;
+  dcf_wacc?: number | null;
+  power_law_score?: number | null;
+  value_trap_verdict?: string | null;
+  ev_upside_pct?: number | null;
+  assumptions?: string[];
+  catalysts?: string[];
+  risks?: string[];
+  llm_used?: boolean;
+}
+
+export interface PriorRecap {
+  run_id?: string;
+  run_at?: string;
+  age_days?: number;
+  price_at_run?: number | null;
+  final_action?: string | null;
+  signal_score?: number | null;
+  recap_text?: string;
+  recap_json?: PriorRecapJson;
+}
+
+export interface FreshnessDeltaEvent {
+  headline?: string;
+  date?: string;
+  relevance?: string;
+}
+
+export interface FreshnessDelta {
+  material?: boolean | null;      // null = check unavailable
+  events?: FreshnessDeltaEvent[];
+  verdict?: string;
+  based_on_run?: string | null;
+  prior_run_at?: string | null;
+}
+
 export interface DcfRange {
   bull?: DcfCase;
   base?: DcfCase;
@@ -295,6 +437,7 @@ export interface DcfRange {
   profile?: string;
   reit_breakdown?: ReitBreakdown | null;
   bank_breakdown?: BankBreakdown | null;
+  sotp_breakdown?: SotpBreakdown | null;
   // Methodology-transparency fields — already emitted by
   // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
   // untyped/unused on the frontend. See DcfMethodologyPanel.
@@ -418,6 +561,14 @@ export interface PipelineData {
   power_law_analysis?: Record<string, PowerLawAnalysis>;
   value_trap_analysis?: Record<string, ValueTrapAnalysis>;
   dcf_range?: Record<string, DcfRange>;
+  // Tier 2.6 — past-run PT track record per ticker (built at save time by
+  // analysis_service._build_pt_history; oldest-first). Absent on the first
+  // run for a ticker.
+  price_target_history?: Record<string, PtHistoryPoint[]>;
+  // M1 recency loop — recap of the previous report per ticker + freshness
+  // delta (what materially changed since it). Absent on first-ever runs.
+  prior_recap?: Record<string, PriorRecap>;
+  freshness_delta?: Record<string, FreshnessDelta>;
   risk_manager_output?: RiskManagerOutput;
   // Deep research + citations
   deep_research_report?: string;

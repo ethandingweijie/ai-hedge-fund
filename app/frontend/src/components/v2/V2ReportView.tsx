@@ -28,6 +28,9 @@ import type {
   BiopharmaPipelineAsset,
   SaasMetrics,
   SectorCardPayload,
+  PtHistoryPoint,
+  PriorRecap,
+  FreshnessDelta,
 } from '@/lib/reportTypes';
 import {
   getStockData, getCompanyName,
@@ -50,6 +53,9 @@ import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel'
 import { SectorValuationCard } from '@/components/report/SectorValuationCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
+import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
+import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryStrip';
+import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
 import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
@@ -126,6 +132,10 @@ export function V2ReportView({
   // Sector-specific valuation card (Option B). Absent for legacy sub-profiles.
   const sectorCard = (data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker];
   const industryBrief = data.industry_brief as string | undefined;
+  // M1 recency loop — prior report recap + freshness delta (absent on
+  // first-ever runs; PriorReportCard renders nothing then).
+  const priorRecap = (data.prior_recap as Record<string, PriorRecap> | undefined)?.[ticker];
+  const freshnessDelta = (data.freshness_delta as Record<string, FreshnessDelta> | undefined)?.[ticker];
   const deepResearch = (data.deep_research ?? data.deep_research_report) as string | undefined;
   const deepAnnotated = data.deep_research_annotated as string | undefined;
   const citations = data.citation_registry as CitationRegistryEntry[] | undefined;
@@ -288,7 +298,7 @@ export function V2ReportView({
 
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">
-        {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} />}
+        {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} prior={priorRecap} delta={freshnessDelta} />}
         {tab === 'valuation'  && <ValuationBody
           dcfRange={dcfRange}
           dcfSkipReason={dcfSkipReason}
@@ -307,6 +317,7 @@ export function V2ReportView({
           }
           saasMetrics={(data.saas_metrics as Record<string, SaasMetrics> | undefined)?.[ticker]}
           sectorCard={sectorCard}
+          ptHistory={(data.price_target_history as Record<string, PtHistoryPoint[]> | undefined)?.[ticker]}
         />}
         {tab === 'investors'  && <InvestorsBody  agentSignals={agentSignals} debateResult={debateResult} ticker={ticker} isRunning={isRunning} />}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
@@ -372,13 +383,15 @@ function LoadingGradeChip({ label }: { label: string }) {
 }
 
 function SummaryBody({
-  ticker, stockMetrics, decision, vgpm, isRunning,
+  ticker, stockMetrics, decision, vgpm, isRunning, prior, delta,
 }: {
   ticker: string;
   stockMetrics: Record<string, number | undefined> | null;
   decision: any;
   vgpm: VgpmResult | undefined;
   isRunning: boolean;
+  prior: PriorRecap | undefined;
+  delta: FreshnessDelta | undefined;
 }) {
   return (
     <div className="px-4 pt-5 pb-10 space-y-5">
@@ -418,9 +431,21 @@ function SummaryBody({
             </div>
           )}
           {decision.rationale && (
-            <p className="mt-3 text-[12.5px] text-foreground/80 leading-relaxed">
-              {decision.rationale}
-            </p>
+            /* Thesis-density rule (Tier 2.7): the PM rationale arrives as
+               numbered themes separated by newlines (legacy runs used "• "
+               bullets). Render each line as its own paragraph so both shapes
+               read as distinct themes instead of one collapsed blob. */
+            <div className="mt-3 space-y-1.5">
+              {String(decision.rationale)
+                .split(/\n+/)
+                .map((ln) => ln.trim())
+                .filter(Boolean)
+                .map((ln, i) => (
+                  <p key={i} className="text-[12.5px] text-foreground/80 leading-relaxed">
+                    {ln}
+                  </p>
+                ))}
+            </div>
           )}
         </div>
       ) : (
@@ -436,6 +461,10 @@ function SummaryBody({
           </div>
         </div>
       )}
+
+      {/* M1 recency — what the last report said + what changed since.
+          Renders nothing on first-ever runs for this ticker. */}
+      <PriorReportCard prior={prior} delta={delta} ticker={ticker} />
 
       {/* VGPM scorecard — always rendered, with spinners per grade until ready */}
       <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
@@ -465,7 +494,7 @@ function SummaryBody({
 /* ───────── Valuation Tab ───────── */
 function ValuationBody({
   dcfRange, dcfSkipReason, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
-  sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics, sectorCard,
+  sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics, sectorCard, ptHistory,
 }: {
   dcfRange: DcfRange | undefined;
   /** Why dcfRange came back {} for this ticker, if known (see DcfMethodologyPanel). */
@@ -489,6 +518,8 @@ function ValuationBody({
   saasMetrics?: SaasMetrics;
   /** Sector-specific valuation card payload (V3 audit bridge UI). */
   sectorCard?: SectorCardPayload;
+  /** Tier 2.6 — past-run PT track record (built at save time; oldest-first). */
+  ptHistory?: PtHistoryPoint[];
 }) {
   // Extract the numbers still needed by sibling panels below (PriceTargetPanel
   // now owns its own derivation of target/upside/bear-base-bull/consensus).
@@ -515,6 +546,12 @@ function ValuationBody({
         <PriceTargetPanel dcfRange={dcfRange} scenario={scenarioAnalysis} decision={decision} ticker={ticker} />
       ) : (
         <LoadingCard label="12-Month Price Target" minH={320} />
+      )}
+
+      {/* ── Tier 2.6: model target track record (past IV/PT vs price-at-run).
+          Renders nothing until ≥2 prior runs exist for the ticker. ────── */}
+      {ptHistory && ptHistory.length > 0 && (
+        <PriceTargetHistoryStrip history={ptHistory} ticker={ticker} />
       )}
 
       {/* ── REIT branch OR DCF Valuation Ladder ──────────────────────────── */}
@@ -569,6 +606,12 @@ function ValuationBody({
       ) : (
         <LoadingCard label="DCF Valuation Ladder" minH={160} />
       )}
+
+      {/* ── Tier 1: GS-style SOTP report card ──────────────────────────────
+          Present only when the SOTP extractor produced assumptions for this
+          ticker (dcf_range[ticker].sotp_breakdown). Stacks below whichever
+          sector branch rendered above; the DCF methodology panel follows. ── */}
+      {dcfRange?.sotp_breakdown && <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />}
 
       <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 
