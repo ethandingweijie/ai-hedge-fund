@@ -48,6 +48,51 @@ def test_all_matching_never_drops_everything():
     assert len(_drop_aggregate_segments(segs)) >= 1
 
 
+# ── group-revenue reconciliation gate (task #27 BABA incident) ───────────────
+# A map that already reconciles with group revenue cannot contain a
+# double-counted parent; the subset sweep then only produces coincidental
+# matches. On BABA the sweep dropped the three LARGEST segments (Taobao
+# 54B ≈ 18.5+14+11.5+8; Cloud 18.5 ≈ 14+4; Cainiao 11.5 ≈ 8+4), collapsing
+# NAV ~4.7x and — through the 75% SOTP blend — the blended IV/TP.
+
+_BABA_MAP = [
+    {"name": "Taobao Tmall Group (TTG)", "revenue_fwd": 54.0e9},
+    {"name": "Cloud Intelligence Group", "revenue_fwd": 18.5e9},
+    {"name": "International Digital Commerce", "revenue_fwd": 14.0e9},
+    {"name": "Cainiao Smart Logistics", "revenue_fwd": 11.5e9},
+    {"name": "Local Services (Ele.me + Amap)", "revenue_fwd": 8.0e9},
+    {"name": "All Others (DingTalk, Freshippo, etc.)", "revenue_fwd": 4.0e9},
+]
+
+
+def test_reconciled_map_skips_coincidental_subset_sweep():
+    # Sum 110B vs group TTM 140.8B (78%) — reconciles, no double-count
+    # possible, all six disjoint segments must survive.
+    kept = _drop_aggregate_segments(_BABA_MAP, group_revenue=140.8e9)
+    assert [s["name"] for s in kept] == [s["name"] for s in _BABA_MAP]
+
+
+def test_forward_uplift_within_band_still_reconciles():
+    # Forward revenues 20% above TTM reported still reconcile (≤1.25x).
+    kept = _drop_aggregate_segments(_BABA_MAP, group_revenue=90.0e9)
+    assert len(kept) == 6
+
+
+def test_inflated_map_still_drops_parent():
+    # Meituan shape with realistic group revenue: parent+children inflate
+    # the map to ~1.9x group — the sweep fires and drops the parent.
+    kept = [s["name"] for s in
+            _drop_aggregate_segments(_MEITUAN_MAP, group_revenue=47.0e9)]
+    assert kept == ["Food Delivery", "Instashopping", "IHT", "New initiatives"]
+
+
+def test_no_group_revenue_keeps_legacy_sweep():
+    # Unknown group revenue: fall back to the original protective behavior.
+    kept = [s["name"] for s in _drop_aggregate_segments(_BABA_MAP)]
+    assert "Taobao Tmall Group (TTG)" not in kept
+    assert len(kept) == 3
+
+
 # ── _units_scale_factor ───────────────────────────────────────────────────────
 
 def test_units_millions_detected():

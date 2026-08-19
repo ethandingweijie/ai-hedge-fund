@@ -310,3 +310,31 @@ def test_breakdown_none_on_missing_shares():
     assert build_sotp_breakdown({"segments": []}) is None
     assert build_sotp_breakdown({}) is None
     assert build_sotp_breakdown(None) is None
+
+
+# ── Currency-label guard (BABA production incident) ─────────────────────────
+# A CNY-reporting, US-listed ticker carries no fx_usd_to_reporting: the table
+# is USD-denominated, so labeling the per-share figure "RMB" misstates it.
+
+def test_breakdown_labels_usd_when_fx_absent():
+    a = copy.deepcopy(_SCEN_ASSUMPTIONS)
+    a["_shares"] = 10e9
+    bd = build_sotp_breakdown(a, reporting_ccy="CNY")
+    assert bd is not None
+    assert bd["fx_to_reporting"] == 1.0
+    assert bd["reporting_currency"] == "USD"
+    assert bd["sentence"].startswith("TP $")
+    assert "RMB" not in bd["sentence"]
+
+
+def test_breakdown_keeps_reporting_label_when_fx_present():
+    # HK-listed shape: real USD→HKD conversion applied → HKD label stays.
+    a = copy.deepcopy(_SCEN_ASSUMPTIONS)
+    a["_shares"] = 10e9
+    a["fx_usd_to_reporting"] = 7.8
+    bd = build_sotp_breakdown(a, reporting_ccy="HKD")
+    assert bd is not None
+    assert bd["reporting_currency"] == "HKD"
+    assert bd["sentence"].startswith("TP HK$")
+    assert bd["per_share_reporting"] == pytest.approx(
+        bd["per_share"] * 7.8)

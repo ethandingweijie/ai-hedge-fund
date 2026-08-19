@@ -428,6 +428,15 @@ def build_sotp_breakdown(assumptions: dict, reporting_ccy: str = "USD",
     if not shares or shares <= 0:
         return None
     fx = float(assumptions.get("fx_usd_to_reporting") or 1.0)
+    # Label guard: when no USD→reporting conversion is applied (fx 1.0) the
+    # table stays USD-denominated even if the company reports in another
+    # currency (BABA/JD/PDD: CNY reporting, US listing, USD FMP inputs —
+    # HK listings carry a real fx via the dcf_agent HK fallback). Labeling
+    # the per-share figure with the reporting currency would misstate it
+    # (observed in production: "TP RMB61.18" on a $61.18/ADS value).
+    label_ccy = (reporting_ccy or "USD").upper()
+    if fx == 1.0 and label_ccy != "USD":
+        label_ccy = "USD"
     if table is None:
         table = _sotp_analyst_style(assumptions, shares=shares,
                                     fx_to_reporting=fx, net_debt=net_debt,
@@ -463,8 +472,8 @@ def build_sotp_breakdown(assumptions: dict, reporting_ccy: str = "USD",
 
     return {
         "method": "SOTP (analyst)",
-        "sentence": build_sotp_sentence(table, reporting_ccy),
-        "reporting_currency": reporting_ccy or "USD",
+        "sentence": build_sotp_sentence(table, label_ccy),
+        "reporting_currency": label_ccy,
         "rows": table["rows"],
         "segment_value": table["segment_value"],
         "associates": table["associates"],

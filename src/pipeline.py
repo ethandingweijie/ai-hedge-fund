@@ -89,6 +89,16 @@ _FRONT_BLOCK_TIMEOUT_S = _env_seconds("PIPELINE_FRONT_BLOCK_TIMEOUT_S", 1500.0)
 # Phase-7 trio: fast-tier Qwen ~120s calls x retry headroom.
 _PHASE7_TIMEOUT_S = _env_seconds("PIPELINE_PHASE7_TIMEOUT_S", 900.0)
 
+# Engine-cache version gate for the Phase 4.5 dcf_range archive cache.
+# Archived dcf_range payloads are only reusable when stamped with this
+# version at serialization time; anything older (or unstamped) is treated
+# as stale and recomputed. Bump whenever a DCF-engine change alters the
+# IVs a cached entry would otherwise keep serving:
+#   v1 (implicit, unstamped): pre-task-#26 legacy engine — wrong legacy IVs
+#     for CN names (FX artifact in _analyst_growth_bands) and no SOTP blend.
+#   v2: task #26 FX fix + task #27 SOTP(analyst) snapshot attachment.
+_DCF_CACHE_VERSION = 2
+
 
 def _bounded_join(executor, futures: list, timeout_s: float, label: str) -> list:
     """Join `futures` against ONE shared wall-clock deadline.
@@ -1012,7 +1022,24 @@ def run_advanced_pipeline(
         print("[4.5/10] DCF Engine (multi-method, macro-aware)")
         print('='*60)
         with _timed("4_5_dcf_engine"):
-            if _all_cached("dcf_range", age_days=60.0):
+            _dcf_cache_ok = _all_cached("dcf_range", age_days=60.0)
+            if _dcf_cache_ok:
+                # Engine version gate: DCF-engine code changes (task #26 FX
+                # fix, task #27 SOTP snapshot attach) silently invalidate
+                # archived dcf_range payloads — reuse would keep serving the
+                # old IVs for up to the 60-day cache window. Only entries
+                # stamped with the current _DCF_CACHE_VERSION at serialization
+                # time are reusable; unstamped entries predate the gate.
+                for _t in tickers:
+                    _stamp = (_phase_cache[_t]["dcf_range"] or {}).get(  # type: ignore[index]
+                        "_engine_cache_version")
+                    if _stamp != _DCF_CACHE_VERSION:
+                        print(f"  [cache] {_t}: cached dcf_range stamped "
+                              f"engine v{_stamp} (current v{_DCF_CACHE_VERSION})"
+                              f" — stale, recomputing")
+                        _dcf_cache_ok = False
+                        break
+            if _dcf_cache_ok:
                 cached_dcf: dict = {}
                 for _t in tickers:
                     _cd = _phase_cache[_t]["dcf_range"]  # type: ignore[index]
@@ -1625,6 +1652,17 @@ def run_advanced_pipeline(
         print("Advanced pipeline complete.")
         print('='*60)
 
+        # Stamp each non-empty per-ticker dcf_range payload with the engine
+        # cache version so the Phase 4.5 gate on future runs can distinguish
+        # entries produced by this engine from stale ones. Empty {} placeholders
+        # stay empty — the _all_cached truthy guard relies on them remaining
+        # falsy so a crashed engine never masquerades as a valid cache hit.
+        _dcf_range_out = {
+            _t: ({**_v, "_engine_cache_version": _DCF_CACHE_VERSION}
+                 if isinstance(_v, dict) and _v else _v)
+            for _t, _v in (state["data"].get("dcf_range") or {}).items()
+        }
+
         return {
             "decisions":          decisions,
             "analyst_signals":    state["data"]["analyst_signals"],
@@ -1646,8 +1684,9 @@ def run_advanced_pipeline(
             "short_interest":     state["data"].get("short_interest", {}),
             "earnings_quality":   state["data"].get("earnings_quality", {}),
             # Raw financial history (strategic router Phase 2) + DCF outputs
+            # (stamped with _DCF_CACHE_VERSION above for the Phase 4.5 gate).
             "raw_financials":     state["data"].get("raw_financials", {}),
-            "dcf_range":          state["data"].get("dcf_range", {}),
+            "dcf_range":          _dcf_range_out,
             # Per-ticker reason a DCF entry came back {} (set by dcf_agent.py's
             # early-exit branches) + the exception when the whole engine
             # crashed (set by the try/except around run_dcf_agent below).

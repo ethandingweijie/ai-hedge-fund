@@ -237,7 +237,7 @@ def _reconcile_research_segments(merged: list, rs_block: dict | None,
     return merged
 
 
-def _drop_aggregate_segments(segs: list) -> list:
+def _drop_aggregate_segments(segs: list, group_revenue: float | None = None) -> list:
     """Drop double-counted parent segments.
 
     LLMs sometimes emit an aggregate line AND its children (e.g. "Core
@@ -247,11 +247,25 @@ def _drop_aggregate_segments(segs: list) -> list:
     purpose: reported parent/child sets reconcile within ~4%, and looser
     bands false-positive on coincidental segment sums. Segment counts are
     small (≤8) so the subset sweep is cheap. Drop the parent, keep leaves.
+
+    Group-revenue reconciliation gate: double-counting NECESSARILY inflates
+    the segment map above group revenue, so a map that already reconciles
+    (sum ≤ 1.25× group — headroom for forward-vs-reported growth) cannot
+    contain a double-counted parent and the sweep is skipped. Without this,
+    disjoint maps hit coincidental subset sums — observed on BABA:
+    Taobao 54B ≈ Cloud 18.5 + Intl 14 + Cainiao 11.5 + Local 8 (=52B),
+    Cloud 18.5 ≈ 14+4, Cainiao 11.5 ≈ 8+4 — the sweep dropped the three
+    LARGEST segments and collapsed NAV ~4.7× (per-share 174 → 18.14),
+    which the 75% SOTP blend then amplified into a broken IV/TP.
     """
     if len(segs) <= 2:
         return segs
-    from itertools import combinations
     revs = [(s.get("revenue_fwd") or 0) for s in segs]
+    if group_revenue and group_revenue > 0:
+        seg_sum = sum(r for r in revs if r > 0)
+        if 0 < seg_sum <= 1.25 * group_revenue:
+            return segs
+    from itertools import combinations
     drop: set = set()
     for i, s in enumerate(segs):
         rev = revs[i]
@@ -664,7 +678,10 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
             merged_segments, rs_block, group_revenue=skeleton["revenue"])
 
         # Deterministic double-count guard (parent + children emitted together).
-        merged_segments = _drop_aggregate_segments(merged_segments)
+        # Passes the group revenue so a map that already reconciles skips the
+        # subset sweep (coincident-sum false positives — see the guard docstring).
+        merged_segments = _drop_aggregate_segments(
+            merged_segments, group_revenue=skeleton["revenue"])
 
         # ── Basis layer (independent of any sell-side report), margin FIRST
         #    so profitability classification sees model-filled margins:
