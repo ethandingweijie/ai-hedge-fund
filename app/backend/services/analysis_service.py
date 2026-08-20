@@ -1512,7 +1512,7 @@ async def run_analysis_pipeline(
             or status.startswith("✓")           # pipeline "✓ <msg>" completions
             or status.startswith("[cache]")      # power_law / value_trap cache hits
             or status.startswith("Cache HIT")    # deep_research pure cache hit
-            or status.startswith("EDGAR")        # edgar_hkex_resolver: "EDGAR OK:", "EDGAR CIK...", "HKEX OK:"
+            or status.startswith(("EDGAR", "HKEX"))  # edgar_hkex_resolver: "EDGAR OK:", "EDGAR CIK...", "HKEX OK:"
             or _sl == "data routing complete"    # data_router final status
             or status.startswith("Score:")       # power_law live: "Score: 8/10 — ..."
             or _sl.startswith("trap risk")       # value_trap live: "TRAP RISK LOW/MEDIUM/HIGH"

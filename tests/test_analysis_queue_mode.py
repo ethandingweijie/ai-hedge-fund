@@ -129,8 +129,10 @@ def test_runner_stream_start_progress_complete(monkeypatch):
 
     name, start = _parse_sse(chunks[0])
     assert name == "start"
-    # fixed phase total — the investor committee is decommissioned (M2 E)
-    assert start == {"ticker": "MSFT", "model": "m", "total_done_phases": 20}
+    # fixed phase total — the investor committee is decommissioned (M2 E);
+    # 16 = the web pipeline's true terminal phases (M2 progress fix dropped
+    # the seven CLI-only "system" phases that never emit here)
+    assert start == {"ticker": "MSFT", "model": "m", "total_done_phases": 16}
 
     name, prog = _parse_sse(chunks[1])
     assert name == "progress"
@@ -149,7 +151,7 @@ def test_runner_stream_total_is_fixed_phase_count(monkeypatch):
     chunks = _drain(A._queue_stream_generator(
         "run-x", "AAPL", "m", waiter=False))
     _, start = _parse_sse(chunks[0])
-    assert start["total_done_phases"] == A._FIXED_DONE_COUNT == 20
+    assert start["total_done_phases"] == A._FIXED_DONE_COUNT == 16
 
 
 def test_runner_stream_error_event(monkeypatch):
@@ -229,7 +231,7 @@ def test_start_queue_run_runner_path_enqueues(monkeypatch):
     # Runner stream announces the full phase total
     chunks = _drain(resp.body_iterator)
     _, start = _parse_sse(chunks[0])
-    assert start["total_done_phases"] == 20
+    assert start["total_done_phases"] == 16
 
 
 def test_start_queue_run_waiter_subscribes_to_runner(monkeypatch):

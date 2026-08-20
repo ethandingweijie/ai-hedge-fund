@@ -274,14 +274,19 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
 
         # Always-terminal phases of the fixed pipeline (committee decommissioned,
         # M2 Track E — no investor-agents synthetic event).
-        # Fixed breakdown (20):
+        # Fixed breakdown (16) — phases that actually fire a terminal status in
+        # the WEB pipeline (the old 20 counted seven CLI-only "system" phases —
+        # fundamentals/growth_agent/news_sentiment/sentiment/technicals/
+        # valuation/advanced_portfolio_manager — that never emit here, which
+        # capped an honest run's bar at ~65%):
         #   Pipeline "✓" (9):  macro_regime_classifier, strategic_router, intelligence_agents,
         #                       deep_research_agent, industry_specialist, dcf_engine,
         #                       phase7_complete, advanced_risk_manager, portfolio_manager
-        #   System "Done"  (7): fundamentals, growth_agent, news_sentiment, sentiment,
-        #                       technicals, valuation, advanced_portfolio_manager
-        #   Other terminal (4): edgar_hkex_resolver, power_law_agent, value_trap_agent, data_router
-        _FIXED_DONE_COUNT = 20
+        #   Memory terminal (1): archive_cache ("✓ Research memory checked", M2 progress fix)
+        #   Other terminal (6): edgar_hkex_resolver, power_law_agent, value_trap_agent,
+        #                       data_router, deep_research ("Cache HIT…" on reuse runs),
+        #                       sector_card (conditional — bar tolerates firing above this)
+        _FIXED_DONE_COUNT = 16
         _total_done = _FIXED_DONE_COUNT
         yield f"event: start\ndata: {json.dumps({'ticker': ticker, 'model': model_name, 'total_done_phases': _total_done})}\n\n"
 
@@ -426,7 +431,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
 # the full replayed progress history.
 
 # Terminal phases of the fixed pipeline breakdown (mirrors event_generator).
-_FIXED_DONE_COUNT = 20
+_FIXED_DONE_COUNT = 16
 # 30-min cap on a CLIENT STREAM. The worker job_timeout is 60 min, so a
 # long run keeps running after this fires — but the client is released with
 # an error instead of heartbeating forever (and can pick the run up from

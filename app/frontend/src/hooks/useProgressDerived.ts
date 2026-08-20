@@ -18,6 +18,10 @@ const PHASE_SHORT: Record<string, string> = {
   macro_regime_classifier: 'Macro Regime',
   strategic_router:        'Sector Routing',
   intelligence_agents:     'Intelligence',
+  // M2 progress fix: phases 2_8 archive-cache-load + 2_9 freshness delta emit
+  // under this key; it now carries a terminal ✓ event so the bar moves through
+  // the reuse work instead of freezing at the front-block percentage.
+  archive_cache:           'Research Memory',
   data_router:             'Data Router',
   deep_research_agent:     'Deep Research',
   deep_research:           'Deep Research',

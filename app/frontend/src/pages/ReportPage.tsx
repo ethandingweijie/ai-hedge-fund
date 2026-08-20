@@ -636,12 +636,13 @@ export function ReportPage() {
   // "Done" (case-insensitive). The backend normalises "✓ <message>" statuses
   // → "Done" so pre-pipeline phases count here too.
   // M2 Track D/E: the committee is gone, so no investor-phase grouping —
-  // the pipeline is a fixed 20-step path (backend _FIXED_DONE_COUNT) and
-  // the bar's denominator tracks it directly.
+  // the pipeline is a fixed 16-step terminal path (backend _FIXED_DONE_COUNT;
+  // the old 20 counted CLI-only phases that never fire in web runs and capped
+  // the bar at ~65%) and the bar's denominator tracks it directly.
   const _phaseEntries = Object.entries(phaseMap);
   const phaseDone = _phaseEntries.filter(([, e]) => e.status.toLowerCase() === 'done').length;
   const phaseSeen = _phaseEntries.length;
-  const totalPhases = Math.max(_phaseEntries.length, 20);
+  const totalPhases = Math.max(_phaseEntries.length, 16);
 
   // Non-linear front-loaded curve: progress = 1 - (1 - ratio)^1.5
   const progressPct  =

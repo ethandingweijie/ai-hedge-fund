@@ -558,6 +558,12 @@ def run_advanced_pipeline(
                         + f" ({_pr.get('age_days') or 0:.1f}d old)")
             state["data"]["prior_recap"] = dict(_prior_reports)
             if _prior_reports:
+                # Progress visibility: the freshness search below takes up to
+                # ~45s per ticker (bounded) — say so instead of going silent
+                # under the archive_cache label.
+                progress.update_status(
+                    "archive_cache", primary_ticker,
+                    "Searching for material developments since the prior report…")
                 _deltas = _run_freshness_delta(list(tickers), _prior_reports)
                 state["data"]["freshness_delta"] = _deltas
                 for _t, _d in _deltas.items():
@@ -591,6 +597,19 @@ def run_advanced_pipeline(
                             _t, _prior_reports.get(_t))
             except Exception as _lessons_exc:
                 print(f"  [lessons] lesson generation failed: {_lessons_exc}")
+
+            # Terminal ✓ event: archive_cache never got a completion marker,
+            # so the progress bar froze at the front-block percentage for the
+            # entire 2_8+2_9 window ("archive cache 28% forever" on cache
+            # runs). Counting it as a done phase keeps the bar moving through
+            # the reuse work and marks the phase complete in /analysis/status.
+            _n_mat = sum(
+                1 for _d in state["data"].get("freshness_delta", {}).values()
+                if _d.get("material"))
+            progress.update_status(
+                "archive_cache", primary_ticker,
+                "✓ Research memory checked — prior report + freshness delta loaded"
+                + (f" ({_n_mat} material)" if _n_mat else ""))
 
         def _all_cached(key: str, age_days: float = 7.0) -> bool:
             """True if every ticker has a fresh-enough, non-empty cache entry for key.
