@@ -10,9 +10,11 @@ route falls back to the in-process execution path — so production keeps
 working identically until the Redis addon exists.
 
 Redis keys:
-- analysis_dedup:{ticker}::{agents}   STRING run_id, SETNX, TTL 65 min
+- analysis_dedup:{ticker}   STRING run_id, SETNX, TTL 65 min
   Distributed replacement for the in-memory _in_flight dict: the value is
   the runner's run_id so waiters can subscribe to the same bus channel.
+  (Per-ticker since M2 Track E — the investor committee and its agent-list
+  dimension are decommissioned.)
 """
 from __future__ import annotations
 
@@ -34,15 +36,14 @@ DEDUP_TTL = 3900  # 65 min — worker job_timeout (60 min) + 5 min slack
 ENQUEUE_EXPIRES = 1800  # 30 min — unclaimed jobs expire out of the queue
 
 
-def build_dedup_key(ticker: str, selected_agents: Optional[list[str]]) -> str:
+def build_dedup_key(ticker: str) -> str:
     """Canonical dedup slot key for one analysis run.
 
     MUST stay identical between the web claim site (routes/analysis.py) and
-    the worker release (worker.run_analysis_pipeline_task): sorted agent
-    list so [A, B] and [B, A] dedupe to the same slot, None == [].
+    the worker release (worker.run_analysis_pipeline_task). Per-ticker since
+    the investor committee was decommissioned (M2 Track E).
     """
-    agents_key = ",".join(sorted(selected_agents or []))
-    return f"{ticker}::{agents_key}"
+    return ticker
 
 _arq_pool = None
 
@@ -90,7 +91,6 @@ async def enqueue_analysis(
     ticker: str,
     model_name: str,
     api_keys: dict,
-    selected_agents: Optional[list[str]],
     user_id: Optional[int],
     run_id: str,
 ) -> None:
@@ -103,7 +103,6 @@ async def enqueue_analysis(
         ticker=ticker,
         model_name=model_name,
         api_keys=api_keys,
-        selected_agents=selected_agents,
         user_id=user_id,
         run_id=run_id,
         _job_id=f"analysis:{run_id}",

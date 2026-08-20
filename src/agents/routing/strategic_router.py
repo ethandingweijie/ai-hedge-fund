@@ -212,12 +212,14 @@ def run_strategic_router(state: AgentState) -> AgentState:
         raw_financials_out = _cached["raw_financials"] or {}
         routing_decision   = _cached["routing_decision"] or {}
         sector_llm_raw     = _cached["sector_llm_raw"] or final_sector
+        reported_ccy       = _cached.get("reported_currency") or "USD"
 
         state["data"]["sector"]            = final_sector
         state["data"]["sector_llm_raw"]    = sector_llm_raw
         state["data"]["sector_confidence"] = sector_confidence
         state["data"]["sector_warning"]    = sector_warning
         state["data"]["raw_financials"]    = raw_financials_out
+        state["data"]["reported_currency"] = reported_ccy
         state["data"]["insider_summary"]   = "(cached — not re-fetched)"
         state["data"]["routing_decision"]  = routing_decision
         state["data"]["primary_ticker"]    = ticker
@@ -306,6 +308,17 @@ def run_strategic_router(state: AgentState) -> AgentState:
                 row[field] = val
         financial_rows.append(row)
 
+    # M2 B2 — reporting currency of the FMP figures (e.g. CNY for BABA).
+    # Downstream research prompts label figures with it and the consistency
+    # checker converts to USD before comparing. First non-empty value wins
+    # (FMP reportedCurrency is stable across periods for a given filer).
+    reported_ccy = "USD"
+    for item in (line_items or []):
+        _ccy = str(getattr(item, "currency", "") or "").upper().strip()
+        if _ccy:
+            reported_ccy = _ccy
+            break
+
     # Compact insider summary
     net_buy_value = sum(
         (t.transaction_value or 0)
@@ -383,6 +396,7 @@ def run_strategic_router(state: AgentState) -> AgentState:
     state["data"]["sector_confidence"]  = confidence             # HIGH | MEDIUM | LOW
     state["data"]["sector_warning"]     = sector_warning         # None or warning string
     state["data"]["raw_financials"]     = result.raw_financials
+    state["data"]["reported_currency"]  = reported_ccy
     state["data"]["insider_summary"]    = result.insider_summary
     state["data"]["routing_decision"]   = result.routing_decision
     state["data"]["primary_ticker"]     = ticker
@@ -403,6 +417,7 @@ def run_strategic_router(state: AgentState) -> AgentState:
                                   if hasattr(result.routing_decision, "model_dump") else {}),
         raw_financials    = result.raw_financials if isinstance(result.raw_financials, dict)
                             else {},
+        reported_currency = reported_ccy,
     )
 
     # Build per-ticker sector map for multi-ticker runs.

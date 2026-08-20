@@ -6,8 +6,8 @@ Covers the pure/deterministic pieces of each speed lever:
       (``specialist.assemble_industry_brief_merged``) and the SECTION 7 parser
       in ``deep_research._extract_sections``.
   R2  search-profile / brief-mode prompt gating (``_build_research_system``).
-  R3  investor panel resolution (``pipeline._resolve_investor_panel``) and PM
-      voice renormalisation (``portfolio_manager._compute_weighted_signal``).
+  R3  (retired) investor panel resolution + PM voice renormalisation tests —
+      the committee was decommissioned in M2 Track D/E.
   R4  fast-tier model routing (``llm.get_agent_model_config``).
   R5  card-QA delta check (``card_qa_agent.compute_card_qa_hash`` /
       ``should_reuse_card_qa``).
@@ -111,93 +111,9 @@ class TestShouldReuseCardQa:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# R3 — investor panel resolution + PM voice renormalisation
+# R3 — retired with the investor committee (M2 Track D/E). Panel resolution
+# and PM voice renormalisation no longer exist to test.
 # ─────────────────────────────────────────────────────────────────────────────
-
-from src.pipeline import _DEFAULT_INVESTOR_SIX, _resolve_investor_panel
-from src.pipeline_investors import INVESTOR_PERSONAS
-from src.agents.portfolio_manager import _compute_weighted_signal
-
-
-@pytest.fixture
-def no_persona_env(monkeypatch):
-    monkeypatch.delenv("PIPELINE_INVESTOR_PERSONAS", raising=False)
-    return monkeypatch
-
-
-class TestResolveInvestorPanel:
-    def test_registry_retains_all_12_profiles(self):
-        assert len(INVESTOR_PERSONAS) == 12
-
-    def test_default_panel_is_balanced_six(self, no_persona_env):
-        panel = _resolve_investor_panel(None)
-        assert panel == _DEFAULT_INVESTOR_SIX
-        assert len(panel) == 6
-        assert set(panel) <= set(INVESTOR_PERSONAS)
-
-    def test_user_selection_kept_when_small(self, no_persona_env):
-        assert _resolve_investor_panel(["buffett", "munger", "lynch"]) == [
-            "buffett", "munger", "lynch"]
-
-    def test_unknown_names_dropped(self, no_persona_env):
-        assert _resolve_investor_panel(["buffett", "fake_guru"]) == ["buffett"]
-
-    def test_selection_capped_at_six(self, no_persona_env):
-        picks = list(INVESTOR_PERSONAS.keys())[:8]
-        panel = _resolve_investor_panel(picks)
-        assert panel == picks[:6]
-
-    def test_all_unknown_falls_back_to_default(self, no_persona_env):
-        assert _resolve_investor_panel(["nope", "nada"]) == list(_DEFAULT_INVESTOR_SIX)
-
-    def test_env_all_restores_full_twelve(self, monkeypatch):
-        monkeypatch.setenv("PIPELINE_INVESTOR_PERSONAS", "all")
-        panel = _resolve_investor_panel(None)
-        assert len(panel) == 12 and panel == list(INVESTOR_PERSONAS.keys())
-
-    def test_env_comma_list_validated_and_capped(self, monkeypatch):
-        monkeypatch.setenv("PIPELINE_INVESTOR_PERSONAS", " munger , lynch , fisher ")
-        assert _resolve_investor_panel(None) == ["munger", "lynch", "fisher"]
-        monkeypatch.setenv("PIPELINE_INVESTOR_PERSONAS", "munger,bogus,lynch")
-        assert _resolve_investor_panel(None) == ["munger", "lynch"]
-        monkeypatch.setenv("PIPELINE_INVESTOR_PERSONAS", ",".join(INVESTOR_PERSONAS))
-        assert len(_resolve_investor_panel(None)) == 6
-        monkeypatch.setenv("PIPELINE_INVESTOR_PERSONAS", "bogus,ghost")
-        assert _resolve_investor_panel(None) == list(_DEFAULT_INVESTOR_SIX)
-
-
-def _pm_state(signals: dict) -> dict:
-    return {"data": {
-        "analyst_signals": signals,
-        "agent_weight_multipliers": {},
-        "conviction_weights": {},
-        "debate_result": {},
-    }}
-
-
-class TestPmVoiceRenormalisation:
-    """The weighted signal divides by the weights of PRESENT voices only, so
-    shrinking the panel from 6 to 3 must not dilute a consensus."""
-
-    @staticmethod
-    def _voices(keys, signal, conviction):
-        return {k: {"CRWD": {"signal": signal, "conviction": conviction}} for k in keys}
-
-    def test_three_buy_votes_same_score_as_six(self):
-        s3 = _compute_weighted_signal("CRWD", _pm_state(
-            self._voices(["buffett", "munger", "lynch"], "BUY", 8)))
-        s6 = _compute_weighted_signal("CRWD", _pm_state(
-            self._voices(list(INVESTOR_PERSONAS)[:6], "BUY", 8)))
-        assert s3 == pytest.approx(8.0)
-        assert s6 == pytest.approx(8.0)   # renormalised, not averaged over 12
-
-    def test_mixed_panel(self):
-        sigs = self._voices(["buffett", "munger"], "BUY", 8)
-        sigs.update(self._voices(["burry"], "SELL", 8))
-        assert _compute_weighted_signal("CRWD", _pm_state(sigs)) == pytest.approx(8 / 3)
-
-    def test_no_voices_returns_zero(self):
-        assert _compute_weighted_signal("CRWD", _pm_state({})) == 0.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -212,20 +128,24 @@ _RUN_STATE = {"metadata": {"model_name": "claude-sonnet-4-6",
 
 @pytest.fixture
 def clean_model_env(monkeypatch):
-    for k in ("PIPELINE_FAST_MODEL", "AGENT_MODEL_INVESTOR_BUFFETT",
-              "AGENT_MODEL_SCENARIO_AGENT", "AGENT_MODEL_VALUE_TRAP_AGENT",
-              "AGENT_MODEL_DEEP_RESEARCH"):
+    for k in ("PIPELINE_FAST_MODEL", "AGENT_MODEL_SCENARIO_AGENT",
+              "AGENT_MODEL_VALUE_TRAP_AGENT", "AGENT_MODEL_DEEP_RESEARCH"):
         monkeypatch.delenv(k, raising=False)
     return monkeypatch
 
 
 class TestFastTierRouting:
     @pytest.mark.parametrize("agent", [
-        "investor_buffett", "investor_cathie_wood",
         "scenario_agent", "power_law_agent", "value_trap_agent",
     ])
     def test_fast_tier_defaults_to_alibaba_fast_model(self, clean_model_env, agent):
         assert get_agent_model_config(_RUN_STATE, agent) == ("qwen3.6-plus", "Alibaba")
+
+    def test_decommissioned_investor_names_fall_to_run_model(self, clean_model_env):
+        # The investor_ prefix left the fast tier with the committee (M2 E):
+        # any such legacy name now routes to the run model, not the fast tier.
+        assert get_agent_model_config(_RUN_STATE, "investor_buffett") == (
+            "claude-sonnet-4-6", "Anthropic")
 
     def test_research_agents_keep_run_model(self, clean_model_env):
         for agent in ("deep_research", "dcf_agent", "industry_specialist"):
@@ -234,12 +154,12 @@ class TestFastTierRouting:
 
     def test_empty_pipeline_fast_model_disables_tiering(self, clean_model_env):
         clean_model_env.setenv("PIPELINE_FAST_MODEL", "")
-        assert get_agent_model_config(_RUN_STATE, "investor_buffett") == (
+        assert get_agent_model_config(_RUN_STATE, "scenario_agent") == (
             "claude-sonnet-4-6", "Anthropic")
 
     def test_pipeline_fast_model_override(self, clean_model_env):
         clean_model_env.setenv("PIPELINE_FAST_MODEL", "gpt-4.1")
-        assert get_agent_model_config(_RUN_STATE, "investor_buffett") == ("gpt-4.1", "OpenAI")
+        assert get_agent_model_config(_RUN_STATE, "scenario_agent") == ("gpt-4.1", "OpenAI")
 
     def test_agent_model_env_beats_fast_tier(self, clean_model_env):
         clean_model_env.setenv("AGENT_MODEL_SCENARIO_AGENT", "qwen3.6-plus")

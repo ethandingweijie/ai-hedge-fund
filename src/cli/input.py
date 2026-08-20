@@ -70,77 +70,6 @@ def parse_tickers(tickers_arg: str | None) -> list[str]:
     return [ticker.strip() for ticker in tickers_arg.split(",") if ticker.strip()]
 
 
-def select_investor_agents(analysts_all: bool = False) -> list[str]:
-    """
-    Interactive numbered-list agent selector for the advanced 10-phase pipeline.
-    Shows the 12 INVESTOR_PERSONAS.  Always prompts unless analysts_all=True.
-    """
-    from src.pipeline_investors import INVESTOR_PERSONAS  # local import to avoid circular
-
-    INVESTOR_DISPLAY: dict[str, str] = {
-        "damodaran":      "Aswath Damodaran  — Dean of Valuation",
-        "graham":         "Ben Graham        — Father of Value Investing",
-        "ackman":         "Bill Ackman       — Activist Investor (Pershing Square)",
-        "cathie_wood":    "Cathie Wood       — Queen of Disruptive Growth (ARK)",
-        "munger":         "Charlie Munger    — Rational Thinker (Berkshire)",
-        "burry":          "Michael Burry     — Forensic Contrarian (Scion)",
-        "pabrai":         "Mohnish Pabrai    — Dhandho Investor",
-        "lynch":          "Peter Lynch       — Tenbagger Hunter (Fidelity)",
-        "fisher":         "Phil Fisher       — Scuttlebutt Investigator",
-        "jhunjhunwala":   "Rakesh Jhunjhunwala — Big Bull of India",
-        "druckenmiller":  "Stanley Druckenmiller — Macro Legend (Duquesne)",
-        "buffett":        "Warren Buffett    — Oracle of Omaha (Berkshire)",
-    }
-
-    all_keys = list(INVESTOR_PERSONAS.keys())
-
-    if analysts_all:
-        print(f"\n{Fore.WHITE}{Style.BRIGHT}Investor Agents (--analysts-all: running all {len(all_keys)}){Style.RESET_ALL}")
-        for i, key in enumerate(all_keys, 1):
-            print(f"  {Fore.GREEN}{i:2}. {INVESTOR_DISPLAY.get(key, key)}{Style.RESET_ALL}")
-        print()
-        return all_keys
-
-    # ── Interactive numbered-list prompt ─────────────────────────────────────
-    print(f"\n{Fore.WHITE}{Style.BRIGHT}Select Investor Agents to run in the Advanced Pipeline{Style.RESET_ALL}")
-    print(f"{Fore.WHITE}{'─'*60}{Style.RESET_ALL}")
-    for i, key in enumerate(all_keys, 1):
-        print(f"  {Fore.CYAN}{i:2}.{Style.RESET_ALL} {INVESTOR_DISPLAY.get(key, key)}")
-    print(f"{Fore.WHITE}{'─'*60}{Style.RESET_ALL}")
-
-    choices = questionary.checkbox(
-        "Choose agents  [Space = toggle | 'a' = all | Enter = confirm]",
-        choices=[
-            questionary.Choice(
-                f"{i+1:2}. {INVESTOR_DISPLAY.get(key, key)}",
-                value=key,
-            )
-            for i, key in enumerate(all_keys)
-        ],
-        validate=lambda x: len(x) > 0 or "Select at least one agent.",
-        style=questionary.Style([
-            ("checkbox-selected", "fg:green"),
-            ("selected",          "fg:green noinherit"),
-            ("highlighted",       "noinherit"),
-            ("pointer",           "noinherit"),
-        ]),
-    ).ask()
-
-    if not choices:
-        print("\n\nInterrupt received. Exiting...")
-        sys.exit(0)
-
-    print(
-        f"\nSelected agents: "
-        + ", ".join(
-            Fore.GREEN + INVESTOR_DISPLAY.get(c, c).split("—")[0].strip() + Style.RESET_ALL
-            for c in choices
-        )
-        + "\n"
-    )
-    return choices
-
-
 def select_analysts(flags: dict | None = None) -> list[str]:
     if flags and flags.get("analysts_all"):
         return [a[1] for a in ANALYST_ORDER]
@@ -497,8 +426,10 @@ def parse_cli_inputs(
     analysts_all_flag = getattr(args, "analysts_all", False)
 
     if pipeline_mode == "advanced":
-        # Advanced pipeline uses INVESTOR_PERSONAS (12 agents), always shows interactive prompt
-        selected_analysts = select_investor_agents(analysts_all=analysts_all_flag)
+        # M2 Track E: the investor committee is decommissioned — the advanced
+        # pipeline takes no agent selection (the PM decides from research +
+        # valuation directly).
+        selected_analysts = []
     else:
         selected_analysts = select_analysts({
             "analysts_all": analysts_all_flag,

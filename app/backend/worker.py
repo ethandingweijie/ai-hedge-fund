@@ -14,10 +14,12 @@ running everything in-process exactly as today.
 Tasks
 -----
 run_analysis_pipeline_task(ctx, ticker, model_name, api_keys,
-                           selected_agents, user_id, run_id)
-    Full 10-phase analysis pipeline. run_id is minted by the WEB process at
+                           user_id, run_id)
+    Full analysis pipeline. run_id is minted by the WEB process at
     enqueue time so SSE clients can subscribe to progress:{run_id} before the
-    job even starts.
+    job even starts. The `selected_agents` kwarg is still ACCEPTED (jobs
+    enqueued before the M2 Track E deploy carry it) but ignored — the
+    investor committee is decommissioned.
 
 run_research_job_task(ctx, job_id, kind, params)
     /research/* background jobs. The complacency kinds are module-level sync
@@ -68,11 +70,13 @@ async def run_analysis_pipeline_task(
     ticker: str,
     model_name: str,
     api_keys: dict,
-    selected_agents: Optional[list[str]] = None,
+    selected_agents: Optional[list[str]] = None,  # legacy kwarg — accepted
+    # for jobs enqueued before the M2 Track E deploy; ignored (never
+    # forwarded). Removing it would TypeError on unpickled pre-deploy jobs.
     user_id: Optional[int] = None,
     run_id: Optional[str] = None,
 ) -> dict:
-    """Run the 10-phase pipeline, streaming progress over the bus.
+    """Run the analysis pipeline, streaming progress over the bus.
 
     on_phase is a SYNC callback invoked from inside the pipeline, so events
     are queued and drained by a single forwarder task — this preserves event
@@ -134,7 +138,6 @@ async def run_analysis_pipeline_task(
                 model_name=model_name,
                 api_keys=api_keys,
                 on_phase=on_phase,
-                selected_agents=selected_agents,
                 user_id=user_id,
                 run_id=run_id,
             )
@@ -182,11 +185,13 @@ async def run_analysis_pipeline_task(
         # re-run of the same ticker waits out the full 65-min DEDUP_TTL, and
         # a crashed run leaves its slot locked until expiry. In-process runs
         # never claim a Redis slot, so the DEL is a no-op there;
-        # release_run also swallows Redis failures itself.
+        # release_run also swallows Redis failures itself. Per-ticker key
+        # (M2 Track E). NOTE: pre-deploy jobs claimed the old
+        # "ticker::agents" key — those slots simply expire via TTL.
         try:
             from app.backend.services import queue_client
             await queue_client.release_run(
-                queue_client.build_dedup_key(ticker, selected_agents))
+                queue_client.build_dedup_key(ticker))
         except Exception as exc:
             logger.warning("worker: dedup release failed: %s", exc)
 

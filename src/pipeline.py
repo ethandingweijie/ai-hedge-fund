@@ -1,17 +1,23 @@
 """
-Advanced 10-Phase Pipeline Orchestrator
+Advanced Pipeline Orchestrator (committee-free as of M2 Track D/E)
 
 Sequence:
-  [1] Macro Regime Classifier      — sequential, sets agent weights + position cap
-  [2] Strategic Routing Agent      — sequential, sector + raw financials scratchpad
-  [3] Industry Specialist Agent    — sequential, shared intelligence brief
-  [4] Data Router                  — sequential, no LLM, pre-fetches per-agent data
-  [5] Investor Agents (parallel)   — 12 threads, CoT signals with conviction + cot_log
-  [6] Debate Round (conditional)   — sequential, only if ≥3 BUY and ≥3 SELL on same ticker
+  [1] Macro Regime Classifier      — front block, sets regime + position cap
+  [2] Strategic Routing Agent      — front block, sector + raw financials scratchpad
+  [2.5] Intelligence Agents        — front block, deterministic intel signals
+  [2.7] EDGAR/HKEX Resolver        — front block, filing refs
+  [2.9] Freshness delta            — one bounded search per ticker with a prior recap
+  [3] Deep Research + Industry Brief — Qwen/Anthropic web research, extractor fan-out
+  [4] DCF / SOTP / Data Router     — valuation engines + per-agent data pre-fetch
+  [4.6/4.7] Peer comparison + price history (background since the front block)
   [7] Scenario + PowerLaw + Trap   — 3 parallel threads, all read same state
-  [8] Advanced Risk Manager        — sequential, dual-layer quality filter + position caps
-  [9] Advanced Portfolio Manager   — sequential, conviction-weighted formula + LLM rationale
-  [10] Post-Trade Review (optional)— sequential, scores prior calls, updates weights on disk
+  [8] Advanced Risk Manager        — dual-layer quality filter + position caps
+  [9] Advanced Portfolio Manager   — valuation-band cascade + research digest + LLM rationale
+  [10] Post-Trade Review (optional)— scores prior calls against outcomes
+
+The former phases 5 (investor agents) and 6 (debate round) were
+decommissioned in M2: the PM decides from qualitative research +
+quantitative valuation directly ("Decision path: no committee").
 
 Entry point called from main.py when --pipeline advanced is passed.
 """
@@ -19,7 +25,7 @@ Entry point called from main.py when --pipeline advanced is passed.
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -52,7 +58,6 @@ try:
 except Exception:  # ImportError or any missing transitive dependency
     run_sotp_extractor = None
 from src.agents.analysis.peer_comparison import run_peer_comparison
-from src.agents.analysis.debate_round import run_debate_round, should_trigger_debate
 from src.agents.analysis.scenario_agent import run_scenario_agent
 from src.agents.analysis.power_law_agent import run_power_law_agent
 from src.agents.analysis.value_trap_agent import run_value_trap_agent
@@ -62,7 +67,6 @@ from src.agents.risk_manager import run_advanced_risk_manager, risk_management_a
 from src.agents.portfolio_manager import run_advanced_portfolio_manager
 from src.agents.portfolio.post_trade_review import run_post_trade_review
 from src.memory.run_archive import save_run, archive_summary, get_phase_cache
-from src.pipeline_investors import run_advanced_investor, INVESTOR_PERSONAS
 from src.utils.pdf_report import _compute_vgpm
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -134,55 +138,12 @@ def _bounded_join(executor, futures: list, timeout_s: float, label: str) -> list
     executor.shutdown(wait=True)
     return results
 
-# Speed round 2 (R3): default investor panel for automated runs — balanced
-# across bull/bear/value/growth. All 12 INVESTOR_PERSONAS remain registered
-# and selectable; user selections are validated and capped at 6 inside
-# run_advanced_pipeline so the investor phase is always a single wave.
-_DEFAULT_INVESTOR_SIX = ["buffett", "damodaran", "burry", "cathie_wood", "ackman", "graham"]
-assert set(_DEFAULT_INVESTOR_SIX) <= set(INVESTOR_PERSONAS), \
-    "default investor panel drifted from INVESTOR_PERSONAS keys"
-
 # Speed round 2 (R5): card-QA delta check — how far back to look for a prior
 # run whose card+research inputs match this one. Reuse only happens when the
 # stored hash, QA version and clean-audit conditions all hold (see
 # src.agents.audit.card_qa_agent.should_reuse_card_qa). Env gate:
 # CARD_QA_DELTA=true (default) | false.
 _CARD_QA_REUSE_DAYS = 7
-
-# Speed round 2 (R3): single-wave cap on active investors. The worker-pool
-# cap for this account is 6 (429s above it), so ≤6 active investors is always
-# exactly one wave (12 personas used to run 2 serial waves ≈ +2–2.5 min).
-_MAX_INVESTORS = 6
-
-
-def _resolve_investor_panel(selected_agents: list[str] | None) -> list[str]:
-    """Resolve the active investor panel for a run (speed round 2, R3).
-
-    All 12 INVESTOR_PERSONAS stay registered. Selection rules:
-      - User selection: validated against INVESTOR_PERSONAS (unknown names
-        dropped), capped at _MAX_INVESTORS.
-      - No selection: env PIPELINE_INVESTOR_PERSONAS (comma list, validated
-        and capped; "all" restores the full 12), defaulting to the balanced
-        6 (bull/bear/value/growth spread).
-    """
-    if selected_agents:
-        _valid = [a for a in selected_agents if a in INVESTOR_PERSONAS]
-        _dropped = [a for a in selected_agents if a not in INVESTOR_PERSONAS]
-        if _dropped:
-            print(f"  [investors] ignoring unknown agent name(s): {', '.join(_dropped)}")
-        if len(_valid) > _MAX_INVESTORS:
-            print(f"  [investors] capping user selection {len(_valid)} → {_MAX_INVESTORS} "
-                  f"(one-wave limit); keeping: {', '.join(_valid[:_MAX_INVESTORS])}")
-        return _valid[:_MAX_INVESTORS] or list(_DEFAULT_INVESTOR_SIX)
-
-    _env_personas = os.environ.get("PIPELINE_INVESTOR_PERSONAS", "").strip().lower()
-    if _env_personas == "all":
-        return list(INVESTOR_PERSONAS.keys())
-    if _env_personas:
-        _env_valid = [p.strip() for p in _env_personas.split(",") if p.strip()]
-        _env_valid = [p for p in _env_valid if p in INVESTOR_PERSONAS][:_MAX_INVESTORS]
-        return _env_valid or list(_DEFAULT_INVESTOR_SIX)
-    return list(_DEFAULT_INVESTOR_SIX)
 
 
 def _merge_resume_into_phase_cache(
@@ -251,126 +212,19 @@ def _merge_resume_into_phase_cache(
 # whether anything MATERIAL changed since that report. User-triggered by
 # design (runs inside the requested pipeline — nothing runs unattended).
 # Every failure mode is soft: the run always continues.
+#
+# M2 Track A1: the search + classify pair moved to src/memory/freshness.py,
+# shared with the Pulse endpoint (Track C). Thin callers stay here.
 
-def _classify_delta(ticker: str, prior: dict, snippets: str) -> dict | None:
-    """Fast-tier LLM pass over one search result set. Returns
-    {material, events, verdict} or None on any failure (soft-fail)."""
-    try:
-        from pydantic import BaseModel, Field
-
-        class DeltaEvent(BaseModel):
-            headline: str = ""
-            date: str = ""
-            relevance: str = ""
-
-        class DeltaClassification(BaseModel):
-            material: bool = Field(
-                default=False,
-                description="True if any event meaningfully changes the prior thesis")
-            events: list[DeltaEvent] = Field(default_factory=list)
-            verdict: str = Field(
-                default="",
-                description="One sentence: is the prior report still current and why")
-
-        from src.llm.models import ModelProvider, get_model
-        from src.memory.report_recap import RECAP_MODEL_NAME
-        provider = ModelProvider.ALIBABA
-        if RECAP_MODEL_NAME.lower().startswith(("gpt", "o1", "o3", "o4")):
-            provider = ModelProvider.OPENAI
-        llm = get_model(RECAP_MODEL_NAME, provider, None)
-        if llm is None:
-            return None
-
-        recap_json = prior.get("recap_json") or {}
-        assumptions = "; ".join((recap_json.get("assumptions") or [])[:5]) or "(none recorded)"
-        catalysts = "; ".join((recap_json.get("catalysts") or [])[:5]) or "(none recorded)"
-
-        system = (
-            "You check whether a prior equity research report is still current. "
-            "Compare fresh news against the prior thesis. Be strict: only "
-            "earnings, guidance, M&A, regulatory, macro-sector or thesis-level "
-            "developments count as material — routine price moves do not. "
-            "Respond in JSON format."
-        )
-        human = (
-            f"Ticker: {ticker}\n"
-            f"Prior report ({str(prior.get('run_at') or '')[:10]}): "
-            f"{prior.get('final_action') or 'N/A'}, "
-            f"price target {recap_json.get('price_target')} — "
-            f"{(prior.get('recap_text') or '')[:400]}\n"
-            f"Key assumptions: {assumptions}\n"
-            f"Watched catalysts: {catalysts}\n\n"
-            f"Fresh search results since then:\n{snippets[:4000]}\n\n"
-            "Classify: material (bool), events (max 5, only genuinely material "
-            "ones, each with headline/date/relevance to the prior thesis), "
-            "verdict (one sentence on whether the prior report is still current).\n"
-            "Return a JSON object: {\"material\": true|false, \"events\": "
-            "[{\"headline\": \"...\", \"date\": \"...\", \"relevance\": \"...\"}], "
-            "\"verdict\": \"...\"}"
-        )
-        messages = [("system", system), ("human", human)]
-        try:
-            from src.research_ideas.complacency import qwen_throttle
-            qwen_throttle.acquire(weight=1.0)
-        except Exception:
-            pass  # throttle is a courtesy; never block the delta check on it
-
-        structured_llm = llm.with_structured_output(DeltaClassification, method="json_mode")
-        try:
-            out = structured_llm.invoke(messages)
-        except Exception:
-            import json as _json
-            raw = llm.invoke(messages)
-            text = raw.content if hasattr(raw, "content") else str(raw)
-            start, end = text.find("{"), text.rfind("}")
-            if start < 0 or end <= start:
-                return None
-            out = DeltaClassification(**_json.loads(text[start:end + 1]))
-
-        return {
-            "material": bool(out.material),
-            "events": [
-                {"headline": (e.headline or "")[:200],
-                 "date": (e.date or "")[:16],
-                 "relevance": (e.relevance or "")[:300]}
-                for e in (out.events or [])[:5]
-            ],
-            "verdict": (out.verdict or "")[:500],
-        }
-    except Exception as exc:
-        print(f"  [delta] {ticker}: classification failed: {exc}")
-        return None
+from src.memory.freshness import classify_delta as _classify_delta  # back-compat alias
+from src.memory.freshness import run_freshness_search
 
 
 def _delta_for_ticker(ticker: str, prior: dict, tavily_key: str | None) -> dict:
     """One bounded search + classification for a single ticker. Soft-fail:
-    always returns a well-formed delta dict."""
-    base = {
-        "material": None,
-        "events": [],
-        "verdict": "check unavailable",
-        "based_on_run": prior.get("run_id"),
-        "prior_run_at": prior.get("run_at"),
-    }
-    if not tavily_key:
-        return base
-    try:
-        from src.agents.industry.deep_research import _search_web
-        since = str(prior.get("run_at") or "")[:10] or "the last report"
-        snippets = _search_web(
-            f"{ticker} stock material news earnings guidance M&A regulatory since {since}",
-            tavily_key,
-        )
-        if not snippets or snippets.startswith(("Search error", "No results")):
-            base["verdict"] = "no fresh results"
-            return base
-        classified = _classify_delta(ticker, prior, snippets)
-        if classified:
-            base.update(classified)
-        return base
-    except Exception as exc:
-        print(f"  [delta] {ticker}: freshness check failed: {exc}")
-        return base
+    always returns a well-formed delta dict. Thin caller over
+    src.memory.freshness (M2 Track A1) — Qwen primary, Tavily secondary."""
+    return run_freshness_search(ticker, prior, tavily_key=tavily_key)
 
 
 def _run_freshness_delta(
@@ -397,7 +251,6 @@ def run_advanced_pipeline(
     start_date: str,
     end_date: str,
     portfolio: dict,
-    selected_agents: list[str] | None = None,
     model_name: str = "claude-sonnet-4-6",
     model_provider: str = "Anthropic",
     show_reasoning: bool = False,
@@ -407,17 +260,17 @@ def run_advanced_pipeline(
     resume_bundle: dict | None = None,
 ) -> dict:
     """
-    Run the full 10-phase advanced pipeline.
+    Run the full advanced pipeline (committee-free as of M2 Track D/E).
 
     on_checkpoint, if provided, is called after the deep_research,
-    industry_brief, investor_signals and final_calculation checkpoints so the
-    caller can persist partial results early.
+    industry_brief and final_calculation checkpoints so the caller can
+    persist partial results early.
     Signature: on_checkpoint(state: AgentState, checkpoint_name: str) -> None
 
     resume_bundle, if provided (see analysis_service._build_resume_bundle),
-    is a crashed predecessor run's checkpoint payload. Its Phase 3/4 outputs
-    seed the phase cache so the expensive skip gates fire; Phase 5+ always
-    reruns fresh.
+    is a crashed predecessor run's checkpoint payload. Its research/valuation
+    outputs seed the phase cache so the expensive skip gates fire; later
+    phases always rerun fresh.
     Returns a result dict compatible with print_trading_output().
     """
     progress.start()
@@ -448,13 +301,12 @@ def run_advanced_pipeline(
             },
         }
 
-        # ── Investor selection (speed round 2, R3) ─────────────────────
-        # Validation + cap logic lives in _resolve_investor_panel (unit
-        # tested): user picks capped at 6, default balanced 6, env
-        # PIPELINE_INVESTOR_PERSONAS override ("all" = full 12).
-        active_agents = _resolve_investor_panel(selected_agents)
+        # ── Decision path (M2 Track D) ───────────────────────────────────
+        # The investor committee and debate round are decommissioned: the
+        # portfolio manager decides from qualitative research + quantitative
+        # valuation directly. No investor phase, no debate phase.
         primary_ticker = tickers[0] if tickers else ""
-        print(f"  Active investor agents ({len(active_agents)}): {', '.join(active_agents)}")
+        print("  Decision path: qualitative + valuation (no committee)")
 
         # ----------------------------------------------------------------
         # Phase timing instrumentation (Workstream A)
@@ -495,8 +347,7 @@ def run_advanced_pipeline(
         # B1 — phases 1 + 2 + 2.5 + 2.7 run CONCURRENTLY below. All four
         # need only tickers + dates and write DISJOINT state keys (verified
         # by grep):
-        #   macro  → macro_regime, agent_weight_multipliers,
-        #             conviction_weights, position_size_cap
+        #   macro  → macro_regime, position_size_cap
         #   router → company_name, sector(s), profile_name(s),
         #             raw_financials, routing_decision, insider_summary, …
         #   intel  → insider_activity, analyst_revisions, news_sentiment,
@@ -1153,59 +1004,10 @@ def run_advanced_pipeline(
         _bg_peer_exec.shutdown(wait=False)
 
         # ----------------------------------------------------------------
-        # PHASE 5 — Investor Agents (parallel)
+        # PHASES 5+6 — decommissioned (M2 Track D/E)
+        # The investor committee and debate round no longer run: the PM
+        # decides from qualitative research + quantitative valuation.
         # ----------------------------------------------------------------
-        print(f"\n{'='*60}")
-        print(f"[5/10] Investor Agents ({len(active_agents)} agents, parallel)")
-        print('='*60)
-        with _timed("5_investor_agents"):
-            state = _run_investor_agents_parallel(state, active_agents)
-
-        # Signal summary
-        for ticker in tickers:
-            buy_c = sum(
-                1 for k, v in state["data"]["analyst_signals"].items()
-                if isinstance(v, dict) and ticker in v and v[ticker].get("signal") == "BUY"
-            )
-            sell_c = sum(
-                1 for k, v in state["data"]["analyst_signals"].items()
-                if isinstance(v, dict) and ticker in v and v[ticker].get("signal") in ("SELL", "SHORT")
-            )
-            hold_c = sum(
-                1 for k, v in state["data"]["analyst_signals"].items()
-                if isinstance(v, dict) and ticker in v and v[ticker].get("signal") == "HOLD"
-            )
-            print(f"  {ticker}: {buy_c} BUY | {sell_c} SELL/SHORT | {hold_c} HOLD")
-        progress.update_status("investor_agents", primary_ticker, "✓ Signals complete",
-                               partial_data={"analyst_signals": state["data"].get("analyst_signals")})
-
-        # ── Checkpoint 3 — investor signals complete ───────────────────────────
-        if on_checkpoint:
-            try:
-                on_checkpoint(state, "investor_signals")
-            except Exception as _ck_err:
-                print(f"  [checkpoint] investor_signals save failed (non-fatal): {_ck_err}")
-
-        # ----------------------------------------------------------------
-        # PHASE 6 — Debate Round (conditional)
-        # ----------------------------------------------------------------
-        print(f"\n{'='*60}")
-        print("[6/10] Debate Round")
-        print('='*60)
-        with _timed("6_debate"):
-            if should_trigger_debate(state["data"]["analyst_signals"], tickers):
-                print("  TRIGGERED — genuine conflict detected")
-                state = run_debate_round(state)
-                for ticker in tickers:
-                    dr = state["data"].get("debate_result", {}).get(ticker)
-                    if dr:
-                        print(f"  {ticker} adjudicated: {dr.get('adjudicated_signal')} "
-                              f"conviction {dr.get('adjudicated_conviction')}/10")
-            else:
-                print("  SKIPPED — no strong conflict (< 3 BUY and 3 SELL on same ticker)")
-                state["data"]["debate_result"] = {}
-        progress.update_status("debate_round", primary_ticker, "✓ Debate complete",
-                               partial_data={"debate_result": state["data"].get("debate_result")})
 
         # ----------------------------------------------------------------
         # PHASE 7 — Scenario + Power Law + Value Trap (parallel)
@@ -1674,7 +1476,6 @@ def run_advanced_pipeline(
             "scenario_analysis":  state["data"].get("scenario_analysis"),
             "power_law_analysis": state["data"].get("power_law_analysis"),
             "value_trap_analysis":state["data"].get("value_trap_analysis"),
-            "debate_result":      state["data"].get("debate_result"),
             "post_trade_review":  state["data"].get("post_trade_review"),
             # Phase 2.5 intelligence — included so downstream consumers
             # (alerts, PDF) can access without re-fetching from state.
@@ -1875,8 +1676,7 @@ def _merge_front_block(router_state: AgentState, macro_state: AgentState,
     """
     state = router_state
     state["data"]["phase_durations"] = phase_durations
-    for _k in ("macro_regime", "agent_weight_multipliers",
-               "conviction_weights", "position_size_cap"):
+    for _k in ("macro_regime", "position_size_cap"):
         if _k in macro_state["data"]:
             state["data"][_k] = macro_state["data"][_k]
     for _k in ("insider_activity", "analyst_revisions", "news_sentiment",
@@ -1885,24 +1685,6 @@ def _merge_front_block(router_state: AgentState, macro_state: AgentState,
             state["data"][_k] = intel_state["data"][_k]
     state["data"]["edgar_filing_refs"] = edgar_state["data"].get("edgar_filing_refs", {})
     return state
-
-
-def _investor_max_workers() -> int:
-    """B5 — worker cap for the investor-agent pool, env-tunable.
-
-    Default 6 (long-standing behaviour). Measured 2026-08-09 on the
-    production Anthropic account: bumping PIPELINE_INVESTOR_MAX_WORKERS
-    to 10 saturated the per-minute token/rate budget — the 12 concurrent
-    contexts (~50k tokens each) triggered sustained 429 retries and the
-    investor phase ran SLOWER than at 6. Only raise this on accounts with
-    substantially higher Anthropic limits. Qwen/DashScope burst-limits
-    around 3-4 concurrent calls (429s), so the default stays there too.
-    Malformed values fall back to 6 — a bad env var must never sink a run.
-    """
-    try:
-        return max(1, int(os.environ.get("PIPELINE_INVESTOR_MAX_WORKERS", "") or 6))
-    except ValueError:
-        return 6
 
 
 def _fetch_price_history(tickers: list[str], end_date: str, api_key: str | None) -> dict[str, list]:
@@ -1928,30 +1710,6 @@ def _fetch_price_history(tickers: list[str], end_date: str, api_key: str | None)
             price_history_all[ticker] = []
             print(f"  {ticker}: price history unavailable")
     return price_history_all
-
-
-def _run_investor_agents_parallel(state: AgentState, active_agents: list[str]) -> AgentState:
-    """Run all investor agents concurrently. Worker cap via _investor_max_workers()
-    (B5: PIPELINE_INVESTOR_MAX_WORKERS env, default 6 to avoid API rate limits)."""
-    results: dict[str, dict] = {}
-
-    with ThreadPoolExecutor(max_workers=min(len(active_agents), _investor_max_workers())) as executor:
-        futures = {
-            _ctx_submit(executor, run_advanced_investor, agent_key, state): agent_key
-            for agent_key in active_agents
-        }
-        for future in as_completed(futures):
-            agent_key = futures[future]
-            try:
-                results[agent_key] = future.result()
-            except Exception as e:
-                print(f"  Warning: {agent_key} agent failed: {e}")
-                results[agent_key] = {}
-
-    for agent_key, agent_result in results.items():
-        state["data"]["analyst_signals"][agent_key] = agent_result
-
-    return state
 
 
 def _append_to_trade_log(state: AgentState, decisions: dict) -> None:

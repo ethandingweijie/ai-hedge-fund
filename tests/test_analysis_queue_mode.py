@@ -99,12 +99,10 @@ def test_release_run_clears_slot(monkeypatch):
 
 
 def test_build_dedup_key_is_canonical():
-    """Web claim site and worker release MUST build the same key: sorted
-    agents, None == []."""
-    assert queue_client.build_dedup_key("MSFT", ["b", "a"]) == "MSFT::a,b"
-    assert queue_client.build_dedup_key("MSFT", None) == "MSFT::"
-    assert queue_client.build_dedup_key("MSFT", []) == "MSFT::"
-    assert queue_client.build_dedup_key("MSFT", ["solo"]) == "MSFT::solo"
+    """Web claim site and worker release MUST build the same key:
+    per-ticker since the investor committee was decommissioned (M2 Track E)."""
+    assert queue_client.build_dedup_key("MSFT") == "MSFT"
+    assert queue_client.build_dedup_key("BRK.B") == "BRK.B"
 
 
 def test_dedup_ttl_outlives_worker_job_timeout():
@@ -127,12 +125,12 @@ def test_runner_stream_start_progress_complete(monkeypatch):
     monkeypatch.setattr(progress_bus, "iter_events", _fake_iter_events(events))
 
     chunks = _drain(A._queue_stream_generator(
-        "run-9", "MSFT", "m", ["a1", "a2"], waiter=False))
+        "run-9", "MSFT", "m", waiter=False))
 
     name, start = _parse_sse(chunks[0])
     assert name == "start"
-    # 2 selected agents + 21 fixed phases
-    assert start == {"ticker": "MSFT", "model": "m", "total_done_phases": 23}
+    # fixed phase total — the investor committee is decommissioned (M2 E)
+    assert start == {"ticker": "MSFT", "model": "m", "total_done_phases": 20}
 
     name, prog = _parse_sse(chunks[1])
     assert name == "progress"
@@ -143,15 +141,15 @@ def test_runner_stream_start_progress_complete(monkeypatch):
     assert done == {"run_id": "run-9", "ticker": "MSFT"}
 
 
-def test_runner_stream_defaults_to_12_investors(monkeypatch):
+def test_runner_stream_total_is_fixed_phase_count(monkeypatch):
     monkeypatch.setattr(progress_bus, "iter_events", _fake_iter_events([
         {"phase": "pipeline_complete", "status": "done", "summary": "ok",
          "completed": True},
     ]))
     chunks = _drain(A._queue_stream_generator(
-        "run-x", "AAPL", "m", None, waiter=False))
+        "run-x", "AAPL", "m", waiter=False))
     _, start = _parse_sse(chunks[0])
-    assert start["total_done_phases"] == 12 + 21
+    assert start["total_done_phases"] == A._FIXED_DONE_COUNT == 20
 
 
 def test_runner_stream_error_event(monkeypatch):
@@ -160,7 +158,7 @@ def test_runner_stream_error_event(monkeypatch):
          "summary": "RuntimeError: kaboom", "completed": True},
     ]))
     chunks = _drain(A._queue_stream_generator(
-        "run-e", "TSLA", "m", None, waiter=False))
+        "run-e", "TSLA", "m", waiter=False))
     name, err = _parse_sse(chunks[-1])
     assert name == "error"
     assert err == {"error": "RuntimeError: kaboom"}
@@ -173,11 +171,11 @@ def test_waiter_stream_hands_back_cached_run(monkeypatch):
     ]))
     monkeypatch.setattr(
         A.analysis_service, "get_cached_run",
-        lambda ticker, within_minutes=None, agents=None:
+        lambda ticker, within_minutes=None:
             {"run_id": "runner-1", "ticker": ticker, "run_at": "2026-08-08T00:00:00"})
 
     chunks = _drain(A._queue_stream_generator(
-        "runner-1", "NVDA", "m", None, waiter=True))
+        "runner-1", "NVDA", "m", waiter=True))
 
     name, start = _parse_sse(chunks[0])
     assert name == "start" and start["total_done_phases"] == 0
@@ -195,10 +193,10 @@ def test_waiter_stream_without_cache_emits_complete(monkeypatch):
     ]))
     monkeypatch.setattr(
         A.analysis_service, "get_cached_run",
-        lambda ticker, within_minutes=None, agents=None: None)
+        lambda ticker, within_minutes=None: None)
 
     chunks = _drain(A._queue_stream_generator(
-        "runner-1", "NVDA", "m", None, waiter=True))
+        "runner-1", "NVDA", "m", waiter=True))
     name, done = _parse_sse(chunks[-1])
     assert name == "complete" and done["run_id"] == "runner-1"
 
@@ -216,14 +214,14 @@ def test_start_queue_run_runner_path_enqueues(monkeypatch):
 
     monkeypatch.setattr(queue_client, "enqueue_analysis", fake_enqueue)
 
-    resp = asyncio.run(A._start_queue_run("MSFT", "m", ["a1"], 1, {"k": "v"}))
+    resp = asyncio.run(A._start_queue_run("MSFT", "m", 1, {"k": "v"}))
     assert resp is not None
     assert resp.media_type == "text/event-stream"
 
     assert len(enqueued) == 1
     job = enqueued[0]
     assert job["ticker"] == "MSFT"
-    assert job["selected_agents"] == ["a1"]
+    assert "selected_agents" not in job   # committee decommissioned (M2 E)
     assert job["user_id"] == 1
     assert job["api_keys"] == {"k": "v"}
     assert len(job["run_id"]) == 36
@@ -231,7 +229,7 @@ def test_start_queue_run_runner_path_enqueues(monkeypatch):
     # Runner stream announces the full phase total
     chunks = _drain(resp.body_iterator)
     _, start = _parse_sse(chunks[0])
-    assert start["total_done_phases"] == 1 + 21
+    assert start["total_done_phases"] == 20
 
 
 def test_start_queue_run_waiter_subscribes_to_runner(monkeypatch):
@@ -241,7 +239,7 @@ def test_start_queue_run_waiter_subscribes_to_runner(monkeypatch):
     ]))
     monkeypatch.setattr(
         A.analysis_service, "get_cached_run",
-        lambda ticker, within_minutes=None, agents=None: None)
+        lambda ticker, within_minutes=None: None)
 
     async def claim_fails(key, run_id):
         return False
@@ -252,7 +250,7 @@ def test_start_queue_run_waiter_subscribes_to_runner(monkeypatch):
     monkeypatch.setattr(queue_client, "claim_run", claim_fails)
     monkeypatch.setattr(queue_client, "get_runner_run_id", runner_id)
 
-    resp = asyncio.run(A._start_queue_run("MSFT", "m", None, None, {}))
+    resp = asyncio.run(A._start_queue_run("MSFT", "m", None, {}))
     chunks = _drain(resp.body_iterator)
     _, start = _parse_sse(chunks[0])
     assert start["total_done_phases"] == 0          # waiter flavour
@@ -283,7 +281,7 @@ def test_start_queue_run_reclaims_expired_slot(monkeypatch):
     monkeypatch.setattr(queue_client, "get_runner_run_id", no_runner)
     monkeypatch.setattr(queue_client, "enqueue_analysis", fake_enqueue)
 
-    resp = asyncio.run(A._start_queue_run("MSFT", "m", None, None, {}))
+    resp = asyncio.run(A._start_queue_run("MSFT", "m", None, {}))
     assert resp is not None
     assert calls["claim"] == 2
     assert len(enqueued) == 1
@@ -297,7 +295,7 @@ def test_start_queue_run_enqueue_failure_falls_back(monkeypatch):
 
     monkeypatch.setattr(queue_client, "enqueue_analysis", enqueue_boom)
 
-    resp = asyncio.run(A._start_queue_run("MSFT", "m", None, None, {}))
+    resp = asyncio.run(A._start_queue_run("MSFT", "m", None, {}))
     assert resp is None  # caller falls through to the in-process path
     # ...and the dedup slot was released so the in-process run can proceed
     assert fake.store == {}
@@ -313,7 +311,7 @@ def test_start_queue_run_unreadable_slot_falls_back(monkeypatch):
     monkeypatch.setattr(queue_client, "claim_run", claim_fails)
     monkeypatch.setattr(queue_client, "get_runner_run_id", no_runner)
 
-    assert asyncio.run(A._start_queue_run("MSFT", "m", None, None, {})) is None
+    assert asyncio.run(A._start_queue_run("MSFT", "m", None, {})) is None
 
 
 # ── GET /analysis/status/{ticker} dual mode ──────────────────────────────────

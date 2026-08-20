@@ -58,7 +58,7 @@ intrinsic values computed before you ran. Use them as numeric constraints:
 - Your bear fair_value should be near the DCF bear IV (deviate only with strong evidence)
 - Your base fair_value should be near the DCF base IV (investor consensus may shift ±15%)
 - Your bull fair_value should be near the DCF bull IV (TAM or catalyst premium acceptable)
-If no DCF anchors are provided, derive fair values from investor targets and industry data.
+If no DCF anchors are provided, derive fair values from the industry brief and research inputs.
 
 M&A OVERRIDE: If the research identifies a SIGNED acquisition, merger, or tender offer at a
 specific per-share price, the deal price REPLACES DCF anchors for fair_value:
@@ -131,9 +131,11 @@ def run_scenario_agent(state: AgentState) -> AgentState:
                 f"FCF margin base: {dcf_ticker['fcf_margin_base']:.1%}"
             )
         else:
-            dcf_anchors_str = "Not available — derive fair values from investor targets."
+            dcf_anchors_str = "Not available — derive fair values from the industry brief."
 
-        # Collect all investor signals for this ticker
+        # Collect any system-agent signals carrying a price target for this
+        # ticker (the investor committee is decommissioned — this is usually
+        # empty and the scenarios lean on DCF anchors + research instead).
         investor_targets = {}
         for agent_key, signals in analyst_signals.items():
             if not isinstance(signals, dict) or ticker not in signals:
@@ -153,11 +155,10 @@ def run_scenario_agent(state: AgentState) -> AgentState:
                 "Ticker: {ticker}\n"
                 "Current price: {current_price}\n\n"
                 "DCF Engine anchors (deterministic, use as constraints):\n{dcf_anchors}\n\n"
-                "Investor signals and price targets:\n{targets}\n\n"
+                "Analyst signals and price targets (system agents, if any):\n{targets}\n\n"
                 "Industry Intelligence Brief:\n{brief}\n\n"
                 "2B — Competitive Landscape (informs bull/base scenario assumptions):\n{competitive}\n\n"
                 "2E — Disruption Vectors (informs bear case scenario):\n{disruption}\n\n"
-                "Debate adjudication (if any):\n{debate}\n\n"
                 "Output format:\n"
                 '{{\n'
                 '  "bull": {{"assumptions": "...", "fair_value": float, "probability": float}},\n'
@@ -170,10 +171,6 @@ def run_scenario_agent(state: AgentState) -> AgentState:
             )),
         ])
 
-        debate_text = str(
-            state["data"].get("debate_result", {}).get(ticker, "No debate triggered")
-        )
-
         prompt = template.invoke({
             "ticker": ticker,
             "current_price": current_price_val or "unknown",
@@ -182,7 +179,6 @@ def run_scenario_agent(state: AgentState) -> AgentState:
             "brief": industry_brief[:25000],
             "competitive": competitive_section[:1500] if competitive_section else "Not available.",
             "disruption": disruption_section[:1500] if disruption_section else "Not available.",
-            "debate": debate_text[:500],
         })
 
         result: ScenarioOutput = call_llm(

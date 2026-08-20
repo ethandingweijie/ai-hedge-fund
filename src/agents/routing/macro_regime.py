@@ -11,13 +11,14 @@ What it does:
   so the LLM receives a structured narrative block — not raw numbers
 - Asks the LLM to classify the regime across FIVE dimensions:
     risk_appetite | rate_direction | dollar_trend | volatility_regime | recession_risk
-- Uses a hard-coded RULE TABLE (not the LLM) to translate regime → agent weight multipliers
-- Reads conviction_weights.json (track record from prior post-trade reviews)
-- Multiplies track-record weights × regime multipliers → agent_weight_multipliers for Phase 9
+- Uses a hard-coded RULE TABLE (not the LLM) to derive position_size_cap from the regime
 - Persists the regime to regime_state.json for Phase 10 post-trade review
+
+M2 Track E: the investor committee is decommissioned — this agent no longer
+emits agent_weight_multipliers / conviction_weights. Only the regime dict and
+position_size_cap are consumed downstream (risk manager, rotation engine, PM).
 """
 
-import json
 import os
 from datetime import datetime, timedelta
 
@@ -36,9 +37,12 @@ from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
 
 # ---------------------------------------------------------------------------
-# Regime → weight adjustment rules (CLAUDE.md §1)
+# Regime → sizing rules (CLAUDE.md §1)
 # Key: (risk_appetite, rate_direction) or (volatility_regime,)
-# Values: agents to upweight (×1.3) and downweight (×0.7)
+# Values: position_size_cap (0.5–1.0) for defensive regimes.
+# (The upweight/downweight lists are historical — the investor committee that
+# consumed them is decommissioned as of M2 Track E; only position_size_cap
+# is read today.)
 # ---------------------------------------------------------------------------
 REGIME_WEIGHT_RULES: list[tuple[dict, dict]] = [
     (
@@ -96,37 +100,21 @@ ALL_AGENTS = [
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 
 
-def _load_conviction_weights() -> dict[str, float]:
-    path = os.path.join(DATA_DIR, "conviction_weights.json")
-    try:
-        with open(path) as f:
-            raw = json.load(f)
-        return {k: float(v) for k, v in raw.items() if k in ALL_AGENTS}
-    except Exception:
-        return {agent: 1.0 for agent in ALL_AGENTS}
-
-
-def _apply_regime_rules(regime: dict, base_weights: dict[str, float]) -> tuple[dict[str, float], float]:
+def _apply_regime_rules(regime: dict) -> float:
     """
-    Walk the rule table, apply multipliers where the regime matches,
-    and return (adjusted_weights, position_size_cap).
+    Walk the rule table and return the position_size_cap implied by the
+    regime (1.0 when no cap rule matches). The agent-weight multipliers in
+    the table are historical (committee decommissioned, M2 Track E).
     """
-    weights = dict(base_weights)
     position_size_cap = 1.0
 
     for condition, adjustments in REGIME_WEIGHT_RULES:
         # Check if ALL keys in condition match the current regime
         if all(regime.get(k) == v for k, v in condition.items()):
-            for agent in adjustments.get("upweight", []):
-                if agent in weights:
-                    weights[agent] = min(2.0, weights[agent] * 1.3)
-            for agent in adjustments.get("downweight", []):
-                if agent in weights:
-                    weights[agent] = max(0.5, weights[agent] * 0.7)
             if "position_size_cap" in adjustments:
                 position_size_cap = min(position_size_cap, adjustments["position_size_cap"])
 
-    return weights, position_size_cap
+    return position_size_cap
 
 
 def run_macro_regime_classifier(state: AgentState) -> AgentState:
@@ -342,14 +330,13 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
         ),
     )
 
-    # Use deterministic rule table to override LLM weight suggestions.
-    # For position_size_cap: take the minimum (more conservative) of the rule-table
-    # floor and the LLM's suggestion.  The LLM cap is clamped to [0.5, 1.0] to
-    # guard against hallucination extremes while still letting it reduce the cap
+    # Use the deterministic rule table to derive position_size_cap.
+    # Take the minimum (more conservative) of the rule-table cap and the
+    # LLM's suggestion.  The LLM cap is clamped to [0.5, 1.0] to guard
+    # against hallucination extremes while still letting it reduce the cap
     # in risk-off / cautious regimes that the rule table doesn't explicitly cover.
-    base_weights = _load_conviction_weights()
     regime_dict  = llm_out.regime.model_dump()
-    adjusted_weights, rule_cap = _apply_regime_rules(regime_dict, base_weights)
+    rule_cap = _apply_regime_rules(regime_dict)
     llm_cap = max(0.5, min(1.0, float(llm_out.position_size_cap)))
     position_size_cap = min(rule_cap, llm_cap)
 
@@ -363,7 +350,6 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
                 "last_run":          datetime.now().strftime("%Y-%m-%d"),
                 "tickers":           state["data"]["tickers"],
                 "regime":            regime_dict,
-                "agent_weights":     adjusted_weights,
                 "position_size_cap": position_size_cap,
             },
         )
@@ -376,40 +362,7 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
         f"Regime: {regime_dict['risk_appetite']} / {regime_dict['volatility_regime']} vol / recession {rec_label}"
     )
 
-    # ── Blend data-driven regime weights when available ───────────────────────
-    # regime_weights.json is written by:
-    #   python -m src.memory.reweight --regime-stratified
-    # It maps regime → {agent: weight} using the formula:
-    #   weight = base_weight × (1 + α × regime_hit_rate)
-    # When a data-driven weight exists for the current regime it replaces
-    # base_weights as the track_w input to the portfolio manager, giving
-    # the formula:  signal × conviction × track_w(regime-aware) × regime_w
-    _rw_path     = os.path.join(DATA_DIR, "regime_weights.json")
-    regime_key   = regime_dict.get("risk_appetite", "")
-    track_weights = base_weights   # default: flat conviction weights
-    try:
-        with open(_rw_path, encoding="utf-8") as _f:
-            _rw = json.load(_f)
-        _data_driven = _rw.get(regime_key, {})
-        if _data_driven:
-            # Merge: data-driven wins where it has data; base fills the rest
-            track_weights = {
-                a: _data_driven.get(a, base_weights.get(a, 1.0))
-                for a in ALL_AGENTS
-            }
-            progress.update_status(
-                agent_id, None,
-                f"Regime weights loaded for '{regime_key}' "
-                f"({len(_data_driven)} agents data-driven)"
-            )
-    except FileNotFoundError:
-        pass   # regime_weights.json not yet generated — use base_weights
-    except Exception:
-        pass   # Never fatal
-
     state["data"]["macro_regime"]            = regime_dict
-    state["data"]["agent_weight_multipliers"] = adjusted_weights
     state["data"]["position_size_cap"]        = position_size_cap
-    state["data"]["conviction_weights"]       = track_weights
 
     return state

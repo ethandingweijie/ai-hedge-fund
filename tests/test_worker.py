@@ -83,7 +83,7 @@ def test_analysis_task_streams_progress_and_completes(monkeypatch):
     _patch_bus(monkeypatch, rec)
 
     async def fake_pipeline(ticker, model_name, api_keys, on_phase,
-                            selected_agents=None, user_id=None, run_id=None):
+                            user_id=None, run_id=None):
         on_phase("macro_regime_classifier", "running", "Classifying regime",
                  "", ticker, "t0", None)
         on_phase("deep_research_agent", "Done", "Research complete",
@@ -438,8 +438,10 @@ def test_analysis_task_releases_dedup_slot_on_success(monkeypatch):
         selected_agents=["b_agent", "a_agent"], run_id="run-9"))
 
     assert out["ok"] is True
-    # Canonical key — sorted agents, same construction as the web claim site
-    assert tracker.deleted == ["analysis_dedup:msft::a_agent,b_agent"]
+    # Per-ticker key (M2 Track E) — the legacy selected_agents kwarg carried
+    # by pre-deploy enqueued jobs is accepted but never forwarded, and the
+    # released dedup slot is the ticker alone.
+    assert tracker.deleted == ["analysis_dedup:msft"]
 
 
 def test_analysis_task_releases_dedup_slot_on_failure(monkeypatch):
@@ -456,6 +458,6 @@ def test_analysis_task_releases_dedup_slot_on_failure(monkeypatch):
     with pytest.raises(RuntimeError):
         asyncio.run(worker.run_analysis_pipeline_task(
             {}, ticker="aapl", model_name="m", api_keys={},
-            selected_agents=None, run_id="run-err"))
+            run_id="run-err"))
 
-    assert tracker.deleted == ["analysis_dedup:aapl::"]
+    assert tracker.deleted == ["analysis_dedup:aapl"]

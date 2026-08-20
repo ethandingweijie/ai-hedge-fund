@@ -190,7 +190,6 @@ if __name__ == "__main__":
             start_date=inputs.start_date,
             end_date=inputs.end_date,
             portfolio=portfolio,
-            selected_agents=inputs.selected_analysts if inputs.selected_analysts else None,
             model_name=inputs.model_name,
             model_provider=inputs.model_provider,
             show_reasoning=inputs.show_reasoning,

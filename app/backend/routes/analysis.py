@@ -26,7 +26,7 @@ from app.backend.services.auth_service import get_user_from_token
 
 logger = logging.getLogger(__name__)
 
-# ── Per-ticker deduplication: one pipeline at a time per ticker+agents ────────
+# ── Per-ticker deduplication: one pipeline at a time per ticker ──────────────
 _in_flight: dict[str, asyncio.Event] = {}
 _in_flight_lock: asyncio.Lock = asyncio.Lock()
 
@@ -117,11 +117,9 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     elif is_sg_ticker(ticker):
         ticker = _sg_canonical(ticker)
     model_name = body.get("model", "claude-sonnet-4-6")
-    # Use agents list only when explicitly provided and non-empty.
-    # `body.get("agents") or None` would coerce [] → None (all 12 agents),
-    # so check explicitly for a non-empty list.
-    _raw_agents = body.get("agents")
-    agents: list[str] | None = _raw_agents if isinstance(_raw_agents, list) and _raw_agents else None
+    # M2 Track E: the investor committee is decommissioned — runs are
+    # per-ticker with no agent selection. A legacy "agents" body key from
+    # older frontends is silently ignored.
 
     if not ticker:
         raise HTTPException(status_code=400, detail="ticker is required")
@@ -131,7 +129,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
     user_id = _caller.id if _caller else None
 
     # ── Cache check (fast path, no lock) ─────────────────────────────────────
-    cached = analysis_service.get_cached_run(ticker, within_minutes=30, agents=agents)
+    cached = analysis_service.get_cached_run(ticker, within_minutes=30)
     if cached:
         async def cached_event_generator():
             yield f"event: start\ndata: {json.dumps({'ticker': ticker, 'model': model_name})}\n\n"
@@ -166,7 +164,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         try:
             _q_api_keys = ApiKeyService(db).get_api_keys_dict(user_id)
             _queued = await _start_queue_run(
-                ticker, model_name, agents, user_id, _q_api_keys
+                ticker, model_name, user_id, _q_api_keys
             )
         except Exception as exc:
             logger.warning("queue mode unavailable (%s) — in-process fallback", exc)
@@ -174,12 +172,11 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         if _queued is not None:
             return _queued
 
-    # ── Dedup lock: prevent duplicate pipelines for the same ticker+agents ────
-    # Uses a per-(ticker, agents) asyncio.Event so that concurrent requests for
-    # the same analysis wait for the first pipeline to finish, then reuse its
+    # ── Dedup lock: prevent duplicate pipelines for the same ticker ──────────
+    # Uses a per-ticker asyncio.Event so that concurrent requests for the
+    # same analysis wait for the first pipeline to finish, then reuse its
     # cached result instead of launching N identical pipelines.
-    _agents_key = ",".join(sorted(agents or []))
-    _dedup_key = f"{ticker}::{_agents_key}"
+    _dedup_key = ticker
     _wait_event: asyncio.Event | None = None
     _run_event: asyncio.Event | None = None
     _cached_in_lock: dict | None = None
@@ -188,11 +185,11 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         # Re-check inside the lock to close the TOCTOU gap (another request may
         # have finished the pipeline between our fast-path check and here).
         _cached_in_lock = analysis_service.get_cached_run(
-            ticker, within_minutes=30, agents=agents
+            ticker, within_minutes=30
         )
         if not _cached_in_lock:
             if _dedup_key in _in_flight:
-                # A pipeline for this exact ticker+agents is already running —
+                # A pipeline for this ticker is already running —
                 # grab its completion event so we can wait for it.
                 _wait_event = _in_flight[_dedup_key]
             else:
@@ -214,7 +211,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         )
 
     if _wait_event is not None:
-        # Waiter path: another request for the same ticker+agents is already in-flight.
+        # Waiter path: another request for the same ticker is already in-flight.
         # Wait up to 15 min for it to finish, polling every 30s.  If it finishes
         # successfully we reuse its cached result.  If it fails or times out we
         # tell the client to retry — this cleans up the stale dedup entry so the
@@ -224,7 +221,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
             _wait_msg = "Analysis already in progress for " + ticker + " \u2014 awaiting result\u2026"
             yield f"event: progress\ndata: {json.dumps({'phase': 'pipeline_queued', 'status': 'running', 'summary': _wait_msg})}\n\n"
             _total_waited = 0
-            _MAX_WAIT = 900  # 15 min — deep research + 12 agents can take 10-12 min
+            _MAX_WAIT = 900  # 15 min — deep research + valuation can take 10-12 min
             _orphaned = False
             while _total_waited < _MAX_WAIT:
                 try:
@@ -248,7 +245,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                 return
 
             # Runner finished (event was set) or was orphaned — check for cached result
-            _result = analysis_service.get_cached_run(ticker, within_minutes=5, agents=agents)
+            _result = analysis_service.get_cached_run(ticker, within_minutes=5)
             if _result:
                 yield (
                     f"event: cached\ndata: "
@@ -275,21 +272,17 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
         error_container: dict = {}
         phase_events: asyncio.Queue = asyncio.Queue()
 
-        # System agents that ALWAYS run and ALWAYS emit "Done":
-        # portfolio_manager, risk_manager, fundamentals, growth_agent,
-        # news_sentiment, sentiment, technicals, valuation
-        # Always-terminal phases = investor agents + fixed pipeline phases
-        # Fixed breakdown (21):  (citation_auditor removed from pipeline)
-        #   Pipeline "✓" (10): macro_regime_classifier, strategic_router, intelligence_agents,
+        # Always-terminal phases of the fixed pipeline (committee decommissioned,
+        # M2 Track E — no investor-agents synthetic event).
+        # Fixed breakdown (20):
+        #   Pipeline "✓" (9):  macro_regime_classifier, strategic_router, intelligence_agents,
         #                       deep_research_agent, industry_specialist, dcf_engine,
-        #                       investor_agents (synthetic), phase7_complete,
-        #                       advanced_risk_manager, portfolio_manager
+        #                       phase7_complete, advanced_risk_manager, portfolio_manager
         #   System "Done"  (7): fundamentals, growth_agent, news_sentiment, sentiment,
         #                       technicals, valuation, advanced_portfolio_manager
         #   Other terminal (4): edgar_hkex_resolver, power_law_agent, value_trap_agent, data_router
-        _FIXED_DONE_COUNT = 21
-        _investor_count = len(agents) if agents else 12
-        _total_done = _investor_count + _FIXED_DONE_COUNT
+        _FIXED_DONE_COUNT = 20
+        _total_done = _FIXED_DONE_COUNT
         yield f"event: start\ndata: {json.dumps({'ticker': ticker, 'model': model_name, 'total_done_phases': _total_done})}\n\n"
 
         def _on_phase_sync(
@@ -335,7 +328,6 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
                         model_name=model_name,
                         api_keys=api_keys,
                         on_phase=_on_phase_sync,
-                        selected_agents=agents,
                         user_id=user_id,
                     )
                 result_container["run_id"] = run_id
@@ -434,7 +426,7 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
 # the full replayed progress history.
 
 # Terminal phases of the fixed pipeline breakdown (mirrors event_generator).
-_FIXED_DONE_COUNT = 21
+_FIXED_DONE_COUNT = 20
 # 30-min cap on a CLIENT STREAM. The worker job_timeout is 60 min, so a
 # long run keeps running after this fires — but the client is released with
 # an error instead of heartbeating forever (and can pick the run up from
@@ -445,7 +437,6 @@ _QUEUE_STREAM_DEADLINE = 1800
 async def _start_queue_run(
     ticker: str,
     model_name: str,
-    agents: Optional[list[str]],
     user_id: Optional[int],
     api_keys: dict,
 ):
@@ -459,7 +450,7 @@ async def _start_queue_run(
 
     # Canonical key construction — MUST match the worker-side release in
     # worker.run_analysis_pipeline_task (queue_client.build_dedup_key).
-    dedup_key = queue_client.build_dedup_key(ticker, agents)
+    dedup_key = queue_client.build_dedup_key(ticker)
 
     run_id = str(uuid.uuid4())
     is_runner = await queue_client.claim_run(dedup_key, run_id)
@@ -475,7 +466,7 @@ async def _start_queue_run(
             if not runner_id:
                 return None  # neither claim nor read worked — fall back
             return StreamingResponse(
-                _queue_stream_generator(runner_id, ticker, model_name, agents, waiter=True),
+                _queue_stream_generator(runner_id, ticker, model_name, waiter=True),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
@@ -485,7 +476,6 @@ async def _start_queue_run(
             ticker=ticker,
             model_name=model_name,
             api_keys=api_keys,
-            selected_agents=agents,
             user_id=user_id,
             run_id=run_id,
         )
@@ -495,7 +485,7 @@ async def _start_queue_run(
         return None
 
     return StreamingResponse(
-        _queue_stream_generator(run_id, ticker, model_name, agents, waiter=False),
+        _queue_stream_generator(run_id, ticker, model_name, waiter=False),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -505,7 +495,6 @@ async def _queue_stream_generator(
     run_id: str,
     ticker: str,
     model_name: str,
-    agents: Optional[list[str]],
     waiter: bool,
 ):
     """SSE stream sourced from progress_bus. Emits the same event contract as
@@ -523,8 +512,7 @@ async def _queue_stream_generator(
             f"{json.dumps({'phase': 'pipeline_queued', 'status': 'running', 'summary': _wait_msg})}\n\n"
         )
     else:
-        investor_count = len(agents) if agents else 12
-        total_done = investor_count + _FIXED_DONE_COUNT
+        total_done = _FIXED_DONE_COUNT
         yield (
             f"event: start\ndata: "
             f"{json.dumps({'ticker': ticker, 'model': model_name, 'total_done_phases': total_done})}\n\n"
@@ -557,7 +545,7 @@ async def _queue_stream_generator(
             elif waiter:
                 # Match the in-process waiter contract: hand back the cached run.
                 cached = analysis_service.get_cached_run(
-                    ticker, within_minutes=5, agents=agents
+                    ticker, within_minutes=5
                 )
                 if cached:
                     yield (
@@ -684,7 +672,8 @@ async def get_pipeline_status(ticker: str):
     phase_info = _live_phases.get(t)
     in_progress = False
     async with _in_flight_lock:
-        in_progress = any(k.startswith(f"{t}::") for k in _in_flight)
+        # Per-ticker dedup keys since the committee was decommissioned (M2 E).
+        in_progress = t in _in_flight
     # Return all accumulated phases so reconnecting clients can rebuild progress bar
     all_phases = _live_phase_maps.get(t, {})
     return {
@@ -696,6 +685,172 @@ async def get_pipeline_status(ticker: str):
         "timestamp": phase_info.get("timestamp") if phase_info else None,
         "all_phases": all_phases,  # {phase_name: {phase, status, summary, timestamp}, ...}
     }
+
+
+# ── GET /analysis/pulse — M2 Track C1: Gemini-Flash-style instant recall ─────
+#
+# Two-beat SSE per ticker:
+#   beat 1  pulse_prior  (<0.5 s, DB only) — last report's decision/PT/thesis
+#   beat 2  pulse_delta  (~10-25 s)        — one freshness search since then
+# Always terminates: every failure soft-fails into a well-formed event.
+# Same-day repeats serve beat 2 from the complacency_web_research cache
+# (kind='pulse'); concurrent pulses for one ticker are single-flighted.
+
+_PULSE_KIND = "pulse"
+_PULSE_LOCKS: dict[str, asyncio.Lock] = {}
+_PULSE_LOCKS_GUARD = asyncio.Lock()
+
+
+def _pulse_today() -> str:
+    from datetime import timezone as _tz
+    return datetime.now(_tz.utc).strftime("%Y-%m-%d")
+
+
+async def _pulse_lock_for(ticker: str) -> asyncio.Lock:
+    async with _PULSE_LOCKS_GUARD:
+        lk = _PULSE_LOCKS.get(ticker)
+        if lk is None:
+            lk = asyncio.Lock()
+            _PULSE_LOCKS[ticker] = lk
+        return lk
+
+
+def _pulse_cache_get_delta(ticker: str) -> dict | None:
+    """Same-day pulse cache. Blocking — call via asyncio.to_thread."""
+    try:
+        from src.research_ideas.complacency import web_research as _wr
+        payload = _wr._cache_get(ticker, _PULSE_KIND, "", max_age_days=1)
+        if payload and payload.get("pulse_date") == _pulse_today():
+            return payload.get("delta")
+    except Exception as exc:
+        logger.warning("pulse cache read failed (%s): %s", ticker, exc)
+    return None
+
+
+def _pulse_cache_put_delta(ticker: str, delta: dict) -> None:
+    """Blocking — call via asyncio.to_thread. Soft-fail: cache is a courtesy."""
+    try:
+        from src.research_ideas.complacency import web_research as _wr
+        _wr._cache_put(ticker, _PULSE_KIND, "",
+                       {"pulse_date": _pulse_today(), "delta": delta})
+    except Exception as exc:
+        logger.warning("pulse cache write failed (%s): %s", ticker, exc)
+
+
+def _pulse_discovery_search(ticker: str) -> dict:
+    """No prior coverage: one bounded Qwen search for latest developments.
+    Blocking — call via asyncio.to_thread. Never raises."""
+    from src.memory import freshness
+    out = freshness.base_delta(None)
+    out["discovery"] = True
+    if not freshness._freshness_enabled():
+        out["verdict"] = "check disabled"
+        return out
+    try:
+        from src.research_ideas.complacency.web_research import qwen_web_search
+        text = qwen_web_search(
+            f"{ticker} stock latest developments news this week",
+            system_prompt=(
+                "You report the latest dated developments for an equity. "
+                "Be factual, dated, and concise. Respond in plain text."
+            ),
+            max_chars=6000,
+            request_timeout_s=30.0,
+        )
+        if text:
+            out["brief"] = text[:2000]
+            out["verdict"] = "discovery brief — no prior report to compare against"
+        else:
+            out["verdict"] = "no fresh results"
+    except Exception as exc:
+        logger.warning("pulse discovery search failed (%s): %s", ticker, exc)
+        out["verdict"] = "search unavailable"
+    return out
+
+
+@router.get("/pulse")
+async def pulse(request: Request, ticker: str = Query(...)):
+    """Instant 'recent developments' for a ticker (SSE). Read-only: never
+    starts a pipeline run. See the section header above for the contract."""
+    t = (ticker or "").strip().upper()
+    from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canonical
+    from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
+    if is_hk_ticker(t):
+        t = _hk_canonical(t)
+    elif is_sg_ticker(t):
+        t = _sg_canonical(t)
+    if not t:
+        raise HTTPException(status_code=400, detail="ticker is required")
+
+    async def _pulse_generator():
+        def _sse(name: str, data: dict) -> str:
+            return f"event: {name}\ndata: {json.dumps(data)}\n\n"
+        try:
+            # ── beat 1: accumulated knowledge (DB only) ─────────────────
+            from src.memory import report_recap
+            prior = await asyncio.to_thread(report_recap.get_recent_recap, t)
+            if prior:
+                recap_json = prior.get("recap_json") or {}
+                yield _sse("pulse_prior", {
+                    "ticker": t,
+                    "covered": True,
+                    "run_id": prior.get("run_id"),
+                    "run_at": prior.get("run_at"),
+                    "age_days": prior.get("age_days"),
+                    "price_at_run": prior.get("price_at_run"),
+                    "final_action": prior.get("final_action"),
+                    "price_target": recap_json.get("price_target"),
+                    "recap_text": prior.get("recap_text"),
+                    "catalysts": recap_json.get("catalysts") or [],
+                })
+            else:
+                yield _sse("pulse_prior", {
+                    "ticker": t,
+                    "covered": False,
+                    "summary": "No prior coverage for this ticker — discovery mode.",
+                })
+
+            # ── beat 2: one freshness search (cached same-day, single-flight) ──
+            delta = await asyncio.to_thread(_pulse_cache_get_delta, t)
+            from_cache = delta is not None
+            if delta is None:
+                lock = await _pulse_lock_for(t)
+                async with lock:
+                    # Re-check inside the lock — the leader may have filled it.
+                    delta = await asyncio.to_thread(_pulse_cache_get_delta, t)
+                    from_cache = delta is not None
+                    if delta is None:
+                        if prior:
+                            from src.memory import freshness
+                            delta = await asyncio.to_thread(
+                                freshness.run_freshness_search,
+                                ticker=t,
+                                prior=prior,
+                                request_timeout_s=30.0,
+                            )
+                        else:
+                            delta = await asyncio.to_thread(
+                                _pulse_discovery_search, t)
+                        await asyncio.to_thread(
+                            _pulse_cache_put_delta, t, delta)
+
+            yield _sse("pulse_delta", {
+                "ticker": t,
+                "from_cache": from_cache,
+                **(delta or {"material": None, "events": [],
+                             "verdict": "check unavailable"}),
+            })
+            yield _sse("pulse_complete", {"ticker": t})
+        except Exception as exc:
+            logger.warning("pulse stream failed (%s): %s", t, exc)
+            yield _sse("pulse_error", {"ticker": t, "error": str(exc)})
+            yield _sse("pulse_complete", {"ticker": t})
+
+    return StreamingResponse(
+        _pulse_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── GET /analysis/popular-tickers ────────────────────────────────────────────

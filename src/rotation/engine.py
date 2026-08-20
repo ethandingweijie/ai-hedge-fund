@@ -52,12 +52,6 @@ DATA_DIR       = os.path.join(os.path.dirname(__file__), "..", "data")
 REGIME_STATE   = os.path.join(DATA_DIR, "regime_state.json")
 ROTATION_STATE = os.path.join(DATA_DIR, "rotation_state.json")
 
-ALL_AGENTS = [
-    "damodaran", "graham", "ackman", "cathie_wood", "munger",
-    "burry", "pabrai", "lynch", "fisher", "jhunjhunwala",
-    "druckenmiller", "buffett",
-]
-
 # Shift scoring per dimension (total possible = 10)
 _SHIFT_WEIGHTS = {
     "risk_appetite":     3,   # most consequential — determines entire portfolio posture
@@ -118,11 +112,14 @@ def _load_previous_regime() -> dict | None:
         return None
 
 
-def _classify_current_regime() -> tuple[dict, dict, float]:
+def _classify_current_regime() -> tuple[dict, float]:
     """
     Fresh macro regime classification via live FMP data + LLM.
     Builds a minimal AgentState to reuse run_macro_regime_classifier().
-    Returns (regime_dict, agent_weight_multipliers, position_size_cap).
+    Returns (regime_dict, position_size_cap).
+
+    (Agent weight multipliers were retired with the investor committee —
+    M2 Track E.)
     """
     from src.agents.routing.macro_regime import run_macro_regime_classifier
 
@@ -145,7 +142,6 @@ def _classify_current_regime() -> tuple[dict, dict, float]:
     updated = run_macro_regime_classifier(state)
     return (
         updated["data"]["macro_regime"],
-        updated["data"]["agent_weight_multipliers"],
         updated["data"]["position_size_cap"],
     )
 
@@ -204,8 +200,6 @@ def _sector_rotation_signal(new_regime: dict) -> dict[str, list[str]]:
 
 def _compute_recommendations(
     signals:     list[dict],
-    old_weights: dict[str, float],
-    new_weights: dict[str, float],
     old_cap:     float,
     new_cap:     float,
 ) -> list[dict]:
@@ -213,11 +207,12 @@ def _compute_recommendations(
     For each open BUY/SHORT position, compute new recommended size.
 
     Formula:
-      regime_scale    = new_cap / old_cap
-      agent_alignment = avg(new_weight for voting agents)
-                      / avg(old_weight for voting agents), capped at 1.0
-      new_pct         = current_pct * regime_scale * alignment
-                        (hard-capped at new_cap * 15% per position)
+      regime_scale = new_cap / old_cap
+      new_pct      = current_pct * regime_scale
+                     (hard-capped at new_cap * 15% per position)
+
+    (Agent-alignment scaling was retired with the investor committee —
+    M2 Track E; new runs carry no agent votes.)
 
     Recommendation:
       delta <= ROTATE_OUT_THRESHOLD AND new_pct < 1%  => ROTATE_OUT
@@ -234,21 +229,8 @@ def _compute_recommendations(
         if action not in ("BUY", "SHORT") or current_pct <= 0:
             continue
 
-        # Agents who voted the same direction as the final portfolio action
-        voting_agents = [
-            a["agent_key"] for a in sig.get("agent_votes", [])
-            if a.get("signal") == action
-        ]
-
-        if voting_agents:
-            avg_old   = sum(old_weights.get(a, 1.0) for a in voting_agents) / len(voting_agents)
-            avg_new   = sum(new_weights.get(a, 1.0) for a in voting_agents) / len(voting_agents)
-            alignment = min(1.0, avg_new / avg_old) if avg_old > 0 else 1.0
-        else:
-            alignment = 1.0
-
         regime_scale = new_cap / old_cap if old_cap > 0 else 1.0
-        new_pct      = current_pct * regime_scale * alignment
+        new_pct      = current_pct * regime_scale
         new_pct      = max(0.0, min(new_cap * 15, new_pct))   # hard per-position cap (15% max × regime cap)
         delta        = new_pct - current_pct
 
@@ -264,8 +246,6 @@ def _compute_recommendations(
         reason_parts = []
         if abs(old_cap - new_cap) > 0.001:
             reason_parts.append(f"Cap {old_cap:.1f}\u2192{new_cap:.1f}")
-        if alignment < 0.95:
-            reason_parts.append(f"Agent alignment {alignment:.2f}\u00d7")
 
         recs.append({
             "ticker":      sig["ticker"],
@@ -394,21 +374,18 @@ def run_rotation_engine(dry_run: bool = False, force: bool = False) -> dict:
     if prev_state is None:
         first_run   = True
         old_regime  = {}
-        old_weights = {a: 1.0 for a in ALL_AGENTS}
         old_cap     = 1.0
     else:
         old_regime  = prev_state.get("regime", {})
-        old_weights = prev_state.get("agent_weights", {a: 1.0 for a in ALL_AGENTS})
         old_cap     = float(prev_state.get("position_size_cap", 1.0))
 
     # ── 2. Classify current regime (live LLM call ~30s) ───────────────────────
     print(f"\n  [rotation] Classifying current macro regime...")
-    new_regime, new_weights, new_cap = _classify_current_regime()
+    new_regime, new_cap = _classify_current_regime()
 
     # ── 3. First run: no comparison possible → treat as no shift ──────────────
     if first_run:
         old_regime  = new_regime
-        old_weights = new_weights
         old_cap     = new_cap
 
     # ── 4. Detect shift ────────────────────────────────────────────────────────
@@ -421,7 +398,7 @@ def run_rotation_engine(dry_run: bool = False, force: bool = False) -> dict:
     # ── 6. Per-ticker recommendations (only when shift > 0 or forced) ─────────
     recs = []
     if shift_score > 0 or force:
-        recs = _compute_recommendations(signals, old_weights, new_weights, old_cap, new_cap)
+        recs = _compute_recommendations(signals, old_cap, new_cap)
 
     # ── 7. Sector rotation signal ──────────────────────────────────────────────
     sector_signal = _sector_rotation_signal(new_regime)

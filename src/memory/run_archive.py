@@ -49,6 +49,15 @@ DB_PATH = os.environ.get("RUN_ARCHIVE_PATH",
           os.path.join(os.path.dirname(__file__), "..", "data", "run_archive.db"))
 PIPELINE_VERSION = "2.0"
 
+# M2 A3 — marker for the dated LATEST DEVELOPMENTS addendum appended to
+# REUSED (pure-cache / delta) research text. Both section parsers
+# (_parse_sections_inline here, deep_research._extract_sections) cut the
+# text at this marker BEFORE parsing, so an archived text carrying the
+# addendum re-parses into the identical sections — the C2 extractor hash
+# stays stable and extractor reuse survives the addendum. Keep the literal
+# in lock-step in both parsers (deep_research imports this constant).
+LATEST_DEV_ADDENDUM_MARKER = "\n\n---\n\n## LATEST DEVELOPMENTS (as of "
+
 # ── Schema (DDL for fresh databases) ─────────────────────────────────────────
 
 _DDL = """
@@ -68,6 +77,10 @@ CREATE TABLE IF NOT EXISTS runs (
 
     -- Research quality metadata
     research_tier         TEXT,                   -- "anthropic_web" | "tavily" | "knowledge_only" | "none"
+    research_as_of        TEXT,                   -- M2: content date the research reflects (ISO-8601
+                                                  -- date or timestamp). NULL = fall back to run_at.
+                                                  -- Full live pass -> today; delta success -> today;
+                                                  -- pure cache -> inherited from the source run.
 
     -- Full text outputs (for audit trail and backtesting context)
     industry_brief_text   TEXT,                   -- full industry intelligence brief
@@ -165,6 +178,7 @@ CREATE TABLE IF NOT EXISTS ticker_routing_cache (
     company_name          TEXT,
     routing_decision_json TEXT,
     raw_financials_json   TEXT,
+    reported_currency     TEXT,                  -- M2 B2: FMP reportedCurrency (e.g. CNY)
     last_updated          TEXT NOT NULL          -- ISO-8601 timestamp
 );
 
@@ -205,6 +219,7 @@ CREATE TABLE IF NOT EXISTS runs (
     model_name            TEXT,
     pipeline_version      TEXT DEFAULT '2.0',
     research_tier         TEXT,
+    research_as_of        TEXT,
     industry_brief_text   TEXT,
     deep_research_text    TEXT
 );
@@ -294,6 +309,7 @@ CREATE TABLE IF NOT EXISTS ticker_routing_cache (
     company_name          TEXT,
     routing_decision_json TEXT,
     raw_financials_json   TEXT,
+    reported_currency     TEXT,
     last_updated          TEXT NOT NULL
 );
 
@@ -330,6 +346,7 @@ _MIGRATIONS = [
 
     # v2 additions to runs
     ("runs", "research_tier",        "TEXT"),
+    ("runs", "research_as_of",       "TEXT"),   # M2 A2 — content-age reuse trigger
     ("runs", "industry_brief_text",  "TEXT"),
     ("runs", "deep_research_text",   "TEXT"),
     ("runs", "regime_recession_risk","TEXT"),   # v2.1 — 5th regime dimension
@@ -409,6 +426,10 @@ _MIGRATIONS = [
     # the QA LLM pass and reuse the prior clean audit.
     ("ticker_signals", "sector_card_hash",    "TEXT"),
     ("ticker_signals", "card_qa_json",        "TEXT"),
+
+    # M2 B2 — reporting currency for the cached FMP financials (currency-
+    # labeling of research prompts + FX-aware consistency check)
+    ("ticker_routing_cache", "reported_currency", "TEXT"),
 ]
 
 
@@ -618,8 +639,9 @@ def save_run(state: dict, decisions: dict) -> str:
                     regime_risk_appetite, regime_rate_direction,
                     regime_volatility, regime_dollar, regime_recession_risk,
                     tickers, model_name, pipeline_version,
-                    research_tier, industry_brief_text, deep_research_text
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    research_tier, research_as_of,
+                    industry_brief_text, deep_research_text
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     run_id,
@@ -635,6 +657,7 @@ def save_run(state: dict, decisions: dict) -> str:
                     meta.get("model_name"),
                     PIPELINE_VERSION,
                     data.get("research_tier"),          # set by deep_research.py
+                    data.get("research_as_of"),         # M2 A2: content date (deep_research.py)
                     data.get("industry_brief") or data.get("deep_research") or None,
                     data.get("deep_research") or None,
                 ),
@@ -643,7 +666,8 @@ def save_run(state: dict, decisions: dict) -> str:
             # ── per-ticker rows ───────────────────────────────────────────────
             analyst_signals: dict = data.get("analyst_signals", {})
             skip_agents = {"risk_management_agent", "advanced_risk_manager"}
-            debate_results: dict = data.get("debate_result", {})
+            # Debate round decommissioned (M2 Track E): the columns stay for
+            # historical rows but new runs always write 0/NULL.
             dcf_range: dict = data.get("dcf_range", {})
 
             for ticker in tickers:
@@ -682,10 +706,10 @@ def save_run(state: dict, decisions: dict) -> str:
                 if dcf_iv is not None and price_at_run and price_at_run > 0:
                     dcf_iv_vs_price = round((dcf_iv - price_at_run) / price_at_run * 100, 2)
 
-                # Debate
-                debate = debate_results.get(ticker, {})
-                debate_triggered = int(bool(debate))
-                debate_adj_signal = debate.get("adjudicated_signal") if debate else None
+                # Debate — decommissioned (M2 Track E); columns kept for
+                # historical rows, new runs always write 0/NULL.
+                debate_triggered = 0
+                debate_adj_signal = None
 
                 # Entry range
                 entry_range = decision.get("entry_range") or []
@@ -1226,7 +1250,8 @@ def get_routing_cache(
     Returns a dict with keys:
         sector, sector_llm_raw, sector_confidence, sector_warning,
         company_name, routing_decision (dict), raw_financials (dict),
-        last_updated (str ISO-8601), age_days (float)
+        reported_currency (str | None), last_updated (str ISO-8601),
+        age_days (float)
     or None if no valid cache entry exists.
     """
     try:
@@ -1235,7 +1260,8 @@ def get_routing_cache(
         row = _fetch_one(
             """
             SELECT ticker, sector, sector_llm_raw, sector_confidence, sector_warning,
-                   company_name, routing_decision_json, raw_financials_json, last_updated
+                   company_name, routing_decision_json, raw_financials_json,
+                   reported_currency, last_updated
             FROM ticker_routing_cache
             WHERE ticker = ? AND last_updated >= ?
             """,
@@ -1265,6 +1291,7 @@ def get_routing_cache(
             "company_name":      row["company_name"],
             "routing_decision":  _j("routing_decision_json"),
             "raw_financials":    _j("raw_financials_json"),
+            "reported_currency": row["reported_currency"],
             "last_updated":      last_updated,
             "age_days":          round(age_days, 2),
         }
@@ -1283,6 +1310,7 @@ def save_routing_cache(
     company_name: str | None,
     routing_decision: dict | None,
     raw_financials: dict | None,
+    reported_currency: str | None = None,
 ) -> None:
     """
     Upsert (INSERT OR REPLACE) a routing-cache entry for *ticker*.
@@ -1291,7 +1319,7 @@ def save_routing_cache(
     try:
         cols = ["ticker", "sector", "sector_llm_raw", "sector_confidence",
                 "sector_warning", "company_name", "routing_decision_json",
-                "raw_financials_json", "last_updated"]
+                "raw_financials_json", "reported_currency", "last_updated"]
         phs = ", ".join("?" * len(cols))
         if db.is_postgres():
             updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in cols if c != "ticker")
@@ -1310,6 +1338,7 @@ def save_routing_cache(
                 company_name,
                 _safe_json(routing_decision),
                 _safe_json(raw_financials),
+                reported_currency,
                 datetime.now().isoformat(),
             ],
         )
@@ -1421,6 +1450,9 @@ def _parse_sections_inline(text: str) -> dict[str, str]:
       * SECTION 7 brief extraction + spanning-section trim (R1, 2026-08)
     """
     import re
+    # M2 A3: strip the freshness addendum (appended to reused research text)
+    # so re-parsed sections match the original extraction — C2 hash stability.
+    text = text.split(LATEST_DEV_ADDENDUM_MARKER)[0]
     # Widened to tolerate LLM formatting variants — kept in lock-step with
     # deep_research._extract_sections(). See that function's docstring.
     boundary = re.compile(
@@ -1461,22 +1493,33 @@ def _parse_sections_inline(text: str) -> dict[str, str]:
 def get_recent_research(
     ticker: str,
     max_age_days: int = 7,
-    qualifying_tiers: tuple[str, ...] = ("anthropic_web", "tavily", "qwen_web"),
+    qualifying_tiers: tuple[str, ...] = (
+        "anthropic_web", "tavily", "qwen_web",
+        # M2 A2: archived/delta-derived research is first-class reuse seed.
+        # Before this, runs saved as cache or delta tiers could never seed
+        # reuse — staleness chained forward forever (08-19 BABA incident:
+        # full research pass despite a run from the day before).
+        "anthropic_web_cached", "archive_news_delta",
+    ),
 ) -> dict | None:
     """
     Return the most recent qualifying deep-research run for `ticker`, or None.
 
     A run qualifies when ALL of:
-      - `ticker` appears in runs.tickers JSON array
+      - `ticker` appears in runs.tickers JSON array (as the PRIMARY ticker)
       - runs.research_tier is in qualifying_tiers  (excludes knowledge_only / none)
       - runs.deep_research_text is non-empty
-      - runs.run_at is within the last max_age_days days
+      - the CONTENT date is within the last max_age_days days — keyed on
+        research_as_of (M2 A2), falling back to run_at when NULL. Reuse is
+        decided by how old the research content is, not when the row was
+        written: a delta-refreshed run stays reusable for its full window.
 
     Returns a dict with keys:
         run_id               str
         run_at               str   ISO-8601 timestamp
         analysis_date        str   end_date used in that run
-        age_days             float decimal days at call time
+        age_days             float decimal days of CONTENT age at call time
+        research_as_of       str|None content date (None → age keyed on run_at)
         research_tier        str
         deep_research_text   str   full Section 2 report
         deep_research_sections dict[str, str]  pre-parsed via _parse_sections_inline()
@@ -1490,15 +1533,18 @@ def get_recent_research(
     # match multi-ticker runs where this ticker was secondary — returning the
     # primary ticker's research text for the wrong company (NEE→ZIM bleed bug).
     # The tickers JSON array's FIRST element is always the primary ticker.
+    # COALESCE(research_as_of, run_at): rows written before M2 have NULL
+    # research_as_of and fall back to their write time.
     sql = f"""
-        SELECT run_id, run_at, analysis_date, research_tier, deep_research_text
+        SELECT run_id, run_at, analysis_date, research_tier,
+               research_as_of, deep_research_text
         FROM   runs
         WHERE  tickers LIKE ?
         AND    research_tier IN ({placeholders})
         AND    deep_research_text IS NOT NULL
         AND    deep_research_text != ''
-        AND    run_at >= ?
-        ORDER  BY run_at DESC
+        AND    COALESCE(research_as_of, run_at) >= ?
+        ORDER  BY COALESCE(research_as_of, run_at) DESC
         LIMIT  1
     """
     # Match only when ticker is the FIRST element in the JSON array:
@@ -1512,9 +1558,30 @@ def get_recent_research(
     if not row:
         return None
 
-    age_days = (
-        datetime.now() - datetime.fromisoformat(row["run_at"])
-    ).total_seconds() / 86_400
+    # Content age: how old is the research itself (M2 A2), not the row.
+    as_of_raw = row["research_as_of"] if "research_as_of" in row.keys() else None
+    content_dt = None
+    if as_of_raw:
+        try:
+            content_dt = datetime.fromisoformat(str(as_of_raw))
+        except (ValueError, TypeError):
+            content_dt = None
+    if content_dt is None:
+        as_of_raw = None
+        try:
+            content_dt = datetime.fromisoformat(row["run_at"])
+        except (ValueError, TypeError):
+            return {
+                "run_id":                  row["run_id"],
+                "run_at":                  row["run_at"],
+                "analysis_date":           row["analysis_date"],
+                "age_days":                0.0,
+                "research_as_of":          None,
+                "research_tier":           row["research_tier"],
+                "deep_research_text":      row["deep_research_text"],
+                "deep_research_sections":  _parse_sections_inline(row["deep_research_text"]),
+            }
+    age_days = (datetime.now() - content_dt).total_seconds() / 86_400
 
     text = row["deep_research_text"]
     return {
@@ -1522,6 +1589,7 @@ def get_recent_research(
         "run_at":                  row["run_at"],
         "analysis_date":           row["analysis_date"],
         "age_days":                round(age_days, 2),
+        "research_as_of":          str(as_of_raw) if as_of_raw else None,
         "research_tier":           row["research_tier"],
         "deep_research_text":      text,
         "deep_research_sections":  _parse_sections_inline(text),

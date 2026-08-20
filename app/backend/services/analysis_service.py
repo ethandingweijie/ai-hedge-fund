@@ -427,7 +427,8 @@ def _save_partial_web_run(
             "segment_scenarios":           data.get("segment_scenarios"),
             # ── checkpoint: industry_brief ───────────────────────────────
             "industry_brief":              data.get("industry_brief"),
-            # ── checkpoint: investor_signals ─────────────────────────────
+            # ── checkpoint: analyst signals (system agents only — the
+            #    investor committee was decommissioned in M2 Track D/E) ─────
             "analyst_signals":             data.get("analyst_signals"),
             "dcf_range":                   data.get("dcf_range"),
             "peer_comparison":             data.get("peer_comparison"),
@@ -470,9 +471,10 @@ def _save_partial_web_run(
 # ── R2: checkpoint resume + cleanup ───────────────────────────────────────────
 
 #: A checkpoint row newer than this is not resumable — it may belong to a run
-#: that is STILL EXECUTING under a different dedup key (selected_agents is
-#: part of the web-run dedup key, so two runs of the same ticker can coexist;
-#: only the abandoned one's row is stale enough to borrow from).
+#: that is STILL EXECUTING. Dedup is per-ticker since M2 Track E, so a
+#: borrowed row this young can only be the live run's own checkpoint (or a
+#: worker retry of it); only an abandoned row old enough to borrow from is
+#: past this threshold.
 _RESUME_MIN_AGE_S = 20 * 60
 
 
@@ -488,8 +490,8 @@ def _build_resume_bundle(
     A web_runs row keeps is_checkpoint=1 only while its run is incomplete —
     the successful final save upserts the SAME row to is_checkpoint=0 — so an
     is_checkpoint=1 row inside the window is by definition an abandoned /
-    crashed run whose expensive Phase 3/4 output we can reuse. Phases 5+
-    always rerun fresh.
+    crashed run whose expensive Phase 3/4 output we can reuse. The decision
+    phases (risk, PM) always rerun fresh.
 
     Returns:
         {"checkpoint", "run_id", "run_at", "age_days", "data"} where `data`
@@ -738,102 +740,17 @@ def _save_web_run(
 
 # ── Cache helper ──────────────────────────────────────────────────────────────
 
-# ── Agent-name canonicalization for cache key matching ──────────────────────
-# The frontend sends short names ('graham', 'buffett', 'burry', etc.) but the
-# backend stores agent_id keys in analyst_signals using FULL names like
-# 'ben_graham_agent', 'warren_buffett_agent', 'michael_burry_agent'. Naive
-# normalization `f"{name}_agent"` produces 'graham_agent' which never matches
-# 'ben_graham_agent' → cache miss on every Deep-Value / Quality-Growth /
-# partial-profile run. Hardcode the short→full mapping here.
-#
-# Source of truth: src/utils/analysts.py ANALYST_CONFIG keys, which get
-# suffixed with '_agent' to form the agent_id by get_analyst_nodes().
-_FRONTEND_SHORT_TO_AGENT_ID = {
-    "damodaran":      "aswath_damodaran_agent",
-    "graham":         "ben_graham_agent",
-    "ackman":         "bill_ackman_agent",
-    "cathie_wood":    "cathie_wood_agent",
-    "munger":         "charlie_munger_agent",
-    "burry":          "michael_burry_agent",
-    "pabrai":         "mohnish_pabrai_agent",
-    "lynch":          "peter_lynch_agent",
-    "fisher":         "phil_fisher_agent",
-    "jhunjhunwala":   "rakesh_jhunjhunwala_agent",
-    "druckenmiller":  "stanley_druckenmiller_agent",
-    "buffett":        "warren_buffett_agent",
-}
-
-# Agents that ALWAYS run and appear in analyst_signals but are NOT
-# user-selectable (and therefore excluded from the cache-comparison set).
-# Includes:
-#   - System: risk_management, advanced_risk_manager, portfolio_manager
-#     (note: portfolio_manager has NO _agent suffix per portfolio_manager.py)
-#   - Always-on data analysts: sentiment, technical, valuation, growth,
-#     fundamentals, news_sentiment
-_CACHE_SYSTEM_AGENTS = {
-    "risk_management_agent",
-    "advanced_risk_manager",
-    "portfolio_manager",
-    "advanced_portfolio_manager",
-    "sentiment_analyst_agent",
-    "technical_analyst_agent",
-    "valuation_analyst_agent",
-    "growth_analyst_agent",
-    "fundamentals_analyst_agent",
-    "news_sentiment_agent",
-}
-
-
-def _canonicalize_requested_agents(agents: list[str]) -> list[str]:
-    """Translate frontend short names to backend agent_id format.
-    'graham' → 'ben_graham_agent'. Already-suffixed names pass through.
-    Unknown names get the legacy `f"{name}_agent"` fallback so older
-    profile configs still work."""
-    out: list[str] = []
-    for a in agents:
-        if a.endswith("_agent"):
-            out.append(a)
-        elif a in _FRONTEND_SHORT_TO_AGENT_ID:
-            out.append(_FRONTEND_SHORT_TO_AGENT_ID[a])
-        else:
-            out.append(f"{a}_agent")
-    return out
-
-
-# Reverse map: full agent_id → bare persona key. Current pipelines key
-# investor signals by the bare short name ('damodaran'), while legacy
-# archived runs stored full agent_ids ('aswath_damodaran_agent').
-_AGENT_ID_TO_SHORT = {v: k for k, v in _FRONTEND_SHORT_TO_AGENT_ID.items()}
-
-
-def _canonical_agent_key(name: str) -> str:
-    """Normalise any agent-name spelling to the bare persona key that
-    analyst_signals actually stores.
-    'damodaran' / 'aswath_damodaran_agent' / 'damodaran_agent' → 'damodaran'.
-    Unknown names pass through with a trailing '_agent' stripped."""
-    if name in _FRONTEND_SHORT_TO_AGENT_ID:
-        return name                        # already the bare short name
-    if name in _AGENT_ID_TO_SHORT:
-        return _AGENT_ID_TO_SHORT[name]    # full agent_id → short name
-    if name.endswith("_agent"):
-        return name[:-6]                   # legacy suffixed spelling
-    return name
-
-
 def get_cached_run(
     ticker: str,
     within_minutes: int = 30,
-    agents: list[str] | None = None,
 ) -> Optional[dict]:
     """
     Return the most recent completed web run for *ticker* if it was created
-    within *within_minutes* minutes ago AND was run with the same investor
-    agents as requested, otherwise None.
+    within *within_minutes* minutes ago, otherwise None.
 
-    *agents* is the raw list sent by the frontend (e.g. ['graham', 'burry']).
-    None means "all agents" — any cached full-committee run is acceptable.
-    If *agents* is a non-empty list, the cached run must contain exactly the
-    same set of investor agents (cache miss when agent selection differs).
+    Runs are per-ticker (the investor committee was decommissioned in M2
+    Track E), so no agent-set comparison is needed — the newest completed
+    run for the ticker IS the cached result.
     """
     _ensure_web_runs_table()
     cutoff = (datetime.now() - timedelta(minutes=within_minutes)).strftime(
@@ -855,43 +772,12 @@ def get_cached_run(
     if row is None:
         return None
 
-    result = {
+    return {
         "run_id":           row["run_id"],
         "run_at":           row["run_at"],
         "ticker":           row["ticker"],
         "full_result_json": json.loads(row["full_result_json"]),
     }
-
-    # ── Agent-set validation ───────────────────────────────────────────
-    # Verify the cached run used the same investor-agent set as requested.
-    # Two layers of normalisation needed (bug fixed 2026-04-25):
-    #   1. Frontend short names → backend agent_id via _FRONTEND_SHORT_TO_AGENT_ID
-    #      ('graham' → 'ben_graham_agent', not 'graham_agent')
-    #   2. Strip always-on system + data analysts from the cached set
-    #      (sentiment, technical, valuation, growth, fundamentals,
-    #       news_sentiment, plus risk + portfolio managers)
-    # Pre-fix: every Deep-Value / partial-profile run cache-missed because
-    # short-name normalisation produced 'graham_agent' which never matched
-    # the cached 'ben_graham_agent'.
-    if agents:
-        cached_data    = result["full_result_json"].get("data", {})
-        cached_signals = cached_data.get("analyst_signals", {})
-        # Compare both sides in ONE namespace: the bare persona keys that
-        # analyst_signals stores ('damodaran', 'graham', …). Pre-fix the
-        # requested side was normalised to full agent_ids
-        # ('aswath_damodaran_agent') which never matched the bare stored
-        # keys → the 30-min endpoint cache missed on EVERY user-selected
-        # re-run. _canonical_agent_key() accepts every historical spelling
-        # on both sides (bare short, full agent_id, legacy '<name>_agent').
-        cached_investor_agents = sorted(
-            _canonical_agent_key(k)
-            for k in cached_signals if k not in _CACHE_SYSTEM_AGENTS
-        )
-        requested_normalised = sorted(_canonical_agent_key(a) for a in agents)
-        if cached_investor_agents != requested_normalised:
-            return None   # different agent selection — force fresh run
-
-    return result
 
 
 # ── Delete helper ─────────────────────────────────────────────────────────────
@@ -983,7 +869,9 @@ def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
         [run_id, ticker],
     )
 
-    # Reconstruct analyst_signals dict (investor agents only)
+    # Reconstruct analyst_signals dict (system agents — the investor
+    # committee was decommissioned in M2 Track D/E; historical rows may
+    # still carry investor keys)
     analyst_signals: dict = {}
     for ag in agent_rows:
         analyst_signals[ag["agent_key"]] = {
@@ -1283,12 +1171,12 @@ def get_history(
 
     cli_where_sql = "WHERE " + " AND ".join(cli_where)
 
-    cli_rows = _fetch(
-        f"""
+    _cli_select = f"""
         SELECT
             r.run_id, r.run_at, ts.ticker, r.model_name,
             r.regime_risk_appetite  AS regime,
             r.sector                AS sector,
+            r.research_as_of,
             ts.final_action, ts.position_size_pct, ts.price_target, ts.stop_loss,
             ts.dcf_base_iv, ts.ev_upside_pct, ts.power_law_score,
             ts.value_trap_verdict,  ts.outcome, ts.pct_change,
@@ -1297,9 +1185,16 @@ def get_history(
         JOIN runs r ON r.run_id = ts.run_id
         {cli_where_sql}
         ORDER BY r.run_at DESC
-        """,
-        cli_params,
-    )
+    """
+    try:
+        cli_rows = _fetch(_cli_select, cli_params)
+        _cli_has_research_as_of = True
+    except Exception:
+        # Pre-M2-A2 schema without runs.research_as_of — retry without the
+        # column rather than failing the whole history endpoint.
+        cli_rows = _fetch(_cli_select.replace("r.research_as_of,\n            ", ""),
+                          cli_params)
+        _cli_has_research_as_of = False
 
     # ── 3. Merge metadata (no JSON) + sort → determine page slice ─────────
     web_light: list[dict] = [
@@ -1337,6 +1232,9 @@ def get_history(
             "outcome":          row["outcome"] or "PENDING",
             "pct_change":       row["pct_change"],
             "vgpm_grades":      {},
+            # M2 Track A2 content age (NULL → frontend falls back to run_at)
+            "research_as_of":   (row["research_as_of"]
+                                 if _cli_has_research_as_of else None),
         }
         for row in cli_rows
     ]
@@ -1377,6 +1275,9 @@ def get_history(
             "final_action": item["_final_action"] or "",
             "regime":       item["_regime"] or "",
             "sector":       item["_sector"] or "",
+            # M2 Track A2 content age — deep_research writes it into
+            # state["data"]; absent on legacy runs (NULL → run_at fallback)
+            "research_as_of": None,
         }
 
         raw_json = json_by_id.get(item["run_id"])
@@ -1386,6 +1287,8 @@ def get_history(
                 data = result.get("data", {})
                 tickers_list = data.get("tickers", [item["ticker"]])
                 t = tickers_list[0] if tickers_list else item["ticker"]
+
+                enriched["research_as_of"] = data.get("research_as_of")
 
                 # Fill summary fields from JSON if summary cols were NULL (legacy row)
                 if not enriched["regime"]:
@@ -1545,12 +1448,11 @@ async def run_analysis_pipeline(
     model_name: str,
     api_keys: dict,
     on_phase: Callable[..., None],  # (phase, status, summary, reasoning, ticker, timestamp, partial_data)
-    selected_agents: list[str] | None = None,
     user_id: Optional[int] = None,
     run_id: Optional[str] = None,
 ) -> tuple[str, dict]:
     """
-    Run the 10-phase advanced pipeline for a ticker.
+    Run the advanced pipeline for a ticker.
     Streams progress via on_phase callback.
     Returns (run_id, result_dict).
 
@@ -1665,12 +1567,8 @@ async def run_analysis_pipeline(
                 "realized_gains": {},
             }
 
-            # selected_agents=[] (empty list) is falsy in Python — treat it as
-            # "no preference" (all agents) only when truly None, not empty list.
-            _agents = selected_agents if selected_agents else None
-
             # Qwen drives deep research (web search + free-text synthesis)
-            # but structured pipeline phases (macro regime, investors, sector
+            # but structured pipeline phases (macro regime, sector
             # classification, etc.) must use Claude because Qwen's thinking
             # mode blocks function_calling / Pydantic schema compliance.
             _is_qwen = model_name.startswith("qwen")
@@ -1692,7 +1590,7 @@ async def run_analysis_pipeline(
                 print(
                     f"  [resume] checkpoint '{resume_bundle['checkpoint']}' from run "
                     f"{resume_bundle['run_id'][:8]} ({resume_bundle['age_days'] * 24:.1f}h old)"
-                    " — seeding phase caches, phases 5+ rerun fresh"
+                    " — seeding phase caches, decision phases rerun fresh"
                 )
 
             state = run_advanced_pipeline(
@@ -1700,7 +1598,6 @@ async def run_analysis_pipeline(
                 start_date="2020-01-01",
                 end_date=end_date,
                 portfolio=portfolio,
-                selected_agents=_agents,
                 model_name=_pipeline_model,
                 model_provider=_provider,
                 show_reasoning=True,

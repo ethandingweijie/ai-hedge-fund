@@ -263,10 +263,12 @@ def print_advanced_output(result: dict, show_reasoning: bool = False) -> None:
       2. Sector + Industry Brief excerpt
       3. Agent Signals table  (signal | conviction/10 | horizon | target | thesis)
          [+ cot_log block per agent when show_reasoning=True]
-      4. Debate Round result  (only if debate occurred)
-      5. Phase 7 Analytics    (scenario EV upside | power law score | value trap)
-      6. Risk Manager flags
-      7. Final Portfolio Decision
+      4. Phase 7 Analytics    (scenario EV upside | power law score | value trap)
+      5. Risk Manager flags
+      6. Final Portfolio Decision
+
+    (The Debate Round section was removed with the investor committee —
+    M2 Track D/E.)
     """
     W = Style.BRIGHT + Fore.WHITE
     R = Style.RESET_ALL
@@ -318,7 +320,6 @@ def print_advanced_output(result: dict, show_reasoning: bool = False) -> None:
 
     decisions       = result.get("decisions", {})
     analyst_signals = result.get("analyst_signals", {})
-    debate_result   = result.get("debate_result") or {}
     scenario        = result.get("scenario_analysis") or {}
     power_law       = result.get("power_law_analysis") or {}
     value_trap      = result.get("value_trap_analysis") or {}
@@ -431,32 +432,7 @@ def print_advanced_output(result: dict, show_reasoning: bool = False) -> None:
                 for line in cot.splitlines():
                     print(f"  {Fore.WHITE}{line}{R}")
 
-        # ── 4. Debate Round ────────────────────────────────────────────────
-        dr = debate_result.get(ticker)
-        if dr:
-            adj_signal = dr.get("adjudicated_signal", "—").upper()
-            adj_conv   = dr.get("adjudicated_conviction", "—")
-            adj_color  = SIGNAL_COLOR.get(adj_signal, Fore.WHITE)
-            # DebateResult stores agent_a (bull) and agent_b (bear)
-            bull_key = dr.get("agent_a", "")
-            bear_key = dr.get("agent_b", "")
-            bull_name = AGENT_DISPLAY.get(bull_key, bull_key.replace("_", " ").title() if bull_key else "—")
-            bear_name = AGENT_DISPLAY.get(bear_key, bear_key.replace("_", " ").title() if bear_key else "—")
-            adjudication  = dr.get("adjudication", "")
-            disagreement  = dr.get("disagreement_core", "")
-            debate_rows = [
-                ["Bull advocate",      f"{Fore.GREEN}{bull_name}{R}"],
-                [f"  Rebuttal",        f"{Fore.WHITE}{_wrap(dr.get('agent_a_rebuttal', ''), 62)}{R}"],
-                ["Bear advocate",      f"{Fore.RED}{bear_name}{R}"],
-                [f"  Rebuttal",        f"{Fore.WHITE}{_wrap(dr.get('agent_b_rebuttal', ''), 62)}{R}"],
-                ["Core disagreement",  f"{Fore.WHITE}{_wrap(disagreement, 62)}{R}"],
-                ["Adjudicated signal", f"{adj_color}{Style.BRIGHT}{adj_signal}  conviction {adj_conv}/10{R}"],
-                ["Moderator ruling",   f"{Fore.WHITE}{_wrap(adjudication, 62)}{R}"],
-            ]
-            print(f"\n{W}DEBATE ROUND — TRIGGERED (≥3 BUY vs ≥3 SELL){R}")
-            print(tabulate(debate_rows, tablefmt="grid", colalign=("left", "left")))
-        else:
-            print(f"\n{Fore.YELLOW}  Debate: SKIPPED — no strong conflict (< 3 BUY and 3 SELL on same ticker){R}")
+        # (Debate Round section removed with the investor committee — M2 Track D/E.)
 
         # ── 5. Phase 7 Analytics ───────────────────────────────────────────
         scen = scenario.get(ticker, {})
@@ -598,7 +574,6 @@ def _print_result_summary(
     macro        = result.get("macro_regime") or {}
     sector       = result.get("sector", "-")
     analyst_sigs = result.get("analyst_signals", {})
-    debate_res   = (result.get("debate_result") or {}).get(ticker)
     scenario     = (result.get("scenario_analysis") or {}).get(ticker, {})
     power_law    = (result.get("power_law_analysis") or {}).get(ticker, {})
     trap         = (result.get("value_trap_analysis") or {}).get(ticker, {})
@@ -653,14 +628,7 @@ def _print_result_summary(
         )
     agent_assessment = "\n".join(agent_lines) if agent_lines else "-"
 
-    # ── Debate row ─────────────────────────────────────────────────────────
-    if debate_res:
-        adj_sig  = debate_res.get("adjudicated_signal", "-").upper()
-        adj_conv = debate_res.get("adjudicated_conviction", "-")
-        sc = SIGNAL_COLOR.get(adj_sig, Fore.WHITE)
-        debate_str = f"TRIGGERED — {sc}{adj_sig}{R} conviction {adj_conv}/10"
-    else:
-        debate_str = f"{Fore.YELLOW}Skipped (no strong conflict){R}"
+    # (Debate row removed with the investor committee — M2 Track D/E.)
 
     # ── Phase 7 rows ───────────────────────────────────────────────────────
     upside = scenario.get("upside_pct")
@@ -757,7 +725,6 @@ def _print_result_summary(
         [f"{W}Sector{R}",             f"{Fore.CYAN}{sector}{R}"],
         [f"{W}Agent Vote{R}",         vote_str],
         [f"{W}Agent Assessment{R}",   agent_assessment],
-        [f"{W}Debate{R}",             debate_str],
         [f"{W}Scenario EV Upside{R}", ev_str],
         [f"{W}Power Law{R}",          pl_str],
         [f"{W}Value Trap{R}",         trap_str],

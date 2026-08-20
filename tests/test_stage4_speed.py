@@ -44,8 +44,6 @@ def test_b1_merge_unions_disjoint_phase_keys():
     macro = _blank_state()
     macro["data"].update({
         "macro_regime": {"risk_appetite": "risk_on"},
-        "agent_weight_multipliers": {"buffett": 1.0},
-        "conviction_weights": {"buffett": 0.1},
         "position_size_cap": 0.25,
     })
     intel = _blank_state()
@@ -283,28 +281,7 @@ def test_b4_different_ticker_not_cross_served(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# B5 — investor worker cap env parsing
+# B5 — retired: PIPELINE_INVESTOR_MAX_WORKERS and _investor_max_workers were
+# decommissioned together with the investor wave they throttled (M2 Track E).
 # ---------------------------------------------------------------------------
 
-def test_b5_investor_max_workers_default(monkeypatch):
-    from src.pipeline import _investor_max_workers
-    monkeypatch.delenv("PIPELINE_INVESTOR_MAX_WORKERS", raising=False)
-    assert _investor_max_workers() == 6
-
-
-def test_b5_investor_max_workers_env_override(monkeypatch):
-    from src.pipeline import _investor_max_workers
-    monkeypatch.setenv("PIPELINE_INVESTOR_MAX_WORKERS", "10")
-    assert _investor_max_workers() == 10
-
-
-def test_b5_investor_max_workers_malformed_falls_back(monkeypatch):
-    from src.pipeline import _investor_max_workers
-    monkeypatch.setenv("PIPELINE_INVESTOR_MAX_WORKERS", "not-a-number")
-    assert _investor_max_workers() == 6
-
-
-def test_b5_investor_max_workers_floor_of_one(monkeypatch):
-    from src.pipeline import _investor_max_workers
-    monkeypatch.setenv("PIPELINE_INVESTOR_MAX_WORKERS", "0")
-    assert _investor_max_workers() == 1

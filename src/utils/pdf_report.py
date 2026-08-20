@@ -581,7 +581,6 @@ def _extract_catalysts(
     ticker: str,
     analyst_signals: dict,
     scenario: dict,
-    debate_result: dict,
 ) -> list[dict]:
     """Scan agent text for catalyst mentions using keyword patterns.
     Returns list of {type, timeline, catalyst, source}, max 6.
@@ -598,7 +597,8 @@ def _extract_catalysts(
         if assum.strip():
             text_sources.append((assum, "Scenario Agent"))
 
-    # Investor agent thesis + CoT logs
+    # System-agent thesis + CoT logs (investor committee decommissioned —
+    # M2 Track E; analyst_signals now holds system agents only)
     for agent_key, sig_map in analyst_signals.items():
         if agent_key in _SKIP_AGENTS:
             continue
@@ -614,11 +614,6 @@ def _extract_catalysts(
             text_sources.append((thesis, name))
         if cot.strip():
             text_sources.append((cot[:600], name))   # cap CoT length
-
-    # Debate adjudication
-    adj = str((debate_result or {}).get(ticker, {}).get("adjudication", "") or "")
-    if adj.strip():
-        text_sources.append((adj, "Debate Round"))
 
     for text, source in text_sources:
         if len(results) >= 6:
@@ -652,12 +647,11 @@ def _catalyst_section(
     ticker: str,
     analyst_signals: dict,
     scenario: dict,
-    debate_result: dict,
     styles,
     page_w: float,
 ) -> list:
     """Render a Key Catalysts table. Returns [] if no catalysts found."""
-    cats = _extract_catalysts(ticker, analyst_signals, scenario, debate_result)
+    cats = _extract_catalysts(ticker, analyst_signals, scenario)
     if not cats:
         return []
 
@@ -1797,33 +1791,8 @@ def _build_key_points(
         }
         points.append(_VERDICT_PROSE.get(trap_verdict, f"Risk audit verdict: {trap_verdict}."))
 
-    # ── 5. Analyst committee consensus ───────────────────────────────────────
-    buy_n = hold_n = sell_n = 0
-    conv_total = 0.0
-    conv_count = 0
-    for agent_key, sig_map in analyst_signals.items():
-        if agent_key in _SKIP_AGENTS:
-            continue
-        if not isinstance(sig_map, dict) or ticker not in sig_map:
-            continue
-        sig = sig_map[ticker]
-        if not isinstance(sig, dict):
-            continue
-        s = _strip(sig.get("signal", "")).upper()
-        if s == "BUY":        buy_n  += 1
-        elif s in ("SELL", "SHORT"): sell_n += 1
-        else:                        hold_n += 1
-        conv = sig.get("conviction")
-        if isinstance(conv, (int, float)):
-            conv_total += conv
-            conv_count += 1
-    total_n = buy_n + hold_n + sell_n
-    if total_n > 0:
-        avg_conv = conv_total / conv_count if conv_count else 0
-        points.append(
-            f"Analyst committee votes {buy_n} BUY / {hold_n} HOLD / {sell_n} SELL "
-            f"across {total_n} analysts, with average conviction {avg_conv:.1f}/10."
-        )
+    # (Analyst committee consensus point removed with the committee —
+    #  M2 Track E. The PM decision card carries the verdict now.)
 
     return points[:5]
 
@@ -3042,7 +3011,7 @@ def generate_pdf_reports_per_ticker(result: dict) -> list[str]:
     For a multi-ticker result the pipeline's shared context (macro_regime, sector,
     industry_brief, deep_research, etc.) is replicated into every per-ticker
     sub-result, while per-ticker dicts (decisions, dcf_range, scenario_analysis,
-    power_law_analysis, value_trap_analysis, debate_result, analyst_signals,
+    power_law_analysis, value_trap_analysis, analyst_signals,
     short_interest, earnings_quality, insider_activity, news_sentiment,
     analyst_revisions) are sliced so each sub-result contains only that ticker.
 
@@ -3066,7 +3035,6 @@ def generate_pdf_reports_per_ticker(result: dict) -> list[str]:
         "scenario_analysis",
         "power_law_analysis",
         "value_trap_analysis",
-        "debate_result",
         "short_interest",
         "earnings_quality",
         "insider_activity",
@@ -3170,7 +3138,6 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
         )
     industry_brief  = _ib_raw
     analyst_signals = result.get("analyst_signals", {})
-    debate_result   = result.get("debate_result") or {}
     scenario        = result.get("scenario_analysis") or {}
     power_law       = result.get("power_law_analysis") or {}
     value_trap      = result.get("value_trap_analysis") or {}
@@ -3575,7 +3542,6 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
             ticker          = ticker,
             analyst_signals = analyst_signals,
             scenario        = scenario,
-            debate_result   = debate_result,
             styles          = styles,
             page_w          = page_w,
         ))
@@ -3734,100 +3700,10 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
             story.append(Paragraph("Risk data not available for this ticker.", styles["RptBody"]))
         story.append(Spacer(1, 8))
 
-        # ── 5. Analyst Committee (item 4: renamed from "Agent Signals") ─────
-        story.append(Paragraph("Analyst Committee", styles["RptSubsection"]))
-
-        hdr_style = TableStyle([
-            ("BACKGROUND",   (0, 0), (-1, 0), C_PALE),
-            ("TEXTCOLOR",    (0, 0), (-1, 0), C_NAVY),
-            ("FONTNAME",     (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE",     (0, 0), (-1, 0), 7.5),
-            ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING",   (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING",(0, 0), (-1, -1), 3),
-            ("LEFTPADDING",  (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, C_PALE]),
-            ("LINEBELOW",    (0, 0), (-1, -1), 0.25, C_LGREY),
-            ("FONTSIZE",     (0, 1), (-1, -1), 7.5),
-        ])
-        aw = [
-            page_w * 0.14,  # Agent name
-            page_w * 0.09,  # Signal
-            page_w * 0.04,  # Conviction
-            page_w * 0.06,  # Horizon
-            page_w * 0.07,  # Price target
-            page_w * 0.34,  # Full thesis
-            page_w * 0.26,  # Key risks
-        ]
-        agent_rows = [[
-            Paragraph(_wh("Analyst"),   styles["RptLabel"]),
-            Paragraph(_wh("Signal"),    styles["RptLabel"]),
-            Paragraph(_wh("Conv."),     styles["RptLabel"]),
-            Paragraph(_wh("Horizon"),   styles["RptLabel"]),
-            Paragraph(_wh("Target"),    styles["RptLabel"]),
-            Paragraph(_wh("Thesis"),    styles["RptLabel"]),
-            Paragraph(_wh("Key Risks"), styles["RptLabel"]),
-        ]]
-        for agent_key, sig_map in analyst_signals.items():
-            if agent_key in _SKIP_AGENTS:
-                continue
-            if not isinstance(sig_map, dict) or ticker not in sig_map:
-                continue
-            sig = sig_map[ticker]
-            if not isinstance(sig, dict):
-                continue
-            raw_signal = _strip(sig.get("signal", "—")).upper()
-            conviction = str(sig.get("conviction", "—"))
-            a_horizon  = _strip(sig.get("time_horizon", "—"))
-            pt         = sig.get("price_target")
-            thesis     = _collect(sig.get("thesis_summary", "") or sig.get("reasoning", ""))
-            key_risks  = sig.get("key_risks", [])
-            risks_str  = "\n".join(f"• {_collect(r)}" for r in key_risks) if key_risks else "—"
-            name       = _AGENT_DISPLAY.get(agent_key, agent_key.replace("_", " ").title())
-            pt_str     = f"${pt:.2f}" if isinstance(pt, (int, float)) else "—"
-            sig_sty    = styles[_SIG_STYLE_MAP.get(raw_signal, "RptBody")]
-            agent_rows.append([
-                Paragraph(name,       styles["RptLabel"]),
-                Paragraph(raw_signal, sig_sty),
-                Paragraph(f"{conviction}/10", styles["RptValue"]),
-                Paragraph(a_horizon,  styles["RptValue"]),
-                Paragraph(pt_str,     styles["RptValue"]),
-                Paragraph(thesis,     styles["RptBody"]),
-                Paragraph(risks_str,  styles["RptBody"]),
-            ])
-        if len(agent_rows) > 1:
-            at = Table(agent_rows, colWidths=aw, repeatRows=1, hAlign="LEFT")
-            at.setStyle(hdr_style)
-            story.append(at)
-        story.append(Spacer(1, 8))
-
-        # ── 6. Debate Round ───────────────────────────────────────────────────
-        story.append(Paragraph("Debate Round", styles["RptSubsection"]))
-        dr = debate_result.get(ticker)
-        if dr:
-            adj_sig   = _strip(dr.get("adjudicated_signal", "—")).upper()
-            adj_conv  = str(dr.get("adjudicated_conviction", "—"))
-            bull_key  = dr.get("agent_a", "")
-            bear_key  = dr.get("agent_b", "")
-            bull_name = _AGENT_DISPLAY.get(bull_key, _strip(bull_key).replace("_", " ").title())
-            bear_name = _AGENT_DISPLAY.get(bear_key, _strip(bear_key).replace("_", " ").title())
-            debate_rows = [
-                ["Core Disagreement",  _collect(dr.get("disagreement_core", ""))],
-                ["Bull Advocate",      bull_name],
-                ["Bull Rebuttal",      _collect(dr.get("agent_a_rebuttal", ""))],
-                ["Bear Advocate",      bear_name],
-                ["Bear Rebuttal",      _collect(dr.get("agent_b_rebuttal", ""))],
-                ["Adjudicated Signal", f"{adj_sig}  (conviction {adj_conv}/10)"],
-                ["Moderator Ruling",   _collect(dr.get("adjudication", ""))],
-            ]
-            story.append(_kv_table(debate_rows, col1, col2, styles))
-        else:
-            story.append(Paragraph(
-                "Debate skipped — no strong conflict (fewer than 3 BUY and 3 SELL on the same ticker).",
-                styles["RptBody"],
-            ))
-        story.append(Spacer(1, 8))
+        # ── 5+6. Analyst Committee & Debate Round — decommissioned (M2 Track
+        # D/E): the PM decides from research + valuation directly, so the
+        # persona cards and debate table no longer exist. The intelligence
+        # sections below carry the evidence instead.
 
         # ── 7. Power Law Analysis (item 3+4: separated from analytics block, renamed) ──
         story.append(Paragraph("Power Law Analysis", styles["RptSubsection"]))

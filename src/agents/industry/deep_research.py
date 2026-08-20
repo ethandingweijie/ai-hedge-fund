@@ -36,6 +36,10 @@ import anthropic
 from src.graph.state import AgentState
 from src.utils.progress import progress
 from src.utils.company_name import fetch_company_name as _fetch_company_name
+# M2 A3: marker identifying the freshness addendum appended to reused
+# research text — cut before section parsing so the C2 extractor hash
+# stays stable (single source of truth lives in run_archive).
+from src.memory.run_archive import LATEST_DEV_ADDENDUM_MARKER
 
 
 logger = logging.getLogger(__name__)
@@ -441,6 +445,10 @@ def _extract_sections(report_text: str) -> dict[str, str]:
       2f → investor agents    (KPI framework → anchor KPI monitoring)
     """
     ids = ["2F", "2E", "2D", "2C", "2B", "2A"]  # kept for reference
+    # M2 A3: strip the freshness addendum (appended to reused research text)
+    # so sections match the original extraction — C2 hash stability. Kept in
+    # lock-step with run_archive._parse_sections_inline.
+    report_text = report_text.split(LATEST_DEV_ADDENDUM_MARKER)[0]
     # Widened to tolerate LLM formatting variants: `2A.`, `2A:`, `2A—`, `2A-`,
     # `2A)`, `2A ` — with optional markdown markers (`##`, `###`, `**`, `*`,
     # `>`) prefixing. The `2[A-F]` anchor remains to avoid over-matching
@@ -503,10 +511,12 @@ def _extract_sections(report_text: str) -> dict[str, str]:
 # ── FMP number formatter ──────────────────────────────────────────────────────
 # Module-level so it can be imported and tested independently.
 
-def _fmt_fmp(val) -> str:
+def _fmt_fmp(val, symbol: str = "$") -> str:
     """Format a raw FMP number into a readable abbreviated string.
 
     Handles integers, floats, pre-formatted strings, and None/empty.
+    ``symbol`` labels the currency (M2 B2 — non-USD reporters must NOT be
+    shown with a $ prefix; pass the reporting-currency symbol instead).
     Examples:
         391035000000  → '$391.0B'
         -78959000000  → '-$79.0B'
@@ -524,12 +534,27 @@ def _fmt_fmp(val) -> str:
     sign = "-" if n < 0 else ""
     n = abs(n)
     if n >= 1e9:
-        return f"{sign}${n / 1e9:.1f}B"
+        return f"{sign}{symbol}{n / 1e9:.1f}B"
     if n >= 1e6:
-        return f"{sign}${n / 1e6:.0f}M"
+        return f"{sign}{symbol}{n / 1e6:.0f}M"
     if n >= 1e3:
-        return f"{sign}${n / 1e3:.0f}K"
-    return f"{sign}${n:.0f}"
+        return f"{sign}{symbol}{n / 1e3:.0f}K"
+    return f"{sign}{symbol}{n:.0f}"
+
+
+# M2 B2 — display symbol for common reporting currencies; unknown currencies
+# fall back to an ISO-code prefix ("CHF 1.2B") so figures are never unlabeled.
+_CURRENCY_SYMBOLS = {
+    "USD": "$", "CNY": "¥", "RMB": "¥", "EUR": "€", "GBP": "£", "JPY": "¥",
+    "HKD": "HK$", "CAD": "C$", "AUD": "A$", "SGD": "S$", "NZD": "NZ$",
+    "KRW": "₩", "INR": "₹", "TWD": "NT$", "CHF": "CHF ", "SEK": "SEK ",
+    "NOK": "NOK ", "DKK": "DKK ", "ILS": "₪", "BRL": "R$", "ZAR": "R",
+}
+
+
+def _currency_symbol(ccy: str | None) -> str:
+    c = (ccy or "USD").upper().strip()
+    return _CURRENCY_SYMBOLS.get(c, f"{c} " if c != "USD" else "$")
 
 
 # ── Management guidance extractor ───────────────────────────────────────────
@@ -1902,21 +1927,35 @@ def _extract_pipeline_assets(
 
 # ── Delta research helpers ────────────────────────────────────────────────────
 
-def _build_delta_system(year: str, last_run_date: str) -> str:
+def _build_delta_system(year: str, last_run_date: str,
+                        searches_already_run: bool = False) -> str:
     """
     Lightweight system prompt for the delta research pass.
 
-    Instructs Claude to run exactly _DELTA_MAX_SEARCHES date-scoped searches
-    covering only events since `last_run_date`, then output section-tagged
-    amendment paragraphs (not a full 2A-2F report).
+    Anthropic-routed (searches_already_run=False): instructs Claude to run
+    exactly _DELTA_MAX_SEARCHES date-scoped searches covering only events
+    since `last_run_date`.
+
+    Qwen-routed (M2 A4, searches_already_run=True): the searches already ran
+    natively via qwen_web_search and their results ride in the user message —
+    the model only synthesizes section-tagged amendments from them (the
+    Anthropic server web_search tool does not work through the DashScope
+    base_url — provider mismatch).
+
+    Both modes share the identical OUTPUT FORMAT contract consumed by
+    _merge_delta_into_sections.
 
     year          — 4-digit string for the current calendar year ("2026").
     last_run_date — analysis_date from the cached run (e.g. "2026-03-24").
     """
-    return f"""
-You are issuing a delta update to an existing equity deep research report.
-Base research was completed on {last_run_date}. Today is {year}.
-
+    if searches_already_run:
+        search_block = f"""
+The {_DELTA_MAX_SEARCHES} web searches for developments since {last_run_date}
+have ALREADY been run; their results are provided in the user message.
+Use ONLY those results — do not claim knowledge of events they do not contain.
+""".strip()
+    else:
+        search_block = f"""
 Run exactly {_DELTA_MAX_SEARCHES} web searches.
 Every search query MUST include "since {last_run_date}" to scope results to
 new developments only — do not retrieve information that predates {last_run_date}.
@@ -1926,6 +1965,13 @@ SEARCH TARGETS:
   2. [Company] M&A acquisition merger deal announcement since {last_run_date}
   3. [Company] regulatory government policy ruling since {last_run_date}
   4. [Company] analyst upgrade downgrade price target revision since {last_run_date}
+""".strip()
+
+    return f"""
+You are issuing a delta update to an existing equity deep research report.
+Base research was completed on {last_run_date}. Today is {year}.
+
+{search_block}
 
 OUTPUT FORMAT — produce exactly one line per section:
   [2A] <2–4 sentence amendment describing what is NEW since {last_run_date}>
@@ -1937,8 +1983,46 @@ Output "NO CHANGE" for any section where nothing material has occurred.
 Rules:
 - Do NOT repeat or paraphrase the base research — only report new facts.
 - Cite inline: (Source Name, Month Year) — e.g. (Reuters, March 2026).
-- If a search returns no results dated after {last_run_date}, mark that section NO CHANGE.
+- If no result is dated after {last_run_date}, mark that section NO CHANGE.
 """.strip()
+
+
+def _run_qwen_delta_searches(company_display: str, since_date: str) -> str:
+    """M2 A4 — bounded native Qwen searches for the delta pass.
+
+    Mirrors the four SEARCH TARGETS of _build_delta_system. Returns the
+    concatenated dated findings ('' when nothing usable came back — the
+    caller falls through to full research rather than trust an unverified
+    delta). Each call is wall-bounded; the shared qwen_throttle serializes
+    against other Qwen consumers.
+    """
+    queries = [
+        f"{company_display} earnings results revenue guidance since {since_date}",
+        f"{company_display} M&A acquisition merger deal announcement since {since_date}",
+        f"{company_display} regulatory government policy ruling since {since_date}",
+        f"{company_display} analyst upgrade downgrade price target revision since {since_date}",
+    ][:_DELTA_MAX_SEARCHES]
+    chunks: list[str] = []
+    for q in queries:
+        try:
+            from src.research_ideas.complacency.web_research import qwen_web_search
+            text = qwen_web_search(
+                q + ". List only developments dated after "
+                    f"{since_date}; state explicitly if nothing material "
+                    "happened.",
+                system_prompt=(
+                    "You retrieve dated, factual equity-research "
+                    "developments. Report only what happened after the "
+                    "given date, with dates and source names."
+                ),
+                max_chars=3000,
+                request_timeout_s=45.0,
+            )
+            if text and text.strip():
+                chunks.append(f"SEARCH: {q}\n{text.strip()}")
+        except Exception as exc:
+            print(f"  [deep_research] A4 delta search failed: {exc}")
+    return "\n\n".join(chunks)
 
 
 def _merge_delta_into_sections(
@@ -1978,6 +2062,60 @@ def _merge_delta_into_sections(
         f"{k.upper()}.\n{v}" for k, v in sorted(merged.items())
     )
     return merged, merged_full
+
+
+def _build_latest_developments_addendum(
+    freshness_delta: dict | None,
+    as_of: str,
+) -> str:
+    """M2 A3 — dated addendum that makes a reused report's recency legible.
+
+    Appended to the archived FULL TEXT (and downstream prompts) on the
+    pure-cache and delta branches — never to deep_research_sections, so the
+    C2 extractor hash stays stable. Both section parsers cut at
+    LATEST_DEV_ADDENDUM_MARKER before parsing.
+
+    Returns "" when there is no freshness result to report (kill switch,
+    no prior run) — in that case the branch's own behaviour speaks for
+    itself. Material events → dated list; nothing material → says so
+    explicitly; unclassified → states the check outcome.
+    """
+    if not freshness_delta:
+        return ""
+    events = freshness_delta.get("events") or []
+    verdict = str(freshness_delta.get("verdict") or "").strip()
+    material = freshness_delta.get("material")
+
+    lines: list[str] = []
+    if material is True and events:
+        lines.append("Material developments since the original research:")
+        for e in events[:5]:
+            date = str(e.get("date") or "").strip()
+            headline = str(e.get("headline") or "").strip()
+            relevance = str(e.get("relevance") or "").strip()
+            if not headline:
+                continue
+            item = f"- {date}: {headline}" if date else f"- {headline}"
+            if relevance:
+                item += f" — {relevance}"
+            lines.append(item)
+    elif material is False:
+        lines.append(
+            "No material developments since the original research — the "
+            "analysis above remains current."
+        )
+    else:
+        lines.append(
+            f"Freshness check returned no classification "
+            f"({verdict or 'unavailable'}) — treat the analysis above as "
+            f"current only as of its original date."
+        )
+    if verdict and material is True:
+        lines.append("")
+        lines.append(f"Verdict: {verdict}")
+
+    heading = f"## LATEST DEVELOPMENTS (as of {as_of})"
+    return heading + "\n\n" + "\n".join(lines)
 
 
 # ── News supplement helper ───────────────────────────────────────────────────────
@@ -2762,6 +2900,7 @@ def _check_research_financial_consistency(
     sections: dict[str, str],
     raw_financials: dict | None,
     ticker: str,
+    reported_currency: str = "USD",
 ) -> dict:
     """Deterministic research↔books consistency check (no LLM).
 
@@ -2850,6 +2989,21 @@ def _check_research_financial_consistency(
                     "section":        "2a",
                 }
 
+    # ── B2: FX rate for non-USD reporters (deterministic, no LLM) ────────────
+    # Used twice below: (1) to extend the magnitude check's candidate scales
+    # with the USD-converted books value (a correctly-converted $ claim must
+    # not be flagged), and (2) to detect raw-figure-as-USD mislabeling.
+    _ccy = (reported_currency or "USD").upper().strip()
+    _fx: float | None = None
+    if _ccy != "USD":
+        try:
+            from src.tools.api import get_fx_rate
+            _fx = get_fx_rate(_ccy, "USD")
+        except Exception:
+            _fx = None
+        if not (_fx and _fx > 0 and abs(_fx - 1.0) > 1e-9):
+            _fx = None   # unknown/identity rate → FX checks stay off
+
     # ── Revenue magnitude (scale-normalised) ─────────────────────────────────
     # Research phrasing: "revenue of $3.9B", "$3,954 million revenue", ...
     if rev and rev > 0:
@@ -2858,6 +3012,12 @@ def _check_research_financial_consistency(
             r"\s*(billion|bn|b\b|million|mm|m\b)?",
             section_2a,
         )
+        # Candidate books values: raw books at common scales (raw, thousands,
+        # M, B) plus — for non-USD reporters — the USD-converted books value
+        # at the same scales, so a correctly converted $ claim matches.
+        _cand_scales = [1.0, 1e3, 1e6, 1e9]
+        if _fx:
+            _cand_scales += [_fx, _fx * 1e3, _fx * 1e6, _fx * 1e9]
         for _amt_s, _unit in _r_claims[:5]:
             try:
                 _amt = float(_amt_s.replace(",", ""))
@@ -2870,8 +3030,7 @@ def _check_research_financial_consistency(
                 research_rev_usd = _amt * 1e6
             else:
                 research_rev_usd = _amt  # bare number — scale-ambiguous, try all
-            # Try common books scales; books may be raw USD, thousands, M or B
-            for _scale in (1.0, 1e3, 1e6, 1e9):
+            for _scale in _cand_scales:
                 _books_usd = rev * _scale
                 if _books_usd <= 0:
                     continue
@@ -2886,6 +3045,52 @@ def _check_research_financial_consistency(
                     "section":         "2a",
                 }
                 break  # one flag is enough
+
+    # ── B2: FX-aware currency-mislabel check (non-USD reporters) ─────────────
+    # A $-labeled claim must line up with the books value CONVERTED to USD.
+    # If it matches the RAW figure in the reporting currency instead, the
+    # figure was almost certainly mislabeled (prod BABA 08-19: ¥1,023.7B
+    # revenue quoted as "$1023.7B"; true USD value ≈ $142B). Deterministic —
+    # no LLM; rides the same research_financial_divergences payload.
+    if _fx and rev and rev > 0 and "currency_mislabel" not in flags:
+        _scales = (1.0, 1e3, 1e6, 1e9)
+        # _r_claims is defined above — the rev > 0 guard ran that block
+        for _amt_s, _unit in _r_claims[:5]:
+            try:
+                _amt = float(_amt_s.replace(",", ""))
+            except ValueError:
+                continue
+            _unit_l = (_unit or "").lower()
+            if _unit_l.startswith("b"):
+                _claim = _amt * 1e9
+            elif _unit_l.startswith("m"):
+                _claim = _amt * 1e6
+            else:
+                _claim = _amt
+            if _claim <= 0:
+                continue
+            _raw_ok = any(
+                0.75 <= _claim / (rev * _s) <= 1.25
+                for _s in _scales if rev * _s > 0
+            )
+            _fx_ok = any(
+                0.75 <= _claim / (rev * _fx * _s) <= 1.25
+                for _s in _scales if rev * _fx * _s > 0
+            )
+            if _raw_ok and not _fx_ok:
+                flags["currency_mislabel"] = {
+                    "books_raw":         rev,
+                    "reported_currency": _ccy,
+                    "fx_rate":           round(_fx, 4),
+                    "research_claim":    _claim,
+                    "note": (
+                        f"$-labeled claim matches the raw {_ccy} figure, not its "
+                        f"USD value ({_ccy}→USD @ {_fx:.4f}) — likely {_ccy} "
+                        "mislabeled as USD"
+                    ),
+                    "section":           "2a",
+                }
+                break
 
     if flags:
         print(
@@ -3436,6 +3641,7 @@ def _research_one_ticker(
     resume_research: dict | None = None,
     prior_recap: dict | None = None,
     freshness_delta: dict | None = None,
+    reported_currency: str = "USD",
 ) -> dict:
     """
     Run the full archive-gate + three-tier research pipeline for a single ticker.
@@ -3561,6 +3767,25 @@ def _research_one_ticker(
             # can render inline [n] hyperlinks.
             _citations = _cit_future.result()
             _cit_ex.shutdown(wait=False)
+
+            # ── M2 A3: LATEST DEVELOPMENTS addendum ───────────────────────────
+            # Appended to the archived full text (and every downstream prompt
+            # that reads it) — never to deep_research_sections, which stays
+            # byte-identical so _sections_hash and C2 extractor reuse hold.
+            # Both section parsers cut at LATEST_DEV_ADDENDUM_MARKER, so the
+            # NEXT run re-parses this archived text into the same sections.
+            _addendum_today = end_date or datetime.now().strftime("%Y-%m-%d")
+            _addendum = _build_latest_developments_addendum(
+                freshness_delta, _addendum_today
+            )
+            if _addendum:
+                _cached_text = _cached_text + "\n\n---\n\n" + _addendum
+                progress.update_status(
+                    agent_id, ticker,
+                    f"LATEST DEVELOPMENTS addendum appended "
+                    f"(as of {_addendum_today})"
+                )
+
             _annotated_cached = _cached_text
             _used_cached: set = set()
             for _entry in sorted(
@@ -3581,13 +3806,19 @@ def _research_one_ticker(
                     _used_cached.add(_ref_n)
             # C6: deterministic research↔books check (no LLM cost)
             _divergences = _check_research_financial_consistency(
-                _cached["deep_research_sections"], raw_financials, ticker
+                _cached["deep_research_sections"], raw_financials, ticker,
+                reported_currency=reported_currency,
             )
             return {
                 "deep_research":            _cached_text,
                 "deep_research_annotated":  _annotated_cached,
                 "deep_research_sections":   _cached["deep_research_sections"],
                 "research_tier":            "anthropic_web_cached",
+                # M2 A2: pure cache does NOT refresh content age — inherit the
+                # source run's content date (pre-M2 rows fall back to their
+                # run_at). Reuse windows stay keyed on how old the research
+                # itself is, killing the staleness chain.
+                "research_as_of":           _cached.get("research_as_of") or _cached.get("run_at"),
                 "citation_registry":        _citations,
                 "web_intelligence":         {},
                 "cache_hit":                True,
@@ -3626,28 +3857,70 @@ def _research_one_ticker(
                 timeout=CLIENT_TIMEOUT,
                 max_retries=4,
             )
-            _delta_resp = _delta_client.messages.create(
-                model=_synthesis_model,
-                max_tokens=8000,
-                tools=[{
-                    "type": _WEB_SEARCH_TOOL_VERSION,
-                    "name": "web_search",
-                    "max_uses": _DELTA_MAX_SEARCHES,
-                }],
-                system=_build_delta_system(_year, _cached["analysis_date"]),
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Company: {_company_display}\n"
-                        f"Sector: {sector}\n"
-                        f"Base research date: {_cached['analysis_date']}\n"
-                        f"Today: {_today}\n\n"
-                        f"Run {_DELTA_MAX_SEARCHES} targeted searches for material "
-                        f"developments since {_cached['analysis_date']} and produce "
-                        f"section-tagged amendments."
+            if base_url:
+                # ── M2 A4: Qwen-routed delta ──────────────────────────────────
+                # The Anthropic server web_search tool does NOT work through
+                # the DashScope base_url (provider mismatch) — before this fix
+                # every Qwen-routed delta raised and fell through to a full
+                # research pass. Native Qwen searches + a tools-free synthesis
+                # produce the same [2X]-tagged amendment format.
+                _snippets = _run_qwen_delta_searches(
+                    _company_display, _cached["analysis_date"]
+                )
+                if not _snippets:
+                    raise RuntimeError(
+                        "Qwen delta searches returned nothing — freshness "
+                        "unverified, falling through to full research"
+                    )
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Qwen delta searches complete ({len(_snippets):,} chars) "
+                    f"— synthesizing amendments"
+                )
+                _delta_resp = _delta_client.messages.create(
+                    model=_synthesis_model,
+                    max_tokens=8000,
+                    system=_build_delta_system(
+                        _year, _cached["analysis_date"],
+                        searches_already_run=True,
                     ),
-                }],
-            )
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"Company: {_company_display}\n"
+                            f"Sector: {sector}\n"
+                            f"Base research date: {_cached['analysis_date']}\n"
+                            f"Today: {_today}\n\n"
+                            f"Search results for developments since "
+                            f"{_cached['analysis_date']}:\n\n{_snippets}\n\n"
+                            f"Produce the section-tagged amendments now."
+                        ),
+                    }],
+                )
+            else:
+                # Anthropic-routed delta — server-side web_search tool path.
+                _delta_resp = _delta_client.messages.create(
+                    model=_synthesis_model,
+                    max_tokens=8000,
+                    tools=[{
+                        "type": _WEB_SEARCH_TOOL_VERSION,
+                        "name": "web_search",
+                        "max_uses": _DELTA_MAX_SEARCHES,
+                    }],
+                    system=_build_delta_system(_year, _cached["analysis_date"]),
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"Company: {_company_display}\n"
+                            f"Sector: {sector}\n"
+                            f"Base research date: {_cached['analysis_date']}\n"
+                            f"Today: {_today}\n\n"
+                            f"Run {_DELTA_MAX_SEARCHES} targeted searches for material "
+                            f"developments since {_cached['analysis_date']} and produce "
+                            f"section-tagged amendments."
+                        ),
+                    }],
+                )
             _delta_text = "".join(
                 b.text for b in _delta_resp.content if hasattr(b, "text")
             ).strip()
@@ -3721,12 +3994,24 @@ def _research_one_ticker(
                 pass
             # C6: deterministic research↔books check on the MERGED sections
             _divergences_d = _check_research_financial_consistency(
-                _merged_sections, raw_financials, ticker
+                _merged_sections, raw_financials, ticker,
+                reported_currency=reported_currency,
             )
+            # ── M2 A3: LATEST DEVELOPMENTS addendum (delta branch) ────────────
+            # Appended to the full text only, AFTER the extractor fan-out and
+            # the C2 persist (both keyed on the addendum-free sections), so
+            # the hash stays stable for the follow-up pure-cache run.
+            _addendum_d = _build_latest_developments_addendum(
+                freshness_delta, _today
+            )
+            if _addendum_d:
+                _merged_full = _merged_full + "\n\n---\n\n" + _addendum_d
             return {
                 "deep_research":          _merged_full,
                 "deep_research_sections": _merged_sections,
                 "research_tier":          "archive_news_delta",
+                # M2 A2: delta pass brought the content current as of today.
+                "research_as_of":         _today,
                 "citation_registry":      _citations_d,
                 "web_intelligence":       {},
                 "cache_hit":              True,
@@ -3867,6 +4152,11 @@ def _research_one_ticker(
 
     # ── Inject FMP pre-loaded data ────────────────────────────────────────────
     _fmp_block = ""
+    # M2 B2: label pre-loaded figures with their reporting currency (BABA
+    # reports in CNY — unlabeled "$" prefixes were the root of the 08-19
+    # RMB-as-USD mislabeling that polluted the scenario PT and PM rationale).
+    _ccy = (reported_currency or "USD").upper().strip()
+    _sym = _currency_symbol(_ccy)
     if raw_financials:
         _rows = []
         _sorted_fin_years = sorted(raw_financials.keys())  # oldest → newest
@@ -3875,11 +4165,11 @@ def _research_one_ticker(
             if not isinstance(_yd, dict):
                 continue
             _rows.append(
-                f"  {_yk}: Rev={_fmt_fmp(_yd.get('revenue'))}  "
-                f"NI={_fmt_fmp(_yd.get('net_income'))}  "
-                f"FCF={_fmt_fmp(_yd.get('free_cash_flow'))}  "
-                f"Capex={_fmt_fmp(_yd.get('capital_expenditure'))}  "
-                f"NetDebt={_fmt_fmp(_yd.get('net_debt'))}"
+                f"  {_yk}: Rev={_fmt_fmp(_yd.get('revenue'), _sym)}  "
+                f"NI={_fmt_fmp(_yd.get('net_income'), _sym)}  "
+                f"FCF={_fmt_fmp(_yd.get('free_cash_flow'), _sym)}  "
+                f"Capex={_fmt_fmp(_yd.get('capital_expenditure'), _sym)}  "
+                f"NetDebt={_fmt_fmp(_yd.get('net_debt'), _sym)}"
             )
         # Pre-compute revenue CAGR to avoid LLM arithmetic errors
         _cagr_note = ""
@@ -3903,13 +4193,64 @@ def _research_one_ticker(
                 _cagr_note = (
                     f"\nPRE-COMPUTED Revenue CAGR ({_y0}–{_y1}, n={_n}yr): "
                     f"{_cagr_val:.1%}  "
-                    f"[Formula: ({_fmt_fmp(_r1)} / {_fmt_fmp(_r0)})^(1/{_n}) − 1 = {_cagr_val:.1%}]\n"
+                    f"[Formula: ({_fmt_fmp(_r1, _sym)} / {_fmt_fmp(_r0, _sym)})^(1/{_n}) − 1 = {_cagr_val:.1%}]\n"
                     f"DO NOT recompute this — use the pre-computed figure above to avoid arithmetic errors.\n"
                 )
         if _rows:
+            # M2 B2: USD-converted headline values + an explicit currency rule
+            # for non-USD reporters, so the analyst never quotes ¥ figures as $.
+            _fx_block = ""
+            if _ccy != "USD":
+                _fx_rate = None
+                try:
+                    from src.tools.api import get_fx_rate
+                    _fx_rate = get_fx_rate(_ccy, "USD")
+                except Exception:
+                    _fx_rate = None
+                _fy_keys_d = [
+                    k for k in _sorted_fin_years
+                    if isinstance(raw_financials.get(k), dict)
+                ]
+                _latest_yd = raw_financials[_fy_keys_d[-1]] if _fy_keys_d else {}
+                if _fx_rate and _fx_rate > 0 and abs(_fx_rate - 1.0) > 1e-9:
+                    def _usd(v):
+                        try:
+                            return float(v) * _fx_rate
+                        except (TypeError, ValueError):
+                            return None
+                    _conv_bits = []
+                    for _lbl, _key in (("Revenue", "revenue"),
+                                       ("Net income", "net_income"),
+                                       ("FCF", "free_cash_flow")):
+                        _uv = _usd(_latest_yd.get(_key))
+                        if _uv:
+                            _conv_bits.append(f"{_lbl} ≈ {_fmt_fmp(_uv)}")
+                    _conv_txt = " | ".join(_conv_bits) or "n/a"
+                    _fy_lbl = _fy_keys_d[-1] if _fy_keys_d else "latest FY"
+                    _fx_block = (
+                        f"\nUSD CONVERSION ({_ccy}→USD @ {_fx_rate:.4f}) — "
+                        f"{_fy_lbl} headline framing only: {_conv_txt}\n"
+                        f"⚠ CURRENCY RULE: ALL pre-loaded figures above are "
+                        f"denominated in {_ccy}, NOT USD. Never quote them with "
+                        f"'$' or 'USD'. When citing a figure, label the currency "
+                        f"— e.g. '{_sym}1,023.7B (≈$142B)'. Any figure quoted "
+                        f"with '$' must be the USD-converted value.\n"
+                    )
+                else:
+                    _fx_block = (
+                        f"\n⚠ CURRENCY RULE: ALL pre-loaded figures above are "
+                        f"denominated in {_ccy}, NOT USD. Never quote them with "
+                        f"'$' or 'USD' without converting first (FX rate "
+                        f"unavailable — flag any USD figure as approximate).\n"
+                    )
+            _ccy_hdr = (
+                "" if _ccy == "USD"
+                else f"  [REPORTING CURRENCY: {_ccy} — figures are NOT in USD]"
+            )
             _fmp_block += (
-                f"PRE-LOADED FINANCIAL DATA {_fin_cite_label}:\n"
+                f"PRE-LOADED FINANCIAL DATA {_fin_cite_label}{_ccy_hdr}:\n"
                 + "\n".join(_rows) + "\n"
+                + _fx_block
                 + _cagr_note
             )
     if insider_summary:
@@ -4728,7 +5069,8 @@ def _research_one_ticker(
                     progress.update_status(agent_id, ticker, f"All tiers failed ({kb_err}) — skipping deep research")
                     return {
                         "deep_research": "", "deep_research_sections": {},
-                        "research_tier": "none", "citation_registry": [],
+                        "research_tier": "none", "research_as_of": None,
+                        "citation_registry": [],
                         "web_intelligence": {}, "cache_hit": False,
                         "cache_age_days": None, "cache_run_id": None,
                         "extractor_failures": [], "research_degraded": False,
@@ -4744,7 +5086,8 @@ def _research_one_ticker(
                 progress.update_status(agent_id, ticker, f"All tiers failed ({kb_err}) — skipping deep research")
                 return {
                     "deep_research": "", "deep_research_sections": {},
-                    "research_tier": "none", "citation_registry": [],
+                    "research_tier": "none", "research_as_of": None,
+                    "citation_registry": [],
                     "web_intelligence": {}, "cache_hit": False,
                     "cache_age_days": None, "cache_run_id": None,
                     "extractor_failures": [], "research_degraded": False,
@@ -4781,7 +5124,8 @@ def _research_one_ticker(
 
     # ── C6: deterministic research↔books consistency check (no LLM) ──────────
     research_financial_divergences = _check_research_financial_consistency(
-        sections, raw_financials, ticker
+        sections, raw_financials, ticker,
+        reported_currency=reported_currency,
     )
     if research_financial_divergences:
         progress.update_status(
@@ -5000,6 +5344,11 @@ def _research_one_ticker(
         "deep_research_annotated":  annotated_report,
         "deep_research_sections":   sections,
         "research_tier":          research_tier,
+        # M2 A2: a full LIVE pass searched the web today, so the content is
+        # current as of today. knowledge_only / "none" did no live research —
+        # leave NULL (readers fall back to run_at; those tiers never qualify
+        # for reuse anyway).
+        "research_as_of":         today if research_tier in _LIVE_RESEARCH_TIERS else None,
         "citation_registry":      citation_registry,
         "web_intelligence":       {},
         "cache_hit":              False,
@@ -5149,6 +5498,10 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
             resume_research=(_resume_research if t == primary_ticker else None),
             prior_recap=(state["data"].get("prior_recap") or {}).get(t),
             freshness_delta=(state["data"].get("freshness_delta") or {}).get(t),
+            reported_currency=(
+                str(state["data"].get("reported_currency") or "USD")
+                if t == primary_ticker else "USD"
+            ),
         )
         return t, result
 
@@ -5175,7 +5528,8 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
                     progress.update_status(agent_id, t, f"Research worker failed: {exc}")
                     deep_research_map[t] = {
                         "deep_research": "", "deep_research_sections": {},
-                        "research_tier": "none", "citation_registry": [],
+                        "research_tier": "none", "research_as_of": None,
+                        "citation_registry": [],
                         "web_intelligence": {}, "cache_hit": False,
                         "cache_age_days": None, "cache_run_id": None,
                         "extractor_failures": [], "research_degraded": False,
@@ -5305,6 +5659,9 @@ def run_deep_research_agent(state: AgentState) -> AgentState:
     state["data"]["deep_research_annotated"]  = primary.get("deep_research_annotated", "")
     state["data"]["deep_research_sections"]   = primary.get("deep_research_sections", {})
     state["data"]["research_tier"]            = primary.get("research_tier", "none")
+    # M2 A2: content date of the primary ticker's research — archived on
+    # runs.research_as_of by save_run and drives content-age reuse.
+    state["data"]["research_as_of"]           = primary.get("research_as_of")
     state["data"]["citation_registry"]        = primary.get("citation_registry", [])
     # C4: primary ticker below the live-search floor → downstream consumers
     # (DCF agent, investor agents) can discount thin-evidence research.

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # run's research-grade model. Research-facing calls (deep research Tier-1,
 # extractors, DCF calibration, citation registry) are NOT in this group.
 _FAST_TIER_AGENT_NAMES = frozenset({"scenario_agent", "power_law_agent", "value_trap_agent"})
-_FAST_TIER_PREFIXES = ("investor_",)
+# (The investor_* prefix tier died with the committee in M2 Track E.)
 # Default fast model; set PIPELINE_FAST_MODEL to override, or to an empty
 # string to disable tiering entirely (all agents use the run model).
 # qwen3.6-plus = the Alibaba haiku-equivalent on this deployment: the fast,
@@ -296,7 +296,7 @@ def get_agent_model_config(state, agent_name):
          (e.g. AGENT_MODEL_SCENARIO_AGENT=qwen3.6-plus).
       2. Request-level per-agent config (API callers).
       3. Env PIPELINE_FAST_MODEL (default qwen3.6-plus) for the fast-tier
-         group: investor_* agents, scenario_agent, power_law_agent.
+         group: scenario_agent, power_law_agent, value_trap_agent.
          Set PIPELINE_FAST_MODEL="" to disable tiering.
       4. Global run model.
     """
@@ -324,10 +324,7 @@ def get_agent_model_config(state, agent_name):
     if agent_name:
         _fast_env = os.environ.get("PIPELINE_FAST_MODEL")
         _fast_model = (_fast_env if _fast_env is not None else _DEFAULT_FAST_MODEL).strip()
-        if _fast_model and (
-            agent_name in _FAST_TIER_AGENT_NAMES
-            or str(agent_name).startswith(_FAST_TIER_PREFIXES)
-        ):
+        if _fast_model and agent_name in _FAST_TIER_AGENT_NAMES:
             _name, _provider = _resolve_env_model(_fast_model)
             if _provider:
                 return _name, _provider

@@ -28,7 +28,6 @@ from src.tools.api import get_prices
 from src.utils.progress import progress
 from src.utils.api_key import get_api_key_from_state
 from src.memory.run_archive import update_outcomes
-from src.memory.reweight import reweight_from_archive, print_reweight_report
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 TRADE_LOG_PATH = os.path.join(DATA_DIR, "trade_log.json")
@@ -217,32 +216,19 @@ def run_post_trade_review(state: AgentState, review_days: int = 30) -> AgentStat
 
     _save_conviction_weights(weights, total_reviews)
 
-    # ── Archive-based reweighting (runs automatically after trade log scoring) ──
-    # Reads all scored outcomes from the SQLite archive (not just this batch)
-    # and recomputes conviction weights from the full historical track record.
-    # min_reviews=3 prevents noise from single-call flukes.
-    archive_updates: dict = {}
-    try:
-        archive_updates = reweight_from_archive(min_reviews=3, dry_run=False)
-        if archive_updates:
-            print_reweight_report(archive_updates, dry_run=False)
-    except Exception as e:
-        progress.update_status(agent_id, None, f"Archive reweight skipped: {e}")
+    # (Archive-based reweighting was run here until M2 Track E. The investor
+    #  committee it reweighted is decommissioned; src/memory/reweight.py stays
+    #  available as offline tooling over historical archives.)
 
     summary = {
         "reviewed": reviewed_count,
         "weight_updates": updates_applied,
         "updated_weights": weights,
-        "archive_reweight": {
-            agent: {"old": v["old"], "new": v["new"], "net": v["net"]}
-            for agent, v in archive_updates.items()
-        },
     }
 
     progress.update_status(
         agent_id, None,
-        f"Reviewed {reviewed_count} trade(s). {len(updates_applied)} weight(s) updated. "
-        f"Archive reweight: {len(archive_updates)} agent(s) adjusted."
+        f"Reviewed {reviewed_count} trade(s). {len(updates_applied)} weight(s) updated."
     )
 
     state["data"]["post_trade_review"] = summary
