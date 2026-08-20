@@ -34,13 +34,21 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export function startAnalysisRun(
   ticker: string,
   model = 'claude-sonnet-4-6',
-  agents?: string[],
 ): Promise<Response> {
+  // M2 Track E: the investor committee is decommissioned — the run body
+  // carries ticker + model only. Old servers tolerated the extra key;
+  // new servers ignore it, so there is nothing to send.
   return fetch(`${BASE}/analysis/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ..._authHeaders() },
-    body: JSON.stringify({ ticker, model, agents: agents && agents.length > 0 ? agents : undefined }),
+    body: JSON.stringify({ ticker, model }),
   });
+}
+
+/** Pulse — Gemini-Flash-style instant recall (SSE). Read-only: never starts
+ * a pipeline run. Returns the raw Response so the caller can stream beats. */
+export function pulseTicker(ticker: string, signal?: AbortSignal): Promise<Response> {
+  return fetch(`${BASE}/analysis/pulse?ticker=${encodeURIComponent(ticker)}`, { signal });
 }
 
 /** Fetch the full result for a completed run. */

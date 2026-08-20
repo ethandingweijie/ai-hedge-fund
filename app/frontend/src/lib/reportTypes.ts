@@ -655,6 +655,32 @@ export interface DdCardAudit {
   qa_budget_hit: boolean;
 }
 
+// ── M2 D3: what the committee-free PM decided from ──────────────────────────
+// Persisted by the portfolio manager as decision["decision_inputs"]; rendered
+// by the "Decision inputs" card in both render paths.
+export interface DecisionInputs {
+  quantitative?: {
+    band_action?: string;
+    upside_to_iv_pct?: number | null;
+    blended_iv?: number | null;
+    expected_value?: number | null;
+    price_target_12m?: number | null;
+    ev_upside_pct?: number | null;
+    vgpm_grades?: Record<string, string | null>;
+    power_law_score?: number | null;
+    trap_verdict?: string | null;
+  };
+  qualitative?: {
+    research_tier?: string | null;
+    digest_chars?: number;
+    delta_material?: boolean | null;
+    regulatory_watch?: string[];
+    prior_catalysts?: string[];
+  };
+  gates?: string[];
+  conviction?: { value?: number; notes?: string[] };
+}
+
 export interface PortfolioDecision {
   action: string;        // BUY | SELL | SHORT | COVER | HOLD
   position_size_pct?: number;
@@ -663,6 +689,7 @@ export interface PortfolioDecision {
   price_target?: number;
   time_horizon?: string;
   rationale?: string;
+  decision_inputs?: DecisionInputs;
 }
 
 // ── VGPM Scorecard ─────────────────────────────────────────────────────────

@@ -23,8 +23,7 @@ const PHASE_SHORT: Record<string, string> = {
   deep_research:           'Deep Research',
   industry_specialist:     'Industry Brief',
   dcf_engine:              'DCF Engine',
-  investor_agents:         'Investor Agents',
-  debate_round:            'Agent Debate',
+  // investor_agents / debate_round rows removed with the committee (M2 E).
   power_law_agent:         'Power Law',
   value_trap_agent:        'Value Trap',
   phase7_complete:         'Wrapping Up',

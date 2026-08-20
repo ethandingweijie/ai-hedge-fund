@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 // removed, so ReportPage doesn't fire toasts directly. Global <Toaster>
 // mount is in App.tsx; other pages (Screener, History) still use toast
 // from 'sonner' as needed.
-import { getActiveTier, STARTER_ALLOWED_AGENTS } from '@/lib/tier';
+// M2 Track E: tier imports retired with the persona picker — the committee
+// is decommissioned, so there are no agents left to gate by tier here.
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { getStockData, searchCompanies, getPopularTickers, getRunResult, type Co
 import { API_BASE_URL } from '@/config';
 import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 // v2 imports
-import { Search as V2Search, Users as V2Users } from '@/components/v2/shared';
+import { Search as V2Search } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun, mergeDataPreserve } from '@/contexts/active-run-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
@@ -27,7 +28,7 @@ import { ReportHeader }        from '@/components/report/ReportHeader';
 import { CardAuditBanner }     from '@/components/report/CardAuditBanner';
 import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
-import { AgentSignalsPanel }   from '@/components/report/AgentSignalsPanel';
+import { DecisionInputsCard }  from '@/components/report/DecisionInputsCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { IntelligenceGrid }    from '@/components/report/IntelligenceGrid';
 import { FinancialsChart }     from '@/components/report/FinancialsChart';
@@ -37,7 +38,6 @@ import { BankValuationPanel }  from '@/components/report/bank/BankValuationPanel
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
-import { DebatePanel }         from '@/components/report/DebatePanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
 import { PriceTargetPanel }    from '@/components/report/PriceTargetPanel';
@@ -46,25 +46,12 @@ import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel }  from '@/components/report/IndustryBriefPanel';
 import { DeepResearchPanel }   from '@/components/report/DeepResearchPanel';
 import { SectionSkeleton }     from '@/components/report/SectionSkeleton';
+import { PulseCard }           from '@/components/report/PulseCard';
 
-// ── Investor profiles ────────────────────────────────────────────────────────
-const ALL_AGENTS = [
-  'damodaran', 'graham', 'ackman', 'cathie_wood', 'munger',
-  'burry', 'pabrai', 'lynch', 'fisher', 'jhunjhunwala',
-  'druckenmiller', 'buffett',
-];
-
-interface Profile { label: string; description: string; agents: string[]; }
-
-const PROFILES: Profile[] = [
-  { label: 'Full Committee',   description: 'All 12 investors — comprehensive analysis',          agents: ALL_AGENTS },
-  { label: 'Deep Value',       description: 'Graham · Burry · Pabrai — margin of safety focus',   agents: ['graham', 'burry', 'pabrai'] },
-  { label: 'Quality Growth',   description: 'Buffett · Munger · Fisher — wonderful businesses',    agents: ['buffett', 'munger', 'fisher'] },
-  { label: 'Disruptive Growth',description: 'Cathie Wood · Lynch · Ackman — high-growth thesis',  agents: ['cathie_wood', 'lynch', 'ackman'] },
-  { label: 'Macro Overlay',    description: 'Druckenmiller · Damodaran · Munger — top-down view', agents: ['druckenmiller', 'damodaran', 'munger'] },
-  { label: 'Valuation Focus',  description: 'Damodaran · Graham · Buffett — DCF and earnings power', agents: ['damodaran', 'graham', 'buffett'] },
-  { label: 'Custom',           description: 'Pick individual investors',                           agents: [] },
-];
+// ── Investor profiles retired (M2 Track E) ──────────────────────────────────
+// ALL_AGENTS / PROFILES lived here: the 12-persona committee and its
+// archetype picker were decommissioned with the committee-free PM (Track D).
+// Rollback path is git history — there is deliberately no kill switch.
 
 // ── Report sections — BLUF-first order ───────────────────────────────────────
 const SECTIONS = [
@@ -77,15 +64,15 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]['id'];
 
 // ── Phase → section keyword mapping ─────────────────────────────────────────
+// Investor-persona and debate keywords removed with the committee (M2 E) —
+// the valuation/analysis sections now track the system phases only.
 const SECTION_PHASES: Record<SectionId, string[]> = {
   summary:    ['routing', 'vgpm'],
   valuation:  ['dcf', 'vgpm', 'portfolio', 'scenario', 'power_law', 'value_trap',
-               'buffett', 'graham', 'munger', 'fisher', 'lynch', 'ackman',
-               'cathie', 'burry', 'pabrai', 'druckenmiller', 'jhunjhunwala',
-               'damodaran', 'investor', 'analyst'],
+               'analyst'],
   analysis:   ['industry', 'deep_research', 'insider', 'news_sentiment',
                'earnings_quality', 'short_interest', 'analyst_revision',
-               'intelligence', 'debate'],
+               'intelligence'],
   financials: ['routing', 'financial'],
 };
 
@@ -126,8 +113,6 @@ const PHASE_LABELS: Record<string, { running: string; done: string }> = {
   data_router:              { running: 'Fetching financial data',              done: 'Financial data ready' },
   industry_specialist:      { running: 'Consulting the industry specialist',   done: 'Industry brief ready' },
   dcf_engine:               { running: 'Computing the valuation model',        done: 'Valuation model complete' },
-  investor_agents:          { running: 'Consulting the investor agents',       done: 'Investor signals received' },
-  debate_round:             { running: 'Bulls and bears debating',             done: 'Debate concluded' },
   power_law_agent:          { running: 'Analysing power-law growth patterns',  done: 'Growth patterns analysed' },
   value_trap_agent:         { running: 'Checking for value traps',             done: 'Value trap check done' },
   phase7_complete:          { running: 'Wrapping up analytical models',        done: 'Models complete' },
@@ -249,9 +234,6 @@ export function ReportPage() {
   // form to the run that is still in flight.
   const [ticker, setTicker]           = useState(isFreshRequest ? '' : (activeRun?.ticker ?? ''));
   const [model]                       = useState('qwen3.6-plus');
-  const [profileIdx, setProfileIdx]   = useState(1); // default: Deep Value (skip Full Committee)
-  const [customAgents]                = useState<string[]>([]);
-  const [showArchetype, setShowArchetype] = useState(false);
   const [suggestions, setSuggestions]     = useState<CompanySearchResult[]>([]);
   const [showSugg, setShowSugg]           = useState(false);
   const [v2Popular, setV2Popular]         = useState<PopularTicker[]>([]);
@@ -493,18 +475,13 @@ export function ReportPage() {
   }, [liveMode]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
-  const selectedProfile = PROFILES[profileIdx];
-  const isCustom        = selectedProfile.label === 'Custom';
-  const activeAgents    = isCustom ? customAgents : selectedProfile.agents;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const t = ticker.trim().toUpperCase();
     if (!t) return;
-    const agentsToSend = activeAgents.length === ALL_AGENTS.length ? undefined : activeAgents;
     runStartedAt.current = new Date().toISOString();
     requestNotificationPermission();  // iOS requires user gesture for permission prompt
-    start(t, model, agentsToSend);  // resetStream() is called inside startStream; clears liveResult too
+    start(t, model);  // resetStream() is called inside startStream; clears liveResult too
     markRunStarted(t);
     freshHoldRef.current = false;  // user launched their own run — follow it live
     setLiveMode(true);
@@ -527,9 +504,8 @@ export function ReportPage() {
     // Don't interrupt an actively streaming run — completed/error states are fine to replace
     if (state === 'running') return;
     setTicker(t);
-    const agentsToSend = activeAgents.length === ALL_AGENTS.length ? undefined : activeAgents;
     runStartedAt.current = new Date().toISOString();
-    start(t, model, agentsToSend);
+    start(t, model);
     markRunStarted(t);
     freshHoldRef.current = false;  // screener analyse intent — follow the new run live
     setLiveMode(true);
@@ -543,9 +519,8 @@ export function ReportPage() {
     sessionStorage.removeItem('watchlist_analyze');
     if (state !== 'idle') return; // stream already running — don't interrupt
     setTicker(t);
-    const agentsToSend = activeAgents.length === ALL_AGENTS.length ? undefined : activeAgents;
     runStartedAt.current = new Date().toISOString();
-    start(t, model, agentsToSend);
+    start(t, model);
     markRunStarted(t);
     freshHoldRef.current = false;  // watchlist analyse intent — follow the new run live
     setLiveMode(true);
@@ -644,7 +619,6 @@ export function ReportPage() {
   // specialist_block is the sub-sector/industry classification from the router
   const subSector       = (routingDecision as { specialist_block?: string } | undefined)?.specialist_block;
   const agentSignals  = data.analyst_signals as import('@/lib/reportTypes').AgentSignals | undefined;
-  const debateResult  = data.debate_result   as import('@/lib/reportTypes').DebateResult | undefined;
   const scenarioAnalysis = _byTicker(data.scenario_analysis as Record<string, import('@/lib/reportTypes').ScenarioAnalysis> | undefined);
   const powerLaw      = _byTicker(data.power_law_analysis  as Record<string, import('@/lib/reportTypes').PowerLawAnalysis>  | undefined);
   const valueTrap     = _byTicker(data.value_trap_analysis as Record<string, import('@/lib/reportTypes').ValueTrapAnalysis> | undefined);
@@ -658,30 +632,16 @@ export function ReportPage() {
   const currentPrice  = livePrice ?? scenarioAnalysis?.current_price;
 
   // Progress bar: phaseMap holds the LATEST status for every unique phase that
-  // has fired at least one event. This naturally covers all pipeline phases.
-  // A phase is "done" when its latest status is "Done" (case-insensitive).
-  // The backend normalises "✓ <message>" statuses → "Done" so pre-pipeline phases
-  // (macro_regime, strategic_router, dcf_engine, etc.) count here too.
-  // phaseDone  = all phases whose latest status is "Done"
-  // totalPhases = backend-provided count: investor agents + 18 fixed terminal phases
-  // Group individual investor agents as ONE logical phase for progress calculation.
-  // Without grouping, 12 investor agents + 18 fixed phases = 34 total, making
-  // progress feel very slow (investor phase = 25% instead of ~60%).
-  // With grouping: ~12 logical phases, matching the 10-phase pipeline.
+  // has fired at least one event. A phase is "done" when its latest status is
+  // "Done" (case-insensitive). The backend normalises "✓ <message>" statuses
+  // → "Done" so pre-pipeline phases count here too.
+  // M2 Track D/E: the committee is gone, so no investor-phase grouping —
+  // the pipeline is a fixed 20-step path (backend _FIXED_DONE_COUNT) and
+  // the bar's denominator tracks it directly.
   const _phaseEntries = Object.entries(phaseMap);
-  const _investorPhases = _phaseEntries.filter(([k]) => k.startsWith('investor_'));
-  const _nonInvestorPhases = _phaseEntries.filter(([k]) => !k.startsWith('investor_'));
-  const _investorAllDone = _investorPhases.length > 0 && _investorPhases.every(([, e]) => e.status.toLowerCase() === 'done');
-  const _nonInvestorDone = _nonInvestorPhases.filter(([, e]) => e.status.toLowerCase() === 'done').length;
-
-  // Count investors as 1 grouped phase (done only if ALL investor agents done)
-  const phaseDone = _nonInvestorDone + (_investorAllDone ? 1 : 0);
-  const phaseSeen = _nonInvestorPhases.length + (_investorPhases.length > 0 ? 1 : 0);
-  // Use grouped total: non-investor unique phases + 1 for investors (if any seen)
-  const totalPhases = Math.max(
-    _nonInvestorPhases.length + (_investorPhases.length > 0 ? 1 : 0),
-    12  // minimum 12 logical phases
-  );
+  const phaseDone = _phaseEntries.filter(([, e]) => e.status.toLowerCase() === 'done').length;
+  const phaseSeen = _phaseEntries.length;
+  const totalPhases = Math.max(_phaseEntries.length, 20);
 
   // Non-linear front-loaded curve: progress = 1 - (1 - ratio)^1.5
   const progressPct  =
@@ -763,14 +723,7 @@ export function ReportPage() {
     );
     if (drDone && !sent.has('dr_done')) {
       sent.add('dr_done');
-      sendNotification(`${liveTicker} Research Complete`, 'Deep research finished. Consulting investor agents...');
-    }
-
-    // Milestone: investor agents started
-    const investorStarted = phases.some(([k]) => k.startsWith('investor_'));
-    if (investorStarted && !sent.has('investors')) {
-      sent.add('investors');
-      sendNotification(`${liveTicker} Investor Analysis`, '12 investor agents are analysing the stock...');
+      sendNotification(`${liveTicker} Research Complete`, 'Deep research finished. Running valuation models...');
     }
 
     // Milestone: risk assessment
@@ -890,21 +843,21 @@ export function ReportPage() {
 
   // ── Form view ────────────────────────────────────────────────────────────────
   if (!liveMode) {
-    // ── Tier enforcement ────────────────────────────────────────────────────
-    const activeTier = getActiveTier();
-    const isStarterTier = activeTier === 'starter';
-    // A profile is locked for Starter if any of its agents are outside the allowed set
-    const isProfileLocked = (agents: string[]) =>
-      isStarterTier && agents.length > 0 &&
-      agents.some(a => !(STARTER_ALLOWED_AGENTS as readonly string[]).includes(a));
-    // Selected archetype label for the icon tooltip
-    const archetypeLabel  = PROFILES[profileIdx].label;
-    const hasCustomAgents = isCustom && customAgents.length > 0;
-    const archetypeReady  = !isCustom || hasCustomAgents;
-    // profileIdx starts at 1 (Deep Value default) — treat as "chosen" once user has opened the panel
-    // or when it's non-default. We always allow submit since Deep Value is a sensible default.
-    const canSubmit       = !!ticker.trim() && archetypeReady;
+    const canSubmit = !!ticker.trim();
     const { user } = useAuth();
+
+    // Pulse "Run full analysis" — same path as the form submit button.
+    const runFullFromPulse = () => {
+      const t = ticker.trim().toUpperCase();
+      if (!t) return;
+      runStartedAt.current = new Date().toISOString();
+      requestNotificationPermission();
+      start(t, model);
+      markRunStarted(t);
+      freshHoldRef.current = false;
+      setLiveMode(true);
+      setLivePrice(null);
+    };
 
     return (
       // Sized to the FULL visible viewport so the hero video reaches behind
@@ -1063,52 +1016,9 @@ export function ReportPage() {
             </button>
           </form>
 
-          {/* Archetype / profile hint */}
-          <div className="px-4 mt-2.5 text-left">
-            <button
-              type="button"
-              onClick={() => setShowArchetype(v => !v)}
-              className="text-[11px] text-muted-foreground"
-            >
-              <V2Users width={11} height={11} className="inline-block mr-1 -mt-0.5 text-brand" />
-              <span className="font-medium text-foreground/80">{archetypeLabel}</span>
-              <span className="mx-1.5 text-muted-foreground/50">.</span>
-              {activeAgents.length} agent{activeAgents.length === 1 ? '' : 's'}
-              <span className="ml-1.5 text-brand font-medium">change</span>
-            </button>
-          </div>
-
-          {/* Archetype panel (collapsible) */}
-          {showArchetype && (
-            <div className="mx-4 mt-3 rounded-lg border border-border bg-card p-3 shadow-sm">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 mb-2">
-                Investor archetype
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {PROFILES.map((p, idx) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => setProfileIdx(idx)}
-                    disabled={isProfileLocked(p.agents)}
-                    className={`h-8 px-2.5 text-[11px] rounded-lg border transition-colors
-                      ${profileIdx === idx
-                        ? 'bg-brand/10 border-brand/25 text-brand'
-                        : 'bg-card border-border text-muted-foreground active:bg-muted/60'}
-                      disabled:opacity-40 disabled:cursor-not-allowed`}
-                  >
-                    {p.label}
-                    {isProfileLocked(p.agents) && ' *'}
-                  </button>
-                ))}
-              </div>
-              {isStarterTier && (
-                <p className="text-[10px] text-muted-foreground/70 mt-2">
-                  Starter plan: some profiles restricted. Upgrade for full access.
-                </p>
-              )}
-            </div>
-          )}
+          {/* Pulse — instant recall of past research on this ticker (M2 C2).
+              Fires on debounced ticker input, never auto-runs the pipeline. */}
+          <PulseCard ticker={ticker} onOpenReport={(id) => navigate(`/report/${id}`)} onRunFull={runFullFromPulse} />
 
           {/* Popular marquee tape */}
           {v2Popular.length > 0 && (
@@ -1459,11 +1369,15 @@ export function ReportPage() {
               <ValueTrapChecklist analysis={valueTrap} ticker={liveTicker} />
             ))}
             <NewsPanel ticker={liveTicker} />
-            {/* Same idea on the right column — was a full-width strip below the
-                grid, now stacks with the other Analysis-adjacent cards so both
-                columns grow together instead of one trailing off short. */}
-            {renderSection('agents', 'Agent Signals', (
-              <AgentSignalsPanel agentSignals={agentSignals} ticker={liveTicker} />
+            {/* Decision-inputs card (M2 D3) — replaces the investor persona
+                panel retired with the committee. Shows the quantitative
+                anchors + qualitative inputs the PM decided from. */}
+            {renderSection('decision', 'Decision Inputs', (
+              <DecisionInputsCard
+                decisionInputs={decision?.decision_inputs}
+                ticker={liveTicker}
+                isRunning={isRunning}
+              />
             ))}
           </div>
         </div>
@@ -1504,9 +1418,6 @@ export function ReportPage() {
             pipelineData={data as Record<string, unknown>}
             ticker={liveTicker}
           />
-        ))}
-        {renderSection('debate', 'Agent Debate', (
-          <DebatePanel debateResult={debateResult} ticker={liveTicker} />
         ))}
 
         {/* ── Financials ──────────────────────────────────────────────────── */}

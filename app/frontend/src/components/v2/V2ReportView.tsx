@@ -1,13 +1,17 @@
 /**
  * V2ReportView.tsx — Reimagined Report view (live + complete states)
  *
- * Tabs: Summary · Valuation · Investors · Risk · Research · Financials
+ * Tabs: Summary · Valuation · Decision · Risk · Research · Financials
  *
  * Wraps existing report panel components (ValuationLadder, PowerLawRadar,
- * ValueTrapChecklist, AgentSignalsPanel, DebatePanel, FinancialsChart,
+ * ValueTrapChecklist, DecisionInputsCard, FinancialsChart,
  * ResearchSummaryPanel, IndustryBriefPanel, DeepResearchPanel) in the new
  * zinc-neutral tab shell. No translator layer needed — existing panels
  * already consume the RunResult shape.
+ *
+ * M2 Track E: the Investors tab (12-persona committee + debate round) was
+ * decommissioned with the committee-free PM; the tab is now "Decision" and
+ * renders the PM's decision-inputs card instead.
  */
 
 import { useEffect, useState } from 'react';
@@ -16,8 +20,6 @@ import { MessageSquare } from 'lucide-react';
 import type {
   RunResult,
   VgpmResult,
-  AgentSignals,
-  DebateResult,
   ScenarioAnalysis,
   PowerLawAnalysis,
   ValueTrapAnalysis,
@@ -57,12 +59,13 @@ import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryStrip';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
+import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
 import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
 
-type TabId = 'summary' | 'valuation' | 'investors' | 'risk' | 'research' | 'financials';
+type TabId = 'summary' | 'valuation' | 'decision' | 'risk' | 'research' | 'financials';
 
 interface V2ReportViewProps {
   result: RunResult | null;
@@ -87,7 +90,7 @@ interface V2ReportViewProps {
 const TABS: { id: TabId; label: string }[] = [
   { id: 'summary',    label: 'Summary'    },
   { id: 'valuation',  label: 'Valuation'  },
-  { id: 'investors',  label: 'Investors'  },
+  { id: 'decision',   label: 'Decision'   },
   { id: 'risk',       label: 'Risk'       },
   { id: 'research',   label: 'Research'   },
   { id: 'financials', label: 'Financials' },
@@ -122,8 +125,9 @@ export function V2ReportView({
   const regime = data.macro_regime as MacroRegime | undefined;
   const routing = (data.routing_decision as Record<string, { sector?: string }> | undefined)?.[ticker];
   const sector = routing?.sector ?? (data.sector as string | undefined);
-  const agentSignals = data.analyst_signals as AgentSignals | undefined;
-  const debateResult = data.debate_result as DebateResult | undefined;
+  // M2 Track E: analyst_signals still feeds the desktop IntelligenceGrid, but
+  // V2's mobile surface shows the PM's decision inputs instead of the retired
+  // investor panel — no investor/debate derivations remain here.
   const scenarioAnalysis = (data.scenario_analysis as Record<string, ScenarioAnalysis> | undefined)?.[ticker];
   const powerLaw = (data.power_law_analysis as Record<string, PowerLawAnalysis> | undefined)?.[ticker];
   const valueTrap = (data.value_trap_analysis as Record<string, ValueTrapAnalysis> | undefined)?.[ticker];
@@ -319,7 +323,9 @@ export function V2ReportView({
           sectorCard={sectorCard}
           ptHistory={(data.price_target_history as Record<string, PtHistoryPoint[]> | undefined)?.[ticker]}
         />}
-        {tab === 'investors'  && <InvestorsBody  agentSignals={agentSignals} debateResult={debateResult} ticker={ticker} isRunning={isRunning} />}
+        {tab === 'decision'   && (isRunning && !decision?.decision_inputs
+          ? <LoadingCard label="Decision Inputs" minH={120} />
+          : <DecisionInputsCard decisionInputs={decision?.decision_inputs} ticker={ticker} isRunning={isRunning} />)}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
         {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} deepAnnotated={deepAnnotated} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
         {tab === 'financials' && <FinancialsBody ticker={ticker} stockMetrics={stockMetrics} />}
@@ -456,7 +462,7 @@ function SummaryBody({
           <div className="flex items-center gap-2.5 py-2 text-muted-foreground/70">
             <LoadingSpinner size={16} />
             <span className="text-[12px]">
-              {isRunning ? 'Investor agents running...' : 'Waiting for decision'}
+              {isRunning ? 'Research & valuation running…' : 'Waiting for decision'}
             </span>
           </div>
         </div>
@@ -700,181 +706,11 @@ function V2ValuationLadder({
   );
 }
 
-/* ───────── Investors Tab — v2 native (Panel Verdicts + Agent list + Debate) ─── */
-const AGENT_LABELS_V2: Record<string, string> = {
-  buffett:      'Buffett',
-  graham:       'Graham',
-  munger:       'Munger',
-  burry:        'Burry',
-  cathie_wood:  'Wood',
-  wood:         'Wood',
-  ackman:       'Ackman',
-  pabrai:       'Pabrai',
-  lynch:        'Lynch',
-  fisher:       'Fisher',
-  jhunjhunwala: 'Jhunjhunwala',
-  druckenmiller:'Druckenmiller',
-  damodaran:    'Damodaran',
-};
-
-function InvestorsBody({
-  agentSignals, debateResult, ticker, isRunning,
-}: {
-  agentSignals: AgentSignals | undefined;
-  debateResult: DebateResult | undefined;
-  ticker: string;
-  isRunning: boolean;
-}) {
-  // Extract per-ticker agent signals into a flat list
-  const agentList: { name: string; verdict: string; conviction: number; thesis: string; priceTarget?: number }[] =
-    agentSignals
-      ? Object.entries(agentSignals)
-          .map(([key, tmap]) => {
-            const sig = (tmap as any)?.[ticker];
-            if (!sig) return null;
-            return {
-              name: AGENT_LABELS_V2[key] || key.charAt(0).toUpperCase() + key.slice(1),
-              verdict: (sig.signal || 'HOLD').toUpperCase(),
-              conviction: Number(sig.conviction ?? 0),
-              thesis: sig.thesis_summary || '',
-              priceTarget: typeof sig.price_target === 'number' ? sig.price_target : undefined,
-            };
-          })
-          .filter(Boolean) as any
-      : [];
-
-  // Count agents by verdict
-  const counts: Record<string, number> = { BUY: 0, HOLD: 0, SELL: 0, SHORT: 0 };
-  agentList.forEach(a => { counts[a.verdict] = (counts[a.verdict] || 0) + 1; });
-
-  // Debate (structured)
-  const tDebate = debateResult?.[ticker];
-  const debateTriggered = tDebate?.triggered === true;
-
-  if (agentList.length === 0) {
-    return (
-      <div className="px-4 pt-5 pb-10 space-y-5">
-        <LoadingCard
-          label={isRunning ? 'Panel Verdicts — 12 investor agents running' : 'Panel Verdicts'}
-          minH={90}
-        />
-        <LoadingCard
-          label={isRunning ? 'Investor Thesis List' : 'Investor Signals'}
-          minH={240}
-        />
-        <LoadingCard
-          label="Points of Disagreement (debate if triggered)"
-          minH={80}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-4 pt-5 pb-10 space-y-5">
-      {/* Panel Verdicts card */}
-      <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
-          Panel Verdicts
-        </div>
-        <div className="grid grid-cols-4 gap-2">
-          {(['BUY', 'HOLD', 'SELL', 'SHORT'] as const).map(v => (
-            <div key={v} className="flex flex-col items-center gap-1">
-              <span className="text-[18px] font-semibold text-foreground tabular-nums">
-                {counts[v] || 0}
-              </span>
-              <ActionPill action={v} />
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Agent thesis list */}
-      <div className="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
-        {agentList.map((p, i) => (
-          <div
-            key={p.name + i}
-            className={`px-4 py-3 flex items-start gap-3 ${i > 0 ? 'border-t border-border/60' : ''}`}
-          >
-            <div className="w-8 h-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center text-[11px] font-semibold shrink-0">
-              {p.name[0]}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[13px] font-semibold text-foreground">{p.name}</span>
-                <ActionPill action={p.verdict} />
-                {p.conviction > 0 && (
-                  <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-                    {p.conviction}/10
-                  </span>
-                )}
-                {p.priceTarget != null && (
-                  <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-                    · ${p.priceTarget.toFixed(2)}
-                  </span>
-                )}
-              </div>
-              {p.thesis && (
-                <p className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">
-                  {p.thesis}
-                </p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Points of Disagreement (Debate) */}
-      <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
-        <div className="flex items-center justify-between mb-2.5">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-            Points of Disagreement
-          </span>
-          <span className="text-[10px] text-muted-foreground/70">debate</span>
-        </div>
-        {debateTriggered && tDebate ? (
-          <div className="space-y-2">
-            {tDebate.disagreement_core && (
-              <DebateRow side="bull" who="Core disagreement" point={tDebate.disagreement_core} />
-            )}
-            {tDebate.agent_a_rebuttal && (
-              <DebateRow side="bull" who="Bull rebuttal" point={tDebate.agent_a_rebuttal} />
-            )}
-            {tDebate.agent_b_rebuttal && (
-              <DebateRow side="bear" who="Bear rebuttal" point={tDebate.agent_b_rebuttal} />
-            )}
-            {tDebate.adjudication && (
-              <DebateRow
-                side={(tDebate.adjudicated_signal || '').toUpperCase() === 'BUY' ? 'bull' : 'bear'}
-                who={`Adjudication → ${tDebate.adjudicated_signal || '?'}`}
-                point={tDebate.adjudication}
-              />
-            )}
-          </div>
-        ) : (
-          <p className="text-[12px] text-muted-foreground">
-            Debate round not triggered for {ticker} (requires ≥3 BUY and ≥3 SELL signals).
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DebateRow({ side, who, point }: { side: 'bull' | 'bear'; who: string; point: string }) {
-  const accent = side === 'bull'
-    ? 'border-l-brand'
-    : 'border-l-rose-500 dark:border-l-rose-400';
-  const labelCls = side === 'bull'
-    ? 'text-brand'
-    : 'text-rose-600 dark:text-rose-400';
-  return (
-    <div className={`pl-3 border-l-2 ${accent}`}>
-      <div className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${labelCls}`}>{who}</div>
-      <p className="text-[12px] text-foreground/80 mt-0.5 leading-relaxed">{point}</p>
-    </div>
-  );
-}
+/* ───────── Decision Tab ───────────────────────────────────────────────────
+ * M2 Track E: AGENT_LABELS_V2, InvestorsBody (12 persona verdict cards +
+ * thesis list) and DebateRow lived here. The committee was decommissioned;
+ * the tab now renders the shared DecisionInputsCard (mounted here AND in
+ * ReportPage/ReportViewPage desktop JSX — both render paths). */
 
 /* ───────── Risk Tab — v2 native (Power Law + Value Trap + Scenario Mix) ─── */
 function RiskBody({

@@ -12,7 +12,7 @@ import { ReportHeader } from '@/components/report/ReportHeader';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import { PowerLawRadar } from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist } from '@/components/report/ValueTrapChecklist';
-import { AgentSignalsPanel } from '@/components/report/AgentSignalsPanel';
+import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
@@ -22,7 +22,6 @@ import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel'
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
-import { DebatePanel } from '@/components/report/DebatePanel';
 import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel } from '@/components/report/IndustryBriefPanel';
@@ -133,7 +132,6 @@ export function ReportViewPage() {
   const subSector = (routingDecision as { specialist_block?: string } | undefined)?.specialist_block;
 
   const agentSignals = data.analyst_signals as import('@/lib/reportTypes').AgentSignals | undefined;
-  const debateResult = data.debate_result as import('@/lib/reportTypes').DebateResult | undefined;
   const scenarioAnalysis = (data.scenario_analysis as Record<string, import('@/lib/reportTypes').ScenarioAnalysis> | undefined)?.[ticker];
   const powerLaw = (data.power_law_analysis as Record<string, import('@/lib/reportTypes').PowerLawAnalysis> | undefined)?.[ticker];
   const valueTrap = (data.value_trap_analysis as Record<string, import('@/lib/reportTypes').ValueTrapAnalysis> | undefined)?.[ticker];
@@ -149,7 +147,7 @@ export function ReportViewPage() {
 
   const currentPrice = scenarioAnalysis?.current_price;
 
-  // Mobile layout — reimagined v2 tab view (Summary/Valuation/Investors/Risk/Research/Financials)
+  // Mobile layout — reimagined v2 tab view (Summary/Valuation/Decision/Risk/Research/Financials)
   if (mode === 'mobile') {
     return (
       <V2ReportView
@@ -305,10 +303,11 @@ export function ReportViewPage() {
             <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
             <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
             <NewsPanel ticker={ticker} />
-            {/* Same idea on the right column — was a full-width strip below the
-                grid, now stacks with the other Analysis-adjacent cards so both
-                columns grow together instead of one trailing off short. */}
-            <AgentSignalsPanel agentSignals={agentSignals} ticker={ticker} />
+            {/* Decision-inputs card (M2 D3) — replaces the investor persona
+                panel retired with the committee; shows what the PM decided
+                from. Historical runs without decision_inputs render the
+                card's "not available" state. */}
+            <DecisionInputsCard decisionInputs={decision?.decision_inputs} ticker={ticker} />
           </div>
         </div>
 
@@ -336,7 +335,6 @@ export function ReportViewPage() {
           pipelineData={data as Record<string, unknown>}
           ticker={ticker}
         />
-        <DebatePanel debateResult={debateResult} ticker={ticker} />
 
         {/* ── Financials ─────────────────────────────────────────────────── */}
         <SectionAnchor id="financials" label="Financials" />

@@ -14,7 +14,9 @@ export interface UseRunStreamResult {
   liveData: Record<string, unknown>;
   runId: string | null;
   error: string | null;
-  start: (ticker: string, model?: string, agents?: string[]) => void;
+  // M2 Track E: the agents argument was retired with the investor committee —
+  // runs are (ticker, model) only.
+  start: (ticker: string, model?: string) => void;
   reset: () => void;
 }
 
@@ -37,7 +39,7 @@ export function useRunStream(): UseRunStreamResult {
     setError(null);
   }, []);
 
-  const start = useCallback(async (ticker: string, model = 'claude-sonnet-4-6', agents?: string[]) => {
+  const start = useCallback(async (ticker: string, model = 'claude-sonnet-4-6') => {
     // Cancel any in-progress run
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -49,7 +51,7 @@ export function useRunStream(): UseRunStreamResult {
     setError(null);
 
     try {
-      const res = await startAnalysisRun(ticker, model, agents);
+      const res = await startAnalysisRun(ticker, model);
 
       if (!res.ok) {
         const text = await res.text();

@@ -78,7 +78,7 @@ interface ActiveRunContextValue {
   streamExpectedPhases: string[];
   liveResult: RunResult | null;
   setLiveResult: (r: RunResult | null) => void;
-  startStream: (ticker: string, model?: string, agents?: string[]) => void;
+  startStream: (ticker: string, model?: string) => void;
   resetStream: () => void;
   startPolling: (ticker: string) => void;
   // ── Per-ticker API ──────────────────────────────────────────────────────
@@ -133,10 +133,12 @@ const TICKER_KEYED_FIELDS = new Set<string>([
   // NOTE: 'analyst_signals' is deliberately NOT here. It is keyed AGENT-first
   // ({agent_key: {ticker: signal}}), not ticker-first, so normalisePartialData's
   // `T in obj` ticker probe fails and the else-branch would mis-wrap the whole
-  // dict under the ticker ({PYPL: {pabrai: {...}}}) — unreadable by the panels.
-  // Leaving it out lets it pass through untouched; mergeDataPreserve then
-  // inner-merges per agent_key as each investor's signal streams in, and its
-  // own empty-{} clobber guard still protects populated agents.
+  // dict under the ticker ({PYPL: {risk_manager: {...}}}) — unreadable by the
+  // panels. Leaving it out lets it pass through untouched; mergeDataPreserve
+  // then inner-merges per agent_key as each system agent's signal streams in
+  // (post-committee, analyst_signals holds risk manager / intelligence / PM
+  // rows only), and its own empty-{} clobber guard still protects populated
+  // agents.
   // Sector valuation card — emitted mid-run from pipeline.py (after the DCF
   // engine, then again after the final render). Already ticker-keyed
   // ({ticker: payload}), so normalisePartialData passes it through and
@@ -878,7 +880,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   }, [setStreamEvents, setPhaseMap, setLiveData, updateTicker]);
 
-  const startStream = useCallback(async (ticker: string, model = 'claude-sonnet-4-6', agents?: string[]) => {
+  const startStream = useCallback(async (ticker: string, model = 'claude-sonnet-4-6') => {
     const T = ticker.toUpperCase();
     // Per-ticker abort: only kill THIS ticker's previous stream (if any).
     // Other tickers' streams continue uninterrupted. Before 2026-04-25 this
@@ -929,7 +931,7 @@ export function ActiveRunProvider({ children }: { children: React.ReactNode }) {
     });
 
     try {
-      const res = await startAnalysisRun(ticker, model, agents);
+      const res = await startAnalysisRun(ticker, model);
 
       if (!res.ok) {
         const text = await res.text();

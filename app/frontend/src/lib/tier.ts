@@ -80,22 +80,9 @@ export const TIER_PROFILES: Record<Tier, TierProfile> = {
 
 export const TIER_ORDER: Tier[] = ['free', 'starter', 'professional'];
 
-/**
- * Agents available to the Starter tier.
- * These are classic deep-value / quality-value investors.
- * All other agents require Professional.
- */
-export const STARTER_ALLOWED_AGENTS = [
-  'graham',      // Benjamin Graham — margin of safety
-  'buffett',     // Warren Buffett — moat / owner earnings
-  'munger',      // Charlie Munger — mental models / quality
-  'pabrai',      // Mohnish Pabrai — Dhandho / concentrated value
-  'fisher',      // Phil Fisher — scuttlebutt / quality compounders
-  'burry',       // Michael Burry — forensic / deep value
-  'damodaran',   // Aswath Damodaran — DCF / valuation
-] as const;
-
-export type StarterAgent = (typeof STARTER_ALLOWED_AGENTS)[number];
+// M2 Track E: the investor committee is decommissioned, so the Starter
+// agent-gating list (STARTER_ALLOWED_AGENTS) was retired with it — there
+// are no agents left to gate. Tier limits on runs/watchlist/etc. stay.
 
 const STORAGE_KEY = 'ai_hf_tier';
 

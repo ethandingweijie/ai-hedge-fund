@@ -24,12 +24,12 @@ interface FeatureRow {
 
 const FEATURES: FeatureRow[] = [
   // Analysis
+  // M2 Track E: "Investor agent personas", "Debate round" and "Agent
+  // selection" rows removed — the committee is decommissioned; every plan
+  // now runs the same committee-free decision path.
   { category: 'Analysis', label: 'Full pipeline runs / month', free: '1 (lifetime)', starter: '5', professional: '20' },
-  { category: 'Analysis', label: 'Investor agent personas', free: false, starter: 'Deep value (7)', professional: 'All 12' },
   { category: 'Analysis', label: 'DCF + scenario analysis', free: true, starter: true, professional: true },
   { category: 'Analysis', label: 'Deep research (web search)', free: false, starter: true, professional: true },
-  { category: 'Analysis', label: 'Debate round (bull vs bear)', free: true, starter: true, professional: true },
-  { category: 'Analysis', label: 'Agent selection', free: false, starter: false, professional: true },
   { category: 'Analysis', label: 'Multi-ticker batch (tickers/run)', free: '1', starter: '1', professional: '3' },
   { category: 'Analysis', label: 'Add-on runs', free: false, starter: '5 for $12', professional: '10 for $18' },
   // Screener

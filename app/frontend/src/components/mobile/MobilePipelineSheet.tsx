@@ -19,7 +19,8 @@ const PIPELINE_STEPS = [
   { key: 'deep_research',label: 'Deep Research' },
   { key: 'industry',     label: 'Industry' },
   { key: 'dcf',          label: 'DCF Valuation' },
-  { key: 'investor',     label: 'Investor Agents' },
+  // investor row removed with the committee (M2 Track E) — the PM decides
+  // directly from research + valuation now.
   { key: 'portfolio',    label: 'Portfolio Manager' },
 ];
 
