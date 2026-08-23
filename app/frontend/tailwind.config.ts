@@ -11,12 +11,14 @@ const config: Config = {
   theme: {
   	fontFamily: {
   		sans: [
-  			'Inter',
-  			'sans-serif'
+  			'Anthropic Serif',
+  			'Georgia',
+  			'serif'
   		],
   		mono: [
-  			'Inter',
-  			'sans-serif'
+  			'Anthropic Serif',
+  			'Georgia',
+  			'serif'
   		]
   	},
   	extend: {

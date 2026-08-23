@@ -2,8 +2,8 @@
  * v2/shared.tsx — Shared UI kit for the reimagined Equitable UI
  *
  * Wise-inspired aesthetic: token-driven cream/forest palette, 1px borders,
- * Inter with tabular numerics. Brand green reserved for logo, primary CTAs,
- * positive deltas, ongoing-run state, deep-research accents.
+ * Anthropic Serif (self-hosted, tabular numerics). Brand green reserved for
+ * logo, primary CTAs, positive deltas, ongoing-run state, deep-research accents.
  *
  * Exports: Icons, Leaf, Divider, ActionPill, GradeChip, Delta, Card
  */

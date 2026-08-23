@@ -191,7 +191,7 @@ export function V2ReportView({
             <div className="flex items-baseline gap-2 flex-wrap">
               <span
                 className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
-                style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
+                style={{ letterSpacing: '-0.02em' }}
               >
                 {ticker || '—'}
               </span>
@@ -228,7 +228,7 @@ export function V2ReportView({
               <div className="text-right shrink-0">
                 <div
                   className="text-[22px] font-bold tracking-tight text-foreground tabular-nums leading-none"
-                  style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: '-0.02em' }}
+                  style={{ letterSpacing: '-0.02em' }}
                 >
                   ${livePrice.toFixed(2)}
                 </div>
