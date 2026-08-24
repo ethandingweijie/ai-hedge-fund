@@ -1512,7 +1512,7 @@ def _parse_sections_inline(text: str) -> dict[str, str]:
 
 def get_recent_research(
     ticker: str,
-    max_age_days: int = 7,
+    max_age_days: "int | None" = 7,
     qualifying_tiers: tuple[str, ...] = (
         "anthropic_web", "tavily", "qwen_web",
         # M2 A2: archived/delta-derived research is first-class reuse seed.
@@ -1533,6 +1533,8 @@ def get_recent_research(
         research_as_of (M2 A2), falling back to run_at when NULL. Reuse is
         decided by how old the research content is, not when the row was
         written: a delta-refreshed run stays reusable for its full window.
+        max_age_days=None lifts the age filter entirely (fast-path reuse:
+        memory + one freshness search patches recency instead).
 
     Returns a dict with keys:
         run_id               str
@@ -1546,7 +1548,6 @@ def get_recent_research(
 
     Returns None if no qualifying run is found or if the DB is unavailable.
     """
-    cutoff = (datetime.now() - timedelta(days=max_age_days)).isoformat()
     placeholders = ",".join("?" * len(qualifying_tiers))
     # Match runs where this ticker was the PRIMARY ticker (deep_research_text
     # stores the primary ticker's research only).  Using tickers LIKE would
@@ -1555,6 +1556,12 @@ def get_recent_research(
     # The tickers JSON array's FIRST element is always the primary ticker.
     # COALESCE(research_as_of, run_at): rows written before M2 have NULL
     # research_as_of and fall back to their write time.
+    _age_clause = ""
+    _age_params: list = []
+    if max_age_days is not None:
+        cutoff = (datetime.now() - timedelta(days=max_age_days)).isoformat()
+        _age_clause = "AND    COALESCE(research_as_of, run_at) >= ?"
+        _age_params = [cutoff]
     sql = f"""
         SELECT run_id, run_at, analysis_date, research_tier,
                research_as_of, deep_research_text
@@ -1563,13 +1570,13 @@ def get_recent_research(
         AND    research_tier IN ({placeholders})
         AND    deep_research_text IS NOT NULL
         AND    deep_research_text != ''
-        AND    COALESCE(research_as_of, run_at) >= ?
+        {_age_clause}
         ORDER  BY COALESCE(research_as_of, run_at) DESC
         LIMIT  1
     """
     # Match only when ticker is the FIRST element in the JSON array:
     # '["ZIM"' at position 0 ensures ZIM was the primary ticker.
-    params: list = [f'["{ticker.upper()}"%', *qualifying_tiers, cutoff]
+    params: list = [f'["{ticker.upper()}"%', *qualifying_tiers, *_age_params]
     try:
         row = _fetch_one(sql, params)
     except Exception:

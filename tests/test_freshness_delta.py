@@ -13,6 +13,7 @@ respect its kill switch, and tickers without a prior report are skipped
 entirely (no search spent on them).
 """
 import inspect
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -59,6 +60,7 @@ def test_kill_switch_returns_empty(monkeypatch):
 
 def test_tickers_without_prior_skipped(monkeypatch):
     from src import pipeline
+    monkeypatch.setattr(pipeline, "_pulse_cache_delta", lambda t: None)
     called = []
     monkeypatch.setattr(pipeline, "_delta_for_ticker",
                         lambda t, p, k: called.append(t) or {"material": None})
@@ -100,7 +102,8 @@ def test_no_provider_returns_no_fresh_results(monkeypatch):
 
 def test_qwen_primary_path_anchored_query(monkeypatch):
     """Qwen is searched FIRST, with a query bounded and anchored to the
-    prior report date."""
+    prior report date (a report fresher than the search window keeps its
+    exact date as the anchor — L5)."""
     import src.research_ideas.complacency.web_research as wr
     prompts = []
 
@@ -109,20 +112,22 @@ def test_qwen_primary_path_anchored_query(monkeypatch):
         return "2026-08-14: CRWD raised FY guidance."
 
     monkeypatch.setattr(wr, "qwen_web_search", fake_qwen)
-    monkeypatch.setattr(freshness, "classify_delta", lambda t, p, s: {
+    monkeypatch.setattr(freshness, "classify_delta", lambda t, p, s, since="": {
         "material": True,
         "events": [{"headline": "Guidance raised", "date": "2026-08-14",
                     "relevance": "beats prior ARR assumption"}],
         "verdict": "Prior thesis strengthened",
     })
-    d = freshness.run_freshness_search("CRWD", _prior())
+    fresh_prior = _prior(run_at=(datetime.now() - timedelta(days=1)).isoformat())
+    d = freshness.run_freshness_search("CRWD", fresh_prior)
     assert d["material"] is True
     assert d["events"][0]["headline"] == "Guidance raised"
     assert d["verdict"] == "Prior thesis strengthened"
     # provenance fields survive the merge
     assert d["based_on_run"] == "run-prev"
-    assert d["prior_run_at"] == "2026-08-05T00:00:00+00:00"
-    assert "CRWD" in prompts[0] and "2026-08-05" in prompts[0]
+    assert d["prior_run_at"] == fresh_prior["run_at"]
+    assert "CRWD" in prompts[0]
+    assert fresh_prior["run_at"][:10] in prompts[0]
 
 
 def test_tavily_fallback_when_qwen_empty(monkeypatch):
@@ -136,13 +141,14 @@ def test_tavily_fallback_when_qwen_empty(monkeypatch):
         return "1. CRWD guidance raised..."
 
     monkeypatch.setattr(dr, "_search_web", fake_tavily)
-    monkeypatch.setattr(freshness, "classify_delta", lambda t, p, s: {
+    monkeypatch.setattr(freshness, "classify_delta", lambda t, p, s, since="": {
         "material": True, "events": [], "verdict": "changed",
     })
-    d = freshness.run_freshness_search("CRWD", _prior(), tavily_key="tvly-x")
+    fresh_prior = _prior(run_at=(datetime.now() - timedelta(days=1)).isoformat())
+    d = freshness.run_freshness_search("CRWD", fresh_prior, tavily_key="tvly-x")
     assert d["material"] is True
     assert queries and queries[0][1] == "tvly-x"
-    assert "2026-08-05" in queries[0][0]
+    assert fresh_prior["run_at"][:10] in queries[0][0]
 
 
 def test_tavily_error_prefix_treated_as_empty(monkeypatch):
@@ -158,7 +164,7 @@ def test_tavily_error_prefix_treated_as_empty(monkeypatch):
 def test_classifier_failure_keeps_base(monkeypatch):
     import src.research_ideas.complacency.web_research as wr
     monkeypatch.setattr(wr, "qwen_web_search", lambda *a, **k: "snippets")
-    monkeypatch.setattr(freshness, "classify_delta", lambda t, p, s: None)
+    monkeypatch.setattr(freshness, "classify_delta", lambda t, p, s, since="": None)
     d = freshness.run_freshness_search("CRWD", _prior())
     assert d["material"] is None
     assert d["verdict"] == "check unavailable"
@@ -183,7 +189,8 @@ def test_explicit_since_date_overrides_prior(monkeypatch):
     prompts = []
     monkeypatch.setattr(wr, "qwen_web_search",
                         lambda p, **k: prompts.append(p) or "text")
-    monkeypatch.setattr(freshness, "classify_delta", lambda t, p, s: None)
+    monkeypatch.setattr(freshness, "classify_delta",
+                        lambda t, p, s, since="": None)
     freshness.run_freshness_search("CRWD", _prior(), since_date="2026-08-18")
     assert "2026-08-18" in prompts[0]
 

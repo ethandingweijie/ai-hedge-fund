@@ -88,8 +88,11 @@ def _env_seconds(name: str, default: float) -> float:
 # the in-process SSE stream heartbeated indefinitely. A bounded join converts
 # the hang into a fail-fast RuntimeError: the dedup slot is released, the
 # user sees a clear error and can retry immediately.
-# Front block: Claude client timeout 600s x retry headroom.
-_FRONT_BLOCK_TIMEOUT_S = _env_seconds("PIPELINE_FRONT_BLOCK_TIMEOUT_S", 1500.0)
+# Front block: Claude client timeout 600s x retry headroom. Bumped +100s for
+# the L2 fast path: the one freshness web search now runs as the block's 5th
+# leg (self-bounds at ~45s/ticker, soft-fail), so the shared deadline gets a
+# little extra headroom on top of the existing four legs.
+_FRONT_BLOCK_TIMEOUT_S = _env_seconds("PIPELINE_FRONT_BLOCK_TIMEOUT_S", 1600.0)
 # Phase-7 trio: fast-tier Qwen ~120s calls x retry headroom.
 _PHASE7_TIMEOUT_S = _env_seconds("PIPELINE_PHASE7_TIMEOUT_S", 900.0)
 
@@ -144,6 +147,14 @@ def _bounded_join(executor, futures: list, timeout_s: float, label: str) -> list
 # src.agents.audit.card_qa_agent.should_reuse_card_qa). Env gate:
 # CARD_QA_DELTA=true (default) | false.
 _CARD_QA_REUSE_DAYS = 7
+
+# L1 fast path: the pipeline's recap read is effectively uncapped — the most
+# recent recap is the right prior-report anchor (and PM flip-flag context) at
+# ANY age. get_recent_recap treats max_age_days=None as "use the env default"
+# (RECAP_MAX_AGE_DAYS, 30d), so pass a horizon large enough to never bind
+# instead of changing that function's contract (the Pulse endpoint relies on
+# the 30d default).
+_RECAP_UNCAPPED_DAYS = 36500
 
 
 def _merge_resume_into_phase_cache(
@@ -227,12 +238,41 @@ def _delta_for_ticker(ticker: str, prior: dict, tavily_key: str | None) -> dict:
     return run_freshness_search(ticker, prior, tavily_key=tavily_key)
 
 
+def _pulse_cache_delta(ticker: str) -> dict | None:
+    """L3: same-day Pulse-endpoint cache (kind='pulse'). The Pulse flow
+    already paid for the exact `run_freshness_search` result today — reuse
+    it instead of searching again. Same gate as the Pulse endpoint's own
+    same-day read (routes/analysis.py::_pulse_cache_get_delta): cache row
+    <=1d old AND pulse_date == today (UTC). `discovery`-shaped deltas (no
+    prior coverage) are NOT reused — pipeline 2_9 only runs for tickers
+    WITH a prior recap, so the anchored shape is the only valid one here.
+    Soft-fail: any read problem -> None -> caller falls through to a search."""
+    try:
+        from datetime import timezone as _tz
+        from src.research_ideas.complacency import web_research as _wr
+        payload = _wr._cache_get(ticker, "pulse", "", max_age_days=1)
+        if not payload:
+            return None
+        _today = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+        if payload.get("pulse_date") != _today:
+            return None
+        delta = payload.get("delta")
+        if not isinstance(delta, dict) or delta.get("discovery"):
+            return None
+        return delta
+    except Exception as exc:
+        print(f"  [freshness] {ticker}: pulse cache read failed: {exc}")
+        return None
+
+
 def _run_freshness_delta(
     tickers: list[str],
     prior_reports: dict[str, dict],
 ) -> dict[str, dict]:
     """M1 phase 2.9 — freshness delta for every ticker with a prior recap.
-    Kill switch: FRESHNESS_DELTA_SEARCH=false."""
+    Kill switch: FRESHNESS_DELTA_SEARCH=false.
+    L3: a same-day Pulse-cache hit is reused as-is (0 searches) — the Pulse
+    flow already paid for that search today."""
     if os.environ.get("FRESHNESS_DELTA_SEARCH", "true").strip().lower() in (
             "0", "false", "no", "off", ""):
         return {}
@@ -241,6 +281,12 @@ def _run_freshness_delta(
     for t in tickers:
         prior = prior_reports.get(t)
         if not prior:
+            continue
+        _cached = _pulse_cache_delta(t)
+        if _cached is not None:
+            print(f"  [freshness] {t}: reusing today's Pulse-cache delta "
+                  f"(0 searches)")
+            deltas[t] = _cached
             continue
         deltas[t] = _delta_for_ticker(t, prior, tavily_key)
     return deltas
@@ -339,12 +385,111 @@ def run_advanced_pipeline(
                 print(f"  [timing] {phase_name}: {_dur:.1f}s")
 
         # ----------------------------------------------------------------
+        # ARCHIVE CACHE — load recent phase outputs so expensive phases
+        # (Industry Brief, DCF, Power Law, Citation) can be skipped when
+        # fresh-enough data already exists in the archive.
+        # Deep Research has its own internal caching (data_router/deep_research.py)
+        # and is intentionally NOT bypassed here.
+        #
+        # L2 fast path: moved BEFORE the front block so the one freshness web
+        # search can run as the block's 5th leg — hiding its ~45s behind the
+        # parallel macro/router/intel/edgar work. These are pure DB reads (<1s).
+        # ----------------------------------------------------------------
+        _phase_cache: dict[str, dict | None] = {}
+        _prior_reports: dict[str, dict] = {}
+        with _timed("2_8_archive_cache_load"):
+            for _t in tickers:
+                _phase_cache[_t] = get_phase_cache(_t, max_age_days=60)
+                if _phase_cache[_t]:
+                    _c = _phase_cache[_t]
+                    print(f"  [cache] {_t}: found recent run from "
+                          f"{_c['run_at'][:10]} (age {_c['age_days']:.1f}d) — "
+                          f"brief={'✓' if _c.get('industry_brief') else '✗'} "
+                          f"dcf={'✓' if _c.get('dcf_range') else '✗'} "
+                          f"power_law={'✓' if _c.get('power_law') else '✗'} "
+                          f"citation={'✓' if _c.get('citation_audit') else '✗'}")
+
+            # R2 checkpoint resume — seed gaps from a crashed predecessor's
+            # checkpoint so the expensive Phase 3/4 skip gates fire.
+            if resume_bundle:
+                _rb_data = resume_bundle.get("data") or {}
+                if _merge_resume_into_phase_cache(_phase_cache, resume_bundle, tickers):
+                    print(f"  [resume] phase cache seeded from checkpoint "
+                          f"'{resume_bundle.get('checkpoint')}' (run "
+                          f"{str(resume_bundle.get('run_id') or '')[:8]}, "
+                          f"{(resume_bundle.get('age_days') or 0) * 24:.1f}h old)")
+                    progress.update_status(
+                        "archive_cache", primary_ticker,
+                        f"[resume] recovered checkpoint '{resume_bundle.get('checkpoint')}' "
+                        f"— reusing Phase 3/4 outputs")
+                if _rb_data.get("deep_research"):
+                    # Shaped exactly like run_archive.get_recent_research's
+                    # return so deep_research's pure-cache path consumes it
+                    # unchanged (popped inside run_deep_research_agent).
+                    state["data"]["_resume_research"] = {
+                        "run_id":                 resume_bundle.get("run_id"),
+                        "run_at":                 resume_bundle.get("run_at"),
+                        "analysis_date":          end_date,
+                        "age_days":               resume_bundle.get("age_days") or 0.0,
+                        "research_tier":          _rb_data.get("research_tier"),
+                        "deep_research_text":     _rb_data.get("deep_research"),
+                        "deep_research_sections": _rb_data.get("deep_research_sections") or {},
+                    }
+
+            # ── M1 recency loop: load each ticker's last report recap ──────
+            # Feeds phase 2.9 (freshness delta), the deep-research/PM prompt
+            # injections and the saved payload's data.prior_recap. A ticker
+            # with no archive/resume cache entry gets a minimal dict: the
+            # oversized age_days keeps every _all_cached skip gate inert,
+            # while resume-seeded entries keep their own (usable) age.
+            # L1 fast path: the recap read is uncapped (_RECAP_UNCAPPED_DAYS)
+            # — the most recent recap is the right prior-report anchor at ANY
+            # age; the 30d default cap starved the freshness anchor for older
+            # memory.
+            try:
+                from src.memory import report_recap as _report_recap
+                if _report_recap.recaps_enabled():
+                    for _t in tickers:
+                        _pr = _report_recap.get_recent_recap(
+                            _t, max_age_days=_RECAP_UNCAPPED_DAYS)
+                        if not _pr:
+                            continue
+                        if _phase_cache[_t] is None:
+                            _phase_cache[_t] = {"age_days": 999.0}
+                        _phase_cache[_t]["prior_report"] = _pr
+                        print(f"  [recap] {_t}: prior report recap loaded "
+                              f"({_pr.get('final_action') or 'N/A'}, "
+                              f"{_pr.get('age_days', 0):.1f}d old)")
+            except Exception as _recap_exc:
+                print(f"  [recap] prior recap load failed: {_recap_exc}")
+
+            # Build the prior-report map for the freshness leg (2_9) and the
+            # saved payload's data.prior_recap.
+            for _t in tickers:
+                _pr = (_phase_cache.get(_t) or {}).get("prior_report")
+                if _pr:
+                    _prior_reports[_t] = _pr
+                    _pr_px = _pr.get("price_at_run")
+                    progress.update_status(
+                        "archive_cache", _t,
+                        f"[recap] prior: {_pr.get('final_action') or 'N/A'}"
+                        + (f" @ ${_pr_px}" if _pr_px else "")
+                        + f" ({_pr.get('age_days') or 0:.1f}d old)")
+            if _prior_reports:
+                # Progress visibility: the freshness search below runs as the
+                # front block's 5th leg (bounded ~45s/ticker, soft-fail).
+                progress.update_status(
+                    "archive_cache", primary_ticker,
+                    "Searching for material developments since the prior report…")
+
+        # ----------------------------------------------------------------
         # FRONT BLOCK — Phases 1, 2, 2.5, 2.7 (parallel)
         # ----------------------------------------------------------------
         print(f"\n{'='*60}")
-        print("[1-2.7/10] Front block (Macro ∥ Router ∥ Intelligence ∥ EDGAR, parallel)")
+        print("[1-2.7/10] Front block (Macro ∥ Router ∥ Intelligence ∥ EDGAR ∥ Freshness, parallel)")
         print('='*60)
-        # B1 — phases 1 + 2 + 2.5 + 2.7 run CONCURRENTLY below. All four
+        # B1 — phases 1 + 2 + 2.5 + 2.7 run CONCURRENTLY below, plus (L2) the
+        # one 2_9 freshness web search as a 5th leg. The four research phases
         # need only tickers + dates and write DISJOINT state keys (verified
         # by grep):
         #   macro  → macro_regime, position_size_cap
@@ -354,9 +499,9 @@ def run_advanced_pipeline(
         #             earnings_quality, short_interest, analyst_signals
         #   edgar  → edgar_filing_refs
         # The router does NOT read macro_regime (verified), so no ordering
-        # dependency exists. Each phase runs on a deepcopy; results merge
-        # after the join. Wall time becomes max(the four) instead of the sum
-        # (~35-70 s saved on fresh runs; more when FMP is slow). Per-phase
+        # dependency exists. Each research phase runs on a deepcopy; results
+        # merge after the join. Wall time becomes max(the five legs) instead of
+        # the sum (~35-70 s saved on fresh runs; more when FMP is slow). Per-phase
         # timings keep their original phase names (overlapping started_at
         # values reveal the concurrency); SSE progress events are emitted
         # post-merge in the same order as the sequential pipeline, so
@@ -390,7 +535,15 @@ def run_advanced_pipeline(
         # RuntimeError("<block> timed out ...") on a hang instead of
         # blocking forever. Exceptions from phases re-raise at the join
         # exactly as the sequential pipeline would have raised mid-phase.
-        _front_ex = ThreadPoolExecutor(max_workers=4)
+        def _freshness_leg(_st_unused):
+            """L2: the one per-ticker freshness search + classify (phase 2_9)
+            as a front-block leg. Reads only the pre-built _prior_reports and
+            writes nothing to state — the result is mounted after the join.
+            Soft-fail: _run_freshness_delta always returns a well-formed dict
+            and self-bounds (~45s search timeout per ticker)."""
+            return _run_freshness_delta(list(tickers), _prior_reports)
+
+        _front_ex = ThreadPoolExecutor(max_workers=5)
         _f_macro  = _ctx_submit(_front_ex, _timed_call, "1_macro_regime",
                                 run_macro_regime_classifier, _st_macro)
         _f_router = _ctx_submit(_front_ex, _timed_call, "2_strategic_router",
@@ -399,15 +552,26 @@ def run_advanced_pipeline(
                                 _run_intelligence_agents_parallel, _st_intel)
         _f_edgar  = _ctx_submit(_front_ex, _timed_call, "2_7_edgar_hkex",
                                 run_edgar_hkex_resolver, _st_edgar)
+        # L2: 5th leg — the one freshness web search runs CONCURRENTLY with
+        # the four research legs instead of sequentially after them. It needs
+        # only _prior_reports (built in the pre-block 2_8) and writes no
+        # state, so it needs no deepcopy of its own.
+        _f_fresh  = _ctx_submit(_front_ex, _timed_call, "2_9_freshness_delta",
+                                _freshness_leg, None)
 
-        _st_macro, _st_router, _st_intel, _st_edgar = _bounded_join(
-            _front_ex, [_f_macro, _f_router, _f_intel, _f_edgar],
-            _FRONT_BLOCK_TIMEOUT_S, "Front block (macro/router/intel/edgar)")
+        _st_macro, _st_router, _st_intel, _st_edgar, _fresh_deltas = _bounded_join(
+            _front_ex, [_f_macro, _f_router, _f_intel, _f_edgar, _f_fresh],
+            _FRONT_BLOCK_TIMEOUT_S,
+            "Front block (macro/router/intel/edgar/freshness)")
 
         # Merge: router's copy is the base (carries the most downstream
         # keys); graft the other three phases' disjoint key sets on top.
         state = _merge_front_block(_st_router, _st_macro, _st_intel, _st_edgar,
                                    _phase_durations)
+        # L2: mount the prior-report map + freshness verdicts collected by the
+        # front block's 5th leg — phase 3 (deep research) consumes both.
+        state["data"]["prior_recap"] = dict(_prior_reports)
+        state["data"]["freshness_delta"] = _fresh_deltas or {}
 
         regime = state["data"].get("macro_regime", {})
         print(f"  Regime: {regime.get('risk_appetite')} | "
@@ -468,148 +632,59 @@ def run_advanced_pipeline(
                 print(f"  {ticker}: EDGAR filing not resolved — FMP attribution used")
 
         # ----------------------------------------------------------------
-        # ARCHIVE CACHE — load recent phase outputs so expensive phases
-        # (Industry Brief, DCF, Power Law, Citation) can be skipped when
-        # fresh-enough data already exists in the archive.
-        # Deep Research has its own internal caching (data_router/deep_research.py)
-        # and is intentionally NOT bypassed here.
+        # 2_9 FRESHNESS DELTA — reporting + lessons only (M1 recency loop).
+        # L2: the actual work (uncapped recap load in the pre-block 2_8, the
+        # one bounded web search per ticker + fast-tier classify as the front
+        # block's 5th leg) already ran — the verdicts are mounted on
+        # state["data"] above. This block reports them, runs the M1 agent-
+        # lessons post-mortem, and emits the terminal archive_cache ✓ event.
+        # Every failure mode is soft; the run always continues.
         # ----------------------------------------------------------------
-        _phase_cache: dict[str, dict | None] = {}
-        with _timed("2_8_archive_cache_load"):
-            for _t in tickers:
-                _phase_cache[_t] = get_phase_cache(_t, max_age_days=60)
-                if _phase_cache[_t]:
-                    _c = _phase_cache[_t]
-                    print(f"  [cache] {_t}: found recent run from "
-                          f"{_c['run_at'][:10]} (age {_c['age_days']:.1f}d) — "
-                          f"brief={'✓' if _c.get('industry_brief') else '✗'} "
-                          f"dcf={'✓' if _c.get('dcf_range') else '✗'} "
-                          f"power_law={'✓' if _c.get('power_law') else '✗'} "
-                          f"citation={'✓' if _c.get('citation_audit') else '✗'}")
+        _fresh_deltas_rep = state["data"].get("freshness_delta") or {}
+        if _prior_reports:
+            for _t, _d in _fresh_deltas_rep.items():
+                _n_ev = len(_d.get("events") or [])
+                _mat = _d.get("material")
+                if _mat is None:
+                    _label = "check unavailable"
+                elif _mat:
+                    _label = f"MATERIAL change ({_n_ev} event(s))"
+                else:
+                    _label = "no material change"
+                print(f"  [delta] {_t}: {_label} since "
+                      f"{str(_d.get('prior_run_at') or '')[:10]} — "
+                      f"{(_d.get('verdict') or '')[:160]}")
+                progress.update_status("archive_cache", _t, f"[delta] {_label}")
+        else:
+            print("  [delta] no prior report recaps — freshness check skipped")
 
-            # R2 checkpoint resume — seed gaps from a crashed predecessor's
-            # checkpoint so the expensive Phase 3/4 skip gates fire.
-            if resume_bundle:
-                _rb_data = resume_bundle.get("data") or {}
-                if _merge_resume_into_phase_cache(_phase_cache, resume_bundle, tickers):
-                    print(f"  [resume] phase cache seeded from checkpoint "
-                          f"'{resume_bundle.get('checkpoint')}' (run "
-                          f"{str(resume_bundle.get('run_id') or '')[:8]}, "
-                          f"{(resume_bundle.get('age_days') or 0) * 24:.1f}h old)")
-                    progress.update_status(
-                        "archive_cache", primary_ticker,
-                        f"[resume] recovered checkpoint '{resume_bundle.get('checkpoint')}' "
-                        f"— reusing Phase 3/4 outputs")
-                if _rb_data.get("deep_research"):
-                    # Shaped exactly like run_archive.get_recent_research's
-                    # return so deep_research's pure-cache path consumes it
-                    # unchanged (popped inside run_deep_research_agent).
-                    state["data"]["_resume_research"] = {
-                        "run_id":                 resume_bundle.get("run_id"),
-                        "run_at":                 resume_bundle.get("run_at"),
-                        "analysis_date":          end_date,
-                        "age_days":               resume_bundle.get("age_days") or 0.0,
-                        "research_tier":          _rb_data.get("research_tier"),
-                        "deep_research_text":     _rb_data.get("deep_research"),
-                        "deep_research_sections": _rb_data.get("deep_research_sections") or {},
-                    }
+        # ── M1 agent lessons: post-mortem any detected gap ─────────────
+        # Detection reads each ticker's last SCORED archive run
+        # (INCORRECT outcome or DCF calibration error); no gap → no LLM
+        # call at all, and a gap that already produced lessons is
+        # skipped too. Lazy/user-triggered exactly like the freshness
+        # check above; failures are logged and never break the run.
+        try:
+            from src.memory import agent_lessons as _agent_lessons
+            if _agent_lessons.lessons_enabled():
+                for _t in tickers:
+                    _agent_lessons.maybe_generate_lessons(
+                        _t, _prior_reports.get(_t))
+        except Exception as _lessons_exc:
+            print(f"  [lessons] lesson generation failed: {_lessons_exc}")
 
-            # ── M1 recency loop: load each ticker's last report recap ──────
-            # Feeds phase 2.9 (freshness delta), the deep-research/PM prompt
-            # injections and the saved payload's data.prior_recap. A ticker
-            # with no archive/resume cache entry gets a minimal dict: the
-            # oversized age_days keeps every _all_cached skip gate inert,
-            # while resume-seeded entries keep their own (usable) age.
-            try:
-                from src.memory import report_recap as _report_recap
-                if _report_recap.recaps_enabled():
-                    for _t in tickers:
-                        _pr = _report_recap.get_recent_recap(_t)
-                        if not _pr:
-                            continue
-                        if _phase_cache[_t] is None:
-                            _phase_cache[_t] = {"age_days": 999.0}
-                        _phase_cache[_t]["prior_report"] = _pr
-                        print(f"  [recap] {_t}: prior report recap loaded "
-                              f"({_pr.get('final_action') or 'N/A'}, "
-                              f"{_pr.get('age_days', 0):.1f}d old)")
-            except Exception as _recap_exc:
-                print(f"  [recap] prior recap load failed: {_recap_exc}")
-
-        # ----------------------------------------------------------------
-        # 2_9 FRESHNESS DELTA (M1 recency loop) — for every ticker with a
-        # prior report recap: one bounded web search since that report +
-        # one fast-tier classification of what materially changed. Lazy by
-        # construction: this only runs because a user asked about the
-        # ticker — nothing runs unattended. Every failure mode is soft;
-        # the run always continues.
-        # ----------------------------------------------------------------
-        with _timed("2_9_freshness_delta"):
-            _prior_reports: dict[str, dict] = {}
-            for _t in tickers:
-                _pr = (_phase_cache.get(_t) or {}).get("prior_report")
-                if _pr:
-                    _prior_reports[_t] = _pr
-                    _pr_px = _pr.get("price_at_run")
-                    progress.update_status(
-                        "archive_cache", _t,
-                        f"[recap] prior: {_pr.get('final_action') or 'N/A'}"
-                        + (f" @ ${_pr_px}" if _pr_px else "")
-                        + f" ({_pr.get('age_days') or 0:.1f}d old)")
-            state["data"]["prior_recap"] = dict(_prior_reports)
-            if _prior_reports:
-                # Progress visibility: the freshness search below takes up to
-                # ~45s per ticker (bounded) — say so instead of going silent
-                # under the archive_cache label.
-                progress.update_status(
-                    "archive_cache", primary_ticker,
-                    "Searching for material developments since the prior report…")
-                _deltas = _run_freshness_delta(list(tickers), _prior_reports)
-                state["data"]["freshness_delta"] = _deltas
-                for _t, _d in _deltas.items():
-                    _n_ev = len(_d.get("events") or [])
-                    _mat = _d.get("material")
-                    if _mat is None:
-                        _label = "check unavailable"
-                    elif _mat:
-                        _label = f"MATERIAL change ({_n_ev} event(s))"
-                    else:
-                        _label = "no material change"
-                    print(f"  [delta] {_t}: {_label} since "
-                          f"{str(_d.get('prior_run_at') or '')[:10]} — "
-                          f"{(_d.get('verdict') or '')[:160]}")
-                    progress.update_status("archive_cache", _t, f"[delta] {_label}")
-            else:
-                state["data"]["freshness_delta"] = {}
-                print("  [delta] no prior report recaps — freshness check skipped")
-
-            # ── M1 agent lessons: post-mortem any detected gap ─────────────
-            # Detection reads each ticker's last SCORED archive run
-            # (INCORRECT outcome or DCF calibration error); no gap → no LLM
-            # call at all, and a gap that already produced lessons is
-            # skipped too. Lazy/user-triggered exactly like the freshness
-            # check above; failures are logged and never break the run.
-            try:
-                from src.memory import agent_lessons as _agent_lessons
-                if _agent_lessons.lessons_enabled():
-                    for _t in tickers:
-                        _agent_lessons.maybe_generate_lessons(
-                            _t, _prior_reports.get(_t))
-            except Exception as _lessons_exc:
-                print(f"  [lessons] lesson generation failed: {_lessons_exc}")
-
-            # Terminal ✓ event: archive_cache never got a completion marker,
-            # so the progress bar froze at the front-block percentage for the
-            # entire 2_8+2_9 window ("archive cache 28% forever" on cache
-            # runs). Counting it as a done phase keeps the bar moving through
-            # the reuse work and marks the phase complete in /analysis/status.
-            _n_mat = sum(
-                1 for _d in state["data"].get("freshness_delta", {}).values()
-                if _d.get("material"))
-            progress.update_status(
-                "archive_cache", primary_ticker,
-                "✓ Research memory checked — prior report + freshness delta loaded"
-                + (f" ({_n_mat} material)" if _n_mat else ""))
+        # Terminal ✓ event: archive_cache never got a completion marker,
+        # so the progress bar froze at the front-block percentage for the
+        # entire 2_8+2_9 window ("archive cache 28% forever" on cache
+        # runs). Counting it as a done phase keeps the bar moving through
+        # the reuse work and marks the phase complete in /analysis/status.
+        _n_mat = sum(
+            1 for _d in _fresh_deltas_rep.values()
+            if _d.get("material"))
+        progress.update_status(
+            "archive_cache", primary_ticker,
+            "✓ Research memory checked — prior report + freshness delta loaded"
+            + (f" ({_n_mat} material)" if _n_mat else ""))
 
         def _all_cached(key: str, age_days: float = 7.0) -> bool:
             """True if every ticker has a fresh-enough, non-empty cache entry for key.

@@ -51,7 +51,9 @@ def test_bounded_join_propagates_phase_exception_unchanged():
 
 
 def test_timeout_defaults_and_env_tuning(monkeypatch):
-    assert P._FRONT_BLOCK_TIMEOUT_S == 1500.0
+    # 1600.0 since the fast-path L2 move: the front block carries a 5th leg
+    # (the 2_9 freshness search) alongside the four research phases.
+    assert P._FRONT_BLOCK_TIMEOUT_S == 1600.0
     assert P._PHASE7_TIMEOUT_S == 900.0
 
     monkeypatch.setenv("PIPELINE_FRONT_BLOCK_TIMEOUT_S", "123")

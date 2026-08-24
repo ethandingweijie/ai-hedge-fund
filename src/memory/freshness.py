@@ -24,6 +24,7 @@ Design rules:
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta
 
 _SEARCH_TIMEOUT_S = 45.0
 _SEARCH_MAX_CHARS = 6000
@@ -36,6 +37,17 @@ _SNIPPETS_KEEP_CHARS = 8000
 def _freshness_enabled() -> bool:
     return os.environ.get("FRESHNESS_DELTA_SEARCH", "true").strip().lower() not in (
         "0", "false", "no", "off", "")
+
+
+def _window_days() -> float:
+    """Fast-path search window (L5): how many days BEFORE the search's own
+    date/time the one freshness search covers. Default 3 (covers the 2–3
+    days the user cares about); env-tunable, never zero/negative."""
+    try:
+        v = float(os.environ.get("FRESHNESS_SEARCH_WINDOW_DAYS", "3"))
+        return v if v > 0 else 3.0
+    except (TypeError, ValueError):
+        return 3.0
 
 
 def base_delta(prior: dict | None) -> dict:
@@ -54,9 +66,11 @@ def base_delta(prior: dict | None) -> dict:
     }
 
 
-def classify_delta(ticker: str, prior: dict, snippets: str) -> dict | None:
+def classify_delta(ticker: str, prior: dict, snippets: str, since: str = "") -> dict | None:
     """Fast-tier LLM pass over one search result set. Returns
-    {material, events, verdict} or None on any failure (soft-fail)."""
+    {material, events, verdict} or None on any failure (soft-fail).
+    `since`, when given, is the search window start — echoed into the
+    prompt so the verdict states the span it actually covers."""
     try:
         from pydantic import BaseModel, Field
 
@@ -90,10 +104,13 @@ def classify_delta(ticker: str, prior: dict, snippets: str) -> dict | None:
         system = (
             "You check whether a prior equity research report is still current. "
             "Compare fresh news against the prior thesis. Be strict: only "
-            "earnings, guidance, M&A, regulatory, macro-sector or thesis-level "
-            "developments count as material — routine price moves do not. "
+            "earnings releases, product launches/releases, guidance, M&A, "
+            "regulatory, macro-sector or thesis-level developments count as "
+            "material — routine price moves do not. Earnings releases and "
+            "product launches are the highest-priority signals. "
             "Respond in JSON format."
         )
+        _span = f" since {since}" if since else " since then"
         human = (
             f"Ticker: {ticker}\n"
             f"Prior report ({str(prior.get('run_at') or '')[:10]}): "
@@ -102,10 +119,12 @@ def classify_delta(ticker: str, prior: dict, snippets: str) -> dict | None:
             f"{(prior.get('recap_text') or '')[:400]}\n"
             f"Key assumptions: {assumptions}\n"
             f"Watched catalysts: {catalysts}\n\n"
-            f"Fresh search results since then:\n{snippets[:4000]}\n\n"
+            f"Fresh search results{_span}:\n{snippets[:4000]}\n\n"
             "Classify: material (bool), events (max 5, only genuinely material "
-            "ones, each with headline/date/relevance to the prior thesis), "
-            "verdict (one sentence on whether the prior report is still current).\n"
+            "ones, ordered with earnings releases and product launches first, "
+            "each with headline/date/relevance to the prior thesis), "
+            "verdict (one sentence on whether the prior report is still current, "
+            "naming the covered news span).\n"
             "Return a JSON object: {\"material\": true|false, \"events\": "
             "[{\"headline\": \"...\", \"date\": \"...\", \"relevance\": \"...\"}], "
             "\"verdict\": \"...\"}"
@@ -150,14 +169,18 @@ def _search_fresh_snippets(
     tavily_key: str | None,
     request_timeout_s: float,
 ) -> str:
-    """Qwen primary, Tavily secondary. Returns '' when nothing usable."""
+    """Qwen primary, Tavily secondary. Returns '' when nothing usable.
+    L5: query leads with earnings releases and product launches — the two
+    event classes that most often move a thesis inside a 2–3 day window."""
     query = (
-        f"{ticker} stock material news earnings guidance M&A regulatory since {since}"
+        f"{ticker} earnings results or announcement, product launch or release "
+        f"since {since}, then guidance M&A regulatory news"
     )
     try:
         from src.research_ideas.complacency.web_research import qwen_web_search
         text = qwen_web_search(
-            query + ". List dated developments; state explicitly if nothing "
+            query + ". Prioritise earnings releases and product launches. "
+                    "List dated developments; state explicitly if nothing "
                     "material happened.",
             system_prompt=(
                 "You check whether fresh news materially changes a prior "
@@ -190,17 +213,31 @@ def run_freshness_search(
     request_timeout_s: float = _SEARCH_TIMEOUT_S,
 ) -> dict:
     """One bounded search + classification for a single ticker since
-    `since_date` (defaults to the prior report date). Soft-fail: always
-    returns a well-formed delta dict — never raises."""
+    `since_date`. Soft-fail: always returns a well-formed delta dict —
+    never raises.
+
+    L5 basis (when `since_date` is not given): the search covers the
+    window max(prior_report_date, now − FRESHNESS_SEARCH_WINDOW_DAYS)
+    (default 3 days before the search's own date/time). Older reports no
+    longer open an ever-wider search window — the memory layer carries the
+    older history, the one search patches the recent window, and the
+    verdict/addendum state the span they cover.
+    """
     base = base_delta(prior)
     if not _freshness_enabled():
         base["verdict"] = "check disabled"
         return base
-    since = (
-        since_date
-        or str((prior or {}).get("run_at") or "")[:10]
-        or "the last report"
-    )
+    if since_date:
+        since = since_date
+    else:
+        _prior_date = str((prior or {}).get("run_at") or "")[:10]
+        _window_start = (
+            datetime.now() - timedelta(days=_window_days())
+        ).strftime("%Y-%m-%d")
+        # ISO dates compare lexicographically; the later of the two anchors
+        # the window. No prior at all → search the bare window.
+        since = max(_prior_date, _window_start) if _prior_date else _window_start
+    base["since"] = since
     if tavily_key is None:
         tavily_key = os.environ.get("TAVILY_API_KEY") or None
     try:
@@ -211,7 +248,7 @@ def run_freshness_search(
         # R2: keep what the classification saw so the delta route can
         # synthesize amendments from THE one search instead of re-searching.
         base["snippets"] = snippets[:_SNIPPETS_KEEP_CHARS]
-        classified = classify_delta(ticker, prior or {}, snippets)
+        classified = classify_delta(ticker, prior or {}, snippets, since=since)
         if classified:
             base.update(classified)
         return base

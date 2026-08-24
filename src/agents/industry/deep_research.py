@@ -265,6 +265,47 @@ _DELTA_MAX_SEARCHES  = 4    # searches in delta pass (vs 12 full)
 #              + Phase 2.5 news_sentiment injected as "recent_news" section via LLM synthesis
 # Age > 14d → full fresh search (12 searches)
 
+# ── Fast path (L1): reuse archived research at ANY content age ───────────────
+# When enabled (the default), any qualifying archive hit takes the pure-cache
+# branch — 0 research searches; the phase-2_9 freshness search carries the
+# recency signal into the LATEST DEVELOPMENTS addendum instead. First-ever
+# tickers (no archive hit) still get the full research pass.
+# Kill switch RESEARCH_FORCE_REUSE=false restores the M2 age tiers above.
+def _force_reuse_enabled() -> bool:
+    return os.environ.get(
+        "RESEARCH_FORCE_REUSE", "true").strip().lower() not in (
+        "0", "false", "no", "off", "")
+
+
+def _is_pure_cache_hit(age_days: float, force_reuse: bool | None = None) -> bool:
+    """Archive-gate branch decision for one cached result. `force_reuse=None`
+    reads the kill switch; pass explicit True/False in tests."""
+    if force_reuse is None:
+        force_reuse = _force_reuse_enabled()
+    return force_reuse or age_days < _CACHE_NO_DELTA_DAYS
+
+
+def _fast_tier_model(standard_model: str, qwen_routed: bool) -> str:
+    """L4: fast-tier override for display-guarded LLM calls (citation rebuild).
+
+    FAST_TIER_MODEL=<name> picks the model; FAST_TIER_MODEL=false restores the
+    standard model; unset defaults to the recap fast tier. Only applied when
+    the run is Qwen-routed (base_url set) — the fast tier is a DashScope model
+    and would 404 on a pure Anthropic endpoint."""
+    if not qwen_routed:
+        return standard_model
+    _v = os.environ.get("FAST_TIER_MODEL", "").strip()
+    if _v.lower() in ("0", "false", "no", "off"):
+        return standard_model
+    if _v:
+        return _v
+    try:
+        from src.memory.report_recap import RECAP_MODEL_NAME
+        return RECAP_MODEL_NAME
+    except Exception:
+        return standard_model
+
+
 # ── R2: one-search delta routing ──────────────────────────────────────────────
 # Phase 2_9 (freshness.py) already ran THE one web search for this ticker and
 # classified materiality. In one_search mode the 3–14d window consumes that
@@ -2118,10 +2159,15 @@ def _build_latest_developments_addendum(
     events = freshness_delta.get("events") or []
     verdict = str(freshness_delta.get("verdict") or "").strip()
     material = freshness_delta.get("material")
+    # L5 honesty guard: state the span the freshness search actually covered
+    # (usually a 2–3 day window), never imply "since the original research"
+    # when the report is older than the window.
+    _since = str(freshness_delta.get("since") or "").strip()
+    _span = f"since {_since}" if _since else "since the original research"
 
     lines: list[str] = []
     if material is True and events:
-        lines.append("Material developments since the original research:")
+        lines.append(f"Material developments {_span}:")
         for e in events[:5]:
             date = str(e.get("date") or "").strip()
             headline = str(e.get("headline") or "").strip()
@@ -2134,7 +2180,7 @@ def _build_latest_developments_addendum(
             lines.append(item)
     elif material is False:
         lines.append(
-            "No material developments since the original research — the "
+            f"No material developments {_span} — the "
             "analysis above remains current."
         )
     else:
@@ -3628,6 +3674,7 @@ def _run_extractor_fanout(
 def _resolve_research_cache(
     ticker: str,
     resume_research: dict | None = None,
+    max_age_days: "int | float | None" = _FRESH_DAYS,
 ) -> dict | None:
     """Resolve the archive-first gate's cached research for `ticker`.
 
@@ -3635,8 +3682,10 @@ def _resolve_research_cache(
       1. R2 resume bundle — the crashed predecessor run's own research
          (minutes/hours old; model-matched upstream by the bundle builder).
          Accepted only when it is a well-formed LIVE-tier result.
-      2. run_archive.get_recent_research — the usual _FRESH_DAYS archive
-         lookup.
+      2. run_archive.get_recent_research — the usual archive lookup, capped
+         at `max_age_days`. None lifts the age filter entirely (fast path
+         L1: reuse research at any content age; tier qualification and the
+         knowledge_only discard still apply).
 
     knowledge_only results are discarded from EITHER source: they lack live
     web data and must be re-run with the current web-search model.
@@ -3666,7 +3715,7 @@ def _resolve_research_cache(
     else:
         try:
             from src.memory.run_archive import get_recent_research as _get_recent
-            _cached = _get_recent(ticker, max_age_days=_FRESH_DAYS)
+            _cached = _get_recent(ticker, max_age_days=max_age_days)
         except Exception:
             _cached = None
 
@@ -3745,7 +3794,12 @@ def _research_one_ticker(
 
     # ── Archive-first gate (R2: a crashed run's resume bundle wins over the
     # archive; knowledge_only results are discarded from either source) ──────
-    _cached = _resolve_research_cache(ticker, resume_research=resume_research)
+    _cached = _resolve_research_cache(
+        ticker, resume_research=resume_research,
+        # L1 fast path: no age cap — any qualifying archive hit is reused.
+        # RESEARCH_FORCE_REUSE=false restores the M2 _FRESH_DAYS cap.
+        max_age_days=None if _force_reuse_enabled() else _FRESH_DAYS,
+    )
 
     if _cached is not None:
         _age = _cached["age_days"]
@@ -3754,10 +3808,11 @@ def _research_one_ticker(
         # from the carried phase-2_9 snippets), 'legacy' (pre-R2 searches).
         _route = _delta_route(_age, freshness_delta)
 
-        # ── Pure cache hit: age < 3 days, OR R2 replay of a NOT-MATERIAL
-        #    freshness verdict (the phase-2_9 one search already confirmed
-        #    nothing material changed — 0 additional searches) ────────────
-        if _age < _CACHE_NO_DELTA_DAYS or _route == "replay":
+        # ── Pure cache hit: L1 force-reuse (any content age), age < 3 days,
+        #    OR R2 replay of a NOT-MATERIAL freshness verdict (the phase-2_9
+        #    one search already confirmed nothing material changed — 0
+        #    additional searches) ──────────────────────────────────────────
+        if _is_pure_cache_hit(_age) or _route == "replay":
             progress.update_status(
                 agent_id, ticker,
                 f"Cache HIT ({_age:.1f}d old, tier={_cached['research_tier']}) "
@@ -3816,6 +3871,11 @@ def _research_one_ticker(
             _cit_client_cache = anthropic.Anthropic(
                 api_key=anthropic_key, base_url=base_url,
                 timeout=CLIENT_TIMEOUT, max_retries=1)
+            # L4: the citation rebuild is rendering-guarded — run it on the
+            # fast tier when one is routable (falls back to the synthesis
+            # model on pure-Anthropic runs or when FAST_TIER_MODEL=false).
+            _cit_model = _fast_tier_model(
+                _synthesis_model, qwen_routed=base_url is not None)
             _citations_persisted = None
             if _citation_persist_enabled():
                 try:
@@ -3832,7 +3892,7 @@ def _research_one_ticker(
                 _cit_ex = _B8Pool(max_workers=1)
                 _cit_future = _cit_ex.submit(
                     _extract_citation_registry,
-                    _cit_client_cache, _synthesis_model, _cached_text, ticker,
+                    _cit_client_cache, _cit_model, _cached_text, ticker,
                     edgar_filing_ref=edgar_filing_ref,
                 )
 
@@ -4118,7 +4178,9 @@ def _research_one_ticker(
             _cit_ex_d = _B8Pool(max_workers=1)
             _cit_future_d = _cit_ex_d.submit(
                 _extract_citation_registry,
-                _delta_client, _synthesis_model, _merged_full, ticker,
+                _delta_client,
+                _fast_tier_model(_synthesis_model, qwen_routed=base_url is not None),
+                _merged_full, ticker,
                 edgar_filing_ref=edgar_filing_ref,
             )
             _dcf_cal_d = _extract_dcf_calibration(
