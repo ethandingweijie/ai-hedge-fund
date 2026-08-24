@@ -53,6 +53,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+import re
 import statistics
 import time
 from datetime import datetime, timedelta
@@ -1105,6 +1106,138 @@ def _guided_growth(guidance: dict, revenue_base: float = 0.0) -> Optional[float]
             # Sanity: guidance should be within -30% to +100% of current revenue
             if -0.30 <= implied <= 1.0:
                 return implied
+    return None
+
+
+# ── R1: structured company guidance (Priority 0 over the regex parse) ────────
+# The assumption store (src/memory/assumption_store.py) holds guidance
+# extracted from PRIMARY sources — the EDGAR press release (FPI 6-K
+# EX-99.1 / domestic 8-K Item 2.02) and the full earnings-call transcript —
+# by workstream R1. When a stored row exists it takes Priority 0 in the
+# growth waterfall and for Year-1 EBITDA; the regex-parsed
+# management_guidance stays as fallback and deterministic cross-check.
+# Soft-fail throughout: kill switch off, store empty/errored, or unparseable
+# amounts → None and the legacy path runs unchanged.
+
+def _norm_metric(s) -> str:
+    """'Total Revenue' → 'totalrevenue'; 'Adj. EBITDA' → 'adjebitda'.
+    Press-release metric names are free-form text — normalize before
+    matching so consumers don't depend on exact wording."""
+    return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+
+def _is_annual_period(period: str) -> bool:
+    """True for full-year-ish period labels ('Full Year FY27', 'FY2026',
+    'fiscal year ended ...'); False for quarters ('Q2 FY27', '3Q26')."""
+    p = (period or "").lower()
+    if re.search(r"quarter|qtr|\bq[1-4]\b", p):
+        return False
+    return any(k in p for k in ("full year", "annual", "fy", "year"))
+
+
+def _revenue_metric_rank(nm: str) -> int:
+    """0 = the canonical P&L revenue line; 2 = another *revenue* figure
+    (segment line, currency-annotated 'Revenue (RMB)'); -1 = not revenue.
+    ARR ('recurring revenue') is a KPI near revenue in size but NOT the
+    P&L line → excluded outright (live CRWD row carries both)."""
+    if "recurring" in nm or not nm:
+        return -1
+    if nm in ("revenue", "revenues", "totalrevenue", "totalrevenues",
+              "netrevenue", "netrevenues", "totalnetrevenue",
+              "totalnetrevenues", "netsales", "totalnetsales"):
+        return 0
+    if "revenue" in nm or "revenues" in nm:
+        return 2
+    return -1
+
+
+def _r1_structured_guidance(ticker: str,
+                            revenue_base: float = 0.0) -> Optional[dict]:
+    """Shape the latest stored earnings-assumption guidance row like
+    _extract_management_guidance() output:
+        {revenue_guidance_mid?, ebitda_guidance_mid?,
+         _r1_period, _r1_source, _r1_as_of}
+    Metric names are normalized (_norm_metric) — live rows carry
+    'Total revenue', 'Adjusted EBITA', etc., not canonical keys.
+    Candidates are ranked (canonical revenue line first, annual periods
+    before quarterly) and the first whose implied growth survives the
+    sanity band wins (−30%..+100% vs revenue_base — rejects quarters
+    against an annual base and currency mismatches).
+    None when disabled / nothing stored / nothing parseable."""
+    if os.environ.get("EARNINGS_ASSUMPTIONS", "true").strip().lower() in (
+            "0", "false", "no", "off", ""):
+        return None
+    try:
+        from src.memory import assumption_store
+        latest = assumption_store.get_latest_earnings_assumptions(ticker)
+    except Exception:
+        return None
+    if not latest:
+        return None
+    try:
+        from src.memory.assumption_extract import parse_amount
+    except Exception:
+        return None
+
+    def _amount(g: dict) -> Optional[float]:
+        mid = parse_amount(g.get("mid"))
+        if mid:
+            return mid
+        # No mid → average the two range ends (parsed separately; each may
+        # carry its own scale suffix, e.g. "$4.4B" / "$4.5B")
+        lo = parse_amount(g.get("low"))
+        hi = parse_amount(g.get("high"))
+        if lo and hi:
+            return (lo + hi) / 2.0
+        return lo or hi
+
+    out: dict = {}
+    # Revenue: rank candidates (canonical line before segment/currency-
+    # annotated ones; annual periods before quarterly), then take the
+    # first that survives the implied-growth band.  Live rows store one
+    # item per fiscal period (CRWD: Total revenue Q2 FY27 AND Full Year
+    # FY27) — against the annual base only the full-year figure lands
+    # in-band, and the annual-first ordering also picks correctly when
+    # no base is supplied.
+    cands: list[tuple] = []
+    for g in (latest.get("guidance") or []):
+        rank = _revenue_metric_rank(_norm_metric(g.get("metric")))
+        if rank < 0:
+            continue
+        amt = _amount(g)
+        if not amt:
+            continue
+        annual = 0 if _is_annual_period(g.get("period")) else 1
+        cands.append((rank, annual, g, amt))
+    cands.sort(key=lambda c: (c[0], c[1]))
+    for _rk, _an, g, amt in cands:
+        if revenue_base and revenue_base > 0:
+            implied = (amt / revenue_base) - 1.0
+            if not (-0.30 <= implied <= 1.0):
+                continue
+        out["revenue_guidance_mid"] = amt
+        out["_r1_period"] = g.get("period") or ""
+        break
+    # EBITDA/EBITA: same annual-first preference ('Adjusted EBITA' is the
+    # reported line at BABA; 'Non-GAAP income from operations' is NOT an
+    # EBITDA figure and matches neither substring).
+    eb_cands: list[tuple] = []
+    for g in (latest.get("guidance") or []):
+        nm = _norm_metric(g.get("metric"))
+        if "ebitda" not in nm and "ebita" not in nm:
+            continue
+        amt = _amount(g)
+        if amt:
+            annual = 0 if _is_annual_period(g.get("period")) else 1
+            eb_cands.append((annual, amt))
+    if eb_cands:
+        eb_cands.sort(key=lambda c: c[0])
+        out["ebitda_guidance_mid"] = eb_cands[0][1]
+    if out:
+        out.setdefault("_r1_period", latest.get("period_label") or "")
+        out["_r1_source"] = latest.get("source") or ""
+        out["_r1_as_of"] = latest.get("as_of") or ""
+        return out
     return None
 
 
@@ -4023,6 +4156,36 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         data_source = "historical"
         guidance = mgmt_guidance_all.get(ticker, {})
 
+        # R1: structured company guidance from primary-source extraction
+        # (EDGAR press release + earnings call) takes Priority 0 over the
+        # regex-parsed management_guidance; the regex value stays as the
+        # fallback whenever the store has nothing usable.
+        _r1_guid = _r1_structured_guidance(ticker, revenue_base=revenue_base)
+        if _r1_guid:
+            _r1_merge = {k: v for k, v in _r1_guid.items()
+                         if not k.startswith("_r1")}
+            if _r1_merge:
+                guidance = {**guidance, **_r1_merge}
+                _r1_bits = []
+                if "revenue_guidance_mid" in _r1_merge and revenue_base \
+                        and revenue_base > 0:
+                    _r1_bits.append(
+                        f"revenue → "
+                        f"{(_r1_merge['revenue_guidance_mid'] / revenue_base) - 1.0:+.1%}")
+                if "ebitda_guidance_mid" in _r1_merge:
+                    _r1_bits.append(
+                        f"Yr1 EBITDA "
+                        f"{_r1_merge['ebitda_guidance_mid'] / 1e9:.2f}B")
+                ticker_forward_flags.append(
+                    "R1 structured guidance (Priority 0): "
+                    + (", ".join(_r1_bits) or "guidance on file")
+                    + f" [{_r1_guid.get('_r1_source') or 'edgar+transcript'}"
+                    + (f", {_r1_guid['_r1_period']}"
+                       if _r1_guid.get('_r1_period') else "")
+                    + (f", as of {_r1_guid['_r1_as_of']}"
+                       if _r1_guid.get('_r1_as_of') else "")
+                    + "]")
+
         growth_base = _guided_growth(guidance, revenue_base=revenue_base)
         if growth_base is not None:
             data_source = "guided"
@@ -4106,6 +4269,52 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "analyst_count_revenue": getattr(_fwd, "analyst_count_revenue", None),
                 "period_end":            getattr(_fwd, "period_end",            ""),
             }
+
+        # ── R1: licensed analyst-report estimates vs street consensus ─────
+        # Deposited sell-side reports (analyst_reports table) are the ONLY
+        # estimate source for HK/SG names (FMP returns nothing there); where
+        # FMP consensus exists they become a cross-check. Comparison is on
+        # RAW reporting-currency figures (both sides pre-FX); a ratio
+        # outside 0.25–4.0 is reported as a basis mismatch, not a divergence.
+        if os.environ.get("EARNINGS_ASSUMPTIONS", "true").strip().lower() not in (
+                "0", "false", "no", "off", ""):
+            try:
+                from src.memory import assumption_store as _r1_store
+                _r1_reports = _r1_store.get_analyst_reports(ticker, limit=1)
+            except Exception:
+                _r1_reports = []
+            if _r1_reports:
+                _rep = _r1_reports[0]
+                _est_list = _rep.get("estimates") or []
+                _est = _est_list[0] if _est_list else {}
+                _house_lbl = (f"{_rep.get('house') or 'Sell-side'} "
+                              f"{_rep.get('report_date') or ''}").strip()
+                try:
+                    from src.memory.assumption_extract import (
+                        parse_amount as _r1_amt)
+                except Exception:
+                    _r1_amt = None
+                _h_rev = _r1_amt(_est.get("revenue")) if (_r1_amt and _est) else None
+                _s_rev = _safe(getattr(_fwd, "revenue_avg", None)) \
+                    if estimates else None
+                if _h_rev and _s_rev:
+                    _ratio = _h_rev / _s_rev
+                    if 0.25 <= _ratio <= 4.0:
+                        _div = _ratio - 1.0
+                        if abs(_div) >= 0.03:
+                            ticker_forward_flags.append(
+                                f"R1 house vs street FY+1 revenue: "
+                                f"{_house_lbl} {_div:+.1%} vs consensus")
+                    else:
+                        ticker_forward_flags.append(
+                            f"R1 house vs street FY+1 revenue: currency "
+                            f"basis differs ({_house_lbl} vs FMP) — not "
+                            f"compared")
+                elif _h_rev and not estimates:
+                    ticker_forward_flags.append(
+                        f"R1 house estimates on file ({_house_lbl}): FY+1 "
+                        f"revenue ≈ {_h_rev/1e9:.1f}B — no FMP consensus "
+                        f"for this name")
 
         # ── Deep-research DCF calibration (from sections 2D + 2F) ────────
         # Applied AFTER the guided/analyst/historical waterfall so it acts as a
@@ -5160,7 +5369,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # Priority 0: Management guidance EBITDA (from deep research extraction).
             # Priority 1: Historical EBITDA × (1+g) — scenario-specific growth.
             # Priority 2: FCF / 0.65 heuristic — only if no EBITDA data at all.
-            _mgmt = mgmt_guidance_all.get(ticker, {}) if mgmt_guidance_all else {}
+            # R1: `guidance` already carries the structured Priority-0
+            # values merged at the top of the ticker loop; it falls back to
+            # the regex-only dict when the store had nothing usable.
+            _mgmt = guidance or {}
             _mgmt_ebitda = _mgmt.get("ebitda_guidance_mid")
             _mgmt_revenue = _mgmt.get("revenue_guidance_mid")
 

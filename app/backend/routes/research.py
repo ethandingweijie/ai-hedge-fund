@@ -2145,6 +2145,122 @@ async def complacency_qual_sweep(
     }
 
 
+# ─── R1.e: analyst-report Drive folder sync + R1 assumption reads ──────────
+
+
+def _execute_drive_sync_job(job_id: str) -> None:
+    """Worker-side runner for the analyst-doc Drive sync (kind=drive_sync)."""
+    from app.backend.services import drive_sync
+
+    job_store.update_progress(job_id, "running", "listing Drive folder")
+    try:
+        result = drive_sync.sync_drive_folder(
+            on_progress=lambda msg: job_store.update_progress(
+                job_id, "running", msg[:200]))
+        job_store.complete_job(job_id, result)
+    except Exception as exc:
+        logger.exception("drive sync job %s failed: %s", job_id, exc)
+        job_store.fail_job(job_id, str(exc))
+
+
+@router.post("/ideas/analyst-docs/sync")
+async def analyst_docs_sync(
+    actor: User | None = Depends(require_user_or_service),
+):
+    """
+    R1.e: on-demand sync of the Drive analyst-report folder (same engine
+    the 8am worker cron runs). Lists the folder, matches filenames to
+    tickers, downloads changed/new PDFs into research/pdfs/, registers
+    them in research/manifest.json and runs R1 extraction on allowed docs.
+
+    Returns {job_id, status: 'pending'}; poll
+    GET /research/ideas/complacency/jobs/{job_id}.
+    """
+    in_flight = job_store.find_in_flight_job("drive_sync")
+    if in_flight:
+        return {
+            "job_id":    in_flight["job_id"],
+            "status":    in_flight["status"],
+            "started_at": in_flight["started_at"],
+            "deduped":   True,
+        }
+
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
+
+    job_id = job_store.create_job("drive_sync",
+                                  user_id=actor.id if actor else None)
+
+    if not await _maybe_enqueue_research(job_id, "drive_sync", {}):
+        async def _run():
+            await asyncio.to_thread(_execute_drive_sync_job, job_id)
+
+        _spawn_background(_run())
+    return {
+        "job_id":    job_id,
+        "status":    "pending",
+        "started_at": None,
+        "deduped":   False,
+    }
+
+
+@router.get("/ideas/analyst-docs/assumptions/{ticker}")
+async def analyst_docs_assumptions(ticker: str):
+    """R1 read path: current earnings assumptions + analyst-report
+    extractions + version trajectory for one ticker (consumed by the
+    report UI and usable as a manual cross-check)."""
+    from src.memory import assumption_store
+
+    def _gather():
+        return {
+            "ticker": ticker.upper(),
+            "earnings_assumptions":
+                assumption_store.get_earnings_assumptions(ticker),
+            "analyst_reports":
+                assumption_store.get_analyst_reports(ticker),
+            "versions":
+                assumption_store.get_assumption_versions(ticker, limit=60),
+            "open_challenges":
+                assumption_store.get_open_challenges(ticker),
+            "scorecard":
+                assumption_store.get_scorecard_summary(ticker),
+        }
+
+    try:
+        return await asyncio.to_thread(_gather)
+    except Exception as exc:
+        logger.exception("analyst_docs_assumptions(%s) failed: %s",
+                         ticker, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/ideas/analyst-docs/refresh/{ticker}")
+async def analyst_docs_refresh_company(
+    ticker: str,
+    force: bool = False,
+    actor: User | None = Depends(require_user_or_service),
+):
+    """R1 channels 1+2 on demand: fetch the latest EDGAR earnings press
+    release + FMP transcript for one ticker, extract assumptions, persist.
+    Cache-first: no-op within the same reported quarter unless force."""
+    from src.memory.assumption_extract import refresh_company_assumptions
+
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=60, concurrent_limit=3, slot_ttl_seconds=900,
+    )
+    try:
+        result = await asyncio.to_thread(
+            refresh_company_assumptions, ticker, force)
+        return result
+    except Exception as exc:
+        logger.exception("analyst_docs_refresh_company(%s) failed: %s",
+                         ticker, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/ideas/complacency/score/{ticker}")
 async def score_complacency_adhoc(
     ticker: str,

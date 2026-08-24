@@ -33,6 +33,9 @@ def test_worker_settings_shape():
         "run_hundred_q_backstop_task",
         # R2 — daily housekeeping (stale-checkpoint prune)
         "run_maintenance_task",
+        # Workstream R1.e — analyst-report Drive folder sync (8am cron +
+        # manual trigger via the research routes)
+        "run_drive_sync_task",
     }
     assert ws.max_jobs == 10
     assert ws.job_timeout == 3600       # 60 min — VGPM backfill can exceed 30
@@ -46,12 +49,74 @@ def test_research_kinds_cover_spawn_points():
         "refresh", "score_adhoc", "hundred_q_refresh",
         # Workstream Q2 — on-demand full-table qualitative sweep
         "qual_sweep",
+        # Workstream R1.e — analyst-report Drive folder sync
+        "drive_sync",
     }
 
 
-def test_unknown_research_kind_raises():
-    with pytest.raises(ValueError, match="unknown research job kind"):
-        asyncio.run(worker.run_research_job_task({}, "job-1", "nope", {}))
+def test_unknown_research_kind_fails_job_store(monkeypatch):
+    """R1 contract change (2026-08-17 prod incident): an unknown kind must
+    FAIL the job-store row (so find_in_flight_job stops deduping against a
+    zombie pending row) and return an error dict — not bare-raise, which
+    left the row pending for ~30 min."""
+    from app.backend.services import complacency_job_store as job_store
+
+    failed: list = []
+    monkeypatch.setattr(job_store, "fail_job",
+                        lambda job_id, err: failed.append((job_id, err)))
+
+    out = asyncio.run(worker.run_research_job_task({}, "job-1", "nope", {}))
+
+    assert out["ok"] is False
+    assert out["kind"] == "nope"
+    assert "unknown" in out["error"]
+    assert len(failed) == 1
+    assert failed[0][0] == "job-1"
+    assert "nope" in failed[0][1]
+
+
+# ── R1.e drive sync task ──────────────────────────────────────────────────────
+
+def test_drive_sync_task_noop_without_folder(monkeypatch):
+    """Backward gate: with DRIVE_SYNC_FOLDER unset the cron entry is a
+    no-op — no job row, no sync attempt."""
+    monkeypatch.delenv("DRIVE_SYNC_FOLDER", raising=False)
+
+    def _fail(*a, **kw):
+        pytest.fail("sync must not run when DRIVE_SYNC_FOLDER is unset")
+
+    monkeypatch.setattr("app.backend.services.drive_sync.sync_drive_folder",
+                        _fail, raising=False)
+    out = asyncio.run(worker.run_drive_sync_task({}))
+    assert out == {"ran": False, "skipped": True}
+
+
+def test_drive_sync_task_completes_job_store(monkeypatch):
+    from app.backend.services import complacency_job_store as job_store
+
+    monkeypatch.setenv("DRIVE_SYNC_FOLDER", "1sVyHVhQ9i-fOb2hwcovX3bMjYQHf6FX1")
+    events = []
+    monkeypatch.setattr(job_store, "create_job",
+                        lambda kind, **kw: events.append(("create", kind)) or "job-ds")
+    monkeypatch.setattr(job_store, "update_progress",
+                        lambda job_id, status, msg: events.append(("progress", msg)))
+    monkeypatch.setattr(job_store, "complete_job",
+                        lambda job_id, payload: events.append(("complete", payload)))
+    monkeypatch.setattr(job_store, "fail_job",
+                        lambda job_id, err: events.append(("fail", err)))
+    monkeypatch.setattr(
+        "app.backend.services.drive_sync.sync_drive_folder",
+        lambda *a, **kw: {"listed": 5, "matched": 5, "unmatched": [],
+                          "downloaded": 0, "unchanged": 5, "extracted": 0,
+                          "gated": 0, "errors": []})
+
+    out = asyncio.run(worker.run_drive_sync_task({}))
+
+    assert out["ran"] is True and out["job_id"] == "job-ds"
+    assert out["result"]["listed"] == 5
+    assert events[0] == ("create", "drive_sync")
+    assert events[-1][0] == "complete"
+    assert events[-1][1]["unchanged"] == 5
 
 
 # ── analysis pipeline task ────────────────────────────────────────────────────

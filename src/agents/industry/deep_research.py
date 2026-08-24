@@ -3657,6 +3657,28 @@ def _research_one_ticker(
     """
     agent_id = "deep_research"
 
+    # ── R1: refresh company earnings assumptions (cache-first) ──────────────
+    # Deterministic date check (newest visible earnings event vs stored
+    # as_of); the full EDGAR+transcript extraction fires only when a NEW
+    # quarter has reported since the last refresh — once per quarter per
+    # ticker, not per run. Runs BEFORE the archive gate so cached/delta
+    # runs also feed dcf_agent's Priority-0 guidance from fresh rows, and
+    # so the live path's EXTRACTED ASSUMPTIONS block reads the latest
+    # quarter. Soft-fail: any error leaves the run exactly pre-R1.
+    # Kill switch: EARNINGS_ASSUMPTIONS=false (checked inside).
+    try:
+        from src.memory.assumption_extract import refresh_company_assumptions
+        _assump_refresh = refresh_company_assumptions(ticker)
+        _ar_status = _assump_refresh.get("status")
+        if _ar_status not in ("skipped_disabled", "up_to_date"):
+            print(f"  [deep_research] R1 assumptions refresh {ticker}: "
+                  f"{_ar_status}"
+                  + (f" (FY{_assump_refresh.get('fiscal_year')}Q"
+                     f"{_assump_refresh.get('fiscal_quarter')})"
+                     if _ar_status == "extracted" else ""))
+    except Exception as _ar_exc:
+        print(f"  [deep_research] R1 assumptions refresh skipped: {_ar_exc}")
+
     # synthesis_model: model used for ALL sdk_client (Anthropic-compatible endpoint) calls.
     # For HK tickers, model_name = qwen3.6-plus (OpenAI-compat web search only) while
     # synthesis_model = qwen3-max (available on the Anthropic-compat endpoint).
@@ -4275,6 +4297,27 @@ def _research_one_ticker(
             "    the revenue inflection? Those qualitative answers cannot come from this data.\n"
             + _fmp_block + "\n"
         )
+
+    # ── R1: extracted earnings assumptions + licensed analyst views ──────
+    # Grounds the research on management guidance from the actual filing /
+    # earnings call and on the (licensed) sell-side view on file, instead
+    # of reconstructing either from web snippets. DB read; soft-fail —
+    # empty when nothing is stored or the kill switch is off.
+    if os.environ.get("EARNINGS_ASSUMPTIONS", "true").strip().lower() not in (
+            "0", "false", "no", "off", ""):
+        try:
+            from src.memory.assumption_extract import build_assumption_context
+            _assump_block = build_assumption_context(ticker)
+            if _assump_block:
+                _base_context += (
+                    "\nEXTRACTED ASSUMPTIONS (company filings / earnings call "
+                    "and licensed analyst reports on file — treat as primary "
+                    "sources; prefer these over web snippets for guidance and "
+                    "estimate figures):\n"
+                    + _assump_block + "\n"
+                )
+        except Exception as _assump_exc:
+            print(f"  [deep_research] R1 assumptions block skipped: {_assump_exc}")
 
     # ── M1 recency: prior report recap + freshness delta (live path only) ──
     # Continuity with the last report on this ticker: the analyst is told

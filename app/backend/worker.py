@@ -209,6 +209,7 @@ RESEARCH_KINDS = {
     "score_adhoc",
     "hundred_q_refresh",
     "qual_sweep",
+    "drive_sync",
 }
 
 
@@ -247,10 +248,18 @@ async def run_research_job_task(
             job_id, params["ticker"], bool(params.get("force_qual", False))),
         "qual_sweep": lambda: R._execute_qual_sweep_job(
             job_id, bool(params.get("force", False))),
+        "drive_sync": lambda: R._execute_drive_sync_job(job_id),
     }
     fn = runners.get(kind)
     if fn is None:
-        raise ValueError(f"unknown research job kind: {kind!r}")
+        # Fail the job row explicitly — a bare raise leaves it 'pending'
+        # in the job store, and find_in_flight_job then dedupes against
+        # the zombie for ~30 min (seen live with the pre-Q worker image,
+        # 2026-08-17 qual_sweep incident).
+        from app.backend.services import complacency_job_store as job_store
+        job_store.fail_job(job_id, f"unknown research job kind: {kind!r}")
+        return {"job_id": job_id, "kind": kind,
+                "ok": False, "error": f"unknown kind {kind!r}"}
     await asyncio.to_thread(fn)
     return {"job_id": job_id, "kind": kind, "ok": True}
 
@@ -589,6 +598,38 @@ def _log_publish_outcome(task: asyncio.Task) -> None:
         logger.warning("worker: progress publish failed: %s", task.exception())
 
 
+# ── R1.e: Drive analyst-report folder sync ──────────────────────────────────
+
+async def run_drive_sync_task(ctx: dict) -> dict:
+    """Sync the user's Drive analyst-report folder into the research
+    manifest + run R1 extraction (arq cron, every morning; also enqueued
+    by POST /research/ideas/analyst-docs/sync via run_research_job_task).
+
+    No-op when DRIVE_SYNC_FOLDER is unset.
+    """
+    from app.backend.services import complacency_job_store as job_store
+
+    if not os.environ.get("DRIVE_SYNC_FOLDER"):
+        logger.info("[drive_sync] DRIVE_SYNC_FOLDER unset — cron no-op")
+        return {"ran": False, "skipped": True}
+
+    job_id = job_store.create_job("drive_sync")
+    job_store.update_progress(job_id, "running", "listing Drive folder")
+    try:
+        from app.backend.services import drive_sync
+        result = await asyncio.to_thread(
+            drive_sync.sync_drive_folder,
+            None, None, None,
+            lambda msg: job_store.update_progress(job_id, "running", msg[:200]),
+        )
+        job_store.complete_job(job_id, result)
+        return {"ran": True, "job_id": job_id, "result": result}
+    except Exception as exc:
+        logger.exception("drive sync failed: %s", exc)
+        job_store.fail_job(job_id, str(exc))
+        return {"ran": True, "job_id": job_id, "error": str(exc)}
+
+
 # ── WorkerSettings — arq entry point ──────────────────────────────────────────
 
 async def _on_startup(ctx: dict) -> None:
@@ -622,7 +663,22 @@ class WorkerSettings:
         run_hundred_q_backstop_task,
         # R2 — daily housekeeping (stale-checkpoint prune etc.)
         run_maintenance_task,
+        # R1.e — analyst-report Drive folder sync (also manual via
+        # POST /research/ideas/analyst-docs/sync → run_research_job_task)
+        run_drive_sync_task,
     ]
+    # R1.e — arq-native daily cron. Railway workers run UTC, so set
+    # DRIVE_SYNC_CRON_HOUR to the UTC hour matching local 8am (this knob
+    # is deliberately UTC-documented). No-op when DRIVE_SYNC_FOLDER unset.
+    try:
+        from arq import cron as _cron
+        _drive_sync_hour = int(os.environ.get("DRIVE_SYNC_CRON_HOUR", "8"))
+        cron_jobs = [
+            _cron(run_drive_sync_task, hour={_drive_sync_hour}, minute={7},
+                  unique=True),
+        ]
+    except Exception:  # pragma: no cover — arq always present in the worker
+        cron_jobs = []
     queue_name = QUEUE_NAME
     redis_settings = build_redis_settings()
     max_jobs = 10            # plan: 10 concurrent pipelines per worker
