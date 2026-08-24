@@ -265,6 +265,39 @@ _DELTA_MAX_SEARCHES  = 4    # searches in delta pass (vs 12 full)
 #              + Phase 2.5 news_sentiment injected as "recent_news" section via LLM synthesis
 # Age > 14d → full fresh search (12 searches)
 
+# ── R2: one-search delta routing ──────────────────────────────────────────────
+# Phase 2_9 (freshness.py) already ran THE one web search for this ticker and
+# classified materiality. In one_search mode the 3–14d window consumes that
+# verdict instead of re-searching:
+#   not material → replay the archived sections (0 additional searches)
+#   material     → merge-synthesis amends sections from the carried snippets
+#   anything else (no verdict, no snippets, legacy mode) → the pre-R2 delta
+#   search pass, unchanged.
+def _delta_route(age_days: float, freshness_delta: dict | None) -> str:
+    """Returns 'replay' | 'one_search' | 'legacy' for a cache-window hit."""
+    mode = os.environ.get(
+        "DEEP_RESEARCH_DELTA_MODE", "one_search").strip().lower()
+    fd = freshness_delta or {}
+    mat = fd.get("material")
+    if mode == "one_search" and mat is False:
+        return "replay"
+    if (mode == "one_search" and mat is True
+            and str(fd.get("snippets") or "").strip()):
+        return "one_search"
+    return "legacy"
+
+
+def _hash_research_text(text: str) -> str:
+    """sha256 of research full text — R2 citation-registry persistence key."""
+    import hashlib
+    return hashlib.sha256((text or "").encode("utf-8", "ignore")).hexdigest()
+
+
+def _citation_persist_enabled() -> bool:
+    return os.environ.get(
+        "CITATION_REGISTRY_PERSIST", "true").strip().lower() not in (
+        "0", "false", "no", "off", "")
+
 # ── Section 2F sector-specific prompt overlays ────────────────────────────────
 # Append-only mechanism: the overlay text is INSERTED INSIDE Section 2F (between
 # sub-points 2F.5 "data sources" and 2F.6 "management guidance") so the generic
@@ -2143,22 +2176,45 @@ def _build_news_supplement(
                 archived run date, so the LLM focuses exclusively on new developments.
     Returns "" if no news_sentiment data is available.
     """
-    if not news_sentiment or not news_sentiment.get("article_count"):
+    if not isinstance(news_sentiment, dict) or not news_sentiment.get("article_count"):
         return ""
 
     signal        = news_sentiment.get("signal", "NEUTRAL")
     score         = news_sentiment.get("composite_score", 0.0)
     volume_spike  = news_sentiment.get("volume_spike", False)
-    top_headlines = news_sentiment.get("top_headlines") or []
     analysis_note = news_sentiment.get("analysis_note", "")
 
-    # Filter to post-cache-date headlines only
+    # Normalized headline entries. The agent's contract (news_sentiment_agent
+    # L348/376) is `top_headlines: list[str]` ("[LABEL] title") and
+    # `scored_articles: list[dict]` (date/title/score/label). The date filter
+    # and join below need dicts — coerce BOTH shapes (live bug 2026-08-24:
+    # string headlines threw AttributeError('.get') mid-delta and dropped the
+    # whole delta pass into full research). Prefer scored_articles (dated);
+    # parse the "[LABEL] title" strings only when no dicts exist.
+    _headlines: list[dict] = []
+    for _h in (news_sentiment.get("scored_articles") or [])[:10]:
+        if isinstance(_h, dict) and _h.get("title"):
+            _headlines.append(_h)
+    if not _headlines:
+        for _h in (news_sentiment.get("top_headlines") or [])[:10]:
+            if isinstance(_h, dict) and _h.get("title"):
+                _headlines.append(_h)
+            elif isinstance(_h, str) and _h.strip():
+                _s = _h.strip()
+                _label, _, _title = (_s[1:] if _s.startswith("[") else _s).partition("] ")
+                _headlines.append({"date": "", "title": (_title or _s)[:90],
+                                   "score": 0.0, "label": _label})
+
+    # Filter to post-cache-date headlines only. Entries WITHOUT a date are
+    # kept — unknown date is not "old", and dropping them silently lost the
+    # top |score| items (they only existed as undated strings).
     if since_date:
-        top_headlines = [h for h in top_headlines if h.get("date", "") > since_date]
+        _headlines = [h for h in _headlines
+                      if not h.get("date") or str(h.get("date")) > since_date]
 
     spike_note = " [VOLUME SPIKE — unusual activity]" if volume_spike else ""
 
-    if not top_headlines:
+    if not _headlines:
         # No new headlines — return a brief no-change note without calling LLM
         return (
             f"RECENT NEWS SUPPLEMENT — {ticker} (as of {as_of})\n"
@@ -2167,8 +2223,9 @@ def _build_news_supplement(
         )
 
     headlines_text = "\n".join(
-        f"  [{h.get('date','')}] {h.get('title','')} (score: {h.get('score',0):+.3f})"
-        for h in top_headlines[:10]
+        f"  [{str(h.get('date') or 'undated')}] {h.get('title', '')} "
+        f"(score: {float(h.get('score') or 0):+.3f})"
+        for h in _headlines[:10]
     )
 
     prompt = (
@@ -2198,12 +2255,13 @@ def _build_news_supplement(
     except Exception as _exc:
         # Graceful fallback — emit headlines as plain text if LLM call fails
         synthesis = "\n".join(
-            f"• [{h.get('date','')}] {h.get('title','')}" for h in top_headlines[:5]
+            f"• [{str(h.get('date') or 'undated')}] {h.get('title', '')}"
+            for h in _headlines[:5]
         )
 
     return (
         f"RECENT NEWS SUPPLEMENT — {ticker} (as of {as_of})\n"
-        f"Signal: {signal} | Score: {score:+.3f} | New articles: {len(top_headlines)}{spike_note}\n\n"
+        f"Signal: {signal} | Score: {score:+.3f} | New articles: {len(_headlines)}{spike_note}\n\n"
         + synthesis
     )
 
@@ -3691,13 +3749,21 @@ def _research_one_ticker(
 
     if _cached is not None:
         _age = _cached["age_days"]
+        # R2: how this cache-window hit routes — 'replay' (freshness says
+        # not material → 0 searches), 'one_search' (material → synthesize
+        # from the carried phase-2_9 snippets), 'legacy' (pre-R2 searches).
+        _route = _delta_route(_age, freshness_delta)
 
-        # ── Pure cache hit: age < 2 days ──────────────────────────────────────
-        if _age < _CACHE_NO_DELTA_DAYS:
+        # ── Pure cache hit: age < 3 days, OR R2 replay of a NOT-MATERIAL
+        #    freshness verdict (the phase-2_9 one search already confirmed
+        #    nothing material changed — 0 additional searches) ────────────
+        if _age < _CACHE_NO_DELTA_DAYS or _route == "replay":
             progress.update_status(
                 agent_id, ticker,
                 f"Cache HIT ({_age:.1f}d old, tier={_cached['research_tier']}) "
-                f"— reusing base research, 0 searches"
+                + ("— freshness verdict NOT material: replaying archived "
+                   "research, 0 searches" if _route == "replay"
+                   else "— reusing base research, 0 searches")
             )
             # ── C2: reuse persisted extractor outputs when the cached sections
             # are unchanged. Extraction is a pure function of sections+profile,
@@ -3724,21 +3790,51 @@ def _research_one_ticker(
                 )
             )
 
-            # B8: rebuild the citation registry (never persisted — only
-            # deep_research_text is stored, so this always runs) CONCURRENTLY
-            # with the extractor work below instead of blocking it. The two
-            # are independent LLM calls; this hides the citation call's wall
-            # time on cache-miss runs. _extract_citation_registry returns []
-            # on any failure, so the future never raises.
+            # B8/R2: the citation registry rebuild (~128 s — the cached-run
+            # floor) first checks the R2 persistence store keyed by the
+            # research text hash; a hit serves it with 0 LLM calls. On a
+            # miss the rebuild runs CONCURRENTLY with the extractor work
+            # below (B8) and is persisted afterwards for the next hit.
+            # _extract_citation_registry returns [] on any failure, so the
+            # future never raises.
             from concurrent.futures import ThreadPoolExecutor as _B8Pool
             _cached_text = _cached["deep_research_text"]
+            # R2 key canonicalization: archived text accumulates LATEST
+            # DEVELOPMENTS addenda across consecutive re-runs, but the
+            # registry is a pure function of the BASE research text — strip
+            # the addendum so run N+1's hash matches run N's persisted key
+            # (same canonicalization both section parsers already apply).
+            _cached_text_hash = _hash_research_text(
+                _cached_text.split(LATEST_DEV_ADDENDUM_MARKER)[0])
             _cal_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
-            _cit_ex = _B8Pool(max_workers=1)
-            _cit_future = _cit_ex.submit(
-                _extract_citation_registry,
-                _cal_client, _synthesis_model, _cached_text, ticker,
-                edgar_filing_ref=edgar_filing_ref,
-            )
+            # R2: the registry rebuild is ONE long call over the full cached
+            # text — the 60 s calibration client always times out at
+            # qwen-tier generation speed (live 2026-08-24: two failed 60 s
+            # attempts == the "~128 s cached floor", an empty registry, and
+            # nothing ever persisted). Full CLIENT_TIMEOUT + one retry; the
+            # rebuild soft-fails to [] and the next run retries.
+            _cit_client_cache = anthropic.Anthropic(
+                api_key=anthropic_key, base_url=base_url,
+                timeout=CLIENT_TIMEOUT, max_retries=1)
+            _citations_persisted = None
+            if _citation_persist_enabled():
+                try:
+                    from src.memory.run_archive import (
+                        get_citation_registry as _get_persisted_cit,
+                    )
+                    _citations_persisted = _get_persisted_cit(
+                        ticker, _cached_text_hash)
+                except Exception:
+                    _citations_persisted = None
+            _cit_ex = None
+            _cit_future = None
+            if _citations_persisted is None:
+                _cit_ex = _B8Pool(max_workers=1)
+                _cit_future = _cit_ex.submit(
+                    _extract_citation_registry,
+                    _cit_client_cache, _synthesis_model, _cached_text, ticker,
+                    edgar_filing_ref=edgar_filing_ref,
+                )
 
             if _ext_reused:
                 _ext_results  = _persisted_ext["results"]
@@ -3784,11 +3880,29 @@ def _research_one_ticker(
                 except Exception:
                     pass
 
-            # Join the concurrent citation rebuild (B8) and re-annotate cached
-            # text with the rebuilt markers so the frontend DeepResearchPanel
-            # can render inline [n] hyperlinks.
-            _citations = _cit_future.result()
-            _cit_ex.shutdown(wait=False)
+            # Join the concurrent citation rebuild (B8) — or serve the R2
+            # persisted registry — then re-annotate cached text with the
+            # markers so the frontend DeepResearchPanel can render inline
+            # [n] hyperlinks.
+            if _cit_future is not None:
+                _citations = _cit_future.result()
+                _cit_ex.shutdown(wait=False)
+                # R2: persist for the next cache hit on this exact text
+                if _citation_persist_enabled() and _citations:
+                    try:
+                        from src.memory.run_archive import (
+                            save_citation_registry as _save_persisted_cit,
+                        )
+                        if _save_persisted_cit(
+                                ticker, _cached_text_hash, _citations):
+                            print(f"  [R2] {ticker}: citation registry "
+                                  f"persisted for reuse")
+                    except Exception:
+                        pass
+            else:
+                _citations = _citations_persisted
+                print(f"  [R2] {ticker}: citation registry reused from "
+                      f"archive ({len(_citations)} entries, 0 LLM calls)")
 
             # ── M2 A3: LATEST DEVELOPMENTS addendum ───────────────────────────
             # Appended to the archived full text (and every downstream prompt
@@ -3862,8 +3976,11 @@ def _research_one_ticker(
         # ── Delta hit: 2–7 days old ───────────────────────────────────────────
         progress.update_status(
             agent_id, ticker,
-            f"Cache HIT ({_age:.1f}d old) — running delta pass "
-            f"({_DELTA_MAX_SEARCHES} searches since {_cached['analysis_date']})"
+            f"Cache HIT ({_age:.1f}d old) — "
+            + ("one-search delta: synthesizing from the phase-2_9 freshness "
+               "verdict, 0 additional searches" if _route == "one_search"
+               else f"running delta pass ({_DELTA_MAX_SEARCHES} searches "
+                    f"since {_cached['analysis_date']})")
         )
         try:
             _today = end_date or datetime.now().strftime("%Y-%m-%d")
@@ -3879,7 +3996,40 @@ def _research_one_ticker(
                 timeout=CLIENT_TIMEOUT,
                 max_retries=4,
             )
-            if base_url:
+            if _route == "one_search":
+                # ── R2: one-search delta ──────────────────────────────────────
+                # Phase 2_9 already ran THE one web search and classified it
+                # MATERIAL; synthesize amendments from those carried snippets
+                # instead of re-running searches. Tools-free synthesis call —
+                # identical shape to the Qwen-routed legacy path below.
+                _snippets = str((freshness_delta or {}).get("snippets") or "")
+                progress.update_status(
+                    agent_id, ticker,
+                    f"One-search delta: synthesizing amendments from the "
+                    f"phase-2_9 freshness snippets ({len(_snippets):,} chars) "
+                    f"— 0 additional searches"
+                )
+                _delta_resp = _delta_client.messages.create(
+                    model=_synthesis_model,
+                    max_tokens=8000,
+                    system=_build_delta_system(
+                        _year, _cached["analysis_date"],
+                        searches_already_run=True,
+                    ),
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"Company: {_company_display}\n"
+                            f"Sector: {sector}\n"
+                            f"Base research date: {_cached['analysis_date']}\n"
+                            f"Today: {_today}\n\n"
+                            f"Search results for developments since "
+                            f"{_cached['analysis_date']}:\n\n{_snippets}\n\n"
+                            f"Produce the section-tagged amendments now."
+                        ),
+                    }],
+                )
+            elif base_url:
                 # ── M2 A4: Qwen-routed delta ──────────────────────────────────
                 # The Anthropic server web_search tool does NOT work through
                 # the DashScope base_url (provider mismatch) — before this fix
@@ -4028,6 +4178,29 @@ def _research_one_ticker(
             )
             if _addendum_d:
                 _merged_full = _merged_full + "\n\n---\n\n" + _addendum_d
+            # R2: persist the rebuilt registry under the FINAL merged text,
+            # canonicalized to the base (addendum stripped) — the next run
+            # reads this archive row with an addendum appended, strips it
+            # for the key, and hits. Best-effort; never persist an empty
+            # registry (a failed rebuild must not poison every future hit).
+            if _citation_persist_enabled() and _citations_d:
+                try:
+                    from src.memory.run_archive import (
+                        save_citation_registry as _save_cit_d,
+                    )
+                    if _save_cit_d(
+                        ticker,
+                        _hash_research_text(
+                            _merged_full.split(
+                                LATEST_DEV_ADDENDUM_MARKER)[0]),
+                        _citations_d,
+                    ):
+                        print(
+                            f"  [R2] delta path: citation registry persisted "
+                            f"for {ticker} ({len(_citations_d)} entries)"
+                        )
+                except Exception as _cit_save_exc:
+                    print(f"  [R2] delta registry persist skipped: {_cit_save_exc}")
             return {
                 "deep_research":          _merged_full,
                 "deep_research_sections": _merged_sections,
@@ -4053,6 +4226,11 @@ def _research_one_ticker(
             }
 
         except Exception as _delta_err:
+            import traceback as _tb_delta
+            print(
+                f"  [delta] {ticker}: delta pass failed ({_delta_err!r}) — "
+                f"falling through to full research\n{_tb_delta.format_exc()}"
+            )
             progress.update_status(
                 agent_id, ticker,
                 f"Delta pass failed ({_delta_err!r}) — falling through to full research"
@@ -5242,6 +5420,30 @@ def _research_one_ticker(
 
     llm_registry = _cit_future_f.result()
     _cit_ex_f.shutdown(wait=False)
+    # R2: persist the LLM-extracted registry keyed by this fresh report text.
+    # The archive stores final_report VERBATIM, so a follow-up cache hit's
+    # _hash_research_text(cached text) matches this key exactly and serves
+    # the registry with 0 LLM calls (killing the ~128 s cached-run floor).
+    # Only llm_registry is persisted — NOT seed_registry + dedup — because
+    # the seed entries come from THIS run's web_search tool result (free to
+    # rebuild, never present on the cache path) and the persisted value must
+    # be byte-equivalent to what a cache-path rebuild would produce.
+    # Never persist an empty registry — a one-off extraction failure must
+    # not be served to every future cache hit (rebuild gets another chance).
+    if _citation_persist_enabled() and llm_registry:
+        try:
+            from src.memory.run_archive import (
+                save_citation_registry as _save_cit_f,
+            )
+            if _save_cit_f(
+                ticker, _hash_research_text(final_report), llm_registry,
+            ):
+                print(
+                    f"  [R2] fresh path: citation registry persisted "
+                    f"for {ticker} ({len(llm_registry)} entries)"
+                )
+        except Exception as _cit_save_exc:
+            print(f"  [R2] fresh registry persist skipped: {_cit_save_exc}")
     ref_offset = len(seed_registry)
     llm_deduped: list[dict] = []
     for entry in llm_registry:

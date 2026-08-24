@@ -27,6 +27,10 @@ import os
 
 _SEARCH_TIMEOUT_S = 45.0
 _SEARCH_MAX_CHARS = 6000
+# R2: how much of the freshness snippets travel with the verdict for the
+# one-search delta synthesis (state blob stays small; synthesis prompts
+# truncate further themselves).
+_SNIPPETS_KEEP_CHARS = 8000
 
 
 def _freshness_enabled() -> bool:
@@ -41,6 +45,10 @@ def base_delta(prior: dict | None) -> dict:
         "material": None,
         "events": [],
         "verdict": "check unavailable",
+        # R2: the raw search snippets the classification was based on —
+        # the one-search delta route synthesizes amendments from these
+        # instead of running fresh searches. Empty when nothing usable.
+        "snippets": "",
         "based_on_run": prior.get("run_id"),
         "prior_run_at": prior.get("run_at"),
     }
@@ -200,6 +208,9 @@ def run_freshness_search(
         if not snippets:
             base["verdict"] = "no fresh results"
             return base
+        # R2: keep what the classification saw so the delta route can
+        # synthesize amendments from THE one search instead of re-searching.
+        base["snippets"] = snippets[:_SNIPPETS_KEEP_CHARS]
         classified = classify_delta(ticker, prior or {}, snippets)
         if classified:
             base.update(classified)

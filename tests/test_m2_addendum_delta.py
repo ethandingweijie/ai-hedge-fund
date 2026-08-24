@@ -218,6 +218,12 @@ _DELTA_RESPONSE = (
 
 
 def _patch_delta_env(monkeypatch):
+    # The delta branch lives in the M2 age tiers (3–14d). Pin the L1
+    # kill switch so force-reuse (any-age pure cache, RESEARCH_FORCE_REUSE
+    # default) cannot shadow the delta branch these tests exercise —
+    # "RESEARCH_FORCE_REUSE=false restores the M2 age tiers" per its own
+    # docstring in deep_research.py.
+    monkeypatch.setenv("RESEARCH_FORCE_REUSE", "false")
     monkeypatch.setattr(
         run_archive, "get_recent_research",
         lambda ticker, max_age_days=7, qualifying_tiers=None: dict(_DELTA_ROW),

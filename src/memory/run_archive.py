@@ -195,6 +195,18 @@ CREATE TABLE IF NOT EXISTS extractor_outputs (
     extracted_at  TEXT NOT NULL,                 -- ISO-8601 timestamp
     PRIMARY KEY (ticker, sections_hash)
 );
+
+-- R2: persisted citation registry, keyed by research FULL-TEXT hash.
+-- The registry was rebuilt via LLM on EVERY path (~128s of the cached-run
+-- floor). Extraction is a pure function of the report text, so identical
+-- text is reusable across runs.
+CREATE TABLE IF NOT EXISTS citation_registry (
+    ticker        TEXT NOT NULL,
+    text_hash     TEXT NOT NULL,                 -- sha256 of deep_research_text
+    registry_json TEXT NOT NULL,                 -- list of registry entries
+    extracted_at  TEXT NOT NULL,                 -- ISO-8601 timestamp
+    PRIMARY KEY (ticker, text_hash)
+);
 """
 
 # ── Postgres DDL (full column set — CREATE covers everything _MIGRATIONS adds,
@@ -319,6 +331,14 @@ CREATE TABLE IF NOT EXISTS extractor_outputs (
     outputs_json  TEXT NOT NULL,
     extracted_at  TEXT NOT NULL,
     PRIMARY KEY (ticker, sections_hash)
+);
+
+CREATE TABLE IF NOT EXISTS citation_registry (
+    ticker        TEXT NOT NULL,
+    text_hash     TEXT NOT NULL,
+    registry_json TEXT NOT NULL,
+    extracted_at  TEXT NOT NULL,
+    PRIMARY KEY (ticker, text_hash)
 );
 """
 
@@ -1664,6 +1684,73 @@ def get_extractor_outputs(ticker: str, sections_hash: str) -> dict | None:
         return None
     failures = parsed.get("failures")
     parsed["failures"] = failures if isinstance(failures, list) else []
+    return parsed
+
+
+# ── R2: persisted citation registry (keyed by research full-text hash) ───────
+
+def save_citation_registry(
+    ticker: str,
+    text_hash: str,
+    registry: list,
+) -> bool:
+    """Persist the LLM-extracted citation registry keyed by report text.
+
+    Best-effort by contract (same as save_extractor_outputs): a persistence
+    failure returns False and must never sink the run. Upserts — a later
+    extraction over identical text may be more complete.
+    """
+    payload = _safe_json(registry if isinstance(registry, list) else [])
+    if not ticker or not text_hash or payload is None:
+        return False
+    try:
+        if db.is_postgres():
+            sql = (
+                "INSERT INTO citation_registry "
+                "(ticker, text_hash, registry_json, extracted_at) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (ticker, text_hash) DO UPDATE SET "
+                "registry_json = EXCLUDED.registry_json, "
+                "extracted_at = EXCLUDED.extracted_at"
+            )
+        else:
+            sql = (
+                "INSERT OR REPLACE INTO citation_registry "
+                "(ticker, text_hash, registry_json, extracted_at) "
+                "VALUES (?, ?, ?, ?)"
+            )
+        _exec(sql, [ticker.upper(), text_hash, payload,
+                    datetime.now().isoformat()])
+        return True
+    except Exception:
+        return False
+
+
+def get_citation_registry(ticker: str, text_hash: str) -> list | None:
+    """Return the persisted citation registry for this ticker + text hash.
+
+    Returns the list of registry entries, or None when absent/unreadable —
+    the caller rebuilds via LLM in that case (the pre-R2 path), so a bad
+    blob can never break a run.
+    """
+    if not ticker or not text_hash:
+        return None
+    try:
+        row = _fetch_one(
+            "SELECT registry_json FROM citation_registry "
+            "WHERE ticker = ? AND text_hash = ?",
+            [ticker.upper(), text_hash],
+        )
+    except Exception:
+        return None
+    if not row:
+        return None
+    try:
+        parsed = json.loads(row["registry_json"])
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(parsed, list):
+        return None
     return parsed
 
 
