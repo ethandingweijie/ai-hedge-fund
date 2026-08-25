@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, Plus, BarChart2, MessageSquare, Zap, LogOut,
-  Sun, Moon, Monitor, User, type LucideIcon,
+  Sun, Moon, Monitor, User, PieChart, type LucideIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
@@ -159,6 +159,7 @@ export function MenuPage() {
         <section>
           <SectionLabel>Explore</SectionLabel>
           <Card>
+            <Row icon={PieChart} label="Portfolio" onClick={() => handleNav(byPath('/portfolio'))} />
             <Row icon={MessageSquare} label="Discuss" onClick={() => handleNav(byPath('/discuss'))} />
             <Row icon={Zap} label="Pricing" onClick={() => navigate('/pricing')} />
           </Card>
