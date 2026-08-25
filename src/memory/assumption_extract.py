@@ -503,6 +503,23 @@ def _salvage(text: str, schema: type[BaseModel]) -> Optional[BaseModel]:
 
 # ── Channel 1+2: company material → earnings assumptions ────────────────────
 
+def _focus_block(ticker: str) -> str:
+    """R3 monitor-spec focus fields as a prompt block (empty when the
+    steward is disabled or the ticker has no spec/templates)."""
+    try:
+        from src.memory.assumption_steward import focus_fields, steward_enabled
+        if not steward_enabled():
+            return ""
+        fields = focus_fields(ticker)
+    except Exception:
+        return ""
+    if not fields:
+        return ""
+    return ("\n\nFOCUS FIELDS (monitor spec — prioritise these drivers "
+            "when stated in the source):\n- "
+            + "\n- ".join(fields[:18]))
+
+
 _COMPANY_SYSTEM = (
     "You extract management's forward-looking assumptions from a company's "
     "own earnings materials (press release + call transcript). Report ONLY "
@@ -566,7 +583,7 @@ def extract_company_assumptions(ticker: str,
         "restructuring, FX, notable non-recurring items\n"
         "- verbatim_quotes: array of up to 3 strings — the most "
         "decision-relevant management statements."
-    )
+    ) + _focus_block(ticker)
 
     client, model_name = _get_bundle_client()
     if client is None:
@@ -645,9 +662,12 @@ def extract_analyst_report(ticker: str, extracted_pdf: dict,
         "summary} — bull/base/bear\n"
         "- revisions: array of {field, new_value, prior_value, direction, "
         "reason} — every 'raised/cut/lifted from X to Y' WITH prior "
-        "values\n"
+        f"values. ATTRIBUTE RULE: record a revision ONLY when the revised "
+        f"line explicitly names {ticker} or its unmistakable sub-business; "
+        f"if the revised figure belongs to another covered company, leave "
+        f"revisions empty for it\n"
         "- thesis_points, catalysts, risks: arrays of strings."
-    )
+    ) + _focus_block(ticker)
     client, model_name = _get_bundle_client()
     if client is None:
         return None
@@ -889,6 +909,16 @@ def extract_and_persist_analyst_pdf(path: str, tickers: list[str], *,
         except Exception as exc:
             logger.exception("analyst persistence failed for %s: %s", tkr, exc)
             summary["tickers"][tkr] = "failed"
+    # R3 — steward inline pass over the tickers that actually got new
+    # extractions this ingest (detectors -> challenges -> scorecard)
+    extracted_tickers = [t for t, s in summary["tickers"].items()
+                         if str(s).startswith("extracted")]
+    if extracted_tickers:
+        try:
+            from src.memory.assumption_steward import run_steward_inline
+            run_steward_inline(extracted_tickers, trigger="analyst_ingest")
+        except Exception as exc:
+            logger.warning("[steward] inline pass failed: %s", exc)
     return summary
 
 
@@ -1009,6 +1039,13 @@ def refresh_company_assumptions(ticker: str, force: bool = False) -> dict:
                     "kpis %d, +%d versions)", tkr, fy, fq,
                     len(extraction.get("guidance") or []),
                     len(extraction.get("kpis") or []), added)
+        # R3 — steward inline pass (detectors -> challenges -> scorecard;
+        # never raises into the pipeline)
+        try:
+            from src.memory.assumption_steward import run_steward_inline
+            run_steward_inline([tkr], trigger="company_ingest")
+        except Exception as exc:
+            logger.warning("[steward] inline pass failed for %s: %s", tkr, exc)
         return {"ticker": tkr, "status": "extracted",
                 "fiscal_year": fy, "fiscal_quarter": fq, "as_of": as_of,
                 "versions_added": added}
@@ -1075,6 +1112,16 @@ def build_assumption_context(ticker: str, max_chars: int = 4500) -> str:
                              f"({rev.get('direction') or '?'})")
     if rep_lines:
         parts.append("Licensed analyst reports on file:\n" + "\n".join(rep_lines))
+
+    # R3 — Assumption Watch (open challenges, variant drivers, hit-rates).
+    # Empty when the steward is disabled or nothing is flagged.
+    try:
+        from src.memory.assumption_steward import build_assumption_watch
+        watch = build_assumption_watch(ticker, max_chars=1500)
+        if watch:
+            parts.append(watch)
+    except Exception:
+        pass
 
     text = "\n\n".join(parts)
     return text[:max_chars]

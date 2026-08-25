@@ -493,6 +493,24 @@ def resolve_challenge(challenge_id: str, status: str,
     )
 
 
+def annotate_challenge(challenge_id: str, note: str) -> None:
+    """Append an analyst note (e.g. the steward's LLM reading) WITHOUT
+    changing status — the challenge stays open until facts resolve it."""
+    ensure_assumption_tables()
+    r = db.query_one(
+        "SELECT outcome_note FROM assumption_challenges WHERE id = ?",
+        [challenge_id],
+    )
+    if r is None:
+        return
+    prior = r["outcome_note"] or ""
+    merged = ((prior + "\n") if prior else "") + note
+    db.execute(
+        "UPDATE assumption_challenges SET outcome_note = ? WHERE id = ?",
+        [merged[:4000], challenge_id],
+    )
+
+
 # ── assumption_scorecard (R3) ────────────────────────────────────────────────
 
 def record_scorecard(ticker: str, source: str, field_key: str,

@@ -2236,6 +2236,108 @@ async def analyst_docs_assumptions(ticker: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+# ─── R3: Assumption Steward — manual trigger + Assumption Watch read ───────
+
+
+def _execute_assumption_steward_job(job_id: str,
+                                    tickers: list | None = None) -> None:
+    """Worker-side runner for the steward (kind=assumption_steward).
+    tickers=None → full monitored-universe sweep; else inline pass."""
+    job_store.update_progress(job_id, "running",
+                              "steward: scanning assumption ledger")
+    try:
+        from src.memory.assumption_steward import (
+            run_steward_inline, run_steward_sweep)
+        if tickers:
+            result = run_steward_inline(list(tickers), trigger="manual")
+        else:
+            result = run_steward_sweep()
+        job_store.complete_job(job_id, result)
+    except Exception as exc:
+        logger.exception("assumption steward job %s failed: %s", job_id, exc)
+        job_store.fail_job(job_id, str(exc))
+
+
+@router.post("/ideas/analyst-docs/steward")
+async def analyst_docs_steward(
+    tickers: str | None = None,
+    actor: User | None = Depends(require_user_or_service),
+):
+    """
+    R3: on-demand Assumption Steward pass — deterministic anomaly
+    detectors over the assumption ledger, challenge persistence,
+    scorecard scoring against earnings actuals, and one bundled LLM
+    reading per flagged ticker. `tickers` = comma-separated list;
+    omitted → full monitored-universe sweep.
+
+    Returns {job_id, status: 'pending'}; poll
+    GET /research/ideas/complacency/jobs/{job_id}.
+    """
+    in_flight = job_store.find_in_flight_job("assumption_steward")
+    if in_flight:
+        return {
+            "job_id":    in_flight["job_id"],
+            "status":    in_flight["status"],
+            "started_at": in_flight["started_at"],
+            "deduped":   True,
+        }
+
+    await rate_limiter.check_limits(
+        user=actor, scope="research",
+        daily_limit=30, concurrent_limit=2, slot_ttl_seconds=2100,
+    )
+
+    tkr_list = [t.strip().upper() for t in (tickers or "").split(",")
+                if t.strip()] or None
+    job_id = job_store.create_job("assumption_steward",
+                                  user_id=actor.id if actor else None)
+
+    if not await _maybe_enqueue_research(
+            job_id, "assumption_steward", {"tickers": tkr_list}):
+        async def _run():
+            await asyncio.to_thread(
+                _execute_assumption_steward_job, job_id, tkr_list)
+
+        _spawn_background(_run())
+    return {
+        "job_id":    job_id,
+        "status":    "pending",
+        "started_at": None,
+        "deduped":   False,
+    }
+
+
+@router.get("/ideas/analyst-docs/watch/{ticker}")
+async def analyst_docs_watch(ticker: str):
+    """R3 read path: the Assumption Watch payload for one ticker —
+    open challenges (with LLM readings), variant drivers, source
+    hit-rates, and the rendered watch block (consumed by the report
+    Assumption Watch card)."""
+    from src.memory.assumption_steward import (
+        build_assumption_watch, steward_enabled, variant_drivers,
+        source_track_record)
+    from src.memory import assumption_store
+
+    def _gather():
+        if not steward_enabled():
+            return {"ticker": ticker.upper(), "enabled": False}
+        return {
+            "ticker": ticker.upper(),
+            "enabled": True,
+            "open_challenges":
+                assumption_store.get_open_challenges(ticker),
+            "variant_drivers": variant_drivers(ticker),
+            "track_record": source_track_record(ticker),
+            "watch_text": build_assumption_watch(ticker),
+        }
+
+    try:
+        return await asyncio.to_thread(_gather)
+    except Exception as exc:
+        logger.exception("analyst_docs_watch(%s) failed: %s", ticker, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/ideas/analyst-docs/refresh/{ticker}")
 async def analyst_docs_refresh_company(
     ticker: str,

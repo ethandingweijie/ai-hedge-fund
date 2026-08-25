@@ -36,6 +36,9 @@ def test_worker_settings_shape():
         # Workstream R1.e — analyst-report Drive folder sync (8am cron +
         # manual trigger via the research routes)
         "run_drive_sync_task",
+        # Workstream R3 — Assumption Steward weekly sweep (opt-in via
+        # ASSUMPTION_STEWARD_SWEEP_HOUR; manual trigger via research routes)
+        "run_assumption_steward_sweep_task",
     }
     assert ws.max_jobs == 10
     assert ws.job_timeout == 3600       # 60 min — VGPM backfill can exceed 30
@@ -51,6 +54,8 @@ def test_research_kinds_cover_spawn_points():
         "qual_sweep",
         # Workstream R1.e — analyst-report Drive folder sync
         "drive_sync",
+        # Workstream R3 — Assumption Steward manual sweep trigger
+        "assumption_steward",
     }
 
 
@@ -117,6 +122,30 @@ def test_drive_sync_task_completes_job_store(monkeypatch):
     assert events[0] == ("create", "drive_sync")
     assert events[-1][0] == "complete"
     assert events[-1][1]["unchanged"] == 5
+
+
+# ── R3 assumption steward sweep task ─────────────────────────────────────────
+
+def test_steward_sweep_task_disabled_is_noop(monkeypatch):
+    """Backward gate: ASSUMPTION_STEWARD=false → the weekly cron task still
+    completes cleanly (never crash the cron loop) but the steward is a
+    no-op end to end."""
+    monkeypatch.setenv("ASSUMPTION_STEWARD", "false")
+    out = asyncio.run(worker.run_assumption_steward_sweep_task({}))
+    assert out["ran"] is True
+    assert out["result"] == {"status": "disabled"}
+
+
+def test_steward_sweep_task_never_raises(monkeypatch):
+    """A failing sweep (store unavailable etc.) must return an error dict,
+    never raise into the arq worker."""
+    def boom():
+        raise RuntimeError("store unavailable")
+    monkeypatch.setattr("src.memory.assumption_steward.run_steward_sweep",
+                        boom)
+    out = asyncio.run(worker.run_assumption_steward_sweep_task({}))
+    assert out["ran"] is True
+    assert "store unavailable" in out["error"]
 
 
 # ── analysis pipeline task ────────────────────────────────────────────────────

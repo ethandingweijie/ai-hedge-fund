@@ -210,6 +210,7 @@ RESEARCH_KINDS = {
     "hundred_q_refresh",
     "qual_sweep",
     "drive_sync",
+    "assumption_steward",
 }
 
 
@@ -249,6 +250,8 @@ async def run_research_job_task(
         "qual_sweep": lambda: R._execute_qual_sweep_job(
             job_id, bool(params.get("force", False))),
         "drive_sync": lambda: R._execute_drive_sync_job(job_id),
+        "assumption_steward": lambda: R._execute_assumption_steward_job(
+            job_id, params.get("tickers")),
     }
     fn = runners.get(kind)
     if fn is None:
@@ -630,6 +633,21 @@ async def run_drive_sync_task(ctx: dict) -> dict:
         return {"ran": True, "job_id": job_id, "error": str(exc)}
 
 
+# ── R3: Assumption Steward weekly sweep ─────────────────────────────────────
+
+async def run_assumption_steward_sweep_task(ctx: dict) -> dict:
+    """R3 weekly Assumption Steward sweep (arq cron — registered only when
+    ASSUMPTION_STEWARD_SWEEP_HOUR is set; unset = inline-only operation
+    after ingests). No-op when ASSUMPTION_STEWARD=false."""
+    try:
+        from src.memory.assumption_steward import run_steward_sweep
+        result = await asyncio.to_thread(run_steward_sweep)
+        return {"ran": True, "result": result}
+    except Exception as exc:
+        logger.exception("assumption steward sweep failed: %s", exc)
+        return {"ran": True, "error": str(exc)}
+
+
 # ── WorkerSettings — arq entry point ──────────────────────────────────────────
 
 async def _on_startup(ctx: dict) -> None:
@@ -666,10 +684,15 @@ class WorkerSettings:
         # R1.e — analyst-report Drive folder sync (also manual via
         # POST /research/ideas/analyst-docs/sync → run_research_job_task)
         run_drive_sync_task,
+        # R3 — Assumption Steward weekly sweep (cron registered below only
+        # when ASSUMPTION_STEWARD_SWEEP_HOUR is set)
+        run_assumption_steward_sweep_task,
     ]
     # R1.e — arq-native daily cron. Railway workers run UTC, so set
     # DRIVE_SYNC_CRON_HOUR to the UTC hour matching local 8am (this knob
     # is deliberately UTC-documented). No-op when DRIVE_SYNC_FOLDER unset.
+    # R3 — weekly steward sweep cron only when ASSUMPTION_STEWARD_SWEEP_HOUR
+    # is set (unset = inline-only operation after ingests). UTC hour.
     try:
         from arq import cron as _cron
         _drive_sync_hour = int(os.environ.get("DRIVE_SYNC_CRON_HOUR", "8"))
@@ -677,6 +700,14 @@ class WorkerSettings:
             _cron(run_drive_sync_task, hour={_drive_sync_hour}, minute={7},
                   unique=True),
         ]
+        _steward_sweep_hour = os.environ.get("ASSUMPTION_STEWARD_SWEEP_HOUR",
+                                             "").strip()
+        if _steward_sweep_hour:
+            cron_jobs.append(
+                _cron(run_assumption_steward_sweep_task, week_day={1},
+                      hour={int(_steward_sweep_hour)}, minute={23},
+                      unique=True),
+            )
     except Exception:  # pragma: no cover — arq always present in the worker
         cron_jobs = []
     queue_name = QUEUE_NAME

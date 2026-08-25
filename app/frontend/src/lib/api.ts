@@ -61,6 +61,40 @@ export function deleteRun(runId: string): Promise<{ deleted: string }> {
   return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}`, { method: 'DELETE' });
 }
 
+/** R3: Assumption Watch payload — the steward's open challenges, variant
+ * drivers and source hit-rates for one ticker (Assumption Watch card). */
+export interface AssumptionWatchPayload {
+  ticker: string;
+  enabled: boolean;
+  open_challenges?: Array<{
+    id: string;
+    field_key: string;
+    anomaly_type: string;
+    evidence: string;
+    status: string;
+    outcome_note?: string | null;
+  }>;
+  variant_drivers?: Array<{
+    field_key: string;
+    source: string;
+    house_view?: string;
+    street_view?: string;
+    gap_pct: number;
+  }>;
+  track_record?: Record<string, {
+    hit_rate: number | null;
+    n: number;
+    low_track_record: boolean;
+  }>;
+  watch_text?: string;
+}
+
+export function getAssumptionWatch(ticker: string): Promise<AssumptionWatchPayload> {
+  return fetchJson(
+    `${BASE}/research/ideas/analyst-docs/watch/${encodeURIComponent(ticker)}`,
+  );
+}
+
 /** Fetch paginated history with optional filters. */
 export function getHistory(params: {
   ticker?: string;

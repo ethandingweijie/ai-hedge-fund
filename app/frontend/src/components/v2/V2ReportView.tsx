@@ -60,6 +60,7 @@ import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryS
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
 import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
+import { AssumptionWatchCard } from '@/components/report/AssumptionWatchCard';
 import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
@@ -325,7 +326,16 @@ export function V2ReportView({
         />}
         {tab === 'decision'   && (isRunning && !decision?.decision_inputs
           ? <LoadingCard label="Decision Inputs" minH={120} />
-          : <DecisionInputsCard decisionInputs={decision?.decision_inputs} ticker={ticker} isRunning={isRunning} />)}
+          : (
+            <>
+              <DecisionInputsCard decisionInputs={decision?.decision_inputs} ticker={ticker} isRunning={isRunning} />
+              {/* R3 Assumption Watch — mounts in BOTH render paths; fetches
+                  its own endpoint and renders nothing when unflagged. */}
+              <div className="mt-3">
+                <AssumptionWatchCard ticker={ticker} />
+              </div>
+            </>
+          ))}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
         {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} deepAnnotated={deepAnnotated} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
         {tab === 'financials' && <FinancialsBody ticker={ticker} stockMetrics={stockMetrics} />}

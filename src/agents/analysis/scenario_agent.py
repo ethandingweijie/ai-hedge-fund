@@ -133,6 +133,22 @@ def run_scenario_agent(state: AgentState) -> AgentState:
         else:
             dcf_anchors_str = "Not available — derive fair values from the industry brief."
 
+        # R3 — Assumption Steward: open challenges + variant drivers shape
+        # the scenario weighting (stress-test around the variant driver).
+        # Empty when the steward is disabled or nothing is flagged.
+        assumption_watch_str = ""
+        assumption_divergence_fields: list = []
+        try:
+            from src.memory.assumption_steward import (
+                build_assumption_watch, steward_enabled, variant_drivers)
+            if steward_enabled():
+                assumption_watch_str = build_assumption_watch(ticker,
+                                                              max_chars=1500)
+                assumption_divergence_fields = [
+                    v["field_key"] for v in variant_drivers(ticker)]
+        except Exception:
+            assumption_watch_str = ""
+
         # Collect any system-agent signals carrying a price target for this
         # ticker (the investor committee is decommissioned — this is usually
         # empty and the scenarios lean on DCF anchors + research instead).
@@ -155,6 +171,8 @@ def run_scenario_agent(state: AgentState) -> AgentState:
                 "Ticker: {ticker}\n"
                 "Current price: {current_price}\n\n"
                 "DCF Engine anchors (deterministic, use as constraints):\n{dcf_anchors}\n\n"
+                "Assumption Watch (steward-flagged anomalies & variant drivers — "
+                "re-weight bull/base/bear around these when non-empty):\n{assumption_watch}\n\n"
                 "Analyst signals and price targets (system agents, if any):\n{targets}\n\n"
                 "Industry Intelligence Brief:\n{brief}\n\n"
                 "2B — Competitive Landscape (informs bull/base scenario assumptions):\n{competitive}\n\n"
@@ -175,6 +193,7 @@ def run_scenario_agent(state: AgentState) -> AgentState:
             "ticker": ticker,
             "current_price": current_price_val or "unknown",
             "dcf_anchors": dcf_anchors_str,
+            "assumption_watch": assumption_watch_str or "None flagged.",
             "targets": str(investor_targets)[:2000],
             "brief": industry_brief[:25000],
             "competitive": competitive_section[:1500] if competitive_section else "Not available.",
@@ -198,6 +217,10 @@ def run_scenario_agent(state: AgentState) -> AgentState:
         )
 
         scenario_dict = result.model_dump()
+
+        # R3 audit trail — which variant drivers the scenarios should have
+        # been stressed around (empty when nothing divergent is flagged).
+        scenario_dict["assumption_divergence"] = assumption_divergence_fields
 
         # ── CHECK 4: Independent EV arithmetic verification ───────────────
         # The LLM computes expected_value itself — verify it matches the

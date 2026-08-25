@@ -1556,6 +1556,15 @@ def get_recent_research(
     # The tickers JSON array's FIRST element is always the primary ticker.
     # COALESCE(research_as_of, run_at): rows written before M2 have NULL
     # research_as_of and fall back to their write time.
+    #
+    # Tie-break on run_at DESC: same-day re-runs legitimately share an
+    # as_of date ('2026-08-24' is date-precision), and a bare ORDER BY on
+    # the COALESCE key alone makes the pick arbitrary among ties — Postgres
+    # then returned a STALE week-old research row for BABA (2026-08-25
+    # incident: replayed the pre-earnings Aug-19 text instead of the
+    # Aug-24 post-earnings text → IV and decision flipped).  Among equal
+    # content dates, the most recently WRITTEN row carries the most
+    # delta/freshness-patched content, so it wins.
     _age_clause = ""
     _age_params: list = []
     if max_age_days is not None:
@@ -1571,7 +1580,7 @@ def get_recent_research(
         AND    deep_research_text IS NOT NULL
         AND    deep_research_text != ''
         {_age_clause}
-        ORDER  BY COALESCE(research_as_of, run_at) DESC
+        ORDER  BY COALESCE(research_as_of, run_at) DESC, run_at DESC
         LIMIT  1
     """
     # Match only when ticker is the FIRST element in the JSON array:

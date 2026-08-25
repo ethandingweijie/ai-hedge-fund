@@ -13,6 +13,7 @@ import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import { PowerLawRadar } from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist } from '@/components/report/ValueTrapChecklist';
 import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
+import { AssumptionWatchCard } from '@/components/report/AssumptionWatchCard';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
@@ -308,6 +309,10 @@ export function ReportViewPage() {
                 from. Historical runs without decision_inputs render the
                 card's "not available" state. */}
             <DecisionInputsCard decisionInputs={decision?.decision_inputs} ticker={ticker} />
+            {/* R3 Assumption Watch — the steward's live view of open
+                challenges / variant drivers for this ticker. Fetches its own
+                endpoint; renders nothing when disabled or unflagged. */}
+            <AssumptionWatchCard ticker={ticker} />
           </div>
         </div>
 

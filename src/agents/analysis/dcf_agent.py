@@ -4186,6 +4186,28 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                        if _r1_guid.get('_r1_as_of') else "")
                     + "]")
 
+        # R3: Assumption Steward — OPEN challenges on tracked assumption
+        # fields (guidance/margin/one-off) surface as an IV-haircut audit
+        # flag. Flag ONLY — the engine stays deterministic; no numbers move.
+        try:
+            from src.memory.assumption_steward import steward_enabled
+            if steward_enabled():
+                from src.memory import assumption_store
+                _open_ch = [
+                    c for c in assumption_store.get_open_challenges(ticker)
+                    if str(c.get("field_key") or "").startswith(
+                        ("guidance.", "ebitda.", "margin.", "one_off."))]
+                if _open_ch:
+                    ticker_forward_flags.append(
+                        f"R3 Assumption Steward: {len(_open_ch)} open "
+                        "challenge(s) on tracked guidance fields ("
+                        + ", ".join(sorted(
+                            {c["field_key"] for c in _open_ch})[:3])
+                        + ") — treat Year-1 guidance inputs with caution "
+                        "(IV-haircut flag; engine stays deterministic)")
+        except Exception:
+            pass
+
         growth_base = _guided_growth(guidance, revenue_base=revenue_base)
         if growth_base is not None:
             data_source = "guided"
