@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -305,3 +307,174 @@ def get_dashboard(db: Session, user_id: Optional[int]) -> dict:
 
     signals = _latest_signals(tickers)
     return build_dashboard(holdings, prices, signals)
+
+
+# ── P2: crisis replay (portfolio_replays cache + job orchestration) ─────────
+
+from src.portfolio import replay as _replay
+from src.portfolio.event_library import EVENTS as _EVENTS
+
+_REPLAY_DDL = """
+CREATE TABLE IF NOT EXISTS portfolio_replays (
+    user_id       INTEGER,
+    snapshot_hash TEXT NOT NULL,
+    result_json   TEXT NOT NULL,
+    computed_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_replays_lookup
+    ON portfolio_replays(user_id, snapshot_hash);
+"""
+
+
+def replay_enabled() -> bool:
+    return os.getenv("PORTFOLIO_REPLAY", "true").strip().lower() != "false"
+
+
+def _ensure_replay_table() -> None:
+    _db.ensure_table(_REPLAY_DDL)
+
+
+def _user_where(user_id: Optional[int]) -> tuple[str, list]:
+    """SQL scoping identical to _scope_filter (NULL = anon scope)."""
+    if user_id is not None:
+        return "user_id = ?", [user_id]
+    return "user_id IS NULL", []
+
+
+def get_cached_replay(user_id: Optional[int], snap_hash: str) -> Optional[dict]:
+    _ensure_replay_table()
+    where, params = _user_where(user_id)
+    row = _db.query_one(
+        f"SELECT result_json FROM portfolio_replays "
+        f"WHERE snapshot_hash = ? AND {where} "
+        f"ORDER BY computed_at DESC LIMIT 1",
+        [snap_hash, *params],
+    )
+    if not row:
+        return None
+    try:
+        return json.loads(row["result_json"])
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def save_replay(user_id: Optional[int], snap_hash: str, result: dict) -> None:
+    _ensure_replay_table()
+    _db.execute(
+        "INSERT INTO portfolio_replays (user_id, snapshot_hash, result_json, computed_at) "
+        "VALUES (?, ?, ?, ?)",
+        [user_id, snap_hash, json.dumps(result),
+         datetime.now(timezone.utc).isoformat()],
+    )
+
+
+def _load_today_regime() -> dict:
+    """Latest macro regime snapshot (regime_state.json's `regime` block).
+    Degrades to {} — similarity scoring then reports zero matches."""
+    try:
+        from pathlib import Path
+        path = Path(__file__).parent.parent.parent.parent / "src" / "data" / "regime_state.json"
+        with open(path, encoding="utf-8") as fh:
+            return dict(json.load(fh).get("regime") or {})
+    except Exception:
+        return {}
+
+
+# In-flight guard: (user_id, snapshot_hash) → job_id. The cache check runs
+# BEFORE this, so a second request for an unchanged portfolio either hits
+# the cache or dedupes onto the running job.
+_RUNNING_REPLAYS: dict[tuple, str] = {}
+_RUNNING_LOCK = threading.Lock()
+
+
+def start_replay(db: Session, user_id: Optional[int]) -> dict:
+    """Serve a cached replay when the holdings snapshot is unchanged, else
+    create a tracked job and compute it in a background thread."""
+    from app.backend.services import complacency_job_store as job_store
+
+    holdings = [_holding_dict(r) for r in list_holdings(db, user_id)]
+    if not holdings:
+        return {"error": "no_holdings"}
+    snap = _replay.snapshot_hash(holdings)
+
+    cached = get_cached_replay(user_id, snap)
+    if cached is not None:
+        return {"cached": True, "snapshot_hash": snap, "result": cached}
+
+    key = (user_id, snap)
+    with _RUNNING_LOCK:
+        running_id = _RUNNING_REPLAYS.get(key)
+        if running_id and job_store.get_job(running_id) and \
+                job_store.get_job(running_id).get("status") in ("pending", "running"):
+            return {"cached": False, "running": True, "job_id": running_id,
+                    "snapshot_hash": snap}
+
+    job_id = job_store.create_job("portfolio_replay", ticker=None, user_id=user_id)
+    with _RUNNING_LOCK:
+        _RUNNING_REPLAYS[key] = job_id
+    thread = threading.Thread(
+        target=_execute_replay_job, args=(job_id, user_id, snap, holdings),
+        name=f"replay-{job_id[:8]}", daemon=True)
+    thread.start()
+    return {"cached": False, "job_id": job_id, "snapshot_hash": snap}
+
+
+def _execute_replay_job(job_id: str, user_id: Optional[int], snap: str,
+                        holdings: list[dict]) -> None:
+    from app.backend.services import complacency_job_store as job_store
+
+    stop = threading.Event()
+    start = datetime.now(timezone.utc)
+
+    def _pulse():
+        while not stop.wait(30):
+            elapsed = int((datetime.now(timezone.utc) - start).total_seconds())
+            mm, ss = divmod(elapsed, 60)
+            try:
+                job_store.update_progress(
+                    job_id, "running",
+                    f"replaying {len(holdings)} holdings × {len(_EVENTS)} events "
+                    f"· {mm}m {ss}s elapsed")
+            except Exception:
+                pass
+
+    hb = threading.Thread(target=_pulse, daemon=True)
+    hb.start()
+    try:
+        job_store.update_progress(
+            job_id, "running",
+            f"replaying {len(holdings)} holdings × {len(_EVENTS)} events")
+        result = _replay.replay_portfolio(holdings, today_regime=_load_today_regime())
+        save_replay(user_id, snap, result)
+        job_store.complete_job(job_id, {"snapshot_hash": snap, "result": result})
+        logger.info("portfolio replay %s done: %d events, %d holdings",
+                    job_id, result.get("event_count", 0), len(holdings))
+    except Exception as exc:
+        logger.error("portfolio replay %s failed: %s", job_id, exc)
+        try:
+            job_store.fail_job(job_id, str(exc)[:500])
+        except Exception:
+            pass
+    finally:
+        stop.set()
+        with _RUNNING_LOCK:
+            _RUNNING_REPLAYS.pop((user_id, snap), None)
+
+
+def get_replay_job(job_id: str, user_id: Optional[int]) -> Optional[dict]:
+    """Job status scoped to the requesting user (portfolio data is personal,
+    unlike the shared complacency jobs)."""
+    from app.backend.services import complacency_job_store as job_store
+
+    job = job_store.get_job(job_id)
+    if not job or job.get("kind") != "portfolio_replay":
+        return None
+    if job.get("user_id") != user_id:
+        return None
+    return job
+
+
+def list_events() -> list[dict]:
+    """The curated event library (read-only metadata for the frontend)."""
+    from src.portfolio.event_library import events_as_dicts
+    return events_as_dicts()

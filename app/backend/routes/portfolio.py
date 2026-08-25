@@ -113,3 +113,43 @@ async def delete_holding(holding_id: int,
     except Exception as exc:
         logger.error("delete_holding failed: %s\n%s", exc, traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── P2: crisis replay ────────────────────────────────────────────────────────
+
+@router.get("/replay/events")
+async def replay_events():
+    """The curated event library (metadata only — cheap, unauthenticated)."""
+    return {"events": portfolio_service.list_events()}
+
+
+@router.post("/replay")
+async def start_replay(user_id: Optional[int] = Depends(_optional_user_id),
+                       db: Session = Depends(get_db)):
+    """Replay the current holdings through every curated crisis event.
+
+    Cache-first on the holdings snapshot hash: unchanged portfolio →
+    instant cached result ({cached: true}). Otherwise a tracked job is
+    started and the client polls GET /portfolio/replay/jobs/{job_id}.
+    """
+    if not portfolio_service.replay_enabled():
+        raise HTTPException(status_code=503, detail="portfolio replay disabled")
+    try:
+        out = await asyncio.to_thread(portfolio_service.start_replay, db, user_id)
+    except Exception as exc:
+        logger.error("start_replay failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
+    if out.get("error") == "no_holdings":
+        raise HTTPException(status_code=400, detail="add holdings before replaying")
+    return out
+
+
+@router.get("/replay/jobs/{job_id}")
+async def replay_job(job_id: str,
+                     user_id: Optional[int] = Depends(_optional_user_id)):
+    if not portfolio_service.replay_enabled():
+        raise HTTPException(status_code=503, detail="portfolio replay disabled")
+    job = await asyncio.to_thread(portfolio_service.get_replay_job, job_id, user_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"replay job {job_id} not found")
+    return job
