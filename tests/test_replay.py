@@ -256,3 +256,21 @@ class TestReplayStore:
         assert ps.replay_enabled() is True
         monkeypatch.delenv("PORTFOLIO_REPLAY", raising=False)
         assert ps.replay_enabled() is True   # default on
+
+    def test_replay_job_user_scope(self, monkeypatch, tmp_path):
+        # Regression: replay jobs are PERSONAL — authenticated polls must
+        # scope on user_id. The shared get_job() dict omits user_id by
+        # contract (shared research jobs stay globally visible), so
+        # get_replay_job reads the column directly; without that, prod
+        # polls 404'd (None != real-user-id).
+        monkeypatch.setenv("RUN_ARCHIVE_PATH", str(tmp_path / "jobs.db"))
+        from app.backend.services import complacency_job_store as job_store
+        from app.backend.services import portfolio_service as ps
+
+        job_id = job_store.create_job("portfolio_replay", ticker=None, user_id=7)
+        assert ps.get_replay_job(job_id, 7) is not None
+        assert ps.get_replay_job(job_id, None) is None   # anon cannot see it
+        assert ps.get_replay_job(job_id, 8) is None      # other user cannot
+        # A different job kind stays invisible even with matching user_id
+        other = job_store.create_job("refresh", ticker=None, user_id=7)
+        assert ps.get_replay_job(other, 7) is None

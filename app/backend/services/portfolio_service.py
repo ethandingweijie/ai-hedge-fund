@@ -463,13 +463,25 @@ def _execute_replay_job(job_id: str, user_id: Optional[int], snap: str,
 
 def get_replay_job(job_id: str, user_id: Optional[int]) -> Optional[dict]:
     """Job status scoped to the requesting user (portfolio data is personal,
-    unlike the shared complacency jobs)."""
+    unlike the shared complacency jobs).
+
+    user_id comes from a direct query: the job store's shared get_job()
+    dict deliberately omits it (shared research jobs stay globally visible
+    — attribution is for rate limits only), so replay scoping reads the
+    column itself. get_job() still runs first for its stuck-job watchdog.
+    """
     from app.backend.services import complacency_job_store as job_store
 
     job = job_store.get_job(job_id)
     if not job or job.get("kind") != "portfolio_replay":
         return None
-    if job.get("user_id") != user_id:
+    row = _db.query_one(
+        "SELECT user_id FROM complacency_jobs WHERE job_id = ?", [job_id])
+    if row is None:
+        return None
+    # Row type differs by backend (dict on PG, sqlite3.Row locally) —
+    # key access works on both, .get does not.
+    if row["user_id"] != user_id:
         return None
     return job
 
