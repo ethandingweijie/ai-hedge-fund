@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Float, Integer, String, DateTime, Text, Boolean, JSON, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from .connection import Base
 
@@ -204,6 +204,33 @@ class ChatReaction(Base):
     __table_args__ = (
         UniqueConstraint("message_id", "user_id", "reaction_type", name="uq_chat_reaction_once"),
     )
+
+
+class UserHolding(Base):
+    """P1 — a user's actual portfolio position (ticker + quantity + cost).
+
+    Follows the watchlist scoping pattern: user_id nullable so unscoped
+    (logged-out / local-dev) holdings live under NULL; the composite
+    UNIQUE(user_id, ticker) keeps one row per name per owner. New table —
+    created by Base.metadata.create_all on startup (create_all never
+    ALTERs, so no schema_guard entry is needed)."""
+    __tablename__ = "user_holdings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "ticker", name="uq_user_holdings_user_ticker"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Owner — NULL = unscoped/local holdings (watchlist compat pattern).
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    ticker = Column(String(20), nullable=False, index=True)  # uppercase
+    quantity = Column(Float, nullable=False)                 # shares/units held
+    avg_cost = Column(Float, nullable=False)                 # average cost per share
+    opened_at = Column(DateTime(timezone=True), nullable=True)  # when position opened
+    notes = Column(Text, nullable=True)                      # free-form
 
 
  

@@ -120,28 +120,19 @@ def _ensure_table():
 # ── FMP helpers ───────────────────────────────────────────────────────────────
 
 def _batch_fetch_prices(tickers: list[str]) -> dict[str, float]:
-    """Batch-fetch current prices for multiple tickers in one FMP /stable/quote call."""
+    """Batch-fetch current prices for multiple tickers.
+
+    FMP's /stable/quote only accepts a SINGLE symbol per request (a
+    comma-batched request returns []) — the screener's get_live_quotes
+    already does the parallel per-symbol fan-out (plus yfinance for HK
+    names), so delegate to it. Signature unchanged: {ticker: price}."""
     if not tickers:
         return {}
-    key = _get_fmp_key()
-    if not key:
-        return {}
     try:
-        r = requests.get(
-            f"{_STABLE}/quote/{','.join(tickers)}",
-            params={"apikey": key},
-            timeout=10,
-        )
-        if not r.ok:
-            return {}
-        data = r.json()
-        if not isinstance(data, list):
-            return {}
-        return {
-            item["symbol"]: item["price"]
-            for item in data
-            if item.get("symbol") and item.get("price") is not None
-        }
+        from app.backend.services.screener_service import get_live_quotes
+        quotes = get_live_quotes(tickers)
+        return {sym: q["price"] for sym, q in quotes.items()
+                if q.get("price") is not None}
     except Exception:
         return {}
 

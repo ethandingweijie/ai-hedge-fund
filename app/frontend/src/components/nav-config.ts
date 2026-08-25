@@ -20,7 +20,7 @@
  * tooltips disambiguate them in the sidebar.
  */
 import {
-  Plus, BarChart2, Filter, BookMarked, Lightbulb, History, Wallet, MessageSquare,
+  Plus, BarChart2, Filter, BookMarked, Lightbulb, History, Wallet, MessageSquare, PieChart,
   type LucideIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -40,6 +40,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Current Analysis', icon: BarChart2,  path: '/report',         action: 'resume', hint: 'Resume your in-progress or most recent analysis' },
   { label: 'Screener',         icon: Filter,     path: '/screener'       },
   { label: 'Watchlist',        icon: BookMarked, path: '/watchlist'      },
+  { label: 'Portfolio',        icon: PieChart,   path: '/portfolio',     hint: 'Your holdings vs the system\'s latest valuation signals' },
   { label: 'Discuss',          icon: MessageSquare, path: '/discuss'     },
   { label: 'Robo Strategy',    icon: Wallet,     path: '/robo-strategy',  hint: 'Get a personalized portfolio recommendation' },
   { label: 'Research Ideas',   icon: Lightbulb,  path: '/research-ideas' },

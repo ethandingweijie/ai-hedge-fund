@@ -17,6 +17,7 @@ import { HundredQPage } from './pages/HundredQPage';
 import { IdeaOfTheDayPage } from './pages/IdeaOfTheDayPage';
 import { ShortlistedIdeasPage } from './pages/ShortlistedIdeasPage';
 import { PricingPage } from './pages/PricingPage';
+import { PortfolioPage } from './pages/PortfolioPage';
 import { LoginPage } from './pages/LoginPage';
 import { RoboStrategyPage } from './pages/RoboStrategyPage';
 import { MenuPage } from './pages/MenuPage';
@@ -72,6 +73,7 @@ export default function App() {
           <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />
           <Route path="/screener" element={<RequireAuth><ScreenerPage /></RequireAuth>} />
           <Route path="/watchlist" element={<RequireAuth><WatchlistPage /></RequireAuth>} />
+          <Route path="/portfolio" element={<RequireAuth><PortfolioPage /></RequireAuth>} />
           <Route path="/discuss" element={<RequireAuth><DiscussPage /></RequireAuth>} />
           <Route path="/discuss/:ticker" element={<RequireAuth><TickerChatPage /></RequireAuth>} />
           <Route path="/robo-strategy" element={<RequireAuth><RoboStrategyPage /></RequireAuth>} />

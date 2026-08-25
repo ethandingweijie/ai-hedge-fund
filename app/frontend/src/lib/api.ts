@@ -95,6 +95,91 @@ export function getAssumptionWatch(ticker: string): Promise<AssumptionWatchPaylo
   );
 }
 
+// ── P1 Portfolio — holdings + indicator dashboard ──────────────────────────
+
+export interface HoldingRow {
+  id: number;
+  ticker: string;
+  quantity: number;
+  avg_cost: number;
+  opened_at: string | null;
+  notes: string | null;
+  added_at: string | null;
+  /** Dashboard-enriched fields (GET /portfolio only): */
+  price?: number | null;
+  market_value?: number | null;
+  cost_basis?: number | null;
+  unrealized_pnl?: number | null;
+  pnl_pct?: number | null;
+  weight_pct?: number | null;
+  iv_upside_pct?: number | null;
+  signals?: {
+    run_at?: string | null;
+    decision?: string | null;
+    position_size_pct?: number | null;
+    price_target?: number | null;
+    dcf_base_iv?: number | null;
+    iv_bear?: number;
+    iv_base?: number;
+    iv_bull?: number;
+    wacc?: number | null;
+    anchor_method?: string | null;
+    profile?: string | null;
+    sector?: string | null;
+    expected_value?: number | null;
+    price_target_12m?: number | null;
+    assumption_divergence?: string[];
+    vgpm_composite?: number | null;
+  } | null;
+}
+
+export interface PortfolioDashboard {
+  holdings: HoldingRow[];
+  summary: {
+    total_market_value: number | null;
+    total_cost_basis: number | null;
+    total_unrealized_pnl: number | null;
+    total_pnl_pct: number | null;
+    position_count: number;
+    top_weight_pct: number | null;
+  };
+  sector_exposure: Record<string, number>;
+  prices_at: string;
+}
+
+export function getPortfolioDashboard(): Promise<PortfolioDashboard> {
+  return fetchJson(`${BASE}/portfolio`, { headers: { ..._authHeaders() } });
+}
+
+export function addHolding(body: {
+  ticker: string; quantity: number; avg_cost: number;
+  opened_at?: string | null; notes?: string | null;
+}): Promise<HoldingRow> {
+  return fetchJson(`${BASE}/portfolio/holdings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateHolding(id: number, body: {
+  quantity?: number; avg_cost?: number;
+  opened_at?: string | null; notes?: string | null;
+}): Promise<HoldingRow> {
+  return fetchJson(`${BASE}/portfolio/holdings/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteHolding(id: number): Promise<{ removed: number }> {
+  return fetchJson(`${BASE}/portfolio/holdings/${id}`, {
+    method: 'DELETE',
+    headers: { ..._authHeaders() },
+  });
+}
+
 /** Fetch paginated history with optional filters. */
 export function getHistory(params: {
   ticker?: string;
