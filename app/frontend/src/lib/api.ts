@@ -180,6 +180,172 @@ export function deleteHolding(id: number): Promise<{ removed: number }> {
   });
 }
 
+// ── P2 Portfolio — crisis replay ───────────────────────────────────────────
+
+export interface ReplayMacroSnapshot {
+  risk_appetite: string;
+  rate_direction: string;
+  dollar_trend: string;
+  volatility_regime: string;
+  recession_risk: string;
+  notes?: string;
+}
+
+export interface ReplayBenchStats {
+  spy_return_pct: number;
+  spy_max_dd_pct: number;
+  qqq_return_pct: number;
+  qqq_max_dd_pct: number;
+}
+
+/** Event library metadata (GET /portfolio/replay/events). */
+export interface ReplayEventMeta {
+  key: string;
+  name: string;
+  window: { start: string; end: string };
+  benchmarks: ReplayBenchStats;
+  macro: ReplayMacroSnapshot;
+  tags: string[];
+}
+
+export interface ReplayHoldingImpact {
+  ticker: string;
+  covered: boolean;
+  window_return_pct: number | null;
+  max_dd_pct: number | null;
+  beta: number | null;
+}
+
+/** One event inside a completed replay result. */
+export interface ReplayEventResult {
+  key: string;
+  name: string;
+  window: { start: string; end: string };
+  macro: ReplayMacroSnapshot;
+  tags: string[];
+  benchmarks: {
+    curated: ReplayBenchStats;
+    live: ReplayBenchStats;
+    cross_check: 'ok' | 'divergent';
+    divergent_keys: string[];
+  };
+  holdings: ReplayHoldingImpact[];
+  portfolio: {
+    window_return_pct: number | null;
+    max_dd_pct: number | null;
+    covered_weight_pct: number | null;
+  };
+  excluded: string[];
+  regime_similarity: {
+    matches: number;
+    of: number;
+    matched_dims: string[];
+    today: Record<string, string | null>;
+    then: ReplayMacroSnapshot;
+  };
+}
+
+export interface ReplayResult {
+  event_count: number;
+  /** Sorted most-similar-regime first by the engine. */
+  events: ReplayEventResult[];
+  holdings_snapshot: {
+    tickers: string[];
+    position_count: number;
+    snapshot_hash: string;
+    weight_basis: string;
+  };
+}
+
+/** POST /portfolio/replay response: cached result, or a job to poll. */
+export interface ReplayStartResponse {
+  cached: boolean;
+  running?: boolean;    // true when deduped onto an in-flight job
+  job_id?: string;
+  snapshot_hash?: string;
+  result?: ReplayResult; // present when cached: true
+}
+
+export interface ReplayJobStatus {
+  job_id: string;
+  kind: string;
+  ticker: string | null;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string;
+  finished_at: string | null;
+  progress_msg: string | null;
+  result: { snapshot_hash: string; result: ReplayResult } | null;
+  error: string | null;
+}
+
+/** The curated event library (unauthenticated metadata). */
+export function getReplayEvents(): Promise<{ events: ReplayEventMeta[] }> {
+  return fetchJson(`${BASE}/portfolio/replay/events`);
+}
+
+/** Start (or dedupe/serve cached) a replay of the current holdings. */
+export function startPortfolioReplay(): Promise<ReplayStartResponse> {
+  return fetchJson(`${BASE}/portfolio/replay`, {
+    method: 'POST',
+    headers: { ..._authHeaders() },
+  });
+}
+
+/** One-shot status of a replay job (scoped to the requesting user). */
+export function getPortfolioReplayJob(jobId: string): Promise<ReplayJobStatus> {
+  return fetchJson(`${BASE}/portfolio/replay/jobs/${encodeURIComponent(jobId)}`, {
+    headers: { ..._authHeaders() },
+  });
+}
+
+/**
+ * Poll a replay job to a terminal state. Mirrors pollComplacencyJob
+ * semantics (transient network errors retried, job failures propagated).
+ * Replays are far shorter than research jobs — typical wall is seconds
+ * (cached prices) to a few minutes cold — hence the tighter defaults.
+ */
+export async function pollPortfolioReplayJob(
+  jobId: string,
+  opts: {
+    pollIntervalMs?: number;
+    timeoutMs?: number;
+    maxFailures?: number;
+    onProgress?: (status: ReplayJobStatus) => void;
+  } = {},
+): Promise<ReplayJobStatus> {
+  const pollIntervalMs = opts.pollIntervalMs ?? 4000;
+  const timeoutMs = opts.timeoutMs ?? 10 * 60 * 1000;
+  const maxFailures = opts.maxFailures ?? 6;
+  const start = Date.now();
+  let consecutiveFailures = 0;
+
+  while (true) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`Replay job ${jobId} timed out after ${Math.round(timeoutMs / 1000)}s of polling`);
+    }
+    let status: ReplayJobStatus;
+    try {
+      status = await getPortfolioReplayJob(jobId);
+      consecutiveFailures = 0;
+    } catch (e) {
+      consecutiveFailures += 1;
+      if (consecutiveFailures > maxFailures) {
+        throw new Error(
+          `Replay job ${jobId} polling failed ${consecutiveFailures} times in a row — giving up. Last error: ${(e as Error).message}`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+      continue;
+    }
+    opts.onProgress?.(status);
+    if (status.status === 'completed') return status;
+    if (status.status === 'failed') {
+      throw new Error(status.error || `Replay job ${jobId} failed (no error message)`);
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+}
+
 /** Fetch paginated history with optional filters. */
 export function getHistory(params: {
   ticker?: string;
