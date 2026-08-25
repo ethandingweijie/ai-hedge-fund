@@ -278,9 +278,13 @@ export interface ReplayJobStatus {
   error: string | null;
 }
 
-/** The curated event library (unauthenticated metadata). */
+/** The curated event library. The route itself is unauthenticated, but
+ * prod runs a global auth gate (AUTH_ENFORCED) that rejects anonymous
+ * requests — so attach the token like every other call. */
 export function getReplayEvents(): Promise<{ events: ReplayEventMeta[] }> {
-  return fetchJson(`${BASE}/portfolio/replay/events`);
+  return fetchJson(`${BASE}/portfolio/replay/events`, {
+    headers: { ..._authHeaders() },
+  });
 }
 
 /** Start (or dedupe/serve cached) a replay of the current holdings. */
