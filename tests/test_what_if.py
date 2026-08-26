@@ -65,14 +65,24 @@ class TestClassifyProduct:
         assert c["classified"] and c["confidence"] == "confirmed"
         assert c["underlying"] == "QQQ" and c["leverage"] == -1.0
 
-    def test_mud_assumed_flagged(self):
+    def test_mud_confirmed_micron(self):
+        # User-confirmed (2026-08-26): MUD is the −1× Micron daily inverse,
+        # NOT an inverse MSFT product (the earlier "assumed" guess).
         c = wi.classify_product("MUD")
-        assert c["classified"] and c["confidence"] == "assumed"
-        assert c["underlying"] == "MSFT" and c["leverage"] == -1.0
+        assert c["classified"] and c["confidence"] == "confirmed"
+        assert c["underlying"] == "MU" and c["leverage"] == -1.0
 
-    def test_cord_unknown_without_notes(self):
+    def test_cord_confirmed_coreweave(self):
+        # User-confirmed (2026-08-26): CORD is the 2× inverse CoreWeave ETF.
         c = wi.classify_product("CORD")
-        assert not c["classified"] and c["needs_classification"]
+        assert c["classified"] and c["confidence"] == "confirmed"
+        assert c["underlying"] == "CRWV" and c["leverage"] == -2.0
+
+    def test_curated_map_wins_over_conflicting_notes(self):
+        # Regression: notes must never override the confirmed map (CORD was
+        # once mislabeled inverse Microsoft).
+        c = wi.classify_product("CORD", "inverse MSFT")
+        assert c["underlying"] == "CRWV" and c["confidence"] == "confirmed"
 
     def test_notes_parse_inverse_with_leverage(self):
         c = wi.classify_product("XYZF", "inverse MSFT 2x position")
@@ -257,7 +267,7 @@ class TestLenientOutputParsing:
         by_sector = {s.sector: s for s in out.sector_impacts}
         assert by_sector["Information Technology"].est_return_pct == -75.0
         assert by_sector["Utilities"].est_return_pct == 12.3
-        assert out.most_affected_sectors == ["Information Technology"]
+        assert out.most_affected_sectors == ["Technology"]
         assert out.recommendations[0].action == "HOLD"
         assert out.recommendations[0].instrument == "PSQ"
 
@@ -443,7 +453,7 @@ class TestApplyAssumptionShift:
 
     def test_single_name_product_recomputes_closed_form(self):
         base_est = wi.leveraged_scenario_return_pct(-71.3, 32.0, 90, -1.0)["est_return_pct"]
-        rows = _rows(_product("MUD", "MSFT", -71.3, 32.0, -1.0, base_est, 1000.0))
+        rows = _rows(_product("MUD", "MU", -71.3, 32.0, -1.0, base_est, 1000.0))
         out = wi.apply_assumption_shift(rows, "Technology", -10.0)
         expect = wi.leveraged_scenario_return_pct(-81.3, 32.0, 90, -1.0)["est_return_pct"]
         assert out["adjusted_portfolio_est_pct"] == expect
@@ -496,6 +506,63 @@ class TestApplyAssumptionShift:
         rows = _rows(_equity("TECHX", "Technology", -71.3, 1000.0))
         out = wi.apply_assumption_shift(rows, "Technology", "lots")
         assert out["delta_pp"] == 0.0
+
+
+# ── Sector-list reconciliation (v7): hedged ≠ most-affected ───────────────
+
+class TestSectorListReconciliation:
+    def _out(self, most, hedged, impacts=None):
+        payload = {
+            "scenario_summary": "s",
+            "most_affected_sectors": most,
+            "hedged_sectors": hedged,
+        }
+        if impacts is not None:
+            payload["sector_impacts"] = [
+                {"sector": s, "est_return_pct": v} for s, v in impacts.items()
+            ]
+        return wi._WhatIfLLMOutput(**payload)
+
+    def test_overlap_removed_from_hedged(self):
+        out = self._out(["Technology"], ["Technology", "Utilities"])
+        assert out.most_affected_sectors == ["Technology"]
+        assert out.hedged_sectors == ["Utilities"]
+
+    def test_alias_spelling_cannot_hide_overlap(self):
+        out = self._out(["Information Technology"], ["technology"])
+        assert out.most_affected_sectors == ["Technology"]
+        assert out.hedged_sectors == []
+
+    def test_numbers_contradict_membership(self):
+        # A sector projected to RISE is not most-affected; one projected to
+        # fall hard is not hedged/held-up.
+        out = self._out(
+            ["Technology", "Utilities"], ["Financials", "Consumer Staples"],
+            impacts={"Technology": -60.0, "Utilities": 12.0,
+                     "Financials": -41.0, "Consumer Staples": 2.0})
+        assert out.most_affected_sectors == ["Technology"]
+        assert out.hedged_sectors == ["Consumer Staples"]
+
+    def test_missing_impact_rows_kept(self):
+        out = self._out(["Energy"], ["Utilities"], impacts={"Technology": -50.0})
+        assert out.most_affected_sectors == ["Energy"]
+        assert out.hedged_sectors == ["Utilities"]
+
+    def test_dedup_within_lists(self):
+        out = self._out(["Technology", "Technology", "XLK"],
+                        ["Utilities", "utilities"])
+        assert out.most_affected_sectors == ["Technology"]
+        assert out.hedged_sectors == ["Utilities"]
+
+    def test_numbers_resolve_double_listed_sector(self):
+        # Utilities was double-listed by the LLM; its +8% projection puts
+        # it on the hedged/held-up side, not the most-affected side.
+        out = self._out(["Information Technology", "Utilities"],
+                        ["Utilities"],
+                        impacts={"Information Technology": -70.0,
+                                 "Utilities": 8.0})
+        assert out.most_affected_sectors == ["Technology"]
+        assert out.hedged_sectors == ["Utilities"]
 
 
 # ── Full run with mocked LLM (skeleton + integration shape) ─────────────────
@@ -576,47 +643,58 @@ class TestRunWhatIf:
         assert psq["decay_drag_pp"] < 0
         assert psq["vol_source"].startswith("regime_default")
 
-        # MUD → assumed inverse MSFT via XLK anchor, flagged assumed
+        # MUD → confirmed inverse Micron (MU) via the Technology anchor
         mud = by_tkr["MUD"]
-        assert mud["product"]["confidence"] == "assumed"
+        assert mud["product"]["confidence"] == "confirmed"
+        assert mud["product"]["underlying"] == "MU"
         assert mud["est_impact_pct"] > 200.0
 
-        # CORD → unknown product, no estimate
+        # CORD → confirmed 2× inverse CoreWeave (CRWV); −2× decay math
         cord = by_tkr["CORD"]
-        assert cord["kind"] == "unknown_product"
-        assert cord["est_impact_pct"] is None
+        assert cord["kind"] == "product"
+        assert cord["product"]["leverage"] == -2.0
+        assert cord["product"]["confidence"] == "confirmed"
+        assert cord["anchor_pct"] == -71.3
+        assert cord["est_impact_pct"] is not None
+        assert cord["est_impact_pct"] > mud["est_impact_pct"]   # −2× amplifies
 
-    def test_portfolio_estimate_excludes_uncovered(self):
+    def test_portfolio_estimate_full_coverage(self):
+        # All five fixture holdings now resolve (equities anchored, all
+        # three products confirmed) → nothing left uncovered.
         res = _run()
         assert res["skeleton"]["portfolio_est_impact_pct"] is not None
-        assert res["skeleton"]["covered_weight_pct"] < 100.0
+        assert res["skeleton"]["covered_weight_pct"] == 100.0
 
-    def test_warnings_flag_assumed_and_unknown(self):
+    def test_confirmed_products_not_flagged_in_warnings(self):
         res = _run()
         joined = " | ".join(res["warnings"])
-        assert "ASSUMPTION" in joined and "MUD" in joined
-        assert "CORD" in joined and "note" in joined
+        assert "ASSUMPTION" not in joined
+        for tkr in ("MUD", "CORD", "PSQ"):
+            assert tkr not in joined
+        assert res["warnings"] == []
 
     def test_search_degrades_gracefully_when_empty(self):
-        # CORD unknown → recommended; stub returns nothing → unavailable
-        res = _run(search_results=[])
+        # Forced search with an empty stub → unavailable, never fatal
+        res = _run(override="always", search_results=[])
         assert res["search"]["recommended"] is True
         assert res["search"]["used"] is False
         assert res["search"]["unavailable"] is True
 
     def test_search_used_when_results_present(self):
-        res = _run(search_results=[{"title": "CORD is a fund",
+        res = _run(override="always",
+                   search_results=[{"title": "CoreWeave leverage",
                                     "content": "CORD details…"}])
         assert res["search"]["used"] is True
         assert res["search"]["unavailable"] is False
 
     def test_search_scope_excludes_plain_equities(self):
         # Regression: equities (MOH, TECHX…) must never be flagged as
-        # unclassified short products — only true product candidates (CORD).
+        # unclassified short products; and with every product confirmed
+        # nothing in the portfolio forces an identification search.
         res = _run(search_results=[])
+        assert res["search"]["recommended"] is False
         joined = " ".join(res["search"]["reasons"])
-        assert "CORD" in joined
-        for tkr in ("MOH", "TECHX", "BABA"):
+        for tkr in ("MOH", "TECHX", "BABA", "PSQ", "MUD", "CORD"):
             assert tkr not in joined
 
     def test_equity_only_portfolio_with_reference_no_search(self):
@@ -652,19 +730,21 @@ class TestRunWhatIf:
         assert res["search"]["recommended"] is True      # no anchor → search
 
     def test_notes_classification_flows_into_skeleton(self):
+        # Notes still classify genuinely unknown tickers (curated products
+        # like CORD always resolve from the map instead).
         holdings = HOLDINGS[:-1] + [
-            {"ticker": "CORD", "quantity": 5300.0, "avg_cost": 3.25,
+            {"ticker": "XYZP", "quantity": 5300.0, "avg_cost": 3.25,
              "notes": "inverse MSFT"}]
         res = wi.run_what_if(
             holdings, "AI Capex Meltdown", "concerns text",
             reference_key="dotcom_2000", search_override="never",
             sectors_map=SECTORS, price_fetcher=_no_prices,
             search_fn=lambda q, d, m: [], llm_caller=_mock_llm)
-        cord = next(r for r in res["skeleton"]["holdings"] if r["ticker"] == "CORD")
-        assert cord["kind"] == "product"
-        assert cord["product"]["confidence"] == "notes"
-        assert cord["est_impact_pct"] is not None and cord["est_impact_pct"] > 0
-        assert not any("CORD" in w for w in res["warnings"])
+        row = next(r for r in res["skeleton"]["holdings"] if r["ticker"] == "XYZP")
+        assert row["kind"] == "product"
+        assert row["product"]["confidence"] == "notes"
+        assert row["est_impact_pct"] is not None and row["est_impact_pct"] > 0
+        assert not any("XYZP" in w for w in res["warnings"])
 
     def test_equity_with_short_term_note_stays_equity(self):
         holdings = [{"ticker": "BABA", "quantity": 5850.0, "avg_cost": 122.0,
@@ -752,5 +832,8 @@ class TestWhatIfStore:
         assert "AI Capex Meltdown" in cats and "Custom" in cats
         pm = {p["ticker"]: p for p in ps.product_knowledge()}
         assert pm["PSQ"]["confidence"] == "confirmed"
-        assert pm["MUD"]["confidence"] == "assumed"
-        assert pm["CORD"]["confidence"] == "unknown"
+        assert pm["MUD"]["confidence"] == "confirmed"
+        assert pm["MUD"]["underlying"] == "MU"
+        assert pm["CORD"]["confidence"] == "confirmed"
+        assert pm["CORD"]["underlying"] == "CRWV"
+        assert pm["CORD"]["leverage"] == -2.0

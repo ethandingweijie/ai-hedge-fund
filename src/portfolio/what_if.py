@@ -73,7 +73,10 @@ _TRADING_DAYS_PER_YEAR = 252
 #     drop of rows missing their load-bearing key (2026-08-26).
 # v6: assumptions gain linked_sector + if_true_shift_pp for deterministic
 #     sensitivity recomputation; shared scenario-memory publish (2026-08-26).
-SCENARIO_VERSION = 6
+# v7: product map corrected by the user (MUD = −1× Micron/MU, CORD = −2×
+#     CoreWeave/CRWV) + deterministic reconciliation so hedged_sectors can
+#     never overlap or contradict most_affected_sectors (2026-08-26).
+SCENARIO_VERSION = 7
 
 # Annualized vol (%) by volatility_regime label — fallback when realized vol
 # cannot be computed from the reference window. Bands match macro_regime.py's
@@ -100,26 +103,34 @@ INVERSE_PRODUCT_MAP: dict[str, dict] = {
         "leverage": -1.0,          # daily-rebalanced −1× Nasdaq-100
         "confidence": "confirmed",
     },
-    # Single-stock inverse ETFs trade under obscure tickers that FMP's
-    # stable endpoints do not cover. MUD's price behaviour and the user's
-    # short-products context are consistent with an inverse MSFT product;
-    # this stays flagged "assumed" everywhere it surfaces.
+    # Single-name inverse ETFs trade under obscure tickers that FMP's
+    # stable endpoints do not cover — anchors come from the underlying's
+    # GICS sector instead. Identities confirmed by the user (2026-08-26);
+    # MUD was previously mis-guessed as an inverse MSFT product.
     "MUD": {
-        "name": "Inverse MSFT daily ETF (assumed)",
-        "underlying": "MSFT",
+        "name": "Inverse Micron (MU) daily ETF",
+        "underlying": "MU",
         "leverage": -1.0,
-        "confidence": "assumed",
+        "confidence": "confirmed",
+    },
+    "CORD": {
+        "name": "2x inverse CoreWeave (CRWV) daily ETF",
+        "underlying": "CRWV",
+        "leverage": -2.0,
+        "confidence": "confirmed",
     },
 }
 
 # Tickers we deliberately do NOT classify: nothing is known. An entry here
-# documents the gap; classify_product returns unknown for these.
-UNCLASSIFIED_PRODUCTS: frozenset[str] = frozenset({"CORD"})
+# documents the gap; classify_product returns unknown for these. (Empty since
+# 2026-08-26 — MUD/CORD were confirmed by the user and moved into the map.)
+UNCLASSIFIED_PRODUCTS: frozenset[str] = frozenset()
 
 # Sector of single-name underlyings for inverse single-stock products.
 _SINGLE_NAME_SECTOR: dict[str, str] = {
     "MSFT": "Technology", "AAPL": "Technology", "NVDA": "Technology",
     "AMD": "Technology", "SMCI": "Technology", "AVGO": "Technology",
+    "MU": "Technology", "CRWV": "Technology",
     "META": "Communication Services", "GOOGL": "Communication Services",
     "TSLA": "Consumer Discretionary", "AMZN": "Consumer Discretionary",
     "COIN": "Financials", "MSTR": "Financials", "PLTR": "Technology",
@@ -422,8 +433,9 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
                 })
         else:
             if is_product:
-                # Known product ticker with no classification (e.g. CORD)
-                # and no parseable note → surface loudly, no estimate.
+                # Product ticker with no classification and no parseable
+                # note (only reachable via UNCLASSIFIED_PRODUCTS entries)
+                # → surface loudly, no estimate.
                 row.update({"kind": "unknown_product",
                             "product": {"hint": cls.get("hint")}})
             sec = sectors_map.get(tkr)
@@ -746,6 +758,53 @@ class _WhatIfLLMOutput(BaseModel):
         description="Max 6, spanning SHORT/BUY/GOLD/CASH/HOLD tools; consider the user's existing short products")
     search_evidence_used: bool = Field(default=False)
 
+    @model_validator(mode="after")
+    def _reconcile_sector_lists(self):
+        """Deterministic guard (user directive 2026-08-26): a sector cannot
+        be BOTH most-affected and hedged/held-up. Names are normalized
+        through the GICS resolver (aliases like 'Information Technology' →
+        'Technology'), each list is deduped, hedged entries overlapping
+        most-affected ones are dropped, and membership is cross-checked
+        against sector_impacts numbers when present: a sector projected to
+        fall hard is not 'hedged', a sector projected to rise is not 'most
+        affected' (±2pp tolerance so float noise never flips membership)."""
+        def norm(s):
+            return _resolve_gics(s) or str(s or "").strip()
+
+        affected, seen = [], set()
+        for s in self.most_affected_sectors or []:
+            n = norm(s)
+            if n and n.lower() not in seen:
+                seen.add(n.lower())
+                affected.append(n)
+
+        hedged, hedged_seen = [], set()
+        for s in self.hedged_sectors or []:
+            n = norm(s)
+            if n and n.lower() not in hedged_seen:
+                hedged_seen.add(n.lower())
+                hedged.append(n)
+
+        imp = {}
+        for si in self.sector_impacts or []:
+            g = norm(si.sector)
+            if g:
+                imp[g.lower()] = si.est_return_pct
+
+        # Numbers win: filter membership against the projected returns
+        # FIRST (a sector projected to fall hard is not 'hedged'; one
+        # projected to rise is not 'most affected'), then resolve any
+        # remaining overlap in favour of most_affected — the two lists
+        # must be disjoint.
+        affected = [s for s in affected if imp.get(s.lower(), -1.0) <= 2.0]
+        hedged = [s for s in hedged if imp.get(s.lower(), 1.0) >= -2.0]
+        seen = {s.lower() for s in affected}
+        hedged = [s for s in hedged if s.lower() not in seen]
+
+        self.most_affected_sectors = affected
+        self.hedged_sectors = hedged
+        return self
+
 
 def _default_llm_caller(system_prompt: str,
                         user_prompt: str) -> tuple[Optional[_WhatIfLLMOutput], float]:
@@ -819,6 +878,11 @@ if_true_shift_pp (how many percentage points that sector's scenario return \
 moves if the assumption proves TRUE — negative when it deepens the crisis; \
 keep within ±15 pp). These feed a deterministic sensitivity recompute — do \
 not apply the shifts yourself anywhere else.
+8. most_affected_sectors and hedged_sectors must be DISJOINT — a sector \
+cannot be both most-affected and held-up. Derive them consistently from \
+your sector_impacts signs: most affected = the sectors taking the largest \
+NEGATIVE returns; hedged = sectors that hold up or benefit (near-flat to \
+positive). Use canonical GICS sector names in both lists.
 """
 
 
