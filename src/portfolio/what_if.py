@@ -71,7 +71,9 @@ _TRADING_DAYS_PER_YEAR = 252
 #     (2026-08-26).
 # v5: defaults for omitted fields (confidence/rationale/lists) + entry-level
 #     drop of rows missing their load-bearing key (2026-08-26).
-SCENARIO_VERSION = 5
+# v6: assumptions gain linked_sector + if_true_shift_pp for deterministic
+#     sensitivity recomputation; shared scenario-memory publish (2026-08-26).
+SCENARIO_VERSION = 6
 
 # Annualized vol (%) by volatility_regime label — fallback when realized vol
 # cannot be computed from the reference window. Bands match macro_regime.py's
@@ -452,6 +454,112 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
     }
 
 
+# ── Deterministic sensitivity recompute (assumption holds → portfolio delta) ─
+#
+# The LLM tags each assumption with the sector it governs + the pp shift if
+# it proves true; this function re-runs the skeleton arithmetic with that
+# shift applied. The LLM never does this math.
+#
+# Affected rows:
+#   • equities whose gics matches the linked sector      → est += shift
+#   • products on a SINGLE-NAME underlying in that sector → decay closed form
+#     re-run on the shifted anchor (an inverse product gains when its sector
+#     falls, minus the shifted decay drag)
+# Unaffected (by design — index dilution): products on SPY/QQQ underlyings,
+# rows without estimates, sectors that resolve to nothing.
+
+_SYMBOL_TO_GICS = {v: k for k, v in GICS_SECTOR_SYMBOLS.items()}
+
+
+def _resolve_gics(label: Optional[str]) -> Optional[str]:
+    """Lenient resolution of an LLM-supplied sector label to one of the 11
+    GICS names: exact name (any case), SPDR symbol (XLK…), keyword match."""
+    if not label:
+        return None
+    text = str(label).strip()
+    if not text:
+        return None
+    upper = text.upper()
+    if upper in _SYMBOL_TO_GICS:
+        return _SYMBOL_TO_GICS[upper]
+    for name in GICS_SECTOR_SYMBOLS:
+        if text.lower() == name.lower():
+            return name
+    return sector_to_gics(text)
+
+
+def _portfolio_weighted_est(rows: list[dict]) -> Optional[float]:
+    covered = [r for r in rows if r.get("est_impact_pct") is not None]
+    w = sum(float(r.get("weight_basis") or 0.0) for r in covered)
+    if w <= 0:
+        return None
+    return round(sum(float(r["weight_basis"]) * float(r["est_impact_pct"])
+                     for r in covered) / w, 2)
+
+
+def apply_assumption_shift(holdings_rows: list[dict],
+                           linked_sector: Optional[str],
+                           shift_pp: Optional[float]) -> dict:
+    """Portfolio delta if one assumption holds. Pure-Python re-run of the
+    skeleton math — {linked_gics, shift_pp, base_portfolio_est_pct,
+    adjusted_portfolio_est_pct, delta_pp, affected_tickers}. Degenerates
+    to delta 0 when the sector is unresolvable or the shift is absent."""
+    base = _portfolio_weighted_est(list(holdings_rows or []))
+    gics = _resolve_gics(linked_sector)
+    try:
+        shift = round(float(shift_pp), 2) if shift_pp is not None else None
+    except (TypeError, ValueError):
+        shift = None
+    if gics is None or shift is None or shift == 0.0:
+        return {
+            "linked_gics": gics,
+            "shift_pp": shift,
+            "base_portfolio_est_pct": base,
+            "adjusted_portfolio_est_pct": base,
+            "delta_pp": 0.0,
+            "affected_tickers": [],
+        }
+
+    adjusted_rows: list[dict] = []
+    affected: list[str] = []
+    for row in holdings_rows or []:
+        r = dict(row)
+        est = r.get("est_impact_pct")
+        if est is None:
+            adjusted_rows.append(r)
+            continue
+        if r.get("kind") == "equity" and r.get("gics") == gics:
+            r["est_impact_pct"] = round(float(est) + shift, 2)
+            affected.append(r.get("ticker"))
+        elif r.get("kind") == "product":
+            underlying = str((r.get("product") or {}).get("underlying") or "")
+            if _SINGLE_NAME_SECTOR.get(underlying) == gics \
+                    and r.get("anchor_pct") is not None \
+                    and r.get("vol_pct") is not None \
+                    and r.get("product", {}).get("leverage") is not None:
+                decay = leveraged_scenario_return_pct(
+                    float(r["anchor_pct"]) + shift,
+                    float(r["vol_pct"]),
+                    int(r.get("horizon_days") or DEFAULT_HORIZON_DAYS),
+                    float(r["product"]["leverage"]),
+                )
+                r["est_impact_pct"] = decay["est_return_pct"]
+                affected.append(r.get("ticker"))
+        adjusted_rows.append(r)
+
+    adjusted = _portfolio_weighted_est(adjusted_rows)
+    delta = round(adjusted - base, 2) if (adjusted is not None
+                                           and base is not None) else 0.0
+    return {
+        "linked_gics": gics,
+        "shift_pp": shift,
+        "base_portfolio_est_pct": base,
+        "adjusted_portfolio_est_pct": adjusted,
+        "delta_pp": delta,
+        "affected_tickers": affected,
+    }
+
+
 # ── LLM structured output ────────────────────────────────────────────────────
 
 # Lenient parsing (Q1 lesson): the structured call instructs the exact field
@@ -471,6 +579,12 @@ _SYNONYMS = {
     "timing": ("quarter", "when", "timeframe", "visibility"),
     "instrument": ("tool", "ticker", "symbol", "vehicle"),
     "confidence": ("conf", "certainty", "probability", "conviction"),
+    "sector": ("linked_sector", "sector_name", "gics_sector", "gics",
+               "affected_sector"),
+    "linked_sector": ("sector", "affected_sector", "gics_sector",
+                      "sector_name", "gics"),
+    "if_true_shift_pp": ("shift_pp", "sensitivity_pp", "impact_pp",
+                         "sector_shift_pp", "shift_if_true_pp"),
 }
 
 _ACTIONS = {"SHORT", "BUY", "GOLD", "CASH", "HOLD"}
@@ -525,11 +639,11 @@ def _normalize_llm_output(data: object) -> object:
             elif isinstance(v, (int, float)):
                 rows.append({"sector": str(k), "est_return_pct": v})
         out["sector_impacts"] = rows
-    out["sector_impacts"] = _keep(out.get("sector_impacts"), value_keys)
+    out["sector_impacts"] = _keep(out.get("sector_impacts"), value_keys) or []
 
-    out["assumptions_to_watch"] = _keep(out.get("assumptions_to_watch"),
-                                        metric_keys)
-    out["holding_impacts"] = _keep(out.get("holding_impacts"), ("ticker",))
+    out["assumptions_to_watch"] = (_keep(out.get("assumptions_to_watch"),
+                                         metric_keys) or [])
+    out["holding_impacts"] = _keep(out.get("holding_impacts"), ("ticker",)) or []
 
     for key in ("most_affected_sectors", "hedged_sectors"):
         lst = out.get(key)
@@ -559,8 +673,8 @@ def _normalize_llm_output(data: object) -> object:
             else:
                 fixed.append(r)
         out["recommendations"] = fixed
-    out["recommendations"] = _keep(out.get("recommendations"),
-                                   ("action", "tool"))
+    out["recommendations"] = (_keep(out.get("recommendations"),
+                                    ("action", "tool")) or [])
     return out
 
 
@@ -570,7 +684,10 @@ class _SectorImpact(BaseModel):
     symbol: Optional[str] = Field(default=None, description="SPDR ETF symbol if known (XLK, XLF...)")
     est_return_pct: float = Field(
         description="Expected % move over the horizon under this scenario")
-    rationale: str = Field(description="One sentence, <= 200 chars")
+    # rationale defaults to "": observed live drift emits sector rows WITHOUT
+    # it (the numbers are the load-bearing part); a missing sentence must not
+    # kill the whole scenario block.
+    rationale: str = Field(default="", description="One sentence, <= 200 chars")
 
 
 class _AssumptionWatch(BaseModel):
@@ -583,6 +700,12 @@ class _AssumptionWatch(BaseModel):
     timing: str = Field(
         default="",
         description="When it becomes visible, e.g. 'Q3 earnings, Oct 2026'")
+    linked_sector: Optional[str] = Field(
+        default=None,
+        description="The single GICS sector whose scenario return this assumption governs")
+    if_true_shift_pp: Optional[float] = Field(
+        default=None,
+        description="Percentage points that sector's scenario return moves if this assumption proves true")
 
 
 class _HoldingImpact(BaseModel):
@@ -591,7 +714,10 @@ class _HoldingImpact(BaseModel):
     est_impact_pct: Optional[float] = Field(
         default=None,
         description="Use the precomputed figure when given; adjust only with explicit rationale")
-    rationale: str = Field(description="One sentence, <= 200 chars")
+    # Observed live drift: the model echoes the precomputed skeleton rows back
+    # verbatim (all numbers, no prose). The numbers are what matter; a missing
+    # rationale must not discard the row.
+    rationale: str = Field(default="", description="One sentence, <= 200 chars")
 
 
 class _Recommendation(BaseModel):
@@ -687,6 +813,12 @@ rates/geopolitics hedge. Keep confidence honest (< 0.5 when evidence is thin).
 5. If search evidence is provided and materially informs the scenario, set \
 search_evidence_used=true and cite it in the relevant rationale.
 6. Be concrete and sectoral, not vague: name the transmission channels.
+7. For EVERY assumption also provide linked_sector (the single GICS sector \
+whose scenario return the assumption governs, e.g. 'Technology') and \
+if_true_shift_pp (how many percentage points that sector's scenario return \
+moves if the assumption proves TRUE — negative when it deepens the crisis; \
+keep within ±15 pp). These feed a deterministic sensitivity recompute — do \
+not apply the shifts yourself anywhere else.
 """
 
 
@@ -735,9 +867,11 @@ def _build_user_prompt(category: str, concerns: str, horizon_days: int,
         parts.append("")
     parts.append(
         "Now emit the JSON: scenario_summary, sector_impacts (all 11 GICS "
-        "sectors where the reference provides them), assumptions_to_watch, "
-        "most_affected_sectors, hedged_sectors, holding_impacts (every "
-        "skeleton holding), recommendations, search_evidence_used.")
+        "sectors where the reference provides them), assumptions_to_watch "
+        "(each with metric, watch_for, timing, linked_sector, "
+        "if_true_shift_pp), most_affected_sectors, hedged_sectors, "
+        "holding_impacts (every skeleton holding), recommendations, "
+        "search_evidence_used.")
     return "\n".join(parts)
 
 
@@ -874,5 +1008,5 @@ __all__ = [
     "CATEGORIES", "DEFAULT_HORIZON_DAYS", "INVERSE_PRODUCT_MAP",
     "UNCLASSIFIED_PRODUCTS", "SCENARIO_VERSION",
     "classify_product", "leveraged_scenario_return_pct", "sector_to_gics",
-    "decide_search", "run_what_if",
+    "decide_search", "apply_assumption_shift", "run_what_if",
 ]

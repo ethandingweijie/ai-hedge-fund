@@ -118,11 +118,20 @@ def update_progress(job_id: str, status: str, message: str) -> None:
     Also stamps progress_at — the watchdog measures stuckness from the
     LAST heartbeat, not job start, so legitimately long jobs (full-table
     qual sweeps) survive as long as they keep reporting progress.
+
+    The WHERE clause refuses to touch terminal rows: heartbeat threads
+    wake on a fixed cadence, so one can start its UPDATE in the same
+    instant the worker thread calls complete_job/fail_job — on PG it is
+    last-writer-wins, and a stale heartbeat committing after the terminal
+    write would flip the job back to 'running' with finished_at already
+    set (pollers then wait until the 30-min watchdog kills a job that
+    actually succeeded — observed live on a what-if job). Terminal states
+    are final; late heartbeats are no-ops.
     """
     _ensure_table()
     db.execute(
         "UPDATE complacency_jobs SET status = ?, progress_msg = ?, progress_at = ? "
-        "WHERE job_id = ?",
+        "WHERE job_id = ? AND status IN ('pending', 'running')",
         [status, message[:500], datetime.now(timezone.utc).isoformat(), job_id],
     )
 

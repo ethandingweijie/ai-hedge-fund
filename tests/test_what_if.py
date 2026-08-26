@@ -292,6 +292,211 @@ class TestLenientOutputParsing:
         assert [h.ticker for h in out.holding_impacts] == ["PSQ"]
         assert [r.action for r in out.recommendations] == ["GOLD"]
 
+    def test_rationale_omission_and_sector_alias_parses(self):
+        # Live drift (P6 E2E round 3, 2026-08-26): deepseek-v4-flash
+        # echoed the precomputed skeleton rows verbatim as holding_impacts
+        # (ticker/kind/sector/gics/est_impact_pct/anchor_pct/weight_basis —
+        # all numbers, no prose) and emitted sector rows with
+        # 'linked_sector' instead of 'sector'. EVERY row lacked rationale,
+        # and the strict field rejected the whole payload twice (json_mode
+        # then raw retry) → llm=None. rationale is optional prose now; the
+        # numbers are load-bearing and must survive.
+        out = wi._WhatIfLLMOutput(**{
+            "scenario_summary": "s",
+            "sector_impacts": [
+                {"linked_sector": "Financials", "symbol": "XLF",
+                 "est_return_pct": -41.0, "anchor_pct": -41.0},
+                {"sector": "Information Technology",
+                 "est_return_pct": -70.0},
+            ],
+            "assumptions_to_watch": [{"metric": "m", "watch_for": "w"}],
+            "most_affected_sectors": ["Financials"],
+            "hedged_sectors": [],
+            "holding_impacts": [
+                {"ticker": "JPM", "kind": "equity",
+                 "sector": "Financial Services", "gics": "Financials",
+                 "est_impact_pct": -41.0, "anchor_pct": -41.0,
+                 "weight_basis": 12345.0},
+                {"ticker": "PSQ", "est_impact_pct": 270.9},
+            ],
+            "recommendations": [
+                {"action": "HOLD", "instrument": "PSQ", "confidence": 0.7}],
+        })
+        assert out.sector_impacts[0].sector == "Financials"
+        assert out.sector_impacts[0].rationale == ""
+        assert out.sector_impacts[1].sector == "Information Technology"
+        assert out.holding_impacts[0].ticker == "JPM"
+        assert out.holding_impacts[0].est_impact_pct == -41.0
+        assert out.holding_impacts[0].rationale == ""
+        assert out.holding_impacts[1].rationale == ""
+
+
+# ── Assumption sensitivity (v6): lenient fields + deterministic shift math ──
+
+class TestResolveGics:
+    @pytest.mark.parametrize("label,expected", [
+        ("Technology", "Technology"),
+        ("technology", "Technology"),
+        ("Health Care", "Health Care"),
+        ("XLK", "Technology"),
+        ("xle", "Energy"),
+        ("Cybersecurity SaaS", "Technology"),   # keyword match
+        ("  Financials  ", "Financials"),
+    ])
+    def test_resolves(self, label, expected):
+        assert wi._resolve_gics(label) == expected
+
+    def test_unresolvable(self):
+        assert wi._resolve_gics(None) is None
+        assert wi._resolve_gics("") is None
+        assert wi._resolve_gics("Quantum Basket Weaving") is None
+
+
+class TestAssumptionFieldsParsing:
+    def test_canonical_new_fields_parse(self):
+        out = wi._WhatIfLLMOutput(**{
+            "scenario_summary": "s",
+            "assumptions_to_watch": [
+                {"metric": "Hyperscaler capex",
+                 "linked_sector": "Technology", "if_true_shift_pp": -12.0}],
+        })
+        a = out.assumptions_to_watch[0]
+        assert a.linked_sector == "Technology"
+        assert a.if_true_shift_pp == -12.0
+
+    def test_drifted_aliases_parse(self):
+        out = wi._WhatIfLLMOutput(**{
+            "scenario_summary": "s",
+            "assumptions_to_watch": [
+                {"metric": "capex cuts", "affected_sector": "Technology",
+                 "shift_pp": -12.0},
+                {"metric": "rates", "gics_sector": "XLK",
+                 "sensitivity_pp": -8},
+                {"metric": "margins", "sector": "Financials",
+                 "impact_pp": 5.5},
+            ],
+        })
+        rows = out.assumptions_to_watch
+        assert rows[0].linked_sector == "Technology" and rows[0].if_true_shift_pp == -12.0
+        assert rows[1].linked_sector == "XLK" and rows[1].if_true_shift_pp == -8.0
+        assert rows[2].linked_sector == "Financials" and rows[2].if_true_shift_pp == 5.5
+
+    def test_old_shape_degrades_to_none(self):
+        # Pre-v6 payload: fields omitted entirely → None, never fatal.
+        out = wi._WhatIfLLMOutput(**{
+            "scenario_summary": "s",
+            "assumptions_to_watch": [{"metric": "old shape", "timing": "Q3"}],
+        })
+        a = out.assumptions_to_watch[0]
+        assert a.linked_sector is None and a.if_true_shift_pp is None
+        assert a.timing == "Q3"
+
+    def test_run_result_carries_fields_and_degrades(self):
+        res = _run()   # _mock_llm omits the new fields
+        row = res["llm"]["assumptions_to_watch"][0]
+        assert "linked_sector" in row and row["linked_sector"] is None
+        assert "if_true_shift_pp" in row and row["if_true_shift_pp"] is None
+
+        def llm_with_fields(sys_p, usr_p):
+            out = wi._WhatIfLLMOutput(
+                scenario_summary="s",
+                assumptions_to_watch=[
+                    wi._AssumptionWatch(metric="capex", linked_sector="Technology",
+                                        if_true_shift_pp=-12.0)],
+            )
+            return out, 0.001
+
+        res2 = _run(llm_caller=llm_with_fields)
+        row2 = res2["llm"]["assumptions_to_watch"][0]
+        assert row2["linked_sector"] == "Technology"
+        assert row2["if_true_shift_pp"] == -12.0
+
+
+def _rows(*rows):
+    return list(rows)
+
+
+def _equity(tkr, gics, est, weight):
+    return {"ticker": tkr, "kind": "equity", "sector": None, "gics": gics,
+            "est_impact_pct": est, "anchor_pct": est, "weight_basis": weight}
+
+
+def _product(tkr, underlying, anchor, vol, lev, est, weight, days=90):
+    return {"ticker": tkr, "kind": "product", "gics": None,
+            "product": {"underlying": underlying, "leverage": lev,
+                        "confidence": "confirmed"},
+            "est_impact_pct": est, "anchor_pct": anchor, "vol_pct": vol,
+            "horizon_days": days, "weight_basis": weight}
+
+
+class TestApplyAssumptionShift:
+    def test_equity_shift_weighted_average(self):
+        rows = _rows(_equity("TECHX", "Technology", -71.3, 1000.0),
+                     _equity("MOH", "Health Care", -29.7, 1000.0))
+        out = wi.apply_assumption_shift(rows, "Technology", -10.0)
+        assert out["linked_gics"] == "Technology"
+        assert out["base_portfolio_est_pct"] == -50.5
+        # only TECHX moves: (-81.3 - 29.7) / 2
+        assert out["adjusted_portfolio_est_pct"] == -55.5
+        assert out["delta_pp"] == -5.0
+        assert out["affected_tickers"] == ["TECHX"]
+
+    def test_single_name_product_recomputes_closed_form(self):
+        base_est = wi.leveraged_scenario_return_pct(-71.3, 32.0, 90, -1.0)["est_return_pct"]
+        rows = _rows(_product("MUD", "MSFT", -71.3, 32.0, -1.0, base_est, 1000.0))
+        out = wi.apply_assumption_shift(rows, "Technology", -10.0)
+        expect = wi.leveraged_scenario_return_pct(-81.3, 32.0, 90, -1.0)["est_return_pct"]
+        assert out["adjusted_portfolio_est_pct"] == expect
+        assert out["delta_pp"] == round(expect - base_est, 2)
+        assert out["delta_pp"] > 0        # inverse product gains on deeper fall
+        assert out["affected_tickers"] == ["MUD"]
+
+    def test_spy_qqq_products_unaffected_by_sector_shift(self):
+        # Index dilution: PSQ tracks QQQ, not any single sector.
+        psq_est = wi.leveraged_scenario_return_pct(-76.1, 32.0, 90, -1.0)["est_return_pct"]
+        rows = _rows(_product("PSQ", "QQQ", -76.1, 32.0, -1.0, psq_est, 1000.0),
+                     _equity("MOH", "Health Care", -29.7, 1000.0))
+        out = wi.apply_assumption_shift(rows, "Technology", -10.0)
+        assert out["affected_tickers"] == []
+        assert out["delta_pp"] == 0.0
+        assert out["adjusted_portfolio_est_pct"] == out["base_portfolio_est_pct"]
+
+    def test_unestimated_rows_untouched(self):
+        rows = _rows(_equity("CORD", None, None, 500.0),
+                     _equity("TECHX", "Technology", -71.3, 500.0))
+        out = wi.apply_assumption_shift(rows, "Technology", -10.0)
+        assert out["affected_tickers"] == ["TECHX"]
+        # base/adjusted average over the covered row only
+        assert out["base_portfolio_est_pct"] == -71.3
+        assert out["adjusted_portfolio_est_pct"] == -81.3
+
+    def test_unresolvable_sector_or_missing_shift_is_noop(self):
+        rows = _rows(_equity("TECHX", "Technology", -71.3, 1000.0))
+        for sector, shift in (("Quantum Basket Weaving", -10.0),
+                              ("Technology", None), (None, -10.0),
+                              ("Technology", 0.0)):
+            out = wi.apply_assumption_shift(rows, sector, shift)
+            assert out["delta_pp"] == 0.0
+            assert out["affected_tickers"] == []
+            assert out["adjusted_portfolio_est_pct"] == -71.3
+
+    def test_empty_rows(self):
+        out = wi.apply_assumption_shift([], "Technology", -10.0)
+        assert out["base_portfolio_est_pct"] is None
+        assert out["adjusted_portfolio_est_pct"] is None
+        assert out["delta_pp"] == 0.0
+
+    def test_symbol_label_resolves(self):
+        rows = _rows(_equity("TECHX", "Technology", -71.3, 1000.0))
+        out = wi.apply_assumption_shift(rows, "XLK", -10.0)
+        assert out["linked_gics"] == "Technology"
+        assert out["affected_tickers"] == ["TECHX"]
+
+    def test_non_numeric_shift_is_noop(self):
+        rows = _rows(_equity("TECHX", "Technology", -71.3, 1000.0))
+        out = wi.apply_assumption_shift(rows, "Technology", "lots")
+        assert out["delta_pp"] == 0.0
+
 
 # ── Full run with mocked LLM (skeleton + integration shape) ─────────────────
 

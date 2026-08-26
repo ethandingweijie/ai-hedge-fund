@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, FlaskConical, Loader2, PieChart, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle, BookOpen, FlaskConical, GitFork, Loader2, MessageSquare,
+  PieChart, Plus, RefreshCw, Trash2, X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -10,10 +14,14 @@ import {
   getPortfolioDashboard, addHolding, deleteHolding,
   getReplayEvents, startPortfolioReplay, pollPortfolioReplayJob,
   getWhatIfMeta, startWhatIf, pollWhatIfJob,
+  getWhatIfLibrary, getWhatIfScenario, addWhatIfNote,
+  compareWhatIfToHoldings, startAssumptionCheck,
   ALL_SECTOR_ETFS,
   type PortfolioDashboard, type ReplayEventMeta, type ReplayEventResult,
   type ReplayResult, type ReplaySectorPerf,
   type WhatIfMeta, type WhatIfResult, type WhatIfHoldingSkeleton,
+  type WhatIfLibraryEntry, type WhatIfScenarioDetail, type WhatIfCompareResult,
+  type WhatIfLibraryAssumption,
 } from '@/lib/api';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
@@ -123,6 +131,17 @@ export function PortfolioPage() {
   const [whatIfBusy, setWhatIfBusy] = useState(false);
   const [whatIfProgress, setWhatIfProgress] = useState<string | null>(null);
   const [whatIfError, setWhatIfError] = useState<string | null>(null);
+  // P6 joint scenario memory: library list + "build on this" prefill target.
+  const [library, setLibrary] = useState<WhatIfLibraryEntry[] | null>(null);
+  const [buildOn, setBuildOn] = useState<{ id: string; category: string } | null>(null);
+
+  const refreshLibrary = useCallback(async () => {
+    try {
+      setLibrary(await getWhatIfLibrary());
+    } catch {
+      /* library panel degrades to a retry affordance */
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -149,9 +168,16 @@ export function PortfolioPage() {
     getWhatIfMeta().then(setWhatIfMeta).catch(() => { /* form degrades to free text */ });
   }, []);
 
+  // Joint scenario memory — load when the what-if tab is first visited.
+  useEffect(() => {
+    if (tab !== 'whatif' || library !== null) return;
+    void refreshLibrary();
+  }, [tab, library, refreshLibrary]);
+
   const runWhatIf = useCallback(async (req: {
     category: string; concerns: string; reference_key: string | null;
     search_override: 'auto' | 'always' | 'never'; horizon_days: number;
+    share: boolean; parent_id: string | null;
   }) => {
     if (whatIfBusy) return;
     setWhatIfBusy(true);
@@ -161,6 +187,13 @@ export function PortfolioPage() {
       const start = await startWhatIf(req);
       if (start.cached && start.result) {
         setWhatIf(start.result);
+        if (req.share) {
+          // Cached runs publish synchronously server-side — refresh the
+          // memory so the (possibly new) row shows up immediately.
+          void refreshLibrary();
+          toast.success('Scenario saved to the shared scenario memory.');
+        }
+        setBuildOn(null);
         return;
       }
       if (!start.job_id) throw new Error('What-if request returned neither a cached result nor a job.');
@@ -168,13 +201,18 @@ export function PortfolioPage() {
         onProgress: (s) => setWhatIfProgress(s.progress_msg),
       });
       setWhatIf(final.result?.result ?? null);
+      if (final.result?.library_scenario_id) {
+        toast.success('Scenario saved to the shared scenario memory.');
+        void refreshLibrary();
+      }
+      setBuildOn(null);
     } catch (e) {
       setWhatIfError(e instanceof Error ? e.message : 'Simulation failed');
     } finally {
       setWhatIfBusy(false);
       setWhatIfProgress(null);
     }
-  }, [whatIfBusy]);
+  }, [whatIfBusy, refreshLibrary]);
 
   const runReplay = useCallback(async () => {
     if (replayBusy) return;
@@ -484,7 +522,7 @@ export function PortfolioPage() {
           />
         </TabsContent>
 
-        {/* ── Tab 4: What-if crisis simulator (P5) ───────────────────────── */}
+        {/* ── Tab 4: What-if crisis simulator (P5) + joint memory (P6) ───── */}
         <TabsContent value="whatif">
           <WhatIfSection
             positionCount={positionCount}
@@ -495,6 +533,17 @@ export function PortfolioPage() {
             progress={whatIfProgress}
             error={whatIfError}
             onRun={runWhatIf}
+            parentId={buildOn?.id ?? null}
+            parentLabel={buildOn?.category ?? null}
+            onClearParent={() => setBuildOn(null)}
+          />
+          <ScenarioLibrary
+            entries={library}
+            onRefresh={refreshLibrary}
+            onBuildOn={(id, category) => {
+              setBuildOn({ id, category });
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
           />
         </TabsContent>
       </Tabs>
@@ -906,6 +955,7 @@ const WHAT_IF_ACTION_CLASS: Record<string, string> = {
 
 function WhatIfSection({
   positionCount, positionsLoaded, meta, result, busy, progress, error, onRun,
+  parentId, parentLabel, onClearParent,
 }: {
   positionCount: number;
   positionsLoaded: boolean;
@@ -917,13 +967,18 @@ function WhatIfSection({
   onRun: (req: {
     category: string; concerns: string; reference_key: string | null;
     search_override: 'auto' | 'always' | 'never'; horizon_days: number;
+    share: boolean; parent_id: string | null;
   }) => Promise<void>;
+  parentId: string | null;
+  parentLabel: string | null;
+  onClearParent: () => void;
 }) {
   const [category, setCategory] = useState('');
   const [concerns, setConcerns] = useState('');
   const [referenceKey, setReferenceKey] = useState('');
   const [searchOverride, setSearchOverride] = useState<'auto' | 'always' | 'never'>('auto');
   const [horizon, setHorizon] = useState(90);
+  const [share, setShare] = useState(true);
 
   // Default category once metadata arrives (dropdown is meta-driven)
   useEffect(() => {
@@ -944,6 +999,8 @@ function WhatIfSection({
       reference_key: referenceKey || null,
       search_override: searchOverride,
       horizon_days: horizon,
+      share,
+      parent_id: parentId,
     });
   }
 
@@ -958,6 +1015,22 @@ function WhatIfSection({
           narrative, assumptions to watch and recommendations. Short/inverse products you hold
           (PSQ, MUD, CORD…) are modelled explicitly.
         </p>
+
+        {parentId && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-violet-700/40 bg-violet-600/10 text-violet-700 dark:text-violet-300 text-[11px]">
+              <GitFork size={12} />
+              Building on: {parentLabel ?? 'shared scenario'}
+            </span>
+            <button
+              onClick={onClearParent}
+              className="text-muted-foreground hover:text-foreground"
+              title="Start fresh instead of building on this scenario"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-4 gap-3">
           <div>
@@ -1021,6 +1094,17 @@ function WhatIfSection({
             {busy ? <Loader2 size={15} className="animate-spin" /> : <FlaskConical size={15} />}
             {busy ? (progress || 'Simulating…') : result ? 'Re-run simulation' : 'Simulate scenario'}
           </Button>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+            <Checkbox
+              checked={share}
+              onCheckedChange={(v) => setShare(v === true)}
+              id="whatif-share"
+            />
+            <span>
+              Publish to scenario memory
+              <span className="text-muted-foreground/70"> (others can see &amp; build on it)</span>
+            </span>
+          </label>
           <span className="text-xs text-muted-foreground max-w-xl">
             {positionCount === 0
               ? positionsLoaded
@@ -1294,5 +1378,558 @@ function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rational
       </TableCell>
       <TableCell className="text-[11px] text-muted-foreground max-w-72">{rationale ?? '—'}</TableCell>
     </TableRow>
+  );
+}
+
+// ── P6: joint scenario memory ───────────────────────────────────────────────
+// Completed what-if runs auto-publish (opt-out in the form) into a shared
+// library. Anyone can read the narrative, compare the scenario against their
+// OWN portfolio deterministically, append notes, fork it as a starting
+// point, and verify the scenario's assumptions against market data or a
+// deep-research sweep. Sensitivity numbers are Python re-running the
+// skeleton math — never the LLM.
+
+const VERDICT_CLASS: Record<string, string> = {
+  confirmed: 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  disconfirmed: 'bg-red-600/15 text-red-700 dark:text-red-300 border-red-700/40',
+  inconclusive: 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40',
+  no_data: 'bg-muted text-muted-foreground border-border',
+  open: 'bg-sky-600/15 text-sky-700 dark:text-sky-300 border-sky-700/40',
+};
+
+function ScenarioLibrary({ entries, onRefresh, onBuildOn }: {
+  entries: WhatIfLibraryEntry[] | null;
+  onRefresh: () => Promise<void>;
+  onBuildOn: (id: string, category: string) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  if (selectedId) {
+    return (
+      <ScenarioDetail
+        scenarioId={selectedId}
+        onBack={() => setSelectedId(null)}
+        onOpen={setSelectedId}
+        onBuildOn={(id, category) => { setSelectedId(null); onBuildOn(id, category); }}
+      />
+    );
+  }
+
+  return (
+    <Card className="p-4 mt-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <BookOpen size={16} className="text-muted-foreground" />
+          <div className="text-sm font-semibold">Scenario memory</div>
+          <span className="text-[11px] text-muted-foreground">
+            shared by everyone — open one to compare it against your portfolio,
+            check its assumptions, or build on it
+          </span>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => void onRefresh()} className="gap-1.5">
+          <RefreshCw size={13} /> Refresh
+        </Button>
+      </div>
+
+      {entries === null ? (
+        <div className="mt-3 p-4 rounded-md border border-border text-sm text-muted-foreground flex items-center justify-between gap-3 flex-wrap">
+          <span>Couldn&apos;t load the scenario library.</span>
+          <Button variant="outline" size="sm" onClick={() => void onRefresh()}>Retry</Button>
+        </div>
+      ) : entries.length === 0 ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          No shared scenarios yet — run a simulation above with
+          &ldquo;Publish to scenario memory&rdquo; on and it will appear here for everyone.
+        </p>
+      ) : (
+        <div className="grid md:grid-cols-2 gap-3 mt-3">
+          {entries.map(e => (
+            <div key={e.scenario_id} className="p-3 rounded-md border border-border bg-muted/20 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold truncate">{e.category}</span>
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  {e.created_by_name ?? 'anonymous'} · {ageLabel(e.created_at)}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground line-clamp-2">{e.concerns_excerpt}</p>
+              <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                {e.reference_key && (
+                  <span className="px-1.5 py-0.5 rounded border border-border bg-muted/40">
+                    anchor: {e.reference_key}
+                  </span>
+                )}
+                {e.horizon_days != null && (
+                  <span className="px-1.5 py-0.5 rounded border border-border bg-muted/40">
+                    {e.horizon_days}d
+                  </span>
+                )}
+                {e.author_portfolio_est_pct != null && (
+                  <span className="px-1.5 py-0.5 rounded border border-border bg-muted/40">
+                    author: <RetText value={e.author_portfolio_est_pct} />
+                  </span>
+                )}
+                {Object.entries(e.assumption_status_tally ?? {})
+                  .filter(([k, n]) => n > 0 && k !== 'open')
+                  .map(([k, n]) => (
+                    <span key={k} className={`px-1.5 py-0.5 rounded border ${VERDICT_CLASS[k] ?? VERDICT_CLASS.open}`}>
+                      {n} {k}
+                    </span>
+                  ))}
+                {e.build_count > 0 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-violet-700/40 bg-violet-600/10 text-violet-700 dark:text-violet-300">
+                    <GitFork size={10} /> {e.build_count}
+                  </span>
+                )}
+                {e.notes_count > 0 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border bg-muted/40">
+                    <MessageSquare size={10} /> {e.notes_count}
+                  </span>
+                )}
+              </div>
+              <div>
+                <Button variant="outline" size="sm" onClick={() => setSelectedId(e.scenario_id)}>
+                  Open scenario
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
+  scenarioId: string;
+  onBack: () => void;
+  onOpen: (id: string) => void;
+  onBuildOn: (id: string, category: string) => void;
+}) {
+  const [detail, setDetail] = useState<WhatIfScenarioDetail | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [compare, setCompare] = useState<WhatIfCompareResult | null>(null);
+  const [compareBusy, setCompareBusy] = useState(false);
+  const [compareErr, setCompareErr] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [checking, setChecking] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      setDetail(await getWhatIfScenario(scenarioId));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not load scenario');
+    } finally {
+      setBusy(false);
+    }
+  }, [scenarioId]);
+
+  useEffect(() => {
+    setCompare(null);
+    setCompareErr(null);
+    setNoteText('');
+    setChecking({});
+    void load();
+  }, [load]);
+
+  async function runCompare() {
+    setCompareBusy(true);
+    setCompareErr(null);
+    try {
+      setCompare(await compareWhatIfToHoldings(scenarioId));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Compare failed';
+      setCompareErr(msg.includes('HTTP 400')
+        ? 'Add holdings on the first tab — the comparison uses your actual positions.'
+        : msg);
+    } finally {
+      setCompareBusy(false);
+    }
+  }
+
+  async function submitNote() {
+    const text = noteText.trim();
+    if (!text || noteBusy) return;
+    setNoteBusy(true);
+    try {
+      await addWhatIfNote(scenarioId, text);
+      setNoteText('');
+      await load();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Could not add note';
+      if (msg.includes('HTTP 401')) toast.error('Sign in to add notes.');
+      else toast.error(msg);
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  async function runCheck(a: WhatIfLibraryAssumption, method: 'market_data' | 'deep_research') {
+    if (checking[a.assumption_id]) return;
+    setChecking(prev => ({ ...prev, [a.assumption_id]: method }));
+    try {
+      const start = await startAssumptionCheck(a.assumption_id, method);
+      const final = await pollWhatIfJob(start.job_id, { timeoutMs: 8 * 60 * 1000 });
+      if (final.status === 'completed') {
+        toast.success(`${a.metric}: check ${final.result?.verdict ?? 'finished'}.`);
+      } else {
+        toast.error(`Check failed: ${final.error ?? final.status}`);
+      }
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Check failed');
+    } finally {
+      setChecking(prev => {
+        const next = { ...prev };
+        delete next[a.assumption_id];
+        return next;
+      });
+    }
+  }
+
+  if (busy) {
+    return (
+      <Card className="p-4 mt-4 text-sm text-muted-foreground flex items-center gap-2">
+        <Loader2 size={15} className="animate-spin" /> Loading scenario…
+      </Card>
+    );
+  }
+  if (err || !detail) {
+    return (
+      <Card className="p-4 mt-4">
+        <div className="text-sm text-red-600 dark:text-red-400 flex items-start gap-2">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+          <span>{err ?? 'Scenario not found.'}</span>
+        </div>
+        <Button variant="outline" size="sm" onClick={onBack} className="mt-3">Back to library</Button>
+      </Card>
+    );
+  }
+
+  const llm = detail.result?.llm ?? null;
+  const skel = detail.result?.skeleton;
+
+  return (
+    <div className="space-y-4 mt-4">
+      {/* Header */}
+      <Card className="p-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={onBack} className="text-muted-foreground hover:text-foreground" title="Back to library">
+                <X size={16} />
+              </button>
+              <span className="text-sm font-semibold">{detail.category}</span>
+              {detail.horizon_days != null && (
+                <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+                  {detail.horizon_days}d horizon
+                </span>
+              )}
+              {detail.reference_key && (
+                <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+                  anchor: {detail.reference_key}
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-1">
+              {detail.created_by_name ?? 'anonymous'} · {ageLabel(detail.created_at)}
+              {detail.build_count > 0 && ` · built on ${detail.build_count}×`}
+              {detail.children_count > 0 && ` · ${detail.children_count} fork${detail.children_count > 1 ? 's' : ''}`}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1.5 max-w-2xl">{detail.concerns}</p>
+            {detail.parent && (
+              <button
+                onClick={() => onOpen(detail.parent!.scenario_id)}
+                className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-violet-700/40 bg-violet-600/10 text-violet-700 dark:text-violet-300 text-[11px] hover:bg-violet-600/20"
+                title="Open the scenario this one was built on"
+              >
+                <GitFork size={12} />
+                Built on: {detail.parent.category} ({detail.parent.created_by_name ?? 'anonymous'})
+              </button>
+            )}
+          </div>
+          <Button onClick={() => onBuildOn(detail.scenario_id, detail.category)} className="gap-1.5">
+            <GitFork size={15} /> Build on this scenario
+          </Button>
+        </div>
+
+        {/* Author headline tile */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
+          <div className="p-2.5 rounded-md bg-muted/40">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Author&apos;s portfolio est. impact</div>
+            <div className="text-lg font-semibold">
+              <RetText value={skel?.portfolio_est_impact_pct ?? null} />
+            </div>
+            <div className="text-[10px] text-muted-foreground">cost-basis weighted</div>
+          </div>
+          <div className="p-2.5 rounded-md bg-muted/40">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Assumptions tracked</div>
+            <div className="text-lg font-semibold tabular-nums">{detail.assumptions.length}</div>
+            <div className="text-[10px] text-muted-foreground">verifiable datapoints</div>
+          </div>
+          <div className="p-2.5 rounded-md bg-muted/40">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Community notes</div>
+            <div className="text-lg font-semibold tabular-nums">{detail.notes.length}</div>
+            <div className="text-[10px] text-muted-foreground">append your own below</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Narrative (author's run result) */}
+      {llm && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-2">Scenario narrative</div>
+          <p className="text-sm leading-relaxed">{llm.scenario_summary}</p>
+          <div className="grid md:grid-cols-2 gap-3 mt-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Most affected</div>
+              <div className="flex gap-1 flex-wrap">
+                {llm.most_affected_sectors.map(s => (
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-red-600/10 text-red-700 dark:text-red-300 text-[10px]">{s}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Hedged / holds up</div>
+              <div className="flex gap-1 flex-wrap">
+                {llm.hedged_sectors.map(s => (
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[10px]">{s}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+          {llm.sector_impacts.length > 0 && (
+            <div className="space-y-1 mt-3">
+              {[...llm.sector_impacts]
+                .sort((a, b) => b.est_return_pct - a.est_return_pct)
+                .map(si => (
+                  <div key={si.sector} className="grid grid-cols-[11rem_4rem_1fr] gap-2 items-center text-xs px-2 py-1 rounded bg-muted/30">
+                    <span className="truncate">
+                      {si.sector}{si.symbol ? <span className="text-muted-foreground"> ({si.symbol})</span> : null}
+                    </span>
+                    <RetText value={si.est_return_pct} />
+                    <span className="text-muted-foreground truncate" title={si.rationale}>{si.rationale}</span>
+                  </div>
+                ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Compare to my portfolio (deterministic, viewer-specific) */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-sm font-semibold">Compare to my portfolio</div>
+            <p className="text-[11px] text-muted-foreground max-w-xl">
+              Re-runs the scenario&apos;s deterministic skeleton against YOUR holdings — no LLM,
+              no re-simulation of the narrative. Sensitivities show how each assumption,
+              if it holds, moves your portfolio.
+            </p>
+          </div>
+          <Button onClick={() => void runCompare()} disabled={compareBusy} className="gap-1.5">
+            {compareBusy ? <Loader2 size={15} className="animate-spin" /> : <PieChart size={15} />}
+            {compareBusy ? 'Computing…' : compare ? 'Recompute' : 'Compare'}
+          </Button>
+        </div>
+
+        {compareErr && (
+          <div className="mt-3 text-xs text-red-600 dark:text-red-400">{compareErr}</div>
+        )}
+
+        {compare && (
+          <div className="mt-3 space-y-3">
+            <div className="grid grid-cols-2 gap-3 max-w-md">
+              <div className="p-2.5 rounded-md bg-muted/40">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Your est. impact</div>
+                <div className="text-lg font-semibold">
+                  <RetText value={compare.skeleton.portfolio_est_impact_pct} />
+                </div>
+              </div>
+              <div className="p-2.5 rounded-md bg-muted/40">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coverage</div>
+                <div className="text-lg font-semibold tabular-nums">
+                  {compare.skeleton.covered_weight_pct != null
+                    ? `${fmtNum(compare.skeleton.covered_weight_pct, 1)}%` : '—'}
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Holding</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="text-right">Est. impact</TableHead>
+                    <TableHead className="text-right">Time-decay drag</TableHead>
+                    <TableHead>Rationale</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {compare.skeleton.holdings.map(h => (
+                    <WhatIfHoldingRow key={h.ticker} h={h} rationale={null} />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {compare.assumption_sensitivities.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold mb-1.5">Assumption sensitivity on your portfolio</div>
+                <div className="space-y-1">
+                  {compare.assumption_sensitivities.map(s => (
+                    <div key={s.assumption_id} className="flex items-center gap-2 flex-wrap text-xs px-2 py-1.5 rounded bg-muted/30">
+                      <span className="font-medium truncate max-w-56" title={s.metric}>{s.metric}</span>
+                      {s.base_portfolio_est_pct != null ? (
+                        <span className="text-muted-foreground tabular-nums">
+                          if holds: <RetText value={s.base_portfolio_est_pct} /> →{' '}
+                          <RetText value={s.adjusted_portfolio_est_pct} />
+                          <span className="ml-1">
+                            ({s.delta_pp > 0 ? '+' : ''}{fmtNum(s.delta_pp, 1)}pp)
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">no portfolio linkage</span>
+                      )}
+                      {s.affected_tickers.length > 0 && (
+                        <span className="text-muted-foreground">· {s.affected_tickers.join(', ')}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-[10px] text-muted-foreground">
+              Computed {new Date(compare.computed_at).toLocaleString()} · deterministic skeleton math only.
+            </p>
+          </div>
+        )}
+      </Card>
+
+      {/* Assumptions ledger */}
+      {detail.assumptions.length > 0 && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-1">Assumptions to watch</div>
+          <p className="text-[11px] text-muted-foreground mb-3">
+            Anyone can verify whether an assumption is holding true — market data checks a
+            deterministic FMP reading; research check runs one web-search sweep. Verdicts are
+            LLM judgement, always attributed.
+          </p>
+          <div className="space-y-2.5">
+            {detail.assumptions.map(a => {
+              const inFlight = checking[a.assumption_id];
+              return (
+                <div key={a.assumption_id} className="p-2.5 rounded-md bg-muted/40">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold">{a.metric}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">{a.watch_for}</div>
+                      <div className="text-[10px] text-primary mt-1">{a.timing}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`px-1.5 py-0.5 rounded border text-[10px] ${VERDICT_CLASS[a.status] ?? VERDICT_CLASS.open}`}>
+                        {a.status}
+                      </span>
+                      {a.author_delta && a.author_delta.base_portfolio_est_pct != null && (
+                        <span
+                          className="px-1.5 py-0.5 rounded border border-border bg-muted/60 text-[10px] tabular-nums"
+                          title={`Author's portfolio if this holds — ${a.author_delta.affected_tickers.join(', ') || 'no direct linkage'}`}
+                        >
+                          if holds: <RetText value={a.author_delta.base_portfolio_est_pct} /> →{' '}
+                          <RetText value={a.author_delta.adjusted_portfolio_est_pct} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <Button
+                      variant="outline" size="sm"
+                      disabled={!!inFlight}
+                      onClick={() => void runCheck(a, 'market_data')}
+                      className="gap-1 text-[11px]"
+                      title="Deterministic FMP reading (rates / inflation / sector ETF) judged against the watch-point"
+                    >
+                      {inFlight === 'market_data' ? <Loader2 size={12} className="animate-spin" /> : null}
+                      Market data
+                    </Button>
+                    <Button
+                      variant="outline" size="sm"
+                      disabled={!!inFlight}
+                      onClick={() => void runCheck(a, 'deep_research')}
+                      className="gap-1 text-[11px]"
+                      title="One web-research sweep (qwen) judging the latest evidence"
+                    >
+                      {inFlight === 'deep_research' ? <Loader2 size={12} className="animate-spin" /> : null}
+                      Research check
+                    </Button>
+                    {a.checks_count > 0 && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {a.checks_count} check{a.checks_count > 1 ? 's' : ''} recorded
+                      </span>
+                    )}
+                  </div>
+                  {a.latest_check && (
+                    <div className="mt-2 p-2 rounded border border-border bg-background/60">
+                      <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                        <span className={`px-1.5 py-0.5 rounded border ${VERDICT_CLASS[a.latest_check.verdict] ?? VERDICT_CLASS.open}`}>
+                          {a.latest_check.verdict}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {a.latest_check.user_name ?? 'anonymous'} · {a.latest_check.method === 'market_data' ? 'market data' : 'research'} · {ageLabel(a.latest_check.checked_at)}
+                        </span>
+                        {a.latest_check.source && (
+                          <span className="text-muted-foreground truncate max-w-52" title={a.latest_check.source}>
+                            src: {a.latest_check.source}
+                          </span>
+                        )}
+                      </div>
+                      {a.latest_check.evidence && (
+                        <p className="text-[11px] text-muted-foreground mt-1">{a.latest_check.evidence}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Community notes */}
+      <Card className="p-4">
+        <div className="text-sm font-semibold mb-2">Community notes</div>
+        {detail.notes.length === 0 ? (
+          <p className="text-[11px] text-muted-foreground">No notes yet — add the first observation below.</p>
+        ) : (
+          <div className="space-y-2 mb-3">
+            {detail.notes.map(n => (
+              <div key={n.note_id} className="p-2 rounded border border-border">
+                <div className="text-[10px] text-muted-foreground">
+                  {n.user_name ?? 'anonymous'} · {ageLabel(n.created_at)}
+                </div>
+                <p className="text-xs mt-0.5 whitespace-pre-wrap">{n.note}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 items-start">
+          <textarea
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            rows={2}
+            placeholder="Add an observation, datapoint or update for everyone tracking this scenario…"
+            className="flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs"
+          />
+          <Button onClick={() => void submitNote()} disabled={noteBusy || noteText.trim().length === 0} className="gap-1.5">
+            {noteBusy ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+            Add note
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
 }

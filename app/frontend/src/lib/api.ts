@@ -407,6 +407,10 @@ export interface WhatIfAssumption {
   metric: string;
   watch_for: string;
   timing: string;
+  /** P6 (SCENARIO_VERSION ≥ 6): the GICS sector this assumption governs. */
+  linked_sector?: string | null;
+  /** P6: pp shift applied to that sector's scenario return if it holds true. */
+  if_true_shift_pp?: number | null;
 }
 
 export interface WhatIfRecommendation {
@@ -486,7 +490,19 @@ export interface WhatIfJobStatus {
   started_at: string;
   finished_at: string | null;
   progress_msg: string | null;
-  result: { scenario_hash: string; result: WhatIfResult } | null;
+  result: {
+    scenario_hash: string;
+    result: WhatIfResult;
+    /** P6: set when the run was published to the joint scenario memory. */
+    library_scenario_id?: string;
+    /** P6 (assumption-check jobs): the check row. */
+    verdict?: string;
+    method?: string;
+    evidence?: string;
+    source?: string;
+    user_name?: string;
+    checked_at?: string;
+  } | null;
   error: string | null;
 }
 
@@ -496,6 +512,156 @@ export interface WhatIfRequest {
   reference_key?: string | null;
   search_override?: 'auto' | 'always' | 'never';
   horizon_days?: number;
+  /** P6: publish the completed scenario to the shared library (default on). */
+  share?: boolean;
+  /** P6: forked-from library scenario id ("build on this"). */
+  parent_id?: string | null;
+}
+
+// ── P6 — joint scenario memory + assumption tracking ────────────────────────
+
+export interface WhatIfLibraryEntry {
+  scenario_id: string;
+  category: string;
+  concerns_excerpt: string;
+  reference_key: string | null;
+  horizon_days: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  parent_id: string | null;
+  build_count: number;
+  notes_count: number;
+  author_portfolio_est_pct: number | null;
+  summary_excerpt: string;
+  assumption_status_tally: Record<string, number>;
+}
+
+export interface WhatIfAssumptionCheck {
+  check_id: string;
+  user_name: string | null;
+  checked_at: string;
+  method: 'deep_research' | 'market_data' | string;
+  verdict: string;
+  evidence: string;
+  source: string;
+}
+
+export interface WhatIfLibraryAssumption {
+  assumption_id: string;
+  idx: number;
+  metric: string;
+  watch_for: string;
+  timing: string;
+  linked_sector: string | null;
+  if_true_shift_pp: number | null;
+  /** Deterministic sensitivity on the AUTHOR's portfolio (v6+ rows only). */
+  author_delta: {
+    linked_gics: string | null;
+    shift_pp: number;
+    base_portfolio_est_pct: number | null;
+    adjusted_portfolio_est_pct: number | null;
+    delta_pp: number;
+    affected_tickers: string[];
+  } | null;
+  status: 'open' | 'confirmed' | 'disconfirmed' | 'inconclusive' | string;
+  updated_at: string;
+  latest_check: WhatIfAssumptionCheck | null;
+  checks_count: number;
+}
+
+export interface WhatIfNote {
+  note_id: string;
+  user_id: number | null;
+  user_name: string | null;
+  note: string;
+  created_at: string;
+}
+
+export interface WhatIfScenarioDetail {
+  scenario_id: string;
+  category: string;
+  concerns: string;
+  reference_key: string | null;
+  horizon_days: number | null;
+  created_by: number | null;
+  created_by_name: string | null;
+  created_at: string;
+  build_count: number;
+  parent: {
+    scenario_id: string;
+    category: string;
+    created_at: string;
+    created_by_name: string | null;
+  } | null;
+  children_count: number;
+  result: WhatIfResult;
+  assumptions: WhatIfLibraryAssumption[];
+  notes: WhatIfNote[];
+}
+
+export interface WhatIfCompareResult {
+  scenario_id: string;
+  horizon_days: number;
+  skeleton: {
+    holdings: WhatIfHoldingSkeleton[];
+    portfolio_est_impact_pct: number | null;
+    covered_weight_pct: number | null;
+  };
+  assumption_sensitivities: {
+    assumption_id: string;
+    metric: string;
+    linked_sector: string | null;
+    if_true_shift_pp: number | null;
+    linked_gics: string | null;
+    shift_pp: number;
+    base_portfolio_est_pct: number | null;
+    adjusted_portfolio_est_pct: number | null;
+    delta_pp: number;
+    affected_tickers: string[];
+  }[];
+  computed_at: string;
+}
+
+export function getWhatIfLibrary(limit = 50): Promise<WhatIfLibraryEntry[]> {
+  return fetchJson(`${BASE}/portfolio/what-if/library?limit=${limit}`, {
+    headers: { ..._authHeaders() },
+  });
+}
+
+export function getWhatIfScenario(scenarioId: string): Promise<WhatIfScenarioDetail> {
+  return fetchJson(`${BASE}/portfolio/what-if/library/${encodeURIComponent(scenarioId)}`, {
+    headers: { ..._authHeaders() },
+  });
+}
+
+export function addWhatIfNote(scenarioId: string, text: string): Promise<WhatIfNote> {
+  return fetchJson(`${BASE}/portfolio/what-if/library/${encodeURIComponent(scenarioId)}/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify({ text }),
+  });
+}
+
+/** Deterministic viewer-portfolio skeleton under a shared scenario — no LLM. */
+export function compareWhatIfToHoldings(scenarioId: string): Promise<WhatIfCompareResult> {
+  return fetchJson(`${BASE}/portfolio/what-if/library/${encodeURIComponent(scenarioId)}/compare`, {
+    method: 'POST',
+    headers: { ..._authHeaders() },
+  });
+}
+
+export function startAssumptionCheck(
+  assumptionId: string,
+  method: 'deep_research' | 'market_data',
+): Promise<{ running: boolean; deduped: boolean; job_id: string }> {
+  return fetchJson(
+    `${BASE}/portfolio/what-if/assumptions/${encodeURIComponent(assumptionId)}/check`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+      body: JSON.stringify({ method }),
+    },
+  );
 }
 
 export function getWhatIfMeta(): Promise<WhatIfMeta> {

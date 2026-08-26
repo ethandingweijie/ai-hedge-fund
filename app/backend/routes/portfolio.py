@@ -163,6 +163,8 @@ class WhatIfRequest(BaseModel):
     reference_key: Optional[str] = None
     search_override: str = "auto"          # auto | always | never
     horizon_days: int = Field(default=90, ge=5, le=365)
+    share: bool = True                     # publish to joint scenario memory
+    parent_id: Optional[str] = None        # forked-from library scenario
 
 
 @router.get("/what-if/meta")
@@ -198,7 +200,7 @@ async def start_what_if(body: WhatIfRequest,
         out = await asyncio.to_thread(
             portfolio_service.start_what_if, db, user_id, body.category,
             body.concerns, body.reference_key, body.search_override,
-            body.horizon_days)
+            body.horizon_days, body.share, body.parent_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -218,3 +220,110 @@ async def what_if_job(job_id: str,
     if job is None:
         raise HTTPException(status_code=404, detail=f"what-if job {job_id} not found")
     return job
+
+
+# ── P6: joint scenario memory + assumption tracking ─────────────────────────
+
+class NoteRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class CheckRequest(BaseModel):
+    method: str   # deep_research | market_data
+
+
+@router.get("/what-if/library")
+async def what_if_library(limit: int = 50):
+    """Newest-first shared scenario memory (capped 50). Read-only list —
+    unauthenticated reads are fine; writing (notes) requires auth."""
+    if not portfolio_service.what_if_enabled():
+        raise HTTPException(status_code=503, detail="what-if simulator disabled")
+    limit = min(max(int(limit), 1), 50)
+    return await asyncio.to_thread(portfolio_service.list_what_if_library, limit)
+
+
+@router.get("/what-if/library/{scenario_id}")
+async def what_if_library_scenario(scenario_id: str):
+    """Full scenario detail: result, assumptions (with sensitivity +
+    latest check), notes and fork lineage."""
+    if not portfolio_service.what_if_enabled():
+        raise HTTPException(status_code=503, detail="what-if simulator disabled")
+    out = await asyncio.to_thread(portfolio_service.get_what_if_scenario,
+                                  scenario_id)
+    if out is None:
+        raise HTTPException(status_code=404,
+                            detail=f"scenario {scenario_id} not found")
+    return out
+
+
+@router.post("/what-if/library/{scenario_id}/notes")
+async def add_what_if_note(scenario_id: str, body: NoteRequest,
+                           user_id: Optional[int] = Depends(_optional_user_id),
+                           db: Session = Depends(get_db)):
+    """Append a dated community note to a shared scenario (auth required —
+    notes are attributed)."""
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="sign in to add notes")
+    user_name = await asyncio.to_thread(
+        portfolio_service._user_display_name, db, user_id)
+    try:
+        note = await asyncio.to_thread(
+            portfolio_service.add_what_if_note, scenario_id, user_id,
+            user_name, body.text)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("add_what_if_note failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
+    if note is None:
+        raise HTTPException(status_code=404,
+                            detail=f"scenario {scenario_id} not found")
+    return note
+
+
+@router.post("/what-if/library/{scenario_id}/compare")
+async def compare_what_if(scenario_id: str,
+                          user_id: Optional[int] = Depends(_optional_user_id),
+                          db: Session = Depends(get_db)):
+    """Deterministic skeleton of the VIEWER's holdings under this shared
+    scenario's reference/horizon + per-assumption sensitivity on the
+    viewer's portfolio. Zero LLM calls — pure math."""
+    if not portfolio_service.what_if_enabled():
+        raise HTTPException(status_code=503, detail="what-if simulator disabled")
+    try:
+        out = await asyncio.to_thread(
+            portfolio_service.compare_what_if_to_holdings, db, user_id,
+            scenario_id)
+    except Exception as exc:
+        logger.error("compare_what_if failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
+    if out is None:
+        raise HTTPException(status_code=404,
+                            detail=f"scenario {scenario_id} not found")
+    if out.get("error") == "no_holdings":
+        raise HTTPException(status_code=400,
+                            detail="add holdings before comparing")
+    return out
+
+
+@router.post("/what-if/assumptions/{assumption_id}/check")
+async def check_assumption(assumption_id: str, body: CheckRequest,
+                           user_id: Optional[int] = Depends(_optional_user_id),
+                           db: Session = Depends(get_db)):
+    """Kick a tracked assumption-verification job. market_data = FMP
+    treasury/inflation/sector-ETF reading + one verdict call;
+    deep_research = one qwen web search. Poll
+    GET /portfolio/what-if/jobs/{job_id}."""
+    if not portfolio_service.what_if_enabled():
+        raise HTTPException(status_code=503, detail="what-if simulator disabled")
+    user_name = await asyncio.to_thread(
+        portfolio_service._user_display_name, db, user_id)
+    try:
+        return await asyncio.to_thread(
+            portfolio_service.start_assumption_check, user_id, user_name,
+            assumption_id, body.method)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("check_assumption failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
