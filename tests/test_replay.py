@@ -208,14 +208,22 @@ class TestDeterminism:
               {"ticker": "B", "quantity": 2, "avg_cost": 50}]
         assert rp.snapshot_hash(h1) != rp.snapshot_hash(h4)
 
+    def test_snapshot_hash_version_sensitive(self, monkeypatch):
+        # A library bump must invalidate every cached replay row (the
+        # pre-v2 rows carry no sector data / miss the new events).
+        h = [{"ticker": "A", "quantity": 1, "avg_cost": 100}]
+        before = rp.snapshot_hash(h)
+        monkeypatch.setattr(rp, "LIBRARY_VERSION", rp.LIBRARY_VERSION + 1)
+        assert rp.snapshot_hash(h) != before
+
 
 # ── Event library sanity ─────────────────────────────────────────────────────
 
 class TestEventLibrary:
-    def test_six_events_windows_ordered(self):
-        assert len(EVENTS) == 6
+    def test_seven_events_windows_ordered(self):
+        assert len(EVENTS) == 7
         keys = [e.key for e in EVENTS]
-        assert len(set(keys)) == 6
+        assert len(set(keys)) == 7
         for e in EVENTS:
             assert e.start < e.end
             assert -100 < e.spy_return_pct < 100
@@ -225,7 +233,33 @@ class TestEventLibrary:
     def test_expected_events_present(self):
         keys = {e.key for e in EVENTS}
         assert {"gfc_2008", "covid_2020", "rate_shock_2022",
-                "svb_2023", "q4_2018", "euro_2011"} <= keys
+                "svb_2023", "q4_2018", "euro_2011", "dotcom_2000"} <= keys
+
+    def test_sector_performance_shape(self):
+        for e in EVENTS:
+            d = e.as_dict()
+            sp = d["sector_performance"]
+            assert sp, f"{e.key}: sector_performance missing"
+            rets = [s["return_pct"] for s in sp]
+            assert rets == sorted(rets, reverse=True), f"{e.key}: not best→worst"
+            for s in sp:
+                assert set(s) == {"sector", "symbol", "return_pct"}
+                assert -100.0 < s["return_pct"] < 100.0
+                assert s["symbol"].startswith("XL")
+
+    def test_dotcom_sector_character(self):
+        ev = next(e for e in EVENTS if e.key == "dotcom_2000")
+        sp = {s["symbol"]: s["return_pct"] for s in ev.as_dict()["sector_performance"]}
+        # Defensives positive, tech crushed — the breadth signature
+        assert sp["XLP"] > 0 and sp["XLU"] > 0
+        assert sp["XLK"] == min(sp.values()) and sp["XLK"] < -60.0
+        # XLRE/XLC didn't exist yet → honestly absent, never zero-filled
+        assert "XLRE" not in sp and "XLC" not in sp
+
+    def test_rate_shock_energy_positive(self):
+        ev = next(e for e in EVENTS if e.key == "rate_shock_2022")
+        sp = {s["symbol"]: s["return_pct"] for s in ev.as_dict()["sector_performance"]}
+        assert sp["XLE"] > 30.0 and sp["XLE"] == max(sp.values())
 
 
 # ── Replay store (dual-mode cache table) ────────────────────────────────────

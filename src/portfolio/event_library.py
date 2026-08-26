@@ -15,13 +15,28 @@ Each event carries:
     (risk_appetite, rate_direction, dollar_trend, volatility_regime,
     recession_risk) so the engine can score similarity against today's
     regime deterministically.
+  • sector_performance — per-GICS-sector window returns (the 11 SPDR
+    sector ETFs), curated reference numbers sorted best→worst. Same
+    calibration recipe as the benchmarks (FMP stable EOD, 1dp). Sector
+    ETFs that did not exist yet (XLRE pre-2015, XLC pre-2018) fail the
+    coverage guard and are honestly omitted, not zero-filled.
 
-Windows are the curation; the benchmark numbers were aligned to FMP
-stable EOD history during the P2 forward gate (2026-08-25).
+Windows are the curation; the benchmark and sector numbers were aligned
+to FMP stable EOD history during the P2 forward gate (2026-08-25) and
+the sector/dot-com calibration (2026-08-26).
+
+LIBRARY_VERSION must be bumped whenever event content changes in a way
+that makes cached replay payloads stale — it is baked into the replay
+cache key (snapshot_hash) so pre-bump caches recompute instead of
+serving outdated payloads.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
+# Bumped when curated event content changes (new events, re-calibrated
+# numbers) so cached replays keyed on snapshot_hash miss and recompute.
+LIBRARY_VERSION = 2
 
 
 # Regime vocabulary — must stay aligned with macro_regime.py outputs so
@@ -57,6 +72,21 @@ class MacroSnapshot:
 
 
 @dataclass(frozen=True)
+class SectorPerf:
+    """One GICS sector's window return during the event (via its SPDR ETF)."""
+    sector: str
+    symbol: str          # sector SPDR ETF (XLK, XLF, …)
+    return_pct: float    # curated window return, 1dp (live-free reference)
+
+    def as_dict(self) -> dict:
+        return {
+            "sector": self.sector,
+            "symbol": self.symbol,
+            "return_pct": self.return_pct,
+        }
+
+
+@dataclass(frozen=True)
 class EventSpec:
     key: str
     name: str
@@ -68,6 +98,9 @@ class EventSpec:
     qqq_max_dd_pct: float
     macro: MacroSnapshot
     tags: tuple[str, ...] = field(default_factory=tuple)
+    # Per-sector window returns, sorted best→worst. Empty for synthetic
+    # test events; every curated event carries its calibrated set.
+    sectors: tuple[SectorPerf, ...] = field(default_factory=tuple)
 
     def as_dict(self) -> dict:
         return {
@@ -82,10 +115,41 @@ class EventSpec:
             },
             "macro": self.macro.as_dict(),
             "tags": list(self.tags),
+            "sector_performance": [s.as_dict() for s in self.sectors],
         }
 
 
 EVENTS: list[EventSpec] = [
+    EventSpec(
+        key="dotcom_2000",
+        name="Dot-com bust (2000–01)",
+        start="2000-03-24",       # SPY pre-bust peak
+        end="2001-09-21",         # SPY post-bust trough (post-9/11 low)
+        spy_return_pct=-36.7, spy_max_dd_pct=-36.7,
+        qqq_return_pct=-76.1, qqq_max_dd_pct=-76.1,
+        macro=MacroSnapshot(
+            risk_appetite="risk-off", rate_direction="cutting",
+            dollar_trend="rising", volatility_regime="high",
+            recession_risk="high",
+            notes="Tech/telecom bubble deflation; Fed cut 475bp through "
+                  "2001; 2001 recession. A breadth event — defensives "
+                  "(staples, utilities) ROSE while tech fell ~70%.",
+        ),
+        tags=("equity-bubble", "tech", "recession"),
+        sectors=(
+            SectorPerf(sector="Consumer Staples", symbol="XLP", return_pct=14.2),
+            SectorPerf(sector="Utilities", symbol="XLU", return_pct=12.3),
+            SectorPerf(sector="Energy", symbol="XLE", return_pct=-10.6),
+            SectorPerf(sector="Financials", symbol="XLF", return_pct=-12.0),
+            SectorPerf(sector="Materials", symbol="XLB", return_pct=-21.7),
+            SectorPerf(sector="Industrials", symbol="XLI", return_pct=-25.4),
+            SectorPerf(sector="Consumer Discretionary", symbol="XLY", return_pct=-25.7),
+            SectorPerf(sector="Health Care", symbol="XLV", return_pct=-29.7),
+            SectorPerf(sector="Technology", symbol="XLK", return_pct=-71.3),
+            # Real Estate (XLRE) and Communication Services (XLC) ETFs
+            # did not exist yet — coverage guard excludes them honestly.
+        ),
+    ),
     EventSpec(
         key="gfc_2008",
         name="Global Financial Crisis (2007–09)",
@@ -101,6 +165,18 @@ EVENTS: list[EventSpec] = [
                   "solvency stress. Peak-to-trough equity bear market.",
         ),
         tags=("credit", "banking", "recession"),
+        sectors=(
+            SectorPerf(sector="Consumer Staples", symbol="XLP", return_pct=-30.6),
+            SectorPerf(sector="Health Care", symbol="XLV", return_pct=-39.7),
+            SectorPerf(sector="Utilities", symbol="XLU", return_pct=-44.9),
+            SectorPerf(sector="Energy", symbol="XLE", return_pct=-48.8),
+            SectorPerf(sector="Technology", symbol="XLK", return_pct=-52.2),
+            SectorPerf(sector="Consumer Discretionary", symbol="XLY", return_pct=-57.5),
+            SectorPerf(sector="Materials", symbol="XLB", return_pct=-58.2),
+            SectorPerf(sector="Industrials", symbol="XLI", return_pct=-63.3),
+            SectorPerf(sector="Financials", symbol="XLF", return_pct=-82.5),
+            # XLRE/XLC did not exist yet — coverage guard excludes them.
+        ),
     ),
     EventSpec(
         key="euro_2011",
@@ -117,6 +193,18 @@ EVENTS: list[EventSpec] = [
                   "default risk repriced peripheral Europe.",
         ),
         tags=("sovereign", "europe", "policy-error"),
+        sectors=(
+            SectorPerf(sector="Utilities", symbol="XLU", return_pct=-1.1),
+            SectorPerf(sector="Consumer Staples", symbol="XLP", return_pct=-7.4),
+            SectorPerf(sector="Technology", symbol="XLK", return_pct=-13.4),
+            SectorPerf(sector="Health Care", symbol="XLV", return_pct=-13.7),
+            SectorPerf(sector="Consumer Discretionary", symbol="XLY", return_pct=-16.9),
+            SectorPerf(sector="Industrials", symbol="XLI", return_pct=-26.5),
+            SectorPerf(sector="Energy", symbol="XLE", return_pct=-28.8),
+            SectorPerf(sector="Materials", symbol="XLB", return_pct=-29.7),
+            SectorPerf(sector="Financials", symbol="XLF", return_pct=-30.8),
+            # XLRE/XLC did not exist yet — coverage guard excludes them.
+        ),
     ),
     EventSpec(
         key="q4_2018",
@@ -133,6 +221,19 @@ EVENTS: list[EventSpec] = [
                   "pocket; reversed on the Jan-2019 pivot.",
         ),
         tags=("rates", "liquidity", "policy"),
+        sectors=(
+            SectorPerf(sector="Utilities", symbol="XLU", return_pct=-3.3),
+            SectorPerf(sector="Real Estate", symbol="XLRE", return_pct=-11.0),
+            SectorPerf(sector="Consumer Staples", symbol="XLP", return_pct=-11.9),
+            SectorPerf(sector="Health Care", symbol="XLV", return_pct=-14.6),
+            SectorPerf(sector="Communication Services", symbol="XLC", return_pct=-20.3),
+            SectorPerf(sector="Consumer Discretionary", symbol="XLY", return_pct=-21.9),
+            SectorPerf(sector="Materials", symbol="XLB", return_pct=-22.4),
+            SectorPerf(sector="Financials", symbol="XLF", return_pct=-23.0),
+            SectorPerf(sector="Technology", symbol="XLK", return_pct=-23.3),
+            SectorPerf(sector="Industrials", symbol="XLI", return_pct=-24.5),
+            SectorPerf(sector="Energy", symbol="XLE", return_pct=-28.3),
+        ),
     ),
     EventSpec(
         key="covid_2020",
@@ -149,6 +250,19 @@ EVENTS: list[EventSpec] = [
                   "weeks; sharpest drawdown in history, fastest V-recovery.",
         ),
         tags=("exogenous", "liquidity", "recession"),
+        sectors=(
+            SectorPerf(sector="Consumer Staples", symbol="XLP", return_pct=-24.6),
+            SectorPerf(sector="Health Care", symbol="XLV", return_pct=-28.3),
+            SectorPerf(sector="Communication Services", symbol="XLC", return_pct=-30.0),
+            SectorPerf(sector="Technology", symbol="XLK", return_pct=-31.5),
+            SectorPerf(sector="Consumer Discretionary", symbol="XLY", return_pct=-33.8),
+            SectorPerf(sector="Utilities", symbol="XLU", return_pct=-36.0),
+            SectorPerf(sector="Materials", symbol="XLB", return_pct=-36.6),
+            SectorPerf(sector="Real Estate", symbol="XLRE", return_pct=-38.3),
+            SectorPerf(sector="Industrials", symbol="XLI", return_pct=-42.0),
+            SectorPerf(sector="Financials", symbol="XLF", return_pct=-43.3),
+            SectorPerf(sector="Energy", symbol="XLE", return_pct=-57.0),
+        ),
     ),
     EventSpec(
         key="rate_shock_2022",
@@ -166,6 +280,19 @@ EVENTS: list[EventSpec] = [
                   "positive.",
         ),
         tags=("rates", "inflation", "duration"),
+        sectors=(
+            SectorPerf(sector="Energy", symbol="XLE", return_pct=40.0),
+            SectorPerf(sector="Consumer Staples", symbol="XLP", return_pct=-12.3),
+            SectorPerf(sector="Health Care", symbol="XLV", return_pct=-12.6),
+            SectorPerf(sector="Utilities", symbol="XLU", return_pct=-13.2),
+            SectorPerf(sector="Industrials", symbol="XLI", return_pct=-19.2),
+            SectorPerf(sector="Materials", symbol="XLB", return_pct=-23.3),
+            SectorPerf(sector="Financials", symbol="XLF", return_pct=-23.4),
+            SectorPerf(sector="Technology", symbol="XLK", return_pct=-33.6),
+            SectorPerf(sector="Real Estate", symbol="XLRE", return_pct=-33.8),
+            SectorPerf(sector="Consumer Discretionary", symbol="XLY", return_pct=-33.9),
+            SectorPerf(sector="Communication Services", symbol="XLC", return_pct=-39.1),
+        ),
     ),
     EventSpec(
         key="svb_2023",
@@ -184,6 +311,19 @@ EVENTS: list[EventSpec] = [
                   "market-wide DD.",
         ),
         tags=("banking", "rates", "dispersion"),
+        sectors=(
+            SectorPerf(sector="Consumer Staples", symbol="XLP", return_pct=-0.9),
+            SectorPerf(sector="Utilities", symbol="XLU", return_pct=-1.6),
+            SectorPerf(sector="Technology", symbol="XLK", return_pct=-3.0),
+            SectorPerf(sector="Communication Services", symbol="XLC", return_pct=-3.5),
+            SectorPerf(sector="Health Care", symbol="XLV", return_pct=-4.4),
+            SectorPerf(sector="Industrials", symbol="XLI", return_pct=-6.2),
+            SectorPerf(sector="Real Estate", symbol="XLRE", return_pct=-7.7),
+            SectorPerf(sector="Consumer Discretionary", symbol="XLY", return_pct=-8.6),
+            SectorPerf(sector="Materials", symbol="XLB", return_pct=-8.6),
+            SectorPerf(sector="Energy", symbol="XLE", return_pct=-12.6),
+            SectorPerf(sector="Financials", symbol="XLF", return_pct=-14.5),
+        ),
     ),
 ]
 

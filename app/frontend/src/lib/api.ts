@@ -198,6 +198,31 @@ export interface ReplayBenchStats {
   qqq_max_dd_pct: number;
 }
 
+/** One GICS sector's window return during an event (via its SPDR ETF).
+ * Sorted best→worst by the library. Sector ETFs that didn't exist yet
+ * (XLRE pre-2015, XLC pre-2018) are honestly absent, never zero-filled. */
+export interface ReplaySectorPerf {
+  sector: string;
+  symbol: string;
+  return_pct: number;
+}
+
+/** Full GICS sector ETF universe — used to name which sectors were not
+ * yet listed during an event (absent from sector_performance). */
+export const ALL_SECTOR_ETFS: { sector: string; symbol: string }[] = [
+  { sector: 'Technology', symbol: 'XLK' },
+  { sector: 'Financials', symbol: 'XLF' },
+  { sector: 'Energy', symbol: 'XLE' },
+  { sector: 'Health Care', symbol: 'XLV' },
+  { sector: 'Consumer Discretionary', symbol: 'XLY' },
+  { sector: 'Consumer Staples', symbol: 'XLP' },
+  { sector: 'Industrials', symbol: 'XLI' },
+  { sector: 'Materials', symbol: 'XLB' },
+  { sector: 'Utilities', symbol: 'XLU' },
+  { sector: 'Real Estate', symbol: 'XLRE' },
+  { sector: 'Communication Services', symbol: 'XLC' },
+];
+
 /** Event library metadata (GET /portfolio/replay/events). */
 export interface ReplayEventMeta {
   key: string;
@@ -206,6 +231,7 @@ export interface ReplayEventMeta {
   benchmarks: ReplayBenchStats;
   macro: ReplayMacroSnapshot;
   tags: string[];
+  sector_performance: ReplaySectorPerf[];
 }
 
 export interface ReplayHoldingImpact {
@@ -223,6 +249,7 @@ export interface ReplayEventResult {
   window: { start: string; end: string };
   macro: ReplayMacroSnapshot;
   tags: string[];
+  sector_performance: ReplaySectorPerf[];
   benchmarks: {
     curated: ReplayBenchStats;
     live: ReplayBenchStats;

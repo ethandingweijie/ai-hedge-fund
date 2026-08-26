@@ -30,7 +30,7 @@ import json
 from typing import Callable, Optional
 
 from src.portfolio.event_library import (
-    BENCH_TOLERANCE_PP, EVENTS, EventSpec, events_as_dicts,
+    BENCH_TOLERANCE_PP, EVENTS, LIBRARY_VERSION, EventSpec, events_as_dicts,
 )
 
 # Coverage parameters
@@ -260,13 +260,21 @@ def _round2(x: Optional[float]) -> Optional[float]:
 
 
 def snapshot_hash(holdings: list[dict]) -> str:
-    """Stable hash of the holdings snapshot (the replay cache key)."""
+    """Stable hash of the holdings snapshot (the replay cache key).
+
+    LIBRARY_VERSION is baked in so a library content change (new events,
+    re-calibrated sector numbers) invalidates every cached replay — the
+    old rows stay in the table but miss the lookup and recompute.
+    """
     import hashlib
-    payload = sorted(
-        (str(h["ticker"]).upper(), round(float(h.get("quantity") or 0), 6),
-         round(float(h.get("avg_cost") or 0), 6))
-        for h in holdings
-    )
+    payload = {
+        "library_version": LIBRARY_VERSION,
+        "holdings": sorted(
+            (str(h["ticker"]).upper(), round(float(h.get("quantity") or 0), 6),
+             round(float(h.get("avg_cost") or 0), 6))
+            for h in holdings
+        ),
+    }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 

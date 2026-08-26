@@ -9,8 +9,9 @@ import {
 import {
   getPortfolioDashboard, addHolding, deleteHolding,
   getReplayEvents, startPortfolioReplay, pollPortfolioReplayJob,
+  ALL_SECTOR_ETFS,
   type PortfolioDashboard, type ReplayEventMeta, type ReplayEventResult,
-  type ReplayResult,
+  type ReplayResult, type ReplaySectorPerf,
 } from '@/lib/api';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
@@ -129,7 +130,7 @@ export function PortfolioPage() {
   useEffect(() => { void load(); }, [load]);
 
   // Event library metadata is cheap + unauthenticated — load once so the
-  // replay tab can show the six crises even before the first run.
+  // replay tab can show the seven crises even before the first run.
   useEffect(() => {
     getReplayEvents().then(r => setEvents(r.events)).catch(() => { /* library preview is optional */ });
   }, []);
@@ -477,7 +478,7 @@ function ReplaySection({
               : 'Loading portfolio…'
             : replay
               ? `Computed ${replay.holdings_snapshot.position_count} positions × ${replay.event_count} events on a cost-basis snapshot. Cached until your holdings change.`
-              : 'Replays your current holdings through six historical crises using actual price history — no models, no LLM.'}
+              : 'Replays your current holdings through seven historical crises using actual price history — no models, no LLM.'}
         </span>
       </div>
 
@@ -545,6 +546,7 @@ function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
                 ))}
               </div>
             )}
+            <SectorWinnersLaggards perf={ev.sector_performance} />
           </Card>
         ))}
       </div>
@@ -552,6 +554,53 @@ function EventLibraryPreview({ events }: { events: ReplayEventMeta[] }) {
         Curated crisis windows with reference SPY/QQQ numbers (live-cross-checked on every run).
         Run the replay to see what YOUR portfolio did through each event.
       </p>
+    </div>
+  );
+}
+
+/** Sector winners/laggards — top-3 vs bottom-3 window returns across the
+ * GICS sector SPDRs (curated, calibrated to FMP EOD). Sectors whose ETFs
+ * did not exist yet are named as absent, never zero-filled. */
+function SectorWinnersLaggards({ perf }: { perf: ReplaySectorPerf[] | undefined }) {
+  if (!perf || perf.length === 0) return null;
+  const best = perf.slice(0, 3);
+  const worst = perf.slice(-3);
+  const listed = new Set(perf.map(s => s.symbol));
+  const missing = ALL_SECTOR_ETFS.filter(e => !listed.has(e.symbol));
+
+  const row = (s: ReplaySectorPerf) => (
+    <div key={s.symbol} className="flex items-center justify-between gap-2 text-xs px-2 py-1 rounded bg-muted/30">
+      <span className="truncate">
+        {s.sector} <span className="text-muted-foreground">({s.symbol})</span>
+      </span>
+      <RetText value={s.return_pct} />
+    </div>
+  );
+
+  return (
+    <div className="mt-3">
+      <div className="grid md:grid-cols-2 gap-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+               title="Best window returns across the GICS sector SPDR ETFs — positive (green) means the sector actually rose during the crisis">
+            Sectors that held up
+          </div>
+          <div className="space-y-1">{best.map(row)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+               title="Worst window returns across the GICS sector SPDR ETFs">
+            Sectors hit hardest
+          </div>
+          <div className="space-y-1">{worst.map(row)}</div>
+        </div>
+      </div>
+      {missing.length > 0 && (
+        <p className="text-[10px] text-muted-foreground mt-1.5">
+          {missing.map(m => `${m.sector} (${m.symbol})`).join(' and ')} ETF{missing.length > 1 ? 's' : ''} not
+          listed yet during this window — excluded, not zero-filled.
+        </p>
+      )}
     </div>
   );
 }
@@ -620,6 +669,9 @@ function EventCard({ ev }: { ev: ReplayEventResult }) {
           <div className="text-[10px] text-muted-foreground">of cost basis replayed</div>
         </div>
       </div>
+
+      {/* Sector winners/laggards */}
+      <SectorWinnersLaggards perf={ev.sector_performance} />
 
       {/* Coverage guard note */}
       {partialCoverage && ev.excluded.length > 0 && (
