@@ -153,3 +153,68 @@ async def replay_job(job_id: str,
     if job is None:
         raise HTTPException(status_code=404, detail=f"replay job {job_id} not found")
     return job
+
+
+# ── P5: what-if crisis simulator ─────────────────────────────────────────────
+
+class WhatIfRequest(BaseModel):
+    category: str
+    concerns: str
+    reference_key: Optional[str] = None
+    search_override: str = "auto"          # auto | always | never
+    horizon_days: int = Field(default=90, ge=5, le=365)
+
+
+@router.get("/what-if/meta")
+async def what_if_meta():
+    """Scenario categories + reference-crisis choices + short-product
+    knowledge base (confirmed / assumed / unknown) for the form UI."""
+    return {
+        "categories": portfolio_service.list_what_if_categories(),
+        "reference_events": [
+            {"key": e["key"], "name": e["name"], "window": e["window"],
+             "spy_return_pct": e["benchmarks"]["spy_return_pct"],
+             "qqq_return_pct": e["benchmarks"]["qqq_return_pct"]}
+            for e in portfolio_service.list_events()
+        ],
+        "product_map": portfolio_service.product_knowledge(),
+    }
+
+
+@router.post("/what-if")
+async def start_what_if(body: WhatIfRequest,
+                        user_id: Optional[int] = Depends(_optional_user_id),
+                        db: Session = Depends(get_db)):
+    """Simulate a crisis that has not happened yet.
+
+    Cache-first on the scenario hash (same inputs + holdings → instant
+    cached result). Otherwise a tracked job runs the deterministic
+    skeleton + one DeepSeek scenario call; poll
+    GET /portfolio/what-if/jobs/{job_id}.
+    """
+    if not portfolio_service.what_if_enabled():
+        raise HTTPException(status_code=503, detail="what-if simulator disabled")
+    try:
+        out = await asyncio.to_thread(
+            portfolio_service.start_what_if, db, user_id, body.category,
+            body.concerns, body.reference_key, body.search_override,
+            body.horizon_days)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("start_what_if failed: %s\n%s", exc, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(exc))
+    if out.get("error") == "no_holdings":
+        raise HTTPException(status_code=400, detail="add holdings before simulating")
+    return out
+
+
+@router.get("/what-if/jobs/{job_id}")
+async def what_if_job(job_id: str,
+                      user_id: Optional[int] = Depends(_optional_user_id)):
+    if not portfolio_service.what_if_enabled():
+        raise HTTPException(status_code=503, detail="what-if simulator disabled")
+    job = await asyncio.to_thread(portfolio_service.get_what_if_job, job_id, user_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"what-if job {job_id} not found")
+    return job

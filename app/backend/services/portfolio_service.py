@@ -490,3 +490,225 @@ def list_events() -> list[dict]:
     """The curated event library (read-only metadata for the frontend)."""
     from src.portfolio.event_library import events_as_dicts
     return events_as_dicts()
+
+
+# ── P5: what-if crisis simulator ─────────────────────────────────────────────
+
+from src.portfolio import what_if as _what_if
+
+_WHAT_IF_DDL = """
+CREATE TABLE IF NOT EXISTS portfolio_what_ifs (
+    user_id       INTEGER,
+    scenario_hash TEXT NOT NULL,
+    result_json   TEXT NOT NULL,
+    computed_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_what_ifs_lookup
+    ON portfolio_what_ifs(user_id, scenario_hash);
+"""
+
+
+def what_if_enabled() -> bool:
+    return os.getenv("PORTFOLIO_WHAT_IF", "true").strip().lower() != "false"
+
+
+def _ensure_what_if_table() -> None:
+    _db.ensure_table(_WHAT_IF_DDL)
+
+
+def get_cached_what_if(user_id: Optional[int], scen_hash: str) -> Optional[dict]:
+    _ensure_what_if_table()
+    where, params = _user_where(user_id)
+    row = _db.query_one(
+        f"SELECT result_json FROM portfolio_what_ifs "
+        f"WHERE scenario_hash = ? AND {where} "
+        f"ORDER BY computed_at DESC LIMIT 1",
+        [scen_hash, *params],
+    )
+    if not row:
+        return None
+    try:
+        return json.loads(row["result_json"])
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
+def save_what_if(user_id: Optional[int], scen_hash: str, result: dict) -> None:
+    _ensure_what_if_table()
+    _db.execute(
+        "INSERT INTO portfolio_what_ifs (user_id, scenario_hash, result_json, computed_at) "
+        "VALUES (?, ?, ?, ?)",
+        [user_id, scen_hash, json.dumps(result),
+         datetime.now(timezone.utc).isoformat()],
+    )
+
+
+def compute_scenario_hash(category: str, concerns: str,
+                          reference_key: Optional[str],
+                          search_override: str, horizon_days: int,
+                          holdings: list[dict]) -> str:
+    """Cache key for a what-if scenario. Notes are part of the key because
+    they drive product classification; holdings quantities/costs drive the
+    cost-basis weights. Bumping _what_if.SCENARIO_VERSION invalidates all
+    cached scenarios (prompt/model/anchor changes)."""
+    import hashlib
+    payload = {
+        "scenario_version": _what_if.SCENARIO_VERSION,
+        "category": category.strip(),
+        "concerns": " ".join(concerns.split()),     # whitespace-normalized
+        "reference_key": reference_key,
+        "search_override": search_override,
+        "horizon_days": horizon_days,
+        "holdings": sorted(
+            (str(h["ticker"]).upper(), round(float(h.get("quantity") or 0), 6),
+             round(float(h.get("avg_cost") or 0), 6),
+             " ".join(str(h.get("notes") or "").split()))
+            for h in holdings
+        ),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+
+
+def list_what_if_categories() -> list[str]:
+    return list(_what_if.CATEGORIES)
+
+
+def product_knowledge() -> list[dict]:
+    """Public summary of the short-product knowledge base (the UI hints at
+    what is confirmed vs assumed vs unknown — no sensitive data)."""
+    out = [
+        {"ticker": t, "name": m["name"], "underlying": m["underlying"],
+         "leverage": m["leverage"], "confidence": m["confidence"]}
+        for t, m in sorted(_what_if.INVERSE_PRODUCT_MAP.items())
+    ]
+    out += [{"ticker": t, "confidence": "unknown"}
+            for t in sorted(_what_if.UNCLASSIFIED_PRODUCTS)]
+    return out
+
+
+def start_what_if(db: Session, user_id: Optional[int], category: str,
+                  concerns: str, reference_key: Optional[str],
+                  search_override: str, horizon_days: int) -> dict:
+    """Serve a cached scenario when inputs are unchanged, else create a
+    tracked job and simulate in a background thread."""
+    from app.backend.services import complacency_job_store as job_store
+    from src.portfolio.event_library import get_event
+
+    category = (category or "").strip()
+    if category not in _what_if.CATEGORIES:
+        raise ValueError(f"unknown category '{category}'")
+    concerns = (concerns or "").strip()
+    if len(concerns) < 10:
+        raise ValueError("describe your concerns (at least a sentence)")
+    if reference_key:
+        if get_event(reference_key) is None:
+            raise ValueError(f"unknown reference crisis '{reference_key}'")
+    else:
+        reference_key = None
+    search_override = (search_override or "auto").strip().lower()
+    if search_override not in ("auto", "always", "never"):
+        search_override = "auto"
+    horizon_days = min(max(int(horizon_days or 90), 5), 365)
+
+    holdings = [_holding_dict(r) for r in list_holdings(db, user_id)]
+    if not holdings:
+        return {"error": "no_holdings"}
+
+    scen = compute_scenario_hash(category, concerns, reference_key,
+                                 search_override, horizon_days, holdings)
+    cached = get_cached_what_if(user_id, scen)
+    if cached is not None:
+        return {"cached": True, "scenario_hash": scen, "result": cached}
+
+    key = (user_id, scen)
+    with _RUNNING_LOCK:
+        running_id = _RUNNING_WHAT_IFS.get(key)
+        if running_id and job_store.get_job(running_id) and \
+                job_store.get_job(running_id).get("status") in ("pending", "running"):
+            return {"cached": False, "running": True, "job_id": running_id,
+                    "scenario_hash": scen}
+
+    # Sector map resolved NOW (request thread owns the db session) — the
+    # simulation thread only receives plain data.
+    sectors_map = {t: s.get("sector") for t, s in
+                   _latest_signals([h["ticker"] for h in holdings]).items()
+                   if s.get("sector")}
+
+    job_id = job_store.create_job("what_if", ticker=None, user_id=user_id)
+    with _RUNNING_LOCK:
+        _RUNNING_WHAT_IFS[key] = job_id
+    thread = threading.Thread(
+        target=_execute_what_if_job,
+        args=(job_id, user_id, scen, holdings, category, concerns,
+              reference_key, search_override, horizon_days, sectors_map),
+        name=f"whatif-{job_id[:8]}", daemon=True)
+    thread.start()
+    return {"cached": False, "job_id": job_id, "scenario_hash": scen}
+
+
+# In-flight guard mirrors _RUNNING_REPLAYS (same dedupe semantics).
+_RUNNING_WHAT_IFS: dict[tuple, str] = {}
+
+
+def _execute_what_if_job(job_id: str, user_id: Optional[int], scen: str,
+                         holdings: list[dict], category: str, concerns: str,
+                         reference_key: Optional[str], search_override: str,
+                         horizon_days: int, sectors_map: dict) -> None:
+    from app.backend.services import complacency_job_store as job_store
+
+    stop = threading.Event()
+    start = datetime.now(timezone.utc)
+
+    def _pulse():
+        while not stop.wait(20):
+            elapsed = int((datetime.now(timezone.utc) - start).total_seconds())
+            mm, ss = divmod(elapsed, 60)
+            try:
+                job_store.update_progress(
+                    job_id, "running",
+                    f"simulating '{category}' · {mm}m {ss}s elapsed")
+            except Exception:
+                pass
+
+    hb = threading.Thread(target=_pulse, daemon=True)
+    hb.start()
+    try:
+        job_store.update_progress(job_id, "running",
+                                  f"simulating '{category}' scenario")
+        result = _what_if.run_what_if(
+            holdings, category, concerns,
+            reference_key=reference_key,
+            search_override=search_override,
+            horizon_days=horizon_days,
+            sectors_map=sectors_map)
+        save_what_if(user_id, scen, result)
+        job_store.complete_job(job_id, {"scenario_hash": scen, "result": result})
+        logger.info("what-if %s done: category='%s' llm=%s warnings=%d",
+                    job_id, category,
+                    bool(result.get("llm")), len(result.get("warnings") or []))
+    except Exception as exc:
+        logger.error("what-if %s failed: %s", job_id, exc)
+        try:
+            job_store.fail_job(job_id, str(exc)[:500])
+        except Exception:
+            pass
+    finally:
+        stop.set()
+        with _RUNNING_LOCK:
+            _RUNNING_WHAT_IFS.pop((user_id, scen), None)
+
+
+def get_what_if_job(job_id: str, user_id: Optional[int]) -> Optional[dict]:
+    """User-scoped job status (same pattern/rationale as get_replay_job)."""
+    from app.backend.services import complacency_job_store as job_store
+
+    job = job_store.get_job(job_id)
+    if not job or job.get("kind") != "what_if":
+        return None
+    row = _db.query_one(
+        "SELECT user_id FROM complacency_jobs WHERE job_id = ?", [job_id])
+    if row is None:
+        return None
+    if row["user_id"] != user_id:
+        return None
+    return job

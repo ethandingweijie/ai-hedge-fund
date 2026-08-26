@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Loader2, PieChart, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { AlertTriangle, FlaskConical, Loader2, PieChart, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -9,9 +9,11 @@ import {
 import {
   getPortfolioDashboard, addHolding, deleteHolding,
   getReplayEvents, startPortfolioReplay, pollPortfolioReplayJob,
+  getWhatIfMeta, startWhatIf, pollWhatIfJob,
   ALL_SECTOR_ETFS,
   type PortfolioDashboard, type ReplayEventMeta, type ReplayEventResult,
   type ReplayResult, type ReplaySectorPerf,
+  type WhatIfMeta, type WhatIfResult, type WhatIfHoldingSkeleton,
 } from '@/lib/api';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
@@ -90,7 +92,7 @@ function matchChip(matches: number): string {
 
 // ── page ────────────────────────────────────────────────────────────────────
 
-type PortfolioTab = 'positions' | 'replay' | 'regime';
+type PortfolioTab = 'positions' | 'replay' | 'regime' | 'whatif';
 
 export function PortfolioPage() {
   const [dash, setDash] = useState<PortfolioDashboard | null>(null);
@@ -115,6 +117,13 @@ export function PortfolioPage() {
   const [replayError, setReplayError] = useState<string | null>(null);
   const replayStartedRef = useRef(false);
 
+  // What-if simulator state — lifted for the same reason as replay results.
+  const [whatIfMeta, setWhatIfMeta] = useState<WhatIfMeta | null>(null);
+  const [whatIf, setWhatIf] = useState<WhatIfResult | null>(null);
+  const [whatIfBusy, setWhatIfBusy] = useState(false);
+  const [whatIfProgress, setWhatIfProgress] = useState<string | null>(null);
+  const [whatIfError, setWhatIfError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -134,6 +143,38 @@ export function PortfolioPage() {
   useEffect(() => {
     getReplayEvents().then(r => setEvents(r.events)).catch(() => { /* library preview is optional */ });
   }, []);
+
+  // What-if form metadata (categories, reference crises, product knowledge)
+  useEffect(() => {
+    getWhatIfMeta().then(setWhatIfMeta).catch(() => { /* form degrades to free text */ });
+  }, []);
+
+  const runWhatIf = useCallback(async (req: {
+    category: string; concerns: string; reference_key: string | null;
+    search_override: 'auto' | 'always' | 'never'; horizon_days: number;
+  }) => {
+    if (whatIfBusy) return;
+    setWhatIfBusy(true);
+    setWhatIfError(null);
+    setWhatIfProgress(null);
+    try {
+      const start = await startWhatIf(req);
+      if (start.cached && start.result) {
+        setWhatIf(start.result);
+        return;
+      }
+      if (!start.job_id) throw new Error('What-if request returned neither a cached result nor a job.');
+      const final = await pollWhatIfJob(start.job_id, {
+        onProgress: (s) => setWhatIfProgress(s.progress_msg),
+      });
+      setWhatIf(final.result?.result ?? null);
+    } catch (e) {
+      setWhatIfError(e instanceof Error ? e.message : 'Simulation failed');
+    } finally {
+      setWhatIfBusy(false);
+      setWhatIfProgress(null);
+    }
+  }, [whatIfBusy]);
 
   const runReplay = useCallback(async () => {
     if (replayBusy) return;
@@ -233,6 +274,7 @@ export function PortfolioPage() {
           <TabsTrigger value="positions">Positions &amp; indicators</TabsTrigger>
           <TabsTrigger value="replay">Crisis replay</TabsTrigger>
           <TabsTrigger value="regime">Regime then vs now</TabsTrigger>
+          <TabsTrigger value="whatif">What-if simulator</TabsTrigger>
         </TabsList>
 
         {/* ── Tab 1: Positions & indicators (P1) ─────────────────────────── */}
@@ -439,6 +481,20 @@ export function PortfolioPage() {
             busy={replayBusy}
             progress={replayProgress}
             onRun={runReplay}
+          />
+        </TabsContent>
+
+        {/* ── Tab 4: What-if crisis simulator (P5) ───────────────────────── */}
+        <TabsContent value="whatif">
+          <WhatIfSection
+            positionCount={positionCount}
+            positionsLoaded={!!dash}
+            meta={whatIfMeta}
+            result={whatIf}
+            busy={whatIfBusy}
+            progress={whatIfProgress}
+            error={whatIfError}
+            onRun={runWhatIf}
           />
         </TabsContent>
       </Tabs>
@@ -833,5 +889,410 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
         <p className="text-[11px] text-muted-foreground italic mt-3 leading-relaxed">{ev.macro.notes}</p>
       )}
     </Card>
+  );
+}
+
+// ── What-if crisis simulator tab (P5) ───────────────────────────────────────
+
+const WHAT_IF_HORIZONS = [30, 60, 90, 180, 365];
+
+const WHAT_IF_ACTION_CLASS: Record<string, string> = {
+  SHORT: 'bg-red-600/15 text-red-700 dark:text-red-300 border-red-700/40',
+  BUY: 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  GOLD: 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40',
+  CASH: 'bg-sky-600/15 text-sky-700 dark:text-sky-300 border-sky-700/40',
+  HOLD: 'bg-muted text-muted-foreground border-border',
+};
+
+function WhatIfSection({
+  positionCount, positionsLoaded, meta, result, busy, progress, error, onRun,
+}: {
+  positionCount: number;
+  positionsLoaded: boolean;
+  meta: WhatIfMeta | null;
+  result: WhatIfResult | null;
+  busy: boolean;
+  progress: string | null;
+  error: string | null;
+  onRun: (req: {
+    category: string; concerns: string; reference_key: string | null;
+    search_override: 'auto' | 'always' | 'never'; horizon_days: number;
+  }) => Promise<void>;
+}) {
+  const [category, setCategory] = useState('');
+  const [concerns, setConcerns] = useState('');
+  const [referenceKey, setReferenceKey] = useState('');
+  const [searchOverride, setSearchOverride] = useState<'auto' | 'always' | 'never'>('auto');
+  const [horizon, setHorizon] = useState(90);
+
+  // Default category once metadata arrives (dropdown is meta-driven)
+  useEffect(() => {
+    if (meta && !category) setCategory(meta.categories[0] ?? 'Custom');
+  }, [meta, category]);
+
+  const selectCls = 'rounded-md border border-input bg-background px-2.5 py-1.5 text-sm';
+
+  function run() {
+    if (positionCount === 0) return;
+    if (concerns.trim().length < 10) {
+      toast.error('Describe your concerns in at least a sentence — the scenario is built from them.');
+      return;
+    }
+    void onRun({
+      category: category || 'Custom',
+      concerns: concerns.trim(),
+      reference_key: referenceKey || null,
+      search_override: searchOverride,
+      horizon_days: horizon,
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Scenario form */}
+      <Card className="p-4 mt-2">
+        <div className="text-sm font-semibold mb-1">Simulate a crisis that hasn&apos;t happened yet</div>
+        <p className="text-[11px] text-muted-foreground mb-3">
+          Deterministic skeleton first (sector anchors from the reference crisis, leveraged-product
+          time decay computed in closed form), then ONE deepseek-v4-flash call adds the sectoral
+          narrative, assumptions to watch and recommendations. Short/inverse products you hold
+          (PSQ, MUD, CORD…) are modelled explicitly.
+        </p>
+
+        <div className="grid md:grid-cols-4 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Category</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className={`${selectCls} w-full`}>
+              {(meta?.categories ?? ['Custom']).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1"
+                   title="Closest historical crisis — its calibrated sector returns anchor the scenario. None = model from concerns only.">
+              Reference crisis
+            </label>
+            <select value={referenceKey} onChange={e => setReferenceKey(e.target.value)} className={`${selectCls} w-full`}>
+              <option value="">None — model from concerns only</option>
+              {(meta?.reference_events ?? []).map(ev => (
+                <option key={ev.key} value={ev.key}>
+                  {ev.name} (SPY {ev.spy_return_pct}%)
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1">Horizon</label>
+            <select value={horizon} onChange={e => setHorizon(parseInt(e.target.value, 10))} className={`${selectCls} w-full`}>
+              {WHAT_IF_HORIZONS.map(d => (
+                <option key={d} value={d}>{d} days{d === 90 ? ' (1 quarter)' : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1"
+                   title="auto = search only when the engine decides it's needed (unknown short product, no reference crisis). Tavily quota permitting.">
+              Online search
+            </label>
+            <select value={searchOverride}
+                    onChange={e => setSearchOverride(e.target.value as 'auto' | 'always' | 'never')}
+                    className={`${selectCls} w-full`}>
+              <option value="auto">Auto (recommended)</option>
+              <option value="always">Always search</option>
+              <option value="never">Never search</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <label className="text-xs text-muted-foreground block mb-1">
+            Industry &amp; macro concerns
+          </label>
+          <textarea
+            value={concerns}
+            onChange={e => setConcerns(e.target.value)}
+            rows={3}
+            placeholder="e.g. Rising rates pressure AI data centres — PE-owned capacity is rate-sensitive; circular vendor financing; multiple-compression risk in memory stocks…"
+            className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 mt-3 flex-wrap">
+          <Button onClick={run} disabled={busy || positionCount === 0} className="gap-1.5">
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <FlaskConical size={15} />}
+            {busy ? (progress || 'Simulating…') : result ? 'Re-run simulation' : 'Simulate scenario'}
+          </Button>
+          <span className="text-xs text-muted-foreground max-w-xl">
+            {positionCount === 0
+              ? positionsLoaded
+                ? 'Add positions on the first tab — the simulation compares the scenario against your actual holdings.'
+                : 'Loading portfolio…'
+              : meta?.product_map?.length
+                ? `Short-product knowledge: ${meta.product_map.map(p =>
+                    p.confidence === 'unknown'
+                      ? `${p.ticker} (unknown — add a note)`
+                      : `${p.ticker} ${p.leverage}×${p.underlying} (${p.confidence})`).join(' · ')}`
+                : 'Runs against your current holdings on a cost basis.'}
+          </span>
+        </div>
+      </Card>
+
+      {error && (
+        <Card className="p-4 text-sm text-red-600 dark:text-red-400 flex items-start gap-2">
+          <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+          <span>{error}</span>
+        </Card>
+      )}
+
+      {busy && !result && (
+        <Card className="p-4 text-sm text-muted-foreground flex items-center gap-2">
+          <Loader2 size={15} className="animate-spin" />
+          {progress || 'Building scenario…'}
+        </Card>
+      )}
+
+      {result && <WhatIfResultView result={result} />}
+    </div>
+  );
+}
+
+function WhatIfResultView({ result }: { result: WhatIfResult }) {
+  const llm = result.llm;
+  const skel = result.skeleton;
+  const ref = result.reference_event;
+
+  return (
+    <div className="space-y-4">
+      {/* Header card */}
+      <Card className="p-4">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div>
+            <div className="text-sm font-semibold">{result.category}</div>
+            <div className="text-[11px] text-muted-foreground mt-0.5 max-w-2xl">{result.concerns}</div>
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+              {result.horizon_days}d horizon
+            </span>
+            {ref && (
+              <span className="px-2 py-0.5 rounded border text-[11px] bg-muted/40 border-border">
+                anchor: {ref.name}
+              </span>
+            )}
+            <span
+              className={`px-2 py-0.5 rounded border text-[11px] ${
+                result.search.used
+                  ? 'bg-sky-600/15 text-sky-700 dark:text-sky-300 border-sky-700/40'
+                  : result.search.recommended
+                    ? 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40'
+                    : 'bg-muted text-muted-foreground border-border'}`}
+              title={result.search.reasons.join('; ') || 'No search needed'}
+            >
+              search: {result.search.used ? 'used'
+                : result.search.unavailable ? 'unavailable'
+                : result.search.recommended ? 'recommended, no results' : 'not needed'}
+            </span>
+          </div>
+        </div>
+
+        {/* Warnings (assumed classifications, unknown products, missing LLM) */}
+        {result.warnings.length > 0 && (
+          <div className="mt-3 p-2.5 rounded border border-amber-600/40 bg-amber-600/10 text-[11px] text-amber-800 dark:text-amber-200 space-y-1">
+            {result.warnings.map((w, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" />
+                <span>{w}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Headline tiles */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+          <div className="p-2.5 rounded-md bg-muted/40">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Portfolio est. impact</div>
+            <div className="text-lg font-semibold"><RetText value={skel.portfolio_est_impact_pct} /></div>
+            <div className="text-[10px] text-muted-foreground">cost-basis weighted</div>
+          </div>
+          <div className="p-2.5 rounded-md bg-muted/40">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Coverage</div>
+            <div className="text-lg font-semibold tabular-nums">
+              {skel.covered_weight_pct != null ? `${fmtNum(skel.covered_weight_pct, 1)}%` : '—'}
+            </div>
+            <div className="text-[10px] text-muted-foreground">of cost basis estimated</div>
+          </div>
+          <div className="p-2.5 rounded-md bg-muted/40">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Model</div>
+            <div className="text-lg font-semibold">{result.model.name.replace('deepseek-v4-flash', 'DS-v4-flash')}</div>
+            <div className="text-[10px] text-muted-foreground">est. cost ${result.model.cost_usd_est.toFixed(4)}</div>
+          </div>
+          <div className="p-2.5 rounded-md bg-muted/40">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Reference SPY/QQQ</div>
+            <div className="text-lg font-semibold">
+              {ref ? (<><RetText value={ref.benchmarks.spy_return_pct} /> / <RetText value={ref.benchmarks.qqq_return_pct} /></>) : '—'}
+            </div>
+            <div className="text-[10px] text-muted-foreground">{ref ? `${ref.window.start} → ${ref.window.end}` : 'no anchor'}</div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Scenario narrative */}
+      {llm && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-2">Scenario</div>
+          <p className="text-sm leading-relaxed">{llm.scenario_summary}</p>
+          <div className="grid md:grid-cols-2 gap-3 mt-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Most affected</div>
+              <div className="flex gap-1 flex-wrap">
+                {llm.most_affected_sectors.map(s => (
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-red-600/10 text-red-700 dark:text-red-300 text-[10px]">{s}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Hedged / holds up</div>
+              <div className="flex gap-1 flex-wrap">
+                {llm.hedged_sectors.map(s => (
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[10px]">{s}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Sector impacts */}
+      {llm && llm.sector_impacts.length > 0 && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-2">Sector-level scenario</div>
+          <div className="space-y-1">
+            {[...llm.sector_impacts]
+              .sort((a, b) => b.est_return_pct - a.est_return_pct)
+              .map(si => (
+                <div key={si.sector} className="grid grid-cols-[11rem_4rem_1fr] gap-2 items-center text-xs px-2 py-1 rounded bg-muted/30">
+                  <span className="truncate">
+                    {si.sector}{si.symbol ? <span className="text-muted-foreground"> ({si.symbol})</span> : null}
+                  </span>
+                  <RetText value={si.est_return_pct} />
+                  <span className="text-muted-foreground truncate" title={si.rationale}>{si.rationale}</span>
+                </div>
+              ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Assumptions to watch */}
+      {llm && llm.assumptions_to_watch.length > 0 && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-1">Assumptions to watch across the quarterlies</div>
+          <p className="text-[11px] text-muted-foreground mb-2">
+            The datapoints that confirm or disconfirm this scenario as the quarter unfolds.
+          </p>
+          <div className="grid md:grid-cols-2 gap-2">
+            {llm.assumptions_to_watch.map((a, i) => (
+              <div key={i} className="p-2.5 rounded-md bg-muted/40">
+                <div className="text-xs font-semibold">{a.metric}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">{a.watch_for}</div>
+                <div className="text-[10px] text-primary mt-1">{a.timing}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Holdings impact (deterministic skeleton + LLM rationale) */}
+      <Card className="p-4 overflow-x-auto">
+        <div className="text-sm font-semibold mb-2">Your holdings under this scenario</div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Holding</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead className="text-right">Est. impact</TableHead>
+              <TableHead className="text-right">Time-decay drag</TableHead>
+              <TableHead>Rationale</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {skel.holdings.map(h => {
+              const llmRow = llm?.holding_impacts.find(r => r.ticker === h.ticker);
+              return <WhatIfHoldingRow key={h.ticker} h={h} rationale={llmRow?.rationale ?? null} />;
+            })}
+          </TableBody>
+        </Table>
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Product estimates are closed-form: log(return) ≈ k·L − k(k−1)/2·N·σ². Inverse and leveraged
+          products decay with volatility even when the underlying moves in your favour — the drag column
+          shows the percentage points lost to that effect over the horizon.
+        </p>
+      </Card>
+
+      {/* Recommendations */}
+      {llm && llm.recommendations.length > 0 && (
+        <Card className="p-4">
+          <div className="text-sm font-semibold mb-2">Recommended tools</div>
+          <div className="grid md:grid-cols-2 gap-2">
+            {llm.recommendations.map((r, i) => (
+              <div key={i} className="p-2.5 rounded-md border border-border">
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${WHAT_IF_ACTION_CLASS[r.action] ?? WHAT_IF_ACTION_CLASS.HOLD}`}>
+                    {r.action}
+                  </span>
+                  <span className="text-xs font-semibold">{r.instrument}</span>
+                  <span className="text-[10px] text-muted-foreground tabular-nums" title="Model confidence">
+                    {Math.round(r.confidence * 100)}%
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1.5">{r.rationale}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            Not investment advice — scenario-conditioned suggestions from a single cheap-model pass
+            {result.search.used ? ', grounded in the search evidence gathered above' : ''}.
+          </p>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rationale: string | null }) {
+  const typeBadge = h.kind === 'product' ? (
+    <span className={`px-1.5 py-0.5 rounded border text-[10px] ${
+      h.product?.confidence === 'confirmed'
+        ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border-emerald-700/40'
+        : h.product?.confidence === 'assumed'
+          ? 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40'
+          : 'bg-muted text-muted-foreground border-border'}`}
+      title={h.product?.name ?? ''}>
+      {h.product?.leverage != null ? `${h.product.leverage}×` : ''}{h.product?.underlying ?? '?'}
+      {h.product?.confidence === 'assumed' ? ' (assumed)' : ''}
+    </span>
+  ) : h.kind === 'unknown_product' ? (
+    <span className="px-1.5 py-0.5 rounded border text-[10px] bg-red-600/10 text-red-700 dark:text-red-300 border-red-700/40"
+          title={h.product?.hint ?? 'Unknown product'}>
+      unclassified
+    </span>
+  ) : (
+    <span className="text-[10px] text-muted-foreground">{h.gics ?? h.sector ?? '—'}</span>
+  );
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{h.ticker}</TableCell>
+      <TableCell>{typeBadge}</TableCell>
+      <TableCell className="text-right">
+        {h.est_impact_pct != null ? <RetText value={h.est_impact_pct} /> : <span className="text-muted-foreground">—</span>}
+      </TableCell>
+      <TableCell className="text-right">
+        {h.decay_drag_pp != null ? (
+          <span title={`No-decay estimate ${fmtNum(h.no_decay_return_pct ?? null)}% · vol ${fmtNum(h.vol_pct ?? null)}% (${h.vol_source ?? ''}), ${h.horizon_days ?? 90}d`}>
+            <RetText value={h.decay_drag_pp} />
+          </span>
+        ) : <span className="text-muted-foreground">—</span>}
+      </TableCell>
+      <TableCell className="text-[11px] text-muted-foreground max-w-72">{rationale ?? '—'}</TableCell>
+    </TableRow>
   );
 }

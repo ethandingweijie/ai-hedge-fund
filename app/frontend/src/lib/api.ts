@@ -377,6 +377,191 @@ export async function pollPortfolioReplayJob(
   }
 }
 
+// ── P5 Portfolio — what-if crisis simulator ────────────────────────────────
+
+export interface WhatIfMeta {
+  categories: string[];
+  reference_events: {
+    key: string; name: string;
+    window: { start: string; end: string };
+    spy_return_pct: number; qqq_return_pct: number;
+  }[];
+  /** Known short/inverse products: confirmed / assumed / unknown. */
+  product_map: {
+    ticker: string;
+    name?: string;
+    underlying?: string;
+    leverage?: number;
+    confidence: 'confirmed' | 'assumed' | 'unknown';
+  }[];
+}
+
+export interface WhatIfSectorImpact {
+  sector: string;
+  symbol: string | null;
+  est_return_pct: number;
+  rationale: string;
+}
+
+export interface WhatIfAssumption {
+  metric: string;
+  watch_for: string;
+  timing: string;
+}
+
+export interface WhatIfRecommendation {
+  action: 'SHORT' | 'BUY' | 'GOLD' | 'CASH' | 'HOLD' | string;
+  instrument: string;
+  rationale: string;
+  confidence: number;
+}
+
+/** One holding's deterministic skeleton estimate (computed BEFORE the LLM;
+ * product rows carry the closed-form leverage/time-decay figures). */
+export interface WhatIfHoldingSkeleton {
+  ticker: string;
+  kind: 'equity' | 'product' | 'unknown_product';
+  sector: string | null;
+  gics: string | null;
+  est_impact_pct: number | null;
+  anchor_pct: number | null;
+  weight_basis: number;
+  no_decay_return_pct?: number | null;
+  decay_drag_pp?: number | null;
+  vol_pct?: number | null;
+  vol_source?: string | null;
+  horizon_days?: number | null;
+  product?: {
+    name?: string;
+    underlying?: string;
+    leverage?: number;
+    confidence?: 'confirmed' | 'assumed' | 'notes' | string;
+    hint?: string;
+  };
+}
+
+export interface WhatIfResult {
+  category: string;
+  concerns: string;
+  horizon_days: number;
+  reference_event: ReplayEventMeta | null;
+  search: {
+    recommended: boolean;
+    reasons: string[];
+    used: boolean;
+    unavailable: boolean;
+  };
+  skeleton: {
+    holdings: WhatIfHoldingSkeleton[];
+    portfolio_est_impact_pct: number | null;
+    covered_weight_pct: number | null;
+  };
+  llm: {
+    scenario_summary: string;
+    sector_impacts: WhatIfSectorImpact[];
+    assumptions_to_watch: WhatIfAssumption[];
+    most_affected_sectors: string[];
+    hedged_sectors: string[];
+    holding_impacts: { ticker: string; est_impact_pct: number; rationale: string }[];
+    recommendations: WhatIfRecommendation[];
+    search_evidence_used: boolean;
+  } | null;
+  warnings: string[];
+  model: { name: string; cost_usd_est: number };
+}
+
+export interface WhatIfStartResponse {
+  cached: boolean;
+  running?: boolean;
+  job_id?: string;
+  scenario_hash?: string;
+  result?: WhatIfResult; // present when cached: true
+}
+
+export interface WhatIfJobStatus {
+  job_id: string;
+  kind: string;
+  ticker: string | null;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string;
+  finished_at: string | null;
+  progress_msg: string | null;
+  result: { scenario_hash: string; result: WhatIfResult } | null;
+  error: string | null;
+}
+
+export interface WhatIfRequest {
+  category: string;
+  concerns: string;
+  reference_key?: string | null;
+  search_override?: 'auto' | 'always' | 'never';
+  horizon_days?: number;
+}
+
+export function getWhatIfMeta(): Promise<WhatIfMeta> {
+  return fetchJson(`${BASE}/portfolio/what-if/meta`, {
+    headers: { ..._authHeaders() },
+  });
+}
+
+export function startWhatIf(body: WhatIfRequest): Promise<WhatIfStartResponse> {
+  return fetchJson(`${BASE}/portfolio/what-if`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify(body),
+  });
+}
+
+export function getWhatIfJob(jobId: string): Promise<WhatIfJobStatus> {
+  return fetchJson(`${BASE}/portfolio/what-if/jobs/${encodeURIComponent(jobId)}`, {
+    headers: { ..._authHeaders() },
+  });
+}
+
+/** Poll a what-if job to a terminal state (same semantics as the replay
+ * poller; the single DeepSeek call makes typical wall 10-60 s). */
+export async function pollWhatIfJob(
+  jobId: string,
+  opts: {
+    pollIntervalMs?: number;
+    timeoutMs?: number;
+    maxFailures?: number;
+    onProgress?: (status: WhatIfJobStatus) => void;
+  } = {},
+): Promise<WhatIfJobStatus> {
+  const pollIntervalMs = opts.pollIntervalMs ?? 4000;
+  const timeoutMs = opts.timeoutMs ?? 10 * 60 * 1000;
+  const maxFailures = opts.maxFailures ?? 6;
+  const start = Date.now();
+  let consecutiveFailures = 0;
+
+  while (true) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`What-if job ${jobId} timed out after ${Math.round(timeoutMs / 1000)}s of polling`);
+    }
+    let status: WhatIfJobStatus;
+    try {
+      status = await getWhatIfJob(jobId);
+      consecutiveFailures = 0;
+    } catch (e) {
+      consecutiveFailures += 1;
+      if (consecutiveFailures > maxFailures) {
+        throw new Error(
+          `What-if job ${jobId} polling failed ${consecutiveFailures} times in a row — giving up. Last error: ${(e as Error).message}`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+      continue;
+    }
+    opts.onProgress?.(status);
+    if (status.status === 'completed') return status;
+    if (status.status === 'failed') {
+      throw new Error(status.error || `What-if job ${jobId} failed (no error message)`);
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+}
+
 /** Fetch paginated history with optional filters. */
 export function getHistory(params: {
   ticker?: string;
