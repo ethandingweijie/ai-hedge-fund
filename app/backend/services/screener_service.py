@@ -2114,6 +2114,12 @@ def _intl_universe(market: str,
             "sector": r["sector"] or "Unknown",
             "industry": r["industry"] or "Unknown",
             "market_cap": r["market_cap"],
+            # _fetch_ticker_metrics returns no price or beta, and
+            # robo_strategy_service._to_candidate DROPS any stock without a
+            # price — which silently excluded every HK and SG name from
+            # Individual Stocks mode. Both come free on the screener row.
+            "price": r.get("price"),
+            "beta": r.get("beta"),
         })
         sector_map[canonical] = r["sector"] or "Unknown"
         industry_map[canonical] = r["industry"] or "Unknown"
@@ -2234,6 +2240,10 @@ def _build_hk_screener(cache_key: str) -> dict:
             metrics["industry"] = industry_map.get(canonical, "Unknown")
             if row.get("market_cap"):
                 metrics.setdefault("market_cap", row["market_cap"])
+            if row.get("price") and not metrics.get("price"):
+                metrics["price"] = row["price"]
+            if row.get("beta") is not None and metrics.get("beta") is None:
+                metrics["beta"] = row["beta"]
             return metrics
         except Exception as exc:
             _sqlog.warning("HK screener metrics failed for %s: %s", canonical, exc)
@@ -2390,6 +2400,10 @@ def _build_sg_screener(cache_key: str) -> dict:
             metrics["_name"] = stock.get("name", canonical)
             if stock.get("market_cap"):
                 metrics.setdefault("market_cap", stock["market_cap"])
+            if stock.get("price") and not metrics.get("price"):
+                metrics["price"] = stock["price"]
+            if stock.get("beta") is not None and metrics.get("beta") is None:
+                metrics["beta"] = stock["beta"]
             return canonical, metrics
         except Exception as e:
             _sqlog.warning("SGX metric fetch failed for %s: %s", canonical, e)

@@ -189,8 +189,8 @@ def fetch_universe(market: str) -> list[dict]:
     """Actively-traded operating companies in `market`.
 
     `market` is a MARKETS key, so the US pass unions its three exchanges.
-    Returns [{symbol, name, sector, industry, market_cap}, ...] sorted by
-    market cap descending.
+    Returns [{symbol, name, sector, industry, market_cap, price, beta}, ...]
+    sorted by market cap descending.
     """
     rows: list = []
     for code in MARKETS.get(market, (market,)):
@@ -227,6 +227,12 @@ def fetch_universe(market: str) -> list[dict]:
             "sector": (r.get("sector") or "").strip(),
             "industry": (r.get("industry") or "").strip(),
             "market_cap": mcap,
+            # The screener response already carries these; the comps path
+            # ignores them, but the screener path needs price (a candidate
+            # with no price is dropped downstream) and beta (risk tier).
+            # Free — no extra call.
+            "price": _safe_float(r.get("price")),
+            "beta": _safe_float(r.get("beta")),
         })
     out.sort(key=lambda r: -r["market_cap"])
     return out

@@ -60,25 +60,41 @@ _SG_STOCK_REGION = "Asia-Pacific"
 # from SG's Telco, Consumer Defensive, Basic Materials, Utilities) simply
 # have no HK/SG candidates — fewer picks for that sector/region combo, not
 # an error.
-_HK_SECTOR_TO_CANONICAL = {
-    "Technology": "Technology",
+# HK and SG screener rows now carry FMP's own sector vocabulary, the same as
+# US, so canonicalisation is mostly an identity map. It is kept explicit
+# rather than dropped because _to_candidate treats an unmapped sector as
+# "drop this stock", and a silent drop is exactly how this broke: the maps
+# below used to hold ONLY the legacy labels ("Property", "Tech", "Telco",
+# "REIT"), so once the screeners switched to FMP sectors just 4 of the 11
+# matched. Seven sectors' worth of HK and SG stocks were discarded before
+# they could be scored, and Individual Stocks mode returned an all-US plan
+# even when Emerging Markets and Asia-Pacific were the top-weighted
+# preferences.
+_FMP_SECTORS = (
+    "Technology", "Financial Services", "Real Estate", "Consumer Cyclical",
+    "Consumer Defensive", "Industrials", "Healthcare", "Energy",
+    "Basic Materials", "Utilities", "Communication Services",
+)
+
+#: Legacy labels still possible on older cached rows.
+_LEGACY_SECTOR_ALIASES = {
     "Financials": "Financial Services",
     "Property": "Real Estate",
-    "Consumer": "Consumer Cyclical",
-    "Industrials": "Industrials",
-    "Healthcare": "Healthcare",
-    "Energy": "Energy",
-}
-_SG_SECTOR_TO_CANONICAL = {
-    "Financials": "Financial Services",
     "REIT": "Real Estate",
     "Tech": "Technology",
-    "Industrials": "Industrials",
-    "Consumer": "Consumer Cyclical",
-    "Property": "Real Estate",
     "Telco": "Communication Services",
-    "Energy": "Energy",
+    "Consumer": "Consumer Cyclical",
+    "Materials": "Basic Materials",
+    "Health Care": "Healthcare",
+    "Utilities": "Utilities",
 }
+
+_SECTOR_TO_CANONICAL = {**{s: s for s in _FMP_SECTORS}, **_LEGACY_SECTOR_ALIASES}
+
+# Both markets share one map now — the old per-market split only existed
+# because each carried its own hand-rolled sector labels.
+_HK_SECTOR_TO_CANONICAL = _SECTOR_TO_CANONICAL
+_SG_SECTOR_TO_CANONICAL = _SECTOR_TO_CANONICAL
 
 
 def _round_half_up(x: float) -> int:

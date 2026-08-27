@@ -14,6 +14,8 @@ unbound name, bad key or shape error surfaces offline.
 """
 from __future__ import annotations
 
+import hashlib
+
 import pytest
 
 from app.backend.services import screener_service as ss
@@ -36,8 +38,14 @@ def _universe(prefix: str, n: int = 12):
 
 
 def _metrics(ticker: str, api_key=None, **kw):
-    """Plausible _fetch_ticker_metrics output."""
-    seed = abs(hash(ticker)) % 17
+    """Plausible _fetch_ticker_metrics output.
+
+    Seeded from a stable digest, NOT hash() — Python randomises string
+    hashing per process, which made metric values and therefore VGPM row
+    order differ between runs. A test that passes alone and fails in the
+    suite is worse than one that just fails.
+    """
+    seed = int(hashlib.md5(ticker.encode()).hexdigest()[:4], 16) % 17
     return {
         "ticker": ticker,
         "pe": 10.0 + seed, "pb": 1.0 + seed / 10, "ev_ebitda": 8.0 + seed,
@@ -256,3 +264,109 @@ class TestKgMetricReuse:
         monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("0", n=6))
         ss.get_hk_screener_stocks()
         assert len(fetched) == 6
+
+
+class TestPriceAndBetaCarry:
+    """robo_strategy_service._to_candidate DROPS any stock without a price,
+    so a screener row with price=None silently excluded every HK and SG name
+    from Individual Stocks mode — the stock plan came back 100% US even when
+    Emerging Markets and Asia-Pacific were the highest-weighted preferences.
+
+    _fetch_ticker_metrics returns neither price nor beta; both are already on
+    the FMP company-screener row, so carrying them costs no extra call."""
+
+    def _universe_with_price(self, prefix, n=6):
+        rows, sm, im, nm = _universe(prefix, n)
+        for i, r in enumerate(rows):
+            r["price"] = 100.0 + i
+            r["beta"] = 1.1
+        return rows, sm, im, nm
+
+    def test_hk_items_carry_price(self, stubbed, monkeypatch):
+        monkeypatch.setattr(ss, "_intl_universe",
+                            lambda m, **k: self._universe_with_price("0"))
+        items = ss.get_hk_screener_stocks()["items"]
+        assert all(i.get("price") for i in items), "HK rows must carry a price"
+
+    def test_sg_items_carry_price(self, stubbed, monkeypatch):
+        monkeypatch.setattr(ss, "_intl_universe",
+                            lambda m, **k: self._universe_with_price("D0"))
+        items = ss.get_sg_screener_stocks()["items"]
+        assert all(i.get("price") for i in items), "SG rows must carry a price"
+
+    def test_beta_carried_for_risk_tiering(self, stubbed, monkeypatch):
+        monkeypatch.setattr(ss, "_intl_universe",
+                            lambda m, **k: self._universe_with_price("0"))
+        items = ss.get_hk_screener_stocks()["items"]
+        assert any(i.get("beta") for i in items)
+
+    def test_fetched_metrics_do_not_overwrite_screener_price(self, stubbed, monkeypatch):
+        """setdefault, not assignment — a metrics price would win if present,
+        but a None from the metrics fetcher must not blank the row."""
+        monkeypatch.setattr(ss, "_fetch_ticker_metrics",
+                            lambda t, k=None, **kw: {**_metrics(t), "price": None})
+        monkeypatch.setattr(ss, "_intl_universe",
+                            lambda m, **k: self._universe_with_price("0"))
+        items = ss.get_hk_screener_stocks()["items"]
+        assert all(i.get("price") for i in items)
+
+
+class TestRoboCandidateEligibility:
+    """The end-to-end consequence: an HK screener row must survive
+    _to_candidate, or Individual Stocks mode can never show a non-US name."""
+
+    def test_hk_row_becomes_a_candidate(self, stubbed, monkeypatch):
+        from app.backend.services import robo_strategy_service as rs
+        rows, sm, im, nm = _universe("0", 4)
+        for i, r in enumerate(rows):
+            r["price"], r["beta"] = 100.0 + i, 1.1
+        monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: (rows, sm, im, nm))
+        items = ss.get_hk_screener_stocks()["items"]
+        # Every row must survive — row order depends on VGPM scores, so
+        # asserting on items[0] alone would be order-dependent.
+        cands = [rs._to_candidate(i, region="Emerging Markets",
+                                  sector_map=rs._HK_SECTOR_TO_CANONICAL)
+                 for i in items]
+        assert all(c is not None for c in cands),             "HK screener rows were rejected as candidates"
+        assert all(c["price"] for c in cands)
+
+
+class TestSectorCanonicalisation:
+    """_to_candidate drops any stock whose sector doesn't canonicalise. The
+    maps used to hold ONLY legacy labels ("Property", "Tech", "Telco"), so
+    once the screeners emitted FMP sectors just 4 of 11 matched and seven
+    sectors' worth of HK/SG stocks were silently discarded."""
+
+    def test_every_fmp_sector_maps(self):
+        from app.backend.services import robo_strategy_service as rs
+        for sector in rs._FMP_SECTORS:
+            assert sector in rs._HK_SECTOR_TO_CANONICAL, f"{sector} unmapped"
+            assert sector in rs._SG_SECTOR_TO_CANONICAL, f"{sector} unmapped"
+
+    def test_fmp_sectors_map_to_themselves(self):
+        from app.backend.services import robo_strategy_service as rs
+        for sector in rs._FMP_SECTORS:
+            assert rs._SECTOR_TO_CANONICAL[sector] == sector
+
+    @pytest.mark.parametrize("legacy,expected", [
+        ("Property", "Real Estate"),
+        ("REIT", "Real Estate"),
+        ("Tech", "Technology"),
+        ("Telco", "Communication Services"),
+        ("Financials", "Financial Services"),
+    ])
+    def test_legacy_labels_still_resolve(self, legacy, expected):
+        """Older cached rows may still carry these."""
+        from app.backend.services import robo_strategy_service as rs
+        assert rs._SECTOR_TO_CANONICAL[legacy] == expected
+
+    def test_a_financial_services_stock_is_not_dropped(self):
+        """The single biggest casualty: "Financial Services" is FMP's label
+        and the map only had "Financials"."""
+        from app.backend.services import robo_strategy_service as rs
+        cand = rs._to_candidate(
+            {"symbol": "01398.HK", "companyName": "ICBC", "price": 5.2,
+             "sector": "Financial Services", "marketCap": 3.5e12, "beta": 0.8},
+            region="Emerging Markets", sector_map=rs._HK_SECTOR_TO_CANONICAL)
+        assert cand is not None
+        assert cand["sector"] == "Financial Services"
