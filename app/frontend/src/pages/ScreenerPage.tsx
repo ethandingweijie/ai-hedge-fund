@@ -3,8 +3,8 @@
  *
  * Minimal-fintech Linear/Stripe layout wired to the real backend.
  * - Market segmented control (US · HK · SG)
- * - Search + searchable sector dropdown + market-cap dropdown + VGPM-only toggle
- * - Sort tabs (Overall / V / G / P / M)
+ * - Search bar with the filters flush right: Sector | Market cap | VGPM
+ *   (the VGPM dropdown is the sort — Overall / V / G / P / M)
  * - Stock rows with composite score + V/G/P/M chips
  * - SwipeRow: swipe left → Analyse + Watch actions
  * - 15s live price refresh for top 50 by composite score (existing behaviour preserved)
@@ -72,6 +72,10 @@ const SORTS: { id: SortKey; label: string }[] = [
   { id: 'momentum',      label: 'M' },
 ];
 
+// The VGPM dropdown in the search bar IS the sort control now — the old
+// Sort tab row is gone.
+const SORT_OPTIONS: FilterOption[] = SORTS.map(s => ({ id: s.id, label: s.label }));
+
 // Canonical FMP sector order — used only to keep the derived dropdown
 // stable and readable. The options themselves come from the data, so a
 // sector the provider adds tomorrow shows up automatically.
@@ -118,13 +122,15 @@ function gradeRank(g?: string | null): number {
  * a sector instead of scrolling.
  */
 function FilterDropdown({
-  label, value, options, onSelect, searchable = false,
+  label, value, options, onSelect, searchable = false, defaultValue = 'all',
 }: {
   label: string;
   value: string;
   options: FilterOption[];
   onSelect: (id: string) => void;
   searchable?: boolean;
+  /** Value that counts as "no selection applied" (default 'all'). */
+  defaultValue?: string;
 }) {
   const [open, setOpen]     = useState(false);
   const [query, setQuery]   = useState('');
@@ -157,7 +163,7 @@ function FilterDropdown({
   }, [open]);
 
   const selected = options.find(o => o.id === value);
-  const active   = value !== 'all';
+  const active   = value !== defaultValue;
   const q        = query.trim().toLowerCase();
   const visible  = searchable && q
     ? options.filter(o => o.label.toLowerCase().includes(q))
@@ -175,10 +181,18 @@ function FilterDropdown({
             ? 'bg-primary text-primary-foreground border-primary'
             : 'bg-card text-muted-foreground border-border active:bg-muted'}`}
       >
-        <span className="opacity-70">{label}:</span>
-        <span className={`max-w-[9.5rem] truncate ${active ? 'font-medium' : ''}`}>
-          {selected?.label ?? 'All'}
+        {/* Truncated display: at the default value show only the category
+            name (Sector | Market Cap | VGPM) — the "All sectors" /
+            "Any market cap" / "Overall" defaults are redundant. The
+            selected value only appears once a real filter is active. */}
+        <span className={active ? 'opacity-70' : ''}>
+          {active ? `${label}:` : label}
         </span>
+        {active && (
+          <span className="max-w-[9.5rem] truncate font-medium">
+            {selected?.label ?? ''}
+          </span>
+        )}
         <ChevronDn width={12} height={12} className={`opacity-60 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
       </button>
 
@@ -238,7 +252,6 @@ export function ScreenerPage() {
   const [sector, setSector]         = useState('all'); // 'all' | 'Other' | FMP sector name
   const [capId, setCapId]           = useState('all');
   const [sortKey, setSortKey]       = useState<SortKey>('composite');
-  const [vgpmOnly, setVgpmOnly]     = useState(true);
   const [search, setSearch]         = useState('');
 
   const [data, setData]             = useState<ScreenerResponse | null>(null);
@@ -362,14 +375,13 @@ export function ScreenerPage() {
           !(r.companyName || '').toLowerCase().includes(q)) return false;
       return true;
     });
-    if (vgpmOnly) filtered = filtered.filter(r => r.vgpm !== null);
     return [...filtered].sort((a, b) => {
       if (sortKey === 'composite') return (b.composite_score ?? -1) - (a.composite_score ?? -1);
       const ga = a.vgpm?.[sortKey]?.grade;
       const gb = b.vgpm?.[sortKey]?.grade;
       return gradeRank(gb) - gradeRank(ga);
     });
-  }, [data, sector, capRange, search, vgpmOnly, sortKey]);
+  }, [data, sector, capRange, search, sortKey]);
 
   // ── Ticker not in universe → lookup on demand ────────────────────────────
   useEffect(() => {
@@ -421,46 +433,25 @@ export function ScreenerPage() {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Search bar with the filters inside, flush right:
+          Sector | Market cap | VGPM(sort) */}
       <div className="px-3 md:px-6 pt-2.5">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={15} height={15}/>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search ticker or name"
-            className="w-full h-10 md:h-11 pl-8 pr-3 text-[13px] md:text-[14px] rounded-lg bg-muted/60 border border-border focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 placeholder:text-muted-foreground/70 text-foreground"
-            style={{ ['--tw-ring-color' as any]: `hsl(var(--brand) / 0.1)` }}
-          />
-        </div>
-      </div>
-
-      {/* Filters: sector dropdown · market-cap dropdown · VGPM toggle */}
-      <div className="px-3 md:px-6 pt-2.5 flex flex-wrap items-center gap-1.5">
-        <FilterDropdown label="Sector" value={sector} options={sectorOptions} onSelect={setSector} searchable/>
-        <FilterDropdown label="Market cap" value={capId} options={capOptions} onSelect={setCapId}/>
-        <button
-          onClick={() => setVgpmOnly(v => !v)}
-          className={`h-8 md:h-9 px-2.5 md:px-3 text-[11px] md:text-[12px] rounded-lg border flex items-center gap-1 shrink-0 transition-colors
-            ${vgpmOnly ? 'bg-brand/10 border-brand/30 text-brand' : 'bg-card border-border text-muted-foreground'}`}
-        >
-          <Check width={11} height={11}/> VGPM only
-        </button>
-      </div>
-
-      {/* Sort tabs */}
-      <div className="border-b border-border/60 mt-2">
-        <div className="px-3 md:px-6 flex items-center gap-1 overflow-x-auto phone-scroll">
-          {SORTS.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setSortKey(s.id)}
-              className={`h-9 md:h-10 px-2.5 text-[11.5px] md:text-[12.5px] font-medium border-b-[2px] -mb-px transition-colors shrink-0
-                ${sortKey === s.id ? 'text-foreground border-brand' : 'text-muted-foreground border-transparent active:text-foreground'}`}
-            >
-              Sort: {s.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-muted/60 border border-border focus-within:bg-card focus-within:border-brand/40 px-2 py-1.5 transition-colors">
+          <div className="relative flex-1 min-w-[9rem]">
+            <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={15} height={15}/>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search ticker or name"
+              className="w-full h-8 md:h-9 pl-7 pr-2 text-[13px] md:text-[14px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 ml-auto justify-end">
+            <FilterDropdown label="Sector" value={sector} options={sectorOptions} onSelect={setSector} searchable/>
+            <FilterDropdown label="Market Cap" value={capId} options={capOptions} onSelect={setCapId}/>
+            <FilterDropdown label="VGPM" value={sortKey} options={SORT_OPTIONS}
+                            onSelect={id => setSortKey(id as SortKey)} defaultValue="composite"/>
+          </div>
         </div>
       </div>
 

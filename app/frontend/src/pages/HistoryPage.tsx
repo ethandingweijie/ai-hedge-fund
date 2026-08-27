@@ -52,9 +52,6 @@ const SECTOR_OPTIONS = [
 type MarketOption = 'All markets' | 'US' | 'HK' | 'SG';
 const MARKET_OPTIONS: readonly MarketOption[] = ['All markets', 'US', 'HK', 'SG'];
 
-type TimeOption = 'All time' | 'Last 30 days' | 'Last 10 days' | 'Last 5 days' | 'Yesterday';
-const TIME_OPTIONS: readonly TimeOption[] = ['All time', 'Last 30 days', 'Last 10 days', 'Last 5 days', 'Yesterday'];
-
 type ActionOption = 'Any action' | 'BUY' | 'HOLD' | 'SELL' | 'SHORT';
 const ACTION_OPTIONS: readonly ActionOption[] = ['Any action', 'BUY', 'HOLD', 'SELL', 'SHORT'];
 
@@ -64,25 +61,6 @@ function marketOf(ticker: string): MarketOption {
   if (t.endsWith('.HK')) return 'HK';
   if (t.endsWith('.SI')) return 'SG';
   return 'US';
-}
-
-/** Convert a TimeOption into a cutoff Date; entries older than this are filtered out. */
-function timeCutoff(opt: TimeOption): Date {
-  const now = new Date();
-  const d = new Date(now);
-  switch (opt) {
-    case 'All time':
-      return new Date(0); // epoch — never filters anything out
-    case 'Yesterday':
-      d.setDate(d.getDate() - 1); d.setHours(0, 0, 0, 0); return d;
-    case 'Last 5 days':
-      d.setDate(d.getDate() - 5); return d;
-    case 'Last 10 days':
-      d.setDate(d.getDate() - 10); return d;
-    case 'Last 30 days':
-    default:
-      d.setDate(d.getDate() - 30); return d;
-  }
 }
 
 function daysAgo(iso: string): string {
@@ -137,7 +115,6 @@ export function HistoryPage() {
   // ── Filter state ──────────────────────────────────────────────────────────
   const [sectorFilter, setSectorFilter] = useState<string>('All sectors');
   const [marketFilter, setMarketFilter] = useState<MarketOption>('All markets');
-  const [timeFilter, setTimeFilter]     = useState<TimeOption>('All time');
   const [actionFilter, setActionFilter] = useState<ActionOption>('Any action');
   const [page, setPage] = useState(1);
   const deleteGuard = useRef<Set<string>>(new Set());
@@ -217,7 +194,6 @@ export function HistoryPage() {
   const rows = useMemo(() => {
     const items = history?.items ?? [];
     const query = q.trim().toLowerCase();
-    const cutoff = timeCutoff(timeFilter);
 
     return items.filter(r => {
       // Text search
@@ -234,14 +210,6 @@ export function HistoryPage() {
       if (marketFilter !== 'All markets' && marketOf(r.ticker) !== marketFilter) {
         return false;
       }
-      // Time window — compare run_at to cutoff; Yesterday is a single day window
-      const runDate = parseBackendIso(r.run_at);
-      if (timeFilter === 'Yesterday') {
-        const end = new Date(cutoff); end.setDate(end.getDate() + 1);
-        if (runDate < cutoff || runDate >= end) return false;
-      } else {
-        if (runDate < cutoff) return false;
-      }
       // Action
       if (actionFilter !== 'Any action') {
         const a = (r.final_action || '').toUpperCase();
@@ -249,7 +217,7 @@ export function HistoryPage() {
       }
       return true;
     });
-  }, [history, q, names, sectorFilter, marketFilter, timeFilter, actionFilter]);
+  }, [history, q, names, sectorFilter, marketFilter, actionFilter]);
 
   const handleDelete = async (runId: string) => {
     if (deleteGuard.current.has(runId)) return;
@@ -280,47 +248,42 @@ export function HistoryPage() {
           On mobile the max-width exceeds the 430px frame, so it no-ops and the
           content fills the phone width as before. */}
       <div className={`w-full mx-auto flex flex-1 flex-col ${isDesktop ? 'max-w-7xl' : 'max-w-5xl'}`}>
-      {/* Search */}
+      {/* Search bar with the filters inside, flush right: Sector | Market | Action */}
       <div className="px-3 pt-3">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={15} height={15}/>
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Search ticker or company"
-            className="w-full h-10 pl-8 pr-3 text-[13px] rounded-lg bg-muted/60 border border-border focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 focus:ring-brand/10 placeholder:text-muted-foreground/70 text-foreground"
-          />
+        <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-muted/60 border border-border focus-within:bg-card focus-within:border-brand/40 px-2 py-1.5 transition-colors">
+          <div className="relative flex-1 min-w-[9rem]">
+            <Search className="absolute left-1.5 top-1/2 -translate-y-1/2 text-muted-foreground/70" width={15} height={15}/>
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Search ticker or company"
+              className="w-full h-8 md:h-9 pl-7 pr-2 text-[13px] bg-transparent focus:outline-none placeholder:text-muted-foreground/70 text-foreground"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 ml-auto justify-end">
+            <FilterPill
+              label="Sector"
+              value={sectorFilter}
+              options={SECTOR_OPTIONS as readonly string[]}
+              onChange={v => setSectorFilter(v)}
+              active={sectorFilter !== 'All sectors'}
+            />
+            <FilterPill
+              label="Market"
+              value={marketFilter}
+              options={MARKET_OPTIONS as readonly string[]}
+              onChange={v => setMarketFilter(v as MarketOption)}
+              active={marketFilter !== 'All markets'}
+            />
+            <FilterPill
+              label="Action"
+              value={actionFilter}
+              options={ACTION_OPTIONS as readonly string[]}
+              onChange={v => setActionFilter(v as ActionOption)}
+              active={actionFilter !== 'Any action'}
+            />
+          </div>
         </div>
-      </div>
-
-      {/* Filter chips — each is a working dropdown. Funnel icon removed per design. */}
-      <div className="px-3 pt-2.5 pb-1 flex items-center gap-1.5 overflow-x-auto phone-scroll">
-        <FilterPill
-          value={sectorFilter}
-          options={SECTOR_OPTIONS as readonly string[]}
-          onChange={v => setSectorFilter(v)}
-          active={sectorFilter !== 'All sectors'}
-        />
-        <FilterPill
-          label="Market"
-          value={marketFilter}
-          options={MARKET_OPTIONS as readonly string[]}
-          onChange={v => setMarketFilter(v as MarketOption)}
-          active={marketFilter !== 'All markets'}
-        />
-        <FilterPill
-          label={timeFilter === 'All time' ? 'Any time' : 'Last search'}
-          value={timeFilter}
-          options={TIME_OPTIONS as readonly string[]}
-          onChange={v => setTimeFilter(v as TimeOption)}
-          active={timeFilter !== 'All time'}
-        />
-        <FilterPill
-          value={actionFilter}
-          options={ACTION_OPTIONS as readonly string[]}
-          onChange={v => setActionFilter(v as ActionOption)}
-          active={actionFilter !== 'Any action'}
-        />
       </div>
 
       <div className="flex-1 px-3 pt-2 pb-6">
@@ -639,7 +602,10 @@ function FilterPill({
     };
   }, [open, recomputePos]);
 
-  const display = label ?? value;
+  // At rest show just the category name (Sector | Market | Action) — the
+  // redundant "All sectors" / "All markets" / "Any action" defaults only
+  // appear as options. The selected value shows once a filter is active.
+  const display = active ? (label ? `${label}: ${value}` : value) : (label ?? value);
 
   return (
     <>

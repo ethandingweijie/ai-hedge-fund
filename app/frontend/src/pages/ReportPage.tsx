@@ -193,6 +193,21 @@ function SectionCompleteBadge() {
   );
 }
 
+// ── Landing search: market support gating ────────────────────────────────────
+// The pipeline covers US / HK / SG listings only. Suggestions outside those
+// markets are greyed out and unclickable; ETFs listed on the three supported
+// markets are greyed out too but carry a blue WIP tag.
+function suggestionMarket(s: CompanySearchResult): 'US' | 'HK' | 'SG' | null {
+  const t  = (s.ticker || '').toUpperCase();
+  if (t.endsWith('.HK')) return 'HK';
+  if (t.endsWith('.SI')) return 'SG';
+  const ex = (s.exchange || '').toUpperCase();
+  if (ex.includes('HKSE') || ex.includes('HKEX') || ex.includes('HONG KONG')) return 'HK';
+  if (ex === 'SES' || ex.includes('SGX') || ex.includes('SINGAPORE')) return 'SG';
+  if (/^(NASDAQ|NYSE|AMEX|ARCA|BATS)/.test(ex) || ex.includes('AMERICAN')) return 'US';
+  return null;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 export function ReportPage() {
   const navigate = useNavigate();
@@ -989,27 +1004,41 @@ export function ReportPage() {
               {/* Autocomplete dropdown */}
               {showSugg && suggestions.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-border bg-card shadow-lg max-h-80 overflow-y-auto z-20">
-                  {suggestions.map(s => (
-                    <button
-                      key={s.ticker}
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setTicker(s.ticker);
-                        setShowSugg(false);
-                        setSuggestions([]);
-                      }}
-                      className="w-full text-left px-3 py-2 text-[13px] hover:bg-muted/60 border-b border-border/60 last:border-b-0 flex items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-foreground tabular-nums">{s.ticker}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">{s.name}</div>
-                      </div>
-                      {s.exchange && (
-                        <span className="text-[10px] text-muted-foreground/70 shrink-0">{s.exchange}</span>
-                      )}
-                    </button>
-                  ))}
+                  {suggestions.map(s => {
+                    const market   = suggestionMarket(s);
+                    const isEtf    = s.type === 'etf';
+                    const disabled = market === null || isEtf;
+                    return (
+                      <button
+                        key={s.ticker}
+                        type="button"
+                        disabled={disabled}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setTicker(s.ticker);
+                          setShowSugg(false);
+                          setSuggestions([]);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-[13px] border-b border-border/60 last:border-b-0 flex items-center justify-between gap-3
+                          ${disabled ? 'opacity-45 cursor-not-allowed' : 'hover:bg-muted/60'}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className={`font-semibold tabular-nums flex items-center gap-1.5 ${disabled ? 'text-muted-foreground' : 'text-foreground'}`}>
+                            {s.ticker}
+                            {isEtf && market !== null && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-brand" title="ETF support is in progress">
+                                WIP
+                              </span>
+                            )}
+                          </div>
+                          <div className={`text-[11px] truncate ${disabled ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>{s.name}</div>
+                        </div>
+                        {s.exchange && (
+                          <span className="text-[10px] text-muted-foreground/70 shrink-0">{s.exchange}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
