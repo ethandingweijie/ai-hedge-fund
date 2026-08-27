@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '@/config';
+import { Markdown } from '@/components/report/shared/Markdown';
 
 const API_BASE = API_BASE_URL;
 
@@ -176,7 +177,7 @@ export function ResearchSummaryPanel({
         )}
 
         {error && (
-          <p className="text-sm text-red-500">{error}</p>
+          <p className="text-sm text-content-high">{error}</p>
         )}
 
         {summary && (
@@ -190,18 +191,14 @@ export function ResearchSummaryPanel({
       {(industryBriefContent || industryBrief) && (
         <Accordion title="Industry Intelligence Brief">
           {industryBriefContent ?? (
-            <div className="px-4 py-3 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-              {industryBrief}
-            </div>
+            <Markdown>{industryBrief}</Markdown>
           )}
         </Accordion>
       )}
       {(deepResearchContent || deepResearch) && (
         <Accordion title="Deep Research">
           {deepResearchContent ?? (
-            <div className="px-4 py-3 text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-              {deepResearch}
-            </div>
+            <Markdown>{deepResearch}</Markdown>
           )}
         </Accordion>
       )}

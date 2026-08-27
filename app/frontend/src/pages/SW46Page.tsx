@@ -23,6 +23,7 @@ import {
 import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { rankTone } from '@/lib/semanticColors';
 
 
 // ─── Formatters ────────────────────────────────────────────────────────────
@@ -63,17 +64,17 @@ const formatRunTime = (iso: string | null): string => {
 // of pale 300-weight text colors was tuned for dark backgrounds only and
 // was nearly illegible against the app's light cream theme.
 const AICT_COLOR: Record<AICTTier, string> = {
-  Fortress: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  Fortress: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
   Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
   Stone:    'bg-orange-600/20 text-orange-700 dark:text-orange-300 border-orange-700/40',
-  Wood:     'bg-red-600/20 text-red-700 dark:text-red-300 border-red-700/40',
+  Wood:     'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
 
 const TA_COLOR: Record<TATier, string> = {
-  'Not-TT':  'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  'Not-TT':  'bg-surface-2 text-content-high border-[var(--hairline)]',
   'Near-TT': 'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
-  'TT*':     'bg-red-600/20 text-red-700 dark:text-red-300 border-red-700/40',
+  'TT*':     'bg-surface-2 text-content-high border-[var(--hairline)]',
   'N/A':     'bg-muted text-muted-foreground border-border',
 };
 
@@ -86,11 +87,10 @@ function verdictLabel(score: number): string {
 }
 
 function verdictColor(score: number): string {
-  if (score >= 60) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
-  if (score >= 45) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
-  if (score >= 25) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
-  if (score >= 10) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
-  return 'bg-red-600/30 text-red-900 dark:text-red-200';
+  if (score >= 60) return rankTone(0);
+  if (score >= 45) return rankTone(1);
+  if (score >= 25) return rankTone(2);
+  return rankTone(3);
 }
 
 
@@ -512,9 +512,9 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
           <section>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Composite breakdown</h2>
             <div className="flex h-3 rounded overflow-hidden border border-border">
-              <div className="bg-rose-500/70" style={{ width: `${ticker.composite.shareholder_bucket}%` }} title={`Shareholder ${ticker.composite.shareholder_bucket.toFixed(1)} / 30`} />
+              <div className="bg-surface-2" style={{ width: `${ticker.composite.shareholder_bucket}%` }} title={`Shareholder ${ticker.composite.shareholder_bucket.toFixed(1)} / 30`} />
               <div className="bg-cyan-500/70" style={{ width: `${ticker.composite.quality_bucket}%` }} title={`Quality ${ticker.composite.quality_bucket.toFixed(1)} / 35`} />
-              <div className="bg-emerald-500/70" style={{ width: `${Math.max(ticker.composite.valuation_bucket, 0)}%` }} title={`Valuation ${ticker.composite.valuation_bucket.toFixed(1)} / 35`} />
+              <div className="bg-surface-2" style={{ width: `${Math.max(ticker.composite.valuation_bucket, 0)}%` }} title={`Valuation ${ticker.composite.valuation_bucket.toFixed(1)} / 35`} />
             </div>
             <div className="grid grid-cols-3 gap-2 mt-2 text-[11px]">
               <Bucket label="Shareholder" value={ticker.composite.shareholder_bucket} cap={30} subs={[
@@ -572,7 +572,7 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
           <section>
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tragic Algebra · year-by-year</h2>
-              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${netDiluter ? 'text-rose-400 border-rose-500/40 bg-rose-500/10' : 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10'}`}>
+              <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${netDiluter ? 'text-content-high border-[var(--hairline)] bg-surface-2' : 'text-content-high border-[var(--hairline)] bg-surface-2'}`}>
                 {netDiluter ? 'Net diluter' : 'Net buyer'}
               </span>
             </div>
@@ -609,7 +609,7 @@ function DetailDrawer({ ticker, onClose }: { ticker: SW46TickerResult; onClose: 
                         {y.cash_tax_withholding_estimated && <span className="text-amber-500 ml-0.5">*</span>}
                       </td>
                       <td className="px-1 py-1 text-right">{fmtMoney(y.buybacks)}</td>
-                      <td className={`px-1 py-1 text-right ${y.is_net_diluter ? 'text-rose-400' : 'text-muted-foreground'}`}>{fmtMoney(y.unfunded_comp)}</td>
+                      <td className={`px-1 py-1 text-right ${y.is_net_diluter ? 'text-content-high' : 'text-muted-foreground'}`}>{fmtMoney(y.unfunded_comp)}</td>
                       <td className="px-1 py-1 text-right text-muted-foreground">{y.share_change == null ? '—' : `${(y.share_change / 1e6).toFixed(1)}M`}</td>
                       <td className="px-1 py-1 text-right">{fmtPrice(y.avg_share_price)}</td>
                       <td className="px-1 py-1 text-right">{fmtMoney(y.omega)}</td>

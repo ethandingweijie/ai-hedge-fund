@@ -22,6 +22,7 @@ import {
 import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, Plus, Radar } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { rankTone } from '@/lib/semanticColors';
 
 
 // ─── Formatters ────────────────────────────────────────────────────────────
@@ -52,27 +53,27 @@ const formatRunTime = (iso: string | null): string => {
 // Light-mode: text is BLACK (per user request) so it stays legible on the
 // lightly-tinted chip backgrounds. Dark-mode keeps the existing pastel hues.
 const VERDICT_COLOR: Record<ComplacencyVerdict, string> = {
-  'Strong-Short': 'bg-red-600/30 text-black dark:text-red-200 border-red-700/40',
+  'Strong-Short': 'bg-surface-2 text-content-high border-[var(--hairline)]',
   'Watch':        'bg-orange-600/30 text-black dark:text-orange-200 border-orange-700/40',
   'Borderline':   'bg-amber-600/30 text-black dark:text-amber-200 border-amber-700/40',
-  'Pass':         'bg-emerald-600/20 text-black dark:text-emerald-300 border-emerald-700/40',
+  'Pass':         'bg-surface-2 text-content-high border-[var(--hairline)]',
   'N/A':          'bg-muted text-muted-foreground border-border',
 };
 
 function pillarColor(score: number): string {
-  if (score >= 2) return 'bg-red-600/30 text-black dark:text-red-200';
-  if (score >= 1) return 'bg-amber-600/30 text-black dark:text-amber-200';
-  return 'bg-muted text-muted-foreground';
+  if (score >= 2) return rankTone(0);
+  if (score >= 1) return rankTone(2);
+  return rankTone(null);
 }
 
 // Aggregate-score chip color: rank by total 0-100. Used in the new table
 // column AND the drawer header. Dark mode keeps current vibrancy.
 function aggregateColor(score: number | null | undefined): string {
   if (score == null) return 'bg-muted text-muted-foreground';
-  if (score >= 70) return 'bg-red-600/30 text-black dark:text-red-200';
-  if (score >= 50) return 'bg-orange-600/30 text-black dark:text-orange-200';
-  if (score >= 30) return 'bg-amber-600/30 text-black dark:text-amber-200';
-  return 'bg-emerald-600/20 text-black dark:text-emerald-300';
+  if (score >= 70) return rankTone(0);
+  if (score >= 50) return rankTone(1);
+  if (score >= 30) return rankTone(2);
+  return rankTone(3);
 }
 
 
@@ -608,7 +609,7 @@ export function ComplacencyPage() {
                   <th colSpan={4} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
                     Pillar scores
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-rose-500/15 text-rose-900 dark:text-rose-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Valuation
                   </th>
                   <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-orange-500/15 text-orange-900 dark:text-orange-300">
@@ -617,7 +618,7 @@ export function ComplacencyPage() {
                   <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-900 dark:text-cyan-300">
                     Technical
                   </th>
-                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-emerald-500/15 text-emerald-900 dark:text-emerald-300">
+                  <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Quality
                   </th>
                   <th colSpan={1} className="px-2 py-1"></th>
@@ -730,7 +731,7 @@ export function ComplacencyPage() {
                         <>
                           {r.ev_sales.toFixed(1)}×
                           {r.ev_sales_relative != null && r.ev_sales_relative >= 2.5 && (
-                            <span className="text-red-400 ml-1" title="≥ 2.5× sector median (strong flag)">▲</span>
+                            <span className="text-content-high ml-1" title="≥ 2.5× sector median (strong flag)">▲</span>
                           )}
                         </>
                       )}
@@ -754,7 +755,7 @@ export function ComplacencyPage() {
                         <>
                           {r.ad_ratio_4q_avg.toFixed(2)}
                           {r.ad_ratio_4q_avg < 0.20 && (
-                            <span className="text-red-400 ml-1" title="< 0.20 = strong sell">▼</span>
+                            <span className="text-content-high ml-1" title="< 0.20 = strong sell">▼</span>
                           )}
                         </>
                       )}
@@ -1307,7 +1308,7 @@ function KV({ label, value, highlight = false }: { label: string; value: string;
 // ─── Qualitative panel (LLM-scored short thesis) ──────────────────────────
 
 const CONVICTION_COLOR: Record<QualConvictionLabel, string> = {
-  'EXCEPTIONAL': 'bg-red-600/30 text-black dark:text-red-200 border-red-700/40',
+  'EXCEPTIONAL': 'bg-surface-2 text-content-high border-[var(--hairline)]',
   'BOTH':        'bg-orange-600/30 text-black dark:text-orange-200 border-orange-700/40',
   'QUANT-ONLY':  'bg-amber-600/30 text-black dark:text-amber-200 border-amber-700/40',
   'QUAL-ONLY':   'bg-blue-600/30 text-black dark:text-blue-200 border-blue-700/40',
@@ -1340,7 +1341,7 @@ const QUAL_INDICATOR_THEME: Record<string, { theme: string; label: string; accen
 };
 
 function scoreChipColor(score: number): string {
-  if (score >= 4) return 'bg-red-600/30 text-red-200';
+  if (score >= 4) return 'bg-surface-2 text-content-medium';
   if (score >= 3) return 'bg-orange-600/30 text-orange-200';
   if (score >= 2) return 'bg-amber-600/30 text-amber-200';
   if (score >= 1) return 'bg-yellow-600/20 text-yellow-200';
@@ -1477,11 +1478,11 @@ function QualitativePanel(
 // ─── Aggregate score panel (quant + qual combined 0-100) ─────────────────
 
 function aggregateTier(score: number): { label: string; color: string; blurb: string } {
-  if (score >= 75) return { label: 'EXCEPTIONAL', color: 'bg-red-600/30 text-red-200 border-red-700/40',          blurb: 'Both quant and qualitative pillars at max conviction — textbook short setup' };
+  if (score >= 75) return { label: 'EXCEPTIONAL', color: 'bg-surface-2 text-content-medium border-[var(--hairline)]',          blurb: 'Both quant and qualitative pillars at max conviction — textbook short setup' };
   if (score >= 55) return { label: 'HIGH',        color: 'bg-orange-600/30 text-orange-200 border-orange-700/40', blurb: 'Strong combined signal — actionable short candidate' };
   if (score >= 40) return { label: 'MODERATE',    color: 'bg-amber-600/30 text-amber-200 border-amber-700/40',    blurb: 'Mixed signal — track for confirmation before sizing' };
   if (score >= 25) return { label: 'WEAK',        color: 'bg-yellow-600/20 text-yellow-200 border-yellow-700/40', blurb: 'Limited setup — qualitative or quant pillar missing' };
-  return { label: 'PASS', color: 'bg-emerald-600/20 text-emerald-300 border-emerald-700/40', blurb: 'No actionable short signal' };
+  return { label: 'PASS', color: 'bg-surface-2 text-content-medium border-[var(--hairline)]', blurb: 'No actionable short signal' };
 }
 
 function AggregateScorePanel(
@@ -1496,7 +1497,7 @@ function AggregateScorePanel(
 ) {
   const tier = aggregateTier(total);
   return (
-    <section className="border border-emerald-500/30 rounded-md bg-gradient-to-br from-emerald-500/5 to-amber-500/5 p-3">
+    <section className="border border-[var(--hairline)] rounded-md bg-gradient-to-br from-surface-2 to-amber-500/5 p-3">
       <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
         <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
           3 · Aggregate Score
@@ -1585,10 +1586,10 @@ const ACCENT_BORDER: Record<Accent, string> = {
   emerald:  'border-l-emerald-500/70',
 };
 const ACCENT_BG: Record<Accent, string> = {
-  rose:    'bg-rose-500/10',
+  rose:    'bg-surface-2',
   orange:  'bg-orange-500/10',
   cyan:    'bg-cyan-500/10',
-  emerald: 'bg-emerald-500/10',
+  emerald: 'bg-surface-2',
 };
 
 function InputGroup(

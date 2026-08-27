@@ -53,7 +53,7 @@ export function NewsPanel({ ticker }: NewsPanelProps) {
       )}
 
       {!loading && error && (
-        <p className="text-xs text-red-500 py-2">{error}</p>
+        <p className="text-xs text-content-high py-2">{error}</p>
       )}
 
       {!loading && !error && articles.length === 0 && (

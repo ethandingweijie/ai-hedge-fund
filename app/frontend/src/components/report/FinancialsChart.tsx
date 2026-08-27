@@ -225,7 +225,7 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
         </div>
       ) : error ? (
         <div className="h-52 flex items-center justify-center">
-          <p className="text-xs text-red-500">{error}</p>
+          <p className="text-xs text-content-high">{error}</p>
         </div>
       ) : items.length === 0 ? (
         <div className="h-52 flex items-center justify-center">
@@ -362,9 +362,9 @@ export function FinancialsChart({ ticker }: FinancialsChartProps) {
                       key={i}
                       className={`text-center py-1.5 px-1 text-[11px] font-semibold font-mono align-middle
                         ${cr.positive === true
-                          ? 'text-green-600 dark:text-green-400'
+                          ? 'text-content-high'
                           : cr.positive === false
-                            ? 'text-red-500 dark:text-red-400'
+                            ? 'text-content-high'
                             : 'text-muted-foreground'
                         }`}
                     >

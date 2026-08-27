@@ -18,10 +18,10 @@ import { getAssumptionWatch, type AssumptionWatchPayload } from '@/lib/api';
 
 const ANOMALY_CHIP: Record<string, string> = {
   divergence:         'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25',
-  direction_reversal: 'bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/25',
+  direction_reversal: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   theme_divergence:   'bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/25',
   earnings_quality:   'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/25',
-  margin_compression: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/25',
+  margin_compression: 'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
 
 const ANOMALY_LABEL: Record<string, string> = {
@@ -155,7 +155,7 @@ export function AssumptionWatchCard({ ticker }: Props) {
                 {r.hit_rate != null ? `${Math.round(r.hit_rate * 100)}%` : '—'}
               </span>
               {r.low_track_record && (
-                <span className="text-red-500 font-bold">LOW-TRACK</span>
+                <span className="text-content-high font-bold">LOW-TRACK</span>
               )}
             </span>
           ))}

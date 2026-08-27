@@ -271,7 +271,7 @@ export function RoboStrategyPage() {
           <AccordionTrigger className="text-[14px] font-semibold">
             <span className="flex items-center gap-2">
               Sector Preferences
-              <span className={`text-[11px] font-mono font-normal ${sectorTotal === 100 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+              <span className={`text-[11px] font-mono font-normal ${sectorTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {sectorTotal}%
               </span>
             </span>
@@ -294,7 +294,7 @@ export function RoboStrategyPage() {
           <AccordionTrigger className="text-[14px] font-semibold">
             <span className="flex items-center gap-2">
               Geography Preferences
-              <span className={`text-[11px] font-mono font-normal ${geoTotal === 100 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+              <span className={`text-[11px] font-mono font-normal ${geoTotal === 100 ? 'text-brand' : 'text-content-high'}`}>
                 {geoTotal}%
               </span>
             </span>

@@ -25,6 +25,7 @@ import {
 import { ArrowLeft, RefreshCw, Loader2, X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { rankTone } from '@/lib/semanticColors';
 
 const TIERS: HundredQTier[] = ['active_pass', 'on_deck', 'cooloff'];
 
@@ -36,9 +37,9 @@ const TIER_LABEL: Record<HundredQTier, string> = {
 };
 
 const TIER_TAB_CLS: Record<HundredQTier, string> = {
-  active_pass: 'bg-emerald-500/20 border-emerald-600/60 text-emerald-800 dark:text-emerald-300',
+  active_pass: 'bg-surface-2 border-[var(--hairline)] text-content-high',
   on_deck: 'bg-amber-500/20 border-amber-600/60 text-amber-800 dark:text-amber-300',
-  cooloff: 'bg-red-500/20 border-red-600/60 text-red-800 dark:text-red-300',
+  cooloff: 'bg-surface-2 border-[var(--hairline)] text-content-high',
   not_evaluated: 'bg-muted border-border text-muted-foreground',
 };
 
@@ -60,9 +61,9 @@ function formatRunTime(iso: string | null | undefined): string {
 
 function compositeColor(pct: number | null | undefined): string {
   if (pct == null) return 'bg-muted text-muted-foreground';
-  if (pct >= 0.65) return 'bg-emerald-600/30 text-black dark:text-emerald-200';
-  if (pct >= 0.55) return 'bg-amber-600/30 text-black dark:text-amber-200';
-  return 'bg-red-600/20 text-black dark:text-red-300';
+  if (pct >= 0.65) return rankTone(0);
+  if (pct >= 0.55) return rankTone(2);
+  return rankTone(3);
 }
 
 export function HundredQPage() {
@@ -405,7 +406,7 @@ function TickerDrawer({ ticker, onClose, onRescored }: { ticker: string; onClose
 function QuestionRow({ qa }: { qa: HundredQQuestionAnswer }) {
   const badgeCls = qa.q_type === 'qual' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground';
   const answerGlyph = qa.answer == null ? '—' : qa.answer ? '✓' : '✗';
-  const answerCls = qa.answer == null ? 'text-muted-foreground' : qa.answer ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+  const answerCls = qa.answer == null ? 'text-muted-foreground' : qa.answer ? 'text-content-high' : 'text-content-high';
   return (
     <div className="px-3 py-2.5 group relative">
       <div className="flex items-start justify-between gap-2">

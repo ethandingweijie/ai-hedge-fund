@@ -262,7 +262,7 @@ function Revisions({ breakdown, usd, sym }: { breakdown: SotpBreakdown; usd: str
                 </td>
                 <td className="py-1.5 text-right text-muted-foreground">{fmtVal(r, r.old)}</td>
                 <td className="py-1.5 text-right font-medium text-foreground">{fmtVal(r, r.new)}</td>
-                <td className={`py-1.5 text-right ${up ? 'text-emerald-600 dark:text-emerald-400' : dn ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>
+                <td className={`py-1.5 text-right ${up ? 'text-gain' : dn ? 'text-loss' : 'text-muted-foreground'}`}>
                   {r.delta_pct != null ? fmtPct(r.delta_pct) : ''}
                 </td>
               </tr>
@@ -286,13 +286,13 @@ function Elasticities({ breakdown, sym }: { breakdown: SotpBreakdown; sym: strin
       <div className="flex items-center gap-2 w-full">
         <div className="flex-1 flex justify-end">
           {!pos && (
-            <div className="h-2 rounded-l-full bg-rose-500/60" style={{ width: `${w * 42}%` }} />
+            <div className="h-2 rounded-l-full bg-surface-2" style={{ width: `${w * 42}%` }} />
           )}
         </div>
         <div className="w-px h-3 bg-border" />
         <div className="flex-1">
           {pos && (
-            <div className="h-2 rounded-r-full bg-emerald-500/60" style={{ width: `${w * 42}%` }} />
+            <div className="h-2 rounded-r-full bg-surface-2" style={{ width: `${w * 42}%` }} />
           )}
         </div>
       </div>
@@ -307,7 +307,7 @@ function Elasticities({ breakdown, sym }: { breakdown: SotpBreakdown; sym: strin
             <span className="truncate text-foreground/85" title={e.label}>{e.label}</span>
             {bar(e)}
             <span className="tabular-nums text-right whitespace-nowrap">
-              <span className={(e.impact_per_share ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+              <span className={(e.impact_per_share ?? 0) >= 0 ? 'text-gain' : 'text-loss'}>
                 {(e.impact_per_share ?? 0) >= 0 ? '+' : '−'}{sym}{Math.abs(e.impact_per_share ?? 0).toFixed(2)}
               </span>
               <span className="text-muted-foreground/70 ml-1.5">
@@ -327,9 +327,9 @@ function ScenarioStrip({ breakdown, sym }: { breakdown: SotpBreakdown; sym: stri
   const bull = breakdown.scenarios?.bull;
   if (!bear && !bull) return null;
   const cells: { label: string; ps?: number | null; note?: string; tone: string }[] = [];
-  if (bear) cells.push({ label: 'Bear', ps: bear.per_share_reporting, note: (bear.applied ?? []).join(' · '), tone: 'text-rose-600 dark:text-rose-400' });
+  if (bear) cells.push({ label: 'Bear', ps: bear.per_share_reporting, note: (bear.applied ?? []).join(' · '), tone: 'text-content-high' });
   cells.push({ label: 'Base', ps: breakdown.per_share_reporting, note: 'current assumptions', tone: 'text-foreground' });
-  if (bull) cells.push({ label: 'Bull', ps: bull.per_share_reporting, note: (bull.applied ?? []).join(' · '), tone: 'text-emerald-600 dark:text-emerald-400' });
+  if (bull) cells.push({ label: 'Bull', ps: bull.per_share_reporting, note: (bull.applied ?? []).join(' · '), tone: 'text-content-high' });
   return (
     <div className="mt-4">
       <div className={LABEL_CLS}>Scenario multiples</div>

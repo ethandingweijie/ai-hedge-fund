@@ -129,7 +129,7 @@ function MessageRow({
         <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
           <button
             onClick={() => onLikeToggle(message.id)}
-            className={`flex items-center gap-1 hover:text-foreground transition-colors ${message.liked_by_me ? 'text-red-500 hover:text-red-500' : ''}`}
+            className={`flex items-center gap-1 hover:text-foreground transition-colors ${message.liked_by_me ? 'text-content-high hover:text-content-high' : ''}`}
           >
             <Heart size={13} fill={message.liked_by_me ? 'currentColor' : 'none'} />
             {message.like_count > 0 && <span>{message.like_count}</span>}

@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { rankTone } from '@/lib/semanticColors';
 
 
 // ─── Formatters ────────────────────────────────────────────────────────────
@@ -98,26 +99,24 @@ const formatRunTime = (iso: string | null): string => {
 // Signed composite (-6..+6): green = inflow, red = outflow, intensity = strength.
 function compositeColor(c: number | null | undefined): string {
   if (c == null) return 'bg-muted text-muted-foreground';
-  if (c >= 4) return 'bg-emerald-600/30 text-black dark:text-emerald-200';
-  if (c >= 1) return 'bg-emerald-600/15 text-black dark:text-emerald-300';
-  if (c <= -4) return 'bg-red-600/30 text-black dark:text-red-200';
-  if (c <= -1) return 'bg-red-600/15 text-black dark:text-red-300';
-  return 'bg-muted text-muted-foreground';
+  // Prominence tracks conviction magnitude; the +/- sign in the label
+  // carries direction, which monochrome cannot encode.
+  if (c >= 4 || c <= -4) return rankTone(0);
+  if (c >= 1 || c <= -1) return rankTone(2);
+  return rankTone(null);
 }
 
 // Signed pillar (-2..+2).
 function pillarColor(s: number | null | undefined): string {
   if (s == null) return 'bg-muted text-muted-foreground';
-  if (s >= 1) return 'bg-emerald-600/20 text-black dark:text-emerald-300';
-  if (s <= -1) return 'bg-red-600/20 text-black dark:text-red-300';
-  return 'bg-muted text-muted-foreground';
+  if (s >= 1 || s <= -1) return rankTone(1);
+  return rankTone(null);
 }
 
 function verdictColor(v: string): string {
-  if (v === 'Accelerating-Inflow') return 'bg-emerald-600/30 text-black dark:text-emerald-200 border-emerald-700/40';
-  if (v === 'Turning-Inflow') return 'bg-emerald-600/15 text-black dark:text-emerald-300 border-emerald-700/30';
-  if (v === 'Accelerating-Outflow') return 'bg-red-600/30 text-black dark:text-red-200 border-red-700/40';
-  if (v === 'Turning-Outflow') return 'bg-red-600/15 text-black dark:text-red-300 border-red-700/30';
+  // "Accelerating" outranks "Turning"; Inflow vs Outflow is in the label.
+  if (v === 'Accelerating-Inflow' || v === 'Accelerating-Outflow') return rankTone(0);
+  if (v === 'Turning-Inflow' || v === 'Turning-Outflow') return rankTone(2);
   return 'bg-muted text-muted-foreground border-border';
 }
 
@@ -258,11 +257,11 @@ export function FundFlowPage() {
               Last run {formatRunTime(cohort?.created_at ?? null)}
               {cohort?.as_of ? ` · as of ${cohort.as_of}` : ' · live'}
               {' · '}
-              <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
+              <span className="text-content-high font-semibold">
                 {cohort?.inflow_count ?? 0} inflow
               </span>
               {' / '}
-              <span className="text-red-700 dark:text-red-300 font-semibold">
+              <span className="text-content-high font-semibold">
                 {cohort?.outflow_count ?? 0} outflow
               </span>
             </p>
@@ -407,7 +406,7 @@ function SummaryPanel({ summary }: { summary: FundFlowSummary }) {
           icon={TrendingUp}
           title="Key flows"
           items={summary.key_flows}
-          tone="text-emerald-700 dark:text-emerald-400"
+          tone="text-content-high"
         />
         <SummarySection
           icon={Repeat}
@@ -533,8 +532,8 @@ function StrengthBars({ rows, onSelect, period }: {
                     className={
                       'absolute inset-y-1 group-hover:brightness-110 transition-all '
                       + (isIn
-                        ? 'bg-emerald-600/80 rounded-r'
-                        : 'bg-red-600/80 dark:bg-red-500/80 rounded-l')
+                        ? 'bg-surface-2 rounded-r'
+                        : 'bg-surface-2 rounded-l')
                     }
                     style={{ left: `${left}%`, width: `${Math.max(width, 0.4)}%` }}
                   />
@@ -585,9 +584,9 @@ function Sparkline({ points }: { points: { d: string; v: number }[] }) {
     <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="overflow-visible" aria-hidden>
       <line x1={0} y1={H / 2} x2={W} y2={H / 2} className="stroke-border" strokeWidth={1} />
       <path d={d} fill="none" strokeWidth={2}
-            className={last >= 0 ? 'stroke-emerald-600' : 'stroke-red-600 dark:stroke-red-500'} />
+            className={last >= 0 ? 'stroke-foreground' : 'stroke-foreground'} />
       <circle cx={x(points.length - 1)} cy={y(last)} r={2.2}
-              className={last >= 0 ? 'fill-emerald-600' : 'fill-red-600 dark:fill-red-500'} />
+              className={last >= 0 ? 'fill-foreground' : 'fill-foreground'} />
     </svg>
   );
 }
@@ -672,8 +671,8 @@ function FlowTable({ rows, onSelect, period }: {
               <td className={
                 'px-3 py-3 text-right font-mono text-[12.5px] font-semibold '
                 + ((r.rel_flow_z_delta ?? 0) > 0
-                  ? 'text-emerald-700 dark:text-emerald-400'
-                  : (r.rel_flow_z_delta ?? 0) < 0 ? 'text-red-700 dark:text-red-400' : 'text-muted-foreground')
+                  ? 'text-content-high'
+                  : (r.rel_flow_z_delta ?? 0) < 0 ? 'text-content-high' : 'text-muted-foreground')
               }>
                 {fmtSigma(r.rel_flow_z_delta)}
               </td>
@@ -961,8 +960,8 @@ function Rejected({ children }: { children: React.ReactNode }) {
 
 function DetailDrawer({ row, onClose }: { row: FundFlowRegionResult; onClose: () => void }) {
   const dirCls: Record<string, string> = {
-    INFLOW: 'text-emerald-700 dark:text-emerald-300',
-    OUTFLOW: 'text-red-700 dark:text-red-300',
+    INFLOW: 'text-content-high',
+    OUTFLOW: 'text-content-high',
     NEUTRAL: 'text-muted-foreground',
   };
   return (

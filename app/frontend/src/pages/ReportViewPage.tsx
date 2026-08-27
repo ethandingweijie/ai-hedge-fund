@@ -32,11 +32,15 @@ import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { NewsPanel } from '@/components/report/NewsPanel';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 
+// Mirrors the mobile tab order in V2ReportView so the two render paths present
+// the same information architecture.
 const SECTIONS = [
-  { id: 'summary',       label: 'Summary'    },
-  { id: 'valuation',     label: 'Valuation'  },
-  { id: 'analysis',      label: 'Analysis'   },
-  { id: 'financials',    label: 'Financials' },
+  { id: 'summary',    label: 'Summary'    },
+  { id: 'valuation',  label: 'Valuation'  },
+  { id: 'decision',   label: 'Decision'   },
+  { id: 'risk',       label: 'Risk'       },
+  { id: 'research',   label: 'Research'   },
+  { id: 'financials', label: 'Financials' },
 ] as const;
 
 function scrollTo(id: string) {
@@ -111,7 +115,7 @@ export function ReportViewPage() {
     return (
       <div className="min-h-screen bg-background">
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <p className="text-red-500">{error ?? 'Run not found.'}</p>
+          <p className="text-content-high">{error ?? 'Run not found.'}</p>
           <Button onClick={() => navigate('/report')}>New Analysis</Button>
         </div>
       </div>
@@ -285,6 +289,11 @@ export function ReportViewPage() {
             ) : (
               <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={ticker} />
             )}
+          </div>
+          {/* Right column (2fr): valuation supporting detail. Risk and
+              decision cards used to live here; they now have their own
+              sections below, matching the mobile tab structure. */}
+          <div className="flex flex-col gap-5">
             {/* ── GS-style SOTP report card (task #28) ────────────────────────
                 Present only when the DCF engine ran with SOTP (analyst)
                 assumptions (dcf_range[ticker].sotp_breakdown): business-unit
@@ -300,24 +309,31 @@ export function ReportViewPage() {
                 (no bear/bull IV stored) looking like dead space above a gap. */}
             <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
           </div>
-          <div className="flex flex-col gap-5">
-            <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
-            <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
-            <NewsPanel ticker={ticker} />
-            {/* Decision-inputs card (M2 D3) — replaces the investor persona
-                panel retired with the committee; shows what the PM decided
-                from. Historical runs without decision_inputs render the
-                card's "not available" state. */}
-            <DecisionInputsCard decisionInputs={decision?.decision_inputs} ticker={ticker} />
-            {/* R3 Assumption Watch — the steward's live view of open
-                challenges / variant drivers for this ticker. Fetches its own
-                endpoint; renders nothing when disabled or unflagged. */}
-            <AssumptionWatchCard ticker={ticker} />
-          </div>
         </div>
 
-        {/* ── Analysis (anchored to Industry Brief) ──────────────────────── */}
-        <SectionAnchor id="analysis" label="Analysis" />
+        {/* ── Decision ───────────────────────────────────────────────────── */}
+        <SectionAnchor id="decision" label="Decision" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+          {/* Decision-inputs card (M2 D3) — replaces the investor persona
+              panel retired with the committee; shows what the PM decided
+              from. Historical runs without decision_inputs render the
+              card's "not available" state. */}
+          <DecisionInputsCard decisionInputs={decision?.decision_inputs} ticker={ticker} />
+          {/* R3 Assumption Watch — the steward's live view of open
+              challenges / variant drivers for this ticker. Fetches its own
+              endpoint; renders nothing when disabled or unflagged. */}
+          <AssumptionWatchCard ticker={ticker} />
+        </div>
+
+        {/* ── Risk ───────────────────────────────────────────────────────── */}
+        <SectionAnchor id="risk" label="Risk" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+          <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
+          <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
+        </div>
+
+        {/* ── Research ─────────────────────────────────────── */}
+        <SectionAnchor id="research" label="Research" />
         <ResearchSummaryPanel
           runId={runId!}
           ticker={ticker}
@@ -340,6 +356,7 @@ export function ReportViewPage() {
           pipelineData={data as Record<string, unknown>}
           ticker={ticker}
         />
+        <NewsPanel ticker={ticker} />
 
         {/* ── Financials ─────────────────────────────────────────────────── */}
         <SectionAnchor id="financials" label="Financials" />

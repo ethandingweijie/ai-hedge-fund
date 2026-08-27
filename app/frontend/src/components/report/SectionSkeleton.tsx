@@ -65,7 +65,7 @@ export function SectionSkeleton({ label, events, resultReady = false }: SectionS
       <div className="flex items-center gap-3">
         {resultReady ? (
           /* Pulsing "ready" ring while waiting for reveal timer */
-          <div className="w-5 h-5 rounded-full border-2 border-green-500/40 animate-pulse shrink-0" />
+          <div className="w-5 h-5 rounded-full border-2 border-[var(--hairline)] animate-pulse shrink-0" />
         ) : (
           <div className="w-5 h-5 rounded-full border-2 border-primary/25 border-t-primary animate-spin shrink-0" />
         )}
@@ -73,7 +73,7 @@ export function SectionSkeleton({ label, events, resultReady = false }: SectionS
         <span className="text-sm font-semibold">{label}</span>
 
         <span className={`ml-auto text-[11px] italic transition-opacity duration-500 ${
-          resultReady ? 'text-green-500/70' : 'text-muted-foreground'
+          resultReady ? 'text-content-high' : 'text-muted-foreground'
         }`}>
           {resultReady ? 'Ready — loading…' : PHRASES[phraseIdx]}
         </span>

@@ -51,7 +51,7 @@ const FEATURES: FeatureRow[] = [
 // ── Value cell ────────────────────────────────────────────────────────────────
 
 function Val({ v }: { v: string | boolean }) {
-  if (v === true)  return <Check size={16} className="text-green-500 mx-auto" />;
+  if (v === true)  return <Check size={16} className="text-content-high mx-auto" />;
   if (v === false) return <X    size={16} className="text-muted-foreground/40 mx-auto" />;
   return <span className="text-sm text-center block">{v}</span>;
 }
@@ -116,7 +116,7 @@ function TierCard({
 
       {active && (
         <div className="absolute top-3 right-3">
-          <span className="bg-green-500/15 text-green-600 dark:text-green-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+          <span className="bg-surface-2 text-content-high text-[10px] font-bold px-2 py-0.5 rounded-full">
             CURRENT PLAN
           </span>
         </div>
@@ -145,7 +145,7 @@ function TierCard({
       <ul className="space-y-2.5 mb-6 flex-1">
         {highlights.map(h => (
           <li key={h} className="flex items-start gap-2 text-sm">
-            <Check size={14} className="text-green-500 mt-0.5 flex-shrink-0" />
+            <Check size={14} className="text-content-high mt-0.5 flex-shrink-0" />
             <span>{h}</span>
           </li>
         ))}
@@ -230,7 +230,7 @@ export function PricingPage() {
                 onClick={() => setBilling('annual')}
               >
                 Annual
-                <span className="ml-1.5 text-[10px] bg-green-500/15 text-green-600 dark:text-green-400 font-bold px-1.5 py-0.5 rounded-full">
+                <span className="ml-1.5 text-[10px] bg-surface-2 text-content-high font-bold px-1.5 py-0.5 rounded-full">
                   SAVE 20%
                 </span>
               </button>

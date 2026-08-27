@@ -27,9 +27,9 @@ export function ValuationLadder({ dcfRange, currentPrice, ticker }: ValuationLad
   const current = currentPrice ?? 0;
 
   const cases = [
-    { label: 'Bull Case',  iv: dcfRange.bull?.intrinsic_value, growth: dcfRange.bull?.growth_rate, color: 'text-green-500' },
+    { label: 'Bull Case',  iv: dcfRange.bull?.intrinsic_value, growth: dcfRange.bull?.growth_rate, color: 'text-content-high' },
     { label: 'Base Case',  iv: dcfRange.base?.intrinsic_value, growth: dcfRange.base?.growth_rate, color: 'text-blue-500'  },
-    { label: 'Bear Case',  iv: dcfRange.bear?.intrinsic_value, growth: dcfRange.bear?.growth_rate, color: 'text-red-500'   },
+    { label: 'Bear Case',  iv: dcfRange.bear?.intrinsic_value, growth: dcfRange.bear?.growth_rate, color: 'text-content-high'   },
   ];
 
   // Compute bar widths relative to the max IV

@@ -72,7 +72,7 @@ function NAVHeroCard({ rb, price, sym }: {
         {fmtMoney(navPs, sym)}
       </p>
       {upside != null && (
-        <p className={`text-base font-semibold mt-2 ${upside >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+        <p className={`text-base font-semibold mt-2 ${upside >= 0 ? 'text-gain' : 'text-loss'}`}>
           {upside >= 0 ? '+' : ''}{(upside * 100).toFixed(1)}% vs price
         </p>
       )}
@@ -93,15 +93,15 @@ function NAVHeroCard({ rb, price, sym }: {
             NOI ÷ {fmtPct(rb.cap_rate_used, 2)}
           </p>
         </div>
-        <div className="rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-3.5">
-          <p className={`${SECTION_HEADING_CLS} mb-1 text-red-600`}>Total Debt</p>
-          <p className="text-xl font-bold tabular-nums text-red-700 dark:text-red-400">
+        <div className="rounded-xl border border-[var(--hairline)] bg-surface-2 p-3.5">
+          <p className={`${SECTION_HEADING_CLS} mb-1 text-content-high`}>Total Debt</p>
+          <p className="text-xl font-bold tabular-nums text-content-high">
             {fmtBn(rb.total_debt, sym)}
           </p>
         </div>
-        <div className="rounded-xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 p-3.5">
-          <p className={`${SECTION_HEADING_CLS} mb-1 text-green-600`}>Cash</p>
-          <p className="text-xl font-bold tabular-nums text-green-700 dark:text-green-400">
+        <div className="rounded-xl border border-[var(--hairline)] bg-surface-2 p-3.5">
+          <p className={`${SECTION_HEADING_CLS} mb-1 text-content-high`}>Cash</p>
+          <p className="text-xl font-bold tabular-nums text-content-high">
             {fmtBn(rb.cash, sym)}
           </p>
         </div>
@@ -158,8 +158,8 @@ function REITKeyStats({ rb, price, sym, ticker: _ticker }: {
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
         {stats.map(s => {
           const valCls =
-            s.color === 'green' ? 'text-green-600' :
-            s.color === 'red'   ? 'text-red-500'   : 'text-foreground';
+            s.color === 'green' ? 'text-content-high' :
+            s.color === 'red'   ? 'text-content-high'   : 'text-foreground';
           return (
             <div key={s.label} className="flex items-center justify-between">
               <span className="text-muted-foreground">{s.label}</span>
@@ -376,13 +376,13 @@ function CapRateScenarios({ rb, sym, price }: {
   };
 
   const upsideColor = (pct: number) => {
-    if (pct >  10) return 'text-green-600';
-    if (pct < -10) return 'text-red-500';
+    if (pct >  10) return 'text-gain';
+    if (pct < -10) return 'text-loss';
     return 'text-muted-foreground';
   };
   const rowColor = (label: typeof noiLabels[number]) =>
-    label === 'Bull' ? 'text-green-600' :
-    label === 'Base' ? 'text-blue-500'  : 'text-red-500';
+    label === 'Bull' ? 'text-content-high' :
+    label === 'Base' ? 'text-blue-500'  : 'text-content-high';
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5">

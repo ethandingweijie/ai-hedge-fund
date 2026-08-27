@@ -288,7 +288,7 @@ export function LoginPage() {
 
           {/* Error */}
           {error && (
-            <div className="mt-6 text-[13px] rounded-lg border border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300 px-3.5 py-2.5">
+            <div className="mt-6 text-[13px] rounded-lg border border-[var(--hairline)] bg-surface-2 text-content-high px-3.5 py-2.5">
               {error}
             </div>
           )}

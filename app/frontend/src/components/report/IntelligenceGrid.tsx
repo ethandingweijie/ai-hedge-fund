@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import type { AgentSignals } from '@/lib/reportTypes';
 import { getIntelligence, type IntelligenceData } from '@/lib/api';
+import { rankTextTone } from '@/lib/semanticColors';
 
 interface IntelligenceGridProps {
   agentSignals?: AgentSignals;
@@ -36,21 +37,23 @@ function badge(text: string, color: string) {
 function signalColor(s: string): string {
   const u = (s ?? '').toUpperCase();
   if (['BULLISH', 'BUY', 'POSITIVE', 'HIGH_QUALITY', 'HIGH', 'ACCELERATING_UP', 'BEAT'].includes(u))
-    return 'bg-green-600 text-white';
+    return 'bg-primary text-primary-foreground';
   if (['BEARISH', 'SELL', 'NEGATIVE', 'LOW_QUALITY', 'HEAVILY_SHORTED', 'ACCELERATING_DOWN', 'MISS'].includes(u))
-    return 'bg-red-600 text-white';
+    return 'bg-primary text-primary-foreground';
   if (['NEUTRAL', 'HOLD', 'STABLE', 'MEDIUM', 'MODERATELY_SHORTED', 'DECELERATING'].includes(u))
     return 'bg-yellow-500 text-white';
   if (['LOW_SHORT_INTEREST', 'LOW'].includes(u))
-    return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+    return 'bg-surface-2 text-content-high';
   return 'bg-muted text-muted-foreground';
 }
 
 function flagColor(f: string): string {
   const u = (f ?? '').toUpperCase();
-  if (['RED', 'HIGH'].includes(u)) return 'text-red-500 dark:text-red-400';
-  if (['AMBER', 'MEDIUM', 'MODERATE'].includes(u)) return 'text-amber-500 dark:text-amber-400';
-  if (['GREEN', 'LOW'].includes(u)) return 'text-green-600 dark:text-green-400';
+  // Risk flags invert the usual ramp: a HIGH flag must stand out, while an
+  // all-clear should recede rather than compete for attention.
+  if (['RED', 'HIGH'].includes(u)) return rankTextTone(0);
+  if (['AMBER', 'MEDIUM', 'MODERATE'].includes(u)) return 'text-warning';
+  if (['GREEN', 'LOW'].includes(u)) return rankTextTone(3);
   return 'text-muted-foreground';
 }
 
@@ -96,11 +99,11 @@ function InsiderCard({ d }: { d: D }) {
   const sig = d.signal ?? d.insider_signal ?? '';
   return (
     <AgentCard title="Insider Activity" signal={sig}>
-      <Row label="Net Buying (30d)"  value={fmtMoney(d.net_buying_30d_usd)} valueClass={d.net_buying_30d_usd > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'} />
+      <Row label="Net Buying (30d)"  value={fmtMoney(d.net_buying_30d_usd)} valueClass={d.net_buying_30d_usd > 0 ? 'text-content-high' : 'text-content-high'} />
       <Row label="Net Buying (90d)"  value={fmtMoney(d.net_buying_90d_usd)} />
       <Row label="Buy/Sell Ratio 12m" value={d.buy_sell_ratio_12m != null ? fmtNum(d.buy_sell_ratio_12m, 2) : '—'} />
-      <Row label="Cluster Buy"       value={d.cluster_buy != null ? (d.cluster_buy ? 'Yes' : 'No') : '—'} valueClass={d.cluster_buy ? 'text-green-600 dark:text-green-400' : ''} />
-      <Row label="Conviction Sell"   value={d.conviction_sell_flag != null ? (d.conviction_sell_flag ? '⚠ Yes' : 'No') : '—'} valueClass={d.conviction_sell_flag ? 'text-red-500' : ''} />
+      <Row label="Cluster Buy"       value={d.cluster_buy != null ? (d.cluster_buy ? 'Yes' : 'No') : '—'} valueClass={d.cluster_buy ? 'text-content-high' : ''} />
+      <Row label="Conviction Sell"   value={d.conviction_sell_flag != null ? (d.conviction_sell_flag ? '⚠ Yes' : 'No') : '—'} valueClass={d.conviction_sell_flag ? 'text-content-high' : ''} />
       {d.data_source && <Row label="Source" value={d.data_source} />}
       {d.analysis_note && <p className="text-[10px] text-muted-foreground/80 mt-1 line-clamp-2 italic">{d.analysis_note}</p>}
     </AgentCard>
@@ -112,7 +115,7 @@ function RevisionCard({ d }: { d: D }) {
   return (
     <AgentCard title="Analyst Revisions" signal={sig}>
       <Row label="Surprise Direction" value={d.surprise_direction ?? '—'} />
-      <Row label="Surprise Streak"    value={d.surprise_streak != null ? (d.surprise_streak > 0 ? `+${d.surprise_streak} beats` : `${d.surprise_streak} misses`) : '—'} valueClass={d.surprise_streak > 0 ? 'text-green-600 dark:text-green-400' : d.surprise_streak < 0 ? 'text-red-500 dark:text-red-400' : ''} />
+      <Row label="Surprise Streak"    value={d.surprise_streak != null ? (d.surprise_streak > 0 ? `+${d.surprise_streak} beats` : `${d.surprise_streak} misses`) : '—'} valueClass={d.surprise_streak > 0 ? 'text-content-high' : d.surprise_streak < 0 ? 'text-content-high' : ''} />
       <Row label="EPS Dispersion"     value={d.eps_dispersion_pct != null ? fmtPct(d.eps_dispersion_pct) : '—'} />
       <Row label="Rev Dispersion"     value={d.revenue_dispersion_pct != null ? fmtPct(d.revenue_dispersion_pct) : '—'} />
       <Row label="Estimate Spread"    value={d.estimate_dispersion ?? '—'} />
@@ -127,7 +130,7 @@ function SentimentCard({ d }: { d: D }) {
   const score = d.composite_score;
   return (
     <AgentCard title="News Sentiment" signal={sig}>
-      <Row label="Composite Score"   value={score != null ? fmtNum(score, 3) : '—'} valueClass={score != null ? (score > 0 ? 'text-green-600 dark:text-green-400' : score < 0 ? 'text-red-500 dark:text-red-400' : '') : ''} />
+      <Row label="Composite Score"   value={score != null ? fmtNum(score, 3) : '—'} valueClass={score != null ? (score > 0 ? 'text-content-high' : score < 0 ? 'text-content-high' : '') : ''} />
       <Row label="Articles Analysed" value={d.article_count != null ? String(d.article_count) : '—'} />
       <Row label="Bullish / Bearish" value={(d.bullish_count != null && d.bearish_count != null) ? `${d.bullish_count} / ${d.bearish_count}` : '—'} />
       <Row label="Press Releases"    value={d.press_release_signal ?? (d.press_release_count != null ? String(d.press_release_count) : '—')} />
@@ -142,14 +145,14 @@ function EarningsQualityCard({ d }: { d: D }) {
   const score = d.overall_quality_score ?? d.overall_quality_score;
   return (
     <AgentCard title="Earnings Quality" signal={sig}>
-      {score != null && <Row label="Quality Score" value={`${fmtNum(score, 1)} / 10`} valueClass={score >= 7 ? 'text-green-600 dark:text-green-400' : score >= 4 ? 'text-amber-500' : 'text-red-500 dark:text-red-400'} />}
+      {score != null && <Row label="Quality Score" value={`${fmtNum(score, 1)} / 10`} valueClass={score >= 7 ? 'text-content-high' : score >= 4 ? 'text-amber-500' : 'text-content-high'} />}
       <Row label="Pre-Earnings Risk"  value={d.pre_earnings_risk ?? '—'} valueClass={d.pre_earnings_risk ? flagColor(d.pre_earnings_risk) : ''} />
       <Row label="Accrual Flag"       value={d.accrual_flag ?? '—'} valueClass={d.accrual_flag ? flagColor(d.accrual_flag) : ''} />
       <Row label="Accrual Trend"      value={d.accrual_trend ?? '—'} />
       <Row label="Cash Conversion"    value={d.cash_conversion_flag ?? '—'} valueClass={d.cash_conversion_flag ? flagColor(d.cash_conversion_flag) : ''} />
       <Row label="FCF vs NI"         value={d.fcf_ni_divergence ?? '—'} valueClass={d.fcf_ni_divergence ? flagColor(d.fcf_ni_divergence) : ''} />
       <Row label="SBC Drag"          value={d.sbc_drag_flag ?? (d.sbc_drag_pct != null ? fmtPct(d.sbc_drag_pct) : '—')} valueClass={d.sbc_drag_flag ? flagColor(d.sbc_drag_flag) : ''} />
-      {d.flags?.length > 0 && <p className="text-[10px] text-red-500/80 mt-1 line-clamp-2">⚠ {d.flags[0]}</p>}
+      {d.flags?.length > 0 && <p className="text-[10px] text-content-high mt-1 line-clamp-2">⚠ {d.flags[0]}</p>}
     </AgentCard>
   );
 }
@@ -158,11 +161,11 @@ function ShortInterestCard({ d }: { d: D }) {
   const sig = d.signal ?? d.si_signal ?? '';
   return (
     <AgentCard title="Short Interest" signal={sig}>
-      <Row label="Short Float %"    value={fmtPct(d.short_float_pct ?? d.si_short_float_pct)} valueClass={d.short_float_pct > 20 ? 'text-red-500 dark:text-red-400' : d.short_float_pct > 10 ? 'text-amber-500' : 'text-green-600 dark:text-green-400'} />
+      <Row label="Short Float %"    value={fmtPct(d.short_float_pct ?? d.si_short_float_pct)} valueClass={d.short_float_pct > 20 ? 'text-content-high' : d.short_float_pct > 10 ? 'text-amber-500' : 'text-content-high'} />
       <Row label="Days to Cover"    value={d.days_to_cover != null ? fmtNum(d.days_to_cover, 1) : '—'} />
       <Row label="Borrow Rate"      value={d.borrow_rate_pct != null ? fmtPct(d.borrow_rate_pct) : '—'} />
-      <Row label="SI Trend"         value={d.short_interest_trend ?? '—'} valueClass={d.short_interest_trend === 'INCREASING' ? 'text-red-500 dark:text-red-400' : d.short_interest_trend === 'DECREASING' ? 'text-green-600 dark:text-green-400' : ''} />
-      <Row label="Squeeze Risk"     value={d.squeeze_risk != null ? (d.squeeze_risk ? '⚠ Yes' : 'No') : (d.si_squeeze_risk ? '⚠ Yes' : '—')} valueClass={(d.squeeze_risk || d.si_squeeze_risk) ? 'text-red-500' : ''} />
+      <Row label="SI Trend"         value={d.short_interest_trend ?? '—'} valueClass={d.short_interest_trend === 'INCREASING' ? 'text-content-high' : d.short_interest_trend === 'DECREASING' ? 'text-content-high' : ''} />
+      <Row label="Squeeze Risk"     value={d.squeeze_risk != null ? (d.squeeze_risk ? '⚠ Yes' : 'No') : (d.si_squeeze_risk ? '⚠ Yes' : '—')} valueClass={(d.squeeze_risk || d.si_squeeze_risk) ? 'text-content-high' : ''} />
       <Row label="Crowded Trade"    value={d.crowded_trade != null ? (d.crowded_trade ? 'Yes' : 'No') : (d.si_crowded_trade ? 'Yes' : '—')} valueClass={(d.crowded_trade || d.si_crowded_trade) ? 'text-amber-500' : ''} />
     </AgentCard>
   );

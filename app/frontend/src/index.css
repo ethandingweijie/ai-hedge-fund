@@ -2,137 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Anthropic Serif (Text optical cut) — system font ─────────────────────
-   Self-hosted woff2 in public/fonts. Six weights + italics; the browser
-   only downloads faces actually used. font-display: swap keeps text
-   visible during load. The family ships tnum, so tabular-nums works. */
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-light.woff2') format('woff2');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-light-italic.woff2') format('woff2');
-  font-weight: 300;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-regular.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-regular-italic.woff2') format('woff2');
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-medium.woff2') format('woff2');
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-medium-italic.woff2') format('woff2');
-  font-weight: 500;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-semibold.woff2') format('woff2');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-semibold-italic.woff2') format('woff2');
-  font-weight: 600;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-bold.woff2') format('woff2');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-bold-italic.woff2') format('woff2');
-  font-weight: 700;
-  font-style: italic;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-extrabold.woff2') format('woff2');
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Anthropic Serif';
-  src: url('/fonts/anthropic-serif-text-extrabold-italic.woff2') format('woff2');
-  font-weight: 800;
-  font-style: italic;
-  font-display: swap;
+/* ── Type foundation — Uber Base geometric sans ───────────────────────────
+   No webfont download: the stack resolves to the platform UI face
+   (SF Pro on Apple, Segoe UI Variable on Windows), with Inter picked up
+   only if the user already has it installed locally. Zero network cost,
+   and every one of these faces ships real tabular figures.
+
+   The previous Anthropic Serif woff2 files remain in public/fonts but are
+   no longer referenced, so the browser never fetches them. Restoring the
+   serif is a matter of re-adding the @font-face block and swapping
+   --font-sans below — nothing else in the app names the family directly. */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI Variable Text',
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Numeric face. Deliberately the SAME family as --font-sans rather than a
+     monospace: the 184 existing `font-mono` usages are tickers, prices and
+     metric counters, not code, and the old config already mapped mono to the
+     body face. Keeping them unified preserves that intent while `tnum`+`zero`
+     below give the column alignment those call sites actually wanted. */
+  --font-numeric: var(--font-sans);
 }
 
 @layer base {
   :root {
     --safe-area-top: env(safe-area-inset-top);
     --safe-area-bottom: env(safe-area-inset-bottom);
-    --background: 100 20% 95%;      /* ~#EEF3EC warm cream page bg */
-    --foreground: 100 40% 10%;      /* ~#122413 deep forest text */
-    --card: 0 0% 100%;              /* white cards on cream bg */
-    --card-foreground: 100 40% 10%;
+    /* ── Uber Base · Light ────────────────────────────────────────────────
+       High-contrast monochrome foundation. Pure #FFFFFF card base on a
+       subtle neutral canvas; the only chroma in the entire light theme is
+       the cobalt interactive accent and the three semantic feedback hues. */
+    --background: 0 0% 100%;        /* #FFFFFF light/card base */
+    --foreground: 0 0% 0%;          /* #000000 primary text */
+    --card: 0 0% 100%;              /* #FFFFFF */
+    --card-foreground: 0 0% 0%;
     --popover: 0 0% 100%;
-    --popover-foreground: 100 40% 10%;
-    --primary: 96 72% 67%;          /* ~#9FE870 Wise green (button fills) */
-    --primary-foreground: 100 45% 10%; /* dark forest text on green buttons */
-    --brand: 140 45% 32%;           /* ~#297A4B mid green: text/links/active icons */
-    --hero: 147 48% 13%;            /* Grab-style deep green page-hero band */
-    --hero-foreground: 90 25% 95%;  /* cream text on hero band */
-    --secondary: 90 15% 91%;
-    --secondary-foreground: 100 40% 12%;
-    --muted: 90 15% 91%;
-    --muted-foreground: 100 10% 40%;
-    --accent: 96 55% 90%;
-    --accent-foreground: 100 40% 12%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 90 12% 85%;
-    --node-border: 90 12% 85%;
-    --node-border-hover: 90 10% 72%;
-    --node-border-selected: 140 45% 32%;
-    --status-border: 90 12% 85%;
-    --input: 90 12% 88%;
-    --ring: 96 65% 50%;
-    --radius: 1rem;
-    --sidebar-background: 100 22% 97%;
+    --popover-foreground: 0 0% 0%;
+
+    /* Primary action = full-contrast inversion (black fill, white label) */
+    --primary: 0 0% 0%;             /* #000000 */
+    --primary-foreground: 0 0% 100%;/* #FFFFFF */
+    --brand: 221 83% 53%;           /* #2563EB cobalt — links, active icons */
+    --hero: 0 0% 0%;                /* black page-hero band */
+    --hero-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;       /* #F3F4F6 light subtle neutral */
+    --secondary-foreground: 0 0% 0%;
+    --muted: 220 14% 96%;           /* #F3F4F6 */
+    --muted-foreground: 220 9% 46%; /* #6B7280 secondary labels */
+    --accent: 220 14% 96%;
+    --accent-foreground: 0 0% 0%;
+    /* Errors are MONOCHROME. Green and red are reserved for price change
+       alone, so failure states carry their weight via full-contrast text,
+       an alert glyph and an elevated container rather than hue. */
+    --destructive: 0 0% 0%;         /* #000000 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 91%;          /* #E5E7EB divider */
+    --node-border: 220 13% 91%;
+    --node-border-hover: 216 12% 84%;
+    --node-border-selected: 221 83% 53%;
+    --status-border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221 83% 53%;            /* #2563EB focus ring */
+    --sidebar-background: 220 14% 96%;
     --panel-bg: 0 0% 100%;
     --node-bg: 0 0% 100%;
 
-    /* Hover colors for light theme */
-    --hover-background: rgb(159 232 112 / 0.18); /* wise green tint */
-    --hover-foreground: 100 40% 12%;
+    /* ── Surface elevation · Light ──────────────────────────────────────── */
+    --surface-0: 220 14% 96%;       /* canvas underlay */
+    --surface-1: 0 0% 100%;         /* sheets, primary containers */
+    --surface-2: 220 14% 96%;       /* cards, inputs, chips */
+    --surface-3: 0 0% 100%;         /* popovers, modals, toasts */
+    --surface-2-active: 220 13% 91%;
+    --surface-2-hover: 220 14% 94%;
+    --hairline: rgb(0 0 0 / 0.08);
 
-    /* Active/selected colors for light theme */
-    --active-background: rgb(159 232 112 / 0.3);
-    --active-foreground: 100 45% 10%;
+    /* ── Text emphasis · Light ──────────────────────────────────────────── */
+    --text-high: 0 0% 0%;           /* #000000 headings, fares */
+    --text-medium: 215 14% 34%;     /* body copy */
+    --text-muted: 220 9% 46%;       /* #6B7280 timestamps, captions */
+    --text-disabled: 218 11% 65%;   /* #9CA3AF placeholders */
+
+    /* Hover / active — neutral, no brand tint */
+    --hover-background: rgb(0 0 0 / 0.04);
+    --hover-foreground: 0 0% 0%;
+    --active-background: rgb(0 0 0 / 0.08);
+    --active-foreground: 0 0% 0%;
     
     /* Ramp Grey Colors */
     --ramp-grey-100: #f5f5f5;
@@ -147,96 +102,149 @@
     --ramp-grey-1000: #111111;
 
     /* Tab Colors - Light Theme */
-    --tab-active-text: #1a1a1a;
-    --tab-inactive-text: #666666;
-    --tab-hover-text: #1a1a1a;
+    --tab-active-text: #000000;
+    --tab-inactive-text: #6b7280;
+    --tab-hover-text: #000000;
     --tab-background: #ffffff;
-    --tab-hover-background: #f0f0f0;
-    --tab-border: #e0e0e0;
-    --tab-accent: #007acc;
-    --tab-icon-active: #007acc;
-    --tab-icon-inactive: #666666;
-    --tab-close-hover: #e0e0e0;
+    --tab-hover-background: #f3f4f6;
+    --tab-border: #e5e7eb;
+    --tab-accent: #2563eb;
+    --tab-icon-active: #2563eb;
+    --tab-icon-inactive: #6b7280;
+    --tab-close-hover: #e5e7eb;
 
-    font-family: 'Anthropic Serif', Georgia, 'Times New Roman', serif;
+    /* ── Price-change semantics ─────────────────────────────────────────────
+       RESERVED. --gain / --loss are the ONLY chromatic green and red in the
+       system, and they carry exactly one meaning: the direction of a PRICE
+       CHANGE (deltas, % upside, returns, P&L).
+
+       Do NOT reach for these for status, health, pass/fail, bull/bear
+       framing, progress or validation — those are monochrome and lean on
+       the surface tiers and text-emphasis ramp instead. Every non-price
+       green/red in the app was migrated out on purpose; re-introducing one
+       dilutes the signal that actually matters on a trading screen. */
+    --gain: 160 84% 39%;            /* #10B981 price up */
+    --loss: 0 84% 60%;              /* #EF4444 price down */
+    --warning: 38 92% 50%;          /* #F59E0B — advisory only, never price */
+
+    /* ── Corner radii ───────────────────────────────────────────────────────
+       Strict hierarchy: compact tags → controls → cards → sheets. */
+    --radius-tag: 4px;
+    --radius-control: 8px;          /* inputs, buttons */
+    --radius-card: 16px;
+    --radius-sheet: 24px;           /* draggable bottom sheets (top corners) */
+    --radius: var(--radius-card);   /* shadcn base */
+
+    font-family: var(--font-sans);
     line-height: 1.5;
     font-weight: 400;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-foreground: 100 25% 22%;
-    --sidebar-primary: 140 45% 32%;
+    /* Monochrome-first chart ramp; cobalt leads, then neutral steps. */
+    --chart-1: 221 83% 53%;
+    --chart-2: 0 0% 45%;
+    --chart-3: 0 0% 20%;
+    --chart-4: 218 11% 65%;
+    --chart-5: 215 28% 17%;
+    --sidebar-foreground: 220 9% 46%;
+    --sidebar-primary: 0 0% 0%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 96 55% 90%;
-    --sidebar-accent-foreground: 100 40% 12%;
-    --sidebar-border: 90 12% 87%;
-    --sidebar-ring: 96 65% 50%;
+    --sidebar-accent: 220 13% 91%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 221 83% 53%;
   }
 
   .dark {
-    /* Wise-inspired dark: deep forest backgrounds, soft cream text */
-    --background: 150 18% 9%;         /* ~#131C15 near-black forest */
-    --foreground: 90 20% 92%;
-    --card: 150 15% 13%;
-    --card-foreground: 90 20% 92%;
-    --popover: 150 15% 13%;
-    --popover-foreground: 90 20% 92%;
-    --primary: 96 60% 58%;            /* deeper green for contrast on dark bg */
-    --primary-foreground: 100 45% 8%;
-    --brand: 96 55% 68%;              /* lighter green for text on dark bg */
-    --hero: 150 25% 11%;              /* hero band: slightly richer than dark bg */
-    --hero-foreground: 90 20% 93%;
-    --secondary: 150 12% 18%;
-    --secondary-foreground: 90 20% 92%;
-    --muted: 150 12% 18%;
-    --muted-foreground: 90 8% 60%;
-    --accent: 150 20% 20%;
-    --accent-foreground: 90 20% 92%;
-    --destructive: 0 62.8% 40%;
-    --destructive-foreground: 90 20% 92%;
-    --border: 150 10% 22%;
-    --node-border: 150 10% 22%;
-    --node-border-hover: 150 8% 32%;
-    --node-border-selected: 96 55% 68%;
-    --status-border: 150 10% 22%;
-    --input: 150 10% 20%;
-    --ring: 96 60% 50%;
-    --panel-bg: 150 15% 13%;
-    --node-bg: 150 15% 13%;
-    --sidebar-background: 150 20% 7%;  /* slightly darker sidebar */
+    /* ── Uber Base · Dark ─────────────────────────────────────────────────
+       NOT flat black. Four surface tiers climb in luminance so containers
+       read as floating above the canvas rather than dissolving into it:
+         L0 #000000  canvas / root page
+         L1 #141414  bottom sheets, drawers, persistent bars
+         L2 #212121  cards, inputs, chips
+         L3 #2D2D2D  popovers, modals, toasts
+       Separation comes from luminance + hairline rims + shadow, never from
+       solid light-gray borders. */
+    --background: 0 0% 0%;            /* L0 #000000 */
+    --foreground: 0 0% 100%;          /* #FFFFFF high-emphasis */
+    --card: 0 0% 13%;                 /* L2 #212121 */
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 18%;              /* L3 #2D2D2D */
+    --popover-foreground: 0 0% 100%;
 
-    /* Hover / active */
-    --hover-background: rgb(159 232 112 / 0.12);
-    --hover-foreground: 90 20% 95%;
-    --active-background: rgb(159 232 112 / 0.2);
-    --active-foreground: 96 55% 78%;
+    /* Primary action = full-contrast inversion (white fill, black label) */
+    --primary: 0 0% 100%;             /* #FFFFFF */
+    --primary-foreground: 0 0% 0%;    /* #000000 */
+    --brand: 217 91% 60%;             /* #3B82F6 accent on dark */
+    --hero: 0 0% 8%;                  /* L1 hero band */
+    --hero-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 14%;            /* #242424 secondary button fill */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 218 11% 65%;  /* #9CA3AF metadata */
+    --accent: 0 0% 17%;               /* #2C2C2C selected */
+    --accent-foreground: 0 0% 100%;
+    /* Monochrome errors — see the light-theme note above. */
+    --destructive: 0 0% 100%;         /* #FFFFFF */
+    --destructive-foreground: 0 0% 0%;
+
+    /* Dividers are alpha-white hairlines, never solid gray */
+    --border: 0 0% 18%;
+    --node-border: 0 0% 18%;
+    --node-border-hover: 0 0% 26%;
+    --node-border-selected: 217 91% 60%;
+    --status-border: 0 0% 18%;
+    --input: 0 0% 14%;
+    --ring: 217 91% 60%;              /* #3B82F6 focus ring */
+    --panel-bg: 0 0% 8%;              /* L1 */
+    --node-bg: 0 0% 13%;              /* L2 */
+    --sidebar-background: 0 0% 8%;    /* L1 drawer */
+
+    /* ── Surface elevation · Dark ───────────────────────────────────────── */
+    --surface-0: 0 0% 0%;             /* #000000 canvas */
+    --surface-1: 0 0% 8%;             /* #141414 sheet / drawer / bottom bar */
+    --surface-2: 0 0% 13%;            /* #212121 card / input / chip */
+    --surface-3: 0 0% 18%;            /* #2D2D2D popover / modal / toast */
+    --surface-2-active: 0 0% 17%;     /* #2C2C2C selected row */
+    --surface-2-hover: 0 0% 16%;      /* #2A2A2A press / hover */
+    --hairline: rgb(255 255 255 / 0.08);
+
+    /* ── Text emphasis · Dark ───────────────────────────────────────────── */
+    --text-high: 0 0% 100%;           /* #FFFFFF 15.8:1 on L1 */
+    --text-medium: 0 0% 88%;          /* #E0E0E0 body copy */
+    --text-muted: 218 11% 65%;        /* #9CA3AF captions, ETAs */
+    --text-disabled: 0 0% 33%;        /* #555555 placeholders */
+
+    /* Hover / active — neutral luminance lift, no brand tint */
+    --hover-background: rgb(255 255 255 / 0.06);
+    --hover-foreground: 0 0% 100%;
+    --active-background: rgb(255 255 255 / 0.12);
+    --active-foreground: 0 0% 100%;
 
     /* Tab Colors */
-    --tab-active-text: #dde0e8;
-    --tab-inactive-text: #8c909c;
-    --tab-hover-text: #dde0e8;
-    --tab-background: #1e2028;
-    --tab-hover-background: #282c36;
-    --tab-border: #3a3e4a;
-    --tab-accent: #5b9cf6;
-    --tab-icon-active: #5b9cf6;
-    --tab-icon-inactive: #8c909c;
-    --tab-close-hover: #3a3e4a;
+    --tab-active-text: #ffffff;
+    --tab-inactive-text: #9ca3af;
+    --tab-hover-text: #ffffff;
+    --tab-background: #141414;
+    --tab-hover-background: #2a2a2a;
+    --tab-border: #2d2d2d;
+    --tab-accent: #3b82f6;
+    --tab-icon-active: #3b82f6;
+    --tab-icon-inactive: #9ca3af;
+    --tab-close-hover: #2d2d2d;
 
-    --chart-1: 220 70% 58%;
-    --chart-2: 160 55% 48%;
-    --chart-3: 35 80% 58%;
-    --chart-4: 280 60% 62%;
-    --chart-5: 340 72% 58%;
-    --sidebar-foreground: 90 20% 92%;
-    --sidebar-primary: 96 55% 68%;
-    --sidebar-primary-foreground: 100 45% 8%;
-    --sidebar-accent: 150 20% 20%;
-    --sidebar-accent-foreground: 90 20% 92%;
-    --sidebar-border: 150 10% 22%;
-    --sidebar-ring: 96 60% 50%;
+    /* Monochrome-first chart ramp on dark */
+    --chart-1: 217 91% 60%;
+    --chart-2: 0 0% 65%;
+    --chart-3: 0 0% 88%;
+    --chart-4: 218 11% 45%;
+    --chart-5: 0 0% 33%;
+    --sidebar-foreground: 218 11% 65%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 17%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 217 91% 60%;
   }
 }
 
@@ -284,6 +292,83 @@
   .active-item {
     @apply bg-[var(--active-background)] text-[hsl(var(--active-foreground))];
   }
+
+  /* ── Surface elevation utilities ─────────────────────────────────────────
+     Prefer these over ad-hoc bg-* on containers: they carry the matching
+     rim light and shadow for their tier, so depth stays consistent and
+     both themes stay correct from one class. */
+  .surface-0 {
+    background-color: hsl(var(--surface-0));
+  }
+
+  .surface-1 {
+    background-color: hsl(var(--surface-1));
+    border: 1px solid var(--hairline);
+    box-shadow: 0 -8px 24px rgb(0 0 0 / 0.6);
+  }
+
+  .surface-2 {
+    background-color: hsl(var(--surface-2));
+    border: 1px solid var(--hairline);
+  }
+
+  .surface-2-interactive {
+    background-color: hsl(var(--surface-2));
+    border: 1px solid var(--hairline);
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+
+  .surface-2-interactive:hover {
+    background-color: hsl(var(--surface-2-hover));
+  }
+
+  .surface-2-interactive[aria-selected='true'],
+  .surface-2-interactive[data-state='active'],
+  .surface-2-interactive[aria-pressed='true'] {
+    background-color: hsl(var(--surface-2-active));
+    border: 1.5px solid hsl(var(--ring));
+  }
+
+  .surface-3 {
+    background-color: hsl(var(--surface-3));
+    border: 1px solid var(--hairline);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.8);
+  }
+
+  /* Hairline divider — alpha-based, never a solid light-gray line */
+  .divider-hairline {
+    border-color: var(--hairline);
+  }
+
+  /* ── Price-change direction ──────────────────────────────────────────────
+     The only chromatic green/red in the system. Reserved for price deltas,
+     % upside, returns and P&L. See the --gain/--loss token note above. */
+  .text-gain {
+    color: hsl(var(--gain));
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-loss {
+    color: hsl(var(--loss));
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bg-gain {
+    background-color: hsl(var(--gain));
+  }
+
+  .bg-loss {
+    background-color: hsl(var(--loss));
+  }
+
+  /* Numeric alignment — prices, ETAs, counters, any tabular column */
+  .numeric {
+    font-family: var(--font-numeric);
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @layer base {
@@ -293,6 +378,30 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    /* Geometric sans reads tighter than the outgoing serif; -0.011em pulls
+       the default tracking back to the Base spec's optical rhythm. */
+    letter-spacing: -0.011em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular figures everywhere a number can be scanned in a column.
+     `zero` disambiguates 0/O, which matters on a ticker screen. */
+  input[type='number'],
+  table,
+  time,
+  [class*='tabular'],
+  .numeric {
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Display and heading tiers run tighter still, per the 1.125 scale. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.022em;
   }
 
   html,
@@ -302,19 +411,7 @@
     margin: 0;
   }
 
-  @font-face {
-    font-family: "geist";
-    font-style: normal;
-    font-weight: 100 900;
-    src: url(/fonts/geist.woff2) format("woff2");
-  }
 
-  @font-face {
-    font-family: "geist-mono";
-    font-style: normal;
-    font-weight: 100 900;
-    src: url(/fonts/geist-mono.woff2) format("woff2");
-  }
 }
 
 .skeleton {
@@ -399,8 +496,8 @@
   position: absolute;
   inset: 0;
   border-radius: 0.5rem;
-  background: linear-gradient(90deg, 
-    #163300, #297A4B, #9FE870, #297A4B, #163300
+  background: linear-gradient(90deg,
+    transparent, hsl(var(--muted-foreground)), hsl(var(--foreground)), hsl(var(--muted-foreground)), transparent
   );
   background-size: 200% 100%;
   animation: gradientFlow 3s linear infinite;
@@ -423,8 +520,8 @@
 
 /* Gradient animation for in-progress elements */
 .gradient-animation {
-  background: linear-gradient(90deg, 
-    #163300, #297A4B, #9FE870, #297A4B, #163300
+  background: linear-gradient(90deg,
+    transparent, hsl(var(--muted-foreground)), hsl(var(--foreground)), hsl(var(--muted-foreground)), transparent
   );
   background-size: 200% 100%;
   animation: gradientFlow 3s linear infinite;
@@ -432,8 +529,8 @@
 
 /* Gradient text animation */
 .gradient-text {
-  background: linear-gradient(90deg, 
-    #163300, #297A4B, #9FE870, #297A4B, #163300
+  background: linear-gradient(90deg,
+    transparent, hsl(var(--muted-foreground)), hsl(var(--foreground)), hsl(var(--muted-foreground)), transparent
   );
   background-size: 200% 100%;
   animation: gradientFlow 3s linear infinite;
@@ -465,9 +562,11 @@ html, body {
 
 /* Touch-friendly tap targets */
 @media (max-width: 767px) {
-  /* Ensure minimum 44px tap targets on mobile */
-  button, a {
-    min-height: 44px;
+  /* Base spec floor is 48px, up from the previous 44px. Opt out with
+     .tap-compact on controls that sit inside a dense row and are already
+     wrapped in a larger hit area. */
+  button:not(.tap-compact), a:not(.tap-compact) {
+    min-height: 48px;
   }
 
   /* Stack table layouts on mobile */

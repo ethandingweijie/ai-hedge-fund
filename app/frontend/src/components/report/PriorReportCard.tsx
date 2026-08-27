@@ -23,11 +23,11 @@ function fmtNum(v: number | null | undefined, sym: string): string {
 }
 
 const ACTION_COLORS: Record<string, string> = {
-  BUY: 'text-emerald-500',
-  SELL: 'text-red-500',
-  SHORT: 'text-red-500',
+  BUY: 'text-content-high',
+  SELL: 'text-content-high',
+  SHORT: 'text-content-high',
   HOLD: 'text-amber-500',
-  COVER: 'text-emerald-500',
+  COVER: 'text-content-high',
 };
 
 export function PriorReportCard({ prior, delta, ticker }: Props) {
@@ -111,7 +111,7 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
           </>
         )}
         {material === false && (
-          <div className="text-[11px] font-semibold text-emerald-500 mb-1.5">
+          <div className="text-[11px] font-semibold text-content-high mb-1.5">
             No material change — prior report still current
           </div>
         )}

@@ -220,7 +220,7 @@ export function StockPanel({ ticker }: StockPanelProps) {
           {ticker}
         </span>
         {!loading && history.length > 0 && (
-          <span className={`text-xs font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+          <span className={`text-xs font-bold ${isPositive ? 'text-gain' : 'text-loss'}`}>
             {isPositive ? '+' : ''}{pctChange.toFixed(2)}%
           </span>
         )}
@@ -300,9 +300,13 @@ export function StockPanel({ ticker }: StockPanelProps) {
             // scaled); price metrics use fmtPrice (same currency symbol, no scaling).
             const formatter = currency ? fmtLarge : price ? fmtPrice : (fmt ?? (() => '—'));
             const formatted = formatter(val);
+            // Monochrome: these `signed` metrics are net margin, revenue
+            // growth, ROE, ROIC and net cash -- financial figures, not price
+            // moves, so they do not earn the reserved gain/loss palette. The
+            // leading sign in the formatted value carries the direction.
             const valueColor = !signed || val == null
               ? 'text-foreground'
-              : val >= 0 ? 'text-green-500' : 'text-red-500';
+              : val >= 0 ? 'text-foreground' : 'text-content-medium';
             return (
               <div key={key}>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground leading-none mb-0.5">

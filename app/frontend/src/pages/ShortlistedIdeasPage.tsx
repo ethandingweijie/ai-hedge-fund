@@ -30,7 +30,7 @@ function fmtDate(iso: string | null): string {
 
 function convictionColor(score: number | null | undefined): string {
   if (score == null) return 'bg-muted text-muted-foreground';
-  if (score >= 8) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
+  if (score >= 8) return 'bg-surface-2 text-content-high';
   if (score >= 6) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
   return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
 }
@@ -80,7 +80,7 @@ export function ShortlistedIdeasPage() {
           </button>
         }
         icon={Bookmark}
-        iconClassName="text-emerald-500"
+        iconClassName="text-content-high"
         title="Shortlisted Ideas"
         subtitle="Contrarian deep-value hypotheses you've saved. Snapshot preserved at shortlist time."
       />
@@ -105,7 +105,7 @@ export function ShortlistedIdeasPage() {
               <button
                 key={entry.idea_id}
                 onClick={() => navigate(`/research-ideas/idea-of-the-day/${entry.idea_id}`)}
-                className="w-full text-left p-4 rounded-lg border border-emerald-400/40 dark:border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-900/10 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors group"
+                className="w-full text-left p-4 rounded-lg border border-[var(--hairline)] bg-surface-2 hover:bg-surface-2 dark:hover:bg-surface-2 transition-colors group"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -134,7 +134,7 @@ export function ShortlistedIdeasPage() {
                   <div className="flex flex-col items-end gap-2">
                     <button
                       onClick={(e) => handleRemove(e, entry.idea_id, idea.ticker)}
-                      className="p-1.5 rounded-full bg-muted/40 hover:bg-red-500/20 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                      className="p-1.5 rounded-full bg-muted/40 hover:bg-surface-2 text-muted-foreground hover:text-content-high dark:hover:text-content-high"
                       title="Remove from shortlist"
                       aria-label="Remove"
                     >

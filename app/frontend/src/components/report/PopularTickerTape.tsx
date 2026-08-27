@@ -53,7 +53,7 @@ function TickerChip({ item, onClick }: { item: PopularTicker; onClick: (t: strin
           </span>
 
           {/* Arrow + % change */}
-          <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${up ? 'text-emerald-500' : 'text-red-500'}`}>
+          <span className={`inline-flex items-center gap-0.5 text-[11px] font-semibold ${up ? 'text-gain' : 'text-loss'}`}>
             {up ? (
               <svg className="w-2.5 h-2.5 shrink-0" viewBox="0 0 10 10" fill="currentColor">
                 <path d="M5 1 L9 7 L1 7 Z" />

@@ -81,7 +81,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
             {sym}{target.toFixed(2)}
           </div>
           {upside != null && (
-            <div className={`mt-2 text-[14px] font-medium tabular-nums ${upside >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+            <div className={`mt-2 text-[14px] font-medium tabular-nums ${upside >= 0 ? 'text-gain' : 'text-loss'}`}>
               {upside >= 0 ? '+' : ''}{upside.toFixed(1)}% upside
             </div>
           )}
@@ -102,7 +102,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
                     ? 'text-muted-foreground/70'
                     : consensusDelta > 0
                       ? 'text-brand'
-                      : 'text-rose-600 dark:text-rose-400'
+                      : 'text-content-high'
                 }`}>
                   ({consensusDelta >= 0 ? '+' : ''}{consensusDelta.toFixed(1)}% vs model)
                 </span>
@@ -141,7 +141,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
               <div className="w-[60px] h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
                   style={{ width: `${Math.min(100, (r.prob ?? 0) * 200)}%` }}
-                  className={`h-full ${r.color === 'rose' ? 'bg-rose-500 dark:bg-rose-400' : r.color === 'neutral' ? 'bg-foreground/35' : 'bg-brand'}`}
+                  className={`h-full ${r.color === 'rose' ? 'bg-surface-2' : r.color === 'neutral' ? 'bg-foreground/35' : 'bg-brand'}`}
                 />
               </div>
               <span className="text-[12.5px] font-semibold text-foreground min-w-[40px]">{r.name}</span>

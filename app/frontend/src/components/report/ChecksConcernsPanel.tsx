@@ -85,9 +85,9 @@ export function ChecksConcernsPanel({
       <BulletList
         items={checks}
         icon="✓"
-        iconClass="text-green-500"
+        iconClass="text-content-high"
         header={checkHeader}
-        headerClass="text-green-600 dark:text-green-400"
+        headerClass="text-content-high"
       />
       <BulletList
         items={concerns}

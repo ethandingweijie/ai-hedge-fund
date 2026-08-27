@@ -114,7 +114,7 @@ export function MobilePipelineSheet({
             return (
               <div key={key} className="flex items-center gap-2.5">
                 {status === 'done' ? (
-                  <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                  <div className="w-4 h-4 rounded-full bg-surface-2 flex items-center justify-center">
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                       <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>

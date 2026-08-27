@@ -38,7 +38,7 @@ export function ProgressHeader({
           {onCancel && (
             <button
               onClick={onCancel}
-              className="text-[11.5px] font-medium text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+              className="text-[11.5px] font-medium text-muted-foreground hover:text-content-high dark:hover:text-content-high transition-colors"
             >
               Cancel
             </button>

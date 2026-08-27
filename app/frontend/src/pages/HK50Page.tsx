@@ -28,6 +28,7 @@ import {
 import { ArrowLeft, RefreshCw, Loader2, AlertTriangle, X, Search, TrendingUp, Coins, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { rankTone } from '@/lib/semanticColors';
 
 
 // ─── Screen definitions ─────────────────────────────────────────────────────
@@ -86,18 +87,18 @@ const formatRunTime = (iso: string | null): string => {
 // Light mode: dark text (700) for legibility on the pale `/20` badge.
 // Dark mode (`dark:`): keep the original light-300 text.
 const AICT_COLOR: Record<string, string> = {
-  Fortress: 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  Fortress: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
   Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
   Stone:    'bg-orange-600/20 text-orange-700 dark:text-orange-300 border-orange-700/40',
-  Wood:     'bg-red-600/20 text-red-700 dark:text-red-300 border-red-700/40',
+  Wood:     'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
 const aictClass = (tier: string): string =>
   AICT_COLOR[tier] ?? 'bg-muted text-muted-foreground border-border';
 
 // Provenance dot for a resolved metric source.
 const SOURCE_DOT: Record<string, string> = {
-  primary:    'bg-emerald-400',
+  primary:    'bg-surface-2',
   fmp_growth: 'bg-cyan-400',
   yfinance:   'bg-blue-400',
   compute:    'bg-amber-400',
@@ -109,11 +110,10 @@ const SOURCE_DOT: Record<string, string> = {
 function scoreColor(score: number): string {
   // Light mode: dark text (700/800) for legibility on the pale `/30` pill.
   // Dark mode (`dark:`): keep the original light-200 text.
-  if (score >= 75) return 'bg-emerald-600/30 text-emerald-800 dark:text-emerald-200';
-  if (score >= 55) return 'bg-blue-600/30 text-blue-800 dark:text-blue-200';
-  if (score >= 35) return 'bg-amber-600/30 text-amber-800 dark:text-amber-200';
-  if (score >= 15) return 'bg-orange-600/30 text-orange-800 dark:text-orange-200';
-  return 'bg-red-600/30 text-red-800 dark:text-red-200';
+  if (score >= 75) return rankTone(0);
+  if (score >= 55) return rankTone(1);
+  if (score >= 35) return rankTone(2);
+  return rankTone(3);
 }
 
 
@@ -123,12 +123,12 @@ function scoreColor(score: number): string {
 const CONVICTION_COLOR: Record<string, string> = {
   // Light mode: dark text (800) for legibility on the pale `/30` badge.
   // Dark mode (`dark:`): keep the original light-200 text.
-  'HIGH-CONVICTION': 'bg-emerald-600/30 text-emerald-800 dark:text-emerald-200 border-emerald-700/40',
+  'HIGH-CONVICTION': 'bg-surface-2 text-content-high border-[var(--hairline)]',
   'SOLID':           'bg-blue-600/30 text-blue-800 dark:text-blue-200 border-blue-700/40',
   'QUANT-RICH':      'bg-amber-600/30 text-amber-800 dark:text-amber-200 border-amber-700/40',
   'QUAL-SUPPORT':    'bg-cyan-600/30 text-cyan-800 dark:text-cyan-200 border-cyan-700/40',
   'WATCH':           'bg-muted text-muted-foreground border-border',
-  'POLICY-RISK':     'bg-red-600/30 text-red-800 dark:text-red-200 border-red-700/40',
+  'POLICY-RISK':     'bg-surface-2 text-content-high border-[var(--hairline)]',
   'UNSCORED':        'bg-muted/30 text-muted-foreground/70 border-border border-dashed',
 };
 const convictionClass = (c: string): string =>
@@ -149,19 +149,19 @@ const CONVICTION_SHORT: Record<string, string> = {
 // Light mode: dark text (700) for legibility on the white card.
 // Dark mode (`dark:`): keep the original light-300 text.
 const POLICY_TEXT: Record<string, string> = {
-  Tailwind:  'text-emerald-700 dark:text-emerald-300',
+  Tailwind:  'text-content-high',
   Favorable: 'text-blue-700 dark:text-blue-300',
   Neutral:   'text-muted-foreground',
   Headwind:  'text-orange-700 dark:text-orange-300',
-  Crackdown: 'text-red-700 dark:text-red-300',
+  Crackdown: 'text-content-high',
 };
 // Moat ladder reuses the AICT names generalised to every sector.
 const MOAT_TEXT: Record<string, string> = {
-  Fortress: 'text-emerald-700 dark:text-emerald-300',
+  Fortress: 'text-content-high',
   Castle:   'text-blue-700 dark:text-blue-300',
   Chapel:   'text-amber-700 dark:text-amber-300',
   Stone:    'text-orange-700 dark:text-orange-300',
-  Wood:     'text-red-700 dark:text-red-300',
+  Wood:     'text-content-high',
 };
 
 
@@ -479,7 +479,7 @@ export function HK50Page() {
                 <span
                   key={`up-${p.ticker}`}
                   title={`Promoted into the cohort · lead score ${p.lead_score.toFixed(1)} (cleared ENTER ${cohort.enter_threshold.toFixed(0)})`}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border border-emerald-700/30"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface-2 text-content-high border border-[var(--hairline)]"
                 >
                   ▲ {p.name} <span className="font-mono opacity-70">{p.lead_score.toFixed(0)}</span>
                 </span>
@@ -502,7 +502,7 @@ export function HK50Page() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
             <TopFive
               title="Top 5 · Growth"
-              icon={<TrendingUp size={14} className="text-emerald-400" />}
+              icon={<TrendingUp size={14} className="text-content-high" />}
               rows={top5Growth}
               screen="Growth"
               onPick={setSelected}
@@ -618,7 +618,7 @@ export function HK50Page() {
                       key={r.ticker}
                       onClick={() => setSelected(r)}
                       className={`border-t border-border hover:bg-muted/30 cursor-pointer ${
-                        r.membership === 'promoted' ? 'bg-emerald-600/5' : ''
+                        r.membership === 'promoted' ? 'bg-surface-2' : ''
                       } ${benched ? 'opacity-50' : ''}`}
                     >
                       <td className="px-2 py-1.5 text-right text-muted-foreground">
@@ -633,7 +633,7 @@ export function HK50Page() {
                             <span className="text-[8px] px-1 rounded bg-primary/20 text-primary uppercase tracking-wide">lead</span>
                           )}
                           {r.membership === 'promoted' && (
-                            <span title="Newly promoted into the cohort this run" className="text-[8px] px-1 rounded bg-emerald-600/25 text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">new</span>
+                            <span title="Newly promoted into the cohort this run" className="text-[8px] px-1 rounded bg-surface-2 text-content-high uppercase tracking-wide">new</span>
                           )}
                           {benched && (
                             <span title="Bench — below the membership line (not in the displayed cohort)" className="text-[8px] px-1 rounded bg-muted text-muted-foreground uppercase tracking-wide">bench</span>

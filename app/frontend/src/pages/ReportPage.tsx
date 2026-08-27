@@ -182,7 +182,7 @@ function SectionAnchor({ id, label, badge }: { id: string; label: string; badge?
 function SectionCompleteBadge() {
   return (
     <span
-      className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500/20 text-green-600 dark:text-green-400"
+      className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-surface-2 text-content-high"
       title="Section phase complete"
       aria-label="section phase complete"
     >
@@ -1055,7 +1055,7 @@ export function ReportPage() {
                         {t.price != null && (
                           <span className="text-[11px] text-muted-foreground tabular-nums">${t.price.toFixed(2)}</span>
                         )}
-                        <span className={`text-[11px] font-medium tabular-nums ${delta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <span className={`text-[11px] font-medium tabular-nums ${delta >= 0 ? 'text-gain' : 'text-loss'}`}>
                           {delta >= 0 ? '^' : 'v'} {Math.abs(delta).toFixed(2)}%
                         </span>
                       </button>
@@ -1094,9 +1094,9 @@ export function ReportPage() {
           {isRunning ? (
             <div className="w-8 h-8 rounded-full border-[3px] border-primary/30 border-t-primary animate-spin shrink-0" />
           ) : isComplete ? (
-            <span className="text-green-500 text-2xl shrink-0">✓</span>
+            <span className="text-content-high text-2xl shrink-0">✓</span>
           ) : isError ? (
-            <span className="text-red-500 text-2xl shrink-0">✗</span>
+            <span className="text-content-high text-2xl shrink-0">✗</span>
           ) : null}
 
           {/* Ticker + status — the detailed phase/thinking/progress-bar view
@@ -1109,7 +1109,7 @@ export function ReportPage() {
             </span>
           )}
           {isComplete && liveResult && (
-            <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+            <span className="text-sm text-content-high font-medium">
               Analysis complete
             </span>
           )}
@@ -1117,7 +1117,7 @@ export function ReportPage() {
             <span className="text-xs text-muted-foreground animate-pulse">Loading report…</span>
           )}
           {isError && (
-            <span className="text-xs text-red-500">{error ?? 'Pipeline error'}</span>
+            <span className="text-xs text-content-high">{error ?? 'Pipeline error'}</span>
           )}
 
           <div className="ml-auto flex items-center gap-2">
@@ -1192,9 +1192,9 @@ export function ReportPage() {
           signal below; desktop additionally gets this in-page card. ── */}
       {isComplete && liveResult && (
         <div className="max-w-6xl mx-auto px-4 md:px-8 pt-4">
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-50 dark:bg-emerald-950/20 px-4 py-3 flex items-center gap-2">
-            <span className="text-emerald-600 dark:text-emerald-400 text-base">✓</span>
-            <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+          <div className="rounded-lg border border-[var(--hairline)] bg-surface-2 px-4 py-3 flex items-center gap-2">
+            <span className="text-content-high text-base">✓</span>
+            <span className="text-sm font-medium text-content-high">
               Analysis complete
             </span>
             {events.length === 0 && (
@@ -1216,8 +1216,8 @@ export function ReportPage() {
         {recentlyCompleted
           && recentlyCompleted.ticker.toUpperCase() === (liveTicker || ticker).toUpperCase()
           && !liveResult && (
-          <div className="border-l-4 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded flex items-center justify-between gap-3">
-            <p className="text-sm text-emerald-900 dark:text-emerald-200">
+          <div className="border-l-4 border-[var(--hairline)] bg-surface-2 p-3 rounded flex items-center justify-between gap-3">
+            <p className="text-sm text-content-high">
               Your {liveTicker || ticker} analysis completed {formatTimeAgo(recentlyCompleted.completedAt)}.
             </p>
             <Button
@@ -1482,8 +1482,8 @@ function ProgressOverlay({
           {isRunning
             ? <span className="text-yellow-500 animate-pulse">Pipeline Running…</span>
             : error
-            ? <span className="text-red-500">Pipeline Error</span>
-            : <span className="text-green-500">Pipeline Complete</span>
+            ? <span className="text-content-high">Pipeline Error</span>
+            : <span className="text-content-high">Pipeline Complete</span>
           }
         </span>
         <span className="text-muted-foreground">{open ? '▼' : '▲'}</span>
@@ -1493,7 +1493,7 @@ function ProgressOverlay({
       {open && (
         <ul className="max-h-64 overflow-y-auto p-2 space-y-0.5">
           {error && (
-            <li className="p-2 bg-red-100/10 border border-red-500/30 rounded text-red-400 text-[10px]">
+            <li className="p-2 bg-surface-2 border border-[var(--hairline)] rounded text-content-high text-[10px]">
               {error}
             </li>
           )}
@@ -1528,7 +1528,7 @@ function ProgressOverlay({
             return (
             <li key={ev.phase} className="flex items-start gap-1.5 px-1 py-0.5 rounded hover:bg-muted/30">
               <span className={`mt-0.5 font-bold w-3 shrink-0 ${
-                isDone ? 'text-green-500' : isErr ? 'text-red-500' : 'text-yellow-400 animate-pulse'
+                isDone ? 'text-content-high' : isErr ? 'text-content-high' : 'text-yellow-400 animate-pulse'
               }`}>
                 {isDone ? '✓' : isErr ? '✗' : '…'}
               </span>
@@ -1544,7 +1544,7 @@ function ProgressOverlay({
                         key={m.label}
                         className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                           m.hit
-                            ? 'bg-green-500/15 text-green-500'
+                            ? 'bg-surface-2 text-content-high'
                             : 'bg-muted/60 text-muted-foreground/50'
                         }`}
                       >

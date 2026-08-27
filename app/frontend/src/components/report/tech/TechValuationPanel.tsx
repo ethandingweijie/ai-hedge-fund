@@ -165,13 +165,13 @@ function ScenarioStrip({
       <div className="grid grid-cols-3 gap-3">
         {/* BEAR */}
         <div className="text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-500 dark:text-rose-400">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-content-high">
             Bear
           </p>
           <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {bear != null ? fmtMoney(bear, sym, bear >= 100 ? 0 : 2) : '—'}
           </p>
-          <p className="text-[11px] font-semibold tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">
+          <p className="text-[11px] font-semibold tabular-nums text-content-high mt-0.5">
             {delta(bear) != null ? fmtPct(delta(bear), 1, true) : '—'}
           </p>
         </div>
@@ -189,13 +189,13 @@ function ScenarioStrip({
         </div>
         {/* BULL */}
         <div className="text-center">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500 dark:text-emerald-400">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-content-high">
             Bull
           </p>
           <p className="text-xl font-bold tabular-nums text-foreground mt-0.5">
             {bull != null ? fmtMoney(bull, sym, bull >= 100 ? 0 : 2) : '—'}
           </p>
-          <p className="text-[11px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
+          <p className="text-[11px] font-semibold tabular-nums text-content-high mt-0.5">
             {delta(bull) != null ? fmtPct(delta(bull), 1, true) : '—'}
           </p>
         </div>
@@ -215,9 +215,9 @@ function KPITile({
   tone?: 'green' | 'amber' | 'red' | 'neutral';
 }) {
   const toneCls =
-    tone === 'green' ? 'text-green-600' :
+    tone === 'green' ? 'text-content-high' :
     tone === 'amber' ? 'text-amber-600' :
-    tone === 'red'   ? 'text-red-500'   :
+    tone === 'red'   ? 'text-content-high'   :
                        'text-foreground';
   return (
     <div>
@@ -264,8 +264,8 @@ function SubtypeBanner({
   }
   // growth_saas
   return (
-    <div className="rounded-xl bg-gradient-to-r from-emerald-100 to-emerald-50 dark:from-emerald-950/60 dark:to-emerald-950/20 border border-emerald-200 dark:border-emerald-900 px-4 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-700 dark:text-emerald-300">
+    <div className="rounded-xl bg-gradient-to-r from-surface-2 to-surface-2 dark:from-surface-2 dark:to-surface-2 border border-[var(--hairline)] px-4 py-2.5">
+      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-content-high">
         Growth SaaS · Unit Economics
       </p>
       <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>
@@ -598,9 +598,9 @@ function MatureSaasView({
           <div className="flex items-center justify-between mb-3">
             <p className={SECTION_HEADING_CLS}>Rule of 40 · Decomposition</p>
             <span className={`text-lg font-bold tabular-nums ${
-              decompTone === 'green' ? 'text-green-600' :
+              decompTone === 'green' ? 'text-content-high' :
               decompTone === 'amber' ? 'text-amber-600' :
-              decompTone === 'red'   ? 'text-red-500'   :
+              decompTone === 'red'   ? 'text-content-high'   :
                                        'text-foreground'
             }`}>
               {decompSum != null ? decompSum.toFixed(0) : '—'}
@@ -612,7 +612,7 @@ function MatureSaasView({
                  title={`Growth ${growthPct.toFixed(0)}%`}>
               {growthW > 15 ? `Growth ${growthPct.toFixed(0)}%` : ''}
             </div>
-            <div className="bg-green-500 flex items-center justify-center text-white text-[11px] font-semibold"
+            <div className="bg-surface-2 flex items-center justify-center text-content-high text-[11px] font-semibold"
                  style={{ width: `${fcfW}%` }}
                  title={`FCF ${fcfPct.toFixed(0)}%`}>
               {fcfW > 15 ? `FCF ${fcfPct.toFixed(0)}%` : ''}
@@ -627,7 +627,7 @@ function MatureSaasView({
               </span>
             </li>
             <li className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-surface-2"></span>
               <span className="text-foreground/80 flex-1">FCF Margin</span>
               <span className="tabular-nums font-semibold text-foreground">
                 {fcfPct.toFixed(0)}%
@@ -818,9 +818,9 @@ function GrowthSaasView({
   }
 
   const dotCls = (tone: 'green' | 'amber' | 'red') =>
-    tone === 'green' ? 'bg-green-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-red-500';
+    tone === 'green' ? 'bg-surface-2' : tone === 'amber' ? 'bg-amber-500' : 'bg-surface-2';
   const textCls = (tone: 'green' | 'amber' | 'red') =>
-    tone === 'green' ? 'text-green-600' : tone === 'amber' ? 'text-amber-600' : 'text-red-500';
+    tone === 'green' ? 'text-content-high' : tone === 'amber' ? 'text-amber-600' : 'text-content-high';
 
   return (
     <>

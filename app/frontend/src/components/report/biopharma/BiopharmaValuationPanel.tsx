@@ -73,13 +73,13 @@ const TA_POS_MULT: Record<string, number> = {
 };
 
 const PHASE_COLORS: Record<string, string> = {
-  approved:    'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
-  marketed:    'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
-  launched:    'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
+  approved:    'bg-surface-2 text-content-high',
+  marketed:    'bg-surface-2 text-content-high',
+  launched:    'bg-surface-2 text-content-high',
   filed:       'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
   ph3:         'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400',
   ph2:         'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
-  ph1:         'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-400',
+  ph1:         'bg-surface-2 text-content-high',
   preclinical: 'bg-muted text-muted-foreground',
 };
 
@@ -196,7 +196,7 @@ function RNPVHeader({ dcfRange, currentPrice, sym }: {
           {fmtMoney(iv, sym)}
         </p>
         {upside != null && (
-          <p className={`text-sm font-semibold ${upside >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+          <p className={`text-sm font-semibold ${upside >= 0 ? 'text-gain' : 'text-loss'}`}>
             {upside >= 0 ? '+' : ''}{(upside * 100).toFixed(1)}% vs {fmtMoney(currentPrice, sym)}
           </p>
         )}
@@ -211,7 +211,7 @@ function RNPVHeader({ dcfRange, currentPrice, sym }: {
         <div>
           <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Net Cash</p>
           <p className={`font-semibold tabular-nums ${
-            (netCashPerShare ?? 0) > 0 ? 'text-green-600' : 'text-foreground'
+            (netCashPerShare ?? 0) > 0 ? 'text-content-high' : 'text-foreground'
           }`}>
             {fmtMoney(netCashPerShare, sym)}/sh
           </p>
@@ -360,13 +360,13 @@ function CatalystsTimeline({ assets, sym }: {
   const colorCls = {
     blue:   'bg-blue-500',
     purple: 'bg-purple-500',
-    green:  'bg-green-500',
+    green:  'bg-surface-2',
     amber:  'bg-amber-500',
   };
   const chipCls = {
     blue:   'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
     purple: 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400',
-    green:  'bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-400',
+    green:  'bg-surface-2 text-content-high',
     amber:  'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
   };
 
@@ -446,7 +446,7 @@ function RDProductivity({
         {rdRatio != null ? (
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">R&amp;D / Revenue</span>
-            <span className={`font-semibold tabular-nums ${rdRatio > 0.5 ? 'text-red-500' : rdRatio > 0.25 ? 'text-amber-500' : 'text-foreground'}`}>
+            <span className={`font-semibold tabular-nums ${rdRatio > 0.5 ? 'text-content-high' : rdRatio > 0.25 ? 'text-amber-500' : 'text-foreground'}`}>
               {(rdRatio * 100).toFixed(0)}%
             </span>
           </div>
@@ -461,14 +461,14 @@ function RDProductivity({
         ) : null}
         <div className="flex items-center justify-between">
           <span className="text-muted-foreground">Net cash</span>
-          <span className={`font-semibold tabular-nums ${netCashBn > 0 ? 'text-green-600' : 'text-red-500'}`}>
+          <span className={`font-semibold tabular-nums ${netCashBn > 0 ? 'text-content-high' : 'text-content-high'}`}>
             {netCashBn > 0 ? '+' : ''}{fmtBn(netCashBn, sym)}
           </span>
         </div>
         {runwayYears != null ? (
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">Runway</span>
-            <span className={`font-semibold tabular-nums ${runwayYears < 2 ? 'text-red-500' : runwayYears < 3 ? 'text-amber-500' : 'text-green-600'}`}>
+            <span className={`font-semibold tabular-nums ${runwayYears < 2 ? 'text-content-high' : runwayYears < 3 ? 'text-amber-500' : 'text-content-high'}`}>
               {runwayYears.toFixed(1)}y
             </span>
           </div>

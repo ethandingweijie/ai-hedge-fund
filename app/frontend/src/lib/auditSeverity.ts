@@ -25,11 +25,13 @@ export interface AuditSeverityVisuals {
 }
 
 export const SEVERITY_VISUALS: Record<AuditSeverity, AuditSeverityVisuals> = {
+  // Monochrome: red is reserved for price change, so a critical finding earns
+  // attention through full-contrast text, weight and its alert glyph instead.
   critical: {
-    bgClass:     'bg-red-50 dark:bg-red-950/30',
-    borderClass: 'border-red-300 dark:border-red-800',
-    textClass:   'text-red-900 dark:text-red-200',
-    iconClass:   'text-red-600 dark:text-red-400',
+    bgClass:     'bg-surface-2',
+    borderClass: 'border-[var(--hairline)]',
+    textClass:   'text-content-high font-semibold',
+    iconClass:   'text-content-high',
     label:       'CRITICAL',
   },
   warning: {

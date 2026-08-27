@@ -4,8 +4,8 @@
   "description": "AI-powered investment research and analysis",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#EEF3EC",
-  "theme_color": "#297A4B",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait",
   "icons": [
     {

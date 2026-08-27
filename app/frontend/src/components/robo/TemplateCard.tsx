@@ -26,7 +26,7 @@ const RISK_LABEL: Record<StrategyTemplate['riskLevel'], string> = {
 const RISK_PILL: Record<StrategyTemplate['riskLevel'], string> = {
   conservative: 'bg-amber-400/20 text-amber-700 dark:text-amber-300',
   moderate: 'bg-brand text-white',
-  aggressive: 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
+  aggressive: 'bg-surface-2 text-content-high',
 };
 
 export function TemplateCard({ template, onSelect }: { template: StrategyTemplate; onSelect: () => void }) {

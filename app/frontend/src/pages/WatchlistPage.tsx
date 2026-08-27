@@ -242,7 +242,7 @@ export function WatchlistPage() {
               {adding ? '...' : '+ Add'}
             </Button>
           </form>
-          {addError && <p className="text-xs text-red-500 dark:text-red-400">{addError}</p>}
+          {addError && <p className="text-xs text-content-high">{addError}</p>}
 
           {/* Column headers — V/G/P/M letters once; row grades align beneath */}
           <div className="flex items-center px-3 mb-1">
@@ -278,7 +278,7 @@ export function WatchlistPage() {
                       },
                       {
                         icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
-                        color: 'bg-red-400',
+                        color: 'bg-surface-2',
                         onClick: () => handleRemove(item.ticker),
                       },
                     ]}
@@ -299,7 +299,7 @@ export function WatchlistPage() {
                         {price != null ? `$${price.toFixed(2)}` : '—'}
                       </span>
                       {pct != null && (
-                        <span className={`text-[10px] font-semibold tabular-nums block leading-tight ${pct >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+                        <span className={`text-[10px] font-semibold tabular-nums block leading-tight ${pct >= 0 ? 'text-gain' : 'text-loss'}`}>
                           {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
                         </span>
                       )}
@@ -383,7 +383,7 @@ export function WatchlistPage() {
               </Button>
             </form>
             {addError && (
-              <p className="mt-2 text-xs text-red-500">
+              <p className="mt-2 text-xs text-content-high">
                 {addError}
                 {addError.includes('Upgrade') && (
                   <a href="#/pricing" className="ml-1 underline underline-offset-2 font-semibold hover:opacity-80">
@@ -396,7 +396,7 @@ export function WatchlistPage() {
 
           {/* Error */}
           {error && (
-            <div className="mb-4 p-3 border border-red-500 rounded text-sm text-red-500">{error}</div>
+            <div className="mb-4 p-3 border border-[var(--hairline)] rounded text-sm text-content-high">{error}</div>
           )}
 
           {/* Table */}
@@ -443,8 +443,8 @@ export function WatchlistPage() {
                           const flash = priceFlash[item.ticker];
                           return (
                             <span className={`inline-flex items-center gap-0.5 transition-colors duration-700 ${
-                              flash === 'up'   ? 'text-green-500' :
-                              flash === 'down' ? 'text-red-500'   : ''
+                              flash === 'up'   ? 'text-gain' :
+                              flash === 'down' ? 'text-loss'   : ''
                             }`}>
                               {price != null ? `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                               {flash === 'up'   && <span className="text-[10px] leading-none">▲</span>}
@@ -458,7 +458,7 @@ export function WatchlistPage() {
                           const pct = liveChangePcts[item.ticker] ?? item.change_pct;
                           if (pct == null) return <span className="text-muted-foreground/40">—</span>;
                           return (
-                            <span className={pct >= 0 ? 'text-green-500' : 'text-red-500'}>
+                            <span className={pct >= 0 ? 'text-gain' : 'text-loss'}>
                               {pct >= 0 ? '+' : ''}{pct.toFixed(2)}%
                             </span>
                           );
@@ -495,7 +495,7 @@ export function WatchlistPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-xs h-7 px-2 text-red-500 hover:text-red-600"
+                            className="text-xs h-7 px-2 text-content-high hover:text-content-high"
                             disabled={removing === item.ticker}
                             onClick={() => handleRemove(item.ticker)}
                           >

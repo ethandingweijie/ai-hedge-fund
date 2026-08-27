@@ -70,7 +70,7 @@ export function FloatingNavBar() {
                 {/* Ongoing-research count badge — right side of the History icon */}
                 {path === '/history' && ongoing > 0 && (
                   <span
-                    className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-rose-500 text-white text-[9px] font-bold leading-none flex items-center justify-center shadow-sm"
+                    className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-[3px] rounded-full bg-primary text-primary-foreground text-[9px] font-bold leading-none flex items-center justify-center shadow-sm"
                     aria-label={`${ongoing} ongoing research run${ongoing === 1 ? '' : 's'}`}
                   >
                     {ongoing > 9 ? '9+' : ongoing}

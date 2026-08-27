@@ -24,6 +24,7 @@ import {
 import { ArrowLeft, RefreshCw, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { rankTone } from '@/lib/semanticColors';
 
 
 // ─── Formatters ────────────────────────────────────────────────────────────
@@ -54,26 +55,23 @@ const formatRunTime = (iso: string | null): string => {
 // Signed composite (-6..+6): green = long, red = short, intensity = strength.
 function compositeColor(c: number | null | undefined): string {
   if (c == null) return 'bg-muted text-muted-foreground';
-  if (c >= 4) return 'bg-emerald-600/30 text-black dark:text-emerald-200';
-  if (c >= 1) return 'bg-emerald-600/15 text-black dark:text-emerald-300';
-  if (c <= -4) return 'bg-red-600/30 text-black dark:text-red-200';
-  if (c <= -1) return 'bg-red-600/15 text-black dark:text-red-300';
-  return 'bg-muted text-muted-foreground';
+  // Prominence tracks conviction magnitude; long/short direction is in the label.
+  if (c >= 4 || c <= -4) return rankTone(0);
+  if (c >= 1 || c <= -1) return rankTone(2);
+  return rankTone(null);
 }
 
 // Signed pillar (-2..+2).
 function pillarColor(s: number | null | undefined): string {
   if (s == null) return 'bg-muted text-muted-foreground';
-  if (s >= 1) return 'bg-emerald-600/20 text-black dark:text-emerald-300';
-  if (s <= -1) return 'bg-red-600/20 text-black dark:text-red-300';
-  return 'bg-muted text-muted-foreground';
+  if (s >= 1 || s <= -1) return rankTone(1);
+  return rankTone(null);
 }
 
 function verdictColor(v: string): string {
-  if (v === 'Accelerating-Long') return 'bg-emerald-600/30 text-black dark:text-emerald-200 border-emerald-700/40';
-  if (v === 'Turning-Long')      return 'bg-emerald-600/15 text-black dark:text-emerald-300 border-emerald-700/30';
-  if (v === 'Accelerating-Short') return 'bg-red-600/30 text-black dark:text-red-200 border-red-700/40';
-  if (v === 'Turning-Short')     return 'bg-red-600/15 text-black dark:text-red-300 border-red-700/30';
+  // "Accelerating" outranks "Turning"; Long vs Short is in the label.
+  if (v === 'Accelerating-Long' || v === 'Accelerating-Short') return rankTone(0);
+  if (v === 'Turning-Long' || v === 'Turning-Short') return rankTone(2);
   return 'bg-muted text-muted-foreground border-border';
 }
 
@@ -157,9 +155,9 @@ export function MomentumPage() {
               Last run {formatRunTime(cohort?.created_at ?? null)}
               {cohort?.as_of ? ` · as of ${cohort.as_of}` : ' · live'}
               {' · '}
-              <span className="text-emerald-700 dark:text-emerald-300 font-semibold">{longCount} long</span>
+              <span className="text-content-high font-semibold">{longCount} long</span>
               {' / '}
-              <span className="text-red-700 dark:text-red-300 font-semibold">{shortCount} short</span>
+              <span className="text-content-high font-semibold">{shortCount} short</span>
             </p>
           </div>
         </div>
@@ -221,8 +219,8 @@ export function MomentumPage() {
                       'px-5 py-2.5 min-h-[44px] text-sm font-semibold rounded-full border-2 select-none touch-manipulation transition-colors ' +
                       (sectorDir === d
                         ? (d === 'LONG'
-                            ? 'bg-emerald-500/20 border-emerald-600/60 text-emerald-800 dark:text-emerald-300'
-                            : 'bg-red-500/20 border-red-600/60 text-red-800 dark:text-red-300')
+                            ? 'bg-surface-2 border-[var(--hairline)] text-content-high'
+                            : 'bg-surface-2 border-[var(--hairline)] text-content-high')
                         : 'bg-card border-foreground/70 text-foreground hover:bg-muted')
                     }
                   >
@@ -248,8 +246,8 @@ export function MomentumPage() {
                 className={
                   'px-5 py-2.5 min-h-[44px] text-sm font-semibold rounded-full border-2 select-none touch-manipulation transition-colors ' +
                   (dir === d
-                    ? (d === 'LONG' ? 'bg-emerald-500/20 border-emerald-600/60 text-emerald-800 dark:text-emerald-300'
-                      : d === 'SHORT' ? 'bg-red-500/20 border-red-600/60 text-red-800 dark:text-red-300'
+                    ? (d === 'LONG' ? 'bg-surface-2 border-[var(--hairline)] text-content-high'
+                      : d === 'SHORT' ? 'bg-surface-2 border-[var(--hairline)] text-content-high'
                       : 'bg-primary border-primary text-primary-foreground')
                     : 'bg-card border-foreground/70 text-foreground hover:bg-muted')
                 }
@@ -419,8 +417,8 @@ function SectorTable({ sectors, dir }: {
 
 function DetailDrawer({ row, onClose }: { row: MomentumTickerResult; onClose: () => void }) {
   const dirCls: Record<MomentumDirection, string> = {
-    LONG: 'text-emerald-700 dark:text-emerald-300',
-    SHORT: 'text-red-700 dark:text-red-300',
+    LONG: 'text-content-high',
+    SHORT: 'text-content-high',
     NEUTRAL: 'text-muted-foreground',
   };
   return (

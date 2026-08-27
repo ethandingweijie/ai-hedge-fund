@@ -367,7 +367,7 @@ export function ScreenerPage() {
                   {/* % change — lg+ only */}
                   <div className="hidden lg:block text-right">
                     {r.change_pct != null ? (
-                      <span className={`text-[12.5px] font-semibold tabular-nums ${r.change_pct >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+                      <span className={`text-[12.5px] font-semibold tabular-nums ${r.change_pct >= 0 ? 'text-gain' : 'text-loss'}`}>
                         {r.change_pct >= 0 ? '+' : ''}{r.change_pct.toFixed(2)}%
                       </span>
                     ) : (

@@ -1,3 +1,5 @@
+import { Markdown } from './Markdown';
+
 /**
  * ResearchNarrativeCard
  * ----------------------
@@ -94,17 +96,16 @@ function extractSubsection(sectionText: string, subsection: string): string | nu
 }
 
 /**
- * Normalize common LLM text artifacts for readable display:
- *   - Collapse 3+ newlines to 2
- *   - Strip markdown bold/italic asterisks that don't render natively
- *   - Trim leading/trailing whitespace
+ * Normalize whitespace only.
+ *
+ * This used to strip markdown bold/italic asterisks, on the assumption the
+ * text was rendered as plain text. It now renders through <Markdown>, so the
+ * emphasis is displayed properly rather than deleted -- and GFM tables, which
+ * the old plain-text path leaked as rows of pipe characters, render as real
+ * tables.
  */
 function cleanForDisplay(text: string): string {
-  return text
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/\*\*([^*]+)\*\*/g, '$1')   // **bold** → bold (inline)
-    .replace(/(^|\s)\*([^*\n]+)\*(?=\s|$)/g, '$1$2')   // *italic* → italic
-    .trim();
+  return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function ResearchNarrativeCard({
@@ -136,7 +137,7 @@ export function ResearchNarrativeCard({
   );
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="rounded-card border border-[var(--hairline)] bg-card p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           {icon && <span className="mr-1.5">{icon}</span>}
@@ -146,9 +147,7 @@ export function ResearchNarrativeCard({
           <span className="text-[10px] text-muted-foreground">(excerpt)</span>
         )}
       </div>
-      <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
-        {display}
-      </div>
+      <Markdown>{display}</Markdown>
       {sourceLabel && (
         <p className="text-[10px] text-muted-foreground mt-3 italic">
           {sourceLabel}

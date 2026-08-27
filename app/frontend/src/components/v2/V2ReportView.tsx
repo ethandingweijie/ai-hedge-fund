@@ -65,6 +65,8 @@ import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDeriv
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
+import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
+import { Markdown } from '@/components/report/shared/Markdown';
 
 type TabId = 'summary' | 'valuation' | 'decision' | 'risk' | 'research' | 'financials';
 
@@ -447,21 +449,13 @@ function SummaryBody({
             </div>
           )}
           {decision.rationale && (
-            /* Thesis-density rule (Tier 2.7): the PM rationale arrives as
-               numbered themes separated by newlines (legacy runs used "• "
-               bullets). Render each line as its own paragraph so both shapes
-               read as distinct themes instead of one collapsed blob. */
-            <div className="mt-3 space-y-1.5">
-              {String(decision.rationale)
-                .split(/\n+/)
-                .map((ln) => ln.trim())
-                .filter(Boolean)
-                .map((ln, i) => (
-                  <p key={i} className="text-[12.5px] text-foreground/80 leading-relaxed">
-                    {ln}
-                  </p>
-                ))}
-            </div>
+            /* Shared with the desktop path via RationaleBlock so the two
+               render paths cannot drift apart again. */
+            <RationaleBlock
+              text={String(decision.rationale)}
+              className="mt-3"
+              itemClassName="text-[12.5px] text-foreground/80 leading-relaxed"
+            />
           )}
         </div>
       ) : (
@@ -669,7 +663,7 @@ function V2ValuationLadder({
     { name: 'Current',   value: current,  color: 'bg-muted-foreground/50', delta: null as number | null, growth: null as number | null | undefined },
     { name: 'Bull case', value: bullIV,   color: 'bg-brand', delta: pct(bullIV), growth: bullG },
     { name: 'Base case', value: baseIV,   color: 'bg-blue-500 dark:bg-blue-400',   delta: pct(baseIV), growth: baseG },
-    { name: 'Bear case', value: bearIV,   color: 'bg-rose-500 dark:bg-rose-400',   delta: pct(bearIV), growth: bearG },
+    { name: 'Bear case', value: bearIV,   color: 'bg-surface-2',   delta: pct(bearIV), growth: bearG },
   ];
 
   return (
@@ -699,7 +693,7 @@ function V2ValuationLadder({
                 ${r.value.toFixed(2)}
               </span>
               {r.delta != null && (
-                <span className={`text-[11px] font-medium tabular-nums ${r.delta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+                <span className={`text-[11px] font-medium tabular-nums ${r.delta >= 0 ? 'text-gain' : 'text-loss'}`}>
                   {r.delta >= 0 ? '+' : ''}{r.delta.toFixed(1)}%
                 </span>
               )}
@@ -822,7 +816,7 @@ function RiskBody({
                   </p>
                 )}
                 {d.concern && (
-                  <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-0.5 leading-relaxed">
+                  <p className="text-[11px] text-content-high mt-0.5 leading-relaxed">
                     Watch: {d.concern}
                   </p>
                 )}
@@ -844,7 +838,7 @@ function RiskBody({
             {trapVerdict && (
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
                 trapVerdict.includes('HIGH')
-                  ? 'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30'
+                  ? 'text-content-high bg-surface-2 border-[var(--hairline)]'
                   : trapVerdict.includes('MEDIUM')
                   ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
                   : 'text-brand bg-brand/10 border-brand/25'
@@ -860,7 +854,7 @@ function RiskBody({
                   className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
                     c.rating === 'GREEN' ? 'bg-brand'
                     : c.rating === 'AMBER' ? 'bg-amber-500 dark:bg-amber-400'
-                    : 'bg-rose-500 dark:bg-rose-400'
+                    : 'bg-surface-2'
                   }`}
                 />
                 <div className="min-w-0 flex-1">
@@ -869,7 +863,7 @@ function RiskBody({
                     <span className={`text-[10px] font-semibold tracking-wide shrink-0 ${
                       c.rating === 'GREEN' ? 'text-brand'
                       : c.rating === 'AMBER' ? 'text-amber-600 dark:text-amber-400'
-                      : 'text-rose-600 dark:text-rose-400'
+                      : 'text-content-high'
                     }`}>
                       {c.rating}
                     </span>
@@ -903,7 +897,7 @@ function RiskBody({
               style={{ width: `${Math.round(((bullProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}%` }}
             />
             <div
-              className="h-full bg-rose-500 dark:bg-rose-400"
+              className="h-full bg-surface-2"
               style={{ width: `${Math.round(((bearProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}%` }}
             />
           </div>
@@ -911,7 +905,7 @@ function RiskBody({
             <span className="text-brand">
               {Math.round(((bullProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}% bull
             </span>
-            <span className="text-rose-600 dark:text-rose-400">
+            <span className="text-content-high">
               {Math.round(((bearProb ?? 0) / ((bullProb ?? 0) + (bearProb ?? 0) || 1)) * 100)}% bear
             </span>
           </div>
@@ -1074,9 +1068,7 @@ function ResearchBody({
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-3">
             Industry Intelligence Brief
           </div>
-          <div className="text-[12.5px] text-foreground/80 leading-relaxed whitespace-pre-wrap">
-            {industryBrief}
-          </div>
+          <Markdown>{industryBrief}</Markdown>
         </div>
       )}
       {hasData && sub === 'deep' && deepResearch && (
@@ -1119,7 +1111,7 @@ function StreamingResearchSummary({
       {/* Streaming banner — explains why Qwen summary is absent vs. completed view */}
       <div className="rounded-2xl border border-border bg-card p-4">
         <div className="flex items-center gap-2 mb-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-surface-2 animate-pulse" />
           <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
             Research streaming · {ticker}
           </span>
@@ -1139,9 +1131,7 @@ function StreamingResearchSummary({
             <span className="text-[11px] text-muted-foreground/70">{briefOpen ? '▲' : '▼'}</span>
           </button>
           {briefOpen && (
-            <div className="border-t border-border px-4 py-3 text-[12.5px] text-foreground/80 whitespace-pre-wrap leading-relaxed">
-              {industryBrief}
-            </div>
+            <Markdown>{industryBrief}</Markdown>
           )}
         </div>
       )}
@@ -1156,9 +1146,7 @@ function StreamingResearchSummary({
             <span className="text-[11px] text-muted-foreground/70">{deepOpen ? '▲' : '▼'}</span>
           </button>
           {deepOpen && (
-            <div className="border-t border-border px-4 py-3 text-[12.5px] text-foreground/80 whitespace-pre-wrap leading-relaxed">
-              {deepResearch}
-            </div>
+            <Markdown>{deepResearch}</Markdown>
           )}
         </div>
       )}
@@ -1328,7 +1316,7 @@ function V2RevenueBuild({ ticker, kind }: { ticker: string; kind: 'product' | 'g
               <div className="flex items-baseline gap-2 mt-0.5">
                 <span className="text-[10px] text-muted-foreground tabular-nums">{pctLabel}</span>
                 {yoy != null && (
-                  <span className={`text-[10px] font-medium tabular-nums ${yoy >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+                  <span className={`text-[10px] font-medium tabular-nums ${yoy >= 0 ? 'text-brand' : 'text-content-high'}`}>
                     {yoy >= 0 ? '+' : ''}{yoy.toFixed(1)}%
                   </span>
                 )}
@@ -1427,7 +1415,7 @@ function V2StockChart({ ticker }: { ticker: string }) {
             <span className="text-[22px] font-semibold tracking-tight tabular-nums text-foreground leading-none">
               ${displayPrice.toFixed(2)}
             </span>
-            <span className={`text-[12px] font-medium tabular-nums ${periodDelta >= 0 ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+            <span className={`text-[12px] font-medium tabular-nums ${periodDelta >= 0 ? 'text-gain' : 'text-loss'}`}>
               {periodDelta >= 0 ? '+' : ''}{periodDelta.toFixed(2)}%
             </span>
           </div>
@@ -1578,7 +1566,7 @@ function V2KeyStats({ metrics }: { metrics: Record<string, number | undefined> }
             <span className="text-[11.5px] text-muted-foreground">{r.k}</span>
             <span className={`text-[13px] font-semibold tabular-nums ${
               r.v.startsWith('+') ? 'text-brand'
-              : r.v.startsWith('-') && r.v !== '—' ? 'text-rose-600 dark:text-rose-400'
+              : r.v.startsWith('-') && r.v !== '—' ? 'text-content-high'
               : 'text-foreground'
             }`}>
               {r.v}

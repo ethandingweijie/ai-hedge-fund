@@ -33,26 +33,26 @@ function formatRunTime(iso: string | null): string {
 }
 
 function verdictColor(score: number): string {
-  if (score >= 60) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
+  if (score >= 60) return 'bg-surface-2 text-content-high';
   if (score >= 45) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
   if (score >= 25) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
   if (score >= 10) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
-  return 'bg-red-600/30 text-red-900 dark:text-red-200';
+  return 'bg-surface-2 text-content-high';
 }
 
 // Aggregate-score color (0-100 scale, INVERTED — high = bearish short signal)
 function aggColor(score: number | null | undefined): string {
   if (score == null) return 'bg-muted text-muted-foreground';
-  if (score >= 70) return 'bg-red-600/30 text-red-900 dark:text-red-200';
+  if (score >= 70) return 'bg-surface-2 text-content-high';
   if (score >= 50) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
   if (score >= 30) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
-  return 'bg-emerald-600/20 text-emerald-900 dark:text-emerald-300';
+  return 'bg-surface-2 text-content-high';
 }
 
 // Screen-score color (0-100, NORMAL — high = strong screen fit)
 function screenScoreColor(score: number | null | undefined): string {
   if (score == null) return 'bg-muted text-muted-foreground';
-  if (score >= 75) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
+  if (score >= 75) return 'bg-surface-2 text-content-high';
   if (score >= 55) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
   if (score >= 35) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
   return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
@@ -64,8 +64,8 @@ function screenScoreColor(score: number | null | undefined): string {
 // dual-direction — it surfaces BOTH long and short ideas, so it gets two
 // badges. The AI idea-of-the-day is neither (it carries its own per-idea
 // direction).
-const LONG_BADGE = 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border border-emerald-600/40';
-const SHORT_BADGE = 'bg-red-600/20 text-red-700 dark:text-red-300 border border-red-600/40';
+const LONG_BADGE = 'bg-surface-2 text-content-high border border-[var(--hairline)]';
+const SHORT_BADGE = 'bg-surface-2 text-content-high border border-[var(--hairline)]';
 
 function ideaSides(id: string): Array<{ label: string; cls: string }> {
   if (id === 'sw46' || id === 'hk50')
@@ -90,10 +90,10 @@ function ideaSides(id: string): Array<{ label: string; cls: string }> {
 // Signed-composite chip color for the momentum preview (-6..+6).
 function momentumColor(composite: number | null | undefined): string {
   if (composite == null) return 'bg-muted text-muted-foreground';
-  if (composite >= 4) return 'bg-emerald-600/30 text-emerald-900 dark:text-emerald-200';
-  if (composite >= 1) return 'bg-emerald-600/15 text-emerald-800 dark:text-emerald-300';
-  if (composite <= -4) return 'bg-red-600/30 text-red-900 dark:text-red-200';
-  if (composite <= -1) return 'bg-red-600/15 text-red-800 dark:text-red-300';
+  if (composite >= 4) return 'bg-surface-2 text-content-high';
+  if (composite >= 1) return 'bg-surface-2 text-content-high';
+  if (composite <= -4) return 'bg-surface-2 text-content-high';
+  if (composite <= -1) return 'bg-surface-2 text-content-high';
   return 'bg-muted text-muted-foreground';
 }
 
@@ -399,9 +399,9 @@ export function ResearchIdeasPage() {
                       {idea.id === 'momentum' && (idea.long_count != null || idea.short_count != null) && (
                         <span>
                           Long / Short:{' '}
-                          <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">{idea.long_count ?? 0}</span>
+                          <span className="font-mono font-semibold text-content-high">{idea.long_count ?? 0}</span>
                           {' / '}
-                          <span className="font-mono font-semibold text-red-700 dark:text-red-300">{idea.short_count ?? 0}</span>
+                          <span className="font-mono font-semibold text-content-high">{idea.short_count ?? 0}</span>
                         </span>
                       )}
                       {idea.id === 'momentum' && idea.as_of && (
@@ -410,9 +410,9 @@ export function ResearchIdeasPage() {
                       {idea.id === 'fundflow' && (idea.long_count != null || idea.short_count != null) && (
                         <span>
                           Inflow / Outflow:{' '}
-                          <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">{idea.long_count ?? 0}</span>
+                          <span className="font-mono font-semibold text-content-high">{idea.long_count ?? 0}</span>
                           {' / '}
-                          <span className="font-mono font-semibold text-red-700 dark:text-red-300">{idea.short_count ?? 0}</span>
+                          <span className="font-mono font-semibold text-content-high">{idea.short_count ?? 0}</span>
                         </span>
                       )}
                       {isAi && idea.latest_idea_conviction != null && (
@@ -526,7 +526,7 @@ export function ResearchIdeasPage() {
                     {idea.id === 'hk50' && ((idea.top5_growth?.length ?? 0) > 0 || (idea.top5_dividend?.length ?? 0) > 0) && (
                       <div className="mt-3 pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Top 5 · Growth</div>
+                          <div className={`${sz.previewLabel} uppercase tracking-wider text-content-high mb-1.5`}>Top 5 · Growth</div>
                           <div className="space-y-1">
                             {(idea.top5_growth ?? []).map((t, i) => (
                               <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`}>
@@ -617,7 +617,7 @@ export function ResearchIdeasPage() {
                         {((idea.top_long_sectors?.length ?? 0) > 0 || (idea.top_short_sectors?.length ?? 0) > 0) && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Long sector tailwinds</div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-content-high mb-1.5`}>Long sector tailwinds</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(idea.top_long_sectors ?? []).map((s) => (
                                   <div key={s.etf} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
@@ -631,7 +631,7 @@ export function ResearchIdeasPage() {
                               </div>
                             </div>
                             <div>
-                              <div className={`${sz.previewLabel} uppercase tracking-wider text-red-600 dark:text-red-400 mb-1.5`}>Short sector tailwinds</div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-content-high mb-1.5`}>Short sector tailwinds</div>
                               <div className="flex flex-wrap gap-1.5">
                                 {(idea.top_short_sectors ?? []).map((s) => (
                                   <div key={s.etf} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md border border-border bg-background/60 ${sz.preview}`} title={`${s.label ?? s.etf} · ${s.verdict ?? ''}`}>
@@ -650,12 +650,12 @@ export function ResearchIdeasPage() {
                         {((idea.lead_long_tickers?.length ?? 0) > 0 || (idea.lead_short_tickers?.length ?? 0) > 0) && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>Lead longs</div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-content-high mb-1.5`}>Lead longs</div>
                               <div className="space-y-1">
                                 {(idea.lead_long_tickers ?? []).map((t) => (
                                   <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
                                     <span className="font-mono font-bold text-foreground w-12">{t.ticker}</span>
-                                    {t.sector && <span className={`text-[12px] truncate ${t.sector_aligned ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
+                                    {t.sector && <span className={`text-[12px] truncate ${t.sector_aligned ? 'text-content-high' : 'text-muted-foreground'}`}>{t.sector}</span>}
                                     <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ml-auto ${momentumColor(t.composite)}`}>
                                       {t.composite != null ? (t.composite > 0 ? `+${t.composite.toFixed(0)}` : t.composite.toFixed(0)) : '—'}
                                     </span>
@@ -664,12 +664,12 @@ export function ResearchIdeasPage() {
                               </div>
                             </div>
                             <div>
-                              <div className={`${sz.previewLabel} uppercase tracking-wider text-red-600 dark:text-red-400 mb-1.5`}>Lead shorts</div>
+                              <div className={`${sz.previewLabel} uppercase tracking-wider text-content-high mb-1.5`}>Lead shorts</div>
                               <div className="space-y-1">
                                 {(idea.lead_short_tickers ?? []).map((t) => (
                                   <div key={t.ticker} className={`flex items-center gap-1.5 ${sz.preview}`} title={`${t.name ?? t.ticker} · ${t.verdict ?? ''}${t.sector_aligned ? ' · sector-aligned' : ''}`}>
                                     <span className="font-mono font-bold text-foreground w-12">{t.ticker}</span>
-                                    {t.sector && <span className={`text-[12px] truncate ${t.sector_aligned ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>{t.sector}</span>}
+                                    {t.sector && <span className={`text-[12px] truncate ${t.sector_aligned ? 'text-content-high' : 'text-muted-foreground'}`}>{t.sector}</span>}
                                     <span className={`px-1 py-0.5 rounded ${sz.chip} font-bold font-mono ml-auto ${momentumColor(t.composite)}`}>
                                       {t.composite != null ? t.composite.toFixed(0) : '—'}
                                     </span>
@@ -697,7 +697,7 @@ export function ResearchIdeasPage() {
                         )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
-                            <div className={`${sz.previewLabel} uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-1.5`}>
+                            <div className={`${sz.previewLabel} uppercase tracking-wider text-content-high mb-1.5`}>
                               Money moving in
                             </div>
                             <div className="flex flex-wrap gap-1.5">
@@ -719,7 +719,7 @@ export function ResearchIdeasPage() {
                             </div>
                           </div>
                           <div>
-                            <div className={`${sz.previewLabel} uppercase tracking-wider text-red-600 dark:text-red-400 mb-1.5`}>
+                            <div className={`${sz.previewLabel} uppercase tracking-wider text-content-high mb-1.5`}>
                               Money moving out
                             </div>
                             <div className="flex flex-wrap gap-1.5">
@@ -763,7 +763,7 @@ export function ResearchIdeasPage() {
                         {idea.latest_idea_id && (
                           <button
                             onClick={(e) => handleDeleteIdea(e, idea.latest_idea_id!)}
-                            className="p-1.5 rounded-full bg-muted/40 hover:bg-red-500/20 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                            className="p-1.5 rounded-full bg-muted/40 hover:bg-surface-2 text-muted-foreground hover:text-content-high dark:hover:text-content-high"
                             title="Delete this idea"
                             aria-label="Delete idea"
                           >

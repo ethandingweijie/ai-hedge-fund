@@ -66,9 +66,11 @@ export function MobileKeyStats({ ticker, metrics }: MobileKeyStatsProps) {
         {STATS.map(({ key, label, format, signed }) => {
           const val = metrics[key as keyof typeof metrics];
           const formatted = format(val, sym);
+          // Monochrome -- see StockPanel: these are financial metrics, not
+          // price changes, so the sign in the value carries the direction.
           const colorClass = !signed || val == null
             ? 'text-foreground'
-            : val >= 0 ? 'text-green-500' : 'text-red-500';
+            : val >= 0 ? 'text-foreground' : 'text-content-medium';
 
           return (
             <div

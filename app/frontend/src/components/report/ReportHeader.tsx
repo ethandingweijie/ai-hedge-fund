@@ -5,6 +5,7 @@ import { useCompanyProfile } from '@/hooks/use-company-name';
 import type { PortfolioDecision, MacroRegime, VgpmResult } from '@/lib/reportTypes';
 import { gradeColorClass, formatSector } from '@/lib/gradeColors';
 import { currencySymbol } from '@/lib/utils';
+import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
 
 interface ReportHeaderProps {
   ticker: string;
@@ -19,8 +20,8 @@ interface ReportHeaderProps {
 }
 
 const actionColor: Record<string, string> = {
-  BUY:   'bg-green-600 text-white',
-  SELL:  'bg-red-600 text-white',
+  BUY:   'bg-primary text-primary-foreground',
+  SELL:  'bg-primary text-primary-foreground',
   SHORT: 'bg-orange-600 text-white',
   COVER: 'bg-blue-600 text-white',
   HOLD:  'bg-yellow-600 text-white',
@@ -139,9 +140,11 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           desktop root font scales up on large screens — without it the thesis
           stretched the full card width and lines got hard to track. */}
       {decision?.rationale && (
-        <p className="mt-4 text-lg text-muted-foreground pt-4 leading-relaxed max-w-[72ch]">
-          {decision.rationale}
-        </p>
+        <RationaleBlock
+          text={decision.rationale}
+          className="mt-4 pt-4 max-w-[72ch]"
+          itemClassName="text-lg text-muted-foreground leading-relaxed"
+        />
       )}
 
       {/* ── Sector ── */}

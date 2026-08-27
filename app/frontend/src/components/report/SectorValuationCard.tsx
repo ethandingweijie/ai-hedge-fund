@@ -24,17 +24,17 @@ import type { SectorCardPayload, SectorKpi, SectorKpiAccent } from '@/lib/report
 
 const accentBg: Record<SectorKpiAccent, string> = {
   blue:   'from-blue-500/15 to-blue-500/0 border-blue-500/30',
-  green:  'from-emerald-500/15 to-emerald-500/0 border-emerald-500/30',
+  green:  'from-surface-2 to-surface-2 border-[var(--hairline)]',
   amber:  'from-amber-500/15 to-amber-500/0 border-amber-500/30',
-  rose:   'from-rose-500/15 to-rose-500/0 border-rose-500/30',
+  rose:   'from-surface-2 to-surface-2 border-[var(--hairline)]',
   violet: 'from-violet-500/15 to-violet-500/0 border-violet-500/30',
 };
 
 const accentText: Record<SectorKpiAccent, string> = {
   blue:   'text-blue-600 dark:text-blue-400',
-  green:  'text-emerald-600 dark:text-emerald-400',
+  green:  'text-content-high',
   amber:  'text-amber-600 dark:text-amber-400',
-  rose:   'text-rose-600 dark:text-rose-400',
+  rose:   'text-content-high',
   violet: 'text-violet-600 dark:text-violet-400',
 };
 
@@ -230,8 +230,8 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
   const isLift  = (v: number) => v > 1.005;
   const isDrag  = (v: number) => v < 0.995;
   const tone    = (v: number) =>
-    isLift(v) ? 'text-emerald-600 dark:text-emerald-400'
-              : isDrag(v) ? 'text-rose-500'
+    isLift(v) ? 'text-content-high'
+              : isDrag(v) ? 'text-content-high'
                           : 'text-muted-foreground';
 
   // V4-β z-chip: shows peer-cohort z-score when present. Tone matches sign so
@@ -243,9 +243,9 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
       Math.abs(z) >= 1.0 ? 'top/bot quartile' :
       Math.abs(z) >= 0.5 ? 'above/below' : 'near median';
     const cls = z > 0
-      ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+      ? 'border-[var(--hairline)] text-content-high bg-surface-2'
       : z < 0
-        ? 'border-rose-500/40 text-rose-500 bg-rose-500/10'
+        ? 'border-[var(--hairline)] text-content-high bg-surface-2'
         : 'border-border text-muted-foreground bg-muted/50';
     return (
       <span
@@ -271,9 +271,9 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
     if (extracted == null || total == null || total <= 1) return null;
     const isFull = extracted === total;
     const cls = isFull
-      ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+      ? 'border-[var(--hairline)] text-content-high bg-surface-2'
       : extracted === 0
-        ? 'border-rose-500/30 text-rose-500 bg-rose-500/10'
+        ? 'border-[var(--hairline)] text-content-high bg-surface-2'
         : 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10';
     return (
       <span
@@ -356,8 +356,8 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
         <div className="text-muted-foreground text-sm">×</div>
 
         {/* Risk */}
-        <div className="col-span-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5">
-          <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+        <div className="col-span-2 rounded-md border border-[var(--hairline)] bg-surface-2 px-2 py-1.5">
+          <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-content-high">
             <span>Risk</span>
             {bridge.risk_weight != null && (
               <span className="text-muted-foreground normal-case tracking-normal">
@@ -406,8 +406,8 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
             <span
               className={cn(
                 'text-base font-bold tabular-nums',
-                bridge.tier_label === 'premium' ? 'text-emerald-600 dark:text-emerald-400'
-                  : bridge.tier_label === 'haircut' ? 'text-rose-500'
+                bridge.tier_label === 'premium' ? 'text-content-high'
+                  : bridge.tier_label === 'haircut' ? 'text-content-high'
                   : 'text-foreground',
               )}
               title={`Mapped from composite multiplier ${fmtMult(bridge.final_multiplier)} on a 0.50–1.85 → 0-100 axis.`}
@@ -420,9 +420,9 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
               className={cn(
                 'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider',
                 bridge.tier_label === 'premium'
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  ? 'border-[var(--hairline)] bg-surface-2 text-content-high'
                   : bridge.tier_label === 'haircut'
-                    ? 'border-rose-500/40 bg-rose-500/10 text-rose-500'
+                    ? 'border-[var(--hairline)] bg-surface-2 text-content-high'
                     : 'border-border bg-muted/50 text-muted-foreground',
               )}
             >

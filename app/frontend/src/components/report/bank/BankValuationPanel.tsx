@@ -9,8 +9,8 @@
  *   - uppercase `tracking-[0.2em]` section headings in muted-foreground
  *   - `rounded-2xl border border-border bg-card p-5`
  *   - `text-5xl font-bold tabular-nums` hero values centered
- *   - Bull / bear tinted tiles: bg-green-50 dark:bg-green-950/40 /
- *     bg-red-50 dark:bg-red-950/40
+ *   - Bull / bear tinted tiles: bg-surface-2 /
+ *     bg-surface-2
  *   - Functional colors only — green-600 / red-500 / blue-500
  *
  * 8 panels in order (mirrors the OCBC / DBS research driver hierarchy):
@@ -71,7 +71,7 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
         {fmtMoney(fairValue, sym)}
       </p>
       {upside != null && (
-        <p className={`text-base font-semibold mt-2 ${upside >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+        <p className={`text-base font-semibold mt-2 ${upside >= 0 ? 'text-gain' : 'text-loss'}`}>
           {upside >= 0 ? '+' : ''}{(upside * 100).toFixed(1)}% vs price
         </p>
       )}
@@ -97,15 +97,15 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
         {/* ROE — green if ≥ target */}
         <div className={`rounded-xl border p-3.5 ${
           bb.roe != null && bb.target_roe != null && bb.roe >= bb.target_roe
-            ? 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40'
+            ? 'border-[var(--hairline)] bg-surface-2'
             : 'border-border bg-card'
         }`}>
           <p className={`${SECTION_HEADING_CLS} mb-1 ${
-            bb.roe != null && bb.target_roe != null && bb.roe >= bb.target_roe ? 'text-green-600' : ''
+            bb.roe != null && bb.target_roe != null && bb.roe >= bb.target_roe ? 'text-content-high' : ''
           }`}>ROE</p>
           <p className={`text-xl font-bold tabular-nums ${
             bb.roe != null && bb.target_roe != null && bb.roe >= bb.target_roe
-              ? 'text-green-700 dark:text-green-400' : 'text-foreground'
+              ? 'text-content-high' : 'text-foreground'
           }`}>
             {fmtPct(bb.roe, 1)}
           </p>
@@ -118,20 +118,20 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
         {/* CET1 buffer — green if positive, red if deficit */}
         <div className={`rounded-xl border p-3.5 ${
           bb.cet1_buffer_bps != null && bb.cet1_buffer_bps > 0
-            ? 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40'
+            ? 'border-[var(--hairline)] bg-surface-2'
             : bb.cet1_buffer_bps != null && bb.cet1_buffer_bps < 0
-              ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40'
+              ? 'border-[var(--hairline)] bg-surface-2'
               : 'border-border bg-card'
         }`}>
           <p className={`${SECTION_HEADING_CLS} mb-1 ${
-            bb.cet1_buffer_bps != null && bb.cet1_buffer_bps >= 0 ? 'text-green-600' :
-            bb.cet1_buffer_bps != null && bb.cet1_buffer_bps < 0  ? 'text-red-600'   : ''
+            bb.cet1_buffer_bps != null && bb.cet1_buffer_bps >= 0 ? 'text-content-high' :
+            bb.cet1_buffer_bps != null && bb.cet1_buffer_bps < 0  ? 'text-content-high'   : ''
           }`}>CET1 Buffer</p>
           <p className={`text-xl font-bold tabular-nums ${
             bb.cet1_buffer_bps != null && bb.cet1_buffer_bps >= 0
-              ? 'text-green-700 dark:text-green-400'
+              ? 'text-content-high'
               : bb.cet1_buffer_bps != null && bb.cet1_buffer_bps < 0
-                ? 'text-red-700 dark:text-red-400'
+                ? 'text-content-high'
                 : 'text-foreground'
           }`}>
             {bb.cet1_buffer_bps != null ? fmtBps(bb.cet1_buffer_bps) : '—'}
@@ -199,8 +199,8 @@ function BankKeyStats({ bb, sym }: { bb: BankBreakdown; sym: string }) {
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
         {stats.map(s => {
           const valCls =
-            s.color === 'green' ? 'text-green-600' :
-            s.color === 'red'   ? 'text-red-500'   : 'text-foreground';
+            s.color === 'green' ? 'text-content-high' :
+            s.color === 'red'   ? 'text-content-high'   : 'text-foreground';
           return (
             <div key={s.label} className="flex items-center justify-between">
               <span className="text-muted-foreground">{s.label}</span>
@@ -232,7 +232,7 @@ function ROEGauge({ bb }: { bb: BankBreakdown }) {
       <div className="flex items-baseline justify-between mb-2">
         <span className="text-xs text-muted-foreground">Value creation signal</span>
         <span className={`text-lg font-bold tabular-nums ${
-          isPositive ? 'text-green-600' : 'text-red-500'
+          isPositive ? 'text-content-high' : 'text-content-high'
         }`}>
           {fmtBps(spreadBps)}
         </span>
@@ -247,18 +247,18 @@ function ROEGauge({ bb }: { bb: BankBreakdown }) {
         {/* Fill: green for positive spread, red for negative */}
         {isPositive ? (
           <div
-            className="absolute top-0 h-full bg-green-500"
+            className="absolute top-0 h-full bg-surface-2"
             style={{ left: '33.3%', width: `${barPosition - 33.3}%` }}
           />
         ) : (
           <div
-            className="absolute top-0 h-full bg-red-500"
+            className="absolute top-0 h-full bg-surface-2"
             style={{ left: `${barPosition}%`, width: `${33.3 - barPosition}%` }}
           />
         )}
       </div>
       <p className={`text-[11px] mt-2 font-mono ${
-        isPositive ? 'text-green-600' : 'text-red-500'
+        isPositive ? 'text-content-high' : 'text-content-high'
       }`}>
         ROE {fmtPct(bb.roe, 1)} − CoE {fmtPct(bb.coe, 1)} = {fmtBps(spreadBps)} · {label}
       </p>
@@ -279,7 +279,7 @@ function CapitalReturnCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
       <p className="text-5xl font-bold tabular-nums text-foreground">
         {fmtPct(totalYield, 1)}
       </p>
-      <p className="text-base font-semibold text-green-600 mt-2">total yield</p>
+      <p className="text-base font-semibold text-content-high mt-2">total yield</p>
       <p className="text-xs text-muted-foreground mt-0.5">div + buyback, TTM</p>
 
       {/* 4-metric row */}
@@ -307,15 +307,15 @@ function CapitalReturnCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
         </div>
         <div className={`rounded-xl border p-3.5 ${
           bb.cet1_surplus_usd != null && bb.cet1_surplus_usd > 0
-            ? 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40'
+            ? 'border-[var(--hairline)] bg-surface-2'
             : 'border-border bg-card'
         }`}>
           <p className={`${SECTION_HEADING_CLS} mb-1 ${
-            bb.cet1_surplus_usd != null && bb.cet1_surplus_usd > 0 ? 'text-green-600' : ''
+            bb.cet1_surplus_usd != null && bb.cet1_surplus_usd > 0 ? 'text-content-high' : ''
           }`}>Distributable</p>
           <p className={`text-xl font-bold tabular-nums ${
             bb.cet1_surplus_usd != null && bb.cet1_surplus_usd > 0
-              ? 'text-green-700 dark:text-green-400' : 'text-foreground'
+              ? 'text-content-high' : 'text-foreground'
           }`}>
             {fmtBn(bb.cet1_surplus_usd, sym)}
           </p>
@@ -442,7 +442,7 @@ function LoanGrowthCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
       <div className="rounded-2xl border border-border bg-card p-5 text-center">
         <p className={`${SECTION_HEADING_CLS} mb-3`}>Loan Growth (YoY)</p>
         <p className={`text-5xl font-bold tabular-nums ${
-          positive ? 'text-green-600' : 'text-red-500'
+          positive ? 'text-content-high' : 'text-content-high'
         }`}>
           {positive ? '+' : ''}{(bb.loan_growth_yoy * 100).toFixed(1)}%
         </p>
@@ -495,8 +495,8 @@ function BookQualityCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
           <div className="flex items-center justify-between">
             <span className="text-muted-foreground">NPL coverage</span>
             <span className={`font-semibold tabular-nums ${
-              covColor === 'green' ? 'text-green-600' :
-              covColor === 'red'   ? 'text-red-500'   :
+              covColor === 'green' ? 'text-content-high' :
+              covColor === 'red'   ? 'text-content-high'   :
               covColor === 'amber' ? 'text-amber-500' : 'text-foreground'
             }`}>
               {(bb.npl_coverage_ratio * 100).toFixed(0)}%
@@ -525,8 +525,8 @@ function BookQualityCard({ bb, sym }: { bb: BankBreakdown; sym: string }) {
           <div className="relative w-full h-2 bg-muted rounded-full overflow-hidden">
             <div
               className={`absolute top-0 left-0 h-full rounded-full ${
-                covColor === 'green' ? 'bg-green-500' :
-                covColor === 'red'   ? 'bg-red-500'   :
+                covColor === 'green' ? 'bg-surface-2' :
+                covColor === 'red'   ? 'bg-surface-2'   :
                 covColor === 'amber' ? 'bg-amber-500' : 'bg-muted-foreground/50'
               }`}
               style={{ width: `${Math.min(100, bb.npl_coverage_ratio * 50)}%` }}

@@ -17,23 +17,23 @@ const CHECKS = [
 ] as const;
 
 const verdictColor: Record<string, string> = {
-  'TRAP RISK HIGH':   'bg-red-100   text-red-800   border-red-300   dark:bg-red-900/30   dark:text-red-300   dark:border-red-700',
+  'TRAP RISK HIGH':   'bg-surface-2   text-content-high   border-[var(--hairline)]',
   'TRAP RISK MEDIUM': 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700',
-  'TRAP RISK LOW':    'bg-green-100  text-green-800  border-green-300  dark:bg-green-900/30  dark:text-green-300  dark:border-green-700',
+  'TRAP RISK LOW':    'bg-surface-2  text-content-high  border-[var(--hairline)]',
 };
 
 // Traffic-light dot colour per rating
 const dotClass: Record<string, string> = {
-  RED:   'bg-red-500',
+  RED:   'bg-surface-2',
   AMBER: 'bg-amber-400',
-  GREEN: 'bg-green-500',
+  GREEN: 'bg-surface-2',
 };
 
 // Subtle row tint per rating
 const rowTint: Record<string, string> = {
-  RED:   'hover:bg-red-50   dark:hover:bg-red-950/20',
+  RED:   'hover:bg-surface-2   dark:hover:bg-surface-2',
   AMBER: 'hover:bg-amber-50 dark:hover:bg-amber-950/20',
-  GREEN: 'hover:bg-green-50 dark:hover:bg-green-950/20',
+  GREEN: 'hover:bg-surface-2 dark:hover:bg-surface-2',
 };
 
 export function ValueTrapChecklist({ analysis, ticker }: ValueTrapChecklistProps) {

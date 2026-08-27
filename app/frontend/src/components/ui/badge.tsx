@@ -10,12 +10,16 @@ const badgeVariants = cva(
       variant: {
         secondary:
           "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        // Monochrome: red is reserved for price change. A destructive badge
+        // reads through full-contrast inversion, not hue.
         destructive:
-          "border-transparent bg-red-500 text-destructive-foreground shadow hover:bg-destructive/80",
+          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+        // Amber survives — the reserved-colour rule covers green and red only.
         warning:
-          "border-transparent bg-yellow-500 text-primary shadow hover:bg-yellow-500/80",
+          "border-transparent bg-warning text-black shadow hover:bg-warning/80",
+        // "success" must NOT be green: it is a status, not a price move.
         success:
-          "border-transparent bg-blue-500 text-primary shadow hover:bg-blue-500/80",
+          "border border-[var(--hairline)] bg-surface-2 text-content-high",
         outline: "text-foreground",
       },
     }

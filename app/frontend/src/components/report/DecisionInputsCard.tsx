@@ -12,19 +12,19 @@ import type { DecisionInputs } from '@/lib/reportTypes';
 import { currencySymbol } from '@/lib/utils';
 
 const ACTION_CHIP: Record<string, string> = {
-  BUY:   'bg-green-600 text-white',
-  SELL:  'bg-red-600 text-white',
+  BUY:   'bg-primary text-primary-foreground',
+  SELL:  'bg-primary text-primary-foreground',
   SHORT: 'bg-orange-500 text-white',
   HOLD:  'bg-yellow-500 text-white',
   COVER: 'bg-blue-600 text-white',
 };
 
 const GRADE_CHIP: Record<string, string> = {
-  'A+': 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  'A':  'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-  'A-': 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  'B+': 'bg-lime-500/15 text-lime-600 dark:text-lime-400',
-  'B':  'bg-lime-500/10 text-lime-600 dark:text-lime-400',
+  'A+': 'bg-surface-2 text-content-high',
+  'A':  'bg-surface-2 text-content-high',
+  'A-': 'bg-surface-2 text-content-high',
+  'B+': 'bg-surface-2 text-content-high',
+  'B':  'bg-surface-2 text-content-high',
   'B-': 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
 };
 
@@ -117,7 +117,7 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
             {q.trap_verdict && (
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
                 q.trap_verdict.toUpperCase() === 'HIGH'
-                  ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                  ? 'bg-surface-2 text-content-high'
                   : 'bg-muted text-muted-foreground'
               }`}
               >
@@ -141,7 +141,7 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
             <span className={`px-1.5 py-0.5 rounded font-medium ${
               ql.delta_material
                 ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                : 'bg-surface-2 text-content-high'
             }`}
             >
               {ql.delta_material ? 'fresh news: material' : 'fresh news: none material'}
@@ -149,7 +149,7 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
           )}
         </div>
         {(ql.regulatory_watch?.length ?? 0) > 0 && (
-          <div className="mt-1.5 text-[11px] text-rose-600 dark:text-rose-400">
+          <div className="mt-1.5 text-[11px] text-content-high">
             ⚠ regulatory watch: {(ql.regulatory_watch ?? []).join(', ')}
           </div>
         )}

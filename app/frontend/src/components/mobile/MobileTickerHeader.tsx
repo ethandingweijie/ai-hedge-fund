@@ -46,7 +46,7 @@ export function MobileTickerHeader({
             </p>
           )}
           {priceChange != null && (
-            <p className={`text-[10px] font-semibold tabular-nums leading-tight ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+            <p className={`text-[10px] font-semibold tabular-nums leading-tight ${isPositive ? 'text-gain' : 'text-loss'}`}>
               {isPositive ? '+' : ''}{priceChange.toFixed(2)}% <span className="text-muted-foreground font-normal">1Y</span>
             </p>
           )}

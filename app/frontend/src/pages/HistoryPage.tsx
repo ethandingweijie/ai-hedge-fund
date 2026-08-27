@@ -111,7 +111,7 @@ function AgeBadge({ runAt }: { runAt: string }) {
       title={fresh ? 'Report is fresh (under 7 days)' : 'Report is 7+ days old — consider re-running'}
       className={`text-[9px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
         fresh
-          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+          ? 'bg-surface-2 text-content-high border-[var(--hairline)]'
           : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
       }`}
     >

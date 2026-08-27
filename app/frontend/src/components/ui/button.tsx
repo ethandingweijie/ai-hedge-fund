@@ -11,8 +11,11 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+        // Outlined high-contrast rather than a red fill: destructive intent is
+        // carried by the heavy rim, the label and an alert glyph, keeping red
+        // exclusively for price direction.
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "border-[1.5px] border-foreground bg-transparent text-foreground shadow-sm hover:bg-foreground hover:text-background",
         outline:
           "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
         secondary:

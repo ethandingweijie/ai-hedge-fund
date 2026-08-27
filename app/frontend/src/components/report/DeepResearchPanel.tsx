@@ -79,7 +79,7 @@ function sourceColor(type?: string, name?: string): string {
       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
     case 'financial_data':
     case 'fmp':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+      return 'bg-surface-2 text-content-high';
     default:
       return 'bg-muted text-muted-foreground';
   }
@@ -285,7 +285,7 @@ export function DeepResearchPanel({
                     {/* Verified status — explicit flag OR inferred from trusted source type */}
                     <td className="py-2 align-top">
                       {(entry.verified === true || isTrustedSource(entry.source_type, entry.source_name, entry.url)) ? (
-                        <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400 font-medium whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 text-content-high font-medium whitespace-nowrap">
                           <span>✓</span> <span>Verified</span>
                         </span>
                       ) : (

@@ -30,8 +30,8 @@ import { NAV_ITEMS, useAppNav } from '@/components/nav-config';
 import { LayoutModeToggle } from '@/components/LayoutModeToggle';
 
 const ACTION_COLORS: Record<string, string> = {
-  BUY:   'bg-green-600 text-white',
-  SELL:  'bg-red-600 text-white',
+  BUY:   'bg-primary text-primary-foreground',
+  SELL:  'bg-primary text-primary-foreground',
   SHORT: 'bg-orange-500 text-white',
   COVER: 'bg-blue-600 text-white',
   HOLD:  'bg-yellow-500 text-white',

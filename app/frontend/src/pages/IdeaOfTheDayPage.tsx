@@ -269,7 +269,7 @@ export function IdeaOfTheDayPage() {
           {(idea.key_risks || []).length > 0 && (
             <p className="text-[18px] sm:text-[19px] leading-[1.6] text-foreground">
               <span className="font-bold inline-flex items-center gap-1.5">
-                <AlertTriangle size={15} className="text-rose-600 dark:text-rose-400" /> Key risks:
+                <AlertTriangle size={15} className="text-content-high" /> Key risks:
               </span>{' '}
               {(idea.key_risks || []).join('; ')}
             </p>
@@ -322,7 +322,7 @@ export function IdeaOfTheDayPage() {
           </button>
           <button
             onClick={handleDelete}
-            className="h-11 w-11 flex items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+            className="h-11 w-11 flex items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:text-content-high dark:hover:text-content-high hover:bg-surface-2 transition-colors"
             title="Delete this idea"
             aria-label="Delete"
           >

@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card';
+import { rankTextTone } from '@/lib/semanticColors';
 
 interface CitationAudit {
   audit_score?: number;
@@ -12,9 +13,9 @@ interface CitationPanelProps {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 8) return 'text-green-600 dark:text-green-400';
-  if (score >= 5) return 'text-amber-500 dark:text-amber-400';
-  return 'text-red-500 dark:text-red-400';
+  if (score >= 8) return rankTextTone(0);
+  if (score >= 5) return rankTextTone(2);
+  return rankTextTone(3);
 }
 
 
@@ -63,13 +64,13 @@ export function CitationPanel({ data, ticker }: CitationPanelProps) {
       {/* ── Hallucination Flags ─────────────────────────────────────────────── */}
       {hallucinationFlags.length > 0 && (
         <section>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-red-500/80 mb-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-content-high mb-2">
             Hallucination Flags ({hallucinationFlags.length})
           </p>
           <ul className="space-y-1.5">
             {hallucinationFlags.map((flag, i) => (
               <li key={i} className="flex gap-2 text-xs text-foreground/80 leading-relaxed">
-                <span className="text-red-500 shrink-0">⚠</span>
+                <span className="text-content-high shrink-0">⚠</span>
                 <span>{flag}</span>
               </li>
             ))}

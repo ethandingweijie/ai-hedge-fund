@@ -22,7 +22,7 @@ function upside(target: number | undefined, current: number | undefined): number
 }
 function upColor(pct: number | null): string {
   if (pct == null) return 'text-muted-foreground';
-  return pct >= 0 ? 'text-green-500' : 'text-red-500';
+  return pct >= 0 ? 'text-gain' : 'text-loss';
 }
 
 export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Props) {
@@ -100,14 +100,14 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
           <p className="text-base font-bold tabular-nums">{fmt(ev, sym)}</p>
           {evUp != null && <p className={`text-[10px] font-semibold ${upColor(evUp)}`}>{fmtPct(evUp)}</p>}
         </div>
-        <div className="bg-green-50 dark:bg-green-950/20 rounded-lg px-3 py-2.5">
+        <div className="bg-surface-2 rounded-lg px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bull Case</p>
-          <p className="text-base font-bold tabular-nums text-green-600">{fmt(bullIV, sym)}</p>
+          <p className="text-base font-bold tabular-nums text-content-high">{fmt(bullIV, sym)}</p>
         </div>
-        <div className="bg-red-50 dark:bg-red-950/20 rounded-lg px-3 py-2.5">
+        <div className="bg-surface-2 rounded-lg px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Bear Case</p>
-          <p className="text-base font-bold tabular-nums text-red-500">{fmt(bearIV, sym)}</p>
-          {bearDown != null && <p className={`text-[10px] font-semibold text-red-500`}>{fmtPct(bearDown)}</p>}
+          <p className="text-base font-bold tabular-nums text-content-high">{fmt(bearIV, sym)}</p>
+          {bearDown != null && <p className={`text-[10px] font-semibold text-content-high`}>{fmtPct(bearDown)}</p>}
         </div>
       </div>
 
@@ -116,9 +116,9 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Scenario Probabilities</p>
           {[
-            { label: 'Bear',  prob: scenario?.bear?.probability, target: targets12m?.bear, iv: bearIV, color: 'bg-red-500' },
+            { label: 'Bear',  prob: scenario?.bear?.probability, target: targets12m?.bear, iv: bearIV, color: 'bg-surface-2' },
             { label: 'Base',  prob: scenario?.base?.probability, target: targets12m?.base, iv: baseIV, color: 'bg-blue-500' },
-            { label: 'Bull',  prob: scenario?.bull?.probability, target: targets12m?.bull, iv: bullIV, color: 'bg-green-500' },
+            { label: 'Bull',  prob: scenario?.bull?.probability, target: targets12m?.bull, iv: bullIV, color: 'bg-surface-2' },
           ].map(r => {
             const pct = r.prob != null ? Math.round(r.prob * 100) : null;
             return (

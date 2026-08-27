@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import type { PowerLawAnalysis } from '@/lib/reportTypes';
 import { NIL_TEXT } from './ChecksConcernsPanel';
+import { rankTextTone } from '@/lib/semanticColors';
 
 interface PowerLawRadarProps {
   powerLaw?: PowerLawAnalysis;
@@ -72,9 +73,9 @@ const RISK_WORDS = [
 ];
 
 function scoreColor(s: number) {
-  if (s >= 8) return 'text-green-500';
-  if (s >= 5) return 'text-yellow-500';
-  return 'text-red-500';
+  if (s >= 8) return rankTextTone(0);
+  if (s >= 5) return rankTextTone(2);
+  return rankTextTone(3);
 }
 
 function trim(text: string, limit = 240): string {
@@ -319,7 +320,7 @@ export function PowerLawRadar({ powerLaw, ticker }: PowerLawRadarProps) {
                 <div className="px-5 pb-3 pt-0.5 space-y-2">
                   {hasNote && (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-green-600 dark:text-green-400 mb-0.5">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-content-high mb-0.5">
                         ✓ What Checks Off
                       </p>
                       <p className="text-[11px] leading-relaxed text-muted-foreground">{note}</p>

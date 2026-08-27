@@ -1,32 +1,43 @@
 /**
- * Shared VGPM grade color utility — graduated within each letter band.
+ * Shared VGPM grade chip styling — monochrome ordinal ramp.
  *
- * A+ dark green · A mid green · A- light green
- * B+ dark blue  · B mid blue  · B- light blue
- * C             amber
- * D             red
+ * This was a rainbow scale (green A band · blue B band · amber C · red D).
+ * Under the Uber Base system green and red are reserved for price change, and
+ * a grade is a quality verdict, not a price move. Stripping only the green and
+ * red would have left an incoherent scale that was monochrome at the ends and
+ * chromatic in the middle, so the whole ramp is monochrome: the grade reads
+ * through *prominence*, with A+ as a solid inverted chip down to D barely
+ * lifting off the surface. The letter itself still carries the precise value.
  */
+import { rankTone } from './semanticColors';
 
 export function gradeColorClass(grade?: string): string {
-  if (!grade || grade === '—') return 'text-muted-foreground bg-muted/40';
+  if (!grade || grade === '—') return rankTone(null);
 
-  // ── A band ───────────────────────────────────────────────────────────────────
-  if (grade === 'A+') return 'bg-emerald-600/20 text-emerald-800 dark:text-emerald-300';
-  if (grade === 'A')  return 'bg-green-500/15  text-green-700   dark:text-green-400';
-  if (grade === 'A-') return 'bg-green-400/10  text-green-600   dark:text-green-500';
+  switch (grade) {
+    // ── A band — strongest prominence ──────────────────────────────────────
+    case 'A+':
+    case 'A':
+      return rankTone(0);
+    case 'A-':
+      return rankTone(1);
 
-  // ── B band ───────────────────────────────────────────────────────────────────
-  if (grade === 'B+') return 'bg-blue-600/20   text-blue-800    dark:text-blue-300';
-  if (grade === 'B')  return 'bg-blue-500/15   text-blue-700    dark:text-blue-400';
-  if (grade === 'B-') return 'bg-blue-400/10   text-blue-600    dark:text-blue-500';
+    // ── B band ─────────────────────────────────────────────────────────────
+    case 'B+':
+    case 'B':
+      return rankTone(1);
+    case 'B-':
+      return rankTone(2);
 
-  // ── C ────────────────────────────────────────────────────────────────────────
-  if (grade === 'C')  return 'bg-amber-500/15  text-amber-700   dark:text-amber-400';
+    // ── C / D — recede ─────────────────────────────────────────────────────
+    case 'C':
+      return rankTone(2);
+    case 'D':
+      return rankTone(3);
 
-  // ── D ────────────────────────────────────────────────────────────────────────
-  if (grade === 'D')  return 'bg-red-500/15    text-red-700     dark:text-red-400';
-
-  return 'text-muted-foreground bg-muted/40';
+    default:
+      return rankTone(null);
+  }
 }
 
 /** Convert PascalCase/CamelCase sector keys to display strings with spaces.

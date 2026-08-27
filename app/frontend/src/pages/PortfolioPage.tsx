@@ -41,8 +41,8 @@ function fmtMoney(v: number | null | undefined): string {
 
 function PnlText({ value, pct }: { value: number | null | undefined; pct?: number | null }) {
   if (value == null) return <span className="text-muted-foreground">—</span>;
-  const cls = value > 0 ? 'text-emerald-600 dark:text-emerald-400'
-    : value < 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground';
+  const cls = value > 0 ? 'text-gain'
+    : value < 0 ? 'text-loss' : 'text-muted-foreground';
   return (
     <span className={`${cls} font-medium tabular-nums`}>
       {value > 0 ? '+' : ''}{fmtMoney(value)}
@@ -54,8 +54,8 @@ function PnlText({ value, pct }: { value: number | null | undefined; pct?: numbe
 /** Signed-percentage cell (replay returns / drawdowns). */
 function RetText({ value, dp = 1 }: { value: number | null | undefined; dp?: number }) {
   if (value == null || Number.isNaN(value)) return <span className="text-muted-foreground">—</span>;
-  const cls = value > 0 ? 'text-emerald-600 dark:text-emerald-400'
-    : value < 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground';
+  const cls = value > 0 ? 'text-gain'
+    : value < 0 ? 'text-loss' : 'text-muted-foreground';
   return (
     <span className={`${cls} font-medium tabular-nums`}>
       {value > 0 ? '+' : ''}{fmtNum(value, dp)}%
@@ -64,10 +64,10 @@ function RetText({ value, dp = 1 }: { value: number | null | undefined; dp?: num
 }
 
 const DECISION_CLASS: Record<string, string> = {
-  BUY: 'text-emerald-600 dark:text-emerald-400',
-  STRONG_BUY: 'text-emerald-600 dark:text-emerald-400',
-  SELL: 'text-red-600 dark:text-red-400',
-  SHORT: 'text-red-600 dark:text-red-400',
+  BUY: 'text-content-high',
+  STRONG_BUY: 'text-content-high',
+  SELL: 'text-content-high',
+  SHORT: 'text-content-high',
   HOLD: 'text-amber-600 dark:text-amber-400',
 };
 
@@ -93,7 +93,7 @@ const REGIME_DIMS: Array<{ key: string; label: string }> = [
 ];
 
 function matchChip(matches: number): string {
-  if (matches >= 4) return 'bg-emerald-600/20 text-emerald-700 dark:text-emerald-300 border-emerald-700/40';
+  if (matches >= 4) return 'bg-surface-2 text-content-high border-[var(--hairline)]';
   if (matches >= 2) return 'bg-amber-600/20 text-amber-700 dark:text-amber-200 border-amber-700/40';
   return 'bg-muted text-muted-foreground border-border';
 }
@@ -304,7 +304,7 @@ export function PortfolioPage() {
       />
 
       {error && (
-        <Card className="p-4 mt-4 text-sm text-red-600 dark:text-red-400">{error}</Card>
+        <Card className="p-4 mt-4 text-sm text-content-high">{error}</Card>
       )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as PortfolioTab)} className="mt-4">
@@ -446,7 +446,7 @@ export function PortfolioPage() {
                       <TableCell className="text-right tabular-nums text-xs">{ivs}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {h.iv_upside_pct != null ? (
-                          <span className={h.iv_upside_pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}>
+                          <span className={h.iv_upside_pct >= 0 ? 'text-gain' : 'text-loss'}>
                             {h.iv_upside_pct >= 0 ? '+' : ''}{fmtNum(h.iv_upside_pct, 1)}%
                           </span>
                         ) : <span className="text-muted-foreground">—</span>}
@@ -457,7 +457,7 @@ export function PortfolioPage() {
                         <button
                           onClick={() => void onDelete(h.id, h.ticker)}
                           disabled={removingId === h.id}
-                          className="text-muted-foreground hover:text-red-500 p-1"
+                          className="text-muted-foreground hover:text-content-high p-1"
                           title={`Remove ${h.ticker}`}
                         >
                           <Trash2 size={14} />
@@ -588,7 +588,7 @@ function ReplaySection({
       </div>
 
       {error && (
-        <Card className="p-4 text-sm text-red-600 dark:text-red-400 flex items-start gap-2">
+        <Card className="p-4 text-sm text-content-high flex items-start gap-2">
           <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </Card>
@@ -917,11 +917,11 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
           return (
             <div
               key={d.key}
-              className={`grid grid-cols-[1fr_auto_auto] gap-2 items-center text-xs px-2 py-1 rounded ${matched ? 'bg-emerald-600/10' : ''}`}
+              className={`grid grid-cols-[1fr_auto_auto] gap-2 items-center text-xs px-2 py-1 rounded ${matched ? 'bg-surface-2' : ''}`}
             >
               <span className="text-muted-foreground">{d.label}</span>
               <span className="tabular-nums w-20 text-right">{then ?? '—'}</span>
-              <span className={`tabular-nums w-20 text-right ${matched ? 'text-emerald-700 dark:text-emerald-300 font-semibold' : 'text-muted-foreground'}`}>
+              <span className={`tabular-nums w-20 text-right ${matched ? 'text-content-high font-semibold' : 'text-muted-foreground'}`}>
                 {now ?? '—'}
               </span>
             </div>
@@ -946,8 +946,8 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
 const WHAT_IF_HORIZONS = [30, 60, 90, 180, 365];
 
 const WHAT_IF_ACTION_CLASS: Record<string, string> = {
-  SHORT: 'bg-red-600/15 text-red-700 dark:text-red-300 border-red-700/40',
-  BUY: 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
+  SHORT: 'bg-surface-2 text-content-high border-[var(--hairline)]',
+  BUY: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   GOLD: 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40',
   CASH: 'bg-sky-600/15 text-sky-700 dark:text-sky-300 border-sky-700/40',
   HOLD: 'bg-muted text-muted-foreground border-border',
@@ -1121,7 +1121,7 @@ function WhatIfSection({
       </Card>
 
       {error && (
-        <Card className="p-4 text-sm text-red-600 dark:text-red-400 flex items-start gap-2">
+        <Card className="p-4 text-sm text-content-high flex items-start gap-2">
           <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </Card>
@@ -1229,7 +1229,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Most affected</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-red-600/10 text-red-700 dark:text-red-300 text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
                 ))}
               </div>
             </div>
@@ -1237,7 +1237,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Hedged / holds up</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
                 ))}
               </div>
             </div>
@@ -1345,7 +1345,7 @@ function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rational
   const typeBadge = h.kind === 'product' ? (
     <span className={`px-1.5 py-0.5 rounded border text-[10px] ${
       h.product?.confidence === 'confirmed'
-        ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border-emerald-700/40'
+        ? 'bg-surface-2 text-content-high border-[var(--hairline)]'
         : h.product?.confidence === 'assumed'
           ? 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40'
           : 'bg-muted text-muted-foreground border-border'}`}
@@ -1354,7 +1354,7 @@ function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rational
       {h.product?.confidence === 'assumed' ? ' (assumed)' : ''}
     </span>
   ) : h.kind === 'unknown_product' ? (
-    <span className="px-1.5 py-0.5 rounded border text-[10px] bg-red-600/10 text-red-700 dark:text-red-300 border-red-700/40"
+    <span className="px-1.5 py-0.5 rounded border text-[10px] bg-surface-2 text-content-high border-[var(--hairline)]"
           title={h.product?.hint ?? 'Unknown product'}>
       unclassified
     </span>
@@ -1390,8 +1390,8 @@ function WhatIfHoldingRow({ h, rationale }: { h: WhatIfHoldingSkeleton; rational
 // skeleton math — never the LLM.
 
 const VERDICT_CLASS: Record<string, string> = {
-  confirmed: 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-700/40',
-  disconfirmed: 'bg-red-600/15 text-red-700 dark:text-red-300 border-red-700/40',
+  confirmed: 'bg-surface-2 text-content-high border-[var(--hairline)]',
+  disconfirmed: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   inconclusive: 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40',
   no_data: 'bg-muted text-muted-foreground border-border',
   open: 'bg-sky-600/15 text-sky-700 dark:text-sky-300 border-sky-700/40',
@@ -1600,7 +1600,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
   if (err || !detail) {
     return (
       <Card className="p-4 mt-4">
-        <div className="text-sm text-red-600 dark:text-red-400 flex items-start gap-2">
+        <div className="text-sm text-content-high flex items-start gap-2">
           <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
           <span>{err ?? 'Scenario not found.'}</span>
         </div>
@@ -1688,7 +1688,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Most affected</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.most_affected_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-red-600/10 text-red-700 dark:text-red-300 text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
                 ))}
               </div>
             </div>
@@ -1696,7 +1696,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Hedged / holds up</div>
               <div className="flex gap-1 flex-wrap">
                 {llm.hedged_sectors.map(s => (
-                  <span key={s} className="px-1.5 py-0.5 rounded bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[10px]">{s}</span>
+                  <span key={s} className="px-1.5 py-0.5 rounded bg-surface-2 text-content-high text-[10px]">{s}</span>
                 ))}
               </div>
             </div>
@@ -1737,7 +1737,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
         </div>
 
         {compareErr && (
-          <div className="mt-3 text-xs text-red-600 dark:text-red-400">{compareErr}</div>
+          <div className="mt-3 text-xs text-content-high">{compareErr}</div>
         )}
 
         {compare && (

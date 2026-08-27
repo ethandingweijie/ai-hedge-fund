@@ -80,7 +80,7 @@ export const Divider = ({ className = '' }: { className?: string }) =>
 
 export const ACTION_STYLES: Record<string, string> = {
   BUY:   'text-brand bg-brand/10 border-brand/25',
-  SELL:  'text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-100 dark:border-rose-500/20',
+  SELL:  'text-content-high bg-surface-2 border-[var(--hairline)]',
   SHORT: 'text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20',
   HOLD:  'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20',
 };
@@ -120,8 +120,8 @@ function gradeStyle(grade?: string | null) {
     };
   }
   return {
-    text: 'text-rose-700 dark:text-rose-300',
-    bg:   'bg-rose-500/20 dark:bg-rose-500/25',
+    text: 'text-content-high',
+    bg:   'bg-surface-2',
   };
 }
 
@@ -149,7 +149,7 @@ export function Delta({ v, unit = '%' }: { v: number | null | undefined; unit?: 
   if (v == null) return <span className="text-muted-foreground/70">—</span>;
   const up = v >= 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 font-medium tabular-nums ${up ? 'text-brand' : 'text-rose-600 dark:text-rose-400'}`}>
+    <span className={`inline-flex items-center gap-0.5 font-medium tabular-nums ${up ? 'text-gain' : 'text-loss'}`}>
       {up ? <ArrowUp width={11} height={11} strokeWidth={2.2}/> : <ArrowDown width={11} height={11} strokeWidth={2.2}/>}
       {Math.abs(v).toFixed(1)}{unit}
     </span>
