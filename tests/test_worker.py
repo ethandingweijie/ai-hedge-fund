@@ -33,6 +33,8 @@ def test_worker_settings_shape():
         "run_hundred_q_backstop_task",
         # W2 — weekly US/HK/SG exchange-comp refresh
         "run_regional_comps_refresh_task",
+        # Weekly screener cache warm (parallel workstream)
+        "run_screener_refresh_task",
         # R2 — daily housekeeping (stale-checkpoint prune)
         "run_maintenance_task",
         # Workstream R1.e — analyst-report Drive folder sync (8am cron +

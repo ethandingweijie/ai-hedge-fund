@@ -230,6 +230,12 @@ def select_etfs(
             "expenseRatio": etf.get("expenseRatio"),
             "riskLevel": None,  # no single risk tier for a fund — omitted, not faked
             "topHoldings": etf.get("topHoldings") or [],
+            # Constituents for the equity look-through. Carried on the item
+            # (not re-fetched) so the aggregation stays a pure function of
+            # the plan, and coverage travels with the weights it describes.
+            "holdings": etf.get("holdings") or [],
+            "holdingsCount": etf.get("holdingsCount") or 0,
+            "holdingsCoveredPct": etf.get("holdingsCoveredPct") or 0.0,
         }
 
     def allocate_to_category(etfs: list[dict], target_percent: float, count: int) -> None:
@@ -449,6 +455,142 @@ def calculate_breakdowns(items: list[dict]) -> dict:
     return {"sector": sector_breakdown, "geography": geography_breakdown, "risk": risk_breakdown}
 
 
+# ── Step 5b: equity look-through ───────────────────────────────────────────────
+
+# Buckets whose constituents are shares in companies. Bond and commodity
+# funds are deliberately excluded: BNDX's "holdings" are instruments like
+# "Dexia SA 01/21/2028" and GLD's is bullion, and neither is an equity
+# position however the fund reports it.
+_EQUITY_BUCKETS = {"stock", "reit"}
+
+
+def calculate_equity_lookthrough(items: list[dict], total_investment: float = 0.0,
+                                 top_n: int = 25) -> dict:
+    """Which individual COMPANIES a portfolio of funds actually owns.
+
+    The ETF plan tells a user they hold VTI and KWEB; it does not tell them
+    their largest single company exposure is NVDA, or that Tencent arrives
+    through two different funds. This resolves equity funds to their
+    constituents and aggregates by company, so fund choice and company
+    exposure are both visible.
+
+    Allocation is distributed strictly in proportion to the weights actually
+    available: a fund contributing `pct` of the plan with a holding at `w`
+    percent of the fund contributes `pct * w / 100`. Anything the stored
+    constituents do not cover is reported as `uncovered_pct` rather than
+    spread over the rows that are present.
+
+    That is the whole design decision here, and it is not cosmetic. The
+    obvious alternative — renormalising over the visible weights so they sum
+    to the fund's full allocation — assumes the unseen tail resembles the
+    visible head. That holds at 99% coverage and fails badly below it: BNDX
+    reports 3 usable rows totalling 0.01% of the fund, and renormalising
+    spread its entire 9.5% plan weight across those three, showing a single
+    bond at 4.6% of the portfolio. Proportional allocation can only ever
+    understate a position, never invent one, and the shortfall is named.
+
+    Individual stocks (Individual Stocks mode) pass straight through — a
+    single stock genuinely IS 100% itself, which is exact.
+
+    Returns:
+        {positions, position_count, resolved_pct, uncovered_pct,
+         non_equity_pct, top_concentration_pct, coverage}
+      positions       — [{symbol, name, allocationPercent, amount, viaFunds}]
+      resolved_pct    — plan share attributed to named companies
+      uncovered_pct   — equity-fund weight whose constituents are not stored
+      non_equity_pct  — bond/commodity funds, excluded by design
+      coverage        — per-fund {ticker: coveredPct}, so a thin fund is visible
+    """
+    by_symbol: dict[str, dict] = {}
+    uncovered_pct = 0.0
+    non_equity_pct = 0.0
+    coverage: dict[str, float] = {}
+
+    for item in items:
+        pct = float(item.get("allocationPercent") or 0)
+        if pct <= 0:
+            continue
+        # ETF items are keyed by `ticker`, individual-stock items by `symbol`.
+        symbol = item.get("ticker") or item.get("symbol")
+        bucket = item.get("category")
+        holdings = item.get("holdings") or []
+        is_fund = bool(item.get("sectorWeights") or item.get("regionWeights")
+                       or holdings or bucket)
+
+        if not is_fund:
+            # An individual stock resolves to itself.
+            if not symbol:
+                uncovered_pct += pct
+                continue
+            entry = by_symbol.setdefault(symbol, {
+                "symbol": symbol, "name": item.get("name") or symbol,
+                "allocationPercent": 0.0, "viaFunds": [],
+            })
+            entry["allocationPercent"] += pct
+            entry["viaFunds"].append({"ticker": symbol,
+                                      "contributionPct": round(pct, 4),
+                                      "direct": True})
+            continue
+
+        if bucket is not None and bucket not in _EQUITY_BUCKETS:
+            non_equity_pct += pct
+            continue
+
+        if not holdings:
+            uncovered_pct += pct
+            continue
+
+        covered = 0.0
+        for h in holdings:
+            w = float(h.get("weightPercentage") or 0)
+            asset = h.get("asset")
+            if w <= 0 or not asset:
+                continue
+            covered += w
+            contribution = pct * w / 100.0
+            entry = by_symbol.setdefault(asset, {
+                "symbol": asset, "name": h.get("name") or asset,
+                "allocationPercent": 0.0, "viaFunds": [],
+            })
+            entry["allocationPercent"] += contribution
+            entry["viaFunds"].append({
+                "ticker": symbol, "contributionPct": round(contribution, 4),
+                "direct": False,
+            })
+        coverage[symbol or "?"] = round(covered, 2)
+        uncovered_pct += pct * max(0.0, 100.0 - covered) / 100.0
+
+    positions = sorted(by_symbol.values(), key=lambda e: -e["allocationPercent"])
+    for e in positions:
+        e["allocationPercent"] = round(e["allocationPercent"], 4)
+        e["amount"] = round(total_investment * e["allocationPercent"] / 100, 2)
+        # Collapse repeat contributions from one fund, heaviest fund first,
+        # so "mostly via VTI" reads at a glance.
+        merged: dict[str, dict] = {}
+        for v in e["viaFunds"]:
+            m = merged.setdefault(v["ticker"], {"ticker": v["ticker"],
+                                                "contributionPct": 0.0,
+                                                "direct": v["direct"]})
+            m["contributionPct"] += v["contributionPct"]
+        e["viaFunds"] = sorted(
+            ({**m, "contributionPct": round(m["contributionPct"], 4)}
+             for m in merged.values()),
+            key=lambda v: -v["contributionPct"],
+        )
+
+    resolved = sum(e["allocationPercent"] for e in positions)
+    return {
+        "positions": positions[:top_n],
+        "position_count": len(positions),
+        "resolved_pct": round(resolved, 2),
+        "uncovered_pct": round(uncovered_pct, 2),
+        "non_equity_pct": round(non_equity_pct, 2),
+        "top_concentration_pct": round(
+            sum(e["allocationPercent"] for e in positions[:10]), 2),
+        "coverage": coverage,
+    }
+
+
 # ── Stock candidate sourcing (Individual Stocks mode) ──────────────────────────
 
 def _to_candidate(item: dict, region: str, sector_map: Optional[dict] = None) -> Optional[dict]:
@@ -552,6 +694,11 @@ def generate_portfolio(answers: dict) -> dict:
         "stock_portfolio": stock_portfolio,
         "etf_breakdowns": calculate_breakdowns(etf_portfolio),
         "stock_breakdowns": calculate_breakdowns(stock_portfolio),
+        # What companies the FUND plan actually owns, resolved through each
+        # ETF's constituents — so the user sees ETF choice and equity
+        # exposure side by side rather than only the fund tickers.
+        "etf_equity_lookthrough": calculate_equity_lookthrough(
+            etf_portfolio, investment_amount),
         "total_investment": investment_amount,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }

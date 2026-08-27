@@ -183,6 +183,7 @@ GATED = {
     # W2 — weekly exchange-comp refresh (US/HK/SG). Gated so a run that dies
     # partway through is retried rather than skipped for the week.
     "regional_comps_refresh",
+    "screener_cache_refresh",
 }
 
 

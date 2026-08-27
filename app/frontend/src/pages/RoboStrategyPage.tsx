@@ -22,6 +22,7 @@ import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { RangeSlider } from '@/components/robo/RangeSlider';
 import { HoldingsTable } from '@/components/robo/HoldingsTable';
 import { AllocationCharts } from '@/components/robo/AllocationCharts';
+import { EquityLookthrough } from '@/components/robo/EquityLookthrough';
 import { TemplateCard } from '@/components/robo/TemplateCard';
 import { adjustWeight, sumWeights } from '@/lib/roboSliderUtils';
 import { STRATEGY_TEMPLATES, templateToQuestionnaire, type StrategyTemplate } from '@/data/roboStrategyTemplates';
@@ -423,6 +424,14 @@ export function RoboStrategyPage() {
 
       {activeBreakdowns && <AllocationCharts breakdowns={activeBreakdowns} />}
       <HoldingsTable items={activeItems} mode={activeTab} />
+      {/* ETF mode only — in Individual Stocks mode the holdings table IS the
+          equity distribution, so a look-through would just repeat it. */}
+      {activeTab === 'etf' && (
+        <EquityLookthrough
+          lookthrough={portfolio?.etf_equity_lookthrough}
+          totalInvestment={portfolio?.total_investment ?? 0}
+        />
+      )}
     </div>
   );
 

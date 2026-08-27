@@ -2301,11 +2301,38 @@ export interface RoboBreakdowns {
   risk: Record<string, number>;
 }
 
+/** One company reached THROUGH the funds in the plan. */
+export interface RoboLookthroughPosition {
+  symbol: string;
+  name: string;
+  allocationPercent: number;
+  amount: number;
+  viaFunds: { ticker: string; contributionPct: number; direct: boolean }[];
+}
+
+/** Look-through from the fund plan to the companies it actually owns.
+ *
+ * resolved + uncovered + non_equity always sums to the plan. `uncovered_pct`
+ * is the share of equity-fund weight whose constituents aren't stored (a
+ * fund's holdings list is truncated), and is reported rather than spread
+ * over the visible rows — so every position is a floor, never inflated. */
+export interface RoboEquityLookthrough {
+  positions: RoboLookthroughPosition[];
+  position_count: number;
+  resolved_pct: number;
+  uncovered_pct: number;
+  non_equity_pct: number;
+  top_concentration_pct: number;
+  coverage: Record<string, number>;
+}
+
 export interface RoboPortfolio {
   etf_portfolio: RoboHolding[];
   stock_portfolio: RoboHolding[];
   etf_breakdowns: RoboBreakdowns;
   stock_breakdowns: RoboBreakdowns;
+  /** Absent on portfolios generated before the look-through shipped. */
+  etf_equity_lookthrough?: RoboEquityLookthrough;
   total_investment: number;
   generated_at: string;
 }

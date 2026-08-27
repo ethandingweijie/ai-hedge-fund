@@ -8,7 +8,10 @@ For every curated ticker, fetches:
   - expenseRatio, assetsUnderManagement, name         (/stable/etf/info)
   - sectorWeights: {sector: pct}                      (/stable/etf/sector-weightings)
   - regionWeights: {region: pct}                      (/stable/etf/country-weightings, aggregated)
-  - topHoldings: [{asset, name, weightPercentage}]    (/stable/etf/holdings, top 5)
+  - holdings: [{asset, name, weightPercentage}]        (/stable/etf/holdings, top 50)
+  - topHoldings: the first 5 of the above, for display
+  - holdingsCount / holdingsCoveredPct: how many constituents the fund has
+    and how much of its weight the kept rows explain
 
 All four ETF-specific endpoints are single-symbol only (no confirmed batch
 support) — fetched concurrently via a small ThreadPoolExecutor. The whole
@@ -37,7 +40,7 @@ from app.backend.data.etf_universe import ETF_UNIVERSE, all_tickers, bucket_for
 logger = logging.getLogger(__name__)
 
 _STABLE = "https://financialmodelingprep.com/stable"
-_CACHE_KEY = "etf_universe_v1"
+_CACHE_KEY = "etf_universe_v2"   # v2: full look-through holdings + coverage
 _TTL_HOURS = 24
 
 # FMP country name -> our 4-way macro-region taxonomy: US / Europe /
@@ -296,30 +299,65 @@ def _fetch_region_weightings(ticker: str, key: str) -> dict[str, float]:
         return {}
 
 
-def _fetch_top_holdings(ticker: str, key: str, top_n: int = 5) -> list[dict]:
+# How many holdings to keep per fund for the look-through. Full lists run to
+# thousands (VTI returns 3,524), which would bloat the cached universe for no
+# real gain — weights tail off fast. Truncating is only honest if the caller
+# is told how much of the fund is actually covered, hence holdingsCoveredPct.
+_LOOKTHROUGH_DEPTH = 50
+
+
+def _fetch_holdings(ticker: str, key: str, depth: int = _LOOKTHROUGH_DEPTH) -> dict:
+    """Fund constituents by weight, plus honest coverage metadata.
+
+    /etf/holdings is an Ultimate-tier endpoint. It now returns complete
+    constituent lists with weights summing to ~100 (verified 2026-08-27:
+    SPY 505 rows, QQQ 107, VTI 3,524, KWEB 45 — the last including 0700.HK
+    and 9988.HK, so an HK name reached through an ETF resolves to the same
+    ticker the rest of this app uses).
+
+    Returns:
+        {holdings, topHoldings, holdingsCount, holdingsCoveredPct}
+      holdings          — up to `depth` constituents, heaviest first
+      topHoldings       — the first 5, kept for the existing display
+      holdingsCount     — how many the fund actually reports
+      holdingsCoveredPct— total weight of the kept rows, so a look-through
+                          can state what share of the fund it explains
+    """
+    empty = {"holdings": [], "topHoldings": [], "holdingsCount": 0,
+             "holdingsCoveredPct": 0.0}
     try:
-        r = requests.get(f"{_STABLE}/etf/holdings", params={"symbol": ticker, "apikey": key}, timeout=10)
+        r = requests.get(f"{_STABLE}/etf/holdings",
+                         params={"symbol": ticker, "apikey": key}, timeout=20)
         if not r.ok:
-            return []
+            return empty
         data = r.json()
         if not isinstance(data, list):
-            return []
+            return empty
         rows = sorted(
-            (row for row in data if isinstance(row.get("weightPercentage"), (int, float))),
+            (row for row in data
+             if isinstance(row.get("weightPercentage"), (int, float))
+             and row.get("weightPercentage") > 0
+             and row.get("asset")),
             key=lambda row: row["weightPercentage"],
             reverse=True,
         )
-        return [
+        kept = [
             {
                 "asset": row.get("asset"),
                 "name": row.get("name"),
-                "weightPercentage": row.get("weightPercentage"),
+                "weightPercentage": round(float(row["weightPercentage"]), 4),
             }
-            for row in rows[:top_n]
+            for row in rows[:depth]
         ]
+        return {
+            "holdings": kept,
+            "topHoldings": kept[:5],
+            "holdingsCount": len(rows),
+            "holdingsCoveredPct": round(sum(h["weightPercentage"] for h in kept), 2),
+        }
     except Exception as exc:
         logger.warning("etf/holdings failed for %s: %s", ticker, exc)
-        return []
+        return empty
 
 
 def _fetch_one_ticker_metadata(ticker: str, key: str) -> dict:
@@ -333,7 +371,7 @@ def _fetch_one_ticker_metadata(ticker: str, key: str) -> dict:
         "assetsUnderManagement": info.get("assetsUnderManagement"),
         "sectorWeights": _fetch_sector_weightings(ticker, key),
         "regionWeights": _fetch_region_weightings(ticker, key),
-        "topHoldings": _fetch_top_holdings(ticker, key),
+        **_fetch_holdings(ticker, key),
     }
 
 
@@ -352,7 +390,8 @@ def get_etf_universe(force_refresh: bool = False) -> list[dict]:
         return [
             {"ticker": e["ticker"], "bucket": e["bucket"], "price": None,
              "name": None, "expenseRatio": None, "assetsUnderManagement": None,
-             "sectorWeights": {}, "regionWeights": {}, "topHoldings": []}
+             "sectorWeights": {}, "regionWeights": {}, "topHoldings": [],
+             "holdings": [], "holdingsCount": 0, "holdingsCoveredPct": 0.0}
             for e in ETF_UNIVERSE
         ]
 
@@ -372,6 +411,7 @@ def get_etf_universe(force_refresh: bool = False) -> list[dict]:
                     "ticker": ticker, "bucket": bucket_for(ticker), "price": None,
                     "name": None, "expenseRatio": None, "assetsUnderManagement": None,
                     "sectorWeights": {}, "regionWeights": {}, "topHoldings": [],
+                    "holdings": [], "holdingsCount": 0, "holdingsCoveredPct": 0.0,
                 })
 
     # Keep deterministic ordering matching the static universe list.
