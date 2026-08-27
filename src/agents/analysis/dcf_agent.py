@@ -1740,45 +1740,291 @@ def _is_tech_subtype(sector: str, profile_name: str) -> bool:
 # Rationale: TV = (ROE_terminal - CoE) × BVPS_terminal / CoE, discounted back.
 _BANK_PROFILE_CALIBRATION: dict[str, dict] = {
     # US Global Systemically Important Banks (GSIBs)
-    "Money Center Bank":    {"target_roe": 0.12, "coe": 0.090, "p_tbv": 1.4, "pe": 12.0, "fade_years": 5,
-                              "target_cet1": 0.12, "rwa_to_assets": 0.55, "terminal_spread": 0.010},
+    # CoE 10.0% and g 3.0% per the Phillip Securities GGM table for JPM
+    # (21 Oct 2025), which prices US GSIBs on the same Gordon Growth basis
+    # as the SG names. Was 9.0%.
+    "Money Center Bank":    {"target_roe": 0.12, "coe": 0.100, "p_tbv": 1.4, "pe": 12.0, "fade_years": 5,
+                              "target_cet1": 0.12, "rwa_to_assets": 0.55, "terminal_spread": 0.010, "ggm_g": 0.03},
     # European Money Center — structural regulatory drag, higher CoE
     "Money Center Bank (EU)": {"target_roe": 0.10, "coe": 0.110, "p_tbv": 0.8, "pe": 8.0,  "fade_years": 5,
-                              "target_cet1": 0.14, "rwa_to_assets": 0.60, "terminal_spread": 0.005},
+                              "target_cet1": 0.14, "rwa_to_assets": 0.60, "terminal_spread": 0.005, "ggm_g": 0.02},
     # Regional banks — healthy (USB, TFC, PNC)
     "Regional Bank":        {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.70, "terminal_spread": 0.0},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.70, "terminal_spread": 0.0, "ggm_g": 0.025},
     # Super-regionals (TD, BMO, RBC)
     "Super-Regional Bank":  {"target_roe": 0.11, "coe": 0.095, "p_tbv": 1.3, "pe": 11.0, "fade_years": 5,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.65, "terminal_spread": 0.010},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.65, "terminal_spread": 0.010, "ggm_g": 0.025},
     # EM banks — China SOEs (ICBC, CCB, BOC) — national-service risk
     "EM Bank":              {"target_roe": 0.14, "coe": 0.130, "p_tbv": 1.2, "pe": 9.0,  "fade_years": 5,
-                              "target_cet1": 0.105, "rwa_to_assets": 0.65, "terminal_spread": 0.0},
+                              "target_cet1": 0.105, "rwa_to_assets": 0.65, "terminal_spread": 0.0, "ggm_g": 0.04},
     # EM Bank Premium — India private sector (HDFC, ICICI, Kotak) —
     # credit-to-GDP gap supports sustained 16-18% ROE
     "EM Bank (Premium)":    {"target_roe": 0.16, "coe": 0.130, "p_tbv": 2.0, "pe": 14.0, "fade_years": 7,
-                              "target_cet1": 0.115, "rwa_to_assets": 0.62, "terminal_spread": 0.010},
+                              "target_cet1": 0.115, "rwa_to_assets": 0.62, "terminal_spread": 0.010, "ggm_g": 0.05},
     # Investment banks — cyclical (GS, MS)
     "Investment Bank":      {"target_roe": 0.13, "coe": 0.110, "p_tbv": 1.2, "pe": 10.0, "fade_years": 5,
-                              "target_cet1": 0.13, "rwa_to_assets": 0.40, "terminal_spread": 0.005},
+                              "target_cet1": 0.13, "rwa_to_assets": 0.40, "terminal_spread": 0.005, "ggm_g": 0.03},
     # Mortgage/GSE (FNMA, FMCC) — conservatorship overhang
     "Mortgage/GSE":         {"target_roe": 0.09, "coe": 0.110, "p_tbv": 0.8, "pe": 9.0,  "fade_years": 5,
-                              "target_cet1": 0.08, "rwa_to_assets": 0.50, "terminal_spread": 0.0},
+                              "target_cet1": 0.08, "rwa_to_assets": 0.50, "terminal_spread": 0.0, "ggm_g": 0.02},
     # Neo/Challenger banks — J-curve ROEs, extended fade
     "Neo/Challenger":       {"target_roe": 0.18, "coe": 0.120, "p_tbv": 2.8, "pe": 22.0, "fade_years": 10,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.45, "terminal_spread": 0.0},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.45, "terminal_spread": 0.0, "ggm_g": 0.05},
     # Brokerage (SCHW, IBKR) — fee + NII blended
     "Brokerage":            {"target_roe": 0.16, "coe": 0.100, "p_tbv": 2.8, "pe": 18.0, "fade_years": 5,
-                              "target_cet1": 0.10, "rwa_to_assets": 0.35, "terminal_spread": 0.005},
+                              "target_cet1": 0.10, "rwa_to_assets": 0.35, "terminal_spread": 0.005, "ggm_g": 0.035},
+    # Singapore money-center banks (DBS / OCBC / UOB). Calibrated from
+    # Phillip Securities Research Gordon Growth Model tables — DBS
+    # (4 May 2026) and OCBC (11 May 2026): risk-free 2.5%, equity-risk
+    # premium 6.3%, beta ~1.0-1.1 -> CoE 8.6-9.1%, terminal g 3.0-3.3%.
+    # SG banks sustain structurally higher ROE than US GSIBs (DBS 16.6%,
+    # OCBC 12.8% vs JPM ~12%) on a low-cost CASA deposit base and a
+    # fee-heavy wealth franchise, while carrying a LOWER CoE than US peers
+    # (AAA sovereign, MAS-supervised, SGD funding). Applying the US
+    # "Money Center Bank" row (ROE 12% / CoE 9.0% / P/TBV 1.4x) to DBS
+    # understated justified P/B by ~40% (1.5x vs the 2.51x the GGM
+    # supports). Per-ticker ROE / CoE / g overrides live in
+    # _BANK_GGM_OVERRIDES and take precedence over these defaults.
+    "Money Center Bank (SG)": {"target_roe": 0.145, "coe": 0.088, "p_tbv": 2.0, "pe": 13.0, "fade_years": 7,
+                              "target_cet1": 0.140, "rwa_to_assets": 0.55, "terminal_spread": 0.010,
+                              "ggm_g": 0.031},
     # Default fallback
     "default":              {"target_roe": 0.11, "coe": 0.100, "p_tbv": 1.2, "pe": 11.0, "fade_years": 5,
-                              "target_cet1": 0.11, "rwa_to_assets": 0.60, "terminal_spread": 0.0},
+                              "target_cet1": 0.11, "rwa_to_assets": 0.60, "terminal_spread": 0.0, "ggm_g": 0.03},
 }
 
 
 def _bank_profile_calibration(profile_name: str) -> dict:
     """Lookup bank calibration with default fallback."""
     return _BANK_PROFILE_CALIBRATION.get(profile_name, _BANK_PROFILE_CALIBRATION["default"])
+
+
+# ── Per-ticker GGM assumptions extracted from analyst research ───────────
+#
+# Source-of-truth assumptions lifted from published broker Gordon Growth
+# Model tables. These override the profile-level defaults because the
+# ROE / CoE / g triplet is bank-specific and is the single largest driver
+# of a bank's justified P/B — DBS at 2.51x and OCBC at 1.60x differ almost
+# entirely through this triplet, not through anything the profile captures.
+#
+# Each row records `as_of` and `source` so the audit trail carries the
+# vintage. Live deep-research extraction (_bank_*_research) still wins over
+# these static rows, which in turn win over the profile defaults.
+_BANK_GGM_OVERRIDES: dict[str, dict] = {
+    # Phillip Securities Research, "DBS Group Holdings Ltd — Wealth flows
+    # and fees drive growth", 4 May 2026 (SG2026_0093). GGM table:
+    # Rf 2.5% + ERP 6.3% x beta 1.0 = CoE 8.6%; ROE 16.6%; g 3.3%
+    # -> target P/B 2.51x on BVPS S$24.29 -> TP S$61.00.
+    "D05.SI": {"roe": 0.166, "coe": 0.086, "ggm_g": 0.033, "rf": 0.025, "erp": 0.063, "beta": 1.0,
+               "as_of": "2026-05-04", "source": "Phillip Securities Research SG2026_0093"},
+    # Phillip Securities Research, "Oversea-Chinese Banking Corp Ltd —
+    # Non-II growth drives strong start to FY26", 11 May 2026 (SG2026_0099).
+    # GGM table: Rf 2.5% + ERP 6.3% x beta 1.1 = CoE 9.1%; ROE 12.8%;
+    # g 3.0% -> target P/B 1.60x on BVPS S$13.76 -> TP S$22.00.
+    "O39.SI": {"roe": 0.128, "coe": 0.091, "ggm_g": 0.030, "rf": 0.025, "erp": 0.063, "beta": 1.1,
+               "as_of": "2026-05-11", "source": "Phillip Securities Research SG2026_0099"},
+    # Phillip Securities Research, JPMorgan Chase & Co, 21 Oct 2025.
+    # GGM table: CoE 10.0%, g 3.0%, ROE (tangible common) 19.5%
+    # -> target P/B 2.37x -> TP US$305.
+    "JPM":     {"roe": 0.195, "coe": 0.100, "ggm_g": 0.030,
+                "as_of": "2025-10-21", "source": "Phillip Securities Research (JPM)"},
+    # UOB (U11.SI) — no report in the reviewed set. Deliberately left to the
+    # SG profile defaults rather than guessed; add a row when a GGM table
+    # for UOB is sourced.
+}
+
+
+# Widest defensible gap between an extracted cost of equity and the
+# profile's own. The profile CoE encodes a geography's risk-free rate plus
+# equity-risk premium at roughly beta 1.0; 250 bps of slack covers a genuine
+# beta spread of about 0.6-1.4 on a 6% ERP, and rejects the sector-average
+# or WACC figures an extractor picks up when it cannot find a real one.
+_BANK_COE_PLAUSIBLE_BAND = 0.025
+
+
+def _coe_is_plausible(coe: float, cfg: dict) -> bool:
+    """True when an extracted cost of equity sits near the profile's own."""
+    if not coe or not (0.04 < coe < 0.25):
+        return False
+    base = cfg.get("coe")
+    if not base:
+        return True
+    return abs(coe - base) <= _BANK_COE_PLAUSIBLE_BAND
+
+
+def _bank_ggm_assumptions(ticker: str, profile_name: str,
+                          most_recent: dict) -> dict:
+    """Resolve the (ROE, CoE, g) triplet driving the Gordon Growth P/B.
+
+    Precedence, highest first:
+      1. live deep-research extraction (_bank_target_roe_research)
+      2. _BANK_GGM_OVERRIDES — a published broker GGM table for this ticker
+      3. the profile calibration row
+
+    Returns the triplet plus a `provenance` list naming which source won
+    each field, so the audit flag can show its work.
+    """
+    cfg = _bank_profile_calibration(profile_name)
+    ovr = _BANK_GGM_OVERRIDES.get((ticker or "").upper(), {})
+    prov: list[str] = []
+
+    research_roe = _safe(most_recent.get("_bank_target_roe_research"))
+    if research_roe and 0.0 < research_roe < 0.60:
+        roe, src = research_roe, "research"
+    elif ovr.get("roe"):
+        roe, src = ovr["roe"], "broker"
+    else:
+        # No published ROE for this name. The GGM wants a SUSTAINABLE
+        # through-cycle ROE, which is a different quantity from the
+        # profile's `target_roe` — that one is the conservative endpoint
+        # the Residual Income model FADES to. Using the fade target alone
+        # systematically under-values every high-return bank (JPM earns
+        # ~19.5% against a 12% fade target). Take the midpoint of realised
+        # and target ROE: mean-reversion, without pretending today's return
+        # persists forever.
+        _realised = None
+        _ni, _eq = _safe(most_recent.get("net_income")), _safe(most_recent.get("total_equity"))
+        if _ni and _eq and _eq > 0:
+            _realised = _ni / _eq
+        if _realised and 0.0 < _realised < 0.60:
+            roe, src = (cfg["target_roe"] + _realised) / 2.0, "realised+target midpoint"
+        else:
+            roe, src = cfg["target_roe"], "profile"
+    prov.append(f"ROE {roe:.1%} ({src})")
+
+    # Cost of equity and terminal growth rank DIFFERENTLY from ROE, and the
+    # distinction is what a company can actually tell you. ROE is disclosed
+    # and guided by management, so a live extraction is authoritative. CoE
+    # and g are not company facts at all — no issuer publishes its own cost
+    # of equity — so an "extracted" CoE is always second-hand analyst
+    # opinion scraped out of prose, competing against a hand-verified
+    # broker valuation table that states the same quantity deliberately.
+    # The table wins.
+    #
+    # This ordering was inverted on the D05.SI run of 2026-08-27: research
+    # returned CoE 10.5%, which displaced Phillip's 8.6% and cut the target
+    # P/B from 2.51x to 1.62x (S$61 -> S$39). A 10.5% cost of equity implies
+    # a beta near 1.27 on Singapore's 2.5% risk-free and 6.3% ERP, which no
+    # SG bank desk carries. The run also mixed three sources into one
+    # multiple — research ROE, research CoE, broker g — and the GGM triplet
+    # is only coherent when its discount-rate half comes from one framework.
+    research_coe = _safe(most_recent.get("_bank_coe_research"))
+    if ovr.get("coe"):
+        coe, src = ovr["coe"], "broker"
+        if research_coe and abs(research_coe - coe) > 0.005:
+            prov.append(f"[research CoE {research_coe:.1%} not used — broker table]")
+    elif research_coe and _coe_is_plausible(research_coe, cfg):
+        coe, src = research_coe, "research"
+    else:
+        coe, src = cfg["coe"], "profile"
+        if research_coe:
+            prov.append(f"[research CoE {research_coe:.1%} rejected — implausible]")
+    prov.append(f"CoE {coe:.1%} ({src})")
+
+    research_g = _safe(most_recent.get("_bank_ggm_g_research"))
+    if ovr.get("ggm_g") is not None:
+        g, src = ovr["ggm_g"], "broker"
+    elif research_g is not None and 0.0 <= research_g < 0.07:
+        g, src = research_g, "research"
+    else:
+        g, src = cfg.get("ggm_g", 0.030), "profile"
+    prov.append(f"g {g:.1%} ({src})")
+
+    if ovr.get("source"):
+        prov.append(f"src: {ovr['source']} ({ovr.get('as_of', 'n/a')})")
+
+    return {"roe": roe, "coe": coe, "g": g, "provenance": prov,
+            "source_note": ovr.get("source")}
+
+
+def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
+                    shares: float):
+    """Gordon Growth justified P/B valuation for a bank.
+
+        target P/B   = (ROE - g) / (CoE - g)
+        value/share  = target P/B x book value per share
+
+    This is the method Asian bank desks actually publish — both the DBS and
+    OCBC reports price entirely off it — and it was absent from the engine.
+    The bank method set ran Residual Income + P/TBV + P/E + Excess Capital,
+    none of which lets a bank's own sustainable ROE set its book multiple:
+    P/TBV applied a fixed profile constant, so a 16.6%-ROE bank and a
+    12%-ROE bank got the same 1.4x.
+
+    Returns (value_per_share, target_pb, assumptions) or None when the
+    inputs can't support it — notably when CoE <= g, where the formula
+    diverges to infinity.
+    """
+    a = _bank_ggm_assumptions(ticker, profile_name, most_recent)
+    roe, coe, g = a["roe"], a["coe"], a["g"]
+    if not (coe and g is not None and (coe - g) > 0.005):
+        return None          # denominator too small — formula unstable
+    if roe is None or roe <= g:
+        return None          # no franchise value above the cost of capital
+    bvps = _safe(most_recent.get("book_value_per_share"))
+    if (bvps is None or bvps <= 0) and shares and shares > 0:
+        eq = _safe(most_recent.get("total_equity"))
+        bvps = (eq / shares) if eq else None
+    if bvps is None or bvps <= 0:
+        return None
+    target_pb = (roe - g) / (coe - g)
+    # Guard against an implausible multiple from a bad ROE extraction.
+    target_pb = max(0.3, min(target_pb, 4.0))
+    return round(bvps * target_pb, 4), round(target_pb, 4), a
+
+
+# Reporting-currency symbols for audit flags. Anything not listed falls back
+# to the ISO code plus a space ("SEK 12.30"), which is unambiguous.
+_CCY_SYMBOLS: dict[str, str] = {
+    "USD": "$",   "SGD": "S$",  "HKD": "HK$", "CNY": "RMB", "CNH": "RMB",
+    "EUR": "€",   "GBP": "£",   "JPY": "¥",   "AUD": "A$",  "CAD": "C$",
+    "INR": "₹",   "KRW": "₩",   "TWD": "NT$", "CHF": "CHF ", "MYR": "RM",
+}
+
+
+def _bank_total_income(row: dict) -> Optional[float]:
+    """Street "Total Income" for a bank = NII + non-interest income.
+
+    Data providers report a bank's `revenue` as GROSS interest income plus
+    non-interest income. The street — and every analyst consensus revenue
+    estimate — uses Total Income, which is NET of interest expense. For DBS
+    FY2025 that is S$37.9bn (gross) vs S$22.9bn (total income): a 1.65x gap.
+
+    Feeding the gross figure in wherever "revenue" is expected corrupts
+    three things at once:
+      * analyst growth bands (consensus total income ÷ gross base implied
+        ~-40% growth, which pinned bear/base/bull to the -30% clamp floor),
+      * the efficiency ratio / cost-income ratio (opex ÷ gross understated
+        DBS's CIR as 27.3% against a reported 38.7%),
+      * Year-1 revenue and EPS, which inherit the bogus growth rate.
+
+    Validated against Phillip Securities' reported Total Income for DBS:
+        FY2023  derived 20,134  vs reported 20,180  (-0.2%)
+        FY2024  derived 22,217  vs reported 22,297  (-0.4%)
+
+    Returns None when the row can't support the derivation, and returns
+    `revenue` unchanged when revenue is already a net figure (i.e. it does
+    not exceed interest income), so US filers that already report net
+    revenue are passed through untouched.
+    """
+    revenue = row.get("revenue")
+    if revenue is None or revenue <= 0:
+        return None
+    int_inc = row.get("interest_income")
+    int_exp = row.get("interest_expense")
+    if int_exp is None:
+        return revenue
+    # Gross-revenue convention detected only when revenue exceeds interest
+    # income — otherwise `revenue` is already net and subtracting interest
+    # expense a second time would double-count it.
+    if int_inc is not None and revenue <= int_inc:
+        return revenue
+    total_income = revenue - abs(int_exp)
+    # Sanity: total income must stay a plausible share of gross revenue.
+    # Below 25% means the interest-expense line is mis-scaled; fall back.
+    if total_income <= 0 or total_income < revenue * 0.25:
+        return revenue
+    return total_income
 
 
 def _compute_ppop(row: dict) -> Optional[float]:
@@ -1874,16 +2120,33 @@ def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> d
         # that don't cleanly break out interest_income
         nii = revenue - abs(int_exp)
 
-    # NIM — prefer interest_income / assets ratio, fallback to NII / assets
-    nim = None
-    if nii and assets and assets > 0:
-        nim = nii / assets
+    # Total income (NII + non-interest income) — the street's revenue line
+    # for a bank, and the correct denominator for the cost-income ratio.
+    total_income = _bank_total_income(most_recent)
 
-    # Efficiency ratio — operating_expense / (NII + non-interest income)
-    # Proxy: op_exp / revenue since non-interest income rolls into revenue
+    # NIM — NII / interest-EARNING assets. Dividing by TOTAL assets
+    # understates the margin, because cash, goodwill, premises and other
+    # non-earning assets sit in the denominator without generating any
+    # interest. IEA typically runs ~85% of a commercial bank's balance
+    # sheet; DBS FY2025 lands at 1.62% on total assets vs the 1.89% the
+    # bank actually reported, and the gap is entirely this. Prefer a
+    # directly-reported interest-earning-asset figure when present.
+    _IEA_TO_ASSETS = 0.85
+    nim = None
+    iea = _safe(most_recent.get("interest_earning_assets"))
+    if not (iea and iea > 0):
+        iea = (assets * _IEA_TO_ASSETS) if (assets and assets > 0) else None
+    if nii and iea and iea > 0:
+        nim = nii / iea
+
+    # Efficiency ratio (cost-income ratio) — operating_expense / total income.
+    # Must NOT use `revenue`: for banks that is gross interest income plus
+    # non-interest income, so the ratio comes out flattered by roughly the
+    # ratio of gross to net income — DBS printed 27.3% against a reported
+    # cost-income ratio of 38.7%.
     efficiency_ratio = None
-    if op_exp and revenue and revenue > 0:
-        efficiency_ratio = abs(op_exp) / revenue
+    if op_exp and total_income and total_income > 0:
+        efficiency_ratio = abs(op_exp) / total_income
 
     # Credit cost — provisions / total_assets proxy (total_loans unavailable)
     credit_cost_ratio = None
@@ -1940,6 +2203,7 @@ def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> d
 
     return {
         "nii":                 nii,
+        "total_income":        total_income,
         "nim":                 nim,
         "efficiency_ratio":    efficiency_ratio,
         "credit_cost_ratio":   credit_cost_ratio,
@@ -3079,8 +3343,27 @@ def _compute_method_value(
         tbv_ps = bank_m.get("tbv_per_share")
         if tbv_ps is None or tbv_ps <= 0 or shares <= 0:
             return None
-        mult = cfg["p_tbv"] * sm * growth_premium
+        # NOTE: `growth_premium` is deliberately NOT applied here. It is a
+        # revenue-growth-derived multiplier, and a bank's book multiple is
+        # set by ROE vs CoE, not by top-line growth. Worse, the premium is
+        # computed off a revenue base that for banks is gross interest
+        # income (see _bank_total_income), so a bank whose consensus total
+        # income was measured against that inflated base collapsed to the
+        # 0.60 floor — D05.SI priced P/TBV at 1.4 x 0.60 = 0.84x tangible
+        # book, i.e. S$18.53 against a S$22.06 TBV/share, valuing DBS below
+        # liquidation. Scenario dispersion still flows through `sm`.
+        mult = cfg["p_tbv"] * sm
         return tbv_ps * mult
+
+    # ── GGM (P/B) — Gordon Growth justified book multiple ─────────────────
+    # target P/B = (ROE - g) / (CoE - g), applied to book value per share.
+    # The primary published method for Asian bank coverage.
+    if method_name in {"GGM (P/B)", "GGM", "Gordon Growth"}:
+        ggm = _compute_ggm_pb(ticker, profile_name, most_recent, shares)
+        if ggm is None:
+            return None
+        value_ps, _target_pb, _a = ggm
+        return value_ps * sm
 
     # ── Excess Capital — CET1 overlay (bank-specific) ─────────────────────
     # Quantifies the capital-adequacy delta. Positive when CET1 > target
@@ -3968,8 +4251,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _delta_pct = (_norm_ni - _cur_ni) / _cur_ni
             if abs(_delta_pct) > 0.15:
                 ticker_forward_flags.append(
-                    f"Normalized NI: TTM ${_cur_ni/1e9:.2f}B → 5y-cycle "
-                    f"${_norm_ni/1e9:.2f}B ({_delta_pct:+.0%}) — "
+                    f"Normalized NI: TTM {_CCY_SYMBOLS.get((reported_currency or 'USD').upper(), (reported_currency or 'USD').upper() + ' ')}{_cur_ni/1e9:.2f}B → 5y-cycle "
+                    f"{_CCY_SYMBOLS.get((reported_currency or 'USD').upper(), (reported_currency or 'USD').upper() + ' ')}{_norm_ni/1e9:.2f}B ({_delta_pct:+.0%}) — "
                     f"P/E (norm) will use normalized figure"
                 )
 
@@ -4258,10 +4541,59 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # revenue low/avg/high when ≥3 analysts cover the name. Replaces the
         # symmetric ±45% multiplier used when dispersion is unavailable.
         # Per-ticker value — does not vary across the three scenarios.
+        # Banks: consensus "revenue" estimates are published on TOTAL INCOME
+        # (NII + non-interest income), while `revenue_base` for a bank is
+        # gross interest income plus non-II. Comparing the two implies a
+        # fictitious collapse — DBS consensus S$23.6bn against a S$37.9bn
+        # gross base reads as -38% growth, which pinned bear, base AND bull
+        # to the -30% clamp floor (the giveaway signature of this bug is
+        # three identical bands sitting exactly on the floor). The growth
+        # RATE is scale-free, so deriving it on the total-income base and
+        # applying it to the gross base downstream is correct.
+        # NOTE: `profile_name` is not bound yet at this point in the
+        # function (it is resolved further down), so the bank test is built
+        # from `sector` plus the ticker lookup, with a structural fallback
+        # for tickers that get classified in-situ. is_bank_sector() alone is
+        # too broad — it also matches insurers and asset managers, whose
+        # income statements do not carry the gross-interest-income
+        # convention this correction targets.
+        _bands_base = revenue_base
+        _lookup_profile_for_bands = ""
+        try:
+            from src.data.sector_profiles import get_wacc_profile_for_ticker as _gwp
+            _lookup_profile_for_bands = _gwp(ticker)[1] or ""
+        except Exception:
+            _lookup_profile_for_bands = ""
+        # Structural signature of a bank P&L reported gross: interest income
+        # is a component of revenue, and interest expense is a material
+        # share of it. An insurer or asset manager fails this test.
+        _mr_rev = _safe(most_recent.get("revenue")) or 0.0
+        _mr_ii = _safe(most_recent.get("interest_income"))
+        _mr_ie = _safe(most_recent.get("interest_expense"))
+        _looks_like_gross_bank_pl = bool(
+            _mr_rev > 0 and _mr_ii and _mr_ie
+            and _mr_rev > _mr_ii
+            and abs(_mr_ie) > _mr_rev * 0.10
+        )
+        _is_bank_for_bands = is_bank_sector(sector) and (
+            "Bank" in _lookup_profile_for_bands
+            or _lookup_profile_for_bands in _BANK_PROFILE_CALIBRATION
+            or _looks_like_gross_bank_pl
+        )
+        if _is_bank_for_bands:
+            _ti = _bank_total_income(most_recent)
+            if _ti and _ti > 0:
+                _bands_base = _ti
         _analyst_bands = _analyst_growth_bands(
-            estimates, revenue_base, fx_rate=fx_rate
+            estimates, _bands_base, fx_rate=fx_rate
         )
         if _analyst_bands is not None:
+            if _bands_base != revenue_base:
+                ticker_forward_flags.append(
+                    f"Bank growth base: consensus measured against total income "
+                    f"{_bands_base / 1e9:.2f}B (NII + non-II), not gross revenue "
+                    f"{revenue_base / 1e9:.2f}B"
+                )
             ticker_forward_flags.append(
                 f"Analyst dispersion ({_analyst_bands['analyst_count']} analysts): "
                 f"bear {_analyst_bands['bear']:+.1%} / "
@@ -4584,16 +4916,34 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 most_recent["_bank_cet1_research"] = _bm_override["cet1_ratio"]
             if _bm_override.get("management_target_roe"):
                 most_recent["_bank_target_roe_research"] = _bm_override["management_target_roe"]
+            # GGM assumptions lifted straight from the research note's
+            # valuation table, when the extractor found them.
+            if _bm_override.get("cost_of_equity"):
+                most_recent["_bank_coe_research"] = _bm_override["cost_of_equity"]
+            if _bm_override.get("terminal_growth_rate") is not None:
+                most_recent["_bank_ggm_g_research"] = _bm_override["terminal_growth_rate"]
+            if _bm_override.get("target_price_to_book"):
+                most_recent["_bank_target_pb_research"] = _bm_override["target_price_to_book"]
 
             def _fmt_pct(v):
                 return f"{v:.2%}" if v is not None else "n/a"
+
+            # Use the actual reporting currency in the flags. Hard-coding "$"
+            # against SGD/HKD figures leaked into the LLM narrative and into
+            # the value-trap agent, which raised "currency mislabeling risk"
+            # as a genuine red flag on D05.SI and fed it into a SELL.
+            _ccy_sym = _CCY_SYMBOLS.get(
+                (reported_currency or "USD").upper(),
+                f"{(reported_currency or 'USD').upper()} ",
+            )
 
             _bank_parts = [
                 f"ROE {_fmt_pct(_bank_m.get('roe'))}",
                 f"NIM {_fmt_pct(_bank_m.get('nim'))}",
                 f"eff {_fmt_pct(_bank_m.get('efficiency_ratio'))}",
                 f"credit_cost {_fmt_pct(_bank_m.get('credit_cost_ratio'))}",
-                f"TBV/sh ${_bank_m.get('tbv_per_share'):.2f}" if _bank_m.get('tbv_per_share') else "TBV/sh n/a",
+                (f"TBV/sh {_ccy_sym}{_bank_m.get('tbv_per_share'):.2f}"
+                 if _bank_m.get('tbv_per_share') else "TBV/sh n/a"),
                 f"CET1 implied {_fmt_pct(_bank_m.get('cet1_implied'))}",
             ]
             ticker_forward_flags.append(
@@ -4601,6 +4951,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"CoE {_bank_cfg['coe']:.1%} / fade {_bank_cfg['fade_years']}y / "
                 f"target CET1 {_bank_cfg['target_cet1']:.1%}): " + " | ".join(_bank_parts)
             )
+
+            # GGM audit line — the ROE / CoE / g triplet actually used, with
+            # the source of each field, plus the justified P/B it implies.
+            _ggm_dbg = _compute_ggm_pb(ticker, profile_name, most_recent, shares)
+            if _ggm_dbg is not None:
+                _gv, _gpb, _ga = _ggm_dbg
+                ticker_forward_flags.append(
+                    f"GGM (P/B): target P/B {_gpb:.2f}x → {_ccy_sym}{_gv:,.2f}/sh "
+                    f"[{', '.join(_ga['provenance'])}]"
+                )
 
             if _bm_override:
                 _or_parts = []
@@ -4929,6 +5289,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _composite_mult, _composite_bridge = _composite_adjustment(
                     profile_name, sector, _ticker_metrics
                 )
+                # Banks: clamp the quality/risk composite to a narrow band.
+                # The composite scores a bank on ROE, CET1, NPL and cost-
+                # income — but those are the very inputs the GGM and the
+                # 2-stage Residual Income model already consume to set the
+                # book multiple. Multiplying the output by a quality tilt
+                # derived from the same evidence double-counts it. D05.SI
+                # earned a 1.39x composite off a 15.9% ROE and 16.9% CET1,
+                # lifting blended IV from S$29.82 to S$41.44 on top of a
+                # ROE-driven model. Kept as a small tilt rather than
+                # removed, so genuinely stressed banks still get marked
+                # down for factors the ROE input doesn't capture.
+                _is_bank_for_composite = (
+                    is_bank_sector(sector)
+                    or "Bank" in (profile_name or "")
+                    or profile_name in _BANK_PROFILE_CALIBRATION
+                )
+                if _is_bank_for_composite and _composite_mult:
+                    _pre_clamp = _composite_mult
+                    _composite_mult = max(0.90, min(1.10, _composite_mult))
+                    if abs(_pre_clamp - _composite_mult) > 1e-9:
+                        _composite_bridge["bank_clamp"] = (
+                            f"{_pre_clamp:.3f}x → {_composite_mult:.3f}x "
+                            f"(bank quality already priced in ROE)"
+                        )
                 progress.update_status(
                     agent_id, ticker,
                     f"V3 composite {_composite_mult:.3f}x "
@@ -5567,6 +5951,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         peer = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
                                          ticker=ticker)
         _12m_targets: dict[str, Optional[float]] = {}
+        _12m_pt_method_label = "forward multiple (profile-specific)"
         # Bank/GSE/financial profiles: EV-based multiples are meaningless because
         # massive balance-sheet liabilities make (EV - net_debt) negative.
         # Use P/E directly for any bank, GSE, or insurance sub-profile.
@@ -5671,9 +6056,28 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _pt is not None:
                     _pt = round(max(_pt, 0.0), 2)
             elif _use_pe_only:
-                # Bank/GSE forward multiple: P/E only — EV approaches don't apply
-                if _yr1_eps and _yr1_eps > 0:
-                    _pt = _yr1_eps * peer.get("pe", 12.0) * _smult * _adr_h * _gp_pt
+                # ── Bank / financial 12m PT ──────────────────────────────
+                # Primary: Gordon Growth target P/B x book value per share.
+                # This is how bank price targets are actually published —
+                # both the DBS and OCBC reports set TP = target P/B x FY26e
+                # BVPS — and it keeps the PT anchored to the same ROE / CoE
+                # / g triplet as the GGM valuation method.
+                #
+                # NOTE: `_gp_pt` is deliberately NOT applied on the bank
+                # path. It scales the multiple by revenue growth against a
+                # sector average, and a bank's book multiple is a function
+                # of ROE vs CoE, not top-line growth. Banks routinely grow
+                # total income at low-single digits while compounding book
+                # — DBS's -2.3% consensus total income against a 5% sector
+                # average drove `_gp_pt` to its 0.60 floor, cutting the
+                # target P/E from 11x to 6.6x. Combined with a Year-1 EPS
+                # already depressed by the same bogus growth rate, that is
+                # what produced a S$18.19 target on a S$75.65 share.
+                _ggm_pt = _compute_ggm_pb(ticker, profile_name, most_recent, shares)
+                if _ggm_pt is not None:
+                    _pt = _ggm_pt[0] * _smult * _adr_h
+                elif _yr1_eps and _yr1_eps > 0:
+                    _pt = _yr1_eps * peer.get("pe", 12.0) * _smult * _adr_h
             else:
                 # Standard non-financial waterfall: EV/EBITDA → EV/Revenue → P/E
                 # EBITDA margin gate: only use EV/EBITDA when margin > 10%.
@@ -5692,6 +6096,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 elif _yr1_eps and _yr1_eps > 0:
                     _pt = _yr1_eps * peer.get("pe", 20.0) * _smult * _adr_h * _gp_pt
             _12m_targets[scen_name] = round(_pt, 2) if _pt else None
+            if scen_name == "base":
+                if _is_reit and _reit_m and _reit_mults:
+                    _12m_pt_method_label = "P/FFO + P/AFFO blend (REIT sub-type multiples)"
+                elif _use_pe_only:
+                    _12m_pt_method_label = (
+                        "GGM target P/B x book value per share"
+                        if _compute_ggm_pb(ticker, profile_name, most_recent, shares)
+                        else "forward P/E x Year-1 EPS"
+                    )
+                else:
+                    _12m_pt_method_label = "EV/EBITDA or EV/Revenue forward multiple"
 
         # ── Convergence Velocity cap (Tier 2 reality-tightening) ─────────────
         # The 12m PT engine is forward-multiple-driven, decoupled from IV. On
@@ -5960,8 +6375,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # reflects short-lived cycle peaks not sustainable long-term.
             _bb_fair_ptbv = None
             _bb_fair_value = None
+            _bb_ggm_a: dict = {}
             if _bb_roe is not None and _bb_coe > 0:
-                _bb_fair_ptbv = max(0.3, min(3.0, 1.0 + (_bb_roe - _bb_coe) / _bb_coe))
+                # Full Gordon Growth: P/B = (ROE - g) / (CoE - g). The
+                # previous form, 1 + (ROE - CoE) / CoE, is the SAME formula
+                # with g pinned to zero, which systematically understates a
+                # bank with any terminal growth at all — DBS came out at
+                # 1.86x against the 2.51x its own 3.3% g supports, i.e. a
+                # 26% haircut to fair value purely from the missing term.
+                _bb_ggm_a = _bank_ggm_assumptions(ticker, profile_name, most_recent)
+                _bb_ggm_g = _bb_ggm_a.get("g") or 0.0
+                if (_bb_coe - _bb_ggm_g) > 0.005 and _bb_roe > _bb_ggm_g:
+                    _bb_fair_ptbv = max(0.3, min(4.0,
+                                        (_bb_roe - _bb_ggm_g) / (_bb_coe - _bb_ggm_g)))
+                else:
+                    # Degenerate inputs — fall back to the zero-growth form
+                    # rather than emitting a diverging multiple.
+                    _bb_fair_ptbv = max(0.3, min(3.0, 1.0 + (_bb_roe - _bb_coe) / _bb_coe))
                 if _bb_tbv_ps and _bb_tbv_ps > 0:
                     _bb_fair_value = round(_bb_tbv_ps * _bb_fair_ptbv, 2)
 
@@ -6071,9 +6501,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "bvps":                  _bb_bvps,
                 "total_equity":          _bb_equity,
                 "total_assets":          _bb_assets,
-                # P/TBV Fair Value anchor
+                # P/TBV Fair Value anchor (Gordon Growth)
                 "fair_p_tbv":            round(_bb_fair_ptbv, 4) if _bb_fair_ptbv else None,
                 "fair_value_per_share":  _bb_fair_value,
+                # GGM inputs, so the card can state the basis of the multiple
+                # and where each input came from (research / broker / profile).
+                "ggm_terminal_growth":   _bb_ggm_a.get("g"),
+                "ggm_roe":               _bb_ggm_a.get("roe"),
+                "ggm_coe":               _bb_ggm_a.get("coe"),
+                "ggm_provenance":        _bb_ggm_a.get("provenance"),
+                "ggm_source":            _bb_ggm_a.get("source_note"),
                 # Capital adequacy
                 "cet1_ratio":            _bb_cet1,
                 "cet1_buffer_bps":       _bb_cet1_buffer_bps,
@@ -6153,6 +6590,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "pv_tv_base":         _base_pv_tv_per_share,
             # §7 of valuation framework: 12m forward-multiple price targets
             "12m_targets":        _12m_targets,
+            "12m_pt_method":      _12m_pt_method_label,
             # Wall Street consensus 12m PT — for "model vs consensus" sanity
             # display on the frontend. None for HK/SG or when FMP returns no
             # data. Shape: {high, low, consensus, median} or None.

@@ -42,8 +42,46 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "event, a research theme, or a trap/regulatory flag). When a macro-"
     "regime conviction cap is noted in the inputs, cite the regime in one "
     "line.\n"
+    "Currency rule — every monetary figure MUST carry its reporting "
+    "currency (\"S$61.00\", \"US$305\", \"HK$74\"), never a bare "
+    "\"$\" on a non-USD name. Do not describe a currency label as a "
+    "risk; if a figure's currency is ambiguous, omit the figure.\n"
+    "Valuation-basis rule — exactly one theme MUST state the method and "
+    "the inputs behind the price target in the house form: name the "
+    "method, the multiple, and the driver (e.g. \"our GGM assumes a "
+    "2.51x FY26e P/BV on a 16.6% ROE and an 8.6% cost of equity\"). "
+    "Never quote a price target the supplied anchors do not support.\n"
+    "Balance rule — carry at least one genuine negative even on a BUY, "
+    "and at least one genuine positive even on a SELL.\n"
     "Output JSON only."
 )
+
+# Profile addendum for banks. A bank thesis is written off different
+# primitives than an industrial or a software name: the P&L line that
+# matters is total income (net interest income + non-interest income),
+# the multiple is P/B against ROE rather than EV/EBITDA against growth,
+# and the capital-return story (CET1 headroom, payout, buyback) is a
+# first-class part of the thesis rather than a footnote. Mirrors the
+# structure of published Singapore bank coverage.
+_PM_BANK_RATIONALE_ADDENDUM = """
+BANK-SPECIFIC RULES (this name is a bank):
+- Use TOTAL INCOME (net interest income + non-interest income) whenever
+  you refer to the bank's revenue. Never use gross interest income.
+- Value the bank on P/B against ROE - target P/B = (ROE - g) / (CoE - g)
+  - and on P/E. NEVER cite EV/EBITDA, EV/Revenue or free cash flow for a
+  bank: deposits are not debt, and free cash flow is not a meaningful
+  unit of output for a balance-sheet business.
+- Cover, where the supplied inputs support it: NIM and its direction,
+  cost-income ratio, credit cost in bps against the guided range, NPL
+  ratio and coverage, CET1 against target, and the capital-return plan
+  (dividend per share, yield, buyback).
+- Separate the two halves of the earnings engine: rate-driven net
+  interest income versus fee-driven non-interest income (wealth,
+  insurance, treasury). State which is carrying growth, and whether
+  that is sustainable.
+- Where management guidance is supplied, cite it alongside our own
+  estimate so the reader can see the gap.
+"""
 
 
 class PortfolioDecision(BaseModel):
@@ -1011,8 +1049,22 @@ def run_advanced_portfolio_manager(state) -> dict:
         # thesis-density rule — see _PM_RATIONALE_SYSTEM_PROMPT).
         _upside_str = (f"{_upside_iv:+.1f}%"
                        if isinstance(_upside_iv, (int, float)) else "n/a")
+        # Bank names get the profile addendum appended to the house
+        # rules, so the thesis is written in bank primitives rather
+        # than the generic growth/margin frame.
+        _profile_for_prompt = (
+            (state["data"].get("profile_names") or {}).get(ticker)
+            or state["data"].get("profile_name")
+            or ""
+        )
+        _system_prompt = _PM_RATIONALE_SYSTEM_PROMPT
+        if ("Bank" in _profile_for_prompt
+                or _profile_for_prompt in {"Bank / Lending Institution",
+                                           "Mortgage/GSE"}):
+            _system_prompt = _system_prompt + _PM_BANK_RATIONALE_ADDENDUM
+
         template = ChatPromptTemplate.from_messages([
-            ("system", _PM_RATIONALE_SYSTEM_PROMPT),
+            ("system", _system_prompt),
             ("human", (
                 "Ticker: {ticker} | Action: {action} | Size: {size_pct:.1%}\n"
                 "IV-band upside: {upside_iv} | Qualitative conviction: {conviction:.2f} | Trap: {trap}\n"

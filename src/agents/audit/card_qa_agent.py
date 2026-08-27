@@ -97,12 +97,30 @@ def should_reuse_card_qa(
 
 # ── Path-walking helpers ────────────────────────────────────────────────────
 
+def _split_path(path: str, ticker: str) -> list[str]:
+    """Split a dot-notation path template into segments, then substitute.
+
+    The template is split BEFORE `{ticker}` is substituted so that tickers
+    containing a dot stay a single segment. Splitting after substitution
+    turned `data.dcf_range.{ticker}` into
+    `["data", "dcf_range", "D05", "SI"]` for every SGX (`.SI`) and HKEX
+    (`.HK`) ticker, so the lookup failed at the `D05` segment and EVERY
+    ticker-keyed card was reported as missing-mandatory. Cards keyed on
+    non-ticker paths were unaffected, which is why the failure looked
+    selective rather than total.
+    """
+    return [
+        seg.replace("{ticker}", ticker)
+        for seg in (path or "").split(".")
+    ]
+
+
 def _get_path(state: dict, path: str, ticker: str) -> Any:
     """Walk a dot-notation path against state, substituting {ticker}.
 
     Returns None on any missing intermediate segment or non-dict node.
     """
-    parts = path.replace("{ticker}", ticker).split(".")
+    parts = _split_path(path, ticker)
     node: Any = state
     for p in parts:
         if isinstance(node, dict):
@@ -124,7 +142,7 @@ def _set_path(state: dict, path: str, ticker: str, value: Any) -> bool:
     Only handles dict-only paths — array indexing (e.g. `[0]`) is a
     Phase 7 concern when biopharma_pipeline_table adds per-asset paths.
     """
-    parts = path.replace("{ticker}", ticker).split(".")
+    parts = _split_path(path, ticker)
     if not parts:
         return False
     node: Any = state

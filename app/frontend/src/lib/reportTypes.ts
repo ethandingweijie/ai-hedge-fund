@@ -208,6 +208,14 @@ export interface BankBreakdown {
   // P/TBV-based Fair Value (Gordon-growth identity)
   fair_p_tbv?: number | null;
   fair_value_per_share?: number | null;
+  // Gordon Growth inputs behind fair_p_tbv = (ROE − g) / (CoE − g).
+  // ggm_provenance names the source of each input (research / broker /
+  // profile) so the card can show where the assumptions came from.
+  ggm_terminal_growth?: number | null;
+  ggm_roe?: number | null;
+  ggm_coe?: number | null;
+  ggm_provenance?: string[] | null;
+  ggm_source?: string | null;
   // Capital adequacy
   cet1_ratio?: number | null;
   cet1_buffer_bps?: number | null;

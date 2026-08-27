@@ -264,7 +264,18 @@ def run_scenario_agent(state: AgentState) -> AgentState:
             scenario_dict["12m_targets_by_scenario"] = {
                 "bear": _12m_bear, "base": _12m_base, "bull": _12m_bull,
             }
-            scenario_dict["12m_pt_method"] = "EV/EBITDA or EV/Revenue forward multiple"
+            # Label the method actually used. The engine runs a
+            # per-profile waterfall — GGM target P/B for banks, P/FFO +
+            # P/AFFO for REITs, EV/EBITDA -> EV/Revenue -> P/E for
+            # everything else - so a hardcoded "EV/EBITDA or EV/Revenue"
+            # label misdescribed every financial and every REIT. It read
+            # as a genuine methodology error on D05.SI, where EV-based
+            # multiples are meaningless for a deposit-funded balance
+            # sheet.
+            scenario_dict["12m_pt_method"] = (
+                dcf_ticker.get("12m_pt_method")
+                or "forward multiple (profile-specific)"
+            ) if dcf_ticker else "forward multiple (profile-specific)"
         else:
             # Fallback: use scenario fair values (same as IV — note in report)
             _fv_bull = _case_fv(result.bull)

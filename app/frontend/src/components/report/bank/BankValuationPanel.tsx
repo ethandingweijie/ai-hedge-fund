@@ -146,7 +146,19 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
 
       {bb.fair_p_tbv != null && bb.tbv_per_share != null && (
         <p className="text-[11px] text-muted-foreground mt-4 font-mono">
-          Fair = TBV × (1 + (ROE−CoE) / CoE) = {fmtMoney(bb.tbv_per_share, sym)} × {bb.fair_p_tbv.toFixed(2)}x
+          {bb.ggm_terminal_growth != null ? (
+            <>
+              Fair = TBV × (ROE−g) / (CoE−g) = {fmtMoney(bb.tbv_per_share, sym)} × {bb.fair_p_tbv.toFixed(2)}x
+              {'  ·  '}g {fmtPct(bb.ggm_terminal_growth, 1)}
+            </>
+          ) : (
+            <>Fair = TBV × (1 + (ROE−CoE) / CoE) = {fmtMoney(bb.tbv_per_share, sym)} × {bb.fair_p_tbv.toFixed(2)}x</>
+          )}
+        </p>
+      )}
+      {bb.ggm_provenance != null && bb.ggm_provenance.length > 0 && (
+        <p className="text-[11px] text-muted-foreground mt-1">
+          {bb.ggm_provenance.join(' · ')}
         </p>
       )}
     </div>

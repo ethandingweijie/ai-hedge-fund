@@ -1376,6 +1376,18 @@ def _extract_bank_metrics(
                 "  net_charge_offs_pct:     float (0.0-0.05, annualized NCO / avg loans)\n"
                 "  management_target_roe:   float (0.05-0.25, through-cycle ROE/ROTCE\n"
                 "                                  target cited in earnings calls)\n"
+                "  cost_of_equity:          float (0.05-0.20, cost of equity used in\n"
+                "                                  the analyst's GGM/DDM valuation;\n"
+                "                                  e.g. 'COE: 8.6%' -> 0.086)\n"
+                "  equity_risk_premium:     float (0.02-0.12, equity/market risk premium\n"
+                "                                  used to build the cost of equity)\n"
+                "  terminal_growth_rate:    float (0.0-0.06, terminal growth rate g in\n"
+                "                                  the Gordon Growth Model; 'g: 3.3%' -> 0.033)\n"
+                "  target_price_to_book:    float (0.2-5.0, justified/target P/B or P/BV\n"
+                "                                  multiple the analyst applies to BVPS;\n"
+                "                                  e.g. 'we assume a 2.51x FY26e P/BV' -> 2.51)\n"
+                "  credit_cost_bps:         float (0-300, guided credit cost / specific\n"
+                "                                  provisions in bps; 'SP at 17-20bps' -> 18.5)\n"
                 "  loan_to_deposit_ratio:   float (0.40-1.20)\n"
                 "  dividend_payout_ratio:   float (0.10-0.90)\n"
                 "  loan_growth_yoy:         float (-0.10 to 0.30, most recent FY)\n"
@@ -1395,6 +1407,12 @@ def _extract_bank_metrics(
                 "  * Only include fields EXPLICITLY substantiated by the research.\n"
                 "  * cet1_ratio: reported in bank regulatory filings & earnings calls.\n"
                 "    Convert to decimal (15.3% → 0.153).\n"
+                "  * cost_of_equity / terminal_growth_rate / target_price_to_book:\n"
+                "    broker notes state these in a valuation table, e.g. 'Gordon Growth\n"
+                "    Model (COE: 8.6%, g: 3.3%)' and 'Target Price to Book 2.51'. These\n"
+                "    three ARE the bank price target - target P/B = (ROE - g) / (COE - g)\n"
+                "    - so extract them whenever a valuation table is present.\n"
+                "  * credit_cost_bps: take the midpoint of a guided range.\n"
                 "  * management_target_roe: look for phrases like 'targets X% ROE/ROTCE',\n"
                 "    'through-the-cycle ROE target', 'aspires to Y% ROTCE'. Convert to\n"
                 "    decimal (17% → 0.17).\n"
@@ -1431,6 +1449,11 @@ def _extract_bank_metrics(
             "npl_coverage_ratio":     (0.30, 3.00),
             "net_charge_offs_pct":    (0.0, 0.05),
             "management_target_roe":  (0.05, 0.25),
+            "cost_of_equity":         (0.05, 0.20),
+            "equity_risk_premium":    (0.02, 0.12),
+            "terminal_growth_rate":   (0.0, 0.06),
+            "target_price_to_book":   (0.2, 5.0),
+            "credit_cost_bps":        (0.0, 300.0),
             "loan_to_deposit_ratio":  (0.40, 1.20),
             "dividend_payout_ratio":  (0.0, 1.0),
             "loan_growth_yoy":        (-0.30, 0.40),

@@ -1268,12 +1268,13 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Bank / Lending Institution": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": (
                 "Institutional-grade bank valuation. 2-stage Residual Income anchors "
                 "at 55% — ROE fades linearly to profile target over 5-10 years, BVPS "
@@ -1294,82 +1295,107 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # the appropriate sub-profile key below.
         "Money Center Bank": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "US GSIB Money Center bank (JPM/BAC/C/WFC). Target ROE 12%, CoE 9%, P/TBV 1.4x, CET1 target 12%.",
         },
         "Money Center Bank (EU)": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "European Money Center (HSBC/Barclays/DB) — higher CoE (11%) and CET1 target (14%) from regulatory drag; lower target ROE (10%) and P/TBV (0.8x).",
+        },
+        # Singapore money-center banks — DBS (D05.SI), OCBC (O39.SI),
+        # UOB (U11.SI). Distinct from the US GSIB row: structurally higher
+        # sustainable ROE (13-17% on a low-cost CASA base and a fee-heavy
+        # wealth franchise) against a LOWER cost of equity than US peers
+        # (AAA sovereign, MAS supervision, SGD funding). GGM carries a
+        # heavier weight here because it is the method SG bank desks
+        # actually publish.
+        "Money Center Bank (SG)": {
+            "methods": [
+                {"name": "GGM (P/B)",       "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "Excess Capital",  "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE", "P/TBV"],
+            "rationale": "Singapore money-center bank (DBS/OCBC/UOB). GGM-anchored: target P/B = (ROE-g)/(CoE-g) on Rf 2.5% + ERP 6.3%. CoE 8.6-9.1%, g 3.0-3.3%, CET1 target 14%. P/TBV excluded — GGM P/B supersedes it and SG banks carry minimal goodwill.",
         },
         "Regional Bank": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "US Regional (USB/TFC/PNC). Target ROE 11%, CoE 10%, P/TBV 1.2x, CET1 11%. Higher RWA density (0.70x assets) for CRE-heavy books.",
         },
         "Super-Regional Bank": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "Super-regional (TD/BMO/RBC). Canadian Big-Six scale + diversification. CoE 9.5%, P/TBV 1.3x.",
         },
         "EM Bank": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "EM SOE banks (ICBC/CCB/BOC/ABC). Target ROE 14% (high NIM), CoE 13% (national-service risk premium), P/TBV 1.2x, CET1 10.5%.",
         },
         "EM Bank (Premium)": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "EM Premium — India private banks (HDFC/ICICI/Kotak) sustain 16-18% ROE on credit-to-GDP gap. 7-year fade, P/TBV 2.0x.",
         },
         "Investment Bank": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "Investment Bank (GS/MS). Target ROE 13% (cyclical), CoE 11% (trading VaR premium), P/TBV 1.2x, RWA proxy 0.40x (market-risk-weighted).",
         },
         "Neo/Challenger": {
             "methods": [
-                {"name": "Residual Income", "weight": 0.55, "anchor": True,  "implementable": True},
-                {"name": "P/TBV",           "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "GGM (P/B)",       "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Residual Income", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/TBV",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "Excess Capital",  "weight": 0.05, "anchor": False, "implementable": True},
             ],
-            "excluded": ["DCF", "P/BV", "ROE vs CoE"],
+            "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "Neo/Challenger (NU/SOFI) — J-curve ROE. Target 18%, P/TBV 2.8x, 10-year fade (extended because current ROE still ramping).",
         },
         "Insurance": {
@@ -2329,6 +2355,11 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     # Financials sub-profile overrides — keyed on profile_name for dcf_agent lookup
     # Banks use P/E and P/TBV; EV/EBITDA is not applicable
     "Money Center Bank":   {"ev_ebitda": 11.0, "pe": 11.0, "ev_revenue": 2.5,  "pb": 1.3,  "fcf_yield": 0.060, "growth_avg": 0.05},
+    # SG banks: P/E 14x and P/B 2.0x reflect the DBS/OCBC trading band
+    # (DBS FY26e PER 14.6x / P/BV 2.4x; OCBC 12.5x / 1.5x). growth_avg 3%
+    # — SG bank total income grows at low-single digits while book
+    # compounds; the old 5% average pushed the growth premium to its floor.
+    "Money Center Bank (SG)": {"ev_ebitda": 12.0, "pe": 14.0, "ev_revenue": 3.0, "pb": 2.0, "fcf_yield": 0.055, "growth_avg": 0.03},
     "Regional Bank":       {"ev_ebitda": 10.0, "pe": 10.0, "ev_revenue": 2.0,  "pb": 1.1,  "fcf_yield": 0.065, "growth_avg": 0.04},
     "Insurance":           {"ev_ebitda": 10.0, "pe": 11.0, "ev_revenue": 1.5,  "pb": 1.3,  "fcf_yield": 0.060, "growth_avg": 0.05},
     "Investment Bank":     {"ev_ebitda": 12.0, "pe": 13.0, "ev_revenue": 2.5,  "pb": 1.5,  "fcf_yield": 0.055, "growth_avg": 0.06},
@@ -2415,6 +2446,7 @@ SECTOR_PEER_BASKETS: dict[str, list[str]] = {
     "IPP":                  ["NRG", "VST", "CEG", "TLN"],
     "Financials":           ["JPM", "BAC", "WFC", "C", "USB", "PNC"],
     "Money Center Bank":    ["JPM", "BAC", "C", "WFC", "HSBC"],
+    "Money Center Bank (SG)": ["D05.SI", "O39.SI", "U11.SI"],
     "Regional Bank":        ["USB", "PNC", "TFC", "RF", "KEY", "CFG"],
     "Insurance":            ["PGR", "TRV", "ALL", "CB", "AIG", "MET"],
     "Investment Bank":      ["GS", "MS", "LAZ", "EVR"],
@@ -3863,13 +3895,13 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "00939.HK": ("Financials",  "EM Bank",          "Banking",        "China Construction Bank"),
     "03968.HK": ("Financials",  "EM Bank",          "Banking",        "China Merchants Bank"),
     "02628.HK": ("Financials",  "",  "Insurance",                "China Life Insurance"),
-    "01288.HK": ("Financials",  "",  "Banking",                  "Agricultural Bank of China"),
-    "00998.HK": ("Financials",  "",  "Banking",                  "CITIC Bank"),
-    "03328.HK": ("Financials",  "",  "Banking",                  "Bank of Communications"),
-    "01658.HK": ("Financials",  "",  "Banking",                  "Postal Savings Bank of China"),
+    "01288.HK": ("Financials",  "EM Bank",          "Banking",        "Agricultural Bank of China"),
+    "00998.HK": ("Financials",  "EM Bank",          "Banking",        "CITIC Bank"),
+    "03328.HK": ("Financials",  "EM Bank",          "Banking",        "Bank of Communications"),
+    "01658.HK": ("Financials",  "EM Bank",          "Banking",        "Postal Savings Bank of China"),
     "00388.HK": ("Financials",  "",  "Exchange",                 "Hong Kong Exchanges (HKEX)"),
-    "02388.HK": ("Financials",  "",  "Banking",                  "BOC Hong Kong"),
-    "00011.HK": ("Financials",  "",  "Banking",                  "Hang Seng Bank"),
+    "02388.HK": ("Financials",  "Regional Bank",    "Banking",        "BOC Hong Kong — HK-domiciled"),
+    "00011.HK": ("Financials",  "Regional Bank",    "Banking",        "Hang Seng Bank — HK-domiciled"),
     "02888.HK": ("Financials", "Money Center Bank",    "Banks (Diversified)",    "Standard Chartered"),
     "09959.HK": ("Financials", "FinTech",              "Software - Infrastructure", "Linklogis — supply chain fintech"),
     "09923.HK": ("Financials", "FinTech",              "Software - Infrastructure", "Yeahka — payment tech"),
@@ -4103,6 +4135,25 @@ def get_wacc_profile_for_ticker(ticker: str) -> tuple[str, str]:
     entry = TICKER_SECTOR_LOOKUP.get(ticker.upper())
     if entry:
         return entry[0], entry[1]
+
+    # SGX fallback. SGX_TICKER_SECTOR_LOOKUP's field [1] is primarily
+    # screener-display metadata and many hints ("Airline", "AssetMgmt",
+    # "Conglomerate") are NOT valuation-profile keys — so the hint is
+    # returned ONLY when it resolves to a real entry in
+    # INDUSTRY_VALUATION_PROFILES for that sector. Anything else falls
+    # through to in-situ classification exactly as before.
+    #
+    # Without this, D05.SI / O39.SI / U11.SI had no deterministic profile
+    # and were left to the LLM classifier, which routed DBS to the US
+    # "Money Center Bank" row (target ROE 12% / CoE 9.0% / P/TBV 1.4x)
+    # instead of the Singapore calibration.
+    sgx = SGX_TICKER_SECTOR_LOOKUP.get(ticker.upper())
+    if sgx:
+        _sector, _hint = sgx[0], sgx[1]
+        _key = "RealEstate" if _sector == "REIT" else _sector
+        if _hint and INDUSTRY_VALUATION_PROFILES.get(_key, {}).get(_hint):
+            return _sector, _hint
+        return _sector, ""
     return ("Tech", "")
 
 
@@ -4175,9 +4226,9 @@ REIT_VGPM_WEIGHTS = {
 # so a stray hint degrades gracefully + visibly instead of mis-rendering.
 SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     # Banks
-    "D05.SI":  ("Financials", "Money Center Bank", "Banks",           "DBS Group — SG money-center bank"),
-    "O39.SI":  ("Financials", "Money Center Bank", "Banks",           "OCBC Bank — SG money-center bank"),
-    "U11.SI":  ("Financials", "Money Center Bank", "Banks",           "UOB — SG money-center bank"),
+    "D05.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "DBS Group — SG money-center bank"),
+    "O39.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "OCBC Bank — SG money-center bank"),
+    "U11.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "UOB — SG money-center bank"),
     "S68.SI":  ("Financials", "Exchange",    "Capital Markets",        "Singapore Exchange"),
     "9CI.SI":  ("Financials", "AssetMgmt",   "Asset Management",       "CapitaLand Investment"),
     "U09.SI":  ("Financials", "Insurance",   "Insurance",              "United Overseas Insurance"),

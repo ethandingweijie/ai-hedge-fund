@@ -310,6 +310,69 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  True,
                 "fallback":        "use cfg['target_roe'] from _BANK_PROFILE_CALIBRATION",
             },
+            # ── Gordon Growth Model assumptions ──────────────────
+            # The triplet below IS the bank price target on the sell side:
+            # target P/B = (ROE - g) / (CoE - g). Broker notes publish these
+            # explicitly in a valuation table (risk-free rate, equity-risk
+            # premium, beta -> CoE; plus a terminal growth rate), so they are
+            # extractable rather than assumed. dcf_agent._bank_ggm_assumptions
+            # consumes them, falling back to _BANK_GGM_OVERRIDES and then to
+            # the profile calibration.
+            {
+                "key":             "cost_of_equity",
+                "mandatory":       False,
+                "search_phrases":  ["cost of equity", "COE", "required return on equity"],
+                "compute_hint":    "Cost of equity used in the GGM/DDM valuation (risk-free + beta x ERP)",
+                "clamp":           (0.05, 0.20),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use cfg['coe'] from _BANK_PROFILE_CALIBRATION",
+            },
+            {
+                "key":             "terminal_growth_rate",
+                "mandatory":       False,
+                "search_phrases":  ["terminal growth", "long-term growth rate", "g =", "perpetual growth"],
+                "compute_hint":    "Terminal growth rate g in the Gordon Growth Model",
+                "clamp":           (0.0, 0.06),
+                "extractor_only":  True,
+                "decimal_format":  True,
+                "fallback":        "use cfg['ggm_g'] from _BANK_PROFILE_CALIBRATION",
+            },
+            {
+                "key":             "target_price_to_book",
+                "mandatory":       False,
+                "search_phrases":  ["target P/B", "target price to book", "P/BV multiple", "we assume a x P/BV"],
+                "compute_hint":    "Justified P/B multiple the analyst applies to book value per share",
+                "clamp":           (0.2, 5.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "equity_risk_premium",
+                "mandatory":       False,
+                "search_phrases":  ["equity risk premium", "ERP", "market risk premium"],
+                "compute_hint":    "Equity risk premium used to build the cost of equity",
+                "clamp":           (0.02, 0.12),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "credit_cost_bps",
+                "mandatory":       False,
+                "search_phrases":  ["credit cost", "specific provisions", "SP of bps", "provisions guidance"],
+                "compute_hint":    "Guided credit cost / specific provisions in basis points of loans",
+                "clamp":           (0.0, 300.0),
+                "extractor_only":  True,
+            },
+            # NOTE: book value per share is deliberately NOT extracted. The
+            # key collides with the balance-sheet line item of the same
+            # name, and the framework-metrics bridge writes extracted KPIs
+            # onto the financial row by key — so an LLM-extracted value
+            # silently displaces the real one. On the D05.SI run of
+            # 2026-08-27 that replaced DBS's actual BVPS of S$24.28 with an
+            # extracted 32.5, inflating the GGM from S$60.48 to S$80.94 and
+            # flipping the call from SELL to HOLD. BVPS is total equity over
+            # shares — a hard number that is always available — so there is
+            # nothing to gain from extracting it.
             {
                 "key":             "npl_ratio",
                 "mandatory":       False,
@@ -7923,6 +7986,28 @@ def _kpi_label(kpi: dict) -> str:
     )
     return label
 
+
+# ── Singapore money-center bank spec ────────────────────────────────────
+# Derived from the US "Money Center Bank" spec so the KPI set, extractor
+# phrases and card layout stay in lockstep, with the bands re-cut for the
+# Singapore system: SG banks run structurally higher CET1 (MAS requires a
+# 2% buffer above Basel, so ~14% is "in-band" rather than "fortress") and
+# higher through-cycle ROE than US GSIBs. Registered here rather than as a
+# literal so the two specs cannot drift apart.
+if "Money Center Bank" in SECTOR_KPI_FRAMEWORK:
+    import copy as _copy
+    _sg_bank = _copy.deepcopy(SECTOR_KPI_FRAMEWORK["Money Center Bank"])
+    _sg_bank["risk_adjustment"] = {
+        "kpi": "cet1_ratio", "direction": "higher_better",
+        "bands": [
+            {"min": 0.160, "mult": 1.10, "label": "fortress"},
+            {"min": 0.145, "mult": 1.05, "label": "strong"},
+            {"min": 0.135, "mult": 1.00, "label": "in-band"},
+            {"min": 0.0,   "mult": 0.85, "label": "weak"},
+        ],
+    }
+    SECTOR_KPI_FRAMEWORK["Money Center Bank (SG)"] = _sg_bank
+    del _sg_bank
 
 # Normalised (strip + casefold) index over SECTOR_KPI_FRAMEWORK keys so the
 # card lookup tolerates whitespace / case drift between the router's

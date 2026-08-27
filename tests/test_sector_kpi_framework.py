@@ -254,6 +254,15 @@ LEGACY_BANK_CLAMPS = {
     "npl_ratio":             (0.0, 0.15),
     "net_charge_offs_pct":   (0.0, 0.05),
     "management_target_roe": (0.05, 0.25),
+    # Gordon Growth Model valuation assumptions. target P/B = (ROE - g) /
+    # (CoE - g) is how bank price targets are actually published, so these
+    # are extracted from the research note's valuation table rather than
+    # assumed from the profile calibration.
+    "cost_of_equity":        (0.05, 0.20),
+    "equity_risk_premium":   (0.02, 0.12),
+    "terminal_growth_rate":  (0.0, 0.06),
+    "target_price_to_book":  (0.2, 5.0),
+    "credit_cost_bps":       (0.0, 300.0),
     "loan_to_deposit_ratio": (0.40, 1.20),
     "dividend_payout_ratio": (0.0, 1.0),
     "loan_growth_yoy":       (-0.30, 0.40),
