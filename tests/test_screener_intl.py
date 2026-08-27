@@ -54,7 +54,10 @@ def stubbed(monkeypatch, tmp_path):
     monkeypatch.setattr(ss, "_get_fmp_key", lambda: "test-key")
     monkeypatch.setattr(ss, "_fetch_ticker_metrics", _metrics)
     monkeypatch.setattr(ss, "_get_cached", lambda key: None)      # always cold
+    monkeypatch.setattr(ss, "_get_cached_stale", lambda key: None)
     monkeypatch.setattr(ss, "_set_cached", lambda *a, **k: None)
+    # Fresh build locks per test so one test's lock can't leak into another.
+    monkeypatch.setattr(ss, "_BUILD_LOCKS", {})
     monkeypatch.setattr(ss, "_ensure_tables", lambda: None)
     monkeypatch.setattr(ss, "get_live_quotes", lambda *a, **k: {})
     monkeypatch.setattr(ss, "_set_fast_vgpm_cached", lambda *a, **k: None)
@@ -159,3 +162,97 @@ class TestIntlUniverseContract:
         import inspect
         sig = inspect.signature(ss._intl_universe)
         assert sig.parameters["per_sector_limit"].default == ss._PER_SECTOR_LIMIT
+
+
+# ── Cold-build protection ───────────────────────────────────────────────────
+
+class TestColdBuildProtection:
+    """A cold HK build is ~2,600 FMP calls (330 names x 8 endpoints) and
+    cannot finish inside an HTTP request. It ran 300s and the browser gave
+    up — "loading failed". Two guards: expired rows beat a timeout, and only
+    one build runs at a time so concurrent requests don't multiply load on
+    the same rate-limit bucket."""
+
+    def test_stale_beats_a_timeout_when_the_universe_fails(self, stubbed, monkeypatch):
+        def boom(*a, **k):
+            raise RuntimeError("FMP screener down")
+        monkeypatch.setattr(ss, "_intl_universe", boom)
+        monkeypatch.setattr(ss, "_get_cached_stale",
+                            lambda key: [{"symbol": "00700.HK"}])
+        out = ss.get_hk_screener_stocks()
+        assert out["total"] == 1
+        assert out["stale"] is True
+
+    def test_concurrent_request_serves_stale_instead_of_queueing(self, stubbed, monkeypatch):
+        monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("0"))
+        monkeypatch.setattr(ss, "_get_cached_stale",
+                            lambda key: [{"symbol": "00700.HK"}])
+        # Simulate a build already in flight by taking the lock first.
+        lock = ss._build_lock("hk_fmp_v7")
+        assert lock.acquire(blocking=False)
+        try:
+            out = ss.get_hk_screener_stocks()
+        finally:
+            lock.release()
+        assert out["stale"] is True
+        assert out["total"] == 1
+
+    def test_lock_is_released_after_a_build(self, stubbed, monkeypatch):
+        monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("0"))
+        ss.get_hk_screener_stocks()
+        lock = ss._build_lock("hk_fmp_v7")
+        assert lock.acquire(blocking=False), "build lock leaked"
+        lock.release()
+
+    def test_lock_released_even_when_the_build_raises(self, stubbed, monkeypatch):
+        def boom(*a, **k):
+            raise RuntimeError("boom")
+        monkeypatch.setattr(ss, "_intl_universe", boom)
+        ss.get_hk_screener_stocks()
+        lock = ss._build_lock("hk_fmp_v7")
+        assert lock.acquire(blocking=False), "build lock leaked on failure"
+        lock.release()
+
+    def test_sg_has_the_same_protection(self, stubbed, monkeypatch):
+        monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("D0"))
+        monkeypatch.setattr(ss, "_get_cached_stale",
+                            lambda key: [{"symbol": "D05.SI"}])
+        lock = ss._build_lock("sg_fmp_v3")
+        assert lock.acquire(blocking=False)
+        try:
+            out = ss.get_sg_screener_stocks()
+        finally:
+            lock.release()
+        assert out["stale"] is True
+
+    def test_locks_are_per_cache_key(self, stubbed):
+        assert ss._build_lock("hk_fmp_v7") is not ss._build_lock("sg_fmp_v3")
+        assert ss._build_lock("hk_fmp_v7") is ss._build_lock("hk_fmp_v7")
+
+
+class TestKgMetricReuse:
+    """Every rebuild used to re-fetch all ~330 names at 8 FMP calls each even
+    when the metrics were minutes old. The US path already reads this cache."""
+
+    def test_cached_metrics_skip_the_fetch(self, stubbed, monkeypatch):
+        rows, *_ = _universe("0", n=6)
+        cached = {r["canonical"]: _metrics(r["canonical"]) for r in rows}
+        import app.backend.services.knowledge_graph as kg
+        monkeypatch.setattr(kg, "get_ttm_metrics_cached", lambda ts: cached)
+        fetched: list[str] = []
+        monkeypatch.setattr(ss, "_fetch_ticker_metrics",
+                            lambda t, k=None, **kw: fetched.append(t) or _metrics(t))
+        monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("0", n=6))
+        out = ss.get_hk_screener_stocks()
+        assert out["total"] == 6
+        assert fetched == [], "cached metrics must not be re-fetched"
+
+    def test_missing_metrics_still_fetched(self, stubbed, monkeypatch):
+        import app.backend.services.knowledge_graph as kg
+        monkeypatch.setattr(kg, "get_ttm_metrics_cached", lambda ts: {})
+        fetched: list[str] = []
+        monkeypatch.setattr(ss, "_fetch_ticker_metrics",
+                            lambda t, k=None, **kw: fetched.append(t) or _metrics(t))
+        monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("0", n=6))
+        ss.get_hk_screener_stocks()
+        assert len(fetched) == 6

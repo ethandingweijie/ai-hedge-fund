@@ -22,6 +22,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -344,6 +345,38 @@ def _get_cached(cache_key: str) -> Optional[list]:
     if datetime.now(timezone.utc).isoformat() > row["expires_at"]:
         return None
     return json.loads(row["results_json"])
+
+
+#: One build per cache key at a time. Without this, every request that
+#: arrives during a cold ~2,600-call HK build starts its OWN build; they then
+#: compete for the same FMP rate-limit bucket and each one gets slower, which
+#: is how a slow first load became a failing one. Waiters serve stale instead.
+_BUILD_LOCKS: dict[str, threading.Lock] = {}
+_BUILD_LOCKS_GUARD = threading.Lock()
+
+
+def _build_lock(cache_key: str) -> threading.Lock:
+    with _BUILD_LOCKS_GUARD:
+        return _BUILD_LOCKS.setdefault(cache_key, threading.Lock())
+
+
+def _get_cached_stale(cache_key: str) -> Optional[list]:
+    """Cached rows IGNORING the TTL.
+
+    A cold full-universe build costs ~2,600 FMP calls for HK and cannot
+    finish inside an HTTP request — it ran 300s and the browser gave up,
+    which is what "loading failed" looked like. Expired rows are still a far
+    better answer than a timeout: the weekly job rewrites them, so the worst
+    case is data a few days old rather than no screener at all.
+    """
+    row = _db.query_one(
+        "SELECT results_json FROM screener_cache WHERE cache_key = ?", [cache_key])
+    if not row or not row["results_json"]:
+        return None
+    try:
+        return json.loads(row["results_json"])
+    except (TypeError, ValueError):
+        return None
 
 
 #: Structure caches (universe / sector / VGPM) are rewritten by the weekly
@@ -2124,13 +2157,47 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
             # also keeps these rows fresh between weekly refreshes.
             return {"items": cached, "total": len(cached), "cached": True}
 
+    # A cold HK build is ~2,600 FMP calls (330 names x 8 endpoints) and
+    # cannot finish inside an HTTP request — it ran 300s and the browser gave
+    # up, which is what "loading failed" looked like. Only one build runs at
+    # a time; concurrent requests serve the last known rows instead of
+    # queueing behind it and multiplying load on the same rate-limit bucket.
+    # The weekly refresh job is what keeps those rows current.
+    _lock = _build_lock(cache_key)
+    if not _lock.acquire(blocking=False):
+        _stale = _get_cached_stale(cache_key)
+        if _stale:
+            _sqlog.info("HK screener: build in progress — serving stale rows")
+            return {"items": _stale, "total": len(_stale),
+                    "cached": True, "stale": True}
+        _lock.acquire()          # nothing to serve — wait for the build
+        try:
+            _done = _get_cached(cache_key) or _get_cached_stale(cache_key) or []
+        finally:
+            _lock.release()
+        return {"items": _done, "total": len(_done), "cached": bool(_done)}
+
+    try:
+        return _build_hk_screener(cache_key)
+    finally:
+        _lock.release()
+
+
+def _build_hk_screener(cache_key: str) -> dict:
+    """Cold-path build for the HK screener. Callers hold the build lock."""
     # ── Steps 1-2: universe + classification, both from FMP ──────────────
     try:
         universe_rows, sector_map, industry_map, name_map = _intl_universe("HKSE")
     except Exception as exc:
         _sqlog.error("HK screener universe fetch failed: %s", exc)
+        stale = _get_cached_stale(cache_key)
+        if stale:
+            return {"items": stale, "total": len(stale), "cached": True, "stale": True}
         return {"items": [], "total": 0, "cached": False}
     if not universe_rows:
+        stale = _get_cached_stale(cache_key)
+        if stale:
+            return {"items": stale, "total": len(stale), "cached": True, "stale": True}
         return {"items": [], "total": 0, "cached": False}
 
     # ── Step 3: metric fetch via the shared FMP pipeline (parallel) ──────
@@ -2141,10 +2208,25 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
     raw_metrics_list: list[dict] = []
     api_key = _get_fmp_key()
 
+    # Reuse anything already in the knowledge-graph TTM cache, the same way
+    # _get_or_compute_fast_vgpm does for US. Without this every rebuild
+    # re-fetched all ~330 names at 8 FMP calls each even when the metrics
+    # were minutes old.
+    from app.backend.services import knowledge_graph as _kg_read
+    try:
+        _cached_metrics = _kg_read.get_ttm_metrics_cached(
+            [r["canonical"] for r in universe_rows]) or {}
+    except Exception:
+        _cached_metrics = {}
+    if _cached_metrics:
+        _sqlog.info("HK screener: %d/%d metrics served from KG cache",
+                    len(_cached_metrics), len(universe_rows))
+
     def _fetch_fast_metrics(row: dict) -> Optional[dict]:
         canonical = row["canonical"]
         try:
-            metrics = _fetch_ticker_metrics(canonical, api_key)
+            metrics = _cached_metrics.get(canonical) or _fetch_ticker_metrics(
+                canonical, api_key)
             if not metrics:
                 return None
             metrics["ticker"] = canonical
@@ -2248,6 +2330,32 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
             # also keeps these rows fresh between weekly refreshes.
             return {"items": cached, "total": len(cached), "cached": True}
 
+    # Same cold-build protection as HK. SGX is smaller (~130 names) so its
+    # build fits inside a request today, but the failure mode is identical
+    # if the universe grows or FMP slows, and the herd behaviour is worse
+    # than the latency.
+    _lock = _build_lock(cache_key)
+    if not _lock.acquire(blocking=False):
+        _stale = _get_cached_stale(cache_key)
+        if _stale:
+            _sqlog.info("SGX screener: build in progress — serving stale rows")
+            return {"items": _stale, "total": len(_stale),
+                    "cached": True, "stale": True}
+        _lock.acquire()
+        try:
+            _done = _get_cached(cache_key) or _get_cached_stale(cache_key) or []
+        finally:
+            _lock.release()
+        return {"items": _done, "total": len(_done), "cached": bool(_done)}
+
+    try:
+        return _build_sg_screener(cache_key)
+    finally:
+        _lock.release()
+
+
+def _build_sg_screener(cache_key: str) -> dict:
+    """Cold-path build for the SGX screener. Callers hold the build lock."""
     try:
         universe_rows, sector_map, industry_map, name_map = _intl_universe("SES")
     except Exception as exc:
@@ -2260,12 +2368,23 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
 
     _sg_api_key = _get_fmp_key()
 
+    from app.backend.services import knowledge_graph as _kg_read
+    try:
+        _sg_cached = _kg_read.get_ttm_metrics_cached(
+            [r["canonical"] for r in universe]) or {}
+    except Exception:
+        _sg_cached = {}
+    if _sg_cached:
+        _sqlog.info("SGX screener: %d/%d metrics served from KG cache",
+                    len(_sg_cached), len(universe))
+
     def _fetch_one(stock: dict) -> tuple[str, dict]:
         canonical = stock["canonical"]
         try:
             # Same shared FMP pipeline the US and HK screeners use, so all
             # three are scored on identical sub-factors from one source.
-            metrics = _fetch_ticker_metrics(canonical, _sg_api_key) or {}
+            metrics = dict(_sg_cached.get(canonical) or {}) or (
+                _fetch_ticker_metrics(canonical, _sg_api_key) or {})
             metrics["_sector"] = stock.get("sector", "Unknown")
             metrics["_industry"] = stock.get("industry", "Unknown")
             metrics["_name"] = stock.get("name", canonical)
