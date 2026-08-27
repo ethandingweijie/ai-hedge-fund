@@ -2212,6 +2212,7 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
     if not universe_rows:
         return {"items": [], "total": 0, "cached": False}
     universe = universe_rows
+    raw_metrics: dict[str, dict] = {}
 
     _sg_api_key = _get_fmp_key()
 
