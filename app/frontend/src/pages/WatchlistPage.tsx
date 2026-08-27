@@ -9,20 +9,20 @@ import { getWatchlist, addToWatchlist, removeFromWatchlist, searchCompanies, get
 import type { WatchlistItem } from '@/lib/reportTypes';
 import type { CompanySearchResult } from '@/lib/api';
 import { getProfile } from '@/lib/tier';
-import { gradeColorClass } from '@/lib/gradeColors';
 import { AgentOrbIcon } from '@/components/report/AgentOrbIcon';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 import { SwipeableCard } from '@/components/mobile/SwipeableCard';
 import { GradeChip } from '@/components/v2/shared';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
+import { gradeTone } from '@/lib/semanticColors';
 
 // ── Grade pill ────────────────────────────────────────────────────────────────
 function GradePill({ grade }: { grade?: string }) {
   const clean = grade?.replace(/^~/, '');
   if (!clean || clean === '—') return <span className="text-muted-foreground text-xs">—</span>;
   return (
-    <span className={`inline-block px-1.5 py-0.5 rounded text-sm font-bold ${gradeColorClass(clean)}`}>
+    <span className={`inline-block px-1.5 py-0.5 rounded text-sm font-bold ${gradeTone(clean)}`}>
       {clean}
     </span>
   );

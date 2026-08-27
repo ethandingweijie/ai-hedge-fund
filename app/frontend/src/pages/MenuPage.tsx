@@ -28,14 +28,8 @@ import { parseBackendIso } from '@/lib/utils';
 import type { RunSummary } from '@/lib/reportTypes';
 import { NAV_ITEMS, useAppNav } from '@/components/nav-config';
 import { LayoutModeToggle } from '@/components/LayoutModeToggle';
+import { actionTone } from '@/lib/semanticColors';
 
-const ACTION_COLORS: Record<string, string> = {
-  BUY:   'bg-primary text-primary-foreground',
-  SELL:  'bg-primary text-primary-foreground',
-  SHORT: 'bg-orange-500 text-white',
-  COVER: 'bg-blue-600 text-white',
-  HOLD:  'bg-yellow-500 text-white',
-};
 
 const THEMES: { value: Theme; icon: typeof Sun; label: string }[] = [
   { value: 'light', icon: Sun,     label: 'Light' },
@@ -141,7 +135,7 @@ export function MenuPage() {
                     >
                       <span className="font-mono text-xs font-bold text-foreground min-w-[48px]">{run.ticker}</span>
                       {run.final_action && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${ACTION_COLORS[run.final_action] ?? 'bg-muted text-muted-foreground'}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold leading-none ${actionTone(run.final_action)}`}>
                           {run.final_action}
                         </span>
                       )}

@@ -26,6 +26,7 @@ import {
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
 import { toast } from 'sonner';
+import { actionTone } from '@/lib/semanticColors';
 
 // ── small presentational helpers ────────────────────────────────────────────
 
@@ -63,13 +64,6 @@ function RetText({ value, dp = 1 }: { value: number | null | undefined; dp?: num
   );
 }
 
-const DECISION_CLASS: Record<string, string> = {
-  BUY: 'text-content-high',
-  STRONG_BUY: 'text-content-high',
-  SELL: 'text-content-high',
-  SHORT: 'text-content-high',
-  HOLD: 'text-amber-600 dark:text-amber-400',
-};
 
 function ageLabel(runAt?: string | null): string {
   if (!runAt) return '—';
@@ -440,7 +434,7 @@ export function PortfolioPage() {
                       <TableCell className="text-right"><PnlText value={h.unrealized_pnl} pct={h.pnl_pct} /></TableCell>
                       <TableCell className="text-center">
                         {decision
-                          ? <span className={`text-xs font-bold ${DECISION_CLASS[decision] ?? ''}`}>{decision.replace('_', ' ')}</span>
+                          ? <span className={`text-xs font-bold ${actionTone(decision, 'text')}`}>{decision.replace('_', ' ')}</span>
                           : <span className="text-muted-foreground text-xs">—</span>}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-xs">{ivs}</TableCell>
@@ -945,13 +939,6 @@ function RegimeCompareCard({ ev }: { ev: ReplayEventResult }) {
 
 const WHAT_IF_HORIZONS = [30, 60, 90, 180, 365];
 
-const WHAT_IF_ACTION_CLASS: Record<string, string> = {
-  SHORT: 'bg-surface-2 text-content-high border-[var(--hairline)]',
-  BUY: 'bg-surface-2 text-content-high border-[var(--hairline)]',
-  GOLD: 'bg-amber-600/15 text-amber-700 dark:text-amber-200 border-amber-700/40',
-  CASH: 'bg-sky-600/15 text-sky-700 dark:text-sky-300 border-sky-700/40',
-  HOLD: 'bg-muted text-muted-foreground border-border',
-};
 
 function WhatIfSection({
   positionCount, positionsLoaded, meta, result, busy, progress, error, onRun,
@@ -1319,7 +1306,7 @@ function WhatIfResultView({ result }: { result: WhatIfResult }) {
             {llm.recommendations.map((r, i) => (
               <div key={i} className="p-2.5 rounded-md border border-border">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${WHAT_IF_ACTION_CLASS[r.action] ?? WHAT_IF_ACTION_CLASS.HOLD}`}>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${actionTone(r.action)}`}>
                     {r.action}
                   </span>
                   <span className="text-xs font-semibold">{r.instrument}</span>

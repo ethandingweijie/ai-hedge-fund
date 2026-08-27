@@ -10,23 +10,9 @@
  */
 import type { DecisionInputs } from '@/lib/reportTypes';
 import { currencySymbol } from '@/lib/utils';
+import { actionTone, gradeTone } from '@/lib/semanticColors';
 
-const ACTION_CHIP: Record<string, string> = {
-  BUY:   'bg-primary text-primary-foreground',
-  SELL:  'bg-primary text-primary-foreground',
-  SHORT: 'bg-orange-500 text-white',
-  HOLD:  'bg-yellow-500 text-white',
-  COVER: 'bg-blue-600 text-white',
-};
 
-const GRADE_CHIP: Record<string, string> = {
-  'A+': 'bg-surface-2 text-content-high',
-  'A':  'bg-surface-2 text-content-high',
-  'A-': 'bg-surface-2 text-content-high',
-  'B+': 'bg-surface-2 text-content-high',
-  'B':  'bg-surface-2 text-content-high',
-  'B-': 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-};
 
 function money(v: number | null | undefined, ticker: string): string {
   if (v == null || Number.isNaN(v)) return '—';
@@ -88,7 +74,7 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
         <div className="text-[10px] font-semibold text-muted-foreground/70 mb-1.5">Quantitative</div>
         <div className="flex items-center gap-2 flex-wrap">
           {q.band_action && (
-            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${ACTION_CHIP[q.band_action] ?? 'bg-muted text-muted-foreground'}`}>
+            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${actionTone(q.band_action)}`}>
               {q.band_action}
             </span>
           )}
@@ -109,7 +95,7 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
               const g = grades[dim];
               if (!g) return null;
               return (
-                <span key={dim} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${GRADE_CHIP[g] ?? 'bg-muted text-muted-foreground'}`} title={dim}>
+                <span key={dim} className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${gradeTone(g)}`} title={dim}>
                   {dim[0].toUpperCase()} {g}
                 </span>
               );

@@ -10,6 +10,7 @@
 import { Card } from '@/components/ui/card';
 import { currencySymbol } from '@/lib/utils';
 import type { FreshnessDelta, PriorRecap } from '@/lib/reportTypes';
+import { actionTone } from '@/lib/semanticColors';
 
 interface Props {
   prior: PriorRecap | undefined;
@@ -22,13 +23,6 @@ function fmtNum(v: number | null | undefined, sym: string): string {
   return `${sym}${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-const ACTION_COLORS: Record<string, string> = {
-  BUY: 'text-content-high',
-  SELL: 'text-content-high',
-  SHORT: 'text-content-high',
-  HOLD: 'text-amber-500',
-  COVER: 'text-content-high',
-};
 
 export function PriorReportCard({ prior, delta, ticker }: Props) {
   if (!prior) return null;
@@ -37,7 +31,7 @@ export function PriorReportCard({ prior, delta, ticker }: Props) {
   const rj = prior.recap_json ?? {};
   const ageDays = prior.age_days != null ? `${prior.age_days.toFixed(1)}d old` : '';
   const runDate = prior.run_at ? prior.run_at.slice(0, 10) : '';
-  const actionColor = ACTION_COLORS[(prior.final_action ?? '').toUpperCase()] ?? 'text-foreground';
+  const actionColor = actionTone(prior.final_action, 'text');
 
   const events = delta?.events ?? [];
   const material = delta?.material;

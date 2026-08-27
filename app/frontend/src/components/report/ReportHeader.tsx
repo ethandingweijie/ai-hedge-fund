@@ -3,9 +3,10 @@ import { MessageSquare } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { useCompanyProfile } from '@/hooks/use-company-name';
 import type { PortfolioDecision, MacroRegime, VgpmResult } from '@/lib/reportTypes';
-import { gradeColorClass, formatSector } from '@/lib/gradeColors';
+import { formatSector } from '@/lib/gradeColors';
 import { currencySymbol } from '@/lib/utils';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
+import { actionTone, gradeTone } from '@/lib/semanticColors';
 
 interface ReportHeaderProps {
   ticker: string;
@@ -19,13 +20,6 @@ interface ReportHeaderProps {
   vgpm?: VgpmResult;
 }
 
-const actionColor: Record<string, string> = {
-  BUY:   'bg-primary text-primary-foreground',
-  SELL:  'bg-primary text-primary-foreground',
-  SHORT: 'bg-orange-600 text-white',
-  COVER: 'bg-blue-600 text-white',
-  HOLD:  'bg-yellow-600 text-white',
-};
 
 const VGPM_DIMS = [
   { key: 'valuation',     label: 'V' },
@@ -36,7 +30,7 @@ const VGPM_DIMS = [
 
 export function ReportHeader({ ticker, runAt, modelName, decision, regime, currentPrice, sector, subSector, vgpm }: ReportHeaderProps) {
   const action = decision?.action ?? '—';
-  const colorClass = actionColor[action] ?? 'bg-muted text-muted-foreground';
+  const colorClass = actionTone(action);
   const profile = useCompanyProfile(ticker);
   const companyName = profile?.name ?? null;
 
@@ -124,7 +118,7 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground whitespace-nowrap">{fullLabel}</span>
                 <span
                   title={tooltip}
-                  className={`text-xl font-bold px-3 py-1 rounded-lg cursor-help ${gradeColorClass(dim.grade)}`}
+                  className={`text-xl font-bold px-3 py-1 rounded-lg cursor-help ${gradeTone(dim.grade)}`}
                 >
                   {dim.grade}
                 </span>

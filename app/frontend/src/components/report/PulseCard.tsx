@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { pulseTicker } from '@/lib/api';
 import { currencySymbol } from '@/lib/utils';
+import { actionTone } from '@/lib/semanticColors';
 
 interface PulsePrior {
   ticker: string;
@@ -43,13 +44,6 @@ interface PulseDelta {
   brief?: string;
 }
 
-const ACTION_CHIP: Record<string, string> = {
-  BUY:   'bg-primary text-primary-foreground',
-  SELL:  'bg-primary text-primary-foreground',
-  SHORT: 'bg-orange-500 text-white',
-  HOLD:  'bg-yellow-500 text-white',
-  COVER: 'bg-blue-600 text-white',
-};
 
 /* Age badge — same fresh/stale convention as the History page (M1-8). */
 function AgeBadge({ ageDays }: { ageDays?: number }) {
@@ -181,7 +175,7 @@ export function PulseCard({ ticker, onOpenReport, onRunFull }: Props) {
         <div className="text-[12px] leading-relaxed">
           <div className="flex items-center gap-2 flex-wrap">
             {prior.final_action && (
-              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${ACTION_CHIP[prior.final_action] ?? 'bg-muted text-muted-foreground'}`}>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${actionTone(prior.final_action)}`}>
                 {prior.final_action}
               </span>
             )}

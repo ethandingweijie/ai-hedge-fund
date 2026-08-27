@@ -416,9 +416,12 @@ function SectorTable({ sectors, dir }: {
 
 
 function DetailDrawer({ row, onClose }: { row: MomentumTickerResult; onClose: () => void }) {
+  // Mirrors the action-pill vocabulary so LONG/SHORT read the same way here as
+  // BUY/SHORT do elsewhere: cobalt for long, amber for short. (The colour
+  // migration had collapsed both to the same class, making them identical.)
   const dirCls: Record<MomentumDirection, string> = {
-    LONG: 'text-content-high',
-    SHORT: 'text-content-high',
+    LONG: 'text-brand',
+    SHORT: 'text-warning',
     NEUTRAL: 'text-muted-foreground',
   };
   return (

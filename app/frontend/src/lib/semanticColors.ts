@@ -213,3 +213,83 @@ export function rankTextTone(level: RankLevel): string {
       return 'text-muted-foreground';
   }
 }
+
+/**
+ * Trade-action pills (BUY / SELL / SHORT / HOLD / COVER).
+ *
+ * Colour is spent only on the two actions that ask the reader to OPEN a
+ * position, because those are the ones worth spotting in a list:
+ *   BUY   → cobalt `--brand`   (go long)
+ *   SHORT → amber  `--warning` (go short — the contrarian, riskier call)
+ * SELL and HOLD are monochrome: SELL closes an existing position and HOLD asks
+ * for nothing, so neither earns an accent. HOLD previously owned amber, which
+ * is what frees that token for SHORT without the two competing.
+ *
+ * Note the two accents are deliberately NOT green/red. Those remain reserved
+ * for price change, so a coloured action pill can never be mistaken for a
+ * price move sitting next to it. Direction reads from the label.
+ */
+export type ActionVariant = 'pill' | 'text';
+
+const ACTION_TONES: Record<string, Record<ActionVariant, string>> = {
+  BUY: {
+    pill: 'bg-brand text-white border border-transparent',
+    text: 'text-brand',
+  },
+  STRONG_BUY: {
+    pill: 'bg-brand text-white border border-transparent',
+    text: 'text-brand',
+  },
+  SHORT: {
+    pill: 'bg-warning text-black border border-transparent',
+    text: 'text-warning',
+  },
+  SELL: {
+    pill: 'bg-surface-2 text-content-high border border-[var(--hairline)]',
+    text: 'text-content-high',
+  },
+  HOLD: {
+    pill: 'bg-surface-2 text-content-high border border-[var(--hairline)]',
+    text: 'text-content-high',
+  },
+  COVER: {
+    pill: 'bg-surface-2 text-content-high border border-[var(--hairline)]',
+    text: 'text-content-high',
+  },
+};
+
+export function actionTone(
+  action: string | null | undefined,
+  variant: ActionVariant = 'pill',
+): string {
+  const key = (action ?? '').toUpperCase().replace(/[\s-]+/g, '_');
+  const entry = ACTION_TONES[key];
+  if (entry) return entry[variant];
+  return variant === 'pill' ? 'bg-muted text-muted-foreground' : 'text-muted-foreground';
+}
+
+/**
+ * VGPM grade pills.
+ *
+ * Only the A band (A+, A, A-) carries colour — the cobalt `--brand` accent,
+ * graduated by fill weight so A+ reads stronger than A-. B through D drop to
+ * plain neutral text with no fill at all, so on a scorecard the eye lands on
+ * genuine distinction and slides past the rest. The letter itself still states
+ * the precise grade, so nothing is lost by draining the colour.
+ *
+ * Cobalt rather than green: green stays reserved for price change.
+ */
+export function gradeTone(grade?: string | null, variant: ActionVariant = 'pill'): string {
+  const g = (grade ?? '').trim();
+  if (!g || g === '—') {
+    return variant === 'pill' ? 'text-content-disabled' : 'text-content-disabled';
+  }
+  if (g[0].toUpperCase() !== 'A') {
+    // B / C / D — no colour, no fill.
+    return 'text-content-medium';
+  }
+  if (variant === 'text') return 'text-brand';
+  const mod = g.slice(1);
+  const fill = mod === '+' ? 'bg-brand/25' : mod === '-' ? 'bg-brand/10' : 'bg-brand/[0.18]';
+  return `text-brand ${fill}`;
+}

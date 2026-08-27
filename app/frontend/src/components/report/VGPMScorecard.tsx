@@ -1,5 +1,5 @@
 import type { VgpmResult } from '@/lib/reportTypes';
-import { gradeColorClass } from '@/lib/gradeColors';
+import { gradeTone } from '@/lib/semanticColors';
 
 interface VGPMScorecardProps {
   vgpm?: VgpmResult;
@@ -22,7 +22,7 @@ export function VGPMScorecard({ vgpm }: VGPMScorecardProps) {
       {dimensions.map(({ key, label }) => {
         const dim = vgpm[key];
         if (!dim) return null;
-        const colorClass = gradeColorClass(dim.grade);
+        const colorClass = gradeTone(dim.grade);
         return (
           <div key={key} className="flex flex-col items-center justify-center gap-2 text-center">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</span>

@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { actionTone, gradeTone } from '@/lib/semanticColors';
 
 export const BRAND = '#297A4B';
 
@@ -78,55 +79,15 @@ export function Leaf({ size = 22 }: { size?: number }) {
 export const Divider = ({ className = '' }: { className?: string }) =>
   <div className={`h-px bg-border/60 ${className}`} />;
 
-export const ACTION_STYLES: Record<string, string> = {
-  BUY:   'text-brand bg-brand/10 border-brand/25',
-  SELL:  'text-content-high bg-surface-2 border-[var(--hairline)]',
-  SHORT: 'text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-500/10 border-orange-100 dark:border-orange-500/20',
-  HOLD:  'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20',
-};
 
 export function ActionPill({ action, size = 'sm' }: { action?: string | null; size?: 'sm' | 'lg' }) {
-  const base = (action && ACTION_STYLES[action]) || 'text-foreground/80 bg-muted/60 border-border';
+  const base = actionTone(action);
   const sz = size === 'lg' ? 'text-[11px] px-2.5 py-1' : 'text-[10px] px-1.5 py-0.5';
-  return <span className={`inline-flex items-center rounded-md border font-semibold tracking-wide ${sz} ${base}`}>{action || '—'}</span>;
+  return <span className={`inline-flex items-center rounded-md font-semibold tracking-wide ${sz} ${base}`}>{action || '—'}</span>;
 }
 
-function gradeStyle(grade?: string | null) {
-  if (!grade) return { text: 'text-muted-foreground/70', bg: 'bg-muted/60' };
-  const L = grade[0];
-  const mod = grade.slice(1);
-  if (L === 'A') {
-    return {
-      text: 'text-brand',
-      bg: mod === '+' ? 'bg-brand/30 dark:bg-brand/40'
-        : mod === '-' ? 'bg-brand/10 dark:bg-brand/20'
-        :               'bg-brand/20 dark:bg-brand/30',
-    };
-  }
-  if (L === 'B') {
-    return {
-      text: 'text-blue-700 dark:text-blue-300',
-      bg: mod === '+' ? 'bg-blue-500/25 dark:bg-blue-500/30'
-        : mod === '-' ? 'bg-blue-500/10 dark:bg-blue-500/15'
-        :               'bg-blue-500/15 dark:bg-blue-500/20',
-    };
-  }
-  if (L === 'C') {
-    return {
-      text: 'text-amber-700 dark:text-amber-300',
-      bg: mod === '+' ? 'bg-amber-500/25 dark:bg-amber-500/30'
-        : mod === '-' ? 'bg-amber-500/10 dark:bg-amber-500/15'
-        :               'bg-amber-500/20 dark:bg-amber-500/25',
-    };
-  }
-  return {
-    text: 'text-content-high',
-    bg:   'bg-surface-2',
-  };
-}
 
 export function GradeChip({ grade, label, tooltip, size = 'sm' }: { grade?: string | null; label?: string; tooltip?: string; size?: 'sm' | 'md' }) {
-  const s = gradeStyle(grade);
   // 'sm' is the original compact chip (screener rows, report cards). 'md' is
   // a step up for list rows where the chip is a primary column value (History).
   const pill = size === 'md'
@@ -137,7 +98,7 @@ export function GradeChip({ grade, label, tooltip, size = 'sm' }: { grade?: stri
       {label && <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">{label}</span>}
       <span
         title={tooltip}
-        className={`inline-flex items-center justify-center rounded-md font-bold tabular-nums ${pill} ${tooltip ? 'cursor-help' : ''} ${s.text} ${s.bg}`}
+        className={`inline-flex items-center justify-center rounded-md font-bold tabular-nums ${pill} ${tooltip ? 'cursor-help' : ''} ${gradeTone(grade)}`}
       >
         {grade || '—'}
       </span>
