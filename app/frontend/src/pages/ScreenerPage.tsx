@@ -3,11 +3,18 @@
  *
  * Minimal-fintech Linear/Stripe layout wired to the real backend.
  * - Market segmented control (US · HK · SG)
- * - Search + sector chips + VGPM-only toggle
+ * - Search + searchable sector dropdown + market-cap dropdown + VGPM-only toggle
  * - Sort tabs (Overall / V / G / P / M)
  * - Stock rows with composite score + V/G/P/M chips
  * - SwipeRow: swipe left → Analyse + Watch actions
  * - 15s live price refresh for top 50 by composite score (existing behaviour preserved)
+ *
+ * Filtering model: one universe fetch per market switch; sector, market-cap
+ * and search filters all apply client-side so changing a filter is instant.
+ * Sector options are DERIVED from the loaded universe rather than
+ * hard-coded — FMP uses the same 11 sector names in every market, and the
+ * old hand-maintained HK/SG lists ("Financials", "REIT", "Telco", …) never
+ * matched FMP's actual tagging, which made those filters return empty.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -24,6 +31,7 @@ import type { ScreenerResponse } from '@/lib/reportTypes';
 import {
   Search,
   Check,
+  ChevronDn,
   Bookmark,
   GradeChip,
   SwipeRow,
@@ -64,12 +72,29 @@ const SORTS: { id: SortKey; label: string }[] = [
   { id: 'momentum',      label: 'M' },
 ];
 
-const US_SECTORS = ['All', 'Technology', 'Communication Services', 'Financial Services', 'Consumer Cyclical', 'Consumer Defensive', 'Healthcare', 'Industrials', 'Energy', 'Real Estate', 'Utilities', 'Basic Materials'];
-const HK_SECTORS = ['All', 'Technology', 'Financials', 'Property', 'Consumer', 'Industrials', 'Healthcare', 'Energy'];
-const SG_SECTORS = ['All', 'Financials', 'REIT', 'Tech', 'Industrials', 'Consumer', 'Property', 'Telco', 'Energy'];
+// Canonical FMP sector order — used only to keep the derived dropdown
+// stable and readable. The options themselves come from the data, so a
+// sector the provider adds tomorrow shows up automatically.
+const FMP_SECTOR_ORDER = [
+  'Technology', 'Financial Services', 'Healthcare',
+  'Consumer Cyclical', 'Consumer Defensive',
+  'Industrials', 'Communication Services', 'Energy',
+  'Basic Materials', 'Real Estate', 'Utilities',
+];
 
-// Map market → sector list for the chips row
-const sectorsFor = (m: Market) => m === 'US' ? US_SECTORS : m === 'HK' ? HK_SECTORS : SG_SECTORS;
+// Market-cap ranges — labels mirror the backend's _FRONTEND_CAP_RANGES so
+// the pre-computed US cache subsets stay aligned.
+const CAP_RANGES: { id: string; label: string; min: number | null; max: number | null }[] = [
+  { id: 'all',     label: 'Any market cap', min: null,  max: null },
+  { id: '2-12',    label: '$2B – $12B',     min: 2e9,   max: 12e9 },
+  { id: '12-50',   label: '$12B – $50B',    min: 12e9,  max: 50e9 },
+  { id: '50-100',  label: '$50B – $100B',   min: 50e9,  max: 100e9 },
+  { id: '100-500', label: '$100B – $500B',  min: 100e9, max: 500e9 },
+  { id: '500-1t',  label: '$500B – $1T',    min: 500e9, max: 1e12 },
+  { id: 'gt-1t',   label: 'Above $1T',      min: 1e12,  max: null },
+];
+
+type FilterOption = { id: string; label: string; count?: number };
 
 function formatMarketCap(mc: number | null): string {
   if (mc == null) return '—';
@@ -86,13 +111,132 @@ function gradeRank(g?: string | null): number {
   return base + (g.endsWith('+') ? 3 : g.endsWith('-') ? -3 : 0);
 }
 
+/**
+ * Compact filter dropdown with an optional type-ahead search box.
+ * Replaces the old horizontally-scrolling chip row: 11+ options no longer
+ * fit on a phone screen, and the search box lets the user jump straight to
+ * a sector instead of scrolling.
+ */
+function FilterDropdown({
+  label, value, options, onSelect, searchable = false,
+}: {
+  label: string;
+  value: string;
+  options: FilterOption[];
+  onSelect: (id: string) => void;
+  searchable?: boolean;
+}) {
+  const [open, setOpen]     = useState(false);
+  const [query, setQuery]   = useState('');
+  const rootRef  = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Close on outside click / Escape
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  // Reset + focus the search box each time the panel opens
+  useEffect(() => {
+    if (!open) return;
+    setQuery('');
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  const selected = options.find(o => o.id === value);
+  const active   = value !== 'all';
+  const q        = query.trim().toLowerCase();
+  const visible  = searchable && q
+    ? options.filter(o => o.label.toLowerCase().includes(q))
+    : options;
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`h-8 md:h-9 pl-2.5 md:pl-3 pr-2 md:pr-2.5 text-[11px] md:text-[12px] rounded-lg border flex items-center gap-1.5 transition-colors
+          ${active
+            ? 'bg-primary text-primary-foreground border-primary'
+            : 'bg-card text-muted-foreground border-border active:bg-muted'}`}
+      >
+        <span className="opacity-70">{label}:</span>
+        <span className={`max-w-[9.5rem] truncate ${active ? 'font-medium' : ''}`}>
+          {selected?.label ?? 'All'}
+        </span>
+        <ChevronDn width={12} height={12} className={`opacity-60 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}/>
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1.5 z-50 w-60 max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-card shadow-lg overflow-hidden">
+          {searchable && (
+            <div className="p-1.5 border-b border-border/60">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground/60" width={13} height={13}/>
+                <input
+                  ref={inputRef}
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder={`Find ${label.toLowerCase()}…`}
+                  className="w-full h-8 pl-7 pr-2 text-[12px] rounded-md bg-muted/60 border border-border/60 focus:bg-card focus:border-brand/40 focus:outline-none placeholder:text-muted-foreground/60 text-foreground"
+                />
+              </div>
+            </div>
+          )}
+          <div role="listbox" aria-label={label} className="max-h-64 overflow-y-auto py-1">
+            {visible.length === 0 ? (
+              <div className="px-3 py-2.5 text-[12px] text-muted-foreground/70">No matches</div>
+            ) : visible.map(o => (
+              <button
+                key={o.id}
+                type="button"
+                role="option"
+                aria-selected={o.id === value}
+                onClick={() => { onSelect(o.id); setOpen(false); }}
+                className={`w-full h-9 px-3 flex items-center justify-between gap-2 text-left text-[12.5px] transition-colors
+                  ${o.id === value
+                    ? 'bg-muted text-foreground font-medium'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}
+              >
+                <span className="truncate">{o.label}</span>
+                <span className="flex items-center gap-1.5 shrink-0">
+                  {o.count != null && (
+                    <span className="text-[10.5px] text-muted-foreground/60 tabular-nums">{o.count}</span>
+                  )}
+                  {o.id === value && <Check width={12} height={12}/>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ScreenerPage() {
   const navigate = useNavigate();
   const { mode } = useLayoutMode();
   const isDesktop = mode === 'desktop';
 
   const [market, setMarket]         = useState<Market>('US');
-  const [sector, setSector]         = useState('All');
+  const [sector, setSector]         = useState('all'); // 'all' | 'Other' | FMP sector name
+  const [capId, setCapId]           = useState('all');
   const [sortKey, setSortKey]       = useState<SortKey>('composite');
   const [vgpmOnly, setVgpmOnly]     = useState(true);
   const [search, setSearch]         = useState('');
@@ -105,6 +249,8 @@ export function ScreenerPage() {
   useEffect(() => { dataRef.current = data; }, [data]);
 
   // ── Load universe on market change ───────────────────────────────────────
+  // Sector and cap filtering happen client-side on the full universe, so
+  // changing a filter never refetches — only switching markets does.
   const load = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
@@ -112,7 +258,6 @@ export function ScreenerPage() {
       if (market === 'HK') result = await getHkScreenerStocks(forceRefresh);
       else if (market === 'SG') result = await getSgScreenerStocks(forceRefresh);
       else result = await getScreenerStocks({
-        sector: sector !== 'All' ? sector : undefined,
         marketCapMin: 2_000_000_000,
         refresh: forceRefresh,
       });
@@ -123,7 +268,7 @@ export function ScreenerPage() {
     } finally {
       setLoading(false);
     }
-  }, [market, sector]);
+  }, [market]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -162,13 +307,59 @@ export function ScreenerPage() {
     return () => { clearTimeout(initial); clearInterval(id); };
   }, []);
 
-  // ── Filter + sort ────────────────────────────────────────────────────────
+  // ── Sector dropdown options (derived from the loaded universe) ──────────
+  // FMP tags every market with the same 11 sector names; deriving options
+  // from the data guarantees the filter can never drift from the tagging.
+  const sectorOptions = useMemo<FilterOption[]>(() => {
+    const counts = new Map<string, number>();
+    let other = 0;
+    for (const r of data?.items ?? []) {
+      const s = (r.sector || '').trim();
+      if (!s || s === 'Unknown') { other += 1; continue; }
+      counts.set(s, (counts.get(s) ?? 0) + 1);
+    }
+    const opts: FilterOption[] = [...counts.entries()]
+      .sort((a, b) => {
+        const ia = FMP_SECTOR_ORDER.indexOf(a[0]);
+        const ib = FMP_SECTOR_ORDER.indexOf(b[0]);
+        return ((ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib)) || a[0].localeCompare(b[0]);
+      })
+      .map(([s, c]) => ({ id: s, label: s, count: c }));
+    if (other > 0) opts.push({ id: 'Other', label: 'Other / unclassified', count: other });
+    return [{ id: 'all', label: 'All sectors' }, ...opts];
+  }, [data]);
+
+  const capOptions = useMemo<FilterOption[]>(
+    () => CAP_RANGES.map(c => ({ id: c.id, label: c.label })),
+    [],
+  );
+  const capRange = useMemo(
+    () => CAP_RANGES.find(c => c.id === capId) ?? CAP_RANGES[0],
+    [capId],
+  );
+
+  // ── Filter + sort (client-side) ─────────────────────────────────────────
   const rows = useMemo(() => {
     const items = data?.items ?? [];
+    const q = search.trim().toLowerCase();
+    const capMin = capRange.min;
+    const capMax = capRange.max;
     let filtered = items.filter(r => {
-      if (sector !== 'All' && r.sector !== sector) return false;
-      if (search !== '' && !r.symbol.toLowerCase().includes(search.toLowerCase()) &&
-          !(r.companyName || '').toLowerCase().includes(search.toLowerCase())) return false;
+      if (sector !== 'all') {
+        const s = (r.sector || '').trim();
+        const isOther = !s || s === 'Unknown';
+        if (sector === 'Other') {
+          if (!isOther) return false;
+        } else if (isOther || s !== sector) return false;
+      }
+      if (capMin != null || capMax != null) {
+        const mc = r.marketCap;
+        if (mc == null) return false;               // can't verify → exclude
+        if (capMin != null && mc < capMin) return false;
+        if (capMax != null && mc >= capMax) return false;
+      }
+      if (q !== '' && !r.symbol.toLowerCase().includes(q) &&
+          !(r.companyName || '').toLowerCase().includes(q)) return false;
       return true;
     });
     if (vgpmOnly) filtered = filtered.filter(r => r.vgpm !== null);
@@ -178,7 +369,7 @@ export function ScreenerPage() {
       const gb = b.vgpm?.[sortKey]?.grade;
       return gradeRank(gb) - gradeRank(ga);
     });
-  }, [data, sector, search, vgpmOnly, sortKey]);
+  }, [data, sector, capRange, search, vgpmOnly, sortKey]);
 
   // ── Ticker not in universe → lookup on demand ────────────────────────────
   useEffect(() => {
@@ -220,7 +411,7 @@ export function ScreenerPage() {
           {(['US', 'HK', 'SG'] as Market[]).map(m => (
             <button
               key={m}
-              onClick={() => { setMarket(m); setSector('All'); }}
+              onClick={() => { setMarket(m); setSector('all'); setCapId('all'); }}
               className={`flex-1 h-8 md:h-9 rounded-md text-[11.5px] md:text-[12.5px] font-medium transition-colors
                 ${market === m ? 'bg-card text-foreground shadow-sm border border-border' : 'text-muted-foreground active:text-foreground'}`}
             >
@@ -244,20 +435,10 @@ export function ScreenerPage() {
         </div>
       </div>
 
-      {/* Sector chips + VGPM toggle */}
-      <div className="px-3 md:px-6 pt-2.5 flex items-center gap-1.5 overflow-x-auto phone-scroll">
-        {sectorsFor(market).map(s => (
-          <button
-            key={s}
-            onClick={() => setSector(s)}
-            className={`h-8 md:h-9 px-2.5 md:px-3 text-[11px] md:text-[12px] rounded-lg border flex items-center shrink-0 transition-colors
-              ${sector === s
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-card text-muted-foreground border-border active:bg-muted'}`}
-          >
-            {s}
-          </button>
-        ))}
+      {/* Filters: sector dropdown · market-cap dropdown · VGPM toggle */}
+      <div className="px-3 md:px-6 pt-2.5 flex flex-wrap items-center gap-1.5">
+        <FilterDropdown label="Sector" value={sector} options={sectorOptions} onSelect={setSector} searchable/>
+        <FilterDropdown label="Market cap" value={capId} options={capOptions} onSelect={setCapId}/>
         <button
           onClick={() => setVgpmOnly(v => !v)}
           className={`h-8 md:h-9 px-2.5 md:px-3 text-[11px] md:text-[12px] rounded-lg border flex items-center gap-1 shrink-0 transition-colors

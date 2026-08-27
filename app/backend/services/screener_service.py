@@ -34,7 +34,9 @@ from src.data import db as _db
 
 _STABLE = "https://financialmodelingprep.com/stable"
 
-# FMP sector names — must match the frontend SECTORS list exactly.
+# FMP sector names — the same 11 names in every market (US/HK/SG verified
+# 2026-08-27). The frontend derives its filter options from the loaded
+# universe, so these strings are the de facto contract for both sides.
 _SCREENER_SECTORS = [
     "Technology", "Healthcare", "Consumer Cyclical", "Financial Services",
     "Communication Services", "Consumer Defensive", "Energy", "Industrials",
@@ -42,6 +44,26 @@ _SCREENER_SECTORS = [
 ]
 # How many stocks per sector when fetching the "All sectors" universe.
 _PER_SECTOR_LIMIT = 30
+
+# FMP /stable/company-screener ignores the `country` parameter (verified
+# 2026-08-27: a country=US call returned LSE/XETRA/TSX/NEO rows), so the US
+# universe is filtered to US exchanges after the fetch. Same pooling
+# convention as regional_comps.MARKETS["US"].
+_US_EXCHANGES = {"NASDAQ", "NYSE", "AMEX"}
+
+# Bumped whenever cached entries written under the same parameter dict
+# become stale — a bump retires them without a manual cache wipe. v2: the
+# US universe cache predates the exchange filter above and is contaminated
+# with non-US listings.
+_CACHE_V = 2
+
+
+def _us_listing(s: dict) -> bool:
+    """True when an FMP screener row is a US-exchange listing."""
+    ex = (s.get("exchangeShortName") or s.get("exchange") or "").strip().upper()
+    if ex:
+        return ex in _US_EXCHANGES
+    return (s.get("country") or "").strip().upper() == "US"
 
 
 def _get_db_path() -> str:
@@ -384,6 +406,8 @@ def _call_fmp_screener(
         "isActivelyTrading": "true",
         "isEtf": "false",
         "isFund": "false",
+        # NOTE: FMP ignores `country` on this endpoint (verified 2026-08-27);
+        # callers filter the response by exchange instead (see _us_listing).
         "country": country,
         "limit": limit,
         "sortBy": "marketCap",
@@ -1616,6 +1640,11 @@ def backfill_master_universe(
                 seen.add(sym)
         fmp_stocks.sort(key=lambda s: s.get("marketCap") or 0, reverse=True)
 
+    # FMP ignores the country filter — the raw fetch includes foreign
+    # listings (verified 2026-08-27: ~1/3 were LSE/XETRA/TSX/…). Drop them
+    # before storing and scoring.
+    fmp_stocks = [s for s in fmp_stocks if _us_listing(s)]
+
     _set_master_universe(fmp_stocks)
     tickers = [s.get("symbol", "") for s in fmp_stocks if s.get("symbol")]
     _sqlog.info("backfill: %d tickers in master universe", len(tickers))
@@ -1689,6 +1718,7 @@ def backfill_master_universe(
             market_cap_more_than=cap["min"],
             market_cap_lower_than=cap["max"],
             limit=_PER_SECTOR_LIMIT,
+            cache_v=_CACHE_V,
         )
         ck = _make_cache_key(cache_params)
         if items:
@@ -1769,6 +1799,7 @@ def get_screener_stocks(
         market_cap_more_than=market_cap_more_than,
         market_cap_lower_than=market_cap_lower_than,
         limit=effective_limit,
+        cache_v=_CACHE_V,
     )
     cache_key = _make_cache_key(filter_params)
 
@@ -1816,6 +1847,10 @@ def get_screener_stocks(
         if exchange:
             filtered = [s for s in filtered if
                         (s.get("exchangeShortName") or s.get("exchange", "")) == exchange]
+        if country == "US" and not exchange:
+            # FMP ignores the country param — master_universe carries foreign
+            # listings (LSE/XETRA/TSX/…) that don't belong in the US tab.
+            filtered = [s for s in filtered if _us_listing(s)]
 
         tickers = [s.get("symbol", "") for s in filtered if s.get("symbol")]
         pipeline_vgpm = _get_vgpm_map(tickers)
@@ -1834,7 +1869,11 @@ def get_screener_stocks(
             market_cap_lower_than=market_cap_lower_than,
         )
     else:
-        fmp_stocks = _call_fmp_screener(**filter_params)
+        fetch_params = {k: v for k, v in filter_params.items() if k != "cache_v"}
+        fmp_stocks = _call_fmp_screener(**fetch_params)
+    if country == "US" and not exchange:
+        # FMP ignores the country param — keep US-exchange listings only.
+        fmp_stocks = [s for s in fmp_stocks if _us_listing(s)]
     tickers    = [s.get("symbol", "") for s in fmp_stocks if s.get("symbol")]
 
     live_quotes = {} if sector is None else get_live_quotes(tickers)
@@ -2190,7 +2229,7 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
     rather than presented as industry-relative.
     """
     _ensure_tables()
-    cache_key = "sg_fmp_v2"   # v2: FMP exchange universe (was curated universe.py)
+    cache_key = "sg_fmp_v3"   # v3: marketCap fix (v2 rows were all null — the FMP metrics path never sets market_cap_sgd)
 
     if not force_refresh:
         cached = _get_cached(cache_key)
@@ -2254,6 +2293,11 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
 
     scored = _compute_fast_vgpm_universe(metrics_list)
 
+    # The universe row carries the authoritative market cap. The item used to
+    # read metrics["market_cap_sgd"] — a key only the legacy yfinance fetcher
+    # sets — so every FMP-path row shipped marketCap=None.
+    mcap_by_canonical = {s["canonical"]: s.get("market_cap") for s in universe}
+
     items: list[dict] = []
     for canonical, metrics in raw_metrics.items():
         vgpm = scored.get(canonical)
@@ -2267,7 +2311,9 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
             "companyName":     metrics.get("_name", canonical),
             "sector":          metrics.get("_sector", "Unknown"),
             "industry":        metrics.get("_industry", "Unknown"),
-            "marketCap":       metrics.get("market_cap_sgd"),
+            "marketCap":       (mcap_by_canonical.get(canonical)
+                                or metrics.get("market_cap_sgd")
+                                or metrics.get("market_cap")),
             "price":           metrics.get("price"),
             "change_pct":      None,
             "volume":          None,
