@@ -558,6 +558,30 @@ async def run_regional_comps_refresh_task(ctx: dict) -> dict:
     return {"ran": ran}
 
 
+async def run_screener_refresh_task(ctx: dict) -> dict:
+    """Weekly screener cache refresh for US, HK and SG (Sat 01:00 UTC =
+    SGT 09:00). Re-fetches the universes from FMP and rewrites the cache
+    rows with an 8-day TTL so no user ever hits a cold full-universe
+    fetch. Self-gates on its ~6-day window; a partially-completed run
+    counts as not done.
+    """
+    from app.backend.services import screener_service as _ss
+    payload = None
+    try:
+        payload = await asyncio.to_thread(_ss.run_weekly_screener_refresh)
+    except Exception as exc:
+        logger.warning("[sched] screener_cache_refresh raised %s: %s",
+                       type(exc).__name__, exc)
+    if payload is not None:
+        for market, res in payload.items():
+            logger.info("[sched] screener_cache_refresh %s: %s", market, res)
+        return {"ran": True, "markets": sorted(payload)}
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "screener_cache_refresh",
+        lambda: not _ss.screener_refresh_due())
+    return {"ran": ran}
+
+
 async def run_hundred_q_daily_sweep_task(ctx: dict) -> dict:
     """Daily 100-Q event-trigger sweep. Self-gates on its 20h window."""
     from src.research_ideas.hundred_q import scheduler as _s
@@ -701,6 +725,7 @@ class WorkerSettings:
         run_iv15_sweep_task,
         run_fundflow_brief_task,
         run_regional_comps_refresh_task,
+        run_screener_refresh_task,
         run_hundred_q_daily_sweep_task,
         run_hundred_q_weekly_batch_task,
         run_hundred_q_backstop_task,

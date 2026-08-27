@@ -28,6 +28,7 @@ Schedules (all fire times UTC — Railway containers run UTC)
   idea_of_the_day       run_idea_of_the_day_task       daily IDEA_SCHEDULER_HOUR_UTC (0)
   iv15_sweep            run_iv15_sweep_task            daily IV15_ALERT_HOUR_UTC (0)
   fundflow_brief        run_fundflow_brief_task        weekly FUNDFLOW_SCHEDULER_* (Mon 00:00)
+  screener_cache_refresh run_screener_refresh_task     weekly SCREENER_REFRESH_* (Sat 01:00 UTC = SGT 09:00)
   hundred_q_daily_sweep run_hundred_q_daily_sweep_task daily 00:30 + startup catch-up
   hundred_q_weekly_batch run_hundred_q_weekly_batch_task Sunday 01:00
   hundred_q_backstop    run_hundred_q_backstop_task    1st Jan/Apr/Jul/Oct 02:00
@@ -74,6 +75,8 @@ Env knobs
   IDEA_SCHEDULER_DISABLED / IV15_ALERT_DISABLED / FUNDFLOW_SCHEDULER_DISABLED
   HUNDRED_Q_SCHEDULER_DISABLED (+ _DAILY_SWEEP / _WEEKLY_BATCH / _BACKSTOP)
   MAINTENANCE_DISABLED=true            — R2 daily housekeeping job
+  SCREENER_REFRESH_DISABLED=true       — weekly screener cache refresh
+  SCREENER_REFRESH_HOUR_UTC / SCREENER_REFRESH_WEEKDAY — fire slot overrides
   SCHEDULER_RECHECK_DISABLED=true      — R2 same-day-retry loop kill switch
   SCHEDULER_RECHECK_S=1800             — recheck loop interval (seconds)
 All toggles are re-read every loop iteration (hot-toggle by setting the var
@@ -110,6 +113,11 @@ VGPM_FIRE_HOUR_UTC = 9
 #: job's writes.
 MAINTENANCE_FIRE_HOUR_UTC = 3
 MAINTENANCE_FIRE_MINUTE_UTC = 10
+
+#: Screener caches refresh Saturday 01:00 UTC (= SGT 09:00) — same slot
+#: convention and env overrides as regional_comps.
+SCREENER_FIRE_HOUR_UTC = int(os.environ.get("SCREENER_REFRESH_HOUR_UTC", "1"))
+SCREENER_FIRE_WEEKDAY = int(os.environ.get("SCREENER_REFRESH_WEEKDAY", "5"))
 
 #: R2 same-day-retry loop interval (seconds). Failed jobs retry at most
 #: ~hourly anyway (arq keeps a failed run's result key for keep_result=1h),
@@ -164,6 +172,16 @@ def _seconds_until_maintenance_fire() -> float:
     return (target - now).total_seconds()
 
 
+def _seconds_until_screener_fire() -> float:
+    """Seconds until the next Saturday 01:00 UTC boundary (SGT 09:00)."""
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=SCREENER_FIRE_HOUR_UTC, minute=0, second=0, microsecond=0)
+    target += timedelta(days=(SCREENER_FIRE_WEEKDAY - target.weekday()) % 7)
+    if target <= now:
+        target += timedelta(days=7)
+    return (target - now).total_seconds()
+
+
 def _recheck_interval_s() -> float:
     try:
         v = float(os.environ.get("SCHEDULER_RECHECK_S", str(_DEFAULT_RECHECK_S)))
@@ -193,7 +211,7 @@ class ScheduleSpec:
 
 
 def build_schedules() -> list[ScheduleSpec]:
-    """The 9 fire schedules. Next-fire math is delegated to the existing
+    """The 10 fire schedules. Next-fire math is delegated to the existing
     scheduler modules so their HOUR_UTC / WEEKDAY overrides keep working."""
     from src.research_ideas.alerts import iv15_scheduler as iv15_sched
     from src.research_ideas.contrarian import scheduler as idea_sched
@@ -216,6 +234,10 @@ def build_schedules() -> list[ScheduleSpec]:
         now = datetime.now(timezone.utc)
         return now >= now.replace(hour=VGPM_FIRE_HOUR_UTC, minute=0,
                                   second=0, microsecond=0)
+
+    def _screener_done() -> bool:
+        from app.backend.services import screener_service as _ss
+        return not _ss.screener_refresh_due()
 
     return [
         ScheduleSpec(
@@ -255,6 +277,15 @@ def build_schedules() -> list[ScheduleSpec]:
             lock_ttl_s=_TTL_WEEKLY_S,
             is_disabled=lambda: _env_flag("REGIONAL_COMPS_SCHEDULER_DISABLED"),
             gate_fn=_rc.already_ran_this_week,
+        ),
+        ScheduleSpec(
+            name="screener_cache_refresh",
+            task="run_screener_refresh_task",
+            next_fire_fn=_seconds_until_screener_fire,
+            slot_fn=_weekly_slot,
+            lock_ttl_s=_TTL_WEEKLY_S,
+            is_disabled=lambda: _env_flag("SCREENER_REFRESH_DISABLED"),
+            gate_fn=_screener_done,
         ),
         ScheduleSpec(
             name="fundflow_brief",

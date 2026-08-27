@@ -346,6 +346,13 @@ def _get_cached(cache_key: str) -> Optional[list]:
     return json.loads(row["results_json"])
 
 
+#: Structure caches (universe / sector / VGPM) are rewritten by the weekly
+#: scheduler job; the 8-day TTL keeps rows live between Saturday runs so no
+#: user ever hits a cold full-universe fetch. Prices ride on top via the
+#: /screener/prices write-back (update_cached_prices).
+_WEEKLY_TTL_HOURS = 24 * 8
+
+
 def _set_cached(cache_key: str, results: list, ttl_hours: int = 24):
     now = datetime.now(timezone.utc)
     expires = (now + timedelta(hours=ttl_hours)).isoformat()
@@ -2095,7 +2102,8 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
     Metrics source:  the shared _fetch_ticker_metrics FMP pipeline.
     Sector/industry: FMP classification (was TICKER_SECTOR_LOOKUP with every
                      stock's industry set to the literal "HKEX").
-    Caching:         24h in screener_cache under "hk_fmp_v7".
+    Caching:         8d in screener_cache under "hk_fmp_v7" (the weekly
+                     scheduler job rewrites it; prices via write-back).
 
     The industry field is the substantive change. VGPM ranks peer-relative,
     industry first (>=5 peers) then sector (>=8); with every stock labelled
@@ -2109,13 +2117,11 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
     if not force_refresh:
         cached = _get_cached(cache_key)
         if cached is not None:
-            cached_tickers = [i["symbol"] for i in cached if i.get("symbol")]
-            live_quotes = get_live_quotes(cached_tickers)
-            if live_quotes:
-                for item in cached:
-                    q = live_quotes.get(item["symbol"])
-                    if q:
-                        _overlay_live(item, q)
+            # No blocking full-universe re-quote here — that cost seconds on
+            # every page load (SGX: 128 individual FMP /stable/quote calls,
+            # 5-11 s). Prices stay live via the frontend's 15 s
+            # /screener/prices tick, whose write-back (update_cached_prices)
+            # also keeps these rows fresh between weekly refreshes.
             return {"items": cached, "total": len(cached), "cached": True}
 
     # ── Steps 1-2: universe + classification, both from FMP ──────────────
@@ -2209,7 +2215,7 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
     # Sort: highest composite score first (HK peers ranked within HK universe)
     items.sort(key=lambda x: (x["composite_score"] is None, -(x["composite_score"] or 0)))
 
-    _set_cached(cache_key, items)
+    _set_cached(cache_key, items, ttl_hours=_WEEKLY_TTL_HOURS)
     return {"items": items, "total": len(items), "cached": False}
 
 
@@ -2222,7 +2228,8 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
                      src/tools/sg/universe.py, now the fallback).
     Metrics source:  the shared _fetch_ticker_metrics FMP pipeline.
     VGPM:            peer-relative percentile ranks, industry-first.
-    Caching:         24h in screener_cache under "sg_fmp_v2".
+    Caching:         8d in screener_cache under "sg_fmp_v3" (the weekly
+                     scheduler job rewrites it; prices via write-back).
 
     SGX is small (~150 names above the market-cap floor), so most stocks
     resolve at the sector tier rather than industry — reported as such
@@ -2234,13 +2241,11 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
     if not force_refresh:
         cached = _get_cached(cache_key)
         if cached is not None:
-            cached_tickers = [i["symbol"] for i in cached if i.get("symbol")]
-            live_quotes = get_live_quotes(cached_tickers)
-            if live_quotes:
-                for item in cached:
-                    q = live_quotes.get(item["symbol"])
-                    if q:
-                        _overlay_live(item, q)
+            # No blocking full-universe re-quote here — that cost seconds on
+            # every page load (SGX: 128 individual FMP /stable/quote calls,
+            # 5-11 s). Prices stay live via the frontend's 15 s
+            # /screener/prices tick, whose write-back (update_cached_prices)
+            # also keeps these rows fresh between weekly refreshes.
             return {"items": cached, "total": len(cached), "cached": True}
 
     try:
@@ -2315,8 +2320,8 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
                                 or metrics.get("market_cap_sgd")
                                 or metrics.get("market_cap")),
             "price":           metrics.get("price"),
-            "change_pct":      None,
-            "volume":          None,
+            "change_pct":      metrics.get("change_pct"),
+            "volume":          metrics.get("volume"),
             "beta":            metrics.get("beta"),
             "exchange":        "SGX",
             "country":         "SG",
@@ -2327,6 +2332,58 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
 
     items.sort(key=lambda x: (x["composite_score"] is None, -(x["composite_score"] or 0)))
 
-    _set_cached(cache_key, items)
+    _set_cached(cache_key, items, ttl_hours=_WEEKLY_TTL_HOURS)
     return {"items": items, "total": len(items), "cached": False}
+
+
+# ── Weekly refresh (scheduler job + manual prod seed) ────────────────────────
+#: Primary structure caches the weekly job keeps warm. US needs no entry:
+#: its read path filters the daily-backfilled master_universe in-memory.
+_PRIMARY_KEYS = ("hk_fmp_v7", "sg_fmp_v3")
+
+#: A refresh younger than this counts as "already ran this week" — the
+#: worker-side idempotency gate (mirrors regional_comps' ~6-day window).
+_REFRESH_GATE_DAYS = 6.0
+
+
+def screener_refresh_due() -> bool:
+    """True when any primary screener cache row is missing or older than
+    ~6 days — i.e. the current weekly slot's work is not done."""
+    _ensure_tables()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=_REFRESH_GATE_DAYS)).isoformat()
+    for key in _PRIMARY_KEYS:
+        row = _db.query_one(
+            "SELECT fetched_at FROM screener_cache WHERE cache_key = ?", [key])
+        if not row or (row["fetched_at"] or "") < cutoff:
+            return True
+    return False
+
+
+def run_weekly_screener_refresh(force: bool = False) -> Optional[dict]:
+    """Re-fetch the US, HK and SG screener universes from FMP and rewrite
+    their cache rows (8-day TTL). Mirrors regional_comps.run_weekly_refresh:
+    self-gates on the ~6-day window unless force=True (manual seed).
+
+    Everything below reads FMP directly — company-screener for the universes,
+    the shared _fetch_ticker_metrics pipeline for per-stock metrics — nothing
+    is recycled from stale rows.
+    """
+    if not force and not screener_refresh_due():
+        _sqlog.info("[screener] refreshed within %.0f days — skipping", _REFRESH_GATE_DAYS)
+        return None
+    results: dict = {}
+    for market, fn in (
+        ("US", lambda: get_screener_stocks(market_cap_more_than=2_000_000_000,
+                                           force_refresh=True)),
+        ("HK", lambda: get_hk_screener_stocks(force_refresh=True)),
+        ("SG", lambda: get_sg_screener_stocks(force_refresh=True)),
+    ):
+        try:
+            out = fn()
+            results[market] = {"total": out.get("total", 0)}
+            _sqlog.info("[screener] weekly refresh %s: %s items", market, out.get("total", 0))
+        except Exception as exc:
+            _sqlog.exception("[screener] weekly refresh %s failed: %s", market, exc)
+            results[market] = {"error": str(exc)[:200]}
+    return results
 
