@@ -9,7 +9,7 @@
  *   Row 2: Thinking / status detail — full width, wraps up to 3 lines
  *   Row 3: Progress bar
  */
-const BRAND = '#297A4B';
+const BRAND = 'hsl(var(--brand))';
 
 export function ProgressHeader({
   progressPct,
@@ -55,8 +55,10 @@ export function ProgressHeader({
           className="h-full transition-[width] duration-200 ease-out"
           style={{
             width: `${Math.max(0, Math.min(100, progressPct))}%`,
-            background: `linear-gradient(90deg, ${BRAND} 0%, ${BRAND} 80%, #9FE870 100%)`,
-            boxShadow: `0 0 8px ${BRAND}80`,
+            // Cobalt solid, easing to a lighter tint at the leading edge -- the old
+// gradient ended on the retired Wise lime.
+            background: `linear-gradient(90deg, ${BRAND} 0%, ${BRAND} 80%, hsl(var(--brand) / 0.55) 100%)`,
+            boxShadow: `0 0 8px hsl(var(--brand) / 0.5)`,
           }}
         />
       </div>

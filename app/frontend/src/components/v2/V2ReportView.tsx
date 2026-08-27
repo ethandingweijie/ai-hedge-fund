@@ -1010,7 +1010,7 @@ function ResearchBody({
       {hasData && (
         <div className="rounded-lg border border-brand/25 bg-brand/10 shadow-sm p-4 flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-card border border-brand/25 flex items-center justify-center shrink-0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#297A4B" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--brand))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>

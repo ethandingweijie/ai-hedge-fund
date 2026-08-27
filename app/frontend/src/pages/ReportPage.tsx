@@ -867,14 +867,14 @@ export function ReportPage() {
       // root's own pb-24 keeps the footer hint clear of the bar instead.
       <div className="h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px))] -mb-24 pb-24 flex flex-col bg-background relative overflow-hidden">
         {/* ── Hero video background — LIGHT MODE ──────────────────────────────
-           Slow-motion looped footage recoloured toward Equitable green.
+           Slow-motion looped footage, drained to greyscale: grey smoke on white.
            Shared with LoginPage; playbackRate driven below via useEffect. */}
         <div className="absolute inset-0 z-0 pointer-events-none dark:hidden" aria-hidden="true">
           <video
             ref={heroVideoRef}
             className="absolute inset-0 w-full h-full object-cover"
             style={{
-              filter: 'hue-rotate(80deg) saturate(0.9) brightness(1.05) contrast(0.95)',
+              filter: 'grayscale(1) brightness(1.05) contrast(0.95)',
               opacity: 0.55,
             }}
             src="/landing-hero.mp4"
@@ -885,7 +885,7 @@ export function ReportPage() {
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(180deg, rgba(46,125,50,0.22) 0%, rgba(255,255,255,0.55) 55%, rgba(255,255,255,0.92) 100%)',
+                'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.55) 55%, rgba(255,255,255,0.92) 100%)',
             }}
           />
           <div
@@ -898,13 +898,13 @@ export function ReportPage() {
         </div>
 
         {/* ── Hero video background — DARK MODE ───────────────────────────────
-           Descending green-hue footage (already green-tinted). */}
+           Same footage in greyscale: light-grey smoke on black. */}
         <div className="absolute inset-0 z-0 pointer-events-none hidden dark:block" aria-hidden="true">
           <video
             ref={heroVideoDarkRef}
             className="absolute inset-0 w-full h-full object-cover"
             style={{
-              filter: 'saturate(1.05) brightness(0.85) contrast(1.0)',
+              filter: 'grayscale(1) brightness(1.15) contrast(1.05)',
               opacity: 0.55,
             }}
             src="/landing-hero-dark.mp4"
@@ -914,14 +914,14 @@ export function ReportPage() {
             className="absolute inset-0"
             style={{
               background:
-                'linear-gradient(180deg, rgba(24,24,27,0.35) 0%, rgba(24,24,27,0.55) 55%, rgba(24,24,27,0.85) 100%)',
+                'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.85) 100%)',
             }}
           />
           <div
             className="absolute inset-0"
             style={{
               background:
-                'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(24,24,27,0.7) 100%)',
+                'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(0,0,0,0.7) 100%)',
             }}
           />
         </div>

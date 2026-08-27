@@ -2,7 +2,7 @@
  * LoginPage.tsx — Reimagined UI
  *
  * Minimal-fintech Linear/Stripe aesthetic. Zinc-neutral palette, 1px borders,
- * Brand green (#297A4B) reserved for logo. Wires real Google GSI + Apple
+ * Brand accent is the cobalt --brand token. Wires real Google GSI + Apple
  * OAuth flows from auth-context into the new button shells.
  */
 
@@ -197,9 +197,9 @@ export function LoginPage() {
           ref={heroVideoRef}
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            // Shift hues toward green, soften saturation so the tint reads as
-            // a brand wash rather than the original footage colour.
-            filter: 'hue-rotate(80deg) saturate(0.9) brightness(1.05) contrast(0.95)',
+            // Fully desaturated: the footage reads as grey smoke over the
+            // white page rather than carrying any brand tint.
+            filter: 'grayscale(1) brightness(1.05) contrast(0.95)',
             opacity: 0.55,
           }}
           src="/landing-hero.mp4"
@@ -210,12 +210,12 @@ export function LoginPage() {
           preload="auto"
           aria-hidden="true"
         />
-        {/* Equitable green colour wash on top of the video for brand consistency */}
+        {/* Neutral white wash so the sign-in content stays legible */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, rgba(41,122,75,0.22) 0%, rgba(238,243,236,0.55) 55%, rgba(238,243,236,0.92) 100%)',
+              'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.55) 55%, rgba(255,255,255,0.92) 100%)',
           }}
         />
         {/* Soft vignette so content remains legible over moving footage */}
@@ -223,7 +223,7 @@ export function LoginPage() {
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(238,243,236,0.6) 100%)',
+              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(255,255,255,0.6) 100%)',
           }}
         />
       </div>
@@ -236,9 +236,9 @@ export function LoginPage() {
           ref={heroVideoDarkRef}
           className="absolute inset-0 w-full h-full object-cover"
           style={{
-            // Footage is already green-themed — just dim + soften saturation
-            // so it sits behind the forest surface as ambient motion.
-            filter: 'saturate(1.05) brightness(0.85) contrast(1.0)',
+            // Desaturated and lifted so the smoke reads light grey against
+            // the pure-black canvas instead of sinking into it.
+            filter: 'grayscale(1) brightness(1.15) contrast(1.05)',
             opacity: 0.55,
           }}
           src="/landing-hero-dark.mp4"
@@ -249,12 +249,12 @@ export function LoginPage() {
           preload="auto"
           aria-hidden="true"
         />
-        {/* Dark wash: forest bg fades in toward the bottom so the sign-in card sits on a solid surface */}
+        {/* Dark wash: black fades in toward the bottom so the sign-in card sits on a solid surface */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, rgba(19,28,21,0.35) 0%, rgba(19,28,21,0.55) 55%, rgba(19,28,21,0.85) 100%)',
+              'linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.85) 100%)',
           }}
         />
         {/* Radial vignette — dark edges, lighter centre */}
@@ -262,7 +262,7 @@ export function LoginPage() {
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(19,28,21,0.7) 100%)',
+              'radial-gradient(120% 80% at 50% 40%, transparent 35%, rgba(0,0,0,0.7) 100%)',
           }}
         />
       </div>

@@ -11,7 +11,12 @@
 import React, { useRef, useState } from 'react';
 import { actionTone, gradeTone } from '@/lib/semanticColors';
 
-export const BRAND = '#297A4B';
+// Resolves through the --brand token, so it tracks the theme (cobalt
+// #2563EB light / #3B82F6 dark) and stays in step with `text-brand`.
+// Valid in inline styles and SVG fill/stroke alike.
+export const BRAND = 'hsl(var(--brand))';
+/** Same accent at partial alpha, for washes and glows. */
+export const brandAlpha = (a: number) => `hsl(var(--brand) / ${a})`;
 
 /* ───────── Icons ───────── */
 const I = (p: React.SVGProps<SVGSVGElement>) => (

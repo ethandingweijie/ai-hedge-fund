@@ -239,7 +239,7 @@ export function ScreenerPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Search ticker or name"
             className="w-full h-10 md:h-11 pl-8 pr-3 text-[13px] md:text-[14px] rounded-lg bg-muted/60 border border-border focus:bg-card focus:border-brand/40 focus:outline-none focus:ring-2 placeholder:text-muted-foreground/70 text-foreground"
-            style={{ ['--tw-ring-color' as any]: `${BRAND}1a` }}
+            style={{ ['--tw-ring-color' as any]: `hsl(var(--brand) / 0.1)` }}
           />
         </div>
       </div>
@@ -436,13 +436,13 @@ export function ScreenerPage() {
                   {
                     icon: <Search width={18} height={18} strokeWidth={2}/>,
                     label: 'Analyse',
-                    color: '#163300',
+                    color: 'hsl(var(--brand))',
                     onClick: () => handleOpen(r.symbol),
                   },
                   {
                     icon: <Bookmark width={18} height={18} strokeWidth={2}/>,
                     label: 'Watch',
-                    color: '#297A4B',
+                    color: 'hsl(var(--surface-2-active))',
                     onClick: () => handleWatch(r.symbol),
                   },
                 ]}
