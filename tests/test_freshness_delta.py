@@ -28,6 +28,20 @@ def _env(monkeypatch):
     yield
 
 
+@pytest.fixture()
+def tmp_db(tmp_path, monkeypatch):
+    """Point the dual-mode layer at a fresh tmp SQLite file — the phase's
+    pulse write-through must never touch the real dev archive."""
+    from src.data import db as _db
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("RUN_ARCHIVE_PATH", str(tmp_path / "fresh_delta.db"))
+    _db.close_all_connections()
+    from src.research_ideas.complacency import web_research
+    web_research._tables_ready_key = None
+    yield
+    _db.close_all_connections()
+
+
 def _prior(run_id="run-prev", run_at="2026-08-05T00:00:00+00:00") -> dict:
     return {
         "run_id": run_id,
@@ -58,7 +72,7 @@ def test_kill_switch_returns_empty(monkeypatch):
     assert out == {}
 
 
-def test_tickers_without_prior_skipped(monkeypatch):
+def test_tickers_without_prior_skipped(tmp_db, monkeypatch):
     from src import pipeline
     monkeypatch.setattr(pipeline, "_pulse_cache_delta", lambda t: None)
     called = []
@@ -70,6 +84,58 @@ def test_tickers_without_prior_skipped(monkeypatch):
     out = pipeline._run_freshness_delta(["PANW", "CRWD"], {"CRWD": _prior()})
     assert set(out) == {"CRWD"}
     assert called == ["CRWD"]
+
+
+# ── Pulse write-through (mirror of L3) ───────────────────────────────────────
+
+def test_write_through_publishes_pulse_cache_row(tmp_db, monkeypatch):
+    """A computed delta is published to the same-day pulse cache so a later
+    Pulse beat 2 serves it without searching (mirror of the L3 read side)."""
+    from datetime import timezone
+    from src import pipeline
+    from src.research_ideas.complacency import web_research
+
+    computed = {"material": True, "events": [{"headline": "Q2 beat"}],
+                "verdict": "thesis strengthened"}
+    monkeypatch.setattr(pipeline, "_pulse_cache_delta", lambda t: None)
+    monkeypatch.setattr(pipeline, "_delta_for_ticker",
+                        lambda t, p, k: dict(computed))
+
+    out = pipeline._run_freshness_delta(["CRWD"], {"CRWD": _prior()})
+    assert out["CRWD"]["verdict"] == "thesis strengthened"
+
+    payload = web_research._cache_get("CRWD", "pulse", "", max_age_days=1)
+    assert payload is not None
+    assert payload["pulse_date"] == datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    assert payload["delta"]["verdict"] == "thesis strengthened"
+
+
+def test_write_through_failure_never_breaks_the_phase(tmp_db, monkeypatch):
+    """publish_pulse_delta raising must not lose the delta itself."""
+    from src import pipeline
+    monkeypatch.setattr(pipeline, "_pulse_cache_delta", lambda t: None)
+    monkeypatch.setattr(pipeline, "_delta_for_ticker",
+                        lambda t, p, k: {"material": None, "verdict": "searched"})
+
+    def boom(ticker, delta):
+        raise RuntimeError("cache offline")
+
+    monkeypatch.setattr("src.memory.freshness.publish_pulse_delta", boom)
+    out = pipeline._run_freshness_delta(["CRWD"], {"CRWD": _prior()})
+    assert out["CRWD"]["verdict"] == "searched"
+
+
+def test_l3_cache_hit_does_not_write_again(monkeypatch):
+    """The reuse branch serves the cached delta without re-publishing it."""
+    from src import pipeline
+    cached = {"material": True, "events": [], "verdict": "from cache"}
+    monkeypatch.setattr(pipeline, "_pulse_cache_delta", lambda t: dict(cached))
+    published = []
+    monkeypatch.setattr("src.memory.freshness.publish_pulse_delta",
+                        lambda t, d: published.append(t))
+    out = pipeline._run_freshness_delta(["CRWD"], {"CRWD": _prior()})
+    assert out["CRWD"]["verdict"] == "from cache"
+    assert published == []
 
 
 def test_pipeline_classify_alias_back_compat():

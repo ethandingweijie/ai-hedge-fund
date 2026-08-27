@@ -289,6 +289,14 @@ def _run_freshness_delta(
             deltas[t] = _cached
             continue
         deltas[t] = _delta_for_ticker(t, prior, tavily_key)
+        # Write-through (mirror of L3): this run's delta becomes today's
+        # Pulse beat 2 — later pulses for this ticker serve it from cache
+        # instead of searching again. Soft-fail inside the helper.
+        try:
+            from src.memory import freshness as _freshness
+            _freshness.publish_pulse_delta(t, deltas[t])
+        except Exception as exc:
+            print(f"  [freshness] {t}: pulse write-through failed: {exc}")
     return deltas
 
 

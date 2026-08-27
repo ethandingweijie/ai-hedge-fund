@@ -245,4 +245,91 @@ def test_search_outage_still_emits_well_formed_delta(pulse_env, monkeypatch):
     assert delta["material"] is None
     assert delta["events"] == []
     assert delta["verdict"] == "check unavailable"
-    assert dict(events)["pulse_complete"]["ticker"] == "BABA"
+
+
+# ── robustness: keep-alives + detached beat-2 task ───────────────────────────
+
+def test_keepalive_comments_emitted_during_slow_search(pulse_env, monkeypatch):
+    """While the beat-2 search runs, the stream emits SSE comment frames so
+    idle-timeout proxies don't sever the connection mid-search."""
+    _seed_recap()
+    import time
+
+    def slow_fake(**kwargs):
+        time.sleep(0.06)
+        return _fake_delta(kwargs["ticker"], kwargs.get("prior"))
+
+    monkeypatch.setattr("src.memory.freshness.run_freshness_search", slow_fake)
+    monkeypatch.setattr(A, "_PULSE_KEEPALIVE_S", 0.01)
+
+    async def collect():
+        resp = await A.pulse(request=None, ticker="BABA")
+        return [c async for c in resp.body_iterator]
+
+    chunks = asyncio.run(collect())
+    assert any(c.startswith(": keep-alive") for c in chunks)
+    assert any("pulse_delta" in c for c in chunks)   # stream still completes
+
+
+def test_client_disconnect_still_caches_beat2(pulse_env, monkeypatch):
+    """Client drops mid-search (edge proxies cut SSE at ~30 s) — the
+    detached beat-2 task still lands the delta in the pulse cache, so the
+    next pulse serves it instead of paying for another search."""
+    _seed_recap()
+    calls = pulse_env["search_calls"]
+    import time
+
+    def slow_fake(**kwargs):
+        time.sleep(0.05)
+        calls.append(kwargs)
+        return _fake_delta(kwargs["ticker"], kwargs.get("prior"))
+
+    monkeypatch.setattr("src.memory.freshness.run_freshness_search", slow_fake)
+    monkeypatch.setattr(A, "_PULSE_KEEPALIVE_S", 0.01)
+
+    async def drop_mid_stream():
+        resp = await A.pulse(request=None, ticker="BABA")
+        it = resp.body_iterator
+        async for chunk in it:
+            if chunk.startswith(": keep-alive"):
+                break                       # beat-2 task is now in flight
+        await it.aclose()                   # simulate client disconnect
+        await asyncio.sleep(0.2)            # detached task finishes + caches
+        return A._pulse_cache_get_delta("BABA")
+
+    delta = asyncio.run(drop_mid_stream())
+    assert delta is not None
+    assert delta["verdict"] == "Prior thesis at risk"
+    assert len(calls) == 1
+
+
+def test_retry_joins_inflight_task_no_duplicate_search(pulse_env, monkeypatch):
+    """A second pulse arriving while a beat-2 search is in flight (e.g. the
+    frontend's silent retry after being disconnected) joins the running
+    task instead of paying for a duplicate search."""
+    _seed_recap()
+    calls = pulse_env["search_calls"]
+    import time
+
+    def slow_fake(**kwargs):
+        time.sleep(0.08)
+        calls.append(kwargs)
+        return _fake_delta(kwargs["ticker"], kwargs.get("prior"))
+
+    monkeypatch.setattr("src.memory.freshness.run_freshness_search", slow_fake)
+
+    async def scenario():
+        r1 = await A.pulse(request=None, ticker="BABA")
+        it = r1.body_iterator
+        async for chunk in it:
+            if "pulse_prior" in chunk:
+                break
+        await it.aclose()                       # first client drops mid-search
+        r2 = await A.pulse(request=None, ticker="BABA")
+        return await _drain(r2)
+
+    e2 = asyncio.run(scenario())
+    delta = dict(e2)["pulse_delta"]
+    assert delta["verdict"] == "Prior thesis at risk"
+    assert len(calls) == 1                      # joined in-flight, no dupe
+    assert dict(e2)["pulse_complete"]["ticker"] == "BABA"

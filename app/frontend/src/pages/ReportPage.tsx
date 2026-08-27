@@ -959,8 +959,13 @@ export function ReportPage() {
                       searchCompanies(raw.trim())
                         .then(data => {
                           if (reqId !== searchReqIdRef.current) return;
-                          setSuggestions(data);
-                          setShowSugg(data.length > 0);
+                          // Exact-match commit: if the user already typed a
+                          // full ticker, don't open the dropdown over the
+                          // Pulse card — the recall below is the answer.
+                          const typed = raw.trim().toUpperCase();
+                          const exact = data.some(s => s.ticker.toUpperCase() === typed);
+                          setSuggestions(exact ? [] : data);
+                          setShowSugg(!exact && data.length > 0);
                           setSearchNoMatch(data.length === 0 && raw.trim().length >= 2);
                           setSuggLoading(false);
                         })
@@ -1018,8 +1023,10 @@ export function ReportPage() {
           </form>
 
           {/* Pulse — instant recall of past research on this ticker (M2 C2).
-              Fires on debounced ticker input, never auto-runs the pipeline. */}
-          <PulseCard ticker={ticker} onOpenReport={(id) => navigate(`/report/${id}`)} onRunFull={runFullFromPulse} />
+              Fires on debounced ticker input, never auto-runs the pipeline.
+              Suppressed while the autocomplete dropdown is open so it never
+              renders half-hidden behind it (fetch keeps running). */}
+          <PulseCard ticker={ticker} suppressed={showSugg} onOpenReport={(id) => navigate(`/report/${id}`)} onRunFull={runFullFromPulse} />
 
           {/* Popular marquee tape */}
           {v2Popular.length > 0 && (

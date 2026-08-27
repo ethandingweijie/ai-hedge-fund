@@ -69,9 +69,12 @@ interface Props {
   ticker: string;
   onOpenReport: (runId: string) => void;
   onRunFull: () => void;
+  /** Hide the card while the autocomplete dropdown is open (the fetch
+   *  keeps running — the card pops in the moment the dropdown closes). */
+  suppressed?: boolean;
 }
 
-export function PulseCard({ ticker, onOpenReport, onRunFull }: Props) {
+export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props) {
   const [prior, setPrior]   = useState<PulsePrior | null>(null);
   const [delta, setDelta]   = useState<PulseDelta | null>(null);
   const [searching, setSearching] = useState(false);
@@ -89,11 +92,13 @@ export function PulseCard({ ticker, onOpenReport, onRunFull }: Props) {
     const seq = ++reqSeqRef.current;
     let cancelled = false;
     let controller: AbortController | null = null;
-    // Debounce: wait for typing to settle before firing the pulse.
-    const timer = setTimeout(async () => {
-      if (cancelled) return;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const runPulse = async (isRetry: boolean) => {
+      if (cancelled || seq !== reqSeqRef.current) return;
       setSearching(true);
       controller = new AbortController();
+      let settled = false; // a pulse_delta or pulse_error arrived on this stream
       try {
         const res = await pulseTicker(t, controller.signal);
         if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
@@ -115,13 +120,13 @@ export function PulseCard({ ticker, onOpenReport, onRunFull }: Props) {
               if (line.startsWith('event: ')) name = line.slice(7);
               else if (line.startsWith('data: ')) data = line.slice(6);
             }
-            if (!name || !data) continue;
+            if (!name || !data) continue; // keep-alive comments, heartbeats
             if (cancelled || seq !== reqSeqRef.current) return;
             try {
               const payload = JSON.parse(data);
               if (name === 'pulse_prior') { setPrior(payload); setSearching(true); }
-              else if (name === 'pulse_delta') { setDelta(payload); setSearching(false); }
-              else if (name === 'pulse_error') { setError(payload.error ?? 'pulse failed'); setSearching(false); }
+              else if (name === 'pulse_delta') { settled = true; setDelta(payload); setSearching(false); }
+              else if (name === 'pulse_error') { settled = true; setError(payload.error ?? 'pulse failed'); setSearching(false); }
               else if (name === 'pulse_complete') { setSearching(false); }
             } catch { /* malformed frame — skip */ }
           }
@@ -129,29 +134,47 @@ export function PulseCard({ ticker, onOpenReport, onRunFull }: Props) {
       } catch (exc) {
         if ((exc as Error)?.name === 'AbortError') return;
         if (!cancelled && seq === reqSeqRef.current) {
+          settled = true;
           setError('Pulse unavailable');
           setSearching(false);
         }
       }
-    }, 600);
+      if (cancelled || seq !== reqSeqRef.current || settled) return;
+      // Stream closed with no delta/error (edge proxy cut, or the server is
+      // still searching after dropping the client — the beat-2 task caches
+      // its result server-side regardless). One silent retry: by then the
+      // delta is usually cached and arrives instantly. After the retry,
+      // stop the spinner instead of turning forever.
+      if (!isRetry) {
+        retryTimer = setTimeout(() => { runPulse(true); }, 12_000);
+      } else {
+        setSearching(false);
+      }
+    };
+
+    // Debounce: wait for typing to settle before firing the pulse
+    // (300 ms — aligned with the 280 ms company-search debounce).
+    const timer = setTimeout(() => { runPulse(false); }, 300);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
       try { controller?.abort(); } catch { /* ignore */ }
     };
   }, [t, valid]);
 
-  if (!valid || (!prior && !delta && !error)) return null;
+  const showSkeleton = searching && !prior && !delta && !error;
+  if (!valid || (!prior && !delta && !error && !showSkeleton)) return null;
 
   const sym = currencySymbol(t);
 
   return (
-    <div className="mx-4 mt-3 rounded-xl border border-border bg-card/95 backdrop-blur shadow-sm p-4 max-h-[38vh] overflow-y-auto">
+    <div className={`mx-4 mt-3 rounded-xl border border-border bg-card/95 backdrop-blur shadow-sm p-4 max-h-[38vh] overflow-y-auto${suppressed ? ' hidden' : ''}`}>
       {/* Header row */}
       <div className="flex items-center gap-2 mb-2">
         <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
-          Pulse
+          Pulse · past research
         </span>
         <span className="text-[11px] font-semibold text-foreground tabular-nums">{t}</span>
         {prior?.covered && <AgeBadge ageDays={prior.age_days} />}
@@ -170,6 +193,14 @@ export function PulseCard({ ticker, onOpenReport, onRunFull }: Props) {
         </span>
       </div>
 
+      {showSkeleton ? (
+        /* Fetch fired, beat 1 not back yet — show something immediately
+           instead of nothing (the old null-render hid the card for ~1 s+). */
+        <p className="text-[11px] text-muted-foreground">
+          Recalling past research…
+        </p>
+      ) : (
+      <>
       {/* Beat 1 — accumulated knowledge */}
       {prior?.covered ? (
         <div className="text-[12px] leading-relaxed">
@@ -263,6 +294,8 @@ export function PulseCard({ ticker, onOpenReport, onRunFull }: Props) {
           Run full analysis
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }

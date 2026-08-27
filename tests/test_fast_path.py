@@ -306,7 +306,7 @@ def test_pulse_cache_miss_falls_through_to_search(tmp_db, monkeypatch):
     assert out["CRWD"]["verdict"] == "searched"
 
 
-def test_pulse_cache_read_error_falls_through(monkeypatch):
+def test_pulse_cache_read_error_falls_through(tmp_db, monkeypatch):
     """Any reader explosion is swallowed inside _pulse_cache_delta (soft-fail)
     and the normal search path still runs."""
     from src import pipeline

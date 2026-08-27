@@ -255,3 +255,23 @@ def run_freshness_search(
     except Exception as exc:
         print(f"  [freshness] {ticker}: freshness check failed: {exc}")
         return base
+
+
+def publish_pulse_delta(ticker: str, delta: dict) -> None:
+    """Write one freshness delta into the shared Pulse cache
+    (complacency_web_research, kind='pulse', same-day gate on read).
+
+    Shared write side of the pulse cache: the Pulse endpoint writes here
+    after its beat-2 search, and the pipeline writes here after 2_9 — so
+    any completed run today makes the rest of today's pulses instant on
+    beat 2 (mirror of the pipeline's same-day pulse-cache reuse).
+    Soft-fail: the cache is a courtesy; a write failure must never break
+    the caller."""
+    try:
+        from datetime import timezone as _tz
+        from src.research_ideas.complacency import web_research as _wr
+        _today = datetime.now(_tz.utc).strftime("%Y-%m-%d")
+        _wr._cache_put(ticker, "pulse", "",
+                       {"pulse_date": _today, "delta": delta})
+    except Exception as exc:
+        print(f"  [freshness] {ticker}: pulse cache write failed: {exc}")

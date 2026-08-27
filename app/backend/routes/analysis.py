@@ -704,6 +704,13 @@ async def get_pipeline_status(ticker: str):
 _PULSE_KIND = "pulse"
 _PULSE_LOCKS: dict[str, asyncio.Lock] = {}
 _PULSE_LOCKS_GUARD = asyncio.Lock()
+# Detached beat-2 tasks by ticker: a second request (e.g. the frontend's
+# silent retry after an edge-proxy disconnect) joins the running task
+# instead of paying for a duplicate search.
+_PULSE_INFLIGHT: dict[str, asyncio.Task] = {}
+# While a beat-2 search runs (~10-25 s) the stream goes quiet; emit an SSE
+# comment frame every N seconds so idle-timeout proxies don't sever it.
+_PULSE_KEEPALIVE_S = 10.0
 
 
 def _pulse_today() -> str:
@@ -733,13 +740,11 @@ def _pulse_cache_get_delta(ticker: str) -> dict | None:
 
 
 def _pulse_cache_put_delta(ticker: str, delta: dict) -> None:
-    """Blocking — call via asyncio.to_thread. Soft-fail: cache is a courtesy."""
-    try:
-        from src.research_ideas.complacency import web_research as _wr
-        _wr._cache_put(ticker, _PULSE_KIND, "",
-                       {"pulse_date": _pulse_today(), "delta": delta})
-    except Exception as exc:
-        logger.warning("pulse cache write failed (%s): %s", ticker, exc)
+    """Blocking — call via asyncio.to_thread. Soft-fail: cache is a courtesy.
+    Delegates to the shared writer (mirror of the pipeline's write-through)
+    so both producers stamp the same payload shape."""
+    from src.memory import freshness
+    freshness.publish_pulse_delta(ticker, delta)
 
 
 def _pulse_discovery_search(ticker: str) -> dict:
@@ -771,6 +776,31 @@ def _pulse_discovery_search(ticker: str) -> dict:
         logger.warning("pulse discovery search failed (%s): %s", ticker, exc)
         out["verdict"] = "search unavailable"
     return out
+
+
+async def _pulse_search_and_put(ticker: str, prior: dict | None) -> dict:
+    """Beat-2 search + cache write as ONE unit, run as a detached task:
+    even if the client stream dies mid-search (edge proxies drop SSE
+    connections), the result still lands in the pulse cache — the next
+    pulse (or the frontend's silent retry) serves it instantly instead of
+    paying for another search. Never raises: soft-fails into a well-formed
+    delta."""
+    try:
+        if prior:
+            from src.memory import freshness
+            delta = await asyncio.to_thread(
+                freshness.run_freshness_search,
+                ticker=ticker,
+                prior=prior,
+                request_timeout_s=30.0,
+            )
+        else:
+            delta = await asyncio.to_thread(_pulse_discovery_search, ticker)
+        await asyncio.to_thread(_pulse_cache_put_delta, ticker, delta)
+        return delta
+    except Exception as exc:
+        logger.warning("pulse beat-2 search failed (%s): %s", ticker, exc)
+        return {"material": None, "events": [], "verdict": "check unavailable"}
 
 
 @router.get("/pulse")
@@ -825,19 +855,27 @@ async def pulse(request: Request, ticker: str = Query(...)):
                     delta = await asyncio.to_thread(_pulse_cache_get_delta, t)
                     from_cache = delta is not None
                     if delta is None:
-                        if prior:
-                            from src.memory import freshness
-                            delta = await asyncio.to_thread(
-                                freshness.run_freshness_search,
-                                ticker=t,
-                                prior=prior,
-                                request_timeout_s=30.0,
-                            )
-                        else:
-                            delta = await asyncio.to_thread(
-                                _pulse_discovery_search, t)
-                        await asyncio.to_thread(
-                            _pulse_cache_put_delta, t, delta)
+                        # Detached task: the search + cache write survive a
+                        # client disconnect mid-search (see _pulse_search_and_put).
+                        _beat2 = _PULSE_INFLIGHT.get(t)
+                        if _beat2 is None or _beat2.done():
+                            _beat2 = asyncio.ensure_future(
+                                _pulse_search_and_put(t, prior))
+                            _PULSE_INFLIGHT[t] = _beat2
+                            _beat2.add_done_callback(
+                                lambda _tk, _t=t: _PULSE_INFLIGHT.pop(_t, None))
+                        while True:
+                            try:
+                                delta = await asyncio.wait_for(
+                                    asyncio.shield(_beat2),
+                                    timeout=_PULSE_KEEPALIVE_S,
+                                )
+                                break
+                            except asyncio.TimeoutError:
+                                # Still searching — keep the stream warm. SSE
+                                # comment frames are ignored by EventSource and
+                                # by PulseCard's parser (no event:/data: lines).
+                                yield ": keep-alive\n\n"
 
             yield _sse("pulse_delta", {
                 "ticker": t,
