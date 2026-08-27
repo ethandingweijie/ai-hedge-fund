@@ -1,0 +1,153 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Wise-inspired light theme */
+:root {
+  --background: #ffffff;
+  --foreground: #0E0F0C;
+  --card: #ffffff;
+  --card-foreground: #0E0F0C;
+  --popover: #ffffff;
+  --popover-foreground: #0E0F0C;
+  --primary: #9FE870;
+  --primary-foreground: #163300;
+  --secondary: #E2F6D5;
+  --secondary-foreground: #163300;
+  --muted: #F5F4F2;
+  --muted-foreground: #454745;
+  --accent: #E2F6D5;
+  --accent-foreground: #163300;
+  --destructive: #CB272F;
+  --border: #E5E5E5;
+  --input: #E5E5E5;
+  --ring: #9FE870;
+  --chart-1: #9FE870;
+  --chart-2: #0B4C72;
+  --chart-3: #454745;
+  --chart-4: #E2F6D5;
+  --chart-5: #163300;
+  --radius: 0.75rem;
+  --sidebar: #F5F4F2;
+  --sidebar-foreground: #0E0F0C;
+  --sidebar-primary: #9FE870;
+  --sidebar-primary-foreground: #163300;
+  --sidebar-accent: #E2F6D5;
+  --sidebar-accent-foreground: #163300;
+  --sidebar-border: #E5E5E5;
+  --sidebar-ring: #9FE870;
+}
+
+/* Wise-inspired dark theme */
+.dark {
+  --background: #0E0F0C;
+  --foreground: #F5F4F2;
+  --card: #1A1B19;
+  --card-foreground: #F5F4F2;
+  --popover: #1A1B19;
+  --popover-foreground: #F5F4F2;
+  --primary: #9FE870;
+  --primary-foreground: #163300;
+  --secondary: #1E3A14;
+  --secondary-foreground: #9FE870;
+  --muted: #1A1B19;
+  --muted-foreground: #9A9B98;
+  --accent: #1E3A14;
+  --accent-foreground: #9FE870;
+  --destructive: #CB272F;
+  --border: #2A2B28;
+  --input: #2A2B28;
+  --ring: #9FE870;
+  --chart-1: #9FE870;
+  --chart-2: #4DA3E0;
+  --chart-3: #9A9B98;
+  --chart-4: #1E3A14;
+  --chart-5: #C8F5A0;
+  --sidebar: #1A1B19;
+  --sidebar-foreground: #F5F4F2;
+  --sidebar-primary: #9FE870;
+  --sidebar-primary-foreground: #163300;
+  --sidebar-accent: #1E3A14;
+  --sidebar-accent-foreground: #9FE870;
+  --sidebar-border: #2A2B28;
+  --sidebar-ring: #9FE870;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Wise-style heading utility */
+  .heading-xl {
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    text-transform: uppercase;
+  }
+  .heading-lg {
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .heading-md {
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.2;
+  }
+}
