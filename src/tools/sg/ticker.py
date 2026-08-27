@@ -176,3 +176,18 @@ def to_stockanalysis_code(ticker: str) -> str:
     'd05'
     """
     return ticker.strip().upper().replace(".SI", "").lower()
+
+
+def to_fmp_code(ticker: str) -> str:
+    """Normalise to the symbol format FMP's global endpoints accept.
+
+    SGX needs no special handling — FMP uses the same "XXX.SI" form as
+    yfinance (verified 2026-08-27: D05.SI -> DBS Group Holdings Ltd).
+    Kept as a named alias so callers can use one vocabulary across markets.
+
+    Examples
+    --------
+    >>> to_fmp_code("D05")
+    'D05.SI'
+    """
+    return to_yfinance_code(ticker)

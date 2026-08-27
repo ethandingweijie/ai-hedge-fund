@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 
 # Bumped when curated event content changes (new events, re-calibrated
 # numbers) so cached replays keyed on snapshot_hash miss and recompute.
-LIBRARY_VERSION = 2
+LIBRARY_VERSION = 3
 
 
 # Regime vocabulary — must stay aligned with macro_regime.py outputs so
@@ -71,18 +71,49 @@ class MacroSnapshot:
         }
 
 
+# Regional benchmark indices. FMP carries all three back further than any
+# tradable proxy: ^HSI to 1986, ^HSCE to 1993, ^STI to 1987 (verified
+# 2026-08-27), which is what makes the pre-2000 events computable at all.
+REGIONAL_BENCHMARKS: dict[str, str] = {
+    "HSI": "^HSI",       # Hang Seng Index — HK broad market
+    "HSCEI": "^HSCE",    # Hang Seng China Enterprises — H-shares
+    "STI": "^STI",       # Straits Times Index — SG broad market
+}
+
+# Regions a holding can be anchored to. "US" is the default so every
+# pre-existing SectorPerf row keeps its meaning unchanged.
+REGIONS = ("US", "HK", "SG")
+
+
 @dataclass(frozen=True)
 class SectorPerf:
-    """One GICS sector's window return during the event (via its SPDR ETF)."""
+    """One sector's window return during the event, for one region.
+
+    US rows are SPDR sector ETF returns — real tradable index performance.
+    HK and SG rows are cap-weighted baskets of the largest current
+    constituents of that sector on the exchange, because neither market has
+    sector ETFs with usable history. Those rows therefore carry SURVIVORSHIP
+    BIAS: the basket is drawn from companies still listed today, so a sector
+    whose worst names delisted will read better than it lived. `basis`
+    records which construction produced the number so a reader is never
+    misled into treating the two as equivalent, and `constituents` records
+    how many names actually had data in the window.
+    """
     sector: str
-    symbol: str          # sector SPDR ETF (XLK, XLF, …)
+    symbol: str          # sector SPDR ETF (XLK, XLF, …) or a basket label
     return_pct: float    # curated window return, 1dp (live-free reference)
+    region: str = "US"
+    basis: str = "etf"   # "etf" | "constituent_basket"
+    constituents: int = 0   # names in the basket (0 for ETF rows)
 
     def as_dict(self) -> dict:
         return {
             "sector": self.sector,
             "symbol": self.symbol,
             "return_pct": self.return_pct,
+            "region": self.region,
+            "basis": self.basis,
+            "constituents": self.constituents,
         }
 
 
@@ -99,8 +130,16 @@ class EventSpec:
     macro: MacroSnapshot
     tags: tuple[str, ...] = field(default_factory=tuple)
     # Per-sector window returns, sorted best→worst. Empty for synthetic
-    # test events; every curated event carries its calibrated set.
+    # test events; every curated event carries its calibrated set. May hold
+    # rows for several regions — filter with sectors_for_region().
     sectors: tuple[SectorPerf, ...] = field(default_factory=tuple)
+    # {"HSI": {"return_pct": …, "max_dd_pct": …}, "HSCEI": …, "STI": …}.
+    # A key is absent when the index has no coverage for that window, which
+    # is honest rather than zero-filled.
+    regional: dict = field(default_factory=dict)
+    # Set on events whose regional sector rows are constituent baskets, so
+    # the payload can carry the caveat to the reader.
+    caveats: tuple[str, ...] = field(default_factory=tuple)
 
     def as_dict(self) -> dict:
         return {
@@ -113,9 +152,13 @@ class EventSpec:
                 "qqq_return_pct": self.qqq_return_pct,
                 "qqq_max_dd_pct": self.qqq_max_dd_pct,
             },
+            "regional_benchmarks": {
+                k: dict(v) for k, v in sorted(self.regional.items())
+            },
             "macro": self.macro.as_dict(),
             "tags": list(self.tags),
             "sector_performance": [s.as_dict() for s in self.sectors],
+            "caveats": list(self.caveats),
         }
 
 
@@ -325,7 +368,155 @@ EVENTS: list[EventSpec] = [
             SectorPerf(sector="Financials", symbol="XLF", return_pct=-14.5),
         ),
     ),
+
+    # ── Asia-specific events ────────────────────────────────────────────────
+    # The US library above cannot see these. Two of the three are close to
+    # uncorrelated with the S&P: through the 1997-98 Asian Financial Crisis
+    # the US market ROSE 13.9% while Hong Kong fell 47.6% and Singapore
+    # 52.3%; through the 2021-22 China crackdown the S&P fell 1.6% while the
+    # Hang Seng fell 52.8%. A portfolio with Asian exposure was being scored
+    # against the wrong tape entirely.
+    #
+    # SPY/QQQ and the regional index numbers are all computed by
+    # .stageW4_calib.py from live FMP EOD; windows and macro snapshots are
+    # curated the same way as the US events.
+    EventSpec(
+        key="asian_fc_1997",
+        name="Asian Financial Crisis (1997–98)",
+        start="1997-07-01",       # Thai baht float — the trigger
+        end="1998-09-30",         # regional trough, pre-recovery
+        spy_return_pct=13.9, spy_max_dd_pct=-19.0,
+        # QQQ did not exist yet (inception 1999-03) — left at the US
+        # benchmark's own figures rather than invented.
+        qqq_return_pct=13.9, qqq_max_dd_pct=-19.0,
+        macro=MacroSnapshot(
+            risk_appetite="risk-off", rate_direction="hiking",
+            dollar_trend="rising", volatility_regime="extreme",
+            recession_risk="severe",
+            notes="Currency-peg collapses across ASEAN, IMF programmes in "
+                  "Thailand/Indonesia/Korea, HKMA defending the peg with "
+                  "overnight rates spiking. A REGIONAL solvency crisis with "
+                  "almost no US equity transmission — the S&P rose through "
+                  "it. The defining stress test for Asian exposure.",
+        ),
+        tags=("currency", "emerging-markets", "credit", "asia"),
+        sectors=(),   # US sector ETFs mostly post-date this window
+    ),
+    EventSpec(
+        key="china_crash_2015",
+        name="China equity crash (2015–16)",
+        start="2015-06-12",       # Shanghai Composite peak
+        end="2016-02-11",         # global risk trough
+        spy_return_pct=-12.9, spy_max_dd_pct=-14.1,
+        qqq_return_pct=-11.2, qqq_max_dd_pct=-16.4,
+        macro=MacroSnapshot(
+            risk_appetite="risk-off", rate_direction="cutting",
+            dollar_trend="rising", volatility_regime="high",
+            recession_risk="medium",
+            notes="Margin-financed A-share bubble unwinding, the August "
+                  "2015 CNY devaluation and circuit-breaker chaos. H-shares "
+                  "(HSCEI −45%) took far more damage than the US (−13%).",
+        ),
+        tags=("china", "currency", "equity-bubble", "asia"),
+        sectors=(),
+    ),
+    EventSpec(
+        key="china_crackdown_2021",
+        name="China regulatory & property crackdown (2021–22)",
+        start="2021-02-17",       # Hang Seng post-COVID peak
+        end="2022-10-31",         # pre-reopening trough
+        spy_return_pct=-1.6, spy_max_dd_pct=-25.4,
+        qqq_return_pct=-16.8, qqq_max_dd_pct=-35.5,
+        macro=MacroSnapshot(
+            risk_appetite="risk-off", rate_direction="hiking",
+            dollar_trend="rising", volatility_regime="high",
+            recession_risk="medium",
+            notes="Platform antitrust, the education sector effectively "
+                  "nationalised, Evergrande and the developer liquidity "
+                  "cascade, and zero-COVID. A POLICY event, not a credit or "
+                  "rate event: the Hang Seng fell 52.8% while the S&P fell "
+                  "1.6%. Singapore rose 7.6% over the same window — even "
+                  "within Asia this did not travel.",
+        ),
+        tags=("china", "regulation", "property", "asia"),
+        sectors=(),
+    ),
 ]
+
+
+# ── Merge in the calibrated regional data ───────────────────────────────────
+#
+# Benchmarks and HK/SG sector baskets are machine-derived (see
+# .stageW4_calib.py) and live in the generated event_regional module, so the
+# curated judgement above — windows, macro snapshots, narrative — stays
+# hand-written and reviewable while the numbers stay reproducible.
+
+_BASKET_CAVEAT = (
+    "HK/SG sector rows are cap-weighted baskets of companies still listed "
+    "today, not index returns — they carry survivorship bias and read better "
+    "than the sectors lived."
+)
+
+
+def _with_regional(events: list[EventSpec]) -> list[EventSpec]:
+    try:
+        from src.portfolio.event_regional import (
+            REGIONAL_BENCHMARKS_DATA, REGIONAL_SECTORS, US_SECTORS,
+        )
+    except Exception:            # pragma: no cover - generated file absent
+        return events
+
+    import dataclasses
+
+    out: list[EventSpec] = []
+    for ev in events:
+        regional = REGIONAL_BENCHMARKS_DATA.get(ev.key, {})
+        base = tuple(ev.sectors)
+        # Hand-curated US rows always win; the generated ones only fill in
+        # events that shipped without any (the Asia events).
+        if not base:
+            base = tuple(
+                SectorPerf(sector=sector, symbol=symbol, return_pct=ret,
+                           region="US", basis="etf")
+                for sector, symbol, ret in (US_SECTORS.get(ev.key) or ())
+            )
+        extra: list[SectorPerf] = []
+        for region, rows in (REGIONAL_SECTORS.get(ev.key) or {}).items():
+            for sector, ret, n in rows:
+                extra.append(SectorPerf(
+                    sector=sector, symbol=f"{region}:{sector}",
+                    return_pct=ret, region=region,
+                    basis="constituent_basket", constituents=n,
+                ))
+        if not regional and not extra and base == tuple(ev.sectors):
+            out.append(ev)
+            continue
+        # US rows keep their existing order; each regional block is sorted
+        # best->worst within itself.
+        extra.sort(key=lambda s: (s.region, -s.return_pct))
+        out.append(dataclasses.replace(
+            ev,
+            regional=dict(regional),
+            sectors=base + tuple(extra),
+            caveats=(ev.caveats + (_BASKET_CAVEAT,)) if extra else ev.caveats,
+        ))
+    return out
+
+
+EVENTS = _with_regional(EVENTS)
+
+
+def sectors_for_region(ev: "EventSpec", region: str) -> tuple[SectorPerf, ...]:
+    """This event's sector rows for one region, best→worst. Empty when the
+    event has no calibrated rows there (e.g. HK single-name history does not
+    reach 1997, so asian_fc_1997 carries no HK sector basket)."""
+    return tuple(s for s in ev.sectors if s.region == region)
+
+
+def regions_covered(ev: "EventSpec") -> tuple[str, ...]:
+    """Regions this event can anchor a holding to, in REGIONS order."""
+    have = {s.region for s in ev.sectors}
+    return tuple(r for r in REGIONS if r in have)
 
 
 def events_as_dicts() -> list[dict]:

@@ -258,6 +258,18 @@ class OneOffItem(BaseModel):
         return "" if v is None else str(v)
 
 
+class CallSignalItem(BaseModel):
+    """One qualitative reading of the call — never feeds a number."""
+    topic: str = ""
+    detail: str = ""
+    quote: str = ""
+
+    @field_validator("topic", "detail", "quote", mode="before")
+    @classmethod
+    def _str(cls, v):
+        return "" if v is None else str(v)
+
+
 class EarningsAssumptionOutput(BaseModel):
     fiscal_year: Optional[int] = None
     fiscal_quarter: Optional[int] = None
@@ -269,6 +281,14 @@ class EarningsAssumptionOutput(BaseModel):
     capital_allocation: list[CapAllocItem] = Field(default_factory=list)
     one_offs: list[OneOffItem] = Field(default_factory=list)
     verbatim_quotes: list[str] = Field(default_factory=list)
+    # Qualitative call signals — these feed the LLM write-up and R3's
+    # challenge loop, never an intrinsic value. Transcript-only: none of
+    # this exists in a press release or a filing.
+    tone_shift: str = ""
+    qa_pressure: list[CallSignalItem] = Field(default_factory=list)
+    new_risks: list[CallSignalItem] = Field(default_factory=list)
+    strategic_pivots: list[CallSignalItem] = Field(default_factory=list)
+    regulatory: list[CallSignalItem] = Field(default_factory=list)
 
     @field_validator("fiscal_period_label", mode="before")
     @classmethod
@@ -285,8 +305,15 @@ class EarningsAssumptionOutput(BaseModel):
     def _fq(cls, v):
         return _coerce_quarter(v)
 
+    @field_validator("tone_shift", mode="before")
+    @classmethod
+    def _tone(cls, v):
+        return "" if v is None else str(v)
+
     @field_validator("guidance", "segments", "margins", "kpis",
-                     "capital_allocation", "one_offs", mode="before")
+                     "capital_allocation", "one_offs", "qa_pressure",
+                     "new_risks", "strategic_pivots", "regulatory",
+                     mode="before")
     @classmethod
     def _lists(cls, v):
         return _coerce_list(v)
@@ -520,6 +547,21 @@ def _focus_block(ticker: str) -> str:
             + "\n- ".join(fields[:18]))
 
 
+def _industry_block(ticker: str) -> str:
+    """Industry / sub-sector extraction targets as a prompt block.
+
+    Resolves off the FMP industry string, so an HKEX property developer is
+    asked about contracted sales and gearing while an SGX REIT is asked
+    about rental reversion and aggregate leverage. Empty when the ticker
+    cannot be classified — the base extraction still runs.
+    """
+    try:
+        from src.memory.transcript_focus import industry_prompt_block
+        return industry_prompt_block(ticker)
+    except Exception:
+        return ""
+
+
 _COMPANY_SYSTEM = (
     "You extract management's forward-looking assumptions from a company's "
     "own earnings materials (press release + call transcript). Report ONLY "
@@ -582,8 +624,21 @@ def extract_company_assumptions(ticker: str,
         "- one_offs: array of {item, amount, impact} — impairments, "
         "restructuring, FX, notable non-recurring items\n"
         "- verbatim_quotes: array of up to 3 strings — the most "
-        "decision-relevant management statements."
-    ) + _focus_block(ticker)
+        "decision-relevant management statements.\n"
+        "- tone_shift: string — how management's confidence changed versus "
+        "the prior call (e.g. firm full-year guidance last quarter, now "
+        "hedged as subject to macro conditions). Empty string when the call "
+        "gives no basis for a comparison. Do NOT infer it from the numbers.\n"
+        "- qa_pressure: array of {topic, detail, quote} — topics analysts "
+        "pressed on repeatedly or from several banks, and whether "
+        "management answered directly or deflected. Q&A section only.\n"
+        "- new_risks: array of {topic, detail, quote} — risks named here "
+        "that were not raised before.\n"
+        "- strategic_pivots: array of {topic, detail, quote} — changes in "
+        "stated strategy, capital priorities or competitive positioning.\n"
+        "- regulatory: array of {topic, detail, quote} — policy, regulatory "
+        "or geopolitical commentary."
+    ) + _focus_block(ticker) + _industry_block(ticker)
 
     client, model_name = _get_bundle_client()
     if client is None:
@@ -603,6 +658,13 @@ def extract_company_assumptions(ticker: str,
         "capital_allocation": [c.model_dump() for c in out.capital_allocation[:8]],
         "one_offs": [o.model_dump() for o in out.one_offs[:8]],
         "quotes": [q[:400] for q in out.verbatim_quotes[:3]],
+        "call_signals": {
+            "tone_shift": (out.tone_shift or "")[:600],
+            "qa_pressure": [c.model_dump() for c in out.qa_pressure[:8]],
+            "new_risks": [c.model_dump() for c in out.new_risks[:8]],
+            "strategic_pivots": [c.model_dump() for c in out.strategic_pivots[:6]],
+            "regulatory": [c.model_dump() for c in out.regulatory[:6]],
+        },
         "model_used": f"{model_name}(assumptions)",
         "sources": {
             "press_release": bool(press_text),
@@ -935,7 +997,8 @@ def latest_earnings_event(ticker: str) -> Optional[str]:
     from datetime import date, timedelta
 
     candidates: list[str] = []
-    # FMP surprises (US + FPI ADRs; [] for HK/SG)
+    # FMP surprises — global coverage now includes HK and SG (verified
+    # 2026-08-27), so this is no longer a US-only channel.
     try:
         from src.tools.api import get_earnings_surprises
         rows = get_earnings_surprises(
@@ -1033,6 +1096,34 @@ def refresh_company_assumptions(ticker: str, force: bool = False) -> dict:
             quotes=extraction.get("quotes"),
             model_used=extraction.get("model_used"),
         )
+        # Qualitative call signals — separate table, narrative-only. Written
+        # only when a transcript was actually available: a press release
+        # carries no tone and no Q&A, so there is nothing to read from it.
+        if transcript:
+            try:
+                signals = extraction.get("call_signals") or {}
+                industry_label = ""
+                try:
+                    from src.memory.transcript_focus import targets_for_ticker
+                    industry_label = targets_for_ticker(tkr)[0]
+                except Exception:
+                    pass
+                assumption_store.upsert_transcript_signals(
+                    tkr, int(fy), int(fq),
+                    as_of=as_of,
+                    tone_shift=signals.get("tone_shift"),
+                    qa_pressure=signals.get("qa_pressure"),
+                    new_risks=signals.get("new_risks"),
+                    strategic_pivots=signals.get("strategic_pivots"),
+                    regulatory=signals.get("regulatory"),
+                    speakers=(transcript or {}).get("speakers"),
+                    industry_label=industry_label,
+                    model_used=extraction.get("model_used"),
+                )
+            except Exception as exc:
+                logger.warning("[assumptions] transcript signals persist "
+                               "failed for %s: %s", tkr, exc)
+
         added = assumption_store.append_assumption_versions(
             version_rows_from_company(tkr, extraction))
         logger.info("[assumptions] %s FY%sQ%s extracted (guidance %d, "
@@ -1093,6 +1184,35 @@ def build_assumption_context(ticker: str, max_chars: int = 4500) -> str:
             lines.append(f'  > "{q}"')
         if len(lines) > 1:
             parts.append("\n".join(lines))
+
+    # Qualitative call signals. These are explicitly NOT valuation inputs —
+    # they are what the write-up can say about how management sounded and
+    # where analysts pushed, which no filing or press release records.
+    try:
+        sig = assumption_store.get_latest_transcript_signals(ticker)
+    except Exception:
+        sig = None
+    if sig:
+        sig_lines = [
+            f"Earnings-call signals (FY{sig['fiscal_year']} Q"
+            f"{sig['fiscal_quarter']}"
+            + (f", {sig['industry_label']}" if sig.get("industry_label") else "")
+            + ") — qualitative, not a valuation input:"
+        ]
+        if sig.get("tone_shift"):
+            sig_lines.append(f"  - tone vs prior call: {sig['tone_shift']}")
+        for label, key in (("analysts pressed on", "qa_pressure"),
+                           ("new risk raised", "new_risks"),
+                           ("strategic shift", "strategic_pivots"),
+                           ("regulatory/policy", "regulatory")):
+            for item in (sig.get(key) or [])[:3]:
+                topic = item.get("topic") or ""
+                detail = item.get("detail") or ""
+                if topic or detail:
+                    sig_lines.append(f"  - {label}: {topic}"
+                                     + (f" — {detail}" if detail else ""))
+        if len(sig_lines) > 1:
+            parts.append("\n".join(sig_lines))
 
     reports: list[dict] = []
     try:

@@ -80,3 +80,29 @@ def to_canonical(ticker: str) -> str:
     '00700.HK'
     """
     return to_akshare_code(ticker) + ".HK"
+
+
+def to_fmp_code(ticker: str) -> str:
+    """Normalise to the symbol format FMP's global endpoints accept.
+
+    FMP rejects the repo's 5-digit canonical form and requires the 4-digit
+    form (verified 2026-08-27 against /stable/profile):
+
+        00700.HK -> EMPTY      0700.HK  -> Tencent Holdings Limited
+        09988.HK -> EMPTY      9988.HK  -> Alibaba Group Holding Limited
+        700.HK   -> EMPTY      80700.HK -> Tencent (real 5-digit RMB counter)
+
+    That is exactly what to_yfinance_code already produces, including the
+    genuine 5-digit codes (lstrip then zfill(4) leaves 80700 untouched), so
+    this is a documented alias rather than a second implementation.
+
+    Examples
+    --------
+    >>> to_fmp_code("00700.HK")
+    '0700.HK'
+    >>> to_fmp_code("9988")
+    '9988.HK'
+    >>> to_fmp_code("80700")
+    '80700.HK'
+    """
+    return to_yfinance_code(ticker)

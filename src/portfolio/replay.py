@@ -30,7 +30,8 @@ import json
 from typing import Callable, Optional
 
 from src.portfolio.event_library import (
-    BENCH_TOLERANCE_PP, EVENTS, LIBRARY_VERSION, EventSpec, events_as_dicts,
+    BENCH_TOLERANCE_PP, EVENTS, LIBRARY_VERSION, REGIONAL_BENCHMARKS,
+    EventSpec, events_as_dicts,
 )
 
 # Coverage parameters
@@ -39,6 +40,20 @@ _MIN_WINDOW_POINTS = 15     # fewer in-window closes → insufficient data
 
 # Benchmark symbols
 _SPY, _QQQ = "SPY", "QQQ"
+
+# Which broad index a holding is measured against, by market. Beta against
+# SPY is close to meaningless for an HKEX name during an Asia-local crisis,
+# so each holding also gets a beta against its home index.
+_HOME_BENCHMARK = {"hk": "HSI", "sg": "STI"}
+
+
+def _home_benchmark(ticker: str) -> Optional[str]:
+    """Regional benchmark key for a holding, or None for US names."""
+    try:
+        from src.tools.intl_provider import detect_market
+        return _HOME_BENCHMARK.get(detect_market(ticker) or "")
+    except Exception:
+        return None
 
 
 # ── Primitive math ───────────────────────────────────────────────────────────
@@ -141,6 +156,35 @@ def _replay_event(ev: EventSpec, holdings: list[dict], weights: dict[str, float]
         "spy_return_pct": ev.spy_return_pct, "spy_max_dd_pct": ev.spy_max_dd_pct,
         "qqq_return_pct": ev.qqq_return_pct, "qqq_max_dd_pct": ev.qqq_max_dd_pct,
     }
+
+    # Regional benchmarks (^HSI / ^HSCE / ^STI). Only the keys the event
+    # actually carries are fetched, so an event that predates an index does
+    # not spend a call proving it. Curated-vs-live is cross-checked on the
+    # same tolerance as SPY/QQQ.
+    regional_live: dict[str, dict] = {}
+    regional_series: dict[str, tuple] = {}
+    for label, symbol in REGIONAL_BENCHMARKS.items():
+        if label not in (ev.regional or {}):
+            continue
+        series = _series_for(fetcher, symbol, ev.start, ev.end, buffer_start)
+        inw = _in_window(series, ev.start, ev.end)
+        if not inw:
+            continue
+        regional_series[label] = _daily_returns([d for d, _ in inw],
+                                                [c for _, c in inw])
+        regional_live[label] = {
+            "return_pct": _round2(_window_return_pct([c for _, c in inw])),
+            "max_dd_pct": _round2(_max_dd_pct([c for _, c in inw])),
+        }
+    regional_divergent = [
+        f"{label}.{field}"
+        for label, curated_row in (ev.regional or {}).items()
+        for field in ("return_pct", "max_dd_pct")
+        if (regional_live.get(label, {}).get(field) is not None
+            and curated_row.get(field) is not None
+            and abs(regional_live[label][field] - curated_row[field])
+            > BENCH_TOLERANCE_PP)
+    ]
     divergences = [
         k for k in curated
         if live.get(k) is not None and abs(live[k] - curated[k]) > BENCH_TOLERANCE_PP
@@ -161,12 +205,16 @@ def _replay_event(ev: EventSpec, holdings: list[dict], weights: dict[str, float]
             and first_in_window <= _shift_days(ev.start, _GRACE_CALENDAR_DAYS)
             and len(in_win) >= _MIN_WINDOW_POINTS
         )
+        home = _home_benchmark(tkr)
         row = {
             "ticker": tkr,
             "covered": covered,
             "window_return_pct": None,
             "max_dd_pct": None,
             "beta": None,
+            # Beta against the holding's own market, when it has one.
+            "home_benchmark": home,
+            "home_beta": None,
         }
         if covered:
             covered_names.append(tkr)
@@ -177,6 +225,9 @@ def _replay_event(ev: EventSpec, holdings: list[dict], weights: dict[str, float]
             a_dates, a_rets = _daily_returns(dates, closes)
             a_al, b_al = _align_returns(a_dates, a_rets, *spy_ret_series)
             row["beta"] = _round2(_beta_pct_series(a_al, b_al))
+            if home and home in regional_series:
+                h_a, h_b = _align_returns(a_dates, a_rets, *regional_series[home])
+                row["home_beta"] = _round2(_beta_pct_series(h_a, h_b))
             base = closes[0] or 1.0
             normalized[tkr] = [(d, 100.0 * c / base) for d, c in zip(dates, closes)]
         rows.append(row)
@@ -197,6 +248,12 @@ def _replay_event(ev: EventSpec, holdings: list[dict], weights: dict[str, float]
             "live": live,
             "cross_check": "divergent" if divergences else "ok",
             "divergent_keys": divergences,
+            "regional": {
+                "curated": {k: dict(v) for k, v in sorted((ev.regional or {}).items())},
+                "live": {k: dict(v) for k, v in sorted(regional_live.items())},
+                "cross_check": "divergent" if regional_divergent else "ok",
+                "divergent_keys": sorted(regional_divergent),
+            },
         },
         "holdings": rows,
         "portfolio": portfolio,
@@ -208,7 +265,20 @@ def _replay_event(ev: EventSpec, holdings: list[dict], weights: dict[str, float]
 def _portfolio_curve(normalized: dict[str, list[tuple[str, float]]],
                      weights: dict[str, float]) -> list[tuple[str, float]]:
     """Weighted portfolio equity curve (each series normalized to 100 at its
-    first in-window close, forward-filled onto the union of dates)."""
+    first in-window close, forward-filled onto the union of dates).
+
+    Weights are renormalized over the series that actually have a value on
+    each date. Without that, a date where only some series have reported yet
+    sums to less than the full weight and the curve starts below 100, which
+    inflates the window return without bound.
+
+    That was latent while every holding was American and shared one trading
+    calendar: the first union date had every series present. HK, SG and US
+    calendars differ (different holidays, and Asian sessions close on days
+    Wall Street does not), so a mixed portfolio hits it immediately — a
+    2011 euro-crisis replay of a US/HK/SG book returned +160% while every
+    single holding in it was between -50% and +11%.
+    """
     all_dates = sorted({d for series in normalized.values() for d, _ in series})
     last = {t: None for t in normalized}
     idx = {t: 0 for t in normalized}
@@ -222,7 +292,10 @@ def _portfolio_curve(normalized: dict[str, list[tuple[str, float]]],
         vals = [(t, last[t]) for t in normalized if last[t] is not None]
         if not vals:
             continue
-        curve.append((d, sum(weights[t] * v for t, v in vals)))
+        wsum = sum(weights[t] for t, _ in vals)
+        if wsum <= 0:
+            continue
+        curve.append((d, sum(weights[t] * v for t, v in vals) / wsum))
     return curve
 
 

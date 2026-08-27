@@ -2579,6 +2579,10 @@ def get_sector_peer_multiples(
     sector: str,
     is_hk: bool = False,
     profile_name: str = "",
+    ticker: str = "",
+    exchange: str = "",
+    industry: str = "",
+    market_cap: float = 0.0,
 ) -> dict[str, float]:
     """
     Return sector peer multiples for relative valuation.
@@ -2588,6 +2592,12 @@ def get_sector_peer_multiples(
     sector      : sector string (e.g. "Tech", "Financials")
     is_hk       : True for HKEX-listed stocks → uses HK_SECTOR_PEER_MULTIPLES
     profile_name: optional sub-profile override (e.g. "Money Center Bank")
+    ticker      : when given, HK/SG names resolve live exchange comps and the
+                  exchange/industry are looked up automatically
+    exchange    : FMP short code ("HKSE"/"SES"), skips the ticker lookup
+    industry    : FMP industry string, skips the ticker lookup
+    market_cap  : the target's own market cap — lets HK/SG comps resolve to a
+                  size-matched peer cohort instead of a whole-industry median
 
     Returns
     -------
@@ -2598,21 +2608,80 @@ def get_sector_peer_multiples(
     and stale-dynamic for the same field — each field is independently
     either live or static, never partially blended.
     """
-    if is_hk:
-        return (
-            HK_SECTOR_PEER_MULTIPLES.get(profile_name)
-            or HK_SECTOR_PEER_MULTIPLES.get(sector)
-            or {}
-        )
+    table = HK_SECTOR_PEER_MULTIPLES if is_hk else SECTOR_PEER_MULTIPLES
     static = (
-        SECTOR_PEER_MULTIPLES.get(profile_name)
-        or SECTOR_PEER_MULTIPLES.get(sector)
+        table.get(profile_name)
+        or table.get(sector)
         or {}
     )
+
+    # ── HK / SG: live exchange comps, industry-first ──────────────────────
+    # Before FMP global coverage this branch could only return the static
+    # 2026-04 HK table. Now HKEX supports genuine industry medians (97 of its
+    # 139 industries clear the peer floor) and SGX resolves to sector for all
+    # but a handful. Falls through to `static` for any field without a
+    # qualifying comp set, so this can only add information.
+    regional = _regional_peer_multiples(ticker, exchange, industry, sector,
+                                        market_cap)
+    if regional:
+        merged = {**static}
+        basis: dict[str, dict] = {}
+        for field, row in regional.items():
+            merged[field] = row["value"]
+            basis[field] = {"basis": row["basis"],
+                            "cohort": row.get("cohort", "all"),
+                            "peer_count": row["peer_count"]}
+        # Non-numeric, underscore-prefixed so the numeric consumers that read
+        # peer["pe"] / peer.get("ev_ebitda") are unaffected. Lets the report
+        # and the LLM write-up state what a multiple was actually derived
+        # from instead of implying a precision the peer set does not support.
+        merged["_comp_basis"] = basis
+        return merged
+    if is_hk:
+        return static
+
     dynamic = get_dynamic_peer_multiples(sector, profile_name)
     if not dynamic:
         return static
     return {**static, **dynamic}
+
+
+def _regional_peer_multiples(
+    ticker: str = "",
+    exchange: str = "",
+    industry: str = "",
+    sector: str = "",
+    market_cap: float = 0.0,
+) -> dict[str, dict]:
+    """Live HK/SG comps for one name, or {} when unavailable.
+
+    Resolves the exchange and FMP industry from the ticker when the caller
+    did not supply them. Never raises and never blocks: a missing table, a
+    stale refresh or an unclassifiable ticker all return {}.
+    """
+    try:
+        from src.data.regional_comps import (
+            EXCHANGES, get_fmp_classification, get_regional_multiples,
+        )
+    except Exception:
+        return {}
+
+    fmp_sector = sector
+    if (not exchange or not industry) and ticker:
+        info = get_fmp_classification(ticker)
+        exchange = exchange or info.get("exchange", "")
+        industry = industry or info.get("industry", "")
+        # The FMP sector string ("Financial Services") is what keys the
+        # comps table, not the repo's internal profile name ("Financials").
+        fmp_sector = info.get("sector", "") or sector
+
+    if exchange not in EXCHANGES:
+        return {}
+    try:
+        return get_regional_multiples(exchange, industry, fmp_sector,
+                                      market_cap=market_cap or None)
+    except Exception:
+        return {}
 
 
 def get_wacc_for_exchange(

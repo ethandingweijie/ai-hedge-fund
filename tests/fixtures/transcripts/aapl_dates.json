@@ -1,0 +1,27 @@
+[
+  {
+    "quarter": 3,
+    "fiscalYear": 2026,
+    "date": "2026-07-30"
+  },
+  {
+    "quarter": 2,
+    "fiscalYear": 2026,
+    "date": "2026-04-30"
+  },
+  {
+    "quarter": 1,
+    "fiscalYear": 2026,
+    "date": "2026-01-29"
+  },
+  {
+    "quarter": 4,
+    "fiscalYear": 2025,
+    "date": "2025-10-30"
+  },
+  {
+    "quarter": 3,
+    "fiscalYear": 2025,
+    "date": "2025-07-31"
+  }
+]

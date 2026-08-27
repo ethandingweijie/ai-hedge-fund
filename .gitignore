@@ -47,6 +47,10 @@ Thumbs.db
 
 # Txt files
 *.txt
+# ...except recorded test fixtures. tests/test_fmp_transcripts.py asserts the
+# Q&A split against three real transcripts with genuinely different shapes;
+# without them the suite cannot run offline on a fresh clone.
+!tests/fixtures/transcripts/*.txt
 
 # PDF files
 *.pdf

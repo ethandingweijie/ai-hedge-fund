@@ -115,6 +115,29 @@ CREATE TABLE IF NOT EXISTS assumption_scorecard (
     scored_at TEXT,
     PRIMARY KEY (ticker, source, field_key, fiscal_year, fiscal_quarter)
 );
+
+-- Qualitative readings of an earnings call: management tone, what analysts
+-- pushed on, risk language that is new this quarter. Deliberately a SEPARATE
+-- table rather than columns on earnings_assumptions — partly so no ALTER is
+-- needed on an existing table (schema_guard territory), and partly because
+-- none of this may ever move an intrinsic value. It feeds the LLM write-up
+-- and R3's challenge loop only.
+CREATE TABLE IF NOT EXISTS transcript_signals (
+    ticker TEXT NOT NULL,
+    fiscal_year INTEGER NOT NULL,
+    fiscal_quarter INTEGER NOT NULL,
+    as_of TEXT,
+    tone_shift TEXT,
+    qa_pressure_json TEXT,
+    new_risks_json TEXT,
+    strategic_pivots_json TEXT,
+    regulatory_json TEXT,
+    speakers_json TEXT,
+    industry_label TEXT,
+    extracted_at TEXT,
+    model_used TEXT,
+    PRIMARY KEY (ticker, fiscal_year, fiscal_quarter)
+);
 """
 
 _ensure_lock = threading.Lock()
@@ -555,3 +578,86 @@ def get_scorecard_summary(ticker: str, source: str | None = None) -> dict:
         n = t["hits"] + t["misses"]
         t["hit_rate"] = round(t["hits"] / n, 3) if n else None
     return tally
+
+
+# ── Transcript call signals (qualitative) ───────────────────────────────────
+#
+# Kept apart from earnings_assumptions on purpose: these readings feed the
+# narrative and R3's challenge loop, and must never move an intrinsic value
+# on their own. Tone and Q&A pressure exist only in a transcript — no press
+# release or filing carries them — so this is the one store that would be
+# empty without the FMP transcript channel.
+
+def upsert_transcript_signals(
+    ticker: str,
+    fiscal_year: int,
+    fiscal_quarter: int,
+    *,
+    as_of: str | None = None,
+    tone_shift: str | None = None,
+    qa_pressure: list | None = None,
+    new_risks: list | None = None,
+    strategic_pivots: list | None = None,
+    regulatory: list | None = None,
+    speakers: list | None = None,
+    industry_label: str | None = None,
+    model_used: str | None = None,
+) -> None:
+    ensure_assumption_tables()
+    db.execute(
+        """
+        INSERT INTO transcript_signals
+            (ticker, fiscal_year, fiscal_quarter, as_of, tone_shift,
+             qa_pressure_json, new_risks_json, strategic_pivots_json,
+             regulatory_json, speakers_json, industry_label, extracted_at,
+             model_used)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(ticker, fiscal_year, fiscal_quarter) DO UPDATE SET
+            as_of=excluded.as_of,
+            tone_shift=excluded.tone_shift,
+            qa_pressure_json=excluded.qa_pressure_json,
+            new_risks_json=excluded.new_risks_json,
+            strategic_pivots_json=excluded.strategic_pivots_json,
+            regulatory_json=excluded.regulatory_json,
+            speakers_json=excluded.speakers_json,
+            industry_label=excluded.industry_label,
+            extracted_at=excluded.extracted_at,
+            model_used=excluded.model_used
+        """,
+        [ticker.upper(), int(fiscal_year), int(fiscal_quarter), as_of,
+         (tone_shift or "")[:600], _dumps(qa_pressure), _dumps(new_risks),
+         _dumps(strategic_pivots), _dumps(regulatory), _dumps(speakers),
+         (industry_label or "")[:120], _now(), model_used],
+    )
+
+
+def get_transcript_signals(ticker: str, limit: int = 4) -> list[dict]:
+    """Newest-first call signals for a ticker."""
+    ensure_assumption_tables()
+    rows = db.query(
+        "SELECT * FROM transcript_signals WHERE ticker = ? "
+        "ORDER BY fiscal_year DESC, fiscal_quarter DESC LIMIT ?",
+        [ticker.upper(), int(limit)],
+    )
+    out = []
+    for r in rows or []:
+        out.append({
+            "ticker": r["ticker"],
+            "fiscal_year": r["fiscal_year"],
+            "fiscal_quarter": r["fiscal_quarter"],
+            "as_of": r["as_of"],
+            "tone_shift": r["tone_shift"] or "",
+            "qa_pressure": _loads(r["qa_pressure_json"]) or [],
+            "new_risks": _loads(r["new_risks_json"]) or [],
+            "strategic_pivots": _loads(r["strategic_pivots_json"]) or [],
+            "regulatory": _loads(r["regulatory_json"]) or [],
+            "speakers": _loads(r["speakers_json"]) or [],
+            "industry_label": r["industry_label"] or "",
+            "model_used": r["model_used"],
+        })
+    return out
+
+
+def get_latest_transcript_signals(ticker: str) -> "Optional[dict]":
+    rows = get_transcript_signals(ticker, limit=1)
+    return rows[0] if rows else None

@@ -26,6 +26,7 @@ import requests
 
 from src.data.cache import get_cache
 from src.tools.hk.ticker import is_hk_ticker, to_canonical
+from src.tools.intl_provider import fmp_forced, try_fmp
 from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
 from src.data.models import (
     AnalystEstimates,
@@ -46,7 +47,10 @@ from src.data.models import (
 _cache = get_cache()
 _STABLE = "https://financialmodelingprep.com/stable"
 _V4     = "https://financialmodelingprep.com/api/v4"   # legacy — avoid; prefer /stable/ equivalents
-_FREE_LIMIT = 5   # FMP free tier hard-cap (prices, financials). Paid endpoints bypass via uncap=True
+_FREE_LIMIT = 5
+
+# Max rows /historical-price-eod/light will return for one request.
+_EOD_ROW_CAP = 5000   # FMP free tier hard-cap (prices, financials). Paid endpoints bypass via uncap=True
 
 
 # ── API key resolution ─────────────────────────────────────────────────────────
@@ -392,6 +396,36 @@ def _fmp_get(path: str, params: dict, api_key: str | None, uncap: bool = False) 
     return None
 
 
+# key-metrics-ttm and ratios-ttm carry no reportedCurrency field (verified
+# 2026-08-27: 43 and 62 keys, none currency-related). Defaulting to USD was
+# harmless while only US names took this path; with HK/SG on FMP it would
+# label Tencent's CNY metrics as USD. Resolve once per symbol from the
+# income statement and memoize for the process.
+_TTM_CURRENCY_CACHE: dict[str, str] = {}
+
+
+def _reported_currency(symbol: str, api_key: str | None) -> str:
+    """Reporting currency for a symbol, from the latest income statement.
+
+    Falls back to "USD" — the safe assumption for the US path, and no worse
+    than the previous unconditional default when the lookup fails.
+    """
+    if symbol in _TTM_CURRENCY_CACHE:
+        return _TTM_CURRENCY_CACHE[symbol]
+    ccy = "USD"
+    try:
+        rows = _fmp_get(f"{_STABLE}/income-statement",
+                        {"symbol": symbol, "period": "annual", "limit": 1}, api_key)
+        if isinstance(rows, list) and rows:
+            got = (rows[0].get("reportedCurrency") or "").strip().upper()
+            if got:
+                ccy = got
+    except Exception:
+        pass
+    _TTM_CURRENCY_CACHE[symbol] = ccy
+    return ccy
+
+
 def _fmp_period(period: str) -> str:
     return "quarter" if period in ("quarterly", "quarter") else "annual"
 
@@ -418,7 +452,12 @@ def get_prices(
     Response: {symbol, date, price, volume} — price used as close.
     """
     # ── HK routing ────────────────────────────────────────────────────────
-    if is_hk_ticker(ticker):
+    if is_hk_ticker(ticker) and not fmp_forced():
+        served = try_fmp("hk", ticker,
+                         lambda s: get_prices(s, start_date, end_date, api_key),
+                         what="prices")
+        if served is not None:
+            return served
         from src.tools.hk import get_hk_prices
         canonical = to_canonical(ticker)
         cache_key = f"hk_{canonical}_{start_date}_{end_date}"
@@ -429,7 +468,12 @@ def get_prices(
             _cache.set_prices(cache_key, [p.model_dump() for p in result])
         return result
     # ── SG routing ────────────────────────────────────────────────────────
-    if is_sg_ticker(ticker):
+    if is_sg_ticker(ticker) and not fmp_forced():
+        served = try_fmp("sg", ticker,
+                         lambda s: get_prices(s, start_date, end_date, api_key),
+                         what="prices")
+        if served is not None:
+            return served
         from src.tools.sg import get_sg_prices
         canonical = _sg_canonical(ticker)
         cache_key = f"sg_{canonical}_{start_date}_{end_date}"
@@ -460,6 +504,18 @@ def get_prices(
     )
     if not data or not isinstance(data, list):
         return []
+
+    # FMP's light EOD endpoint returns at most 5,000 rows, and when a range
+    # exceeds that it returns the most RECENT 5,000 — silently dropping the
+    # oldest end. Verified 2026-08-27: 0005.HK from 1997 comes back starting
+    # 2006-05-23. Crisis replay fetches one event window at a time so it
+    # stays well clear, but a caller asking for multi-decade history would
+    # get quietly truncated data, so say so.
+    if len(data) >= _EOD_ROW_CAP:
+        logger.warning(
+            "get_prices(%s, %s..%s) hit the %d-row FMP cap — older rows were "
+            "dropped; split the range into chunks for full history",
+            ticker, start_date, end_date, _EOD_ROW_CAP)
 
     prices: list[Price] = []
     for row in data:
@@ -537,7 +593,12 @@ def get_financial_metrics(
     Annual/quarterly: uses key-metrics + ratios (date-keyed, no suffix).
     """
     # ── HK routing ────────────────────────────────────────────────────────
-    if is_hk_ticker(ticker):
+    if is_hk_ticker(ticker) and not fmp_forced():
+        served = try_fmp("hk", ticker,
+                         lambda s: get_financial_metrics(s, end_date, period, limit, api_key),
+                         what="financial metrics")
+        if served is not None:
+            return served
         from src.tools.hk import get_hk_financial_metrics
         canonical = to_canonical(ticker)
         cache_key = f"hk_metrics_{canonical}_{period}_{end_date}_{limit}"
@@ -548,7 +609,15 @@ def get_financial_metrics(
             _cache.set_financial_metrics(cache_key, [m.model_dump() for m in result])
         return result
     # ── SG routing ────────────────────────────────────────────────────────
-    if is_sg_ticker(ticker):
+    # FMP gives SG real statement history; the legacy yfinance path below is
+    # a single TTM snapshot (note its cache key ignores period/end_date), so
+    # it is a fallback only.
+    if is_sg_ticker(ticker) and not fmp_forced():
+        served = try_fmp("sg", ticker,
+                         lambda s: get_financial_metrics(s, end_date, period, limit, api_key),
+                         what="financial metrics")
+        if served is not None:
+            return served
         from src.tools.sg import get_sg_financial_metrics
         canonical = _sg_canonical(ticker)
         cache_key = f"sg_metrics_{canonical}"
@@ -607,6 +676,8 @@ def get_financial_metrics(
         rt_row = (rt_data[0] if isinstance(rt_data, list) and rt_data
                   else rt_data if isinstance(rt_data, dict) else {}) or {}
         merged = {**km_row, **rt_row}
+        if "reportedCurrency" not in merged and (is_hk_ticker(ticker) or is_sg_ticker(ticker)):
+            merged["reportedCurrency"] = _reported_currency(ticker, api_key)
         rows = [{"_date": end_date, "_period": "ttm", **merged}]
         km_field_map = _KEY_METRICS_TTM_MAP
         rt_field_map = _RATIOS_TTM_MAP
@@ -682,12 +753,22 @@ def search_line_items(
     requested fields as LineItem objects (extra="allow" accepts all attrs).
     """
     # ── HK routing ────────────────────────────────────────────────────────
-    if is_hk_ticker(ticker):
+    if is_hk_ticker(ticker) and not fmp_forced():
+        served = try_fmp("hk", ticker,
+                         lambda s: search_line_items(s, line_items, end_date, period, limit, api_key),
+                         what="line items")
+        if served is not None:
+            return served
         from src.tools.hk import search_hk_line_items
         canonical = to_canonical(ticker)
         return search_hk_line_items(canonical, line_items, end_date, period, limit)
     # ── SG routing ────────────────────────────────────────────────────────
-    if is_sg_ticker(ticker):
+    if is_sg_ticker(ticker) and not fmp_forced():
+        served = try_fmp("sg", ticker,
+                         lambda s: search_line_items(s, line_items, end_date, period, limit, api_key),
+                         what="line items")
+        if served is not None:
+            return served
         from src.tools.sg import search_sg_line_items
         canonical = _sg_canonical(ticker)
         raw = search_sg_line_items(canonical, line_items, period, limit)
@@ -837,6 +918,9 @@ def get_insider_trades(
     Pagination stops early once transactions fall before start_date.
     """
     # ── HK routing ────────────────────────────────────────────────────────
+    # NOT routed to FMP: /insider-trading/search returns empty for HK and SG
+    # even on global coverage (verified 2026-08-27) — it is a US SEC Form 4
+    # feed. AKShare/legacy stays primary here.
     if is_hk_ticker(ticker):
         from src.tools.hk import get_hk_insider_trades
         canonical = to_canonical(ticker)
@@ -1039,6 +1123,8 @@ def get_company_news(
     Macro regime falls back to LLM default when news is unavailable.
     """
     # ── HK routing ────────────────────────────────────────────────────────
+    # NOT routed to FMP: /news/stock returns empty for HK and SG (verified
+    # 2026-08-27). AKShare (HK) / yfinance (SG) remain the only news sources.
     if is_hk_ticker(ticker):
         from src.tools.hk import get_hk_company_news
         canonical = to_canonical(ticker)
@@ -1209,11 +1295,25 @@ def get_market_cap(
 ) -> float | None:
     """Current or historical market cap from FMP."""
     # ── HK routing ────────────────────────────────────────────────────────
-    if is_hk_ticker(ticker):
+    # market_cap is a bare float, so relabel is a no-op; a zero/None reading
+    # is treated as "not served" and falls through to the legacy provider.
+    if is_hk_ticker(ticker) and not fmp_forced():
+        served = try_fmp("hk", ticker,
+                         lambda s: get_market_cap(s, end_date, api_key),
+                         validate=lambda v: bool(v), relabel=False,
+                         what="market cap")
+        if served is not None:
+            return served
         from src.tools.hk import get_hk_market_cap
         return get_hk_market_cap(to_canonical(ticker), end_date)
     # ── SG routing ────────────────────────────────────────────────────────
-    if is_sg_ticker(ticker):
+    if is_sg_ticker(ticker) and not fmp_forced():
+        served = try_fmp("sg", ticker,
+                         lambda s: get_market_cap(s, end_date, api_key),
+                         validate=lambda v: bool(v), relabel=False,
+                         what="market cap")
+        if served is not None:
+            return served
         from src.tools.sg import get_sg_market_cap
         return get_sg_market_cap(_sg_canonical(ticker))
     # ── US / FMP path ─────────────────────────────────────────────────────
@@ -1269,12 +1369,20 @@ def get_analyst_estimates(
     limit=3 returns the next 3 fiscal years of estimates (Y+1, Y+2, Y+3).
     Y+1 (nearest year) is the primary anchor for the DCF base-case growth rate.
     """
-    # ── HK routing — FMP has no HK analyst estimate data ──────────────────
-    if is_hk_ticker(ticker):
-        return []
-    # ── SG routing — limited analyst estimates on free tier ────────────────
-    if is_sg_ticker(ticker):
-        return []
+    # ── HK / SG routing ───────────────────────────────────────────────────
+    # Global coverage added these (verified 2026-08-27: 0700.HK returns FY30
+    # revenue estimates, D05.SI FY29). Empty response still falls through to
+    # the historical [] rather than erroring.
+    if is_hk_ticker(ticker) and not fmp_forced():
+        served = try_fmp("hk", ticker,
+                         lambda s: get_analyst_estimates(s, end_date, period, limit, api_key),
+                         what="analyst estimates")
+        return served if served is not None else []
+    if is_sg_ticker(ticker) and not fmp_forced():
+        served = try_fmp("sg", ticker,
+                         lambda s: get_analyst_estimates(s, end_date, period, limit, api_key),
+                         what="analyst estimates")
+        return served if served is not None else []
     cache_key = f"fmp_estimates_{ticker}_{end_date}_{_fmp_period(period)}_{limit}"
     if cached := _cache.get_analyst_estimates(cache_key):
         return [AnalystEstimates(**e) for e in cached]
@@ -1364,6 +1472,9 @@ def get_price_target_consensus(
     FMP plan: free tier exposes consensus PT (verified 2026-04-25).
     HK/SG tickers: not available — returns None.
     """
+    # price-target-consensus is empty for HK and SG even on global coverage
+    # (verified 2026-08-27) — grades-consensus exists for some HK names but
+    # carries no price target, so there is nothing to return here.
     if is_hk_ticker(ticker) or is_sg_ticker(ticker):
         return None
     data = _fmp_get(
@@ -1406,8 +1517,11 @@ def _fetch_revenue_segmentation(
     point-in-time correct). Always returns [] on failure — caller must treat
     emptiness as "no segment data available".
     """
+    # Still empty under global coverage: revenue-product-segmentation and
+    # revenue-geographic-segmentation both return [] for HK and SG (verified
+    # 2026-08-27). SOTP for these names relies on the extractor, not FMP.
     if is_hk_ticker(ticker):
-        return []                       # FMP has no HK segment data
+        return []
     if is_sg_ticker(ticker):
         return []
 
@@ -1944,12 +2058,18 @@ def get_earnings_surprises(
     Returns a list of dicts (newest first):
         date, eps_actual, eps_estimated, surprise_pct, beat (bool)
     """
-    # ── HK routing — FMP has no HK earnings-surprise data ─────────────────
-    if is_hk_ticker(ticker):
-        return []
-    # ── SG routing — no free earnings-surprise data for SGX ───────────────
-    if is_sg_ticker(ticker):
-        return []
+    # ── HK / SG routing ───────────────────────────────────────────────────
+    # Global coverage added /earnings for both markets (verified 2026-08-27).
+    if is_hk_ticker(ticker) and not fmp_forced():
+        served = try_fmp("hk", ticker,
+                         lambda s: get_earnings_surprises(s, end_date, limit, api_key),
+                         relabel=False, what="earnings surprises")
+        return served if served is not None else []
+    if is_sg_ticker(ticker) and not fmp_forced():
+        served = try_fmp("sg", ticker,
+                         lambda s: get_earnings_surprises(s, end_date, limit, api_key),
+                         relabel=False, what="earnings surprises")
+        return served if served is not None else []
     cache_key = f"fmp_surprises_{ticker}_{end_date}_{limit}"
     if cache_key in _EDGAR_SURPRISES_CACHE:
         return _EDGAR_SURPRISES_CACHE[cache_key]
@@ -2112,8 +2232,16 @@ def get_financial_scores(ticker: str, api_key: str = None) -> dict | None:
     Canonical source for both complacency and hundred_q screeners — don't
     re-implement this fetch elsewhere.
     """
-    if is_hk_ticker(ticker) or is_sg_ticker(ticker):
-        return None
+    # Global coverage now computes these for HK/SG too (verified 2026-08-27:
+    # 0700.HK Altman 3.76 / Piotroski 7, D05.SI Altman -0.41 / Piotroski 3 —
+    # note Altman is not meaningful for banks, which was already true in US).
+    if not fmp_forced():
+        _mkt = "hk" if is_hk_ticker(ticker) else ("sg" if is_sg_ticker(ticker) else None)
+        if _mkt:
+            served = try_fmp(_mkt, ticker,
+                             lambda s: get_financial_scores(s, api_key),
+                             relabel=False, what="financial scores")
+            return served if served is not None else None
     data = _fmp_get(
         f"{_STABLE}/financial-scores",
         {"symbol": ticker, "limit": 1},

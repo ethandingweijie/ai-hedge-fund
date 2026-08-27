@@ -2382,6 +2382,7 @@ def _compute_method_value(
     sbc_pe_discount: float = 1.0,
     profile_name: str = "",
     forward_consensus: Optional[dict] = None,
+    ticker: str = "",
 ) -> Optional[float]:
     """
     Compute intrinsic value per share for a single valuation method.
@@ -2403,7 +2404,8 @@ def _compute_method_value(
     before reaching here by the caller — so this function only sees implementable
     method names or proxy names.
     """
-    peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name)
+    peer = get_sector_peer_multiples(sector, is_hk=is_hk, profile_name=profile_name,
+                                     ticker=ticker, market_cap=market_cap)
     ebitda = most_recent.get("ebitda")
     net_income = most_recent.get("net_income")
     ebit = most_recent.get("ebit")
@@ -3522,6 +3524,7 @@ def _run_backward_gate(
                         reported_currency=reported_currency,
                         is_hk=_is_hk_ticker(ticker),
                         profile_name=profile_name,
+                        ticker=ticker,
                     )
 
             for ex in profile_data.get("excluded", []):
@@ -3882,7 +3885,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # This eliminates the two-step CNY→USD→HKD chain (and its rounding noise).
         # The USD→HKD tail conversion further below is skipped for HK tickers.
         _is_hk = _is_hk_ticker(ticker)
-        _target_ccy = "HKD" if _is_hk else "USD"
+        _is_sg = _is_sg_ticker(ticker)
+        # Value each name in the currency it TRADES in, so intrinsic value
+        # and spot are directly comparable. HK already did this; SG did not,
+        # and was converting SGD financials to USD while the spot price it
+        # was compared against stayed in SGD — understating every SGX
+        # intrinsic value by roughly the SGD/USD rate (~22%). The bug was
+        # latent while SG had only a single yfinance TTM snapshot; it bites
+        # now that SG carries real statement history.
+        _target_ccy = "HKD" if _is_hk else ("SGD" if _is_sg else "USD")
 
         if reported_currency != _target_ccy:
             fx_rate = get_fx_rate(reported_currency, _target_ccy, api_key)
@@ -5162,7 +5173,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # only when forward_roic isn't computable (missing EBIT/
                 # invested-capital data).
                 _GROWTH_SENSITIVITY = 0.30
-                _peer_for_gp = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name)
+                _peer_for_gp = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
+                                                         ticker=ticker)
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
                 _gp_raw_growth = (
                     1.0 + _GROWTH_SENSITIVITY * (g - _sector_g_avg) / _sector_g_avg
@@ -5275,6 +5287,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 sbc_pe_discount=_sbc_discount,
                                 profile_name=profile_name,
                                 forward_consensus=forward_consensus,
+                                ticker=ticker,
                             )
 
                 # ── Shadow-compute Forward P/E, Forward EV/EBITDA (Feature 1b)
@@ -5315,6 +5328,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             sbc_pe_discount=_sbc_discount,
                             profile_name=profile_name,
                             forward_consensus=forward_consensus,
+                            ticker=ticker,
                         )
 
                 # Check excluded methods are not used
@@ -5550,7 +5564,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Framework §7: separate from intrinsic value — market pricing via sector multiples
         # For Financials sub-types (banks, GSEs, insurance), use the profile-level entry
         # which carries sector-appropriate multiples (P/E, P/TBV) rather than EV/EBITDA.
-        peer = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name)
+        peer = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
+                                         ticker=ticker)
         _12m_targets: dict[str, Optional[float]] = {}
         # Bank/GSE/financial profiles: EV-based multiples are meaningless because
         # massive balance-sheet liabilities make (EV - net_debt) negative.

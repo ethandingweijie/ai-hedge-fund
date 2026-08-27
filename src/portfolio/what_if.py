@@ -76,7 +76,13 @@ _TRADING_DAYS_PER_YEAR = 252
 # v7: product map corrected by the user (MUD = −1× Micron/MU, CORD = −2×
 #     CoreWeave/CRWV) + deterministic reconciliation so hedged_sectors can
 #     never overlap or contradict most_affected_sectors (2026-08-26).
-SCENARIO_VERSION = 7
+# v8: region-aware anchoring — an HK or SG holding resolves to its OWN
+#     market's sector basket, then that market's broad index, and only then
+#     to SPY. Previously every holding inherited a US sector ETF return,
+#     which is badly wrong when the markets diverge: through the 2021-22
+#     China crackdown the Hang Seng fell 52.8% while the S&P fell 1.6%
+#     (2026-08-27).
+SCENARIO_VERSION = 8
 
 # Annualized vol (%) by volatility_regime label — fallback when realized vol
 # cannot be computed from the reference window. Bands match macro_regime.py's
@@ -310,15 +316,63 @@ def _realized_annual_vol_pct(fetcher: Callable, symbol: str,
     return round(math.sqrt(var) * math.sqrt(_TRADING_DAYS_PER_YEAR) * 100.0, 2)
 
 
-def _sector_anchor(ref: Optional[EventSpec], gics: Optional[str]) -> Optional[float]:
-    """Reference-event window return for a GICS sector; None when the event
-    has no such sector row (e.g. XLRE/XLC pre-inception events)."""
+def ticker_region(ticker: str) -> str:
+    """"HK", "SG" or "US" for a holding.
+
+    Anchoring an HKEX holding to a US sector ETF return is simply wrong when
+    the two markets diverge — during the 2021-22 China crackdown the Hang
+    Seng fell 52.8% while the S&P was down 1.6%. This is what routes a
+    holding to its own market's crisis experience.
+    """
+    try:
+        from src.tools.intl_provider import detect_market
+        market = detect_market(ticker)
+    except Exception:
+        return "US"
+    return {"hk": "HK", "sg": "SG"}.get(market or "", "US")
+
+
+def _sector_anchor(ref: Optional[EventSpec], gics: Optional[str],
+                   region: str = "US") -> Optional[tuple[float, str]]:
+    """(return_pct, region_used) for a GICS sector in the holding's region.
+
+    Falls back to the US row when the region has no calibrated basket for
+    this event — which is the honest outcome for e.g. asian_fc_1997, where
+    FMP's HK single-name history begins in 2000 and no HK basket exists.
+    Returns None when neither region has a row (XLRE/XLC pre-inception).
+    """
     if ref is None or not gics:
         return None
-    for s in ref.sectors:
-        if s.sector == gics:
-            return s.return_pct
+    for want in ([region, "US"] if region != "US" else ["US"]):
+        for s in ref.sectors:
+            if s.sector == gics and s.region == want:
+                return s.return_pct, want
     return None
+
+
+# Which regional benchmark stands in for a region's broad market.
+_REGION_BENCHMARK = {"HK": "HSI", "SG": "STI"}
+
+
+def _regional_anchor(ref: Optional[EventSpec], region: str) -> Optional[float]:
+    """The region's broad-index return for this event, or None.
+
+    Used when a holding's sector has no calibrated basket in its own market
+    — better to anchor an HK name to the Hang Seng than to the S&P.
+    """
+    if ref is None or region == "US":
+        return None
+    key = _REGION_BENCHMARK.get(region)
+    if not key:
+        return None
+    row = (ref.regional or {}).get(key) or {}
+    val = row.get("return_pct")
+    return None if val is None else float(val)
+
+
+def _anchor_value(ref, gics, region="US") -> Optional[float]:
+    got = _sector_anchor(ref, gics, region)
+    return None if got is None else got[0]
 
 
 # ── Search-necessity heuristic (deterministic; LLM confirms, never decides) ─
@@ -363,6 +417,7 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
     """
     spy_anchor = ref.spy_return_pct if ref else None
     qqq_anchor = ref.qqq_return_pct if ref else None
+    regional_anchors = dict(ref.regional) if ref else {}
     regime = (ref.macro.volatility_regime if ref else "medium")
     default_vol = _VOL_REGIME_DEFAULTS_PCT.get(regime, 20.0)
 
@@ -418,7 +473,9 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
             elif underlying == "QQQ":
                 anchor = qqq_anchor
             else:
-                anchor = _sector_anchor(ref, _SINGLE_NAME_SECTOR.get(underlying))
+                # Leveraged/inverse products track their US underlying, so
+                # they stay on the US anchor regardless of where they list.
+                anchor = _anchor_value(ref, _SINGLE_NAME_SECTOR.get(underlying))
             row["anchor_pct"] = anchor
             if anchor is not None:
                 vol, vol_src = _vol_for(underlying)
@@ -440,10 +497,25 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
                             "product": {"hint": cls.get("hint")}})
             sec = sectors_map.get(tkr)
             gics = sector_to_gics(sec)
-            row["sector"], row["gics"] = sec, gics
+            region = ticker_region(tkr)
+            row["sector"], row["gics"], row["region"] = sec, gics, region
             if row["kind"] == "equity":
-                anchor = _sector_anchor(ref, gics) if ref and gics else spy_anchor
+                anchor, anchor_region = None, None
+                if ref and gics:
+                    got = _sector_anchor(ref, gics, region)
+                    if got is not None:
+                        anchor, anchor_region = got
+                if anchor is None:
+                    # No sector row anywhere — fall back to the region's own
+                    # broad benchmark before reaching for SPY.
+                    anchor = _regional_anchor(ref, region)
+                    anchor_region = region if anchor is not None else None
+                if anchor is None:
+                    anchor, anchor_region = spy_anchor, "US"
                 row["anchor_pct"] = anchor
+                row["anchor_region"] = anchor_region
+                row["anchor_region_fallback"] = bool(
+                    anchor_region and region != "US" and anchor_region != region)
                 if anchor is not None:
                     row["est_impact_pct"] = round(anchor, 2)
         rows.append(row)
@@ -460,6 +532,7 @@ def _build_skeleton(holdings: list[dict], ref: Optional[EventSpec],
         "portfolio_est_impact_pct": port_est,
         "covered_weight_pct": round(covered_w / total_w * 100.0, 2) if total_w else None,
         "anchors": {"spy": spy_anchor, "qqq": qqq_anchor,
+                    "regional": regional_anchors,
                     "sectors": ([s.as_dict() for s in ref.sectors] if ref else [])},
         "vol_default_pct": default_vol,
         "horizon_days": horizon_days,
