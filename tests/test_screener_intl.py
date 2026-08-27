@@ -505,3 +505,56 @@ class TestServeStaleAndRefresh:
              "fetched_at": (now - timedelta(days=20)).isoformat()},
         ])
         assert ss._get_cached_stale("sg_fmp_v3") == [{"symbol": "NEWER"}]
+
+
+class TestInvalidateForTicker:
+    """This is what actually made SGX fail intermittently. Analysing ANY
+    ticker ran `DELETE FROM screener_cache`, dropping every market's
+    universe — so a US analysis took the HK and SGX screeners down, the next
+    visitor paid a full cold build, and because the delete removed previous
+    cache-key versions too there was nothing for the stale fallback to
+    serve."""
+
+    def test_expires_rather_than_deletes(self, monkeypatch):
+        sql: list[str] = []
+        monkeypatch.setattr(ss._db, "execute",
+                            lambda q, p=None: sql.append(" ".join(q.split())))
+        monkeypatch.setattr(ss, "_kg", None, raising=False)
+        ss.invalidate_for_ticker("AAPL")
+        universe_sql = [q for q in sql if "screener_cache" in q]
+        assert universe_sql, "screener_cache was not touched at all"
+        for q in universe_sql:
+            assert not q.upper().startswith("DELETE"), \
+                f"universe cache must be expired, not deleted: {q}"
+            assert "UPDATE" in q.upper()
+
+    def test_ticker_scoped_rows_are_still_deleted(self, monkeypatch):
+        """Only the per-ticker caches should actually be removed."""
+        sql: list[tuple] = []
+        monkeypatch.setattr(ss._db, "execute",
+                            lambda q, p=None: sql.append((" ".join(q.split()), p)))
+        ss.invalidate_for_ticker("AAPL")
+        deletes = [(q, p) for q, p in sql if q.upper().startswith("DELETE")]
+        assert deletes, "per-ticker caches should still be cleared"
+        # Count is not asserted — the knowledge-graph cleanup adds its own
+        # scoped delete. What matters is that EVERY delete names a ticker.
+        for q, p in deletes:
+            assert "WHERE" in q.upper(), f"unscoped delete: {q}"
+            assert p == ["AAPL"], f"delete not scoped to the ticker: {q}"
+
+    def test_expiry_is_in_the_past(self, monkeypatch):
+        from datetime import datetime, timezone
+        captured: list = []
+        monkeypatch.setattr(ss._db, "execute",
+                            lambda q, p=None: captured.append((q, p)))
+        ss.invalidate_for_ticker("AAPL")
+        upd = [p for q, p in captured if "UPDATE screener_cache" in q][0]
+        assert upd[0] < datetime.now(timezone.utc).isoformat()
+
+    def test_expired_rows_remain_readable_as_stale(self, monkeypatch):
+        """The whole point: an invalidated universe must still be servable
+        while the background refresh runs."""
+        rows = [{"symbol": "D05.SI"}]
+        monkeypatch.setattr(ss._db, "query_one",
+                            lambda *a, **k: {"results_json": json.dumps(rows)})
+        assert ss._get_cached_stale("sg_fmp_v3") == rows

@@ -1618,13 +1618,28 @@ def _get_or_compute_fast_vgpm(
 def invalidate_for_ticker(ticker: str):
     """
     Called after a pipeline analysis completes for *ticker*.
-    Clears lookup cache, fast VGPM cache, raw metrics cache, and all screener
-    cache entries so the next request reflects the new pipeline VGPM.
+    Clears that ticker's lookup and fast-VGPM rows, and EXPIRES the screener
+    universe caches so the next request rebuilds with the new pipeline VGPM.
+
+    Expire, not delete. This used to run `DELETE FROM screener_cache`, which
+    dropped every market's universe — analysing one US ticker wiped the HK
+    and SGX screeners too. The next visitor then paid a full cold build
+    (~90s for SGX, 300s+ for HK, past what a browser waits for), and because
+    the delete also removed the previous cache-key versions there was
+    nothing for the stale fallback to serve. That is what made the SGX
+    screener fail intermittently and unpredictably: it had nothing to do
+    with SGX, only with someone having run an analysis.
+
+    Expiring keeps the rows readable by _get_cached_stale, so the next
+    request returns the old universe immediately and refreshes behind it.
+    The freshly-analysed ticker's VGPM lands a few seconds later instead of
+    instantly — a fair trade for not taking the screener down.
     """
+    stale_at = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
     try:
         _db.execute("DELETE FROM screener_lookup_cache WHERE symbol = ?", [ticker])
         _db.execute("DELETE FROM fast_vgpm_cache WHERE ticker = ?", [ticker])
-        _db.execute("DELETE FROM screener_cache")
+        _db.execute("UPDATE screener_cache SET expires_at = ?", [stale_at])
     except Exception:
         pass
 
