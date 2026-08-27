@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import re
 import statistics
 import time
@@ -73,7 +74,30 @@ from src.tools.api import _STABLE, _fmp_get, _safe_float
 
 logger = logging.getLogger(__name__)
 
-EXCHANGES = ("HKSE", "SES")
+# Storage key -> the FMP exchange codes that feed it.
+#
+# US pools NASDAQ, NYSE and AMEX into one universe: where a company chose to
+# list is not an economic distinction, and pooling gives industry baskets
+# deep enough to clear the peer floor. HK and SG each stand alone because
+# their risk pricing genuinely differs — the whole point of keeping SGX
+# comps free of HK depositary receipts.
+MARKETS: dict[str, tuple[str, ...]] = {
+    "HKSE": ("HKSE",),
+    "SES": ("SES",),
+    "US": ("NASDAQ", "NYSE", "AMEX"),
+}
+
+EXCHANGES = tuple(MARKETS)
+
+# FMP exchangeShortName -> storage key.
+_EXCHANGE_TO_MARKET: dict[str, str] = {
+    code: market for market, codes in MARKETS.items() for code in codes
+}
+
+
+def market_for_exchange(exchange: Optional[str]) -> Optional[str]:
+    """Storage key for an FMP exchangeShortName ("NASDAQ" -> "US")."""
+    return _EXCHANGE_TO_MARKET.get((exchange or "").strip().upper())
 
 # Market-cap floor for the universe: below this, listed multiples are too
 # illiquid to be meaningful comps.
@@ -127,6 +151,27 @@ FIELDS = tuple(_BANDS.keys())
 
 # ── Universe ────────────────────────────────────────────────────────────────
 
+# Depositary receipts name themselves. HPAD.SI is
+#   "Ping An Insurance (Group) Company of China Ltd. Shs UnSp Singapore
+#    Depositary Receipt Repr 1/2 Sh"
+# — the #2 name by market cap on SGX and a wrapper over an HK-primary
+# company. Cross-referencing company names against the other exchange
+# catches HBND.SI (whose name is plain "Bank of China Limited") but misses
+# this one, because the receipt suffix makes the names differ. The wrapper
+# says what it is, so read that directly.
+_RECEIPT_RE = re.compile(
+    r"depositary receipt|depository receipt"
+    r"|(?:un)?sponsored\s+adr"
+    r"|(?<![A-Za-z])(?:ADR|GDR|SDR)(?![A-Za-z])",
+    re.IGNORECASE,
+)
+
+
+def is_depositary_receipt(name: Optional[str]) -> bool:
+    """True when a listing is a receipt over a security listed elsewhere."""
+    return bool(_RECEIPT_RE.search(name or ""))
+
+
 _NAME_NOISE = re.compile(
     r"\b(limited|ltd|holdings|holding|group|company|co|inc|corporation|corp|"
     r"plc|the|public|berhad|sa|nv|se|ag)\b"
@@ -140,24 +185,29 @@ def normalize_name(name: Optional[str]) -> str:
     return re.sub(r"\s+", " ", n).strip()
 
 
-def fetch_universe(exchange: str) -> list[dict]:
-    """Actively-traded operating companies listed on `exchange`.
+def fetch_universe(market: str) -> list[dict]:
+    """Actively-traded operating companies in `market`.
 
+    `market` is a MARKETS key, so the US pass unions its three exchanges.
     Returns [{symbol, name, sector, industry, market_cap}, ...] sorted by
     market cap descending.
     """
-    rows = _fmp_get(
-        f"{_STABLE}/company-screener",
-        {
-            "exchange": exchange,
-            "limit": 5000,
-            "marketCapMoreThan": MIN_MARKET_CAP,
-            "isActivelyTrading": "true",
-        },
-        api_key=None,
-        uncap=True,
-    )
-    if not isinstance(rows, list):
+    rows: list = []
+    for code in MARKETS.get(market, (market,)):
+        page = _fmp_get(
+            f"{_STABLE}/company-screener",
+            {
+                "exchange": code,
+                "limit": 5000,
+                "marketCapMoreThan": MIN_MARKET_CAP,
+                "isActivelyTrading": "true",
+            },
+            api_key=None,
+            uncap=True,
+        )
+        if isinstance(page, list):
+            rows.extend(page)
+    if not rows:
         return []
 
     out: list[dict] = []
@@ -165,6 +215,8 @@ def fetch_universe(exchange: str) -> list[dict]:
         if not isinstance(r, dict) or not r.get("symbol"):
             continue
         if r.get("isEtf") or r.get("isFund"):
+            continue
+        if is_depositary_receipt(r.get("companyName")):
             continue
         mcap = _safe_float(r.get("marketCap")) or 0.0
         if mcap < MIN_MARKET_CAP:
@@ -523,7 +575,7 @@ def refresh_regional_comps(
     that are primary-listed in Hong Kong.
     """
     if exchange not in EXCHANGES:
-        return {"error": f"unsupported exchange {exchange!r}"}
+        return {"error": f"unsupported market {exchange!r}"}
 
     t0 = time.time()
     universe = fetch_universe(exchange)
@@ -629,6 +681,68 @@ def get_fmp_classification(ticker: str) -> dict:
 
     _CLASSIFICATION_CACHE[key] = result
     return result
+
+
+# ── Weekly refresh schedule ─────────────────────────────────────────────────
+#
+# Default fire: Saturday 01:00 UTC = Saturday 09:00 Singapore Time. The
+# weekend is the right slot — no market is open, the refresh spends ~15k FMP
+# calls across the three markets, and nothing else competes for the token
+# bucket in api.py.
+#
+# Env overrides follow the same convention as the other schedulers:
+#   REGIONAL_COMPS_SCHEDULER_DISABLED=1   — skip entirely
+#   REGIONAL_COMPS_HOUR_UTC=1             — UTC fire hour (default 1 = SGT 09:00)
+#   REGIONAL_COMPS_WEEKDAY=5              — 0=Monday .. 5=Saturday
+
+_FIRE_HOUR_UTC = int(os.environ.get("REGIONAL_COMPS_HOUR_UTC", "1"))
+_FIRE_WEEKDAY = int(os.environ.get("REGIONAL_COMPS_WEEKDAY", "5"))   # Saturday
+
+#: A refresh younger than this counts as "already ran this week".
+_IDEMPOTENCY_HOURS = 6 * 24
+
+
+def seconds_until_next_fire() -> float:
+    """Seconds until the next Saturday 01:00 UTC boundary."""
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=_FIRE_HOUR_UTC, minute=0, second=0, microsecond=0)
+    target += timedelta(days=(_FIRE_WEEKDAY - target.weekday()) % 7)
+    if target <= now:
+        target += timedelta(days=7)
+    return (target - now).total_seconds()
+
+
+def already_ran_this_week() -> bool:
+    """True when every market has a refresh inside the idempotency window.
+
+    Partial completion counts as NOT done, so a run that died halfway
+    through (say after HKSE but before US) is retried rather than skipped.
+    """
+    for market in EXCHANGES:
+        age = latest_refresh_age_days(market)
+        if age is None or age * 24 >= _IDEMPOTENCY_HOURS:
+            return False
+    return True
+
+
+def run_weekly_refresh(force: bool = False) -> Optional[dict]:
+    """Refresh every market. Returns None when the idempotency gate skips it.
+
+    Markets run in order so the SES pass can exclude companies that are
+    primary-listed in Hong Kong.
+    """
+    if not force and already_ran_this_week():
+        logger.info("[regional_comps] already refreshed this week — skipping")
+        return None
+    results = {}
+    for market in EXCHANGES:
+        try:
+            results[market] = refresh_regional_comps(market)
+        except Exception as exc:
+            logger.exception("[regional_comps] %s refresh failed: %s", market, exc)
+            results[market] = {"error": str(exc)[:200]}
+    return results
 
 
 if __name__ == "__main__":

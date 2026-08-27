@@ -534,6 +534,30 @@ async def run_fundflow_brief_task(ctx: dict) -> dict:
     return {"ran": ran}
 
 
+async def run_regional_comps_refresh_task(ctx: dict) -> dict:
+    """Weekly exchange-comp refresh for US, HK and SG.
+
+    Rebuilds the industry/sector medians the valuation ladder reads. Without
+    a fresh table the ladder falls through to the static sector tables — no
+    error, just coarser and staler multiples. Self-gates on its ~6-day
+    window, and treats a partially-completed run as not done.
+    """
+    from src.data import regional_comps as _rc
+    payload = None
+    try:
+        payload = await asyncio.to_thread(_rc.run_weekly_refresh)
+    except Exception as exc:
+        logger.warning("[sched] regional_comps_refresh raised %s: %s",
+                       type(exc).__name__, exc)
+    if payload is not None:
+        for market, res in payload.items():
+            logger.info("[sched] regional_comps %s: %s", market, res)
+        return {"ran": True, "markets": sorted(payload)}
+    ran = await asyncio.to_thread(
+        _sched_gate_outcome, "regional_comps_refresh", _rc.already_ran_this_week)
+    return {"ran": ran}
+
+
 async def run_hundred_q_daily_sweep_task(ctx: dict) -> dict:
     """Daily 100-Q event-trigger sweep. Self-gates on its 20h window."""
     from src.research_ideas.hundred_q import scheduler as _s
@@ -676,6 +700,7 @@ class WorkerSettings:
         run_idea_of_the_day_task,
         run_iv15_sweep_task,
         run_fundflow_brief_task,
+        run_regional_comps_refresh_task,
         run_hundred_q_daily_sweep_task,
         run_hundred_q_weekly_batch_task,
         run_hundred_q_backstop_task,

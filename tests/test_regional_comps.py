@@ -385,3 +385,110 @@ class TestCohortLadder:
                                         market_cap=4.0e12)
         assert got["pe"]["value"] == 10.3
         assert got["pe"]["basis"] == "sector"
+
+
+# ── US market ───────────────────────────────────────────────────────────────
+
+class TestUsMarket:
+    """US pools NASDAQ/NYSE/AMEX into one universe. Where a company chose to
+    list is not an economic distinction, and pooling gives industry baskets
+    deep enough to clear the peer floor."""
+
+    def test_exchange_to_market_mapping(self):
+        for code in ("NASDAQ", "NYSE", "AMEX", "nasdaq"):
+            assert rc.market_for_exchange(code) == "US"
+        assert rc.market_for_exchange("HKSE") == "HKSE"
+        assert rc.market_for_exchange("SES") == "SES"
+
+    def test_unknown_exchange_is_none(self):
+        assert rc.market_for_exchange("LSE") is None
+        assert rc.market_for_exchange(None) is None
+        assert rc.market_for_exchange("") is None
+
+    def test_us_is_a_supported_market(self):
+        assert "US" in rc.EXCHANGES
+        assert rc.MARKETS["US"] == ("NASDAQ", "NYSE", "AMEX")
+
+    def test_hk_and_sg_stay_separate(self):
+        """Pooling HK into SG would leak mainland China risk pricing into
+        Singapore comps — the thing the DR filter exists to prevent."""
+        assert rc.MARKETS["HKSE"] == ("HKSE",)
+        assert rc.MARKETS["SES"] == ("SES",)
+
+    def test_us_ladder_resolves(self, store):
+        _seed("US", "industry", "Consumer Electronics", "pe", 31.5, 9)
+        got = rc.get_regional_multiples("US", "Consumer Electronics", "Technology")
+        assert got["pe"]["value"] == 31.5
+        assert got["pe"]["basis"] == "industry"
+
+    def test_us_store_is_isolated_from_hk(self, store):
+        _seed("HKSE", "industry", "Consumer Electronics", "pe", 9.0, 9)
+        assert rc.get_regional_multiples("US", "Consumer Electronics", "Technology") == {}
+
+
+class TestLayering:
+    """static <- curated-basket dynamic (US only) <- measured exchange comps."""
+
+    def test_regional_beats_dynamic_and_static(self, store, monkeypatch):
+        from src.data import sector_profiles as sp
+        _seed("US", "industry", "Consumer Electronics", "pe", 31.5, 9)
+        monkeypatch.setattr(
+            "src.data.regional_comps.get_fmp_classification",
+            lambda t: {"exchange": "NASDAQ", "sector": "Technology",
+                       "industry": "Consumer Electronics"})
+        monkeypatch.setattr(sp, "get_dynamic_peer_multiples",
+                            lambda sector, profile: {"pe": 44.0, "pb": 7.0})
+        got = sp.get_sector_peer_multiples("Tech", ticker="AAPL", market_cap=4e12)
+        assert got["pe"] == 31.5, "measured industry comp must win"
+        assert got["pb"] == 7.0, "dynamic still fills a field regional missed"
+        assert got["_comp_basis"]["pe"]["basis"] == "industry"
+
+    def test_dynamic_is_not_consulted_for_hk(self, store, monkeypatch):
+        """HK has no curated KG baskets; consulting them would splice US
+        multiples into an HK valuation."""
+        from src.data import sector_profiles as sp
+        _seed("HKSE", "industry", "Internet Content & Information", "pe", 9.2, 6)
+        monkeypatch.setattr(
+            "src.data.regional_comps.get_fmp_classification",
+            lambda t: {"exchange": "HKSE", "sector": "Communication Services",
+                       "industry": "Internet Content & Information"})
+        called = []
+        monkeypatch.setattr(sp, "get_dynamic_peer_multiples",
+                            lambda sector, profile: called.append(1) or {"pb": 99.0})
+        got = sp.get_sector_peer_multiples("Tech", is_hk=True, ticker="00700.HK",
+                                           market_cap=4e12)
+        assert called == [], "US curated baskets must not feed an HK name"
+        assert got["pb"] == sp.HK_SECTOR_PEER_MULTIPLES["Tech"]["pb"]
+
+
+class TestDepositaryReceipts:
+    """SGX lists receipts over HK-primary companies. HPAD.SI (Ping An) was
+    the #2 SGX name by market cap and survived the cross-exchange name
+    filter, because its name carries a receipt suffix the HK listing does
+    not. Left in, it drags Singapore financial comps toward mainland
+    Chinese multiples."""
+
+    @pytest.mark.parametrize("name", [
+        "Ping An Insurance (Group) Company of China Ltd. Shs UnSp Singapore "
+        "Depositary Receipt Repr 1/2 Sh",
+        "Some Co Ltd Depository Receipt",
+        "Alibaba Group Holding Ltd Sponsored ADR",
+        "Some Co Unsponsored ADR",
+        "Foo Plc GDR",
+    ])
+    def test_detected(self, name):
+        assert rc.is_depositary_receipt(name)
+
+    @pytest.mark.parametrize("name", [
+        "DBS Group Holdings Ltd",
+        "Bank of China Limited",
+        "Adroit Holdings",          # contains "adr" as a substring
+        "Cadre Holdings Inc",       # contains "adr" as a substring
+        "Andrea Electronics",
+        "",
+    ])
+    def test_not_detected(self, name):
+        assert not rc.is_depositary_receipt(name)
+
+    def test_none_is_safe(self):
+        assert not rc.is_depositary_receipt(None)

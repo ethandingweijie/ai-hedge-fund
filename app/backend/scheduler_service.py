@@ -193,12 +193,13 @@ class ScheduleSpec:
 
 
 def build_schedules() -> list[ScheduleSpec]:
-    """The 8 fire schedules. Next-fire math is delegated to the existing
+    """The 9 fire schedules. Next-fire math is delegated to the existing
     scheduler modules so their HOUR_UTC / WEEKDAY overrides keep working."""
     from src.research_ideas.alerts import iv15_scheduler as iv15_sched
     from src.research_ideas.contrarian import scheduler as idea_sched
     from src.research_ideas.fundflow import scheduler as fundflow_sched
     from src.research_ideas.hundred_q import scheduler as hq_sched
+    from src.data import regional_comps as _rc
 
     def _hq_all_or(specific: str) -> Callable[[], bool]:
         return lambda: _env_flag("HUNDRED_Q_SCHEDULER_DISABLED") or _env_flag(specific)
@@ -245,6 +246,15 @@ def build_schedules() -> list[ScheduleSpec]:
             lock_ttl_s=_TTL_DAILY_S,
             is_disabled=lambda: _env_flag("IV15_ALERT_DISABLED"),
             gate_fn=iv15_sched._swept_today,
+        ),
+        ScheduleSpec(
+            name="regional_comps_refresh",
+            task="run_regional_comps_refresh_task",
+            next_fire_fn=_rc.seconds_until_next_fire,
+            slot_fn=_weekly_slot,
+            lock_ttl_s=_TTL_WEEKLY_S,
+            is_disabled=lambda: _env_flag("REGIONAL_COMPS_SCHEDULER_DISABLED"),
+            gate_fn=_rc.already_ran_this_week,
         ),
         ScheduleSpec(
             name="fundflow_brief",

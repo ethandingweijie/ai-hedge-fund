@@ -137,13 +137,41 @@ FINANCIALS = {
 }
 
 
+# Native-ADR entries that DO have a Hong Kong listing, so the screen can
+# report them on their own market like everything else. Verified by name
+# match against FMP /profile on 2026-08-27:
+#     9987.HK  Yum China Holdings, Inc.
+#     9961.HK  Trip.com Group Limited
+# EH (EHang) and CHA (Chagee) are genuinely US-only — neither 9959.HK nor
+# 2555.HK is them (they are Linklogis and Chabaidao respectively), so they
+# stay on their US symbols rather than being mapped to a wrong company.
+NATIVE_ADR_HK_LISTING = {
+    "YUMC": "9987.HK",
+    "TCOM": "9961.HK",
+}
+
+
 def route(hk_ticker: str) -> tuple[str, str]:
-    """Return (report_ticker, route_label)."""
+    """Return (report_ticker, route_label).
+
+    Every name that has a Hong Kong listing is now reported on THAT listing,
+    sourced from FMP. Previously 39 of the 105 names were reported on a US
+    ADR (Tencent as TCEHY, Alibaba as BABA) because FMP had no HKEX coverage
+    and yfinance's HK `info` was too thin to score from.
+
+    Reporting on the ADR was never neutral: an ADR trades in USD at its own
+    share ratio (TCEHY is 1/4 of an ordinary share), on US hours, with its
+    own liquidity and its own premium/discount to the Hong Kong line. Per-
+    share metrics and price-derived scores inherited all of that. Sourcing
+    the HK listing directly removes the ratio, the currency translation and
+    the ADR basis in one step.
+    """
+    if hk_ticker in NATIVE_ADR_HK_LISTING:
+        return NATIVE_ADR_HK_LISTING[hk_ticker], "HK/FMP"
     if hk_ticker in NATIVE_ADRS:
-        return hk_ticker, "ADR/FMP"
-    if hk_ticker in ADR_MAP:
-        return ADR_MAP[hk_ticker], "ADR/FMP"
-    return hk_ticker, "HK/AKShare+yf"
+        # US-listed with no HK line — nothing to reroute to.
+        return hk_ticker, "US/FMP"
+    return hk_ticker, "HK/FMP"
 
 
 def currency_of(report_ticker: str) -> tuple[str, str]:

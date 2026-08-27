@@ -194,15 +194,31 @@ def _yf_fcf_growth(ticker: str) -> float | None:
     return _cagr_from_row(cf, "Free Cash Flow")
 
 
+def _fmp_symbol(ticker: str) -> str:
+    """Symbol form FMP accepts — HK needs 4 digits (0700.HK, not 00700.HK)."""
+    try:
+        from src.tools.intl_provider import detect_market, fmp_symbol
+        market = detect_market(ticker)
+        return (fmp_symbol(ticker, market) or ticker) if market else ticker
+    except Exception:
+        return ticker
+
+
 def _fmp_financial_growth(ticker: str) -> dict:
-    """FMP financial-growth (annual, latest) — only meaningful for US/ADR."""
+    """FMP financial-growth (annual, latest).
+
+    Was US/ADR-only because FMP had no HK coverage; global coverage now
+    serves HKEX natively (verified 2026-08-27), so HK names take this path
+    on their own listing instead of a US ADR proxy.
+    """
     try:
         import os
         import requests
         key = os.environ.get("FMP_API_KEY", "")
         r = requests.get(
             "https://financialmodelingprep.com/stable/financial-growth",
-            params={"symbol": ticker, "period": "annual", "limit": 1, "apikey": key},
+            params={"symbol": _fmp_symbol(ticker), "period": "annual",
+                    "limit": 1, "apikey": key},
             timeout=20,
         )
         if r.status_code == 200 and isinstance(r.json(), list) and r.json():
@@ -216,16 +232,17 @@ def _fmp_avg_div_yield(ticker: str, years: int = 5) -> float | None:
     """Mean annual dividend yield over the last `years` from FMP ratios (annual).
 
     Dividend yield is a dimensionless ratio, so this is currency-neutral and safe
-    to use even for a USD-traded / CNY-reporting ADR. US/ADR only (FMP-backed).
-    Closes `yield_vs_5yr_avg` for OTC-pink ADRs whose yfinance `info` is too thin
-    to carry fiveYearAvgDividendYield."""
+    to use even for a USD-traded / CNY-reporting ADR, and now for HK listings
+    directly. Closes `yield_vs_5yr_avg` where yfinance `info` is too thin to
+    carry fiveYearAvgDividendYield."""
     try:
         import os
         import requests
         key = os.environ.get("FMP_API_KEY", "")
         r = requests.get(
             "https://financialmodelingprep.com/stable/ratios",
-            params={"symbol": ticker, "period": "annual", "limit": years, "apikey": key},
+            params={"symbol": _fmp_symbol(ticker), "period": "annual",
+                    "limit": years, "apikey": key},
             timeout=20,
         )
         if r.status_code != 200:
@@ -251,7 +268,11 @@ def resolve(ticker: str) -> dict[str, Resolved]:
     fm_rows = get_financial_metrics(ticker, END_DATE, "ttm", 1)
     fm = fm_rows[0] if fm_rows else None
     yi = _yf_info(ticker)
-    fg = {} if hk else _fmp_financial_growth(ticker)
+    # FMP financial-growth used to be skipped for HK ("only meaningful for
+    # US/ADR") because there was no HKEX coverage. There is now, so HK names
+    # get the same fmp_growth provenance source as US ones — which is what
+    # lets them be scored on their own listing rather than a US ADR proxy.
+    fg = _fmp_financial_growth(ticker)
 
     def fm_get(attr):
         return getattr(fm, attr, None) if fm else None

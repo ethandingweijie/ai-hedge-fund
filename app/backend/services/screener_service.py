@@ -877,6 +877,25 @@ def _fmp_get(url: str, params: dict, timeout: int = 10) -> list | dict | None:
     return None
 
 
+def _legacy_intl_metrics(ticker: str, market: str) -> Optional[dict]:
+    """Pre-FMP HK/SG metric fetchers, kept as the fallback arm.
+
+    Returns None when the legacy source has nothing, so the caller can carry
+    on down the FMP path rather than treating a miss as a hard failure.
+    """
+    try:
+        if market == "hk":
+            from src.tools.hk.vgpm_metrics import fetch_hk_vgpm_metrics
+            return fetch_hk_vgpm_metrics(ticker)
+        if market == "sg":
+            from src.tools.sg.vgpm_metrics import fetch_sg_vgpm_metrics
+            return fetch_sg_vgpm_metrics(ticker)
+    except Exception as exc:
+        _sqlog.warning("legacy %s metrics failed for %s: %s",
+                       market.upper(), ticker, exc)
+    return None
+
+
 def _fetch_ticker_metrics(
     ticker: str,
     api_key: Optional[str],
@@ -909,33 +928,52 @@ def _fetch_ticker_metrics(
     info.shortRatio         — short interest days-to-cover
     """
     # ── HK ticker routing ─────────────────────────────────────────────────────
-    # Numeric HKEX tickers (e.g. '00700.HK') are routed to the dedicated
-    # multi-source HK fetcher instead of the FMP pipeline, which has no
-    # meaningful HKEX coverage.
+    # ── HK / SG routing ──────────────────────────────────────────────────
+    # These used to bypass FMP entirely for the dedicated AKShare/yfinance
+    # fetchers, "which has no meaningful HKEX coverage" — true before the
+    # global-coverage upgrade, not any more. Running them through the SAME
+    # pipeline as US is what finally makes their VGPM scores industry-
+    # relative: the legacy path had no industry at all (every HK stock was
+    # labelled "HKEX"), so all 118 landed in one bucket and the industry
+    # ranking tier never actually differentiated anything.
+    #
+    # FMP wants the 4-digit HK form (0700.HK, not 00700.HK), so the request
+    # symbol and the output label differ. The legacy fetchers remain behind
+    # the provider kill switch and as an empty-response fallback.
+    fmp_ticker = ticker
+    _market = None
     try:
-        from src.tools.hk.ticker import is_hk_ticker
-        if is_hk_ticker(ticker):
-            from src.tools.hk.vgpm_metrics import fetch_hk_vgpm_metrics
-            result = fetch_hk_vgpm_metrics(ticker)
-            if result is not None:
-                return result
-            # If HK fetch returns None (unexpected), fall through to FMP
-    except Exception as _hk_exc:
-        _sqlog.warning("HK VGPM routing failed for %s: %s", ticker, _hk_exc)
-    # ── (HK routing end — US tickers continue below) ─────────────────────────
+        from src.tools.intl_provider import detect_market, fmp_symbol, use_fmp
+        _market = detect_market(ticker)
+        if _market:
+            if not use_fmp(_market):
+                legacy = _legacy_intl_metrics(ticker, _market)
+                if legacy is not None:
+                    return legacy
+            else:
+                fmp_ticker = fmp_symbol(ticker, _market) or ticker
+    except Exception as _intl_exc:
+        _sqlog.warning("intl screener routing failed for %s: %s", ticker, _intl_exc)
 
     base = {"apikey": api_key} if api_key else {}
 
     # ── Parallel FMP fetch ────────────────────────────────────────────────────
+    # Four of these were wrong and had been 404/400-ing for every market,
+    # US included (verified against live /stable 2026-08-27):
+    #   financial-score     -> financial-scores      (404)
+    #   earnings-surprises  -> earnings              (404)
+    #   upgrades-downgrades -> grades-historical     (404)
+    #   analyst-estimates   needs period=annual      (400)
     endpoints = {
-        "km":  (f"{_STABLE}/key-metrics-ttm",    {"symbol": ticker}),
-        "rt":  (f"{_STABLE}/ratios-ttm",          {"symbol": ticker}),
-        "fg":  (f"{_STABLE}/financial-growth",    {"symbol": ticker, "limit": 5}),
-        "spc": (f"{_STABLE}/stock-price-change",  {"symbol": ticker}),
-        "ae":  (f"{_STABLE}/analyst-estimates",   {"symbol": ticker, "limit": 2}),
-        "es":  (f"{_STABLE}/earnings-surprises",  {"symbol": ticker, "limit": 4}),
-        "fs":  (f"{_STABLE}/financial-score",     {"symbol": ticker}),
-        "ud":  (f"{_STABLE}/upgrades-downgrades", {"symbol": ticker, "limit": 20, "page": 0}),
+        "km":  (f"{_STABLE}/key-metrics-ttm",    {"symbol": fmp_ticker}),
+        "rt":  (f"{_STABLE}/ratios-ttm",          {"symbol": fmp_ticker}),
+        "fg":  (f"{_STABLE}/financial-growth",    {"symbol": fmp_ticker, "limit": 5}),
+        "spc": (f"{_STABLE}/stock-price-change",  {"symbol": fmp_ticker}),
+        "ae":  (f"{_STABLE}/analyst-estimates",   {"symbol": fmp_ticker,
+                                                   "period": "annual", "limit": 2}),
+        "es":  (f"{_STABLE}/earnings",            {"symbol": fmp_ticker, "limit": 4}),
+        "fs":  (f"{_STABLE}/financial-scores",    {"symbol": fmp_ticker}),
+        "ud":  (f"{_STABLE}/grades-historical",   {"symbol": fmp_ticker, "limit": 20}),
     }
 
     raw: dict[str, list | dict | None] = {}
@@ -952,6 +990,12 @@ def _fetch_ticker_metrics(
         if isinstance(data, list) and data:
             return data[0] or {}
         return {}
+
+    if _market and not (raw.get("km") or raw.get("rt")):
+        legacy = _legacy_intl_metrics(ticker, _market)
+        if legacy is not None:
+            _sqlog.info("screener %s: FMP empty, served by legacy provider", ticker)
+            return legacy
 
     km  = first("km")
     rt  = first("rt")
@@ -985,14 +1029,20 @@ def _fetch_ticker_metrics(
     pb        = _safe_float(km.get("pbRatioTTM")     or rt.get("priceToBookRatioTTM"))
     ev_ebitda = _safe_float(km.get("evToEBITDATTM"))
     ev_sales  = _safe_float(km.get("evToSalesTTM")   or rt.get("priceToSalesRatioTTM"))
-    peg       = _safe_float(km.get("pegRatioTTM"))
-    div_yield = _safe_float(km.get("dividendYieldTTM"))
+    # peg and dividend yield live on ratios-ttm, not key-metrics-ttm; with no
+    # fallback both were unconditionally None (verified 2026-08-27).
+    peg       = _safe_float(km.get("pegRatioTTM")
+                            or rt.get("priceToEarningsGrowthRatioTTM"))
+    div_yield = _safe_float(km.get("dividendYieldTTM")
+                            or rt.get("dividendYieldTTM"))
 
     # FCF yield: prefer direct field, fall back to 1/P_FCF
     fcf_yield = _safe_float(km.get("freeCashFlowYieldTTM"))
     if fcf_yield is None:
+        # Field is priceToFreeCashFlowRatioTTM — no "s" after Flow.
         p_fcf = _safe_float(
-            rt.get("priceToFreeCashFlowsRatioTTM")
+            rt.get("priceToFreeCashFlowRatioTTM")
+            or rt.get("priceToFreeCashFlowsRatioTTM")
             or km.get("priceToFreeCashFlowsRatioTTM")
         )
         if p_fcf and p_fcf > 0:
@@ -1915,22 +1965,107 @@ def get_company_names(tickers: list[str]) -> dict[str, dict]:
 
 
 
+def _intl_universe(market: str,
+                   per_sector_limit: int = _PER_SECTOR_LIMIT
+                   ) -> tuple[list[dict], dict, dict, dict]:
+    """Exchange universe for HK or SG, from the same FMP screener the US
+    path uses.
+
+    Replaces AKShare's stock_hk_famous_spot_em (a curated ~118 "well-known"
+    list with NO industry data) and SG's hand-maintained universe.py. Two
+    things change as a result:
+
+      * Coverage goes from ~118 hand-picked HK names to the whole exchange
+        above the market-cap floor.
+      * Every stock carries a real FMP `industry`, so the screener's
+        industry-relative percentile tier finally engages. Previously every
+        HK stock was labelled "HKEX", which put all of them in one bucket —
+        the tier ran, but ranked each stock against the entire market while
+        reporting it as industry-relative.
+
+    Reuses regional_comps.fetch_universe/dedupe_universe so the screener and
+    the valuation comps see exactly the same universe, including the RMB
+    dual-counter and SGX depositary-receipt filtering.
+
+    Returns (rows, sector_map, industry_map, name_map) keyed by canonical
+    ticker.
+    """
+    from src.data.regional_comps import (
+        dedupe_universe, fetch_universe, normalize_name,
+    )
+    from src.tools.intl_provider import canonical_symbol
+
+    exclude: set = set()
+    if market == "SES":
+        # Keep HK-primary depositary receipts out of the SGX screener for
+        # the same reason they are kept out of SGX comps.
+        try:
+            exclude = {normalize_name(r["name"]) for r in fetch_universe("HKSE")}
+        except Exception as exc:
+            _sqlog.warning("SGX cross-listing filter unavailable: %s", exc)
+
+    raw = dedupe_universe(fetch_universe(market), exclude_names=exclude)
+
+    # Bound the universe the same way the US screener does: the largest
+    # `per_sector_limit` names in each GICS sector. HKEX has ~1,750 names
+    # above the cap floor and each one costs 8 FMP calls, so taking the lot
+    # would be a ~14k-call refresh — an order of magnitude more than the US
+    # path it is supposed to mirror.
+    #
+    # The trade-off is the same one US lives with: a bounded universe means
+    # only concentrated industries (HK property developers, banks) keep >=5
+    # peers and resolve at the industry tier; thinner ones fall to sector.
+    # That is reported per stock rather than assumed.
+    by_sector: dict[str, list] = {}
+    for r in raw:                       # already sorted by market cap desc
+        by_sector.setdefault(r["sector"] or "Unknown", []).append(r)
+    raw = [r for group in by_sector.values() for r in group[:per_sector_limit]]
+    raw.sort(key=lambda r: -(r["market_cap"] or 0))
+
+    rows: list[dict] = []
+    sector_map: dict[str, str] = {}
+    industry_map: dict[str, str] = {}
+    name_map: dict[str, str] = {}
+    mkt = "hk" if market == "HKSE" else "sg"
+    for r in raw:
+        canonical = canonical_symbol(r["symbol"], mkt) or r["symbol"]
+        rows.append({
+            "canonical": canonical,
+            "name": r["name"],
+            "sector": r["sector"] or "Unknown",
+            "industry": r["industry"] or "Unknown",
+            "market_cap": r["market_cap"],
+        })
+        sector_map[canonical] = r["sector"] or "Unknown"
+        industry_map[canonical] = r["industry"] or "Unknown"
+        name_map[canonical] = r["name"]
+    _sqlog.info("%s screener universe: %d names, %d industries, %d sectors",
+                market, len(rows), len(set(industry_map.values())),
+                len(set(sector_map.values())))
+    return rows, sector_map, industry_map, name_map
+
+
 def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
     """
-    Return the well-known HKEX universe (~118 stocks) with VGPM scores.
+    Return the HKEX universe with VGPM scores.
 
-    Universe source: AKShare stock_hk_famous_spot_em() — Eastmoney Well-known HK Stocks.
-    Metrics source:  AKShare per-stock (fast) + yfinance supplement for deeper fields.
-    Sector/industry: TICKER_SECTOR_LOOKUP in sector_profiles.py, fallback yfinance info.
-    Caching:         24h in screener_cache under cache key "hk_famous".
+    Universe source: FMP company-screener, exchange=HKSE — the same call the
+                     US screener uses. Replaces AKShare's
+                     stock_hk_famous_spot_em, a curated ~118 "well-known"
+                     list that carried no industry data.
+    Metrics source:  the shared _fetch_ticker_metrics FMP pipeline.
+    Sector/industry: FMP classification (was TICKER_SECTOR_LOOKUP with every
+                     stock's industry set to the literal "HKEX").
+    Caching:         24h in screener_cache under "hk_fmp_v7".
 
-    Strategy for speed:
-      - AKShare indicator + valuation endpoints (~1.5s/stock) run in ThreadPoolExecutor
-      - yfinance is skipped for the bulk run (too slow at 118×10s = 20min)
-      - Full multi-source fetch (fetch_hk_vgpm_metrics) is reserved for lookup_ticker
+    The industry field is the substantive change. VGPM ranks peer-relative,
+    industry first (>=5 peers) then sector (>=8); with every stock labelled
+    "HKEX" the industry tier ran against the entire market while reporting
+    itself as industry-relative. HKEX has ~139 real industries, 97 of which
+    clear the peer floor.
     """
     _ensure_tables()
-    cache_key = "hk_famous_v6"   # v6: AKShare indicator shares cross-check (yfinance inflation guard)
+    cache_key = "hk_fmp_v7"   # v7: FMP exchange universe + real industries (was AKShare famous-spot)
 
     if not force_refresh:
         cached = _get_cached(cache_key)
@@ -1944,168 +2079,41 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
                         _overlay_live(item, q)
             return {"items": cached, "total": len(cached), "cached": True}
 
-    # ── Step 1: get universe from AKShare famous spots ────────────────────────
+    # ── Steps 1-2: universe + classification, both from FMP ──────────────
     try:
-        import akshare as ak
-        df_famous = ak.stock_hk_famous_spot_em()
+        universe_rows, sector_map, industry_map, name_map = _intl_universe("HKSE")
     except Exception as exc:
-        _sqlog.error("stock_hk_famous_spot_em failed: %s", exc)
+        _sqlog.error("HK screener universe fetch failed: %s", exc)
+        return {"items": [], "total": 0, "cached": False}
+    if not universe_rows:
         return {"items": [], "total": 0, "cached": False}
 
-    if df_famous is None or df_famous.empty:
-        return {"items": [], "total": 0, "cached": False}
+    # ── Step 3: metric fetch via the shared FMP pipeline (parallel) ──────
+    # Same _fetch_ticker_metrics the US screener uses, so HK stocks are
+    # scored on the same sub-factors from the same source. The per-stock
+    # AKShare + yfinance .info combination this replaces cost ~1.5s and a
+    # separate HTTP call each, and supplied no industry.
+    raw_metrics_list: list[dict] = []
+    api_key = _get_fmp_key()
 
-    # Normalise columns (AKShare returns Chinese headers)
-    col_map = {
-        "代码":   "code",       # ticker code e.g. "00700"
-        "名称":   "name",       # company name
-        "最新价": "price",      # latest price (HKD)
-        "涨跌幅": "change_pct", # day % change
-        "成交量": "volume",     # shares traded
-    }
-    df_famous = df_famous.rename(columns={k: v for k, v in col_map.items() if k in df_famous.columns})
-
-    # Build canonical ticker list
-    try:
-        from src.tools.hk.ticker import to_canonical
-    except Exception:
-        return {"items": [], "total": 0, "cached": False}
-
-    universe_rows: list[dict] = []
-    for _, row in df_famous.iterrows():
-        raw_code = str(row.get("code", "")).strip()
-        if not raw_code:
-            continue
-        canonical = to_canonical(raw_code)   # e.g. "00700.HK"
-        price      = _safe_float(row.get("price"))
-        change_pct = _safe_float(row.get("change_pct"))
-        name       = str(row.get("name", ""))
-        universe_rows.append({
-            "canonical": canonical,
-            "name":       name,
-            "price":      price,
-            "change_pct": change_pct,
-            "volume":     _safe_float(row.get("volume")),
-        })
-
-    # ── Step 2: sector/industry lookup ────────────────────────────────────────
-    try:
-        from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
-    except Exception:
-        TICKER_SECTOR_LOOKUP = {}
-
-    sector_map:   dict[str, str] = {}
-    industry_map: dict[str, str] = {}
-    name_map:     dict[str, str] = {}
-    for row in universe_rows:
-        t    = row["canonical"]
-        name_map[t] = row["name"]
-        entry = TICKER_SECTOR_LOOKUP.get(t)
-        if entry:
-            sector_map[t]   = entry[0]            # e.g. "Tech"
-            industry_map[t] = entry[2] or "HKEX"  # e.g. "Software (Internet)"
-        else:
-            sector_map[t]   = "Unknown"
-            industry_map[t] = "HKEX"
-
-    # ── Step 3: fast AKShare metric fetch for all 118 (parallel) ─────────────
-    try:
-        from src.tools.hk.vgpm_metrics import _fetch_akshare
-        from src.tools.hk.ticker import to_akshare_code
-
-        def _fetch_fast_metrics(row: dict) -> Optional[dict]:
-            try:
-                canonical = row["canonical"]
-                ak_code   = to_akshare_code(canonical)
-                metrics   = _fetch_akshare(ak_code)
-                if not metrics:
-                    metrics = {}
-                metrics["ticker"]   = canonical
-                metrics["sector"]   = sector_map.get(canonical, "Unknown")
-                metrics["industry"] = industry_map.get(canonical, "HKEX")
-                # Inject live price
-                metrics.setdefault("price", row.get("price"))
-
-                # ── Market cap via stock_hk_scale_comparison_em (HKD, no unit conversion) ──
-                try:
-                    import akshare as ak_lib
-                    sc_df = ak_lib.stock_hk_scale_comparison_em(symbol=ak_code)
-                    if sc_df is not None and not sc_df.empty:
-                        mc_col = next(
-                            (c for c in sc_df.columns
-                             if "总市值" in str(c) and "排名" not in str(c)),
-                            None,
-                        )
-                        if mc_col:
-                            mc_val = sc_df.iloc[0][mc_col]
-                            mc_f   = float(mc_val) if mc_val is not None else None
-                            if mc_f and mc_f == mc_f:  # not NaN
-                                metrics["market_cap_hkd"] = mc_f
-                except Exception:
-                    pass
-
-                # ── yfinance .info — V/G/P/M extras + beta (single HTTP call) ──────────
-                try:
-                    import yfinance as yf
-                    from src.tools.hk.ticker import to_yfinance_code
-
-                    def _sf2(v):
-                        if v is None: return None
-                        try:
-                            f = float(v)
-                            return None if f != f else f  # guard NaN
-                        except Exception:
-                            return None
-
-                    info = yf.Ticker(to_yfinance_code(canonical)).info or {}
-
-                    # Beta
-                    if (b := _sf2(info.get("beta"))) is not None:
-                        metrics["beta_yf"] = b
-
-                    # Valuation extras
-                    for src_k, dst_k in [("forwardPE",         "fwd_pe"),
-                                          ("pegRatio",          "peg"),
-                                          ("enterpriseToEbitda","ev_ebitda")]:
-                        if (v := _sf2(info.get(src_k))) is not None:
-                            metrics.setdefault(dst_k, v)
-
-                    # Growth extras
-                    fwd_eps = _sf2(info.get("forwardEps"))
-                    ttm_eps = _sf2(info.get("trailingEps"))
-                    if (fwd_eps is not None and ttm_eps is not None
-                            and abs(ttm_eps) >= 0.10):
-                        feg = (fwd_eps - ttm_eps) / abs(ttm_eps)
-                        metrics.setdefault("fwd_eps_growth", max(-2.0, min(feg, 2.0)))
-
-                    # Profitability extras
-                    for src_k, dst_k in [("grossMargins",  "gross_margin"),
-                                          ("returnOnEquity","roe"),
-                                          ("returnOnAssets","roa"),
-                                          ("profitMargins", "net_margin")]:
-                        if (v := _sf2(info.get(src_k))) is not None:
-                            metrics.setdefault(dst_k, v)
-
-                    # Momentum extras
-                    rec = _sf2(info.get("recommendationMean"))
-                    if rec is not None:
-                        metrics.setdefault("rec_score", (5.0 - rec) / 4.0)
-                    sr = _sf2(info.get("shortRatio"))
-                    if sr is not None:
-                        metrics.setdefault("short_ratio", sr)
-                    wc52 = _sf2(info.get("52WeekChange"))
-                    if wc52 is not None:
-                        metrics.setdefault("price_1y", wc52)
-
-                except Exception:
-                    pass
-
-                return metrics if metrics.get("ticker") else None
-            except Exception:
+    def _fetch_fast_metrics(row: dict) -> Optional[dict]:
+        canonical = row["canonical"]
+        try:
+            metrics = _fetch_ticker_metrics(canonical, api_key)
+            if not metrics:
                 return None
+            metrics["ticker"] = canonical
+            metrics["sector"] = sector_map.get(canonical, "Unknown")
+            metrics["industry"] = industry_map.get(canonical, "Unknown")
+            if row.get("market_cap"):
+                metrics.setdefault("market_cap", row["market_cap"])
+            return metrics
+        except Exception as exc:
+            _sqlog.warning("HK screener metrics failed for %s: %s", canonical, exc)
+            return None
 
-        raw_metrics_list: list[dict] = []
-        with ThreadPoolExecutor(max_workers=20) as pool:
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
             for m in pool.map(_fetch_fast_metrics, universe_rows):
                 if m:
                     raw_metrics_list.append(m)
@@ -2126,8 +2134,8 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
             _sqlog.error("HK VGPM universe computation failed: %s", exc)
 
     # ── Step 5: assemble output items ─────────────────────────────────────────
-    # Live quotes already in universe_rows (from stock_hk_famous_spot_em)
-    # Build fast lookup: canonical → metrics dict (for market_cap_hkd, beta_yf)
+    # The screener response carries no live quote; get_live_quotes overlays
+    # price/change on the cached-read path, same as the US screener.
     metrics_map: dict[str, dict] = {m["ticker"]: m for m in raw_metrics_list}
 
     items = []
@@ -2144,12 +2152,14 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
             "symbol":          t,
             "companyName":     name_map.get(t, ""),
             "sector":          sector_map.get(t, "Unknown"),
-            "industry":        industry_map.get(t, "HKEX"),
-            "marketCap":       m.get("market_cap_hkd"),   # 亿HKD × 1e8, from AKShare indicator
-            "price":           row.get("price"),
-            "change_pct":      row.get("change_pct"),
-            "volume":          row.get("volume"),
-            "beta":            m.get("beta_yf"),           # from yfinance .info
+            "industry":        industry_map.get(t, "Unknown"),
+            # Market cap comes from the FMP screener row (HKD), so it no
+            # longer depends on AKShare's 亿-unit scaling.
+            "marketCap":       row.get("market_cap") or m.get("market_cap"),
+            "price":           m.get("price"),
+            "change_pct":      m.get("change_pct"),
+            "volume":          m.get("volume"),
+            "beta":            m.get("beta") or m.get("beta_yf"),
             "exchange":        "HKEX",
             "country":         "HK",
             "vgpm":            vgpm,
@@ -2166,52 +2176,65 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
 
 def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
     """
-    Return the curated SGX universe (~80 stocks) with VGPM scores.
+    Return the SGX universe with VGPM scores.
 
-    Universe source: src/tools/sg/universe.py (curated STI 30 + Mid Caps + REITs).
-    Metrics source:  yfinance .info + .financials (primary).
-    VGPM:            Computed within SG peer universe using same percentile-rank engine.
-    Caching:         24h in screener_cache under cache key "sg_universe_v1".
+    Universe source: FMP company-screener, exchange=SES — the same call the
+                     US screener uses (was a hand-curated ~80-name list in
+                     src/tools/sg/universe.py, now the fallback).
+    Metrics source:  the shared _fetch_ticker_metrics FMP pipeline.
+    VGPM:            peer-relative percentile ranks, industry-first.
+    Caching:         24h in screener_cache under "sg_fmp_v2".
+
+    SGX is small (~150 names above the market-cap floor), so most stocks
+    resolve at the sector tier rather than industry — reported as such
+    rather than presented as industry-relative.
     """
     _ensure_tables()
-    cache_key = "sg_universe_v1"
+    cache_key = "sg_fmp_v2"   # v2: FMP exchange universe (was curated universe.py)
 
     if not force_refresh:
         cached = _get_cached(cache_key)
         if cached is not None:
+            cached_tickers = [i["symbol"] for i in cached if i.get("symbol")]
+            live_quotes = get_live_quotes(cached_tickers)
+            if live_quotes:
+                for item in cached:
+                    q = live_quotes.get(item["symbol"])
+                    if q:
+                        _overlay_live(item, q)
             return {"items": cached, "total": len(cached), "cached": True}
 
     try:
-        from src.tools.sg.universe import get_sg_universe
-        from src.tools.sg.ticker import to_yfinance_code, to_canonical as _sg_canonical
-        from src.tools.sg.vgpm_metrics import fetch_sg_vgpm_metrics
-    except ImportError as exc:
-        _sqlog.error("SGX module import failed: %s", exc)
+        universe_rows, sector_map, industry_map, name_map = _intl_universe("SES")
+    except Exception as exc:
+        _sqlog.error("SGX screener universe fetch failed: %s", exc)
         return {"items": [], "total": 0, "cached": False}
+    if not universe_rows:
+        return {"items": [], "total": 0, "cached": False}
+    universe = universe_rows
 
-    universe = get_sg_universe()
-    _sqlog.info("SGX screener: %d stocks in universe", len(universe))
-
-    import yfinance as yf
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    raw_metrics: dict[str, dict] = {}
+    _sg_api_key = _get_fmp_key()
 
     def _fetch_one(stock: dict) -> tuple[str, dict]:
-        code = stock["code"]
-        canonical = _sg_canonical(code)
+        canonical = stock["canonical"]
         try:
-            metrics = fetch_sg_vgpm_metrics(code)
+            # Same shared FMP pipeline the US and HK screeners use, so all
+            # three are scored on identical sub-factors from one source.
+            metrics = _fetch_ticker_metrics(canonical, _sg_api_key) or {}
             metrics["_sector"] = stock.get("sector", "Unknown")
             metrics["_industry"] = stock.get("industry", "Unknown")
-            metrics["_name"] = stock.get("name", code)
+            metrics["_name"] = stock.get("name", canonical)
+            if stock.get("market_cap"):
+                metrics.setdefault("market_cap", stock["market_cap"])
             return canonical, metrics
         except Exception as e:
-            _sqlog.warning("SGX metric fetch failed for %s: %s", code, e)
-            return canonical, {"_sector": stock.get("sector"), "_industry": stock.get("industry"), "_name": stock.get("name")}
+            _sqlog.warning("SGX metric fetch failed for %s: %s", canonical, e)
+            return canonical, {"_sector": stock.get("sector"),
+                               "_industry": stock.get("industry"),
+                               "_name": stock.get("name")}
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(_fetch_one, s): s["code"] for s in universe}
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_fetch_one, s): s["canonical"] for s in universe}
         for future in as_completed(futures):
             canonical, metrics = future.result()
             raw_metrics[canonical] = metrics

@@ -2624,7 +2624,13 @@ def get_sector_peer_multiples(
     regional = _regional_peer_multiples(ticker, exchange, industry, sector,
                                         market_cap)
     if regional:
+        # Layering, weakest first: static table, then the curated-basket
+        # median from the KG cache (US only), then the measured exchange
+        # comps. Regional is industry-level and size-matched so it wins any
+        # field it resolves; dynamic still fills fields it does not.
         merged = {**static}
+        if not is_hk:
+            merged.update(get_dynamic_peer_multiples(sector, profile_name))
         basis: dict[str, dict] = {}
         for field, row in regional.items():
             merged[field] = row["value"]
@@ -2661,7 +2667,7 @@ def _regional_peer_multiples(
     """
     try:
         from src.data.regional_comps import (
-            EXCHANGES, get_fmp_classification, get_regional_multiples,
+            get_fmp_classification, get_regional_multiples, market_for_exchange,
         )
     except Exception:
         return {}
@@ -2675,10 +2681,13 @@ def _regional_peer_multiples(
         # comps table, not the repo's internal profile name ("Financials").
         fmp_sector = info.get("sector", "") or sector
 
-    if exchange not in EXCHANGES:
+    # FMP reports the listing venue ("NASDAQ"); the store is keyed by market
+    # ("US"), since where a company listed is not an economic distinction.
+    market = market_for_exchange(exchange)
+    if not market:
         return {}
     try:
-        return get_regional_multiples(exchange, industry, fmp_sector,
+        return get_regional_multiples(market, industry, fmp_sector,
                                       market_cap=market_cap or None)
     except Exception:
         return {}

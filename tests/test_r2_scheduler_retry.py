@@ -180,6 +180,9 @@ def _const_pool(pool):
 GATED = {
     "vgpm_backfill", "idea_of_the_day", "iv15_sweep", "fundflow_brief",
     "hundred_q_daily_sweep", "hundred_q_weekly_batch", "hundred_q_backstop",
+    # W2 — weekly exchange-comp refresh (US/HK/SG). Gated so a run that dies
+    # partway through is retried rather than skipped for the week.
+    "regional_comps_refresh",
 }
 
 
