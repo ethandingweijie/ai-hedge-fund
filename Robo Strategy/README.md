@@ -1,3 +1,26 @@
+> **Archived prototype — not the shipped feature.**
+>
+> Robo Strategy ships as a feature *inside* the AI Hedge Fund app:
+>
+> | | |
+> |---|---|
+> | Route | `/robo-strategy` (`app/frontend/src/pages/RoboStrategyPage.tsx`) |
+> | API | `app/backend/routes/robo_strategy.py` → `/robo-strategy/generate` |
+> | Engine | `app/backend/services/robo_strategy_service.py` |
+> | UI parts | `app/frontend/src/components/robo/` |
+>
+> This directory is the standalone Next.js original that the Python engine
+> was ported from. It still runs its OWN allocation engine
+> (`src/lib/allocation.ts`) and does not call the backend, so it does not
+> carry anything added since the port — notably the equity look-through that
+> resolves the fund plan to the companies it actually holds.
+>
+> It is kept committed so the TypeScript original and the Python port are
+> versioned together and drift between them is visible in history. Because it
+> has its own `package.json`, editors may offer to import it as a separate
+> project — that is expected; it is reference material, not a second app to
+> run.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
