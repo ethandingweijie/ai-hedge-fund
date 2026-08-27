@@ -26,7 +26,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import requests
 
@@ -351,6 +351,11 @@ def _get_cached(cache_key: str) -> Optional[list]:
 #: arrives during a cold ~2,600-call HK build starts its OWN build; they then
 #: compete for the same FMP rate-limit bucket and each one gets slower, which
 #: is how a slow first load became a failing one. Waiters serve stale instead.
+#: How far back a PREVIOUS cache-key version may be borrowed from. Bounded
+#: so a long-dead payload can never resurface — the point is to bridge the
+#: minutes after a deploy, not to serve last month's screener.
+_STALE_VERSION_MAX_AGE_DAYS = 30
+
 _BUILD_LOCKS: dict[str, threading.Lock] = {}
 _BUILD_LOCKS_GUARD = threading.Lock()
 
@@ -361,22 +366,115 @@ def _build_lock(cache_key: str) -> threading.Lock:
 
 
 def _get_cached_stale(cache_key: str) -> Optional[list]:
-    """Cached rows IGNORING the TTL.
+    """Cached rows IGNORING the TTL, falling back across cache-key versions.
 
-    A cold full-universe build costs ~2,600 FMP calls for HK and cannot
-    finish inside an HTTP request — it ran 300s and the browser gave up,
-    which is what "loading failed" looked like. Expired rows are still a far
-    better answer than a timeout: the weekly job rewrites them, so the worst
-    case is data a few days old rather than no screener at all.
+    A cold full-universe build cannot finish inside an HTTP request — HK ran
+    300s and the browser gave up, which is what "loading failed" looked like.
+    Expired rows are a far better answer than a timeout: the weekly job
+    rewrites them, so the worst case is data a few days old.
+
+    The version fallback matters as much as the TTL one. Cache keys carry a
+    version suffix and get bumped whenever the row shape or a field fix
+    changes (sg_universe_v1 -> sg_fmp_v2 -> sg_fmp_v3). A bump leaves ZERO
+    rows under the new key, so an exact-key lookup finds nothing, the stale
+    guard cannot fire, and the first reader after the deploy eats the full
+    cold build anyway — which is exactly how SGX failed again after its
+    marketCap fix. Serving the previous version's rows is stale twice over
+    and marked as such, but it keeps a screener on screen.
+
+    The prefix match is done in Python, not in SQL: a literal percent sign
+    in the SQL text breaks psycopg ("only '%s'... allowed as placeholders"),
+    which rules out a prefix-wildcard query. The table holds a handful of
+    rows, so filtering in Python is both safe and cheap.
     """
     row = _db.query_one(
         "SELECT results_json FROM screener_cache WHERE cache_key = ?", [cache_key])
-    if not row or not row["results_json"]:
+    if row and row["results_json"]:
+        try:
+            return json.loads(row["results_json"])
+        except (TypeError, ValueError):
+            pass
+
+    prefix = _cache_key_family(cache_key)
+    if not prefix:
         return None
     try:
-        return json.loads(row["results_json"])
-    except (TypeError, ValueError):
+        rows = _db.query(
+            "SELECT cache_key, results_json, fetched_at FROM screener_cache "
+            "ORDER BY fetched_at DESC")
+    except Exception:
         return None
+    floor = (datetime.now(timezone.utc)
+             - timedelta(days=_STALE_VERSION_MAX_AGE_DAYS)).isoformat()
+    for r in rows or []:
+        key = r["cache_key"] or ""
+        if key == cache_key or not key.startswith(prefix) or not r["results_json"]:
+            continue
+        if (r["fetched_at"] or "") < floor:
+            continue
+        try:
+            parsed = json.loads(r["results_json"])
+        except (TypeError, ValueError):
+            continue
+        if parsed:
+            _sqlog.info("screener %s: no rows, serving previous version %s",
+                        cache_key, key)
+            return parsed
+    return None
+
+
+def _serve_stale_and_refresh(cache_key: str, build: "Callable[[], dict]",
+                             label: str) -> Optional[dict]:
+    """Return stale rows now and rebuild in the background, or None.
+
+    The cold path is the one that actually reached users: after a deploy
+    that bumps a cache key the table has no rows under it, no build is yet
+    in flight so the lock is free, and the first reader runs the whole
+    build synchronously — 93s for SGX, 300s+ for HK. Both exceed what a
+    browser will wait for.
+
+    Returning the previous version immediately and refreshing behind the
+    request turns that into a fast, visibly-stale answer. Only when there is
+    nothing at all to serve (a genuinely first-ever build) does a caller
+    still block, which happens once per market rather than once per deploy.
+    """
+    stale = _get_cached_stale(cache_key)
+    if not stale:
+        return None
+
+    def _refresh() -> None:
+        # Blocking acquire, NOT try-acquire: the request thread is still
+        # holding the lock when this thread starts and releases it a moment
+        # later. A non-blocking attempt loses that race every time and the
+        # refresh silently never happens.
+        lock = _build_lock(cache_key)
+        lock.acquire()
+        try:
+            # Another waiter may have rebuilt while this thread queued.
+            if _get_cached(cache_key) is not None:
+                return
+            build()
+        except Exception as exc:
+            _sqlog.warning("%s background refresh failed: %s", label, exc)
+        finally:
+            lock.release()
+
+    threading.Thread(target=_refresh, name=f"{label}-refresh", daemon=True).start()
+    _sqlog.info("%s: cache cold — serving stale rows, refreshing in background", label)
+    return {"items": stale, "total": len(stale), "cached": True, "stale": True}
+
+
+def _cache_key_family(cache_key: str) -> str:
+    """The version-independent prefix of a screener cache key.
+
+    "sg_fmp_v3" -> "sg_", so any earlier sg_* payload can stand in. Returns
+    "" for keys with no market prefix (the US screener hashes its params, so
+    it has no stable family and is left alone).
+    """
+    for family in ("sg_", "hk_"):
+        if cache_key.startswith(family):
+            return family
+    return ""
 
 
 #: Structure caches (universe / sector / VGPM) are rewritten by the weekly
@@ -2183,10 +2281,21 @@ def get_hk_screener_stocks(force_refresh: bool = False) -> dict:
             _lock.release()
         return {"items": _done, "total": len(_done), "cached": bool(_done)}
 
+    # Ownership of the lock is handed to the background refresh, so track
+    # the release explicitly — Lock.locked() cannot tell WHICH thread holds
+    # it, and releasing another thread's lock would let two builds run.
+    _released = False
     try:
+        served = _serve_stale_and_refresh(
+            cache_key, lambda: _build_hk_screener(cache_key), "HK screener")
+        if served is not None:
+            _lock.release()
+            _released = True
+            return served
         return _build_hk_screener(cache_key)
     finally:
-        _lock.release()
+        if not _released:
+            _lock.release()
 
 
 def _build_hk_screener(cache_key: str) -> dict:
@@ -2358,10 +2467,21 @@ def get_sg_screener_stocks(force_refresh: bool = False) -> dict:
             _lock.release()
         return {"items": _done, "total": len(_done), "cached": bool(_done)}
 
+    # Ownership of the lock is handed to the background refresh, so track
+    # the release explicitly — Lock.locked() cannot tell WHICH thread holds
+    # it, and releasing another thread's lock would let two builds run.
+    _released = False
     try:
+        served = _serve_stale_and_refresh(
+            cache_key, lambda: _build_sg_screener(cache_key), "SGX screener")
+        if served is not None:
+            _lock.release()
+            _released = True
+            return served
         return _build_sg_screener(cache_key)
     finally:
-        _lock.release()
+        if not _released:
+            _lock.release()
 
 
 def _build_sg_screener(cache_key: str) -> dict:

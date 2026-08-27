@@ -15,6 +15,7 @@ unbound name, bad key or shape error surfaces offline.
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 
@@ -370,3 +371,137 @@ class TestSectorCanonicalisation:
             region="Emerging Markets", sector_map=rs._HK_SECTOR_TO_CANONICAL)
         assert cand is not None
         assert cand["sector"] == "Financial Services"
+
+
+class TestCacheKeyVersionFallback:
+    """Cache keys carry a version suffix and get bumped when the row shape or
+    a field fix changes (sg_universe_v1 -> sg_fmp_v2 -> sg_fmp_v3). A bump
+    leaves ZERO rows under the new key, so the exact-key stale lookup finds
+    nothing, the stale guard cannot fire, and the first reader after the
+    deploy eats the full cold build — 93s for SGX. That is how SGX failed a
+    second time, after its marketCap fix."""
+
+    def test_family_prefix(self):
+        assert ss._cache_key_family("sg_fmp_v3") == "sg_"
+        assert ss._cache_key_family("hk_fmp_v7") == "hk_"
+        assert ss._cache_key_family("d910850ee9375ba2") == "", "US keys are hashes"
+
+    def test_previous_version_serves_when_the_new_key_is_empty(self, monkeypatch):
+        rows = [{"symbol": "D05.SI"}]
+        monkeypatch.setattr(ss._db, "query_one", lambda *a, **k: None)
+        monkeypatch.setattr(ss._db, "query", lambda *a, **k: [
+            {"cache_key": "sg_fmp_v2", "results_json": json.dumps(rows),
+             "fetched_at": "2026-08-20T00:00:00"},
+        ])
+        assert ss._get_cached_stale("sg_fmp_v3") == rows
+
+    def test_other_markets_are_not_borrowed(self, monkeypatch):
+        """An HK payload must never stand in for SGX."""
+        monkeypatch.setattr(ss._db, "query_one", lambda *a, **k: None)
+        monkeypatch.setattr(ss._db, "query", lambda *a, **k: [
+            {"cache_key": "hk_fmp_v7", "results_json": json.dumps([{"symbol": "0700.HK"}]),
+             "fetched_at": "2026-08-26T00:00:00"},
+        ])
+        assert ss._get_cached_stale("sg_fmp_v3") is None
+
+    def test_exact_key_wins_over_older_versions(self, monkeypatch):
+        monkeypatch.setattr(ss._db, "query_one",
+                            lambda *a, **k: {"results_json": json.dumps([{"symbol": "NEW"}])})
+        monkeypatch.setattr(ss._db, "query", lambda *a, **k: [
+            {"cache_key": "sg_fmp_v2", "results_json": json.dumps([{"symbol": "OLD"}]),
+             "fetched_at": "2026-08-20T00:00:00"},
+        ])
+        assert ss._get_cached_stale("sg_fmp_v3") == [{"symbol": "NEW"}]
+
+    def test_no_percent_in_the_sql(self):
+        """A literal percent sign in the SQL text breaks psycopg ("only
+        '%s'... allowed as placeholders"), which rules out a prefix-wildcard
+        query — hence the Python-side filter."""
+        import inspect
+        sql_lines = [l for l in inspect.getsource(ss._get_cached_stale).splitlines()
+                     if "SELECT" in l.upper() or "FROM screener_cache" in l]
+        assert sql_lines, "no SQL found to check"
+        for line in sql_lines:
+            assert "%" not in line, f"percent in SQL breaks psycopg: {line.strip()}"
+
+
+class TestServeStaleAndRefresh:
+    def test_cold_cache_returns_stale_immediately(self, stubbed, monkeypatch):
+        built: list[int] = []
+
+        def slow_build(*a, **k):
+            built.append(1)
+            return {"items": [], "total": 0, "cached": False}
+
+        monkeypatch.setattr(ss, "_build_sg_screener", slow_build)
+        monkeypatch.setattr(ss, "_get_cached_stale",
+                            lambda key: [{"symbol": "D05.SI"}])
+        out = ss.get_sg_screener_stocks()
+        assert out["stale"] is True
+        assert out["total"] == 1
+        # The refresh runs on a daemon thread; give it a moment to land.
+        import time
+        for _ in range(50):
+            if built:
+                break
+            time.sleep(0.01)
+        assert built, "background refresh never ran"
+
+    def test_first_ever_build_still_runs_inline(self, stubbed, monkeypatch):
+        """Nothing to serve — blocking once per market is unavoidable."""
+        monkeypatch.setattr(ss, "_intl_universe", lambda m, **k: _universe("D0", 4))
+        monkeypatch.setattr(ss, "_get_cached_stale", lambda key: None)
+        out = ss.get_sg_screener_stocks()
+        assert out["total"] == 4
+        assert not out.get("stale")
+
+    def test_lock_not_left_held_after_serving_stale(self, stubbed, monkeypatch):
+        monkeypatch.setattr(ss, "_build_sg_screener",
+                            lambda *a, **k: {"items": [], "total": 0, "cached": False})
+        monkeypatch.setattr(ss, "_get_cached_stale",
+                            lambda key: [{"symbol": "D05.SI"}])
+        ss.get_sg_screener_stocks()
+        import time
+        lock = ss._build_lock("sg_fmp_v3")
+        for _ in range(100):
+            if lock.acquire(blocking=False):
+                lock.release()
+                return
+            time.sleep(0.01)
+        raise AssertionError("build lock still held after serving stale")
+
+    def test_ancient_versions_are_not_borrowed(self, monkeypatch):
+        """A key is bumped BECAUSE the old rows were wrong (v3 fixed null
+        marketCap in v2), so the fallback is bounded — it exists to bridge
+        the minutes after a deploy, not to serve last month's screener."""
+        from datetime import datetime, timedelta, timezone
+        old = (datetime.now(timezone.utc)
+               - timedelta(days=ss._STALE_VERSION_MAX_AGE_DAYS + 1)).isoformat()
+        monkeypatch.setattr(ss._db, "query_one", lambda *a, **k: None)
+        monkeypatch.setattr(ss._db, "query", lambda *a, **k: [
+            {"cache_key": "sg_universe_v1",
+             "results_json": json.dumps([{"symbol": "OLD"}]), "fetched_at": old},
+        ])
+        assert ss._get_cached_stale("sg_fmp_v3") is None
+
+    def test_recent_previous_version_is_borrowed(self, monkeypatch):
+        from datetime import datetime, timedelta, timezone
+        recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        monkeypatch.setattr(ss._db, "query_one", lambda *a, **k: None)
+        monkeypatch.setattr(ss._db, "query", lambda *a, **k: [
+            {"cache_key": "sg_fmp_v2",
+             "results_json": json.dumps([{"symbol": "D05.SI"}]), "fetched_at": recent},
+        ])
+        assert ss._get_cached_stale("sg_fmp_v3") == [{"symbol": "D05.SI"}]
+
+    def test_newest_version_preferred(self, monkeypatch):
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        monkeypatch.setattr(ss._db, "query_one", lambda *a, **k: None)
+        monkeypatch.setattr(ss._db, "query", lambda *a, **k: [
+            {"cache_key": "sg_fmp_v2", "results_json": json.dumps([{"symbol": "NEWER"}]),
+             "fetched_at": (now - timedelta(days=1)).isoformat()},
+            {"cache_key": "sg_universe_v1", "results_json": json.dumps([{"symbol": "OLDER"}]),
+             "fetched_at": (now - timedelta(days=20)).isoformat()},
+        ])
+        assert ss._get_cached_stale("sg_fmp_v3") == [{"symbol": "NEWER"}]
