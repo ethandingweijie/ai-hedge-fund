@@ -1196,7 +1196,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         "WealthTech & Specialty Financials (SG)": {
             "methods": [
                 {"name": "P/E (norm)",      "weight": 0.4, "anchor": True, "implementable": True},
-                {"name": "SOTP",            "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "SOTP (published)",            "weight": 0.35, "anchor": False, "implementable": True},
                 {"name": "P/BV",            "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": ['EV/EBITDA'],
@@ -1213,9 +1213,9 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Real Estate Asset Manager (SG)": {
             "methods": [
-                {"name": "SOTP",            "weight": 0.45, "anchor": True, "implementable": True},
-                {"name": "P/E (norm)",      "weight": 0.35, "anchor": False, "implementable": True},
-                {"name": "DDM",             "weight": 0.2, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",          "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "SOTP (published)",    "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DDM",                 "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": ['P/BV', 'EV/EBITDA'],
             "rationale": "SG real estate asset manager (CapitaLand Investment). SOTP-anchored: recurring fee-related earnings capitalise at a different multiple from the balance-sheet co-investments they sit beside. Primary metrics: FRE, FUM, net gearing, investment-property fair value.",
@@ -1674,7 +1674,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 {"name": "Reverse DCF",      "weight": 0.40, "anchor": True,  "implementable": True},
                 {"name": "TAM Penetration",  "weight": 0.30, "anchor": False, "implementable": False, "proxy": "EV/Revenue"},
                 {"name": "EV/NTM Rev",       "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "SOTP",             "weight": 0.10, "anchor": False, "implementable": False, "proxy": "EPV"},
+                {"name": "SOTP (published)",             "weight": 0.10, "anchor": False, "implementable": False, "proxy": "EPV"},
             ],
             "excluded": [],
             "rationale": "High uncertainty in terminal states requires modeling backward from market share assumptions.",
@@ -2067,12 +2067,12 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Aerospace & Engineering (SG)": {
             "methods": [
-                {"name": "EV/EBITDA",       "weight": 0.45, "anchor": True, "implementable": True},
-                {"name": "Forward P/E",     "weight": 0.35, "anchor": False, "implementable": True},
-                {"name": "DCF",             "weight": 0.2, "anchor": False, "implementable": True},
+                {"name": "DCF",                 "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA",           "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",         "weight": 0.2, "anchor": False, "implementable": True},
             ],
             "excluded": ['P/BV'],
-            "rationale": "SG aerospace, defence and engineering (ST Engineering, SATS). Order-book-driven with multi-year delivery schedules, so backlog and burn rate lead the P&L. Primary metrics: order book backlog, EBIT margin, aviation traffic / cargo tonnage, net debt / EBITDA.",
+            "rationale": "SG aerospace, defence and engineering (ST Engineering, SATS). DCF-anchored, following the published method for its largest member (ST Engineering: DCF, WACC 6.8%, terminal g 4%). Order-book-driven with multi-year delivery schedules, so backlog and burn rate lead the P&L. Primary metrics: order book backlog, EBIT margin, aviation traffic / cargo tonnage, net debt / EBITDA.",
         },
         "Aviation & Marine (SG)": {
             "methods": [
@@ -2090,12 +2090,12 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # net book value, in one table. ROIC vs WACC carries the EVA spread.
         "Conglomerate / Industrial (SG)": {
             "methods": [
-                {"name": "SOTP",         "weight": 0.45, "anchor": True,  "implementable": True},
-                {"name": "EV/EBITDA",    "weight": 0.35, "anchor": False, "implementable": True},
-                {"name": "ROIC vs WACC", "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",           "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "SOTP (published)",    "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",                 "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": ["P/BV"],
-            "rationale": "SG conglomerate / industrial (Keppel, Sembcorp, ST Engineering). SOTP-anchored with per-segment bases (PE, net book value, discount to book, mark-to-market). Primary metrics: ROIC, order book / backlog duration, EV/EBITDA, FCF conversion.",
+            "rationale": "SG conglomerate / industrial (Keppel, Sembcorp, ST Engineering). EV/EBITDA-anchored with a published-SOTP secondary. ROIC vs WACC was dropped as the EVA proxy: on the BN4.SI forward run it returned S$1.90 against EV/EBITDA S$10.91 and a published SOTP of S$10.70, so at any material weight it dragged the blend toward a number no method supported. EVA remains the right lens for a conglomerate; this engine implementation is not it. EV/EBITDA-anchored with SOTP secondary — the house method is SOTP, but `segment_breakdown` is populated solely from FMP revenue-product-segmentation, which returns nothing for SGX, so an SOTP anchor would silently never fire and the weights would renormalise onto the secondaries. SOTP contributes the moment segment data exists. Per-segment bases (PE, net book value, discount to book, mark-to-market) with per-segment bases (PE, net book value, discount to book, mark-to-market). Primary metrics: ROIC, order book / backlog duration, EV/EBITDA, FCF conversion.",
         },
         "Aerospace & Defense": {
             "methods": [
@@ -2138,9 +2138,9 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # on its own multiple. EV/EBITDA cross-checks the operating core.
         "Telco / Infrastructure (SG)": {
             "methods": [
-                {"name": "SOTP",         "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "EV/EBITDA",    "weight": 0.35, "anchor": False, "implementable": True},
-                {"name": "DCF",          "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",           "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "SOTP (published)",    "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",                 "weight": 0.25, "anchor": False, "implementable": True},
             ],
             "excluded": ["P/BV"],
             "rationale": "SG telco / infrastructure (Singtel, StarHub, NetLink, Keppel Infra). SOTP-anchored: regional associates and concession assets valued separately from the domestic core. Primary metrics: EV/EBITDA, FCF yield, ARPU, core dividend yield, capex-to-revenue.",
@@ -2237,7 +2237,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "methods": [
                 {"name": "NAV",             "weight": 0.45, "anchor": True, "implementable": True},
                 {"name": "EV/EBITDA",       "weight": 0.35, "anchor": False, "implementable": True},
-                {"name": "SOTP",            "weight": 0.2, "anchor": False, "implementable": True},
+                {"name": "SOTP (published)",            "weight": 0.2, "anchor": False, "implementable": True},
             ],
             "excluded": ['P/BV'],
             "rationale": "SG specialised accommodation and co-living (Centurion, Wee Hur, LHN). A hybrid of an owned asset book and an operating business, so RNAV carries the freehold while EV/EBITDA prices the operations. Primary metrics: PBWA and PBSA bed capacity, average occupancy, RevPAB, net gearing.",

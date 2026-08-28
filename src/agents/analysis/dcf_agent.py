@@ -855,6 +855,79 @@ def _sotp_12m_probabilistic(
     }
 
 
+# ── Published SOTP tables ────────────────────────────────────────────────
+#
+# A third SOTP shape, distinct from the two already here:
+#
+#   SOTP (segments)  — segment REVENUE x a generic multiple, from FMP
+#                      revenue-product-segmentation. Returns nothing for
+#                      SGX, so it can never fire on a Singapore name.
+#   SOTP (analyst)   — segment revenue_fwd / EBIT x P/E or EV/Rev, the
+#                      GS Exhibit-17 shape.
+#   SOTP (published) — segment VALUATIONS stated directly, which is what
+#                      Singapore conglomerate notes actually print.
+#
+# Keppel's note gives a complete table: Infrastructure S$12,000mn at 15x PE,
+# Non-core S$4,716mn at net book value, Real Estate S$3,686mn at a 30%
+# discount to book, Asset Management S$3,000mn at 20x PE, listed entities
+# marked to market, private funds marked to valuation — then group net debt
+# and corporate costs deducted. There is no revenue or EBIT line to
+# reconstruct from, and inventing one would discard the analyst's per-segment
+# basis, which is the whole content of the table.
+#
+# Values are in millions of the reporting currency, matching how the notes
+# print them. Seeded by hand; the same rows are what a future extractor
+# should populate, which is why each carries its own source and vintage.
+_SGX_SOTP_TABLES: dict[str, dict] = {
+    # Phillip Securities Research, Keppel Ltd, 12 Aug 2025.
+    # Segments sum to S$20,404mn = S$10.70/share.
+    "BN4.SI": {
+        "currency": "SGD",
+        "as_of": "2025-08-12",
+        "source": "Phillip Securities Research (Keppel)",
+        "segments": [
+            {"name": "Infrastructure",    "value_mn": 12000.0, "basis": "15x PE"},
+            {"name": "Non-core",          "value_mn":  4716.0, "basis": "net book value"},
+            {"name": "Real Estate",       "value_mn":  3686.0, "basis": "30% discount to book"},
+            {"name": "Asset Management",  "value_mn":  3000.0, "basis": "20x PE"},
+            {"name": "Listed entities",   "value_mn":  2923.0, "basis": "mark to market"},
+            {"name": "Private funds",     "value_mn":  1532.0, "basis": "mark to valuation"},
+            {"name": "Connectivity",      "value_mn":   600.0, "basis": "15x PE"},
+        ],
+        "adjustments": [
+            {"name": "Group net debt",    "value_mn": -7913.0, "basis": "net debt"},
+            {"name": "Corporate cost",    "value_mn":  -140.0, "basis": "corporate activities"},
+        ],
+    },
+}
+
+
+def _compute_published_sotp(ticker: str, shares: float):
+    """Per-share equity value from a published SOTP table.
+
+    Returns (value_per_share, table, provenance) or None when no table
+    exists for the ticker or the share count is unusable. Deliberately does
+    NOT fall back to a computed SOTP — a missing table means the method is
+    unavailable, and the blend renormalises onto the other methods rather
+    than substituting a different methodology under the same name.
+    """
+    tbl = _SGX_SOTP_TABLES.get((ticker or "").upper())
+    if not tbl or not shares or shares <= 0:
+        return None
+    segs = tbl.get("segments") or []
+    if not segs:
+        return None
+    total_mn = sum(_safe(x.get("value_mn")) or 0.0 for x in segs)
+    total_mn += sum(_safe(x.get("value_mn")) or 0.0
+                    for x in (tbl.get("adjustments") or []))
+    if total_mn <= 0:
+        return None
+    value_ps = (total_mn * 1e6) / shares
+    prov = [f"{len(segs)} segments",
+            f"{tbl.get('source', 'sell-side')} ({tbl.get('as_of', 'n/a')})"]
+    return round(value_ps, 4), tbl, prov
+
+
 # ── SOTP (analyst) — GS-style segment P/E + EV/Rev SOTP ─────────────────────
 # Mirrors sell-side SOTP tables (e.g. GS "Navigating China Internet"
 # Exhibit 17, Meituan, 10 Aug 2026): each segment is valued at the higher
@@ -3069,6 +3142,13 @@ def _compute_method_value(
         # picks up asymmetric tail exposure automatically.
         pct_key = {"bear": "p10", "base": "p50", "bull": "p90"}.get(scenario, "p50")
         return dist.get(pct_key)
+
+    # ── SOTP (published) — the analyst's own segment valuation table ─────
+    if method_name in {"SOTP (published)", "Published SOTP"}:
+        res = _compute_published_sotp(ticker, shares)
+        if res is None:
+            return None
+        return res[0] * sm
 
     # ── SOTP (analyst) — GS-style segment P/E + EV/Rev SOTP ──────────────
     # Consumes assumptions assembled by the SOTP extractor (or a hand-built

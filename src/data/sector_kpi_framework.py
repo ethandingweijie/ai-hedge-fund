@@ -8185,7 +8185,7 @@ if "Money Center Bank" in SECTOR_KPI_FRAMEWORK:
 SECTOR_KPI_FRAMEWORK.update({
     "Telco / Infrastructure (SG)": {
         "sector": "Telco",
-        "anchor_methods": ['SOTP', 'EV/EBITDA', 'DCF'],
+        "anchor_methods": ['EV/EBITDA', 'SOTP (published)', 'DCF'],
         "quality_tiers": {
             "kpi_bands": [{
                 "kpi": "fcf_yield_pct",
@@ -8298,7 +8298,7 @@ SECTOR_KPI_FRAMEWORK.update({
     },
     "Conglomerate / Industrial (SG)": {
         "sector": "Industrials",
-        "anchor_methods": ['SOTP', 'EV/EBITDA', 'ROIC vs WACC'],
+        "anchor_methods": ['EV/EBITDA', 'SOTP (published)', 'DCF'],
         "quality_tiers": {
             "kpi_bands": [{
                 "kpi": "roic_pct",
@@ -8714,7 +8714,7 @@ SECTOR_KPI_FRAMEWORK.update({
     },
     "Real Estate Asset Manager (SG)": {
         "sector": "Financials",
-        "anchor_methods": ['SOTP', 'P/E (norm)', 'DDM'],
+        "anchor_methods": ['P/E (norm)', 'SOTP (published)', 'DDM'],
         "quality_tiers": {
             "kpi_bands": [{
                 "kpi": "fee_related_earnings",
@@ -8806,7 +8806,7 @@ SECTOR_KPI_FRAMEWORK.update({
     },
     "Aerospace & Engineering (SG)": {
         "sector": "Industrials",
-        "anchor_methods": ['EV/EBITDA', 'Forward P/E', 'DCF'],
+        "anchor_methods": ['DCF', 'EV/EBITDA', 'Forward P/E'],
         "quality_tiers": {
             "kpi_bands": [{
                 "kpi": "aero_ebit_margin",
@@ -9232,7 +9232,7 @@ SECTOR_KPI_FRAMEWORK.update({
     },
     "WealthTech & Specialty Financials (SG)": {
         "sector": "Financials",
-        "anchor_methods": ['P/E (norm)', 'SOTP', 'P/BV'],
+        "anchor_methods": ['P/E (norm)', 'SOTP (published)', 'P/BV'],
         "quality_tiers": {
             "kpi_bands": [{
                 "kpi": "net_revenue_margin_aua",
@@ -9334,7 +9334,7 @@ SECTOR_KPI_FRAMEWORK.update({
     },
     "Specialised Accommodation (SG)": {
         "sector": "Property",
-        "anchor_methods": ['NAV', 'EV/EBITDA', 'SOTP'],
+        "anchor_methods": ['NAV', 'EV/EBITDA', 'SOTP (published)'],
         "quality_tiers": {
             "kpi_bands": [{
                 "kpi": "accommodation_occupancy",

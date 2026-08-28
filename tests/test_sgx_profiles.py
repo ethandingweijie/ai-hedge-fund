@@ -185,3 +185,66 @@ def test_sector_card_renders_with_groups(profile):
         f"{profile}: KPIs missing from the card (no `group`): "
         f"{sorted(declared - grouped)}"
     )
+
+
+# ── The anchor must be reachable on SGX data ─────────────────────────────
+
+# Methods whose only data source does not cover SGX. `segment_breakdown` is
+# populated solely from FMP revenue-product-segmentation, which returns
+# nothing for SGX tickers — so an SOTP-anchored SGX profile silently never
+# fires its anchor and the weights renormalise onto the secondaries. Caught
+# on the BN4.SI (Keppel) forward run: the profile declared SOTP at 0.45
+# anchor and the run reported `methods: EV/EBITDA, ROIC vs WACC`.
+_UNREACHABLE_ON_SGX = {"SOTP", "SOTP (Segments)", "SOTP (segments)",
+                       "Sum of Parts", "SOTP 12m (probabilistic)",
+                       "Probabilistic SOTP"}
+
+
+@pytest.mark.parametrize("profile", SGX_PROFILES)
+def test_sgx_anchor_method_can_actually_fire(profile):
+    """An anchor that cannot be populated is a fiction, not a valuation."""
+    spec = SECTOR_KPI_FRAMEWORK[profile]
+    vprofile = INDUSTRY_VALUATION_PROFILES[_profile_sector_key(spec["sector"])][profile]
+    anchor = next(m["name"] for m in vprofile["methods"] if m.get("anchor"))
+    assert anchor not in _UNREACHABLE_ON_SGX, (
+        f"{profile}: anchors on {anchor!r}, whose data source does not cover "
+        f"SGX — it would never fire and the weights would silently "
+        f"renormalise onto the secondary methods. Keep it as a secondary."
+    )
+
+
+# ── Published SOTP tables ────────────────────────────────────────────────
+
+def test_published_sotp_reproduces_keppel_target():
+    """Keppel's note prints a complete SOTP: seven segments less group net
+    debt and corporate costs, S$20,404mn = S$10.70/share."""
+    from src.agents.analysis.dcf_agent import _compute_published_sotp
+
+    value, table, provenance = _compute_published_sotp("BN4.SI", 1_906e6)
+    assert value == pytest.approx(10.70, abs=0.05)
+    assert len(table["segments"]) == 7
+    assert any("Phillip" in p for p in provenance)
+
+
+def test_published_sotp_declines_without_a_table():
+    """No table means the method is unavailable — it must not silently fall
+    back to a different SOTP methodology under the same name."""
+    from src.agents.analysis.dcf_agent import _compute_published_sotp
+
+    assert _compute_published_sotp("C6L.SI", 1e9) is None
+    assert _compute_published_sotp("BN4.SI", 0) is None
+
+
+def test_segment_sotp_is_never_declared_on_an_sgx_profile():
+    """`SOTP (segments)` reads FMP revenue-product-segmentation, which
+    returns nothing for SGX. Declaring it would add a method that can never
+    contribute; `SOTP (published)` is the SGX-viable form."""
+    for profile in SGX_PROFILES:
+        spec = SECTOR_KPI_FRAMEWORK[profile]
+        vprofile = INDUSTRY_VALUATION_PROFILES[
+            _profile_sector_key(spec["sector"])][profile]
+        names = {m["name"] for m in vprofile["methods"]}
+        assert not (names & _UNREACHABLE_ON_SGX), (
+            f"{profile}: declares {names & _UNREACHABLE_ON_SGX}, which "
+            f"cannot fire on SGX data"
+        )
