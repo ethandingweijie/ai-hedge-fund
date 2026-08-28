@@ -185,3 +185,23 @@ def test_both_terminal_growth_orders_agree():
     a = parse_pt_methodology("DDM, terminal growth of 1.5%")
     b = parse_pt_methodology("DDM with 1.5% terminal growth")
     assert a["terminal_growth"] == b["terminal_growth"] == pytest.approx(0.015)
+
+
+def test_pe_without_a_slash_resolves_the_method():
+    """Asian notes write "28x PE", not "P/E".
+
+    The basis detector already treated the slash as optional, so Sheng
+    Siong's "28x PE valuations rolled over to FY27e" produced a
+    multiple_basis of "pe" with no method at all — the two patterns
+    disagreed about the same notation.
+    """
+    got = parse_pt_methodology("28x PE valuations rolled over to FY27e")
+    assert got["method"] == "pe"
+    assert got["target_multiple"] == pytest.approx(28.0)
+    assert got["multiple_basis"] == "pe"
+
+
+def test_method_and_basis_never_disagree_about_pe():
+    for line in ("28x PE", "28x P/E", "PER of 28x", "28x price-earnings"):
+        got = parse_pt_methodology(line)
+        assert got.get("method") == "pe", line

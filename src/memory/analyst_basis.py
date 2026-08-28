@@ -37,6 +37,7 @@ from typing import Any, Optional
 __all__ = [
     "parse_pt_methodology",
     "get_analyst_basis",
+    "get_analyst_thesis",
     "METHOD_ANCHORS",
 ]
 
@@ -63,7 +64,12 @@ _METHOD_PATTERNS: list[tuple[str, str]] = [
     ("dcf",       r"\bdcf\b|discounted\s+cash[-\s]?flow"),
     ("nav",       r"\brnav\b|\bnav\b|net\s+asset\s+value|cap\s+rate"),
     ("ev_ebitda", r"ev\s*/\s*(adj\.?\s*)?ebitda|ev/ebitda"),
-    ("pe",        r"\bp\s*/\s*e\b|price[-\s]earnings|\bper\b"),
+    # Slash optional: Asian notes write "28x PE" and "PER", not "P/E".
+    # The basis detector below already used `/?`, so Sheng Siong's
+    # "28x PE valuations rolled over to FY27e" resolved a multiple_basis
+    # of "pe" while leaving `method` unset — the two patterns disagreed
+    # about the same notation.
+    ("pe",        r"\bp\s*/?\s*e\b|price[-\s]earnings|\bper\b"),
 ]
 
 _PCT = r"([0-9]{1,2}(?:\.[0-9]{1,2})?)\s*%"
@@ -186,6 +192,66 @@ def get_analyst_basis(ticker: str) -> Optional[dict[str, Any]]:
     basis["price_target"] = rep.get("price_target") or ""
     basis["price_target_currency"] = rep.get("price_target_currency") or ""
     return basis
+
+
+def get_analyst_thesis(ticker: str) -> Optional[dict[str, Any]]:
+    """Latest sell-side thesis, catalysts and risks for `ticker`, or None.
+
+    Market-agnostic: the shape is identical for US, HKEX and SGX rows
+    (`points` / `catalysts` / `risks`), so one accessor serves all three.
+
+    This is a REFERENCE VIEW, not an instruction. It is another analyst's
+    argument, published on a date, and the engine's own numbers are not
+    downstream of it. Callers must present it as a view to weigh — see the
+    prompt rule in portfolio_manager, which requires the thesis to be
+    engaged with and any disagreement stated, rather than restated.
+
+    Soft-fails to None so a missing or malformed store never blocks a
+    decision.
+    """
+    try:
+        from src.memory import assumption_store
+        reports = assumption_store.get_analyst_reports(ticker, limit=1)
+    except Exception:
+        return None
+    if not reports:
+        return None
+
+    rep = reports[0] or {}
+    thesis = rep.get("thesis") or {}
+    if isinstance(thesis, str):
+        try:
+            import json as _json
+            thesis = _json.loads(thesis)
+        except Exception:
+            thesis = {}
+    if not isinstance(thesis, dict):
+        return None
+
+    def _clean(seq) -> list[str]:
+        out: list[str] = []
+        for item in (seq or []):
+            text = str(item).strip()
+            if text and text not in out:
+                out.append(text)
+        return out
+
+    points = _clean(thesis.get("points"))
+    catalysts = _clean(thesis.get("catalysts"))
+    risks = _clean(thesis.get("risks"))
+    if not (points or catalysts or risks):
+        return None
+
+    return {
+        "points":        points,
+        "catalysts":     catalysts,
+        "risks":         risks,
+        "house":         rep.get("house") or "",
+        "analyst":       rep.get("analyst") or "",
+        "as_of":         rep.get("report_date") or "",
+        "rating":        rep.get("rating") or "",
+        "price_target":  rep.get("price_target") or "",
+    }
 
 
 def method_disagrees(basis: Optional[dict], anchor_method: str) -> bool:

@@ -53,6 +53,12 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "Never quote a price target the supplied anchors do not support.\n"
     "Balance rule — carry at least one genuine negative even on a BUY, "
     "and at least one genuine positive even on a SELL.\n"
+    "Analyst-thesis rule — when a deposited sell-side thesis is supplied, "
+    "engage with it: say where we agree and where we differ, and why. It "
+    "is another analyst's argument on a stated date, not a conclusion to "
+    "adopt — never restate it as our own, and never treat its price "
+    "target as ours. If our call is the opposite of theirs, say so "
+    "explicitly and give the reason.\n"
     "Output JSON only."
 )
 
@@ -567,6 +573,44 @@ def _build_research_digest(state, ticker: str) -> str:
         parts.append(str(sections["full"])[:4000])
     digest = "\n\n".join(parts)
     return (digest[:8000] if digest else "(no research sections parsed)")
+
+
+def _analyst_thesis_block(ticker: str) -> str:
+    """The deposited sell-side thesis, as a view to weigh.
+
+    Applies to US, HKEX and SGX alike — the extraction shape is the same
+    for all three, so a Phillip note on ST Engineering and a Goldman note
+    on Alibaba arrive in the same form.
+
+    Capped deliberately: four thesis points, three catalysts, three risks.
+    The whole note is already available to deep research; what the decision
+    needs is the argument, not the document.
+    """
+    try:
+        from src.memory.analyst_basis import get_analyst_thesis
+        thesis = get_analyst_thesis(ticker)
+    except Exception:
+        return "  (no deposited analyst report)"
+    if not thesis:
+        return "  (no deposited analyst report)"
+
+    header = " ".join(x for x in (
+        thesis.get("house"), thesis.get("analyst"), thesis.get("as_of")) if x)
+    stance = " ".join(x for x in (
+        thesis.get("rating"),
+        (f"TP {thesis['price_target']}" if thesis.get("price_target") else ""),
+    ) if x)
+
+    lines = [f"  Source: {header or 'sell-side'}"
+             + (f" — {stance}" if stance else "")]
+    for label, key, cap in (("Thesis", "points", 4),
+                            ("Catalysts", "catalysts", 3),
+                            ("Risks", "risks", 3)):
+        items = thesis.get(key) or []
+        for item in items[:cap]:
+            lines.append(f"  [{label}] {item[:260]}")
+    return "\n".join(lines)
+
 
 
 def _quant_block_text(ticker: str, state, scenario: dict) -> str:
@@ -1109,6 +1153,8 @@ def run_advanced_portfolio_manager(state) -> dict:
                 "Catalyst continuity:\n{catalyst_block}\n"
                 "Research vs books checks:\n{div_block}\n"
                 "Base scenario: {base_assumptions}\n"
+                "Deposited analyst thesis (a view to weigh, not to adopt):\n"
+                "{analyst_thesis}\n"
                 "Research digest (qualitative):\n{digest}\n"
                 "Prior report context:\n{prior_block}\n\n"
                 "Output:\n"
@@ -1133,6 +1179,7 @@ def run_advanced_portfolio_manager(state) -> dict:
             "trap": trap_verdict,
             "macro_line": _macro_line,
             "quant_block": _quant_block,
+            "analyst_thesis": _analyst_thesis_block(ticker),
             "catalyst_block": _catalyst_block,
             "div_block": _div_block,
             "base_assumptions": _base_assumptions,
