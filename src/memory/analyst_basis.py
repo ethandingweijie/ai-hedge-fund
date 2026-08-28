@@ -114,7 +114,12 @@ def parse_pt_methodology(text: str) -> dict[str, Any]:
     # Terminal growth — "terminal growth of 3.5%", "Terminal g: 1.75%",
     # "g 3.3%". The bare "g" form is tried last so it cannot swallow a
     # percentage belonging to another field.
+    # Both orders occur in the wild: "Terminal g: 1.75%" and, from OCBC on
+    # CapitaLand India Trust, "DCF with 2.75% terminal growth rate" — the
+    # rate leads. Matching only the trailing form silently dropped a stated
+    # assumption and fell back to the profile default.
     g = (_pct(r"terminal\s+(?:growth|g)\s*(?:rate)?\s*(?:of)?\s*[:=]?\s*" + _PCT, t)
+         or _pct(_PCT + r"\s*(?:terminal|long[-\s]term|perpetual)\s+growth", t)
          or _pct(r"long[-\s]term\s+growth\s*[:=]?\s*" + _PCT, t)
          or _pct(r"(?<![a-z])g\s*[:=]?\s*" + _PCT, t))
     if g is not None:

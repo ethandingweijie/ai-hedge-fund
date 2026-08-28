@@ -168,3 +168,20 @@ def test_store_failure_never_blocks_valuation(monkeypatch):
     monkeypatch.setattr(ab, "get_analyst_basis", _boom)
     a = dcf_agent._sreit_ddm_assumptions("A17U.SI", "industrial", {})
     assert a["coe"] > 0
+
+
+def test_terminal_growth_stated_before_the_words():
+    """OCBC on CapitaLand India Trust prints the rate first.
+
+    Matching only "terminal growth of X%" dropped a stated assumption and
+    silently fell back to the profile default.
+    """
+    got = parse_pt_methodology("DCF with 2.75% terminal growth rate")
+    assert got["method"] == "dcf"
+    assert got["terminal_growth"] == pytest.approx(0.0275)
+
+
+def test_both_terminal_growth_orders_agree():
+    a = parse_pt_methodology("DDM, terminal growth of 1.5%")
+    b = parse_pt_methodology("DDM with 1.5% terminal growth")
+    assert a["terminal_growth"] == b["terminal_growth"] == pytest.approx(0.015)

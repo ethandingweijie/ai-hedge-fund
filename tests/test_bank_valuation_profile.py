@@ -44,6 +44,24 @@ DBS_FY2025 = {
 }
 
 
+
+@pytest.fixture(autouse=True)
+def _no_deposited_report(monkeypatch):
+    """Pin these tests to the seed table, not to machine-local DB state.
+
+    `_bank_ggm_assumptions` / `_sreit_ddm_assumptions` consult
+    `analyst_basis.get_analyst_basis`, which reads `analyst_reports`. Once
+    a drive sync has run locally those rows exist and legitimately
+    supersede the static seed table — so these tests passed or failed
+    depending on whether someone had synced PDFs on that machine. The
+    benchmark-precedence behaviour is covered explicitly, with its own
+    stubs, in tests/test_analyst_basis.py.
+    """
+    import src.memory.analyst_basis as ab
+    monkeypatch.setattr(ab, "get_analyst_basis", lambda _t: None)
+
+
+
 # ── Card QA: dotted tickers ──────────────────────────────────────────────
 
 @pytest.mark.parametrize("ticker", ["D05.SI", "O39.SI", "00700.HK", "AAPL"])
