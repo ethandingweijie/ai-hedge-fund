@@ -293,8 +293,23 @@ def test_major_sg_hk_banks_route_deterministically_with_ggm(
     assert 0.3 <= result[1] <= 4.0, (name, result[1])
 
 
-def test_non_bank_sgx_tickers_still_fall_through():
-    """Only hints that are real valuation profiles may be returned."""
-    for ticker in ("C6L.SI", "Z74.SI", "S68.SI"):
-        _sector, profile = get_wacc_profile_for_ticker(ticker)
-        assert profile == ""
+def test_only_real_profiles_are_returned():
+    """A hint that is not a registered profile must never be returned.
+
+    Was `test_non_bank_sgx_tickers_still_fall_through`, which asserted
+    C6L.SI / Z74.SI / S68.SI resolve to "". They now route to real SGX
+    profiles, so the assertion is inverted: the invariant was never
+    "these fall through", it was "whatever comes back is resolvable".
+    """
+    from src.data.sector_profiles import (
+        SGX_TICKER_SECTOR_LOOKUP, INDUSTRY_VALUATION_PROFILES,
+    )
+    for ticker in SGX_TICKER_SECTOR_LOOKUP:
+        sector, profile = get_wacc_profile_for_ticker(ticker)
+        if not profile:
+            continue                      # unrouted is allowed; bogus is not
+        key = "RealEstate" if sector == "REIT" else sector
+        assert INDUSTRY_VALUATION_PROFILES.get(key, {}).get(profile), (
+            f"{ticker}: hint {profile!r} is not a registered profile "
+            f"under sector {key!r}"
+        )

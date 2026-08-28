@@ -1193,6 +1193,33 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
 
     # ── FINANCIALS ────────────────────────────────────────────────────────────
     "Financials": {
+        "WealthTech & Specialty Financials (SG)": {
+            "methods": [
+                {"name": "P/E (norm)",      "weight": 0.4, "anchor": True, "implementable": True},
+                {"name": "SOTP",            "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "P/BV",            "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['EV/EBITDA'],
+            "rationale": "SG wealthtech / specialty financials (iFAST, Yangzijiang Financial, Credit Bureau Asia). Platform economics scale on assets under administration while any lending or investment arm is a separate book — hence P/AUA alongside a book-value leg. Primary metrics: AUA, net inflows, net revenue margin on AUA, cash and short-term investments, NPLs.",
+        },
+        "Market Infrastructure (SG)": {
+            "methods": [
+                {"name": "P/E (norm)",      "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV'],
+            "rationale": "SG market infrastructure / exchange (SGX). Near-monopoly toll-road economics on a fixed cost base, so earnings multiples travel well and operating leverage is the swing factor. Primary metrics: SDAV, DDAV, clearing fee per contract, operating margin.",
+        },
+        "Real Estate Asset Manager (SG)": {
+            "methods": [
+                {"name": "SOTP",            "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "P/E (norm)",      "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DDM",             "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV', 'EV/EBITDA'],
+            "rationale": "SG real estate asset manager (CapitaLand Investment). SOTP-anchored: recurring fee-related earnings capitalise at a different multiple from the balance-sheet co-investments they sit beside. Primary metrics: FRE, FUM, net gearing, investment-property fair value.",
+        },
         "Mortgage/GSE": {
             "methods": [
                 {"name": "P/BV",            "weight": 0.55, "anchor": True,  "implementable": True},
@@ -1537,6 +1564,19 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
 
     # ── TECH ──────────────────────────────────────────────────────────────────
     "Tech": {
+        # Singapore tech manufacturing / EMS — Venture, UMS, Frencken, AEM.
+        # Order-driven and cyclical: priced on forward earnings through the
+        # cycle with a DCF cross-check. Book-to-bill is the leading
+        # indicator and turns before the P/E does.
+        "Tech Manufacturing / EMS (SG)": {
+            "methods": [
+                {"name": "Forward P/E",  "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "DCF",          "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV"],
+            "rationale": "SG tech manufacturing / EMS (Venture, UMS, Frencken, AEM). Forward P/E anchored with a DCF cross-check. Primary metrics: forward P/E, book-to-bill, ROCE, gross margin. PEG is not declared — growth already sits inside the forward multiple and the DCF.",
+        },
         "Growth SaaS": {
             "methods": [
                 # Rebalanced 2026-04-25: EV/NTM Revenue previously anchored at
@@ -1827,6 +1867,24 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
 
     # ── CONSUMER ──────────────────────────────────────────────────────────────
     "Consumer": {
+        "Packaged Consumer & Lifestyle (SG)": {
+            "methods": [
+                {"name": "Forward P/E",     "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV'],
+            "rationale": "SG packaged consumer goods and lifestyle brands (Food Empire, The Hour Glass, Cortina, Delfi). Brand and distribution rights are the moat; input costs and FX translation are the margin swing. Primary metrics: same-store sales growth, gross margin, raw material costs, FX translation impact.",
+        },
+        "Agribusiness & Food (SG)": {
+            "methods": [
+                {"name": "Forward P/E",     "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV'],
+            "rationale": "SG agribusiness and consumer food (Wilmar, Thai Beverage, Olam, Golden Agri). Margin is set upstream by crush spreads and commodity prices rather than by pricing power. Primary metrics: crushing margin, CPO price and yield, same-store sales growth, gross margin.",
+        },
         "Food & Beverage": {
             "methods": [
                 {"name": "P/E",             "weight": 0.50, "anchor": True,  "implementable": True},
@@ -1998,6 +2056,47 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
 
     # ── INDUSTRIALS ───────────────────────────────────────────────────────────
     "Industrials": {
+        "Offshore Marine & Resources (SG)": {
+            "methods": [
+                {"name": "EV/EBITDA",       "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "P/BV",            "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": "SG offshore marine, vessel fleet and resource support (Marco Polo Marine, Dyna-Mac, Samudera, Rex, Geo Energy). Day rates and utilisation set the cash flow, and the asset book is the downside — so EV/EBITDA over P/B, both against maintenance capex. Primary metrics: charter day rates, fleet utilisation, order intake and yard backlog, freight rates, cash cost per tonne or boe.",
+        },
+        "Aerospace & Engineering (SG)": {
+            "methods": [
+                {"name": "EV/EBITDA",       "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "Forward P/E",     "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV'],
+            "rationale": "SG aerospace, defence and engineering (ST Engineering, SATS). Order-book-driven with multi-year delivery schedules, so backlog and burn rate lead the P&L. Primary metrics: order book backlog, EBIT margin, aviation traffic / cargo tonnage, net debt / EBITDA.",
+        },
+        "Aviation & Marine (SG)": {
+            "methods": [
+                {"name": "EV/EBITDA",       "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "DCF",             "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",     "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV'],
+            "rationale": "SG aviation and marine / offshore (SIA, Seatrium, Yangzijiang). Fleet- and yard-heavy, so EV/EBITDA is fleet-ownership neutral where an earnings multiple is not. Primary metrics: passenger yield and load factor, net order intake and firm yard backlog, fuel hedge ratio, net cash.",
+        },
+        # Singapore conglomerate / industrial — Keppel, Sembcorp, ST
+        # Engineering, Yangzijiang. SOTP is the published method: Keppel's
+        # own note values Infrastructure at 15x PE, Real Estate at a 30%
+        # discount to book, listed entities mark-to-market and non-core at
+        # net book value, in one table. ROIC vs WACC carries the EVA spread.
+        "Conglomerate / Industrial (SG)": {
+            "methods": [
+                {"name": "SOTP",         "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "ROIC vs WACC", "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV"],
+            "rationale": "SG conglomerate / industrial (Keppel, Sembcorp, ST Engineering). SOTP-anchored with per-segment bases (PE, net book value, discount to book, mark-to-market). Primary metrics: ROIC, order book / backlog duration, EV/EBITDA, FCF conversion.",
+        },
         "Aerospace & Defense": {
             "methods": [
                 {"name": "EV/EBITDA",   "weight": 0.40, "anchor": True,  "implementable": True},
@@ -2032,6 +2131,20 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
 
     # ── TELCO ─────────────────────────────────────────────────────────────────
     "Telco": {
+        # Singapore telco / infrastructure — Singtel, StarHub, NetLink NBN,
+        # Keppel Infrastructure Trust. Priced SOTP because the value sits in
+        # separable assets: regional associates (Airtel, AIS, Telkomsel),
+        # the domestic access network, and infrastructure concessions, each
+        # on its own multiple. EV/EBITDA cross-checks the operating core.
+        "Telco / Infrastructure (SG)": {
+            "methods": [
+                {"name": "SOTP",         "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "DCF",          "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV"],
+            "rationale": "SG telco / infrastructure (Singtel, StarHub, NetLink, Keppel Infra). SOTP-anchored: regional associates and concession assets valued separately from the domestic core. Primary metrics: EV/EBITDA, FCF yield, ARPU, core dividend yield, capex-to-revenue.",
+        },
         "Stable Growth": {
             "methods": [
                 {"name": "EPV",           "weight": 0.40, "anchor": True,  "implementable": True},
@@ -2114,7 +2227,69 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
     },
 
+    # ── PROPERTY (SGX sector key) ─────────────────────────────────────────────
+    # SGX classifies developers under "Property", separate from REITs.
+    # Developers are valued on revalued NAV with a discount, not on
+    # earnings: reported profit is lumpy with project completions while the
+    # land bank carries the value.
+    "Property": {
+        "Specialised Accommodation (SG)": {
+            "methods": [
+                {"name": "NAV",             "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA",       "weight": 0.35, "anchor": False, "implementable": True},
+                {"name": "SOTP",            "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV'],
+            "rationale": "SG specialised accommodation and co-living (Centurion, Wee Hur, LHN). A hybrid of an owned asset book and an operating business, so RNAV carries the freehold while EV/EBITDA prices the operations. Primary metrics: PBWA and PBSA bed capacity, average occupancy, RevPAB, net gearing.",
+        },
+        "Real Estate Agency (SG)": {
+            "methods": [
+                {"name": "Forward P/E",     "weight": 0.5, "anchor": True, "implementable": True},
+                {"name": "DDM",             "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "DCF",             "weight": 0.2, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['EV/EBITDA', 'P/BV'],
+            "rationale": "SG real estate agency (PropNex, APAC Realty). Asset-light, large net cash and a high payout, so the multiple is best read ex-cash and the dividend is a genuine floor. Primary metrics: transaction volume, agent headcount, commission split, net cash per share.",
+        },
+        "Property Developer (SG)": {
+            "methods": [
+                {"name": "NAV",          "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "DDM",          "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",   "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/EBITDA"],
+            "rationale": "SG property developer (City Developments, UOL, Frasers Property). RNAV-anchored — NAV carries the revalued land bank and investment properties, and the market trades at a persistent discount to it. Primary metrics: RNAV discount/premium, net gearing, pre-sales velocity, land bank cost basis.",
+        },
+    },
+    "Healthcare": {
+        "Healthcare Provider (SG)": {
+            "methods": [
+                {"name": "EV/EBITDA",       "weight": 0.45, "anchor": True, "implementable": True},
+                {"name": "DCF",             "weight": 0.3, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",     "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ['P/BV'],
+            "rationale": "SG healthcare provider (Thomson Medical, Raffles Medical). Capacity-constrained: bed count and occupancy cap revenue, and new capacity carries a gestation drag. Primary metrics: operational bed capacity, bed occupancy rate, ARPOB, staff-cost ratio, EBITDA margin.",
+        },
+    },
+
     "RealEstate": {
+        # Singapore-listed REIT. Distinct from the US "REIT" row above:
+        # S-REITs are priced on a dividend discount model off DPU, which
+        # every Singapore broker note states in its valuation line, while
+        # the US row anchors on NAV cap rates with P/FFO and P/AFFO
+        # secondary. FFO and AFFO are US GAAP constructs that S-REITs do
+        # not report, so pricing a Singapore trust on them applies an
+        # American convention to a Singapore disclosure set.
+        "S-REIT": {
+            "methods": [
+                {"name": "DDM (S-REIT)",    "weight": 0.55, "anchor": True,  "implementable": True},
+                {"name": "NAV (Cap Rates)", "weight": 0.30, "anchor": False, "implementable": True, "scenario_invariant": True},
+                {"name": "P/AFFO",          "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["DCF", "P/BV", "P/FFO"],
+            "rationale": "Singapore-listed REIT. DDM-anchored: value/unit = DPU x (1+g) / (CoE - g). CoE 6.4-8.5% and terminal g 0.5-2.75% by sub-sector, calibrated from published broker DDM tables (FCT 6.38%/1.5%, Keppel DC 6.83%/1.75%, OUE REIT 7.0%/1.2%). P/FFO excluded — S-REITs do not report FFO.",
+        },
         "REIT": {
             "methods": [
                 {"name": "NAV (Cap Rates)", "weight": 0.50, "anchor": True,  "implementable": True,  "scenario_invariant": True},
@@ -2947,6 +3122,10 @@ _SECTOR_PROFILE_DEFAULT = {
     "Telco": "Stable Growth",
     "Crypto": "Pre-Revenue Tech",
     "RealEstate": "REIT",
+    # SGX classifies developers under "Property", separate from REITs.
+    "Property": "Property Developer (SG)",
+    # SGX uses "Healthcare"; the US table uses "HealthcareServices".
+    "Healthcare": "Healthcare Provider (SG)",
     "Transportation": "Rail / Logistics",
     "Materials": "Specialty Chemicals",
     "Resources": "Mining (Major)",
@@ -4153,6 +4332,13 @@ def get_wacc_profile_for_ticker(ticker: str) -> tuple[str, str]:
         _key = "RealEstate" if _sector == "REIT" else _sector
         if _hint and INDUSTRY_VALUATION_PROFILES.get(_key, {}).get(_hint):
             return _sector, _hint
+        # SGX REITs carry a SUB-SECTOR hint ("Retail", "DataCentre",
+        # "India") rather than a profile name, so the check above never
+        # matches and all 25 of them used to fall through to the runtime
+        # LLM classifier. They are all S-REITs; the hint selects the DDM
+        # calibration downstream, not the profile.
+        if _sector == "REIT":
+            return _sector, "S-REIT"
         return _sector, ""
     return ("Tech", "")
 
@@ -4229,54 +4415,54 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "D05.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "DBS Group — SG money-center bank"),
     "O39.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "OCBC Bank — SG money-center bank"),
     "U11.SI":  ("Financials", "Money Center Bank (SG)", "Banks",      "UOB — SG money-center bank"),
-    "S68.SI":  ("Financials", "Exchange",    "Capital Markets",        "Singapore Exchange"),
-    "9CI.SI":  ("Financials", "AssetMgmt",   "Asset Management",       "CapitaLand Investment"),
+    "S68.SI":  ("Financials", "Market Infrastructure (SG)",    "Capital Markets",        "Singapore Exchange"),
+    "9CI.SI":  ("Financials", "Real Estate Asset Manager (SG)",   "Asset Management",       "CapitaLand Investment"),
     "U09.SI":  ("Financials", "Insurance",   "Insurance",              "United Overseas Insurance"),
     # Telco
-    "Z74.SI":  ("Telco",      "",            "Telecom Services",       "SingTel"),
-    "CC3.SI":  ("Telco",      "",            "Telecom Services",       "StarHub"),
+    "Z74.SI":  ("Telco", "Telco / Infrastructure (SG)",            "Telecom Services",       "SingTel"),
+    "CC3.SI":  ("Telco", "Telco / Infrastructure (SG)",            "Telecom Services",       "StarHub"),
     # Industrials
-    "C6L.SI":  ("Industrials", "Airline",    "Air Transport",          "Singapore Airlines"),
-    "BN4.SI":  ("Industrials", "Conglomerate","Conglomerates",         "Keppel Corporation"),
-    "BS6.SI":  ("Industrials", "Shipbuilding","Shipbuilding",          "Yangzijiang Shipbuilding"),
-    "U96.SI":  ("Industrials", "Utilities",  "Utilities & Energy",     "Sembcorp Industries"),
-    "S63.SI":  ("Industrials", "Defence",    "Aerospace & Defence",    "ST Engineering"),
-    "S58.SI":  ("Industrials", "Airport",    "Airport Services",       "SATS"),
-    "C52.SI":  ("Industrials", "Transport",  "Transportation",         "ComfortDelGro"),
-    "J36.SI":  ("Industrials", "Conglomerate","Conglomerates",         "Jardine Matheson"),
-    "J37.SI":  ("Industrials", "Conglomerate","Conglomerates",         "Jardine C&C"),
-    "S51.SI":  ("Industrials", "Marine",     "Marine & Offshore",      "Seatrium"),
-    "MR7.SI":  ("Industrials", "Marine",     "Marine Services",        "Marco Polo Marine"),
-    "S56.SI":  ("Industrials", "Logistics",  "Postal & Logistics",     "Singpost"),
-    "ACV.SI":  ("Industrials", "Services",   "Vehicle Inspection",     "Vicom"),
+    "C6L.SI":  ("Industrials", "Aviation & Marine (SG)",    "Air Transport",          "Singapore Airlines"),
+    "BN4.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Keppel Corporation"),
+    "BS6.SI":  ("Industrials", "Aviation & Marine (SG)","Shipbuilding",          "Yangzijiang Shipbuilding"),
+    "U96.SI":  ("Industrials", "Conglomerate / Industrial (SG)",  "Utilities & Energy",     "Sembcorp Industries"),
+    "S63.SI":  ("Industrials", "Aerospace & Engineering (SG)",    "Aerospace & Defence",    "ST Engineering"),
+    "S58.SI":  ("Industrials", "Aerospace & Engineering (SG)",    "Airport Services",       "SATS"),
+    "C52.SI":  ("Industrials", "Conglomerate / Industrial (SG)",  "Transportation",         "ComfortDelGro"),
+    "J36.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Jardine Matheson"),
+    "J37.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Jardine C&C"),
+    "S51.SI":  ("Industrials", "Aviation & Marine (SG)",     "Marine & Offshore",      "Seatrium"),
+    "MR7.SI":  ("Industrials", "Aviation & Marine (SG)",     "Marine Services",        "Marco Polo Marine"),
+    "S56.SI":  ("Industrials", "Conglomerate / Industrial (SG)",  "Postal & Logistics",     "Singpost"),
+    "ACV.SI":  ("Industrials", "Conglomerate / Industrial (SG)",   "Vehicle Inspection",     "Vicom"),
     # Consumer
-    "F34.SI":  ("Consumer",    "Food",       "Food Products",          "Wilmar International"),
-    "Y92.SI":  ("Consumer",    "Beverages",  "Beverages",              "Thai Beverage"),
-    "G13.SI":  ("Consumer",    "Gaming",     "Casinos & Gaming",       "Genting Singapore"),
-    "E5H.SI":  ("Consumer",    "Agri",       "Agricultural Products",  "Golden Agri-Resources"),
-    "AGS.SI":  ("Consumer",    "Retail",     "Grocery Retail",         "Sheng Siong Group"),
-    "EB5.SI":  ("Consumer",    "Agri",       "Palm Oil",               "First Resources"),
-    "P8Z.SI":  ("Consumer",    "Agri",       "Palm Oil",               "Bumitama Agri"),
-    "T14.SI":  ("Consumer",    "Food",       "Food & Agribusiness",    "Olam Group"),
+    "F34.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Food Products",          "Wilmar International"),
+    "Y92.SI":  ("Consumer", "Agribusiness & Food (SG)",  "Beverages",              "Thai Beverage"),
+    "G13.SI":  ("Consumer", "Packaged Consumer & Lifestyle (SG)",     "Casinos & Gaming",       "Genting Singapore"),
+    "E5H.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Agricultural Products",  "Golden Agri-Resources"),
+    "AGS.SI":  ("Consumer", "Agribusiness & Food (SG)",     "Grocery Retail",         "Sheng Siong Group"),
+    "EB5.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Palm Oil",               "First Resources"),
+    "P8Z.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Palm Oil",               "Bumitama Agri"),
+    "T14.SI":  ("Consumer", "Agribusiness & Food (SG)",       "Food & Agribusiness",    "Olam Group"),
     # Tech
-    "V03.SI":  ("Tech",        "Electronics","Electronics Manufacturing","Venture Corporation"),
-    "AWX.SI":  ("Tech",        "SemiEquip",  "Semiconductor Equipment","AEM Holdings"),
-    "5DD.SI":  ("Tech",        "SemiEquip",  "Semiconductor Equipment","Micro-Mechanics"),
-    "BHK.SI":  ("Tech",        "SemiEquip",  "Semiconductor Equipment","UMS Holdings"),
-    "MZH.SI":  ("Tech",        "Materials",  "Advanced Materials",     "Nanofilm Technologies"),
-    "5CP.SI":  ("Tech",        "Software",   "Banking Software",       "Silverlake Axis"),
+    "V03.SI":  ("Tech", "Tech Manufacturing / EMS (SG)","Electronics Manufacturing","Venture Corporation"),
+    "AWX.SI":  ("Tech", "Tech Manufacturing / EMS (SG)",  "Semiconductor Equipment","AEM Holdings"),
+    "5DD.SI":  ("Tech", "Tech Manufacturing / EMS (SG)",  "Semiconductor Equipment","Micro-Mechanics"),
+    "BHK.SI":  ("Tech", "Tech Manufacturing / EMS (SG)",  "Semiconductor Equipment","UMS Holdings"),
+    "MZH.SI":  ("Tech", "Tech Manufacturing / EMS (SG)",  "Advanced Materials",     "Nanofilm Technologies"),
+    "5CP.SI":  ("Tech", "Tech Manufacturing / EMS (SG)",   "Banking Software",       "Silverlake Axis"),
     # Property
-    "C09.SI":  ("Property",    "Developer",  "Real Estate Development","City Developments"),
-    "H78.SI":  ("Property",    "Developer",  "Real Estate Development","Hongkong Land"),
-    "U14.SI":  ("Property",    "Developer",  "Real Estate Development","UOL Group"),
-    "OYY.SI":  ("Property",    "Services",   "Real Estate Services",   "PropNex"),
-    "W05.SI":  ("Property",    "Developer",  "Real Estate Development","Wing Tai Holdings"),
-    "40T.SI":  ("Property",    "Dormitory",  "Workers Dormitory",      "Centurion Corporation"),
+    "C09.SI":  ("Property", "Property Developer (SG)",  "Real Estate Development","City Developments"),
+    "H78.SI":  ("Property", "Property Developer (SG)",  "Real Estate Development","Hongkong Land"),
+    "U14.SI":  ("Property", "Property Developer (SG)",  "Real Estate Development","UOL Group"),
+    "OYY.SI":  ("Property", "Real Estate Agency (SG)",   "Real Estate Services",   "PropNex"),
+    "W05.SI":  ("Property", "Property Developer (SG)",  "Real Estate Development","Wing Tai Holdings"),
+    "40T.SI":  ("Property", "Specialised Accommodation (SG)",  "Workers Dormitory",      "Centurion Corporation"),
     # Energy
-    "RE4.SI":  ("Energy",      "Coal",       "Coal Mining",            "Geo Energy Resources"),
+    "RE4.SI":  ("Industrials", "Offshore Marine & Resources (SG)",       "Coal Mining",            "Geo Energy Resources"),
     # Healthcare
-    "CLN.SI":  ("Healthcare",  "MedDevices", "Medical Gloves",         "Riverstone Holdings"),
-    "A50.SI":  ("Healthcare",  "Services",   "Healthcare Services",    "Thomson Medical Group"),
+    "CLN.SI":  ("Healthcare", "Healthcare Provider (SG)", "Medical Gloves",         "Riverstone Holdings"),
+    "A50.SI":  ("Healthcare", "Healthcare Provider (SG)",   "Healthcare Services",    "Thomson Medical Group"),
     # REITs
     "A17U.SI": ("REIT",        "Industrial", "Industrial REIT",        "CapitaLand Ascendas REIT"),
     "C38U.SI": ("REIT",        "Retail",     "Retail REIT",            "CapitaLand Integrated Commercial Trust"),
@@ -4288,11 +4474,11 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "T82U.SI": ("REIT",        "Commercial", "Commercial REIT",        "Suntec REIT"),
     "K71U.SI": ("REIT",        "Office",     "Office REIT",            "Keppel REIT"),
     "AJBU.SI": ("REIT",        "DataCentre", "Data Centre REIT",       "Keppel DC REIT"),
-    "A7RU.SI": ("REIT",        "Infra",      "Infrastructure Trust",   "Keppel Infrastructure Trust"),
+    "A7RU.SI":  ("Telco", "Telco / Infrastructure (SG)",      "Infrastructure Trust",   "Keppel Infrastructure Trust"),
     "AU8U.SI": ("REIT",        "China",      "China REIT",             "CapitaLand China Trust"),
     "HMN.SI":  ("REIT",        "Hospitality","Hospitality REIT",       "CapitaLand Ascott Trust"),
     "SK6U.SI": ("REIT",        "Healthcare", "Healthcare REIT",        "Parkway Life REIT"),
-    "CWBU.SI": ("REIT",        "Infra",      "Infrastructure Trust",   "NetLink NBN Trust"),
+    "CWBU.SI":  ("Telco", "Telco / Infrastructure (SG)",      "Infrastructure Trust",   "NetLink NBN Trust"),
     "J91U.SI": ("REIT",        "Industrial", "Industrial REIT",        "ESR-LOGOS REIT"),
     "CY6U.SI": ("REIT",        "India",      "India REIT",             "CapitaLand India Trust"),
     "OXMU.SI": ("REIT",        "US Office",  "US Office REIT",         "Prime US REIT"),

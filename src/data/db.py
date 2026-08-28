@@ -106,9 +106,27 @@ class _PlainPgConn:
 
 
 def _get_sqlite_connection() -> sqlite3.Connection:
-    """Get or create a SQLite connection for the current thread."""
+    """Get or create a SQLite connection for the current thread.
+
+    The resolved path is cached alongside the connection and rechecked on
+    every call. `get_db_path()` is lazy, but it used to be consulted only
+    when the connection was first created — so once anything opened the
+    default archive, a later `RUN_ARCHIVE_PATH` change was silently
+    ignored for the life of the thread and every read kept hitting the
+    old database. That made test isolation depend on import order: a test
+    pointing at a fresh tmp store got whatever database an earlier import
+    had already opened.
+    """
+    db_path = get_db_path()
+    if (getattr(_thread_local, "conn", None) is not None
+            and getattr(_thread_local, "conn_path", None) != db_path):
+        try:
+            _thread_local.conn.close()
+        except Exception:
+            pass
+        _thread_local.conn = None
+
     if not hasattr(_thread_local, "conn") or _thread_local.conn is None:
-        db_path = get_db_path()
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
 
         conn = sqlite3.connect(db_path, check_same_thread=False)
@@ -118,6 +136,7 @@ def _get_sqlite_connection() -> sqlite3.Connection:
         conn.execute("PRAGMA busy_timeout=5000")
 
         _thread_local.conn = conn
+        _thread_local.conn_path = db_path
     return _thread_local.conn
 
 

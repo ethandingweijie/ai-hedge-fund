@@ -290,6 +290,15 @@ LEGACY_REIT_CLAMPS = {
     "leverage_ratio":      (0, 0.80),
     "dpu_cents":           (0, 500),
     "affo_per_unit_cents": (0, 500),
+    "cost_of_debt_pct":            (0.005, 0.12),
+    "fixed_rate_debt_pct":         (0.0, 1.0),
+    "rental_reversion_pct":        (-0.4, 0.6),
+    "interest_coverage_ratio":     (0.5, 20.0),
+    "nav_per_unit":                (0.05, 100.0),
+    "distribution_yield_pct":      (0.005, 0.25),
+    "distribution_payout_ratio":   (0.3, 1.2),
+    "sreit_cost_of_equity":        (0.03, 0.15),
+    "sreit_terminal_growth":       (0.0, 0.05),
     # v3.2 — US-REIT vocabulary additions; legacy extractor accepts these in
     # the same validate-and-clamp block, so framework + legacy must agree.
     "same_store_noi_growth_pct": (-0.20, 0.40),

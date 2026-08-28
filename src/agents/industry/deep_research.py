@@ -1743,6 +1743,16 @@ def _extract_reit_metrics(
                 "  geographic_mix:     object mapping country/region/city to fraction\n"
                 "                      (revenue-weighted OR GAV-weighted). Sub-regions OK\n"
                 "                      (e.g. 'us_west', 'bangalore', 'india', 'emea').\n"
+                "  -- Singapore REIT disclosure set --\n"
+                "  cost_of_debt_pct:           float (0.005-0.12, average all-in cost of debt, decimal (2.7% -> 0.027))\n"
+                "  fixed_rate_debt_pct:        float (0.0-1.0, share of borrowings hedged to fixed, decimal)\n"
+                "  rental_reversion_pct:       float (-0.4-0.6, portfolio rental reversion, decimal (+10% -> 0.10))\n"
+                "  interest_coverage_ratio:    float (0.5-20.0, interest coverage ratio, x)\n"
+                "  nav_per_unit:               float (0.05-100.0, NAV per unit, reporting currency)\n"
+                "  distribution_yield_pct:     float (0.005-0.25, forward distribution yield, decimal)\n"
+                "  distribution_payout_ratio:  float (0.3-1.2, distributable income paid out as DPU, decimal)\n"
+                "  sreit_cost_of_equity:       float (0.03-0.15, cost of equity in the analyst DDM, decimal)\n"
+                "  sreit_terminal_growth:      float (0.0-0.05, terminal growth g in the analyst DDM, decimal)\n"
                 "  dpu_cents:          float (distribution per unit, LOCAL cents/pennies)\n"
                 "                      USE FOR S-REITs / HK-REITs only (DPU reported in local\n"
                 "                      cents). For US-REITs, use dps_usd field below instead.\n"
@@ -1823,6 +1833,49 @@ def _extract_reit_metrics(
         _dpu = parsed.get("dpu_cents")
         if isinstance(_dpu, (int, float)) and 0 < _dpu < 500:
             out["dpu_cents"] = float(_dpu)
+
+        # ── Singapore REIT disclosure set ────────────────────────────
+        # Gearing, cost of debt, hedged proportion, occupancy, rental
+        # reversion and DPU are what every S-REIT results note leads
+        # with. The last two are the DDM itself: Singapore brokers
+        # state the cost of equity and terminal growth in the valuation
+        # line, which makes them extractable rather than assumed.
+        _cost_of_debt = parsed.get("cost_of_debt_pct")
+        if isinstance(_cost_of_debt, (int, float)) and 0.005 <= _cost_of_debt <= 0.12:
+            out["cost_of_debt_pct"] = float(_cost_of_debt)
+
+        _fixed_rate_debt = parsed.get("fixed_rate_debt_pct")
+        if isinstance(_fixed_rate_debt, (int, float)) and 0.0 <= _fixed_rate_debt <= 1.0:
+            out["fixed_rate_debt_pct"] = float(_fixed_rate_debt)
+
+        _rental_reversion = parsed.get("rental_reversion_pct")
+        if isinstance(_rental_reversion, (int, float)) and -0.4 <= _rental_reversion <= 0.6:
+            out["rental_reversion_pct"] = float(_rental_reversion)
+
+        _interest_coverag = parsed.get("interest_coverage_ratio")
+        if isinstance(_interest_coverag, (int, float)) and 0.5 <= _interest_coverag <= 20.0:
+            out["interest_coverage_ratio"] = float(_interest_coverag)
+
+        _nav_per_unit = parsed.get("nav_per_unit")
+        if isinstance(_nav_per_unit, (int, float)) and 0.05 <= _nav_per_unit <= 100.0:
+            out["nav_per_unit"] = float(_nav_per_unit)
+
+        _distribution_yie = parsed.get("distribution_yield_pct")
+        if isinstance(_distribution_yie, (int, float)) and 0.005 <= _distribution_yie <= 0.25:
+            out["distribution_yield_pct"] = float(_distribution_yie)
+
+        _distribution_pay = parsed.get("distribution_payout_ratio")
+        if isinstance(_distribution_pay, (int, float)) and 0.3 <= _distribution_pay <= 1.2:
+            out["distribution_payout_ratio"] = float(_distribution_pay)
+
+        _sreit_cost_of_eq = parsed.get("sreit_cost_of_equity")
+        if isinstance(_sreit_cost_of_eq, (int, float)) and 0.03 <= _sreit_cost_of_eq <= 0.15:
+            out["sreit_cost_of_equity"] = float(_sreit_cost_of_eq)
+
+        _sreit_terminal_g = parsed.get("sreit_terminal_growth")
+        if isinstance(_sreit_terminal_g, (int, float)) and 0.0 <= _sreit_terminal_g <= 0.05:
+            out["sreit_terminal_growth"] = float(_sreit_terminal_g)
+
 
         _affo = parsed.get("affo_per_unit_cents")
         if isinstance(_affo, (int, float)) and 0 < _affo < 500:

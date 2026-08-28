@@ -577,21 +577,57 @@ def _quant_block_text(ticker: str, state, scenario: dict) -> str:
     recon = scenario.get("reconciliation") or {}
     dcf = (data.get("dcf_range") or {}).get(ticker) or {}
     lines: list[str] = []
+
+    # Reporting-currency symbol. A hardcoded "$" against SGD/HKD anchors is
+    # what leaked a bare dollar sign into the D05.SI narrative and got
+    # raised as a currency-mislabelling risk by the value-trap agent.
+    _ccy = ((data.get("raw_financials") or {}).get("currency")
+            or (dcf.get("base") or {}).get("reported_currency") or "USD")
+    _sym = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€",
+            "GBP": "£", "JPY": "¥", "AUD": "A$",
+            "INR": "₹"}.get(str(_ccy).upper(), str(_ccy).upper() + " ")
+
+    # ── Analyst valuation basis ──────────────────────────────────────────
+    # The sell-side method and its published parameters, so the thesis can
+    # state what the street assumed and where we differ. Benchmark only —
+    # the engine's own profile and method still govern the numbers above.
+    try:
+        from src.memory.analyst_basis import get_analyst_basis as _gab
+        _ab = _gab(ticker) or {}
+    except Exception:
+        _ab = {}
+    if _ab.get("method"):
+        _ap = [f"method {_ab['method']}"]
+        for _k, _l in (("wacc", "WACC"), ("cost_of_equity", "CoE"),
+                       ("terminal_growth", "terminal g"),
+                       ("holdco_discount", "holdco discount")):
+            if _ab.get(_k) is not None:
+                _ap.append(f"{_l} {_ab[_k] * 100:.2f}%")
+        if _ab.get("target_multiple"):
+            _ap.append(f"{_ab['target_multiple']:g}x "
+                       f"{_ab.get('multiple_basis') or ''}".strip())
+        if _ab.get("price_target"):
+            _ap.append(f"street TP {_ab['price_target']}")
+        if _ab.get("rating"):
+            _ap.append(str(_ab["rating"]))
+        lines.append(
+            f"Analyst basis ({_ab.get('house') or 'sell-side'} "
+            f"{_ab.get('as_of') or ''}): " + ", ".join(_ap))
     _wacc = dcf.get("wacc")
     if isinstance(_wacc, (int, float)) and _wacc > 0:
         lines.append(f"WACC {_wacc * 100:.1f}%" if _wacc <= 1 else f"WACC {_wacc:.1f}%")
     for _case in ("bear", "base", "bull"):
         _iv = (dcf.get(_case) or {}).get("intrinsic_value")
         if isinstance(_iv, (int, float)) and _iv > 0:
-            lines.append(f"DCF {_case} IV ${_iv:,.2f}")
+            lines.append(f"DCF {_case} IV {_sym}{_iv:,.2f}")
     if recon.get("blended_iv"):
-        lines.append(f"Blended IV ${recon['blended_iv']:,.2f}")
+        lines.append(f"Blended IV {_sym}{recon['blended_iv']:,.2f}")
     if scenario.get("expected_value"):
         lines.append(
-            f"Scenario EV ${scenario['expected_value']:,.2f} "
+            f"Scenario EV {_sym}{scenario['expected_value']:,.2f} "
             f"({scenario.get('upside_pct') or 0:+.1f}%)")
     if scenario.get("12m_price_target"):
-        lines.append(f"12m PT ${scenario['12m_price_target']:,.2f}")
+        lines.append(f"12m PT {_sym}{scenario['12m_price_target']:,.2f}")
     _uiv = recon.get("upside_to_iv_pct")
     if isinstance(_uiv, (int, float)):
         lines.append(f"Upside to blended IV {_uiv:+.1f}%")

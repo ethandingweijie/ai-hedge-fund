@@ -1383,6 +1383,223 @@ _REIT_MAINT_CAPEX_PCT: dict[str, float] = {
 # (NAV = NOI / cap_rate). Lower cap rate = premium asset class.
 # p_ffo / p_affo are REIT-specific distribution multiples (NOT P/E — these
 # apply to cash-adjusted metrics that REITs report in supplemental disclosures).
+# ── Singapore REIT (S-REIT) Dividend Discount Model ──────────────────────
+#
+# S-REITs are priced on a DDM off DPU, not on the US P/FFO / P/AFFO /
+# NAV-cap-rate stack. Every Singapore broker note in the reviewed set
+# states this outright in its valuation line:
+#
+#   Frasers Centrepoint Trust  "DDM (Cost of equity 6.38%, Terminal Growth 1.5%)"   TP S$2.70
+#   Keppel DC REIT             "DDM (Cost of Equity: 6.83%; Terminal g: 1.75%)"     TP S$2.46
+#   OUE REIT                   "DDM (Cost of Equity: 7%; Terminal g: 1.2%)"         TP S$0.45
+#
+# The reason is structural, not stylistic: an S-REIT must distribute at
+# least 90% of taxable income to keep its tax transparency, so DPU is very
+# nearly the whole of the equity cash flow and a distribution discount
+# model IS the valuation. FFO/AFFO are US GAAP constructs that S-REITs do
+# not report; our engine was computing them from statements and pricing a
+# Singapore trust on American multiples.
+#
+# Reconstructing the published targets from forward DPU capitalised at
+# (CoE - g) lands within ~1-7%, which is close enough to confirm the
+# mechanism. The broker models are multi-stage; this is the reduced form.
+#
+#   FCT      12.87c x 1.015 / 0.0488 = 2.68  vs 2.70
+#   KDCREIT  ~12.1c x 1.0175 / 0.0508 = 2.42 vs 2.46
+#   OUE       2.40c x 1.012 / 0.0580 = 0.42  vs 0.45
+
+# Per-sub-sector cost of equity and terminal growth.
+#
+# PUBLISHED (from the broker tables above): retail, data_centre,
+# hospitality. Everything else is INTERPOLATED against those three
+# anchors on the risk ordering the reports themselves imply — CoE rises
+# with cash-flow volatility (suburban retail 6.38% < data centre 6.83% <
+# hospitality 7.00%) and terminal g tracks the growth profile
+# (hospitality 1.2% < retail 1.5% < data centre 1.75%). Interpolated rows
+# are marked; replace them as broker tables become available rather than
+# treating them as sourced.
+# Maps the SGX lookup's sub-sector hint ("DataCentre", "Retail", "India")
+# onto a _SREIT_DDM_CALIBRATION key. The hints are screener-display
+# metadata, so they are normalised rather than trusted verbatim.
+_SGX_REIT_SUBTYPE_MAP: dict[str, str] = {
+    "retail": "retail", "datacentre": "data_centre", "datacenter": "data_centre",
+    "industrial": "industrial", "logistics": "logistics", "office": "office",
+    "commercial": "commercial", "hospitality": "hospitality",
+    "healthcare": "healthcare", "infra": "infra", "infrastructure": "infra",
+    "india": "india", "china": "china", "european": "european",
+    "usoffice": "us_office", "accommodation": "accommodation",
+}
+
+
+def _sgx_reit_subtype(ticker: str) -> str:
+    """Sub-sector key for an SGX-listed REIT, or 'default'."""
+    try:
+        from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP as _SGX
+    except Exception:
+        return "default"
+    entry = _SGX.get((ticker or "").upper())
+    if not entry or len(entry) < 2:
+        return "default"
+    key = re.sub(r"[^a-z]", "", (entry[1] or "").lower())
+    return _SGX_REIT_SUBTYPE_MAP.get(key, "default")
+
+
+_SREIT_DDM_CALIBRATION: dict[str, dict] = {
+    # ── published ────────────────────────────────────────────────────
+    "retail":        {"coe": 0.0638, "g": 0.0150, "src": "published"},
+    "data_centre":   {"coe": 0.0683, "g": 0.0175, "src": "published"},
+    "hospitality":   {"coe": 0.0700, "g": 0.0120, "src": "published"},
+    # ── interpolated ─────────────────────────────────────────────────
+    # Healthcare (Parkway Life): longest WALE in the market, CPI-linked
+    # downside-protected rents — the most defensive S-REIT cash flow.
+    "healthcare":    {"coe": 0.0630, "g": 0.0150, "src": "interpolated"},
+    "industrial":    {"coe": 0.0660, "g": 0.0150, "src": "interpolated"},
+    "logistics":     {"coe": 0.0660, "g": 0.0150, "src": "interpolated"},
+    # Regulated / contracted infrastructure (NetLink, Keppel Infra).
+    "infra":         {"coe": 0.0675, "g": 0.0125, "src": "interpolated"},
+    "commercial":    {"coe": 0.0690, "g": 0.0125, "src": "interpolated"},
+    "accommodation": {"coe": 0.0725, "g": 0.0150, "src": "interpolated"},
+    # Singapore office — structurally softer than suburban retail.
+    "office":        {"coe": 0.0710, "g": 0.0100, "src": "interpolated"},
+    "european":      {"coe": 0.0750, "g": 0.0100, "src": "interpolated"},
+    # India: g 2.75% is published (CapitaLand India Trust); the CoE is
+    # interpolated upward for EM currency and country risk. INR
+    # depreciation is a recurring drag on SGD-reported DPU.
+    "india":         {"coe": 0.0800, "g": 0.0275, "src": "g published, CoE interpolated"},
+    # China: negative rental reversions across retail, business parks and
+    # logistics in the reviewed note; growth assumption deliberately low.
+    "china":         {"coe": 0.0850, "g": 0.0100, "src": "interpolated"},
+    # US office held by an SGX trust — the weakest cash flow in the
+    # universe (Prime US REIT); wide CoE, no real terminal growth.
+    "us_office":     {"coe": 0.0850, "g": 0.0050, "src": "interpolated"},
+    "default":       {"coe": 0.0700, "g": 0.0125, "src": "interpolated"},
+}
+
+# Per-ticker DDM assumptions lifted from published broker valuation lines.
+# These outrank the sub-sector defaults. Same precedence principle as the
+# bank GGM table: CoE and terminal growth are analyst constructs, never
+# issuer disclosures, so a stated broker table beats anything an extractor
+# scrapes out of prose.
+_SREIT_DDM_OVERRIDES: dict[str, dict] = {
+    # Phillip Securities Research, Frasers Centrepoint Trust, Jul 2026.
+    "J69U.SI": {"coe": 0.0638, "g": 0.0150, "as_of": "2026-07",
+                "source": "Phillip Securities Research (FCT)"},
+    # Phillip Securities Research, Keppel DC REIT, 27 Jul 2026 (SG2026_0137).
+    "AJBU.SI": {"coe": 0.0683, "g": 0.0175, "as_of": "2026-07-27",
+                "source": "Phillip Securities Research SG2026_0137"},
+    # Phillip Securities Research, OUE REIT, Jul 2026.
+    "TS0U.SI": {"coe": 0.0700, "g": 0.0120, "as_of": "2026-07",
+                "source": "Phillip Securities Research (OUE REIT)"},
+    # OCBC Global Markets, CapitaLand India Trust, 29 Jul 2026 — terminal
+    # growth stated at 2.75%; the note does not publish a cost of equity,
+    # so that field is left to the sub-sector row.
+    "CY6U.SI": {"g": 0.0275, "as_of": "2026-07-29",
+                "source": "OCBC Global Markets (CLINT)"},
+}
+
+
+def _sreit_ddm_assumptions(ticker: str, subtype: str,
+                           most_recent: dict) -> dict:
+    """Resolve (CoE, g) for an S-REIT DDM, with provenance.
+
+    Precedence: published broker table for this ticker, then a live
+    research extraction that survives a plausibility band, then the
+    sub-sector calibration. Research ranks BELOW the broker table for the
+    same reason it does on the bank GGM — no issuer publishes its own cost
+    of equity, so an extracted value is second-hand opinion competing with
+    a table that states the number deliberately.
+    """
+    cfg = _SREIT_DDM_CALIBRATION.get(subtype) or _SREIT_DDM_CALIBRATION["default"]
+    ovr = _SREIT_DDM_OVERRIDES.get((ticker or "").upper(), {})
+    prov: list[str] = []
+
+    _basis = _analyst_basis(ticker, most_recent)
+    _basis_coe = _safe(_basis.get("cost_of_equity"))
+    _basis_g = _safe(_basis.get("terminal_growth"))
+    _basis_lbl = (f"analyst basis: {_basis.get('house') or 'sell-side'} "
+                  f"{_basis.get('as_of') or ''}").strip()
+
+    research_coe = _safe(most_recent.get("_sreit_coe_research"))
+    if _basis_coe and 0.03 < _basis_coe < 0.15:
+        coe, src = _basis_coe, _basis_lbl
+    elif ovr.get("coe"):
+        coe, src = ovr["coe"], "broker"
+    elif research_coe and abs(research_coe - cfg["coe"]) <= 0.02 and 0.03 < research_coe < 0.15:
+        coe, src = research_coe, "research"
+    else:
+        coe, src = cfg["coe"], f"sub-sector ({subtype})"
+        if research_coe:
+            prov.append(f"[research CoE {research_coe:.2%} rejected]")
+    prov.append(f"CoE {coe:.2%} ({src})")
+
+    research_g = _safe(most_recent.get("_sreit_terminal_g_research"))
+    if _basis_g is not None and 0.0 <= _basis_g <= 0.04:
+        g, src = _basis_g, _basis_lbl
+    elif ovr.get("g") is not None:
+        g, src = ovr["g"], "broker"
+    elif research_g is not None and 0.0 <= research_g <= 0.04:
+        g, src = research_g, "research"
+    else:
+        g, src = cfg["g"], f"sub-sector ({subtype})"
+    prov.append(f"g {g:.2%} ({src})")
+
+    if cfg.get("src") and not ovr:
+        prov.append(f"calibration: {cfg['src']}")
+    if ovr.get("source"):
+        prov.append(f"src: {ovr['source']} ({ovr.get('as_of', 'n/a')})")
+
+    return {"coe": coe, "g": g, "subtype": subtype, "provenance": prov}
+
+
+def _sreit_dpu(most_recent: dict, shares: float) -> Optional[float]:
+    """Distribution per unit, in the reporting currency (not cents).
+
+    S-REITs report DPU in cents; the research extractor captures it that
+    way (`dpu_cents`). Fall back through the statement lines when no
+    extraction is available.
+    """
+    dpu_c = _safe(most_recent.get("_sreit_dpu_cents_research"))
+    if dpu_c and dpu_c > 0:
+        return dpu_c / 100.0
+    dps = _safe(most_recent.get("dividends_per_share"))
+    if dps and dps > 0:
+        return dps
+    if shares and shares > 0:
+        di = _safe(most_recent.get("distributable_income"))
+        if di and di > 0:
+            return di / shares
+        paid = _safe(most_recent.get("dividends_and_distributions"))
+        if paid:
+            return abs(paid) / shares
+    return None
+
+
+def _compute_sreit_ddm(ticker: str, subtype: str, most_recent: dict,
+                       shares: float, dpu_growth: float = 0.0):
+    """Value an S-REIT on its distributions.
+
+        value/unit = DPU_forward x (1 + g) / (CoE - g)
+
+    Returns (value_per_unit, dpu_forward, assumptions) or None when the
+    inputs cannot support it — notably when CoE approaches g, where the
+    capitalisation factor diverges.
+    """
+    a = _sreit_ddm_assumptions(ticker, subtype, most_recent)
+    coe, g = a["coe"], a["g"]
+    if not (coe and g is not None and (coe - g) > 0.005):
+        return None
+    dpu = _sreit_dpu(most_recent, shares)
+    if dpu is None or dpu <= 0:
+        return None
+    # One year of DPU growth to the forward figure the model capitalises.
+    # Clamped: an S-REIT's distribution does not move 30% on trend, and a
+    # wild scenario growth rate must not leak into the terminal value.
+    _gr = max(min(dpu_growth or 0.0, 0.15), -0.15)
+    dpu_fwd = dpu * (1.0 + _gr)
+    value = dpu_fwd * (1.0 + g) / (coe - g)
+    return round(value, 4), round(dpu_fwd, 6), a
+
+
 _REIT_SUBTYPE_MULTIPLES: dict[str, dict[str, float]] = {
     # Data center — default DLR-class calibration. Green Street April 2026:
     # 5.0-5.3% implied cap for large DC REITs. Previous 4.5% was too tight;
@@ -1852,6 +2069,33 @@ def _coe_is_plausible(coe: float, cfg: dict) -> bool:
     return abs(coe - base) <= _BANK_COE_PLAUSIBLE_BAND
 
 
+def _analyst_basis(ticker: str, most_recent: dict) -> dict:
+    """Parsed sell-side valuation basis for `ticker`, cached on the row.
+
+    This is the INITIAL BENCHMARK layer. It outranks our static seed
+    tables and the profile defaults for discount-rate parameters only —
+    cost of equity, WACC, terminal growth — because no issuer discloses
+    those and a published broker table states them deliberately. It never
+    changes which profile a ticker routes to; where the analyst's method
+    disagrees with the profile anchor that is raised as a flag instead.
+
+    Matters most for SGX and HKEX names: FMP returns no analyst estimates
+    there, so a deposited report is the only sell-side input available.
+    """
+    cached = most_recent.get("_analyst_basis_cache")
+    if cached is not None:
+        return cached
+    basis: dict = {}
+    try:
+        from src.memory.analyst_basis import get_analyst_basis
+        basis = get_analyst_basis(ticker) or {}
+    except Exception:
+        basis = {}
+    most_recent["_analyst_basis_cache"] = basis
+    return basis
+
+
+
 def _bank_ggm_assumptions(ticker: str, profile_name: str,
                           most_recent: dict) -> dict:
     """Resolve the (ROE, CoE, g) triplet driving the Gordon Growth P/B.
@@ -1908,8 +2152,19 @@ def _bank_ggm_assumptions(ticker: str, profile_name: str,
     # SG bank desk carries. The run also mixed three sources into one
     # multiple — research ROE, research CoE, broker g — and the GGM triplet
     # is only coherent when its discount-rate half comes from one framework.
+    # A deposited analyst report is the benchmark layer above the static
+    # seed table: it is the same kind of evidence, but ingested rather than
+    # hand-copied, and carries its own vintage.
+    _basis = _analyst_basis(ticker, most_recent)
+    _basis_coe = _safe(_basis.get("cost_of_equity"))
+    _basis_g = _safe(_basis.get("terminal_growth"))
+    _basis_lbl = (f"analyst basis: {_basis.get('house') or 'sell-side'} "
+                  f"{_basis.get('as_of') or ''}").strip()
+
     research_coe = _safe(most_recent.get("_bank_coe_research"))
-    if ovr.get("coe"):
+    if _basis_coe and 0.04 < _basis_coe < 0.25:
+        coe, src = _basis_coe, _basis_lbl
+    elif ovr.get("coe"):
         coe, src = ovr["coe"], "broker"
         if research_coe and abs(research_coe - coe) > 0.005:
             prov.append(f"[research CoE {research_coe:.1%} not used — broker table]")
@@ -1922,7 +2177,9 @@ def _bank_ggm_assumptions(ticker: str, profile_name: str,
     prov.append(f"CoE {coe:.1%} ({src})")
 
     research_g = _safe(most_recent.get("_bank_ggm_g_research"))
-    if ovr.get("ggm_g") is not None:
+    if _basis_g is not None and 0.0 <= _basis_g < 0.07:
+        g, src = _basis_g, _basis_lbl
+    elif ovr.get("ggm_g") is not None:
         g, src = ovr["ggm_g"], "broker"
     elif research_g is not None and 0.0 <= research_g < 0.07:
         g, src = research_g, "research"
@@ -3354,6 +3611,20 @@ def _compute_method_value(
         # liquidation. Scenario dispersion still flows through `sm`.
         mult = cfg["p_tbv"] * sm
         return tbv_ps * mult
+
+    # ── DDM (S-REIT) — distributions discounted, Singapore convention ─────
+    # value/unit = DPU_fwd x (1 + g) / (CoE - g). An S-REIT distributes
+    # >=90% of taxable income to hold its tax transparency, so DPU is
+    # effectively the whole equity cash flow and every Singapore broker
+    # note prices off this. FFO/AFFO are US GAAP constructs S-REITs do not
+    # report.
+    if method_name in {"DDM (S-REIT)", "S-REIT DDM"}:
+        _sub = most_recent.get("_sreit_subtype") or _sgx_reit_subtype(ticker)
+        _res = _compute_sreit_ddm(ticker, _sub, most_recent, shares,
+                                  dpu_growth=growth)
+        if _res is None:
+            return None
+        return _res[0] * sm
 
     # ── GGM (P/B) — Gordon Growth justified book multiple ─────────────────
     # target P/B = (ROE - g) / (CoE - g), applied to book value per share.
@@ -4856,6 +5127,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _lookup_notes = _lookup_entry[3] or ""
             _reit_subtype = _classify_reit_subtype(ticker, _lookup_notes)
             most_recent["_reit_subtype"]  = _reit_subtype
+            # SGX sub-sector drives the DDM calibration and is resolved from
+            # the SGX lookup, not from the US sub-type keyword classifier.
+            if _SGX_TSL.get(ticker.upper()):
+                most_recent["_sreit_subtype"] = _sgx_reit_subtype(ticker)
             most_recent["_ticker"]        = ticker
             most_recent["_lookup_notes"]  = _lookup_notes
 
@@ -4870,6 +5145,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if abs(v) >= 1e6:
                     return f"${v/1e6:.0f}M"
                 return f"${v:.0f}"
+
+            _sreit_sub = most_recent.get("_sreit_subtype")
+            if _sreit_sub:
+                _ddm_dbg = _compute_sreit_ddm(ticker, _sreit_sub, most_recent,
+                                              shares, dpu_growth=growth_base)
+                if _ddm_dbg is not None:
+                    _dv, _dpu_f, _da = _ddm_dbg
+                    _sym = _CCY_SYMBOLS.get((reported_currency or "SGD").upper(),
+                                            (reported_currency or "SGD").upper() + " ")
+                    ticker_forward_flags.append(
+                        f"S-REIT DDM ({_sreit_sub}): DPU fwd {_dpu_f * 100:.2f} cents "
+                        f"-> {_sym}{_dv:,.2f}/unit [{', '.join(_da['provenance'])}]"
+                    )
+                else:
+                    ticker_forward_flags.append(
+                        f"S-REIT DDM ({_sreit_sub}): unavailable — no DPU or "
+                        f"CoE too close to terminal g"
+                    )
 
             ticker_forward_flags.append(
                 f"REIT sub-type: {_reit_subtype} | cap_rate "
@@ -4886,6 +5179,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     most_recent["cap_rate_market"] = _rm_override["cap_rate_market"]
                 if "affo_per_unit_cents" in _rm_override:
                     most_recent["affo_per_share_research"] = _rm_override["affo_per_unit_cents"] / 100.0
+                # ── S-REIT DDM inputs ────────────────────────────────────
+                # Namespaced with an `_sreit_` prefix deliberately. These
+                # are read only by the DDM and must never shadow a
+                # statement line item — the framework bridge writes
+                # extracted KPIs onto the financial row by key, and an
+                # unprefixed name silently replaces real data.
+                if _rm_override.get("dpu_cents"):
+                    most_recent["_sreit_dpu_cents_research"] = _rm_override["dpu_cents"]
+                if _rm_override.get("sreit_cost_of_equity"):
+                    most_recent["_sreit_coe_research"] = _rm_override["sreit_cost_of_equity"]
+                if _rm_override.get("sreit_terminal_growth") is not None:
+                    most_recent["_sreit_terminal_g_research"] = _rm_override["sreit_terminal_growth"]
                 _rm_parts = []
                 if "cap_rate_market" in _rm_override:
                     _rm_parts.append(f"cap_rate {_rm_override['cap_rate_market']:.2%} "
@@ -5187,6 +5492,44 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _anchor_method = _m["name"]
                     break
             _profile_rationale = profile_data.get("rationale", "")
+
+        # ── Analyst valuation basis (benchmark, not an instruction) ──────
+        # Records what the sell-side used and what it put in. Where the
+        # analyst's method is not this profile's anchor, that is FLAGGED,
+        # never acted on: profile routing is ours, and letting a single
+        # extracted string reroute a valuation would put a broker's framing
+        # in charge of the engine.
+        try:
+            _ab = _analyst_basis(ticker, most_recent)
+            if _ab and _ab.get("method"):
+                _parts = [f"method={_ab['method']}"]
+                for _k, _lbl in (("wacc", "WACC"), ("cost_of_equity", "CoE"),
+                                 ("terminal_growth", "g"),
+                                 ("holdco_discount", "holdco disc")):
+                    if _ab.get(_k) is not None:
+                        _parts.append(f"{_lbl} {_ab[_k]:.2%}")
+                if _ab.get("target_multiple"):
+                    _parts.append(
+                        f"{_ab['target_multiple']:g}x "
+                        f"{_ab.get('multiple_basis') or ''}".strip())
+                if _ab.get("price_target"):
+                    _parts.append(f"TP {_ab['price_target']}")
+                if _ab.get("rating"):
+                    _parts.append(str(_ab["rating"]))
+                _src = (f"{_ab.get('house') or 'sell-side'} "
+                        f"{_ab.get('as_of') or ''}").strip()
+                ticker_forward_flags.append(
+                    f"Analyst basis ({_src}): " + " | ".join(_parts))
+
+                from src.memory.analyst_basis import method_disagrees as _disagrees
+                if _anchor_method and _disagrees(_ab, _anchor_method):
+                    ticker_forward_flags.append(
+                        f"⚠ Method divergence: analyst used "
+                        f"{_ab['method']}, profile '{profile_name}' anchors on "
+                        f"{_anchor_method} — profile routing retained, "
+                        f"flagged for review")
+        except Exception as _abe:
+            print(f"  [analyst_basis] {ticker}: {type(_abe).__name__}: {_abe!r}")
 
         # P1.2 — cache most_recent EBITDA for accurate 12m PT computation
         # Using historical EBITDA × (1+g) is far more accurate than FCF / 0.65
