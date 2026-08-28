@@ -32,6 +32,8 @@ import { DecisionInputsCard }  from '@/components/report/DecisionInputsCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { IntelligenceGrid }    from '@/components/report/IntelligenceGrid';
 import { FinancialsChart }     from '@/components/report/FinancialsChart';
+import { FinancialStatements } from '@/components/report/FinancialStatements';
+import type { FinancialStatementsPayload } from '@/components/report/FinancialStatements';
 import { ValuationLadder }     from '@/components/report/ValuationLadder';
 import { REITValuationPanel }  from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel }  from '@/components/report/bank/BankValuationPanel';
@@ -1464,7 +1466,13 @@ export function ReportPage() {
           badge={sectionCompleted('financials', phaseMap) ? <SectionCompleteBadge /> : null}
         />
         {renderSection('financials', 'Financial Statements', (
-          <FinancialsChart ticker={liveTicker} />
+          <div className="space-y-4">
+            <FinancialStatements
+              statements={data.financial_statements as FinancialStatementsPayload | undefined}
+              ticker={liveTicker}
+            />
+            <FinancialsChart ticker={liveTicker} />
+          </div>
         ))}
         {renderSection('citation', 'Citation Registry', (
           <CitationPanel data={data as Record<string, unknown>} ticker={liveTicker} />

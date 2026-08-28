@@ -398,6 +398,7 @@ def _save_partial_web_run(
             "phase_durations":             data.get("phase_durations"),
             "macro_regime":                data.get("macro_regime"),
             "raw_financials":              data.get("raw_financials"),
+            "financial_statements":        data.get("financial_statements"),
             "routing_decision":            data.get("routing_decision"),
             "research_tier":               data.get("research_tier"),
             # Sector classification fields — set by strategic_router BEFORE any
@@ -940,6 +941,9 @@ def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
     # Raw financials
     raw_financials: dict = _load_json_col("raw_financials_json") or {}
 
+    # Three statements with derived growth, profile-aware layout.
+    financial_statements: dict = _load_json_col("financial_statements_json") or {}
+
     # Citation audit
     ca_full = _load_json_col("citation_audit_json")
     citation_audit: dict = {ticker: ca_full} if ca_full else {}
@@ -1024,6 +1028,7 @@ def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
             "value_trap_analysis":value_trap_analysis,
             "power_law_analysis": power_law_analysis,
             "raw_financials":     raw_financials,
+            "financial_statements": financial_statements,
             "citation_audit":     citation_audit,
             "industry_brief":          run_row["industry_brief_text"] or "",
             "deep_research":           run_row["deep_research_text"] or "",

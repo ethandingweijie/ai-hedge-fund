@@ -118,3 +118,38 @@ def test_ambiguous_leading_word_resolves_to_nothing():
 
 def test_matcher_never_guesses_on_an_unknown_name(gazetteer):
     assert match_tickers("Quarterly Macro Outlook_2026.pdf", gazetteer) == []
+
+
+# ── Substring collisions ─────────────────────────────────────────────────
+
+def test_micron_is_not_micro_mechanics(gazetteer):
+    """"micro" (Micro-Mechanics, 5DD.SI) sits inside "micron".
+
+    Alias matching was a bare substring search, so Goldman's Micron note
+    was attributed to a Singapore precision engineer. Aliases now match on
+    a word boundary.
+    """
+    assert set(match_tickers("Micron_June2026.pdf", gazetteer)) == {"MU"}
+    assert set(match_tickers("Micro-Mechanics_2026.pdf", gazetteer)) == {"5DD.SI"}
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("Nvidia_Aug2026.pdf",    {"NVDA"}),
+        ("Coreweave_Aug2026.pdf", {"CRWV"}),
+        ("Nebius_Aug2026.pdf",    {"NBIS"}),
+        ("Micron_June2026.pdf",   {"MU"}),
+    ],
+)
+def test_ai_infrastructure_reports_match(filename, expected, gazetteer):
+    assert set(match_tickers(filename, gazetteer)) == expected
+
+
+def test_no_alias_matches_inside_a_longer_word(gazetteer):
+    """A boundary-free alias silently claims any filename containing it."""
+    for filename in ("Microscopy Weekly.pdf", "Applesauce Corp.pdf",
+                     "Jdcom Holdings Unrelated.pdf"):
+        for ticker in match_tickers(filename, gazetteer):
+            assert ticker not in {"5DD.SI", "AAPL"}, (
+                f"{filename} wrongly matched {ticker}")

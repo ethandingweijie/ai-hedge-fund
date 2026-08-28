@@ -16,6 +16,8 @@ import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
 import { AssumptionWatchCard } from '@/components/report/AssumptionWatchCard';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
+import { FinancialStatements } from '@/components/report/FinancialStatements';
+import type { FinancialStatementsPayload } from '@/components/report/FinancialStatements';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
@@ -360,6 +362,10 @@ export function ReportViewPage() {
 
         {/* ── Financials ─────────────────────────────────────────────────── */}
         <SectionAnchor id="financials" label="Financials" />
+        <FinancialStatements
+          statements={data.financial_statements as FinancialStatementsPayload | undefined}
+          ticker={ticker}
+        />
         <FinancialsChart ticker={ticker} />
         <CitationPanel data={data as Record<string, unknown>} ticker={ticker} />
 

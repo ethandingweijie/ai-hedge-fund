@@ -282,6 +282,7 @@ CREATE TABLE IF NOT EXISTS ticker_signals (
     sector_card_json      TEXT,
     sector_card_hash      TEXT,
     card_qa_json          TEXT,
+    financial_statements_json TEXT,
     UNIQUE(run_id, ticker)
 );
 
@@ -446,6 +447,12 @@ _MIGRATIONS = [
     # the QA LLM pass and reuse the prior clean audit.
     ("ticker_signals", "sector_card_hash",    "TEXT"),
     ("ticker_signals", "card_qa_json",        "TEXT"),
+
+    # v5 — three-statement financials (income / balance / cash flow with
+    # derived YoY growth), built from FMP line items rather than the LLM
+    # echo in raw_financials_json. Additive: raw_financials_json is
+    # unchanged and still what dcf_agent and the extractors read.
+    ("ticker_signals", "financial_statements_json", "TEXT"),
 
     # M2 B2 — reporting currency for the cached FMP financials (currency-
     # labeling of research prompts + FX-aware consistency check)
@@ -762,6 +769,10 @@ def save_run(state: dict, decisions: dict) -> str:
 
                 ca_json = _safe_json(data.get("citation_audit", {}).get(ticker))
 
+                # Three-statement view (data_router builds it from FMP rows).
+                _fin_stmts = data.get("financial_statements") or {}
+                fin_stmts_json = _safe_json(_fin_stmts) if _fin_stmts else None
+
                 # VGPM — compute inline so CLI runs get the same scorecard as web runs
                 vgpm_json = None
                 try:
@@ -816,6 +827,7 @@ def save_run(state: dict, decisions: dict) -> str:
                             "power_law_json", "scenario_json", "raw_financials_json",
                             "citation_audit_json", "vgpm_json", "dcf_range_json", "value_trap_json",
                             "sector_card_json", "sector_card_hash", "card_qa_json",
+                            "financial_statements_json",
                         ],
                         "run_id, ticker",
                     ),
@@ -859,6 +871,7 @@ def save_run(state: dict, decisions: dict) -> str:
                         sc_json,
                         sc_hash,
                         cq_json,
+                        fin_stmts_json,
                     ),
                 )
 
@@ -1160,7 +1173,8 @@ def get_phase_cache(
                 ts.scenario_json,
                 ts.value_trap_json,
                 ts.sector_card_hash,
-                ts.card_qa_json
+                ts.card_qa_json,
+                ts.financial_statements_json
             FROM runs r
             JOIN ticker_signals ts ON r.run_id = ts.run_id AND ts.ticker = ?
             WHERE r.run_at >= ?
@@ -1198,6 +1212,7 @@ def get_phase_cache(
             "value_trap":     _load_json("value_trap_json"),
             "sector_card_hash": row["sector_card_hash"] or None,
             "card_qa_audit":  _load_json("card_qa_json"),
+            "financial_statements": _load_json("financial_statements_json"),
         }
 
     except Exception as exc:

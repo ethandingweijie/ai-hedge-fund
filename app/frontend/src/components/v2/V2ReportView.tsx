@@ -43,6 +43,8 @@ import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechS
 
 // Existing panel components (reused as-is)
 import { FinancialsChart } from '@/components/report/FinancialsChart';
+import { FinancialStatements } from '@/components/report/FinancialStatements';
+import type { FinancialStatementsPayload } from '@/components/report/FinancialStatements';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import type { DdCardAudit } from '@/lib/reportTypes';
@@ -340,7 +342,13 @@ export function V2ReportView({
           ))}
         {tab === 'risk'       && <RiskBody       powerLaw={powerLaw} valueTrap={valueTrap} scenarioAnalysis={scenarioAnalysis} isRunning={isRunning} />}
         {tab === 'research'   && <ResearchBody   runId={runId} ticker={ticker} industryBrief={industryBrief} deepResearch={deepResearch} deepAnnotated={deepAnnotated} citations={citations} events={events} liveData={liveData} isResearchPhase={isResearchPhase} isComplete={isComplete} />}
-        {tab === 'financials' && <FinancialsBody ticker={ticker} stockMetrics={stockMetrics} />}
+        {tab === 'financials' && (
+          <FinancialsBody
+            ticker={ticker}
+            stockMetrics={stockMetrics}
+            statements={data.financial_statements as FinancialStatementsPayload | undefined}
+          />
+        )}
       </div>
     </div>
   );
@@ -1156,13 +1164,17 @@ function StreamingResearchSummary({
 
 /* ───────── Financials Tab — Revenue Build + Income Statement + Key Stats ─── */
 function FinancialsBody({
-  ticker, stockMetrics,
+  ticker, stockMetrics, statements,
 }: {
   ticker: string;
   stockMetrics: Record<string, number | undefined> | null;
+  statements?: FinancialStatementsPayload;
 }) {
   return (
     <div className="px-4 pt-5 pb-10 space-y-5">
+      {/* Three statements with derived YoY growth, profile-aware layout */}
+      <FinancialStatements statements={statements} ticker={ticker} />
+
       {/* Revenue Build — FMP product segmentation (LTM fiscal year) */}
       <V2RevenueBuild ticker={ticker} kind="product" />
 

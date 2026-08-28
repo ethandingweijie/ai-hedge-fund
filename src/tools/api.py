@@ -89,6 +89,16 @@ _INCOME_MAP: dict[str, str] = {
     # Sector-specific additions
     "interestIncome":                    "interest_income",            # Financials: NIM reconstruction
     "provisionForCreditLosses":          "provision_for_loan_losses",  # Financials: credit cycle signal
+    # ── Three-statement view ────────────────────────────────────────
+    # Needed to present an income statement the way an analyst note does
+    # rather than a flat field list. `net_interest_income` is the bank
+    # top line — the DBS/OCBC notes lead with NII + non-II, never with
+    # revenue and cost of revenue.
+    "sellingGeneralAndAdministrativeExpenses": "selling_general_admin",
+    "incomeBeforeTax":                   "pretax_income",
+    "netInterestIncome":                 "net_interest_income",
+    "costAndExpenses":                   "cost_and_expenses",
+    "totalOtherIncomeExpensesNet":       "other_income_expense",
 }
 
 _BALANCE_MAP: dict[str, str] = {
@@ -132,6 +142,19 @@ _BALANCE_MAP: dict[str, str] = {
     # Earnings quality additions
     "accountsPayables":                  "accounts_payable",           # EQ: DPO / cash conversion cycle
     "accountPayables":                   "accounts_payable",           # FMP alternate spelling
+    # ── Three-statement view ────────────────────────────────────────
+    # NOTE: FMP also returns `totalEquity` (incl. minority interest). It is
+    # deliberately NOT mapped — `total_equity` is derived from
+    # `shareholders_equity` and feeds the bank GGM / BVPS path, so
+    # remapping it would move bank valuations without touching that code.
+    "inventory":                         "inventory",
+    "propertyPlantEquipmentNet":         "property_plant_equipment",
+    "retainedEarnings":                  "retained_earnings",
+    "shortTermDebt":                     "short_term_debt",
+    "shortTermInvestments":              "short_term_investments",
+    "minorityInterest":                  "minority_interest",
+    "totalNonCurrentAssets":             "non_current_assets",
+    "totalNonCurrentLiabilities":        "non_current_liabilities",
 }
 
 _CASHFLOW_MAP: dict[str, str] = {
@@ -143,6 +166,19 @@ _CASHFLOW_MAP: dict[str, str] = {
     # Sector-specific additions
     "stockBasedCompensation":            "stock_based_compensation",   # Tech: dilution signal
     "commonStockRepurchased":            "share_buyback",              # Bank: buyback-aware retention
+    # ── Three-statement view ────────────────────────────────────────
+    # The investing/financing subtotals and the working-capital swing are
+    # what make a cash flow statement readable as a statement rather than
+    # as three loose numbers.
+    "netCashProvidedByInvestingActivities": "investing_cash_flow",
+    "netCashProvidedByFinancingActivities": "financing_cash_flow",
+    "changeInWorkingCapital":            "change_in_working_capital",
+    "netChangeInCash":                   "net_change_in_cash",
+    "netDebtIssuance":                   "net_debt_issuance",
+    "acquisitionsNet":                   "acquisitions_net",
+    "cashAtEndOfPeriod":                 "cash_at_end_of_period",
+    "incomeTaxesPaid":                   "income_taxes_paid",
+    "interestPaid":                      "interest_paid",
 }
 
 # Ratios endpoint — annual fields (no suffix); TTM fields have 'TTM' suffix
@@ -820,11 +856,23 @@ def search_line_items(
         if not date or date > end_date:
             continue
 
+        # The income statement is authoritative for its own lines and is
+        # therefore merged LAST.
+        #
+        # The cash flow statement also carries `netIncome` and
+        # `depreciationAndAmortization`, and for several issuers those are
+        # NOT the income-statement figures. With income merged first they
+        # were silently overwritten: DBS FY2024 net income became
+        # S$12,884mn (pre-tax profit) instead of S$11,289mn, and OCBC was
+        # out by 20.7%. That figure feeds EPS, ROE and hence the bank GGM
+        # target P/B, so the error reached the target price. Singapore and
+        # Hong Kong banks and REITs were worst affected; US large caps
+        # happened to agree on both statements and looked fine.
         merged = {
-            **inc,
-            **bal_by_date.get(date, {}),
             **cf_by_date.get(date, {}),
+            **bal_by_date.get(date, {}),
             **rt_by_date.get(date, {}),
+            **inc,
         }
 
         # Translate camelCase → snake_case

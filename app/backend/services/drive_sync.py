@@ -67,6 +67,17 @@ _COMPANY_ALIASES: dict[str, list[str]] = {
     "google":         ["GOOGL"],
     "apple":          ["AAPL"],
     "nvidia":         ["NVDA"],
+    "coreweave":      ["CRWV"],
+    "micron":         ["MU"],
+    "lululemon":      ["LULU"],
+    "birkenstock":    ["BIRK"],
+    "flutter":        ["FLUT"],
+    "draftkings":     ["DKNG"],
+    "sk hynix":       ["000660.KS"],
+    "hynix":          ["000660.KS"],
+    "nebius":         ["NBIS"],
+    "applied digital": ["APLD"],
+    "terawulf":       ["WULF"],
     "tesla":          ["TSLA"],
     "crowdstrike":    ["CRWD"],
     "palantir":       ["PLTR"],
@@ -358,9 +369,15 @@ def match_tickers(name: str, gazetteer: set[str] | None = None) -> list[str]:
         return any(a < end and start < b for start, end in consumed)
 
     for alias in sorted(combined, key=len, reverse=True):
-        idx = lowered.find(alias)
-        if idx == -1 or _overlaps(idx, idx + len(alias)):
+        # Word-boundary match, not a bare substring. "micro" (Micro-
+        # Mechanics, 5DD.SI) sits inside "micron", so a substring search
+        # attributed Goldman's Micron note to a Singapore precision
+        # engineer. Digits and dots are allowed to follow (HK codes,
+        # "Q2'26") but letters are not.
+        hit = re.search(r"(?<![a-z])" + re.escape(alias) + r"(?![a-z])", lowered)
+        if hit is None or _overlaps(hit.start(), hit.end()):
             continue
+        idx = hit.start()
         consumed.append((idx, idx + len(alias)))
         for t in combined[alias]:
             _add(t)

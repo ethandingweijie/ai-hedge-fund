@@ -1564,6 +1564,27 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
 
     # ── TECH ──────────────────────────────────────────────────────────────────
     "Tech": {
+        # GPU neoclouds and AI infrastructure — CoreWeave, Nebius, IREN,
+        # Applied Digital, TeraWulf. Not a SaaS business and not a data-
+        # centre REIT: revenue is contracted capacity sold forward, the
+        # binding constraint is secured POWER rather than demand, and the
+        # balance sheet is consumed by capex years ahead of the earnings.
+        #
+        # Priced on forward EV/Revenue because EBITDA is thin or negative
+        # while the fleet is being built — Goldman values Nebius on "7x
+        # 2HCY27+1HCY28E EV/Sales" (down from 9x CY27E), i.e. a blended
+        # forward period rather than a trailing multiple. EV/EBITDA is kept
+        # as a secondary for the names that have crossed into positive
+        # EBITDA, and contributes nothing for the ones that have not.
+        "AI Infrastructure / Neocloud": {
+            "methods": [
+                {"name": "EV/Revenue",   "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "DCF",          "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV", "DDM"],
+            "rationale": "GPU neocloud / AI infrastructure (CoreWeave, Nebius, IREN, Applied Digital). Forward EV/Revenue anchored — EBITDA is thin or negative during the build-out, so an earnings multiple prices nothing. Primary metrics: contracted power (GW), contracted revenue backlog, capex-to-revenue, gross margin. Secured power, not demand, is the constraint that caps revenue.",
+        },
         # Singapore tech manufacturing / EMS — Venture, UMS, Frencken, AEM.
         # Order-driven and cyclical: priced on forward earnings through the
         # cycle with a DCF cross-check. Book-to-bill is the leading
@@ -2038,6 +2059,28 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # operators (DIS parks, Galaxy Ent casinos, Haidilao restaurants).
         # EV/EBITDA anchors because it normalizes across CapEx profiles.
         # P/E captures franchise/royalty streams (MCD, SBUX, Sands China).
+        "Online Gaming / Sports Betting": {
+            "methods": [
+                {"name": "EV/EBITDA",    "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/Revenue",   "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",          "weight": 0.30, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["P/BV", "DDM", "EPV"],
+            "rationale": (
+                "Online sports betting and iGaming (FLUT, DKNG). EV/EBITDA "
+                "anchors on the operators that have crossed into positive "
+                "EBITDA — Flutter is valued at 11.75x NTM+4 EBITDA for "
+                "its US business. EV/Revenue carries real weight because the "
+                "category is still scaling and DraftKings is valued on an "
+                "equal blend of EV/Sales on NTM+1 and a modified DCF using "
+                "an EV/EBITDA exit. Primary drivers: monthly paying players, "
+                "net revenue margin (structural hold less promotions), and "
+                "customer acquisition spend, which is the swing factor "
+                "between growth and profitability in any given quarter. "
+                "P/BV excluded — the asset base is licences and brand, "
+                "not book."
+            ),
+        },
         "Travel & Dining": {
             "methods": [
                 {"name": "EV/EBITDA",  "weight": 0.35, "anchor": True,  "implementable": True},
@@ -2457,6 +2500,25 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "IDMs and foundries (MU, INTC, TSM, TXN, GFS) have massive fab CapEx "
                 "that suppresses FCF. EV/EBITDA anchors because it strips CapEx "
                 "distortion. EPV excluded — cyclical earnings make perpetuity nonsensical."
+            ),
+        },
+        "Memory / DRAM-NAND": {
+            "methods": [
+                {"name": "P/E (norm)",   "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "EV/EBITDA",    "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "DCF",          "weight": 0.25, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EPV", "LBO Floor", "DDM"],
+            "rationale": (
+                "Memory makers (MU, 000660.KS) are priced on a multiple of "
+                "through-cycle earnings, not on trailing EPS: Goldman values "
+                "Micron at 18x a normalised EPS of $62 and SK Hynix on an "
+                "averaged 2026E/27E P/E. P/E (norm) anchors because the cycle "
+                "position, not the spot quarter, is what the multiple is "
+                "applied to. Split out from IDM / Foundry, whose utilisation "
+                "and leading-edge-mix anchors describe a foundry's economics "
+                "rather than DRAM/NAND bit supply, ASP and HBM mix. EPV "
+                "excluded — cyclical earnings make a perpetuity nonsensical."
             ),
         },
         "Equipment / EDA": {
@@ -3647,6 +3709,11 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
 
     # ── Semiconductor (separate sector from Tech) ─────────────────────────
     # Fabless
+    "CRWV":    ("Tech", "AI Infrastructure / Neocloud", "AI Infrastructure", "CoreWeave — GPU neocloud"),
+    "NBIS":    ("Tech", "AI Infrastructure / Neocloud", "AI Infrastructure", "Nebius Group — GPU neocloud"),
+    "IREN":    ("Tech", "AI Infrastructure / Neocloud", "AI Infrastructure", "IREN — AI/HPC hosting on contracted power"),
+    "APLD":    ("Tech", "AI Infrastructure / Neocloud", "AI Infrastructure", "Applied Digital — AI/HPC datacenter hosting"),
+    "WULF":    ("Tech", "AI Infrastructure / Neocloud", "AI Infrastructure", "TeraWulf — AI/HPC hosting on contracted power"),
     "NVDA":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — AI GPU"),
     "AVGO":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — custom ASIC + networking"),
     "QCOM":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — mobile/edge AI"),
@@ -3654,7 +3721,8 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "MRVL":  ("Semiconductor", "Fabless",     "Semiconductor",                   "Fabless — networking/storage"),
     "ARM":   ("Semiconductor", "",     "Semiconductor",                   "Fabless — IP licensing/royalties"),
     # IDM / Foundry
-    "MU":    ("Semiconductor", "",     "Semiconductor",                   "IDM — DRAM/NAND/HBM fabs"),
+    "MU":    ("Semiconductor", "Memory / DRAM-NAND", "Memory (DRAM/NAND)", "Micron Technology — memory IDM; 18x normalised EPS"),
+    "000660.KS": ("Semiconductor", "Memory / DRAM-NAND", "Memory (DRAM/NAND)", "SK Hynix — DRAM/HBM leader; averaged-year P/E"),
     "INTC":  ("Semiconductor", "IDM / Foundry",     "Semiconductor",                   "IDM + Foundry — x86/fabs"),
     "TSM":   ("Semiconductor", "IDM / Foundry",     "Semiconductor",                   "Foundry — TSMC ADR (reports TWD)"),
     "TXN":   ("Semiconductor", "",     "Semiconductor",                   "IDM — analog fabs"),
@@ -3774,7 +3842,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "BKNG":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Booking Holdings — OTA platform"),
     # ── Apparel & Footwear ────────────────────────────────────────────────
     "NKE":   ("Consumer", "",          "Apparel",                         "Nike"),
-    "LULU":  ("Consumer", "",          "Apparel",                         "Lululemon"),
+    "LULU":  ("Consumer", "Apparel / Athletic Wear", "Athletic Apparel", "Lululemon — 4.50x Q5-Q8 EV/EBITDA"),
+    "BIRK":  ("Consumer", "Apparel / Athletic Wear", "Footwear", "Birkenstock — DCF, 9.5pc WACC / 2.5pc terminal growth"),
+    "FLUT":  ("Consumer", "Online Gaming / Sports Betting", "Sports Betting", "Flutter Entertainment — 11.75x NTM+4 EBITDA (US)"),
+    "DKNG":  ("Consumer", "Online Gaming / Sports Betting", "Sports Betting", "DraftKings — EV/Sales (NTM+1) blended with an EV/EBITDA-exit DCF"),
     "ONON":  ("Consumer", "",          "Apparel",                         "On Holding AG ADR"),
     "DECK":  ("Consumer", "",          "Apparel",                         "Deckers Outdoor — UGG/HOKA"),
     "VFC":   ("Consumer", "",          "Apparel",                         "VF Corp — North Face/Vans/Timberland"),

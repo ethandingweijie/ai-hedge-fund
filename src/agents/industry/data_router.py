@@ -211,6 +211,14 @@ def run_data_router(state: AgentState) -> AgentState:
         all_fields.update(fields)
     all_fields.update(sector_extras)
 
+    # Three-statement financials. search_line_items takes one field list and
+    # issues one set of calls, so adding these costs no extra round trip —
+    # they ride along with the fetch that is already happening.
+    from src.tools.financial_statements import (
+        STATEMENT_LINE_ITEMS, build_financial_statements,
+    )
+    all_fields.update(STATEMENT_LINE_ITEMS)
+
     progress.update_status(agent_id, ticker, f"Fetching {len(all_fields)} unique line items")
 
     # ── B3: issue all four FMP pre-fetches CONCURRENTLY ──────────────────────
@@ -274,6 +282,48 @@ def run_data_router(state: AgentState) -> AgentState:
             for _field, _val in _overlay_row.items():
                 if _field not in _fy_dict and _val is not None:
                     _fy_dict[_field] = _val
+
+    # ── Three-statement view ────────────────────────────────────────────────
+    # Built from the FMP rows above, not from the LLM echo that seeds
+    # raw_financials, and grouped by the profile's own statement layout: a
+    # bank leads with net interest income and total income, an S-REIT with
+    # gross revenue and net property income. Growth is DERIVED here rather
+    # than fetched, because FMP's statement-growth endpoints return nothing
+    # for Hong Kong (00700/01398/00005/00388/09988 all verified empty) while
+    # serving the US, Singapore and Korea.
+    #
+    # Additive: raw_financials keeps its flat keys untouched, since
+    # dcf_agent, the bank/REIT metric paths and every extractor read them.
+    try:
+        # Rebuilt from line_item_by_field rather than reusing _period_to_fy,
+        # which is scoped to the raw_financials branch above and does not
+        # exist when the router returned a non-dict.
+        import re as _re2
+        _stmt_rows: dict[str, dict] = {}
+        for _field, _entries in line_item_by_field.items():
+            for _entry in _entries:
+                _ym = _re2.search(r"(\d{4})", str(_entry.get("period", "")))
+                if not _ym:
+                    continue
+                _val = _entry.get("value")
+                if _val is not None:
+                    _stmt_rows.setdefault(f"FY{_ym.group(1)}", {})[_field] = _val
+        if isinstance(_raw_fin, dict):
+            for _fy, _fy_dict in _raw_fin.items():
+                if isinstance(_fy_dict, dict):
+                    for _k, _v in _fy_dict.items():
+                        _stmt_rows.setdefault(_fy, {}).setdefault(_k, _v)
+        if _stmt_rows:
+            state["data"]["financial_statements"] = build_financial_statements(
+                _stmt_rows,
+                sector=state["data"].get("sector", ""),
+                profile=state["data"].get("wacc_profile", "") or "",
+                currency=state["data"].get("reported_currency", "") or "",
+            )
+    except Exception as _e:  # never let a display view break the pipeline
+        progress.update_status(
+            agent_id, ticker, f"financial_statements skipped: {type(_e).__name__}"
+        )
 
     # Build per-agent data bundles (agent-specific fields + sector overlays)
     routed_data: dict[str, dict] = {}

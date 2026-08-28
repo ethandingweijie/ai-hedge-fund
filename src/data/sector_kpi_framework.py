@@ -1422,6 +1422,113 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     },
 
     # ── Semiconductor: IDM / Foundry (TSM, INTC, GFS) ─────────────────────
+    "Memory / DRAM-NAND": {
+        "sector":         "Semiconductor",
+        "anchor_methods": ["P/E (norm)", "EV/EBITDA", "DCF"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "memory_gross_margin", "direction": "higher_better",
+                 "bands": [{"min": 0.50, "mult": 1.25, "label": "peak-cycle"},
+                           {"min": 0.35, "mult": 1.10, "label": "strong"},
+                           {"min": 0.20, "mult": 1.00, "label": "in-band"},
+                           {"min": -1.0, "mult": 0.85, "label": "trough"}]}
+            ],
+            "cap": [0.7, 1.5],
+        },
+        "risk_adjustment": {
+            "kpi": "memory_inventory_days", "direction": "lower_better",
+            "bands": [{"max": 90.0,  "mult": 1.10, "label": "lean"},
+                      {"max": 140.0, "mult": 1.00, "label": "in-band"},
+                      {"max": 999.0, "mult": 0.85, "label": "glut"}],
+        },
+        "kpis": [
+            {
+                "key":             "memory_gross_margin",
+                "mandatory":       True,
+                "search_phrases":  ["gross margin", "GM%", "blended gross margin"],
+                "compute_hint":    "Blended memory gross margin (decimal) — the cycle's clearest single read",
+                "clamp":           (-0.60, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "hbm_revenue_share",
+                "mandatory":       True,
+                "search_phrases":  ["HBM revenue", "HBM mix", "HBM share of DRAM", "high bandwidth memory"],
+                "compute_hint":    "HBM as a share of DRAM revenue (decimal) — the AI-cycle growth driver",
+                "clamp":           (0.0, 0.90),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "dram_bit_growth",
+                "mandatory":       True,
+                "search_phrases":  ["DRAM bit growth", "DRAM bit shipment", "bit supply growth"],
+                "compute_hint":    "YoY DRAM bit shipment growth (decimal)",
+                "clamp":           (-0.50, 1.50),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "nand_bit_growth",
+                "mandatory":       False,
+                "search_phrases":  ["NAND bit growth", "NAND bit shipment"],
+                "compute_hint":    "YoY NAND bit shipment growth (decimal)",
+                "clamp":           (-0.50, 1.50),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "memory_asp_change",
+                "mandatory":       False,
+                "search_phrases":  ["ASP", "average selling price", "blended ASP", "pricing"],
+                "compute_hint":    "YoY change in blended average selling price (decimal)",
+                "clamp":           (-0.70, 2.00),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "memory_inventory_days",
+                "mandatory":       True,
+                "search_phrases":  ["inventory days", "days of inventory", "inventory outstanding", "weeks of inventory"],
+                "compute_hint":    "Days of inventory — the supply-glut early warning",
+                "clamp":           (0.0, 400.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "bit_supply_demand_gap",
+                "mandatory":       False,
+                "search_phrases":  ["supply/demand", "supply demand balance", "sufficiency ratio", "bit supply growth vs demand"],
+                "compute_hint":    "Industry bit supply growth less demand growth (decimal; positive = oversupply)",
+                "clamp":           (-0.50, 0.50),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "memory_capex",
+                "mandatory":       False,
+                "search_phrases":  ["capex", "capital expenditure", "capex guidance"],
+                "compute_hint":    "Capex guidance for the year, reporting currency",
+                "clamp":           (0.0, 200000000000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "node_transition_pct",
+                "mandatory":       False,
+                "search_phrases":  ["node transition", "1-alpha", "1a nm", "1b nm", "1c nm", "technology migration"],
+                "compute_hint":    "Share of bits on the leading node (decimal)",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Quarterly results + capex/bit-growth guidance",
+            "Latest 10-K / annual report",
+            "Sell-side memory-cycle notes (supply/demand balance)",
+        ],
+    },
+
     "IDM / Foundry": {
         "sector":         "Semiconductor",
         "anchor_methods": ["DCF", "EV/EBITDA", "P/B"],
@@ -2495,6 +2602,94 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
     },
 
 # ── Consumer ──────────────────────────────────────────────────
+    "Online Gaming / Sports Betting": {
+        "sector":         "Consumer",
+        "anchor_methods": ["EV/EBITDA", "EV/Revenue", "DCF"],
+        "quality_tiers": {
+            "kpi_bands": [
+                {"kpi": "net_revenue_margin_pct", "direction": "higher_better",
+                 "bands": [{"min": 0.45, "mult": 1.20, "label": "elite hold"},
+                           {"min": 0.35, "mult": 1.05, "label": "strong"},
+                           {"min": 0.25, "mult": 1.00, "label": "in-band"},
+                           {"min": 0.0,  "mult": 0.88, "label": "weak"}]}
+            ],
+            "cap": [0.75, 1.40],
+        },
+        "risk_adjustment": {
+            "kpi": "promotional_spend_pct", "direction": "lower_better",
+            "bands": [{"max": 0.10, "mult": 1.10, "label": "disciplined"},
+                      {"max": 0.20, "mult": 1.00, "label": "in-band"},
+                      {"max": 1.00, "mult": 0.85, "label": "promotional war"}],
+        },
+        "kpis": [
+            {
+                "key":             "monthly_paying_players",
+                "mandatory":       True,
+                "search_phrases":  ["monthly unique payers", "MUP", "average monthly players", "AMP", "monthly actives"],
+                "compute_hint":    "Monthly unique paying players (000s) — DraftKings MUPs / Flutter AMPs",
+                "clamp":           (0.0, 100000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "net_revenue_margin_pct",
+                "mandatory":       True,
+                "search_phrases":  ["net revenue margin", "structural hold", "hold rate", "win margin"],
+                "compute_hint":    "Net revenue margin (decimal) — structural hold net of promotions",
+                "clamp":           (0.0, 0.90),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "gaming_ebitda_margin",
+                "mandatory":       True,
+                "search_phrases":  ["adjusted EBITDA margin", "EBITDA margin"],
+                "compute_hint":    "Adjusted EBITDA margin (decimal); negative while the operator is still scaling",
+                "clamp":           (-1.50, 0.60),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "handle_amount",
+                "mandatory":       False,
+                "search_phrases":  ["handle", "amount wagered", "stakes", "gross gaming revenue", "GGR"],
+                "compute_hint":    "Total amount wagered (handle), reporting currency",
+                "clamp":           (0.0, 1000000000000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "promotional_spend_pct",
+                "mandatory":       False,
+                "search_phrases":  ["promotional spend", "promotions as a share of revenue", "customer acquisition spend", "external marketing"],
+                "compute_hint":    "Promotional plus acquisition spend as a share of revenue (decimal)",
+                "clamp":           (0.0, 1.00),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "live_market_count",
+                "mandatory":       False,
+                "search_phrases":  ["states live", "live markets", "regulated markets", "jurisdictions"],
+                "compute_hint":    "Count of live regulated markets / states",
+                "clamp":           (0.0, 250.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "igaming_revenue_share",
+                "mandatory":       False,
+                "search_phrases":  ["iGaming", "casino revenue", "iGaming mix"],
+                "compute_hint":    "iGaming as a share of net revenue (decimal); structurally higher margin than sportsbook",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+        ],
+        "source_priority": [
+            "Quarterly results plus MUP/AMP and net revenue margin disclosure",
+            "Regulatory / state gaming commission handle data",
+            "Latest 10-K / annual report",
+        ],
+    },
+
     'Apparel / Athletic Wear': {
         "sector":         'Consumer',
         "anchor_methods": ['EV/EBITDA', 'DCF (FCF)', 'P/E (ops)', 'Brand Valuation'],
@@ -2524,7 +2719,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         # TGT 2022 lesson). Per-user calibration: 2.5-3.1 in-band for premium
         # athletic; >4.0 elite.
         "risk_adjustment": {
-            "kpi": "inventory_turnover", "direction": "higher_better",
+            "kpi": "inventory_turns_research", "direction": "higher_better",
             "bands": [
                 {"min": 4.0,  "mult": 1.10, "label": "elite"},
                 {"min": 3.2,  "mult": 1.05, "label": "strong"},
@@ -2544,7 +2739,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  True,
             },
             {
-                "key":             'inventory_turnover',
+                "key":             'inventory_turns_research',
                 "mandatory":       True,
                 "search_phrases":  ['inventory turnover ratio', 'inventory turns', 'COGS / average inventory'],
                 "compute_hint":    'annual_COGS / average_inventory (FMP-augmentable)',
@@ -2753,7 +2948,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                  ]},
                 # Moat Integrity kicker (separate group, multiplies):
                 # vol_price_diff > 0 → "Volume-Led Growth" → 1.05x
-                {"kpi": "vol_price_diff", "direction": "higher_better",
+                {"kpi": "volume_vs_price_mix", "direction": "higher_better",
                  "correlation_group": "fnb_q_moat",
                  "bands": [
                      {"min":  0.0001, "mult": 1.05, "label": "volume-led-moat"},
@@ -3168,7 +3363,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  True,
             },
             {
-                "key":             'inventory_turnover',
+                "key":             'inventory_turns_research',
                 "mandatory":       True,
                 "search_phrases":  ['inventory turnover ratio', 'inventory turns', 'COGS / average inventory'],
                 "compute_hint":    'annual_COGS / average_inventory',
@@ -4002,6 +4197,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
             {
+                "key":             'nna_capture_pct',
+                "mandatory":       False,
+                "search_phrases":  ['net new asset growth', 'NNA as a % of client assets', 'organic growth rate'],
+                "compute_hint":    'Annualised net new assets / beginning client assets (decimal)',
+                "clamp":           (-0.30, 0.50),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
                 "key":             'cash_as_pct_of_client_assets',
                 "mandatory":       True,
                 "search_phrases":  ['cash as % of total client assets', 'sweep balances'],
@@ -4397,6 +4601,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "clamp":           (1e8, 5e11),
                 "source":          'F',
                 "extractor_only":  False,
+            },
+            {
+                "key":             'cash_to_nav_pct',
+                "mandatory":       False,
+                "search_phrases":  ['cash as a % of NAV', 'net cash to NAV', 'dry powder'],
+                "compute_hint":    'Cash and equivalents / SOTP NAV (decimal)',
+                "clamp":           (0.0, 0.80),
+                "extractor_only":  True,
+                "decimal_format":  True,
             },
             {
                 "key":             'debt_to_nav_pct',
@@ -5091,7 +5304,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "extractor_only":  True,
             },
             {
-                "key":             'tangible_book_value_per_share',
+                "key":             'tbvps_research',
                 "mandatory":       False,
                 "search_phrases":  ['TBVPS', 'NAV per share ex-intangibles'],
                 "source":          'F',
@@ -7616,6 +7829,8 @@ _PROFILE_WEIGHTS: dict[str, tuple[float, float, float]] = {
     # ── Quality + Risk balanced (specialty) ────────────────────────────
     "Fabless":                (0.60, 0.30, 0.10),  # quality dominant; cycle matters
     "IDM / Foundry":          (0.50, 0.40, 0.10),
+    "Online Gaming / Sports Betting": (0.50, 0.45, 0.05),
+    "Memory / DRAM-NAND":     (0.45, 0.45, 0.10),  # cycle risk as heavy as quality
     "Equipment / EDA":        (0.60, 0.40, 0.00),
     "OSAT / Packaging":       (0.50, 0.50, 0.00),
     "Aerospace & Defense":    (0.40, 0.50, 0.10),  # backlog visibility + balance sheet
@@ -7882,6 +8097,23 @@ _KPI_FORMAT_OVERRIDES: dict[str, str] = {
     "divisional_ebitda_disclosed":  "int",
     "dc_capacity_mw":               "int",
     "land_bank_gfa":                "int",
+    # ── memory / DRAM-NAND formats ────────────────────────
+    "memory_inventory_days":        "int",
+    "memory_capex":                 "usd",
+    "inventory_turns_research":     "x",
+    "tbvps_research":               "usd",
+    # online gaming formats
+    "monthly_paying_players":       "int",
+    "live_market_count":            "int",
+    "handle_amount":                "usd",
+    # ── AI infrastructure / neocloud formats ─────────────────────────
+    "contracted_power_gw":          "int",
+    "powered_land_options_gw":      "int",
+    "gpu_fleet_size":               "int",
+    "behind_meter_power_mw":        "int",
+    "contract_duration_years":      "x",
+    "contracted_revenue_backlog":   "usd",
+    "customer_prepayments":         "usd",
     # ── Step-4 (ranks 51-100) SGX formats ────────────────────────────
     "reserve_replacement":            "x",
     "consignment_inventory":          "usd",
@@ -9728,6 +9960,138 @@ SECTOR_KPI_FRAMEWORK.update({
                 "clamp":           (0.0, 0.4),
                 "extractor_only":  True,
                 "decimal_format":  True,
+            },
+        ],
+    },
+})
+
+
+# ── AI Infrastructure / Neocloud KPI spec ───────────────────────────────
+# Drawn from the Goldman notes on CoreWeave, Nebius and Nvidia (Aug 2026).
+# The critical four are the ones without which no forward revenue line can
+# be built: secured power caps capacity, backlog is the revenue already
+# sold, capex intensity decides whether it can be financed, and gross
+# margin decides whether it is worth building.
+SECTOR_KPI_FRAMEWORK.update({
+    "AI Infrastructure / Neocloud": {
+        "sector": "Tech",
+        "anchor_methods": ["EV/Revenue", "DCF", "EV/EBITDA"],
+        "quality_tiers": {
+            "kpi_bands": [{
+                "kpi": "neocloud_gross_margin",
+                "direction": "higher_better",
+                "bands": [
+                    {"min": 0.40, "mult": 1.10, "label": "strong"},
+                    {"min": 0.22, "mult": 1.00, "label": "in-band"},
+                    {"min": 0.0, "mult": 0.88, "label": "thin"}
+                ],
+            }],
+        },
+        "risk_adjustment": {
+            "kpi": "neocloud_customer_concentration",
+            "direction": "lower_better",
+            "bands": [
+                {"min": 0.0, "mult": 1.05, "label": "diversified"},
+                {"min": 0.35, "mult": 1.00, "label": "in-band"},
+                {"min": 0.60, "mult": 0.82, "label": "single-customer"}
+            ],
+        },
+        "source_priority": ["Quarterly results and capacity disclosure",
+                            "Power procurement announcements",
+                            "Contracted backlog / RPO disclosure"],
+        "kpis": [
+            {
+                "key":             "contracted_power_gw",
+                "mandatory":       True,
+                "group":           "Operations",
+                "search_phrases":  ['contracted power', 'GW of contracted power', 'secured power', 'power procurement'],
+                "compute_hint":    "Contracted / secured power capacity in GW",
+                "clamp":           (0.0, 100.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "contracted_revenue_backlog",
+                "mandatory":       True,
+                "group":           "Growth & Pipeline",
+                "search_phrases":  ['contracted backlog', 'revenue backlog', 'RPO', 'remaining performance obligation'],
+                "compute_hint":    "Contracted revenue backlog / RPO, reporting currency",
+                "clamp":           (0.0, 1000000000000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "neocloud_capex_to_revenue",
+                "mandatory":       True,
+                "group":           "Capital",
+                "search_phrases":  ['capex', 'capital expenditure', 'CapEx including finance leases'],
+                "compute_hint":    "Capex (incl. finance leases) / revenue (decimal)",
+                "clamp":           (0.0, 20.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "neocloud_gross_margin",
+                "mandatory":       True,
+                "group":           "Profitability",
+                "search_phrases":  ['gross margin', 'gross profit margin'],
+                "compute_hint":    "Gross margin (decimal)",
+                "clamp":           (-0.50, 0.95),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "powered_land_options_gw",
+                "mandatory":       False,
+                "group":           "Growth & Pipeline",
+                "search_phrases":  ['powered land options', 'powered land', 'land bank power'],
+                "compute_hint":    "Optioned but not yet contracted power, GW",
+                "clamp":           (0.0, 100.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "customer_prepayments",
+                "mandatory":       False,
+                "group":           "Capital",
+                "search_phrases":  ['customer prepayments', 'prepayments', 'upfront payments'],
+                "compute_hint":    "Customer prepayments received, reporting currency",
+                "clamp":           (0.0, 1000000000000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "gpu_fleet_size",
+                "mandatory":       False,
+                "group":           "Operations",
+                "search_phrases":  ['GPU fleet', 'GPUs deployed', 'accelerator count'],
+                "compute_hint":    "Deployed GPU / accelerator count",
+                "clamp":           (0.0, 100000000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "behind_meter_power_mw",
+                "mandatory":       False,
+                "group":           "Operations",
+                "search_phrases":  ['behind-the-meter', 'behind the meter power', 'on-site generation'],
+                "compute_hint":    "Behind-the-meter generation capacity, MW",
+                "clamp":           (0.0, 100000.0),
+                "extractor_only":  True,
+            },
+            {
+                "key":             "neocloud_customer_concentration",
+                "mandatory":       False,
+                "group":           "Risk & Reserves",
+                "search_phrases":  ['customer concentration', 'largest customer', 'top customer revenue'],
+                "compute_hint":    "Revenue share of the largest customer (decimal)",
+                "clamp":           (0.0, 1.0),
+                "extractor_only":  True,
+                "decimal_format":  True,
+            },
+            {
+                "key":             "contract_duration_years",
+                "mandatory":       False,
+                "group":           "Risk & Reserves",
+                "search_phrases":  ['contract duration', 'weighted average contract length', 'take-or-pay term'],
+                "compute_hint":    "Weighted average contract duration in years",
+                "clamp":           (0.0, 30.0),
+                "extractor_only":  True,
             },
         ],
     },
