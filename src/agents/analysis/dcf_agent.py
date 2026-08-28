@@ -3701,7 +3701,7 @@ def _compute_method_value(
     if method_name in {"DDM (S-REIT)", "S-REIT DDM"}:
         _sub = most_recent.get("_sreit_subtype") or _sgx_reit_subtype(ticker)
         _res = _compute_sreit_ddm(ticker, _sub, most_recent, shares,
-                                  dpu_growth=growth)
+                                  dpu_growth=growth_base)
         if _res is None:
             return None
         return _res[0] * sm
