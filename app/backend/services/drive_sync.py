@@ -200,14 +200,101 @@ def list_drive_folder(folder_id: str) -> list[dict]:
 # ── Filename → ticker matching ──────────────────────────────────────────────
 
 def build_gazetteer() -> set[str]:
-    """Known-ticker set: sector lookup ∪ HK50-style forms."""
+    """Known-ticker set: US/HK sector lookup ∪ SGX lookup.
+
+    SGX was missing entirely, and the effect was total rather than partial:
+    the gazetteer held 444 tickers and none ended in `.SI`, so every
+    Singapore document in the archive matched nothing. On the live folder
+    that was 11 of 20 files — DBS, OCBC, Keppel, ST Engineering, Sembcorp,
+    four REITs, PropNex, Sheng Siong. Each was downloaded, attributed to no
+    ticker, and therefore never written to the research manifest, so the
+    SOTP extractor and the analyst-basis benchmark never saw them.
+    """
     tickers: set[str] = set()
     try:
         from src.data.sector_profiles import TICKER_SECTOR_LOOKUP
         tickers.update(TICKER_SECTOR_LOOKUP.keys())
     except Exception as exc:
         logger.warning("TICKER_SECTOR_LOOKUP unavailable: %s", exc)
+    try:
+        from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP
+        tickers.update(SGX_TICKER_SECTOR_LOOKUP.keys())
+    except Exception as exc:
+        logger.warning("SGX_TICKER_SECTOR_LOOKUP unavailable: %s", exc)
     return tickers
+
+
+# Words that carry no identifying signal once the company name is reduced
+# to an alias. "trust" is deliberately NOT here: dropping it would collapse
+# "Capitaland China Trust" and "Capitaland India Trust" onto the same stem.
+_ALIAS_NOISE = {
+    "ltd", "limited", "plc", "inc", "corp", "corporation", "company",
+    "holdings", "holding", "group", "the", "and", "&", "co", "pte",
+    "bhd", "berhad", "sa", "nv", "ag",
+}
+
+
+def _clean_company_name(raw: str) -> str:
+    """Company name → alias stem, or '' when nothing usable survives."""
+    name = (raw or "").split("—")[0].split(" - ")[0]
+    name = re.sub(r"\(.*?\)", " ", name)          # drop parentheticals
+    name = re.sub(r"[^A-Za-z0-9 ]+", " ", name).lower()
+    words = [w for w in name.split() if w and w not in _ALIAS_NOISE]
+    return " ".join(words).strip()
+
+
+def build_derived_aliases() -> dict[str, list[str]]:
+    """Company-name aliases derived from the ticker lookups.
+
+    Hand-maintaining this list does not scale past the dozen US names it
+    started with, and the archive is filled by filename ("Keppel_Aug
+    2025.pdf"), not by ticker. Derivation keeps it in step with the
+    lookups for free.
+    """
+    # SGX ONLY. Field [3] is a company name in SGX_TICKER_SECTOR_LOOKUP
+    # ("DBS Group — SG money-center bank") but a free-text note in
+    # TICKER_SECTOR_LOOKUP — AAPL's reads "Hardware + services + AI capex;
+    # Tech WACC applies", contributing no alias, while APLE's reads "Apple
+    # Hospitality REIT — hotels" and would claim the bare stem "apple".
+    # Deriving across both tables sent an Apple report to Apple Hospitality
+    # REIT. US and HK names stay on the curated _COMPANY_ALIASES list.
+    aliases: dict[str, list[str]] = {}
+    _heads: dict[str, set[str]] = {}
+    for mod_attr in ("SGX_TICKER_SECTOR_LOOKUP",):
+        try:
+            from src.data import sector_profiles as _sp
+            table = getattr(_sp, mod_attr, {}) or {}
+        except Exception:
+            continue
+        for ticker, entry in table.items():
+            if not entry or len(entry) < 4:
+                continue
+            stem = _clean_company_name(entry[3])
+            if len(stem) < 3:                      # too short to be safe
+                continue
+            aliases.setdefault(stem, [])
+            if ticker not in aliases[stem]:
+                aliases[stem].append(ticker)
+            # Archive filenames abbreviate: "OCBC_20260511.pdf" never
+            # contains the full "ocbc bank". Register the leading word too,
+            # but ONLY where it is unambiguous — "capitaland" alone maps to
+            # three different trusts, so it must not resolve to any of them.
+            head = stem.split()[0]
+            if len(head) >= 3 and head != stem:
+                _heads.setdefault(head, set()).add(ticker)
+            # Tolerate a plural/singular slip in the leading word:
+            # the archive holds "Fraser Centrepoint Trust" for
+            # "Frasers Centrepoint Trust".
+            if head.endswith("s") and len(head) > 3:
+                alt = " ".join([head[:-1]] + stem.split()[1:])
+                aliases.setdefault(alt, [])
+                if ticker not in aliases[alt]:
+                    aliases[alt].append(ticker)
+
+    for head, owners in _heads.items():
+        if len(owners) == 1 and head not in aliases:
+            aliases[head] = sorted(owners)
+    return aliases
 
 
 def match_tickers(name: str, gazetteer: set[str] | None = None) -> list[str]:
@@ -247,11 +334,36 @@ def match_tickers(name: str, gazetteer: set[str] | None = None) -> list[str]:
                 _add(hk)
 
     # 2) company-name aliases (substring — 'Alibaba_Meituan_JD' → 3 names)
+    #
+    # LONGEST MATCH WINS, and a matched span is consumed. Without that,
+    # "Keppel DC Reit" matches both "keppel dc reit" (AJBU.SI, the REIT)
+    # and "keppel" (BN4.SI, the parent) and the document is attributed to
+    # both — a REIT note would end up as evidence for the conglomerate's
+    # SOTP. The same collision sits across "Capitaland China Trust",
+    # "Capitaland India Trust" and "Capitaland Investment".
     lowered = f" {stem.lower()} "
-    for alias, tickers in _COMPANY_ALIASES.items():
-        if alias in lowered:
+    combined: dict[str, list[str]] = dict(_COMPANY_ALIASES)
+    try:
+        for alias, tickers in build_derived_aliases().items():
+            combined.setdefault(alias, [])
             for t in tickers:
-                _add(t)
+                if t not in combined[alias]:
+                    combined[alias].append(t)
+    except Exception as exc:                       # derivation is best-effort
+        logger.warning("derived aliases unavailable: %s", exc)
+
+    consumed: list[tuple[int, int]] = []
+
+    def _overlaps(a: int, b: int) -> bool:
+        return any(a < end and start < b for start, end in consumed)
+
+    for alias in sorted(combined, key=len, reverse=True):
+        idx = lowered.find(alias)
+        if idx == -1 or _overlaps(idx, idx + len(alias)):
+            continue
+        consumed.append((idx, idx + len(alias)))
+        for t in combined[alias]:
+            _add(t)
 
     return found
 
@@ -265,6 +377,28 @@ def download_drive_file(file_id: str, dest_dir: str) -> Optional[str]:
 
 
 # ── Sync engine ─────────────────────────────────────────────────────────────
+
+def _already_extracted(tickers: list[str], content_hash: str) -> bool:
+    """True when an analyst_reports row already exists for this document.
+
+    Keyed on content_hash so a re-published document (new bytes, same
+    ticker) still extracts. Any store error returns True — an unreadable
+    store must not trigger an unbounded re-extraction loop on every run.
+    """
+    if not tickers:
+        return True
+    try:
+        from src.memory import assumption_store
+        for tk in tickers:
+            rows = assumption_store.get_analyst_reports(tk, limit=25) or []
+            if any((r or {}).get("content_hash") == content_hash for r in rows):
+                return True
+        return False
+    except Exception as exc:
+        logger.warning("extraction-state check failed (%s) — treating as done", exc)
+        return True
+
+
 
 def sync_drive_folder(repo_root: str | None = None,
                       folder_ref: str | None = None,
@@ -360,10 +494,23 @@ def sync_drive_folder(repo_root: str | None = None,
             # deterministic (<sha12>_<fid8>.pdf), so dest may equal
             # the kept path — deleting it then wipes the ONLY copy
             # (live 2026-08-24 bug: Gate-4 re-trigger emptied pdfs/).
-            if os.path.abspath(dest) not in kept_paths:
-                os.remove(dest)
-            result["unchanged"] += 1
-            continue
+            #
+            # An unchanged file still needs extraction when the PREVIOUS
+            # attempt never produced an analyst_reports row. Extraction can
+            # fail independently of the download — a missing API key, a
+            # rate limit, an unparseable page — and the manifest records
+            # the file as synced regardless. Skipping unconditionally meant
+            # one transient failure stranded a document permanently:
+            # registered, on disk, and never extracted. Seen live when the
+            # first SGX pass ran without DEEP_RESEARCH_API_KEY and every
+            # later run reported unchanged=20, extracted=0.
+            if _already_extracted(tickers, content_hash):
+                if os.path.abspath(dest) not in kept_paths:
+                    os.remove(dest)
+                result["unchanged"] += 1
+                continue
+            _progress(f"re-extracting {name} — registered but never extracted")
+            dest = local_path or dest
         if kept_paths:
             # Same bytes verified on disk under another file id/path
             if os.path.abspath(dest) not in kept_paths:
