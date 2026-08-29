@@ -172,7 +172,11 @@ def parse_pt_methodology(text: str) -> dict[str, Any]:
             basis = "p_b"
         elif re.search(r"p\s*/\s*nav", t, re.I):
             basis = "p_nav"
-        elif re.search(r"p\s*/\s*s\b|price[-\s]sales", t, re.I):
+        elif re.search(r"p\s*/\s*s\b|price[-\s]sales|ev\s*/\s*sales"
+                       r"|ev\s*/\s*revenue", t, re.I):
+            # EV/Sales is a revenue multiple stated on enterprise value —
+            # DraftKings' "2.0x EV/Sales applied to NTM+1" left the basis
+            # unset because only the equity-side P/S form was matched.
             basis = "p_s"
         elif re.search(r"\bp\s*/?\s*e\b|normali[sz]ed\s+eps|\beps\b", t, re.I):
             basis = "pe"

@@ -674,6 +674,15 @@ async def run_drive_sync_task(ctx: dict) -> dict:
             lambda msg: job_store.update_progress(job_id, "running", msg[:200]),
         )
         job_store.complete_job(job_id, result)
+        # Learning digest. Silent on a no-op day, so a message in the channel
+        # always means something changed. Never allowed to fail the sync.
+        try:
+            from src.research_ideas.alerts.drive_sync_slack import (
+                post_drive_sync_digest,
+            )
+            await asyncio.to_thread(post_drive_sync_digest, result)
+        except Exception as _exc:
+            logger.warning("drive_sync digest skipped: %s", _exc)
         return {"ran": True, "job_id": job_id, "result": result}
     except Exception as exc:
         logger.exception("drive sync failed: %s", exc)
