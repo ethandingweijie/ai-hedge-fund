@@ -1214,6 +1214,27 @@ def run_advanced_portfolio_manager(state) -> dict:
         d["stop_loss"] = stop_loss
         d["price_target"] = price_target
 
+        # ── Stage 2: restyle the prose ────────────────────────────────────
+        # The call above reasons AND writes, and its own prompt mandates
+        # numbered themes carrying two figures apiece — which is why the
+        # rationale reads like a checklist however good the thinking is.
+        # This pass rewrites the prose only, against register borrowed from
+        # deposited notes on comparable companies. It cannot touch the
+        # decision (already pinned above) and is rejected outright if it
+        # introduces a figure the draft did not contain.
+        try:
+            from src.agents.pm_stylist import restyle_rationale
+            _styled, _style_audit = restyle_rationale(
+                ticker, d.get("rationale") or "", state, agent_id,
+                note_type="estimate-revision" if _prior_block.strip() else None,
+            )
+            d["rationale"] = _styled
+            state["data"].setdefault("style_audit", {})[ticker] = _style_audit
+        except Exception as _exc:
+            state["data"].setdefault("style_audit", {})[ticker] = (
+                f"stylist skipped ({type(_exc).__name__})"
+            )
+
         # ── M2 D3 payload: what the decision was made from ─────────────────
         # Rendered by the frontend "Decision inputs" card (both render
         # paths) and persisted through web_runs.full_result_json.

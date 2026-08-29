@@ -52,6 +52,9 @@ def call_llm(
     default_factory=None,
     max_tokens: int | None = None,
     temperature: float | None = None,
+    top_p: float | None = None,
+    presence_penalty: float | None = None,
+    frequency_penalty: float | None = None,
 ) -> BaseModel:
     """
     Makes an LLM call with retry logic, handling both JSON supported and non-JSON supported models.
@@ -127,6 +130,27 @@ def call_llm(
         _bind_kwargs["max_tokens"] = max_tokens
     if temperature is not None:
         _bind_kwargs["temperature"] = temperature
+
+    # Sampling controls for prose generation. Only the stylist pass sets
+    # these; every analytical call wants the deterministic default.
+    #
+    # Gated by provider on purpose: `top_p` is broadly supported, but the
+    # presence/frequency penalties are an OpenAI-API concept. Anthropic
+    # rejects them outright, so passing them through unconditionally would
+    # turn a style tweak into a hard failure on the default provider.
+    if top_p is not None:
+        _bind_kwargs["top_p"] = top_p
+    _penalty_ok = model_provider in {
+        ModelProvider.OPENAI, ModelProvider.AZURE_OPENAI, ModelProvider.DEEPSEEK,
+        ModelProvider.ALIBABA, ModelProvider.OPENROUTER, ModelProvider.GROQ,
+        ModelProvider.XAI,
+    }
+    if _penalty_ok:
+        if presence_penalty is not None:
+            _bind_kwargs["presence_penalty"] = presence_penalty
+        if frequency_penalty is not None:
+            _bind_kwargs["frequency_penalty"] = frequency_penalty
+
     if _bind_kwargs:
         llm = llm.bind(**_bind_kwargs)
 
