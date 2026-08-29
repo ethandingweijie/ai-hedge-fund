@@ -63,13 +63,23 @@ _METHOD_PATTERNS: list[tuple[str, str]] = [
     ("sotp",      r"\bsotp\b|sum[-\s]of[-\s]the[-\s]parts"),
     ("dcf",       r"\bdcf\b|discounted\s+cash[-\s]?flow"),
     ("nav",       r"\brnav\b|\bnav\b|net\s+asset\s+value|cap\s+rate"),
-    ("ev_ebitda", r"ev\s*/\s*(adj\.?\s*)?ebitda|ev/ebitda"),
+    # Bare "EBITDA" counts only when a multiple sits right beside it —
+    # Goldman writes "11.75x NTM+4 EBITDA" for Flutter with no "EV/" at all,
+    # which left method unset. Requiring the adjacent multiple keeps a note
+    # that merely mentions EBITDA in passing from claiming the method, and
+    # `dcf` is matched earlier so an EBITDA-exit DCF still reads as a DCF.
+    ("ev_ebitda", r"ev\s*/\s*(adj\.?\s*)?ebitda|ev/ebitda"
+                  r"|[0-9](?:\.[0-9]+)?\s*x[^.]{0,24}\bebitda\b"),
     # Slash optional: Asian notes write "28x PE" and "PER", not "P/E".
     # The basis detector below already used `/?`, so Sheng Siong's
     # "28x PE valuations rolled over to FY27e" resolved a multiple_basis
     # of "pe" while leaving `method` unset — the two patterns disagreed
     # about the same notation.
-    ("pe",        r"\bp\s*/?\s*e\b|price[-\s]earnings|\bper\b"),
+    # "EPS" is a P/E basis stated without the letters P and E: Goldman's
+    # Micron line is "18X multiple applied to our normalized EPS estimate of
+    # $62", which captured the 18x but left the method unset.
+    ("pe",        r"\bp\s*/?\s*e\b|price[-\s]earnings|\bper\b"
+                  r"|normali[sz]ed\s+eps|\beps\b"),
 ]
 
 _PCT = r"([0-9]{1,2}(?:\.[0-9]{1,2})?)\s*%"
@@ -108,12 +118,18 @@ def parse_pt_methodology(text: str) -> dict[str, Any]:
             break
 
     # Cost of equity — "COE: 8.6%", "Cost of Equity 6.83%", "CoE:7%"
-    coe = _pct(r"(?:cost\s+of\s+equity|\bco\.?e\b)\s*[:=]?\s*" + _PCT, t)
+    coe = (_pct(r"(?:cost\s+of\s+equity|\bco\.?e\b)\s*[:=]?\s*" + _PCT, t)
+           or _pct(_PCT + r"\s*(?:cost\s+of\s+equity|co\.?e\b)", t))
     if coe is not None:
         out["cost_of_equity"] = coe
 
-    # WACC — "WACC of 6.3%", "WACC 6.3%"
-    wacc = _pct(r"\bwacc\b\s*(?:of)?\s*[:=]?\s*" + _PCT, t)
+    # WACC — "WACC of 6.3%", "WACC 6.3%", and the LEADING form
+    # "a 9.5% WACC and 2.5% terminal growth rate" (Birkenstock). Only the
+    # trailing form was matched, so a stated WACC was dropped while the
+    # terminal growth sitting beside it in the same sentence parsed fine —
+    # the same asymmetry already fixed for terminal growth just below.
+    wacc = (_pct(r"\bwacc\b\s*(?:of)?\s*[:=]?\s*" + _PCT, t)
+            or _pct(_PCT + r"\s*wacc\b", t))
     if wacc is not None:
         out["wacc"] = wacc
 
@@ -150,7 +166,7 @@ def parse_pt_methodology(text: str) -> dict[str, Any]:
         except ValueError:
             mult = None
     if mult is not None and 0.1 <= mult <= 200:
-        if re.search(r"ev\s*/\s*(adj\.?\s*)?ebitda", t, re.I):
+        if re.search(r"ev\s*/\s*(adj\.?\s*)?ebitda|\bebitda\b", t, re.I):
             basis = "ev_ebitda"
         elif re.search(r"p\s*/\s*bv?\b|price[-\s]to[-\s]book", t, re.I):
             basis = "p_b"
@@ -158,7 +174,7 @@ def parse_pt_methodology(text: str) -> dict[str, Any]:
             basis = "p_nav"
         elif re.search(r"p\s*/\s*s\b|price[-\s]sales", t, re.I):
             basis = "p_s"
-        elif re.search(r"\bp\s*/?\s*e\b", t, re.I):
+        elif re.search(r"\bp\s*/?\s*e\b|normali[sz]ed\s+eps|\beps\b", t, re.I):
             basis = "pe"
         out["target_multiple"] = mult
         if basis:

@@ -496,9 +496,19 @@ def load_comps(exchange: str, level: str, key: str, cohort: str = "all",
 
     out: dict[str, dict] = {}
     for row in rows or []:
-        # PG returns dicts, SQLite returns Row — index positionally for both.
-        field, value, peers, min_mcap, computed = (
-            row[0], row[1], row[2], row[3], row[4])
+        # Index BY NAME. Postgres returns plain dicts, whose keys are the
+        # column names — `row[0]` raises KeyError there, not IndexError, so
+        # the old positional access killed every lookup in production while
+        # working locally on SQLite's Row (which supports both forms). The
+        # exception escaped load_comps and was swallowed by the caller's
+        # try/except, so the whole comps table — refreshed weekly, 2,503
+        # rows across US/HKSE/SES — was silently unread and every valuation
+        # fell back to the static multiples.
+        field    = row["field"]
+        value    = row["value"]
+        peers    = row["peer_count"]
+        min_mcap = row["min_market_cap"]
+        computed = row["computed_at"]
         age = _age_days(computed)
         if age is not None and age > max_age_days:
             continue
@@ -633,15 +643,25 @@ def latest_refresh_age_days(exchange: str) -> Optional[float]:
     """Age of the freshest stored row, or None when nothing is stored."""
     _ensure_table()
     try:
+        # Aliased on purpose: an unaliased MAX() comes back from Postgres
+        # under a driver-chosen key ("max"), and `row[0]` on a dict raises
+        # KeyError — the same trap that killed load_comps above.
         row = _db.query_one(
-            "SELECT MAX(computed_at) FROM regional_comps WHERE exchange = ?",
+            "SELECT MAX(computed_at) AS newest FROM regional_comps "
+            "WHERE exchange = ?",
             [exchange],
         )
     except Exception:
         return None
-    if not row or row[0] is None:
+    if not row:
         return None
-    return _age_days(row[0])
+    try:
+        newest = row["newest"]
+    except Exception:
+        newest = row[0]          # SQLite Row positional fallback
+    if newest is None:
+        return None
+    return _age_days(newest)
 
 
 # ── Per-ticker classification ───────────────────────────────────────────────
