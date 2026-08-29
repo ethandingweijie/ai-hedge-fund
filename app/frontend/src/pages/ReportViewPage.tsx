@@ -52,6 +52,25 @@ function scrollTo(id: string) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/**
+ * Desktop card grid.
+ *
+ * `auto-fit` + `minmax` rather than a fixed `grid-cols-2`: several cards on
+ * this page render null depending on the run (AssumptionWatchCard when the
+ * steward is unflagged, SOTP without an analyst breakdown), and a fixed track
+ * count leaves an empty column behind them. auto-fit drops the empty track, so
+ * a lone survivor goes full width on its own.
+ *
+ * Cards keep their natural height (`items-start`). Stretching them to a common
+ * row height was tried and measured worse: Value Trap Audit has three collapsed
+ * rows and stretching it to match Power Law's radar produced a 511px card whose
+ * content ended at 161px -- 349px of empty bordered box, which reads as broken
+ * rather than tidy. A gap between cards is page background; a gap inside a card
+ * is a defect. Only stretch a pair whose content volumes genuinely match.
+ */
+const CARD_GRID =
+  'grid gap-5 items-start [grid-template-columns:repeat(auto-fit,minmax(420px,1fr))]';
+
 function SectionAnchor({ id, label, badge }: { id: string; label: string; badge?: React.ReactNode }) {
   return (
     <div id={id} className="scroll-mt-28">
@@ -172,6 +191,61 @@ export function ReportViewPage() {
     );
   }
 
+  // Sector-specific valuation panel (REIT / bank / biopharma / tech), or
+  // null when no profile matched. Hoisted out of the JSX so the layout
+  // below can tell whether a dense full-width panel exists -- when it does
+  // not, the generic ladder pairs with the price target instead.
+  const sectorValuationPanel = dcfRange?.reit_breakdown ? (
+              <REITValuationPanel
+                dcfRange={dcfRange}
+                currentPrice={currentPrice}
+                ticker={ticker}
+              />
+            ) : dcfRange?.bank_breakdown ? (
+              <BankValuationPanel
+                dcfRange={dcfRange}
+                currentPrice={currentPrice}
+                ticker={ticker}
+              />
+            ) : isBiopharmaSector(sector) ? (() => {
+              const _fin = extractLatestFinancials(data.raw_financials as Record<string, unknown> | undefined);
+              return (
+                <BiopharmaValuationPanel
+                  dcfRange={dcfRange}
+                  currentPrice={currentPrice}
+                  ticker={ticker}
+                  pipelineAssets={(data.pipeline_assets as Record<string, import('@/lib/reportTypes').BiopharmaPipelineAsset[]> | undefined)?.[ticker]}
+                  sections={data.deep_research_sections as Record<string, string> | undefined}
+                  rd_spend={_fin.rd_spend}
+                  revenue={_fin.revenue}
+                  fcf={_fin.fcf}
+                />
+              );
+            })()
+            /* Tech sub-type routing — uses classifyTechSubtype so historical    */
+            /* runs missing profile_name in stored data still render the correct */
+            /* panel via a ticker-table fallback (e.g. SNOW → growth_saas).      */
+            : (isTechSector(sector) && classifyTechSubtype(
+                 (data.profile_names as Record<string, string> | undefined)?.[ticker]
+                 ?? (data.profile_name as string | undefined),
+                 ticker
+               ) !== null) ? (
+              <TechValuationPanel
+                dcfRange={dcfRange}
+                currentPrice={currentPrice}
+                ticker={ticker}
+                profile={
+                  (data.profile_names as Record<string, string> | undefined)?.[ticker]
+                  ?? (data.profile_name as string | undefined)
+                }
+                sections={data.deep_research_sections as Record<string, string> | undefined}
+                rawFinancials={data.raw_financials as Record<string, unknown> | undefined}
+                saasMetrics={
+                  (data.saas_metrics as Record<string, import('@/lib/reportTypes').SaasMetrics> | undefined)?.[ticker]
+                }
+              />
+  ) : null;
+
   return (
     <div className="min-h-screen bg-background">
       {/* ── Sticky section nav ─────────────────────────────────────────────── */}
@@ -233,99 +307,49 @@ export function ReportViewPage() {
         {/* in place of the generic DCF ladder. Price Target + Scenario Chart */}
         {/* work for REITs too, so they render unconditionally.                */}
         <SectionAnchor id="valuation" label="Valuation" />
-        <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-5 items-start">
-          <div className="flex flex-col gap-5">
-            <PriceTargetPanel
-              dcfRange={dcfRange}
-              scenario={scenarioAnalysis}
-              decision={decision}
-              ticker={ticker}
-            />
-            {dcfRange?.reit_breakdown ? (
-              <REITValuationPanel
-                dcfRange={dcfRange}
-                currentPrice={currentPrice}
-                ticker={ticker}
-              />
-            ) : dcfRange?.bank_breakdown ? (
-              <BankValuationPanel
-                dcfRange={dcfRange}
-                currentPrice={currentPrice}
-                ticker={ticker}
-              />
-            ) : isBiopharmaSector(sector) ? (() => {
-              const _fin = extractLatestFinancials(data.raw_financials as Record<string, unknown> | undefined);
-              return (
-                <BiopharmaValuationPanel
-                  dcfRange={dcfRange}
-                  currentPrice={currentPrice}
-                  ticker={ticker}
-                  pipelineAssets={(data.pipeline_assets as Record<string, import('@/lib/reportTypes').BiopharmaPipelineAsset[]> | undefined)?.[ticker]}
-                  sections={data.deep_research_sections as Record<string, string> | undefined}
-                  rd_spend={_fin.rd_spend}
-                  revenue={_fin.revenue}
-                  fcf={_fin.fcf}
-                />
-              );
-            })()
-            /* Tech sub-type routing — uses classifyTechSubtype so historical    */
-            /* runs missing profile_name in stored data still render the correct */
-            /* panel via a ticker-table fallback (e.g. SNOW → growth_saas).      */
-            : (isTechSector(sector) && classifyTechSubtype(
-                 (data.profile_names as Record<string, string> | undefined)?.[ticker]
-                 ?? (data.profile_name as string | undefined),
-                 ticker
-               ) !== null) ? (
-              <TechValuationPanel
-                dcfRange={dcfRange}
-                currentPrice={currentPrice}
-                ticker={ticker}
-                profile={
-                  (data.profile_names as Record<string, string> | undefined)?.[ticker]
-                  ?? (data.profile_name as string | undefined)
-                }
-                sections={data.deep_research_sections as Record<string, string> | undefined}
-                rawFinancials={data.raw_financials as Record<string, unknown> | undefined}
-                saasMetrics={
-                  (data.saas_metrics as Record<string, import('@/lib/reportTypes').SaasMetrics> | undefined)?.[ticker]
-                }
-              />
-            ) : (
-              <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={ticker} />
-            )}
-          </div>
-          {/* Right column (2fr): valuation supporting detail. Risk and
-              decision cards used to live here; they now have their own
-              sections below, matching the mobile tab structure. */}
-          <div className="flex flex-col gap-5">
-            {/* ── GS-style SOTP report card (task #28) ────────────────────────
-                Present only when the DCF engine ran with SOTP (analyst)
-                assumptions (dcf_range[ticker].sotp_breakdown): business-unit
-                breakdown, NAV bridge, multiple basis, scenario TPs. Stacks
-                below whichever valuation branch rendered above, mirroring
-                V2ReportView; the DCF methodology panel follows. */}
-            {dcfRange?.sotp_breakdown && (
-              <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />
-            )}
-            {/* Sits directly below the DCF ladder in the same column instead of
-                as its own full-width strip — fills the column's remaining
-                height instead of leaving the ladder's sparse-data cards
-                (no bear/bull IV stored) looking like dead space above a gap. */}
-            <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
-            {/* ── Sector Valuation Card ────────────────────────────────
-                Mounted here as well as in V2ReportView: the mobile view
-                bypasses this JSX entirely, so a card added only there is
-                invisible on desktop. Same dual-render-path trap the
-                Financials card had to be mounted around. */}
-            {(data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker]
-              && <SectorValuationCard
-                   payload={(data.sector_card as Record<string, SectorCardPayload>)[ticker]} />}
-          </div>
+        {/* Sparse hero cards share a split row; the ladder only exists
+            when no sector panel did, so auto-fit gives the price target
+            the full width on tickers that have one. */}
+        <div className={CARD_GRID}>
+          <PriceTargetPanel
+            dcfRange={dcfRange}
+            scenario={scenarioAnalysis}
+            decision={decision}
+            ticker={ticker}
+          />
+          {!sectorValuationPanel && (
+            <ValuationLadder dcfRange={dcfRange} currentPrice={currentPrice} ticker={ticker} />
+          )}
         </div>
+
+        {/* Dense, table-bearing panels take the full row: a 6-column
+            scenario table was being squeezed into a 438px column, which is
+            why its headers wrapped to three lines. */}
+        {sectorValuationPanel}
+
+        {/* GS-style SOTP report card (task #28) - present only when the DCF
+            engine ran with SOTP (analyst) assumptions: business-unit
+            breakdown, NAV bridge, multiple basis, scenario TPs. */}
+        {dcfRange?.sotp_breakdown && (
+          <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />
+        )}
+
+        {/* Full width: this is the 6-column scenario table that was being
+            squeezed into a 403px column, wrapping its headers onto three
+            lines. */}
+        <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
+
+        {/* Sector Valuation Card. Mounted here as well as in V2ReportView:
+            the mobile view bypasses this JSX entirely, so a card added only
+            there is invisible on desktop. Full width so its KPI tiles and
+            adjustment bridge stop being crushed into a narrow column. */}
+        {(data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker]
+          && <SectorValuationCard
+               payload={(data.sector_card as Record<string, SectorCardPayload>)[ticker]} />}
 
         {/* ── Decision ───────────────────────────────────────────────────── */}
         <SectionAnchor id="decision" label="Decision" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        <div className={CARD_GRID}>
           {/* Decision-inputs card (M2 D3) — replaces the investor persona
               panel retired with the committee; shows what the PM decided
               from. Historical runs without decision_inputs render the
@@ -339,7 +363,9 @@ export function ReportViewPage() {
 
         {/* ── Risk ───────────────────────────────────────────────────────── */}
         <SectionAnchor id="risk" label="Risk" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        {/* Natural heights: see the CARD_GRID note -- stretching this pair
+            fills Value Trap with ~349px of empty card. */}
+        <div className={CARD_GRID}>
           <PowerLawRadar powerLaw={powerLaw} ticker={ticker} />
           <ValueTrapChecklist analysis={valueTrap} ticker={ticker} />
         </div>
