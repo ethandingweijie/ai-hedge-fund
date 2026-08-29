@@ -625,7 +625,13 @@ def _quant_block_text(ticker: str, state, scenario: dict) -> str:
     # Reporting-currency symbol. A hardcoded "$" against SGD/HKD anchors is
     # what leaked a bare dollar sign into the D05.SI narrative and got
     # raised as a currency-mislabelling risk by the value-trap agent.
-    _ccy = ((data.get("raw_financials") or {}).get("currency")
+    # `raw_financials` is FY-keyed ({"FY2024": {...}}), so a top-level
+    # "currency" on it is almost never present — which left the chain
+    # depending on dcf.base and falling through to USD. state["data"]
+    # ["reported_currency"] is what strategic_router actually stores (FMP's
+    # reportedCurrency) and is checked first.
+    _ccy = (data.get("reported_currency")
+            or (data.get("raw_financials") or {}).get("currency")
             or (dcf.get("base") or {}).get("reported_currency") or "USD")
     _sym = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€",
             "GBP": "£", "JPY": "¥", "AUD": "A$",
@@ -657,6 +663,16 @@ def _quant_block_text(ticker: str, state, scenario: dict) -> str:
         lines.append(
             f"Analyst basis ({_ab.get('house') or 'sell-side'} "
             f"{_ab.get('as_of') or ''}): " + ", ".join(_ap))
+    # Spot price. This block gave the LLM intrinsic values, a WACC, a 12-month
+    # target and upside percentages but never the price the stock actually
+    # trades at — so any sentence about where it trades, and the entry range it
+    # is asked to emit, were guesswork. On a live MU run that produced
+    # "trades near US$96" and an entry range of 94.5-98.5 against an actual
+    # US$932.86, printed alongside a US$1,026 stop.
+    _spot = recon.get("current_price") or scenario.get("current_price")
+    if isinstance(_spot, (int, float)) and _spot > 0:
+        lines.append(f"Spot price {_sym}{_spot:,.2f} (current market price)")
+
     _wacc = dcf.get("wacc")
     if isinstance(_wacc, (int, float)) and _wacc > 0:
         lines.append(f"WACC {_wacc * 100:.1f}%" if _wacc <= 1 else f"WACC {_wacc:.1f}%")
@@ -1213,6 +1229,35 @@ def run_advanced_portfolio_manager(state) -> dict:
         d["position_size_pct"] = size_pct
         d["stop_loss"] = stop_loss
         d["price_target"] = price_target
+
+        # Entry range is the one actionable field still left to the LLM, and
+        # it is emitted without the spot price being in the prompt at all
+        # (now fixed in _quant_block_text). A live MU run returned
+        # [94.5, 98.5] against a spot of US$932.86 — a tradeable instruction
+        # off by an order of magnitude, shown next to a US$1,026 stop. Anything
+        # implausibly far from spot is replaced with a band around spot rather
+        # than published.
+        try:
+            _er = d.get("entry_range")
+            _ok = (
+                isinstance(_er, (list, tuple)) and len(_er) == 2
+                and all(isinstance(x, (int, float)) and x > 0 for x in _er)
+                and current_price and current_price > 0
+                and 0.75 <= (min(_er) / current_price) <= 1.25
+                and 0.75 <= (max(_er) / current_price) <= 1.25
+            )
+            if not _ok:
+                d["entry_range"] = [
+                    round(current_price * 0.98, 2), round(current_price * 1.02, 2),
+                ]
+                state["data"].setdefault("consistency_flags", {})[ticker] = (
+                    (state["data"].get("consistency_flags", {}).get(ticker, "")
+                     + " | " if state["data"].get("consistency_flags", {}).get(ticker) else "")
+                    + f"entry_range {_er} implausible vs spot "
+                      f"{current_price:.2f} — replaced with a band around spot"
+                )
+        except Exception:
+            pass
 
         # ── Stage 2: restyle the prose ────────────────────────────────────
         # The call above reasons AND writes, and its own prompt mandates
