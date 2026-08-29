@@ -91,12 +91,36 @@ def test_extractor_schema_covers_every_kpi():
 
 
 def test_the_memory_cycle_drivers_are_mandatory():
-    """These four are what both notes actually model the name on."""
+    """Retuned against what the deep research actually produces.
+
+    The first cut of this profile scored 0.25 completeness on a live MU run —
+    the worst in the archive — because all four mandatory KPIs were bespoke
+    names the extractor never fills. `gross_margin_pct` is the canonical key
+    the FMP augmentation stage populates (0.7257 on that run) and
+    `bit_supply_demand_gap` is what the research itself calls "the single
+    number that best predicts Micron's revenue 12 months forward".
+    """
     mandatory = set(build_extractor_schema(PROFILE)["mandatory"])
     assert mandatory == {
-        "memory_gross_margin", "hbm_revenue_share",
-        "dram_bit_growth", "memory_inventory_days",
+        "gross_margin_pct", "hbm_revenue_share",
+        "dram_bit_growth", "bit_supply_demand_gap",
     }
+
+
+def test_inventory_days_is_gone():
+    """The research is explicit: "Memory is a flow commodity - 'inventory
+    days' is not the relevant metric for finished goods... The relevant
+    supply metric is wafer starts vs. demand (the sufficiency ratio)." It was
+    both mandatory AND the risk anchor, so it depressed every memory card."""
+    keys = {k["key"] for k in SECTOR_KPI_FRAMEWORK[PROFILE]["kpis"]}
+    assert "memory_inventory_days" not in keys
+
+
+def test_the_risk_anchor_is_the_sufficiency_ratio():
+    risk = SECTOR_KPI_FRAMEWORK[PROFILE]["risk_adjustment"]
+    assert risk["kpi"] == "bit_supply_demand_gap"
+    # Negative gap = supply deficit = pricing power, so lower is better.
+    assert risk["direction"] == "lower_better"
 
 
 def test_foundry_metrics_are_absent():

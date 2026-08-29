@@ -30,6 +30,8 @@ import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
 import { DecisionInputsCard }  from '@/components/report/DecisionInputsCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
+import { SectorValuationCard } from '@/components/report/SectorValuationCard';
+import type { SectorCardPayload } from '@/lib/reportTypes';
 import { IntelligenceGrid }    from '@/components/report/IntelligenceGrid';
 import { FinancialsChart }     from '@/components/report/FinancialsChart';
 import { FinancialStatements } from '@/components/report/FinancialStatements';
@@ -1399,6 +1401,14 @@ export function ReportPage() {
                 height instead of leaving the ladder's sparse-data cards
                 (no bear/bull IV stored) looking like dead space above a gap. */}
             <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} skipReason={dcfSkipReason} />
+            {/* ── Sector Valuation Card ────────────────────────────────
+                Mounted here as well as in V2ReportView: the mobile view
+                bypasses this JSX entirely, so a card added only there is
+                invisible on desktop. Same dual-render-path trap the
+                Financials card had to be mounted around. */}
+            {(data.sector_card as Record<string, SectorCardPayload> | undefined)?.[liveTicker]
+              && <SectorValuationCard
+                   payload={(data.sector_card as Record<string, SectorCardPayload>)[liveTicker]} />}
           </div>
           <div className="flex flex-col gap-2">
             {renderSection('power_law', 'Power Law', (

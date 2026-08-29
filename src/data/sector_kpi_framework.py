@@ -1427,7 +1427,7 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
         "anchor_methods": ["P/E (norm)", "EV/EBITDA", "DCF"],
         "quality_tiers": {
             "kpi_bands": [
-                {"kpi": "memory_gross_margin", "direction": "higher_better",
+                {"kpi": "gross_margin_pct", "direction": "higher_better",
                  "bands": [{"min": 0.50, "mult": 1.25, "label": "peak-cycle"},
                            {"min": 0.35, "mult": 1.10, "label": "strong"},
                            {"min": 0.20, "mult": 1.00, "label": "in-band"},
@@ -1435,15 +1435,25 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             ],
             "cap": [0.7, 1.5],
         },
+        # The sufficiency ratio (bit supply growth less demand growth) is what
+        # the research calls "the single number that best predicts Micron's
+        # revenue 12 months forward". Negative = supply deficit = pricing
+        # power, so lower is better. This replaces inventory days, which the
+        # same research argues is not a meaningful metric for a flow
+        # commodity that ships within weeks of production.
         "risk_adjustment": {
-            "kpi": "memory_inventory_days", "direction": "lower_better",
-            "bands": [{"max": 90.0,  "mult": 1.10, "label": "lean"},
-                      {"max": 140.0, "mult": 1.00, "label": "in-band"},
-                      {"max": 999.0, "mult": 0.85, "label": "glut"}],
+            "kpi": "bit_supply_demand_gap", "direction": "lower_better",
+            "bands": [{"max": 0.00, "mult": 1.15, "label": "supply deficit"},
+                      {"max": 0.03, "mult": 1.00, "label": "balanced"},
+                      {"max": 0.50, "mult": 0.85, "label": "oversupply"}],
         },
         "kpis": [
             {
-                "key":             "memory_gross_margin",
+                # Canonical key, not a bespoke one: the FMP augmentation stage
+                # fills `gross_margin_pct` (0.7257 on the live MU run) and the
+                # LLM extractor is only ever asked for the profile's own keys,
+                # so a renamed duplicate can never be populated.
+                "key":             "gross_margin_pct",
                 "mandatory":       True,
                 "search_phrases":  ["gross margin", "GM%", "blended gross margin"],
                 "compute_hint":    "Blended memory gross margin (decimal) — the cycle's clearest single read",
@@ -1463,8 +1473,14 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
             {
                 "key":             "dram_bit_growth",
                 "mandatory":       True,
-                "search_phrases":  ["DRAM bit growth", "DRAM bit shipment", "bit supply growth"],
-                "compute_hint":    "YoY DRAM bit shipment growth (decimal)",
+                # The research states this as "DRAM Bit Demand Growth vs. Bit
+                # Supply Growth" — the demand-side wording was absent from the
+                # phrase list, and this was the one mandatory KPI still
+                # unfilled on the live MU run.
+                "search_phrases":  ["DRAM bit growth", "DRAM bit demand growth",
+                                    "bit demand growth", "DRAM bit shipment",
+                                    "bit supply growth"],
+                "compute_hint":    "YoY DRAM bit demand/shipment growth (decimal)",
                 "clamp":           (-0.50, 1.50),
                 "extractor_only":  True,
                 "decimal_format":  True,
@@ -1488,16 +1504,8 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "decimal_format":  True,
             },
             {
-                "key":             "memory_inventory_days",
-                "mandatory":       True,
-                "search_phrases":  ["inventory days", "days of inventory", "inventory outstanding", "weeks of inventory"],
-                "compute_hint":    "Days of inventory — the supply-glut early warning",
-                "clamp":           (0.0, 400.0),
-                "extractor_only":  True,
-            },
-            {
                 "key":             "bit_supply_demand_gap",
-                "mandatory":       False,
+                "mandatory":       True,
                 "search_phrases":  ["supply/demand", "supply demand balance", "sufficiency ratio", "bit supply growth vs demand"],
                 "compute_hint":    "Industry bit supply growth less demand growth (decimal; positive = oversupply)",
                 "clamp":           (-0.50, 0.50),
@@ -6712,7 +6720,13 @@ def validate_extractor_output(profile_name: str, output: dict) -> dict:
         output["_completeness_score"] = 1.0
         return output
 
-    missing = [k for k in mandatory_keys if k not in output]
+    # Value-aware, not presence-aware. A key sitting in the dict as None is
+    # missing in every sense that matters to the card, and the old `not in`
+    # test counted it as present.
+    missing = [
+        k for k in mandatory_keys
+        if output.get(k) is None
+    ]
     output["_mandatory_missing"]  = missing
     output["_completeness_score"] = round(
         (len(mandatory_keys) - len(missing)) / len(mandatory_keys), 2
@@ -7699,6 +7713,16 @@ def _fmp_risk_kpis(ticker: str) -> dict:
         if fcf_ps is not None and rps is not None and float(rps) > 0:
             out["fcf_margin_pct"] = round(float(fcf_ps) / float(rps), 4)
 
+        # FCF conversion = FCF / net profit. NOT the same metric as
+        # fcf_margin_pct (FCF / revenue) — the Conglomerate (SG) schema marks
+        # it mandatory and BN4.SI's deep research mentions "FCF conversion"
+        # zero times, so the LLM extractor could never supply it. Both inputs
+        # are FMP fields, so derive it here rather than asking the model to
+        # re-derive what is already computable.
+        eps_ttm = ratios.get("netIncomePerShareTTM")
+        if fcf_ps is not None and eps_ttm is not None and float(eps_ttm) > 0:
+            out["fcf_conversion_pct"] = round(float(fcf_ps) / float(eps_ttm), 4)
+
     except Exception:
         pass  # Fail silently — composite_adjustment will return 1.0x for missing fields
 
@@ -8098,7 +8122,6 @@ _KPI_FORMAT_OVERRIDES: dict[str, str] = {
     "dc_capacity_mw":               "int",
     "land_bank_gfa":                "int",
     # ── memory / DRAM-NAND formats ────────────────────────
-    "memory_inventory_days":        "int",
     "memory_capex":                 "usd",
     "inventory_turns_research":     "x",
     "tbvps_research":               "usd",
@@ -8564,8 +8587,13 @@ SECTOR_KPI_FRAMEWORK.update({
                 "decimal_format":  True,
             },
             {
+                # Good-to-have, not mandatory: this asks whether the group
+                # breaks EBITDA out by division, which BN4.SI's deep research
+                # mentions zero times and which no FMP field can supply. A
+                # mandatory flag that can never clear only depresses the
+                # completeness badge.
                 "key":             "divisional_ebitda_disclosed",
-                "mandatory":       True,
+                "mandatory":       False,
                 "group":           "Operations",
                 "search_phrases":  ['divisional EBITDA', 'segment EBITDA', 'EBIT breakdown'],
                 "compute_hint":    "Count of divisions with a disclosed EBITDA/EBIT split",

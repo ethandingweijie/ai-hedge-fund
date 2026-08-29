@@ -1318,6 +1318,7 @@ def run_advanced_pipeline(
                     _augment_metrics_with_fmp_risk,
                     _augment_metrics_with_fmp_commodity,  # V3.1
                     is_legacy_profile,
+                    validate_extractor_output,
                 )
                 _profile_names = state["data"].get("profile_names", {})
                 _tickers = state["data"].get("tickers", []) or list(_profile_names.keys())
@@ -1334,6 +1335,12 @@ def run_advanced_pipeline(
                             _bucket[_t] = _augment_metrics_with_fmp_risk(_t, _bucket[_t])
                             # V3.1 — also augment commodity prices for Resources/Energy
                             _bucket[_t] = _augment_metrics_with_fmp_commodity(_profile, _bucket[_t])
+                            # Re-annotate completeness AFTER the gap-fills.
+                            # validate_extractor_output runs inside the LLM
+                            # extractor, before these FMP-derived keys land, so
+                            # _mandatory_missing was stale: CRWD reported
+                            # cash_runway_years missing while holding 99.0.
+                            _bucket[_t] = validate_extractor_output(_profile, _bucket[_t])
                             state["data"][_state_key] = _bucket
                     # If no metrics dict exists yet for this ticker, create one
                     # in framework_metrics_all (so render_card_payload finds it)
@@ -1341,7 +1348,7 @@ def run_advanced_pipeline(
                     if _t not in _fwm:
                         _aug = _augment_metrics_with_fmp_risk(_t, {})
                         _aug = _augment_metrics_with_fmp_commodity(_profile, _aug)
-                        _fwm[_t] = _aug
+                        _fwm[_t] = validate_extractor_output(_profile, _aug)
             except Exception as _e:
                 print(f"  [fmp_risk_augment] failed: {_e!r} — Risk/Commodity multiplier will be 1.0x")
 

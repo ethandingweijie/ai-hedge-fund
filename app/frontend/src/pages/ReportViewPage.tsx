@@ -16,6 +16,8 @@ import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
 import { AssumptionWatchCard } from '@/components/report/AssumptionWatchCard';
 import { IntelligenceGrid } from '@/components/report/IntelligenceGrid';
 import { FinancialsChart } from '@/components/report/FinancialsChart';
+import { SectorValuationCard } from '@/components/report/SectorValuationCard';
+import type { SectorCardPayload } from '@/lib/reportTypes';
 import { FinancialStatements } from '@/components/report/FinancialStatements';
 import type { FinancialStatementsPayload } from '@/components/report/FinancialStatements';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
@@ -310,6 +312,14 @@ export function ReportViewPage() {
                 height instead of leaving the ladder's sparse-data cards
                 (no bear/bull IV stored) looking like dead space above a gap. */}
             <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
+            {/* ── Sector Valuation Card ────────────────────────────────
+                Mounted here as well as in V2ReportView: the mobile view
+                bypasses this JSX entirely, so a card added only there is
+                invisible on desktop. Same dual-render-path trap the
+                Financials card had to be mounted around. */}
+            {(data.sector_card as Record<string, SectorCardPayload> | undefined)?.[ticker]
+              && <SectorValuationCard
+                   payload={(data.sector_card as Record<string, SectorCardPayload>)[ticker]} />}
           </div>
         </div>
 
