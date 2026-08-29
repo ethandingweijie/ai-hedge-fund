@@ -1589,6 +1589,12 @@ def run_advanced_pipeline(
             # Raw financial history (strategic router Phase 2) + DCF outputs
             # (stamped with _DCF_CACHE_VERSION above for the Phase 4.5 gate).
             "raw_financials":     state["data"].get("raw_financials", {}),
+            # Three-statement view (data_router) + the stylist's audit line.
+            # Both existed in state and were absent from the archived run
+            # until they were listed here — the same serialization-contract
+            # bug the dcf_skip_reasons comment below describes.
+            "financial_statements": state["data"].get("financial_statements", {}),
+            "style_audit":        state["data"].get("style_audit", {}),
             "dcf_range":          _dcf_range_out,
             # Per-ticker reason a DCF entry came back {} (set by dcf_agent.py's
             # early-exit branches) + the exception when the whole engine

@@ -267,6 +267,33 @@ def _growth(curr: Optional[float], prev: Optional[float]) -> Optional[float]:
     return (curr - prev) / abs(prev)
 
 
+def _blank_unreported_zeros(
+    values: dict[str, Optional[float]], periods: list[str]
+) -> None:
+    """Treat an isolated hard zero on a balance-sheet line as unreported.
+
+    A stock item that was material last year and is exactly 0.0 this year is
+    a reporting gap, not a real balance. FMP returns
+    `retainedEarnings = 0` for DBS FY2025 while equity is S$68,867mn — which
+    rendered as "S$0.00  −100%" and read as though the bank had wiped out its
+    reserves. Mutates `values` in place; the row is dropped upstream if that
+    leaves nothing.
+    """
+    material = [
+        abs(v) for v in values.values()
+        if isinstance(v, (int, float)) and v != 0
+    ]
+    if not material:
+        return
+    # "Material" relative to the line's own scale, so a genuinely small
+    # balance (minority interest at S$47mn) is never blanked.
+    threshold = max(material) * 0.01
+    for period in periods:
+        v = values.get(period)
+        if isinstance(v, (int, float)) and v == 0 and threshold > 0:
+            values[period] = None
+
+
 def _fy_key(period: str) -> Optional[str]:
     m = re.search(r"(\d{4})", str(period or ""))
     return f"FY{m.group(1)}" if m else None
@@ -309,6 +336,8 @@ def build_financial_statements(
                 row = merged[fy]
                 val = _derive(key, row) if key.startswith("_") else row.get(key)
                 values[fy] = val if isinstance(val, (int, float)) else None
+            if stmt == "balance":
+                _blank_unreported_zeros(values, periods)
             if all(v is None for v in values.values()):
                 continue  # never render a row the data cannot fill
             growth: dict[str, Optional[float]] = {}

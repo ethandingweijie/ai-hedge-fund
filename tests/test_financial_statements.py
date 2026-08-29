@@ -195,3 +195,50 @@ def test_no_periods_yields_empty_payload():
     payload = build_financial_statements({}, sector="Tech")
     assert payload["periods"] == []
     assert payload["statements"] == {}
+
+
+# ── Unreported zeros on the balance sheet ────────────────────────────────
+
+def test_isolated_zero_on_a_balance_line_is_blanked():
+    """FMP returns retainedEarnings=0 for DBS FY2025 while equity is
+    S$68,867mn. Rendered literally that read "S$0.00  -100%" — as though the
+    bank had wiped out its reserves. A stock item that was material last
+    year and is exactly zero this year is a reporting gap, not a balance."""
+    rows = {
+        "FY2024": {"retained_earnings": 53_163e6, "shareholders_equity": 68_786e6},
+        "FY2025": {"retained_earnings": 0.0,      "shareholders_equity": 68_867e6},
+    }
+    out = _rows(build_financial_statements(rows, sector="Financials"), "balance")
+    assert out["retained_earnings"]["values"]["FY2025"] is None
+    assert out["retained_earnings"]["growth"]["FY2025"] is None
+
+
+def test_a_genuinely_small_balance_is_not_blanked():
+    """DBS's minority interest really is about S$47mn against S$897bn of
+    assets — small is not the same as unreported."""
+    rows = {
+        "FY2024": {"minority_interest": 47e6, "total_assets": 827_219e6},
+        "FY2025": {"minority_interest": 49e6, "total_assets": 897_488e6},
+    }
+    out = _rows(build_financial_statements(rows, sector="Financials"), "balance")
+    assert out["minority_interest"]["values"]["FY2025"] == pytest.approx(49e6)
+
+
+def test_a_consistently_zero_line_is_kept_as_zero():
+    """The blanking rule targets an ISOLATED zero after a material year.
+    A line that is zero throughout is a reported fact — no goodwill means
+    no acquisitions — and hiding it would destroy information. Only rows
+    with no value at all in any year are dropped."""
+    rows = {"FY2024": {"goodwill": 0.0, "total_assets": 100.0},
+            "FY2025": {"goodwill": 0.0, "total_assets": 120.0}}
+    out = _rows(build_financial_statements(rows, sector="Tech"), "balance")
+    assert out["goodwill"]["values"]["FY2025"] == 0.0
+
+
+def test_cash_flow_zeros_are_left_alone():
+    """A year with no buybacks genuinely is zero — the blanking rule is
+    deliberately scoped to balance-sheet stock items."""
+    rows = {"FY2024": {"share_buyback": 500.0, "operating_cash_flow": 1000.0},
+            "FY2025": {"share_buyback": 0.0,   "operating_cash_flow": 1200.0}}
+    out = _rows(build_financial_statements(rows, sector="Tech"), "cashflow")
+    assert out["share_buyback"]["values"]["FY2025"] == 0.0
