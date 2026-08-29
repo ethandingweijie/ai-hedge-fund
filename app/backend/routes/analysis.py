@@ -43,7 +43,15 @@ _live_phase_maps: dict[str, dict] = {}   # ticker → {phase_name: event_dict, .
 # for the standalone endpoints (news, financials, intelligence) that run outside
 # the pipeline thread and don't benefit from analysis_service's loader.
 def _load_env_local() -> None:
-    """Load .env.local from the project root into os.environ (always overrides process env)."""
+    """Load .env.local from the project root into os.environ (always overrides process env).
+
+    No-op under pytest: tests/conftest.py strips the API keys so the suite
+    cannot reach a live provider, and loading with override=True hands them
+    straight back for every test that runs afterwards.
+    """
+    import sys as _sys
+    if os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in _sys.modules:
+        return
     project_root = Path(__file__).parent.parent.parent.parent
     env_file = project_root / ".env.local"
     if not env_file.exists():

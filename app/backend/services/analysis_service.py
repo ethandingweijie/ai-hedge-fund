@@ -19,6 +19,7 @@ import logging
 import math
 import os
 import sqlite3
+import sys
 import threading
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -43,7 +44,15 @@ def _load_env_local_once() -> None:
     Deployment config (base URLs, fallback keys) is identical for every run, so
     it belongs in os.environ. Per-run, caller-supplied values do NOT — those go
     through run_config's ContextVar overlay instead.
+
+    No-op under pytest. tests/conftest.py deliberately strips the API keys so
+    the suite cannot reach a live provider, and this loads .env.local with
+    override=True — so any test that merely imports this module handed the
+    keys back and re-armed live calls for everything that ran after it. That
+    took the suite from 213s to 3h22m the once it happened.
     """
+    if os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
+        return
     global _env_local_loaded
     if _env_local_loaded:
         return
@@ -827,6 +836,44 @@ def delete_run(run_id: str, user_id: int = None) -> bool:
 
 # ── Public read helpers ───────────────────────────────────────────────────────
 
+def _hydrate_financial_statements(run_id: str, payload: dict) -> None:
+    """Fill in the three-statement view for runs whose stored blob predates it.
+
+    `full_result_json` is returned verbatim, and it is built from an explicit
+    allowlist in src/pipeline.py that did not list `financial_statements`
+    until it was fixed. Those runs still persisted the statements to
+    `ticker_signals.financial_statements_json`, so the data exists — it just
+    is not in the blob the API hands back.
+
+    Reads only when the blob lacks the key, so a current run costs nothing.
+    Mutates `payload` in place; failures are swallowed because a missing
+    display card must never take down the report.
+    """
+    try:
+        data = payload.get("data")
+        if not isinstance(data, dict) or data.get("financial_statements"):
+            return
+        archive_id = data.get("_archive_run_id")
+        if not archive_id:
+            row = _fetch_one(
+                "SELECT archive_run_id FROM web_runs WHERE run_id = ?", [run_id]
+            )
+            archive_id = row["archive_run_id"] if row else None
+        if not archive_id:
+            return
+        ts = _fetch_one(
+            "SELECT financial_statements_json FROM ticker_signals "
+            "WHERE run_id = ? AND financial_statements_json IS NOT NULL",
+            [archive_id],
+        )
+        if ts and ts["financial_statements_json"]:
+            data["financial_statements"] = json.loads(
+                ts["financial_statements_json"]
+            )
+    except Exception:
+        pass
+
+
 def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
     """
     Return full result dict for a run.
@@ -846,7 +893,9 @@ def get_run_result(run_id: str, user_id: int = None) -> Optional[dict]:
         run_user_id = row["user_id"]
         if run_user_id is not None and user_id is not None and run_user_id != user_id:
             return None  # Not the owner — deny access
-        return _sanitize_floats(json.loads(row["full_result_json"]))
+        _payload = json.loads(row["full_result_json"])
+        _hydrate_financial_statements(run_id, _payload)
+        return _sanitize_floats(_payload)
 
     # ── 2. Try reconstructing from CLI archive tables ─────────────────────
     run_row = _fetch_one(

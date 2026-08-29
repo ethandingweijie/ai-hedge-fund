@@ -37,9 +37,19 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import json
 
-# Load environment variables — .env first, .env.local overrides
-load_dotenv(override=True)
-load_dotenv(".env.local", override=True)
+# Load environment variables — .env first, .env.local overrides.
+#
+# Skipped under pytest. tests/conftest.py strips the provider API keys so the
+# suite cannot reach a live endpoint, and these run at MODULE level with
+# override=True — so any test that transitively imports this module handed the
+# keys straight back and re-armed live calls for everything that ran after it.
+# Observed once as a 213s suite taking 3h22m.
+import os as _os
+import sys as _sys
+
+if not (_os.environ.get("PYTEST_CURRENT_TEST") or "pytest" in _sys.modules):
+    load_dotenv(override=True)
+    load_dotenv(".env.local", override=True)
 
 init(autoreset=True)
 
