@@ -350,6 +350,33 @@ class EstimateItem(BaseModel):
         return "" if v is None else str(v)
 
 
+class ValuationRatioItem(BaseModel):
+    """One forward year from the note's ratios table.
+
+    Nearly every broker note carries one — Goldman prints "Ratios &
+    Valuation" (P/E, P/B, EV/EBITDA, EV/sales, FCF yield, ROE), Phillip
+    prints "Valuation Ratios" (P/E, P/B, dividend yield). Only the
+    methodology SENTENCE was being read, which states a multiple in roughly
+    a quarter of notes; the table states several, per forward year, in
+    nearly all of them. Those forward multiples are also the right thing to
+    hold against a peer median, which is itself forward-looking.
+    """
+    fiscal_year_label: str = Field(default="", description="e.g. FY26e, 3/27E, 12/27E")
+    pe: str = ""
+    pb: str = ""
+    ev_ebitda: str = ""
+    ev_sales: str = ""
+    fcf_yield: str = ""
+    dividend_yield: str = ""
+    roe: str = ""
+
+    @field_validator("fiscal_year_label", "pe", "pb", "ev_ebitda", "ev_sales",
+                     "fcf_yield", "dividend_yield", "roe", mode="before")
+    @classmethod
+    def _str(cls, v):
+        return "" if v is None else str(v)
+
+
 class ScenarioItem(BaseModel):
     case: str = Field(default="", description="bull|base|bear")
     price_target: str = ""
@@ -391,6 +418,7 @@ class AnalystReportOutput(BaseModel):
         description="DCF/SOTP/EV-EBITDA etc. incl. any disclosed WACC, "
                     "terminal growth, multiple")
     estimates: list[EstimateItem] = Field(default_factory=list)
+    valuation_ratios: list[ValuationRatioItem] = Field(default_factory=list)
     house_vs_consensus: list[HouseVsConsensusItem] = Field(default_factory=list)
     scenarios: list[ScenarioItem] = Field(default_factory=list)
     revisions: list[RevisionItem] = Field(default_factory=list)
@@ -405,8 +433,8 @@ class AnalystReportOutput(BaseModel):
     def _str(cls, v):
         return "" if v is None else str(v)
 
-    @field_validator("estimates", "house_vs_consensus", "scenarios",
-                     "revisions", mode="before")
+    @field_validator("estimates", "valuation_ratios", "house_vs_consensus",
+                     "scenarios", "revisions", mode="before")
     @classmethod
     def _lists(cls, v):
         return _coerce_list(v)
@@ -718,6 +746,21 @@ def extract_analyst_report(ticker: str, extracted_pdf: dict,
         "WACC / terminal growth / multiples\n"
         "- estimates: array of {fiscal_year_label, revenue, ebitda, eps} "
         "— FY+1 to FY+3 as printed\n"
+        "- valuation_ratios: array of {fiscal_year_label, pe, pb, ev_ebitda, "
+        "ev_sales, fcf_yield, dividend_yield, roe} — READ THE RATIOS TABLE. "
+        "Almost every note has one and it is the densest source of stated "
+        "multiples in the document. Goldman prints it as 'Ratios & "
+        "Valuation'; Phillip and DBS print 'Valuation Ratios'. It is a grid "
+        "with one COLUMN PER FISCAL YEAR (e.g. 3/26, 3/27E, 3/28E, 3/29E or "
+        "FY22..FY26e) and one ROW PER METRIC ('P/E (X)', 'P/B (X)', "
+        "'EV/EBITDA (X)', 'EV/sales (X)', 'FCF yield (%)', 'Dividend Yield', "
+        "'ROE (%)'). Emit ONE OBJECT PER YEAR COLUMN, carrying that column's "
+        "value for each metric row. Copy the numbers exactly as printed; do "
+        "not convert, annualise or infer. Use the column header verbatim as "
+        "fiscal_year_label. Leave a field empty when its row is absent, 'NM' "
+        "or '—'. Bracketed numbers are negative: '(2.3)' is -2.3. Ignore "
+        "rows that are not valuation metrics (inventory days, receivable "
+        "days, interest cover, leverage, CROCI, turnover).\n"
         "- house_vs_consensus: array of {metric, house_view, street_view, "
         "comment} — every explicit 'above/below street/GSe' comparison\n"
         "- scenarios: array of {case, price_target, probability_pct, "
@@ -749,6 +792,10 @@ def extract_analyst_report(ticker: str, extracted_pdf: dict,
         "price_target_currency": (out.price_target_currency or "")[:8],
         "pt_methodology": (out.pt_methodology or "")[:600],
         "estimates": [e.model_dump() for e in out.estimates[:6]],
+        # Capped at 8: a ratios table runs 4-6 year columns, and a
+        # longer list means the model has started emitting metric rows
+        # as years.
+        "valuation_ratios": [v.model_dump() for v in out.valuation_ratios[:8]],
         "house_vs_consensus": [h.model_dump() for h in out.house_vs_consensus[:10]],
         "scenarios": [s.model_dump() for s in out.scenarios[:5]],
         "revisions": [r.model_dump() for r in out.revisions[:15]],
@@ -955,6 +1002,7 @@ def extract_and_persist_analyst_pdf(path: str, tickers: list[str], *,
                 price_target_currency=extraction.get("price_target_currency"),
                 pt_methodology=extraction.get("pt_methodology"),
                 estimates=extraction.get("estimates"),
+                valuation_ratios=extraction.get("valuation_ratios"),
                 house_vs_consensus=extraction.get("house_vs_consensus"),
                 scenarios=extraction.get("scenarios"),
                 thesis=extraction.get("thesis"),

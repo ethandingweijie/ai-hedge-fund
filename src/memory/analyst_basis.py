@@ -166,20 +166,36 @@ def parse_pt_methodology(text: str) -> dict[str, Any]:
         except ValueError:
             mult = None
     if mult is not None and 0.1 <= mult <= 200:
-        if re.search(r"ev\s*/\s*(adj\.?\s*)?ebitda|\bebitda\b", t, re.I):
-            basis = "ev_ebitda"
-        elif re.search(r"p\s*/\s*bv?\b|price[-\s]to[-\s]book", t, re.I):
-            basis = "p_b"
-        elif re.search(r"p\s*/\s*nav", t, re.I):
-            basis = "p_nav"
-        elif re.search(r"p\s*/\s*s\b|price[-\s]sales|ev\s*/\s*sales"
-                       r"|ev\s*/\s*revenue", t, re.I):
-            # EV/Sales is a revenue multiple stated on enterprise value —
-            # DraftKings' "2.0x EV/Sales applied to NTM+1" left the basis
-            # unset because only the equity-side P/S form was matched.
-            basis = "p_s"
-        elif re.search(r"\bp\s*/?\s*e\b|normali[sz]ed\s+eps|\beps\b", t, re.I):
-            basis = "pe"
+        # Attribute the basis by PROXIMITY to the captured multiple, not by a
+        # fixed pattern order. A blended methodology names several metrics in
+        # one sentence, and a fixed order silently pairs the number with the
+        # wrong one. DraftKings reads "2.0x EV/Sales applied to NTM+1 ... and
+        # a modified DCF using an EV/GAAP EBITDA multiple": the 2.0x is a
+        # sales multiple, but EBITDA matched first and it was booked as
+        # EV/EBITDA 2.0x against a peer median of 10.1x — a fabricated -80%
+        # observation. Nearest token wins; ties keep the earlier pattern.
+        _BASIS_PATTERNS = (
+            ("p_b",       r"p\s*/\s*bv?\b|price[-\s]to[-\s]book"),
+            ("p_nav",     r"p\s*/\s*nav"),
+            ("p_s",       r"p\s*/\s*s\b|price[-\s]sales|ev\s*/\s*sales"
+                          r"|ev\s*/\s*revenue"),
+            ("ev_ebitda", r"ev\s*/\s*(adj\.?\s*)?ebitda|\bebitda\b"),
+            ("pe",        r"\bp\s*/?\s*e\b|normali[sz]ed\s+eps|\beps\b"),
+        )
+        anchor = m.end()
+        best: tuple[int, int, str] | None = None
+        for order, (name, pat) in enumerate(_BASIS_PATTERNS):
+            nearest = min(
+                (abs(hit.start() - anchor)
+                 for hit in re.finditer(pat, t, re.I)),
+                default=None,
+            )
+            if nearest is None:
+                continue
+            if best is None or (nearest, order) < (best[0], best[1]):
+                best = (nearest, order, name)
+        basis = best[2] if best else None
+
         out["target_multiple"] = mult
         if basis:
             out["multiple_basis"] = basis

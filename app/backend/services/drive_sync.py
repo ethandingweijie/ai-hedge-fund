@@ -570,10 +570,28 @@ def sync_drive_folder(repo_root: str | None = None,
         # Be polite to Qwen rate limits between documents
         time.sleep(1.0)
 
+    # ── Bank the street-vs-peer observations ────────────────────────────
+    # The multiple an analyst applied is only worth something once it is
+    # held next to what that industry actually trades at. Recorded here, on
+    # ingest, so each report leaves evidence behind instead of being read
+    # once for one Slack line. Written only where BOTH halves exist; never
+    # allowed to fail the sync that produced it.
+    try:
+        from src.memory.multiple_calibration import record_observations
+        _tickers = [t for doc in result["matched"] for t in (doc.get("tickers") or [])]
+        _obs = record_observations(_tickers)
+        result["calibration_observations"] = len(_obs)
+        if _obs:
+            _progress(f"recorded {len(_obs)} calibration observation(s)")
+    except Exception as exc:
+        result["calibration_observations"] = 0
+        logger.warning("[drive_sync] calibration recording skipped: %s", exc)
+
     _progress(f"done: listed={result['listed']} matched={len(result['matched'])} "
               f"unmatched={len(result['unmatched'])} downloaded="
               f"{result['downloaded']} unchanged={result['unchanged']} "
-              f"extracted={result['extracted']} gated={result['gated']}")
+              f"extracted={result['extracted']} gated={result['gated']} "
+              f"calibrated={result.get('calibration_observations', 0)}")
     return result
 
 

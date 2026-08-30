@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS analyst_reports (
     price_target_currency TEXT,
     pt_methodology_json TEXT,
     estimates_json TEXT,
+    valuation_ratios_json TEXT,
     house_vs_consensus_json TEXT,
     scenarios_json TEXT,
     thesis_json TEXT,
@@ -153,6 +154,18 @@ def ensure_assumption_tables() -> None:
         if _ensured:
             return
         db.execute_script(_DDL)
+        # CREATE TABLE IF NOT EXISTS never ALTERs, so a column added to _DDL
+        # reaches new databases only. Every existing one — including
+        # production — needs the explicit ADD COLUMN, or the upsert fails on
+        # a column that the DDL claims exists.
+        for table, column, definition in (
+            ("analyst_reports", "valuation_ratios_json", "TEXT"),
+        ):
+            try:
+                db.add_column_if_missing(table, column, definition)
+            except Exception as exc:
+                logger.warning("assumption_store: add %s.%s failed: %s",
+                               table, column, exc)
         _ensured = True
 
 
@@ -295,6 +308,7 @@ def upsert_analyst_report(
     price_target_currency: str | None = None,
     pt_methodology=None,
     estimates=None,
+    valuation_ratios=None,
     house_vs_consensus=None,
     scenarios=None,
     thesis=None,
@@ -311,10 +325,11 @@ def upsert_analyst_report(
         INSERT INTO analyst_reports
             (ticker, content_hash, house, analyst, report_date, rating,
              price_target, price_target_currency, pt_methodology_json,
-             estimates_json, house_vs_consensus_json, scenarios_json,
+             estimates_json, valuation_ratios_json,
+             house_vs_consensus_json, scenarios_json,
              thesis_json, revisions_json, doc_path, drive_file_id,
              source_url, ai_input_allowed, extracted_at, model_used)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(ticker, content_hash) DO UPDATE SET
             house=excluded.house,
             analyst=excluded.analyst,
@@ -324,6 +339,7 @@ def upsert_analyst_report(
             price_target_currency=excluded.price_target_currency,
             pt_methodology_json=excluded.pt_methodology_json,
             estimates_json=excluded.estimates_json,
+            valuation_ratios_json=excluded.valuation_ratios_json,
             house_vs_consensus_json=excluded.house_vs_consensus_json,
             scenarios_json=excluded.scenarios_json,
             thesis_json=excluded.thesis_json,
@@ -337,7 +353,8 @@ def upsert_analyst_report(
         """,
         [ticker.upper(), content_hash, house, analyst, report_date, rating,
          price_target, price_target_currency, _dumps(pt_methodology),
-         _dumps(estimates), _dumps(house_vs_consensus), _dumps(scenarios),
+         _dumps(estimates), _dumps(valuation_ratios),
+         _dumps(house_vs_consensus), _dumps(scenarios),
          _dumps(thesis), _dumps(revisions), doc_path, drive_file_id,
          source_url, 1 if ai_input_allowed else 0, _now(), model_used],
     )
@@ -364,6 +381,19 @@ def get_analyst_reports(ticker: str, limit: int = 10) -> list[dict]:
     return [_analyst_row(r) for r in rows]
 
 
+def _safe_col(row, column: str):
+    """JSON column that may not exist on this row yet.
+
+    Rows written before a column was added come back from `SELECT *` without
+    the key — a dict raises KeyError, a sqlite3.Row raises IndexError. Either
+    way the absence is expected, not an error.
+    """
+    try:
+        return _loads(row[column])
+    except Exception:
+        return None
+
+
 def _analyst_row(r) -> dict:
     return {
         "ticker": r["ticker"],
@@ -376,6 +406,10 @@ def _analyst_row(r) -> dict:
         "price_target_currency": r["price_target_currency"],
         "pt_methodology": _loads(r["pt_methodology_json"]),
         "estimates": _loads(r["estimates_json"]) or [],
+        # Tolerated as missing: a row written before the column existed has
+        # no key at all on a SELECT *, and this must not break reads of the
+        # rest of the report.
+        "valuation_ratios": _safe_col(r, "valuation_ratios_json") or [],
         "house_vs_consensus": _loads(r["house_vs_consensus_json"]) or [],
         "scenarios": _loads(r["scenarios_json"]) or [],
         "thesis": _loads(r["thesis_json"]) or {},
