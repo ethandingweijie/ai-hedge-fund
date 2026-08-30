@@ -4616,6 +4616,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # This eliminates the two-step CNY→USD→HKD chain (and its rounding noise).
         # The USD→HKD tail conversion further below is skipped for HK tickers.
         _is_hk = _is_hk_ticker(ticker)
+        # Market is a dimension, not a boolean: without this an SGX name is
+        # discounted at US rates with no country premium.
+        _is_sg = _is_sg_ticker(ticker)
         _is_sg = _is_sg_ticker(ticker)
         # Value each name in the currency it TRADES in, so intrinsic value
         # and spot are directly comparable. HK already did this; SG did not,
@@ -5563,6 +5566,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 macro_regime=_risk_appetite,
                 profile=profile_name or "",
                 is_hk=_is_hk,
+                is_sg=_is_sg,
                 interest_coverage=_coverage,
                 net_debt=net_debt,
                 market_cap=_market_cap,
@@ -5574,7 +5578,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                          ticker, _wacc_exc)
             wacc = get_wacc_for_exchange(
                 sector, leverage, macro_regime=_risk_appetite,
-                profile=profile_name, is_hk=_is_hk,
+                profile=profile_name, is_hk=_is_hk, is_sg=_is_sg,
             )
 
         # ── Insider-activity WACC overlay (Tier 3) ──────────────────────
@@ -6480,6 +6484,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 macro_regime=_risk_appetite,
                 profile=profile_name or "",
                 is_hk=_is_hk,
+                is_sg=_is_sg,
                 interest_coverage=_coverage,
                 net_debt=net_debt,
                 market_cap=_market_cap,
@@ -6491,7 +6496,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                          ticker, _wacc_exc)
             wacc = get_wacc_for_exchange(
                 sector, leverage, macro_regime=_risk_appetite,
-                profile=profile_name, is_hk=_is_hk,
+                profile=profile_name, is_hk=_is_hk, is_sg=_is_sg,
             )
 
         # ── Insider-activity WACC overlay (Tier 3) ──────────────────────

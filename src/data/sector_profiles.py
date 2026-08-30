@@ -2976,15 +2976,43 @@ def get_wacc_for_exchange(
     macro_regime: str = "neutral",
     profile: str = "",
     is_hk: bool = False,
+    is_sg: bool = False,
 ) -> float:
     """
-    Return WACC, routing to HK rates when is_hk=True.
+    Return WACC, routing to the listing market's rates.
 
-    For HK-listed stocks the base rate already embeds China CRP (+150 bps).
-    All other parameters (leverage premium, macro overlay) are applied identically.
+    For HK-listed stocks the base rate embeds China CRP (+150 bps); for
+    SG-listed stocks it embeds the Singapore CRP (+50 bps). All other
+    parameters (leverage premium, macro overlay) are applied identically.
 
-    Backward-compatible: is_hk=False delegates entirely to get_wacc().
+    `is_sg` exists because market was previously a boolean (`is_hk`), so every
+    SGX name fell through to the US path and was discounted at US rates with no
+    country premium. That is how Sembcorp (Energy / Regulated Utility) drew a
+    4.18% WACC -- Damodaran's US regulated-utility rate -- against the registry's
+    7.0% for SG Energy. With terminal value at ~90% of a utility DCF, that gap
+    alone put intrinsic value at 6x spot.
+
+    Backward-compatible: both flags False delegates entirely to get_wacc().
     """
+    if is_sg:
+        # Mirrors the HK branch below, with the Singapore CRP. Kept as a
+        # separate branch rather than a shared helper so each market's
+        # calibration stays independently readable and auditable.
+        overlay = _MACRO_WACC_OVERLAY.get(macro_regime, 0.0)
+        if sector == "Energy" and profile in _ENERGY_PROFILE_WACC:
+            base    = _ENERGY_PROFILE_WACC[profile] + _SG_CRP
+            lev_cap = _ENERGY_LEVERAGE_CAP.get(profile, 0.035)
+        elif sector == "Financials" and profile in _FINANCIALS_PROFILE_WACC:
+            base    = _FINANCIALS_PROFILE_WACC[profile] + _SG_CRP
+            lev_cap = _FINANCIALS_LEVERAGE_CAP.get(profile, 0.010)
+        else:
+            # SG_SECTOR_WACC is defined by the market registry and was, until
+            # now, never read by the DCF.
+            base    = SG_SECTOR_WACC.get(sector, SECTOR_WACC.get(sector, 0.090) + _SG_CRP)
+            lev_cap = 0.040
+        leverage_premium = max(0.0, (leverage - 1.5) * 0.01)
+        return round(min(base + leverage_premium + overlay, base + lev_cap), 4)
+
     if not is_hk:
         return get_wacc(sector, leverage, macro_regime=macro_regime, profile=profile)
 
@@ -3037,6 +3065,7 @@ def compute_wacc_hybrid(
     macro_regime: str = "neutral",
     profile: str = "",
     is_hk: bool = False,
+    is_sg: bool = False,
     # ── Live cost-of-debt inputs ─────────────────────────────────────────
     interest_coverage: float | None = None,
     net_debt: float | None = None,
@@ -3055,7 +3084,8 @@ def compute_wacc_hybrid(
     currency (caller's responsibility after FX conversion).
     """
     wacc_base = get_wacc_for_exchange(
-        sector, leverage, macro_regime=macro_regime, profile=profile, is_hk=is_hk
+        sector, leverage, macro_regime=macro_regime, profile=profile,
+        is_hk=is_hk, is_sg=is_sg,
     )
 
     # Short-circuit when we can't compute D/V cleanly
