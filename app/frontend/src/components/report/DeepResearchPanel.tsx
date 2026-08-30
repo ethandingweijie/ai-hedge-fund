@@ -66,14 +66,14 @@ function isTrustedSource(type?: string, name?: string, url?: string): boolean {
 // ── Source type badge color ───────────────────────────────────────────────────
 function sourceColor(type?: string, name?: string): string {
   if (isKnowledgeBase(type, name))
-    return 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300';
+    return 'bg-surface-2 text-content-high border border-[var(--hairline)]';
   switch (type?.toLowerCase()) {
     case 'sec_filing':
     case '20-f':
     case '10-k':
       return 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
     case 'press_release':
-      return 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
+      return 'bg-surface-2 text-content-medium border border-[var(--hairline)]';
     case 'web':
     case 'news':
       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
@@ -237,14 +237,14 @@ export function DeepResearchPanel({
                         >
                           {sourceLabel(entry.source_type, entry.source_name)}
                           {isKnowledgeBase(entry.source_type, entry.source_name) && (
-                            <sup className="text-indigo-500 font-bold ml-0.5">*</sup>
+                            <sup className="text-brand font-bold ml-0.5">*</sup>
                           )}
                         </a>
                       ) : (
                         <span className="text-foreground/80">
                           {sourceLabel(entry.source_type, entry.source_name)}
                           {isKnowledgeBase(entry.source_type, entry.source_name) && (
-                            <sup className="text-indigo-500 font-bold ml-0.5">*</sup>
+                            <sup className="text-brand font-bold ml-0.5">*</sup>
                           )}
                         </span>
                       )}
@@ -303,7 +303,7 @@ export function DeepResearchPanel({
           {/* Footnote — shown only when at least one KB entry exists */}
           {hasKB && (
             <p className="mt-3 text-[10px] text-muted-foreground leading-relaxed border-t border-border/40 pt-2">
-              <sup className="text-indigo-500 font-bold mr-0.5">*</sup>
+              <sup className="text-brand font-bold mr-0.5">*</sup>
               <span className="font-medium text-foreground/60">Equitable AI Knowledge Base</span>
               {' '}is trained on a continual basis from user queries. This knowledge base would have been verified in earlier runs.
             </p>

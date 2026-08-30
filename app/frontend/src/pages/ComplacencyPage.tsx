@@ -54,7 +54,7 @@ const formatRunTime = (iso: string | null): string => {
 // lightly-tinted chip backgrounds. Dark-mode keeps the existing pastel hues.
 const VERDICT_COLOR: Record<ComplacencyVerdict, string> = {
   'Strong-Short': 'bg-surface-2 text-content-high border-[var(--hairline)]',
-  'Watch':        'bg-orange-600/30 text-black dark:text-orange-200 border-orange-700/40',
+  'Watch':        rankTone(2),
   'Borderline':   'bg-amber-600/30 text-black dark:text-amber-200 border-amber-700/40',
   'Pass':         'bg-surface-2 text-content-high border-[var(--hairline)]',
   'N/A':          'bg-muted text-muted-foreground border-border',
@@ -603,7 +603,7 @@ export function ComplacencyPage() {
                     on white. Dark-mode keeps the pastel softness via `dark:`. */}
                 <tr className="border-b border-border/50">
                   <th colSpan={5} className="px-2 py-1"></th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-violet-500/15 text-violet-900 dark:text-violet-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high dark:text-brand">
                     Aggregate
                   </th>
                   <th colSpan={4} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-muted/60 text-foreground border-l border-r border-border/30">
@@ -612,7 +612,7 @@ export function ComplacencyPage() {
                   <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Valuation
                   </th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-orange-500/15 text-orange-900 dark:text-orange-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Behav.
                   </th>
                   <th colSpan={2} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-cyan-500/15 text-cyan-900 dark:text-cyan-300">
@@ -622,7 +622,7 @@ export function ComplacencyPage() {
                     Quality
                   </th>
                   <th colSpan={1} className="px-2 py-1"></th>
-                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-purple-500/15 text-purple-900 dark:text-purple-300">
+                  <th colSpan={1} className="px-2 py-1 text-center text-[10px] uppercase tracking-wider font-bold bg-surface-2 text-content-high">
                     Put rec
                   </th>
                 </tr>
@@ -631,7 +631,7 @@ export function ComplacencyPage() {
                   <th className="px-2 py-2">Ticker</th>
                   <th className="px-2 py-2">Sector</th>
                   <th className="px-2 py-2">Verdict</th>
-                  <th className="px-2 py-2 text-right bg-violet-500/5" title="Aggregate 0-100 (quant 0-50 + qual 0-50)">Agg/100</th>
+                  <th className="px-2 py-2 text-right bg-surface-2/50" title="Aggregate 0-100 (quant 0-50 + qual 0-50)">Agg/100</th>
                   <th className="px-2 py-2 text-right">Comp/8</th>
                   <th className="px-2 py-2 text-right border-l border-border/30" title="Valuation (EV/S, FCF yield)">V</th>
                   <th className="px-2 py-2 text-right" title="Behavioural (insider A/D, EPS rev, range)">B</th>
@@ -645,7 +645,7 @@ export function ComplacencyPage() {
                   <th className="px-2 py-2 text-right" title="Altman Z-Score">Alt Z</th>
                   <th className="px-2 py-2 text-right" title="Piotroski (0-9)">Pio</th>
                   <th className="px-2 py-2 text-right">Price</th>
-                  <th className="px-2 py-2 bg-purple-500/5" title="Put recommendation (Strong-Short / Watch only)">Strike · Exp</th>
+                  <th className="px-2 py-2 bg-surface-2/50" title="Put recommendation (Strong-Short / Watch only)">Strike · Exp</th>
                 </tr>
               </thead>
               <tbody>
@@ -688,7 +688,7 @@ export function ComplacencyPage() {
                         {r.verdict}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 text-right bg-violet-500/5">
+                    <td className="px-2 py-1.5 text-right bg-surface-2/50">
                       {r.aggregate_score != null ? (
                         <span
                           className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${aggregateColor(r.aggregate_score)}`}
@@ -765,10 +765,10 @@ export function ComplacencyPage() {
                     <td className="px-2 py-1.5 text-right">{r.altman_z == null ? '—' : r.altman_z.toFixed(1)}</td>
                     <td className="px-2 py-1.5 text-right">{r.piotroski == null ? '—' : `${r.piotroski}/9`}</td>
                     <td className="px-2 py-1.5 text-right">{fmtPrice(r.price)}</td>
-                    <td className="px-2 py-1.5 bg-purple-500/5">
+                    <td className="px-2 py-1.5 bg-surface-2/50">
                       {r.put_recommendation ? (
                         <span
-                          className="text-purple-300 font-semibold"
+                          className="text-content-high font-semibold"
                           title={[
                             `Strike  ${fmtPrice(r.put_recommendation.strike)}  (${(r.put_recommendation.strike_pct_otm * 100).toFixed(0)}% OTM)`,
                             `Expiry  ${r.put_recommendation.expiry}  (${r.put_recommendation.days_to_expiry} days)`,
@@ -1172,9 +1172,9 @@ function ComplacencyDrawer({
 
           {/* Put recommendation (Strong-Short / Watch only — actionable layer) */}
           {ticker.put_recommendation && (
-            <section className="border border-purple-500/30 rounded-md bg-purple-500/5 p-3">
+            <section className="border border-[var(--hairline)] rounded-md bg-surface-2/50 p-3">
               <div className="flex items-baseline justify-between mb-2">
-                <h2 className="text-xs font-bold uppercase tracking-wider text-purple-300">Put Recommendation</h2>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-content-high">Put Recommendation</h2>
                 <span className="text-[10px] text-muted-foreground italic">v1 · yfinance · no IV percentile</span>
               </div>
               <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
@@ -1187,7 +1187,7 @@ function ComplacencyDrawer({
                 <FragmentRow row={{ label: 'Volume today',       value: ticker.put_recommendation.volume != null ? ticker.put_recommendation.volume.toLocaleString() : '—' }} />
               </div>
               {ticker.put_recommendation.contract_symbol && (
-                <div className="mt-2 pt-2 border-t border-purple-500/20 font-mono text-[10px] text-muted-foreground">
+                <div className="mt-2 pt-2 border-t border-[var(--hairline)] font-mono text-[10px] text-muted-foreground">
                   OCC: <span className="text-foreground">{ticker.put_recommendation.contract_symbol}</span>
                 </div>
               )}
@@ -1309,7 +1309,7 @@ function KV({ label, value, highlight = false }: { label: string; value: string;
 
 const CONVICTION_COLOR: Record<QualConvictionLabel, string> = {
   'EXCEPTIONAL': 'bg-surface-2 text-content-high border-[var(--hairline)]',
-  'BOTH':        'bg-orange-600/30 text-black dark:text-orange-200 border-orange-700/40',
+  'BOTH':        rankTone(2),
   'QUANT-ONLY':  'bg-amber-600/30 text-black dark:text-amber-200 border-amber-700/40',
   'QUAL-ONLY':   'bg-blue-600/30 text-black dark:text-blue-200 border-blue-700/40',
   'PASS':        'bg-muted text-muted-foreground border-border',
@@ -1342,7 +1342,7 @@ const QUAL_INDICATOR_THEME: Record<string, { theme: string; label: string; accen
 
 function scoreChipColor(score: number): string {
   if (score >= 4) return 'bg-surface-2 text-content-medium';
-  if (score >= 3) return 'bg-orange-600/30 text-orange-200';
+  if (score >= 3) return rankTone(1);
   if (score >= 2) return 'bg-amber-600/30 text-amber-200';
   if (score >= 1) return 'bg-yellow-600/20 text-yellow-200';
   return 'bg-muted text-muted-foreground';
@@ -1364,13 +1364,13 @@ function QualitativePanel(
   const totalIndicators = Object.keys(qual.indicators ?? {}).length;
 
   return (
-    <section className="border border-indigo-500/30 rounded-md bg-indigo-500/5 p-3">
+    <section className="border border-[var(--hairline)] rounded-md bg-surface-2/50 p-3">
       <div className="flex items-baseline justify-between mb-2 gap-2 flex-wrap">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-indigo-300">{headerPrefix}Qualitative Thesis</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-content-high">{headerPrefix}Qualitative Thesis</h2>
         <div className="flex items-center gap-1.5">
           {deepCount > 0 && (
             <span
-              className="px-1.5 py-0.5 rounded bg-purple-500/30 text-purple-900 dark:text-purple-100 text-[10px] font-bold uppercase tracking-wider"
+              className="px-1.5 py-0.5 rounded bg-surface-2-active text-content-high text-[10px] font-bold uppercase tracking-wider"
               title="Indicators that escalated to Qwen native web search after a low-confidence first-pass score."
             >
               ★ {deepCount}/{totalIndicators} deep-research
@@ -1394,7 +1394,7 @@ function QualitativePanel(
         </div>
         <div className="h-1.5 rounded overflow-hidden bg-muted/30">
           <div
-            className="h-full bg-indigo-500/70"
+            className="h-full bg-brand/70"
             style={{ width: `${qual.composite_normalized * 100}%` }}
           />
         </div>
@@ -1415,7 +1415,7 @@ function QualitativePanel(
                 <span className="text-foreground flex-1 truncate">{meta.label}</span>
                 {(s.model_used || '').includes('deep') && (
                   <span
-                    className="px-1 py-0.5 rounded bg-purple-500/25 text-purple-900 dark:text-purple-100 text-[8px] font-bold tracking-wider"
+                    className="px-1 py-0.5 rounded bg-surface-2-active text-content-high text-[8px] font-bold tracking-wider"
                     title="This indicator escalated to deep-research (Qwen native web search) after a low-confidence first-pass score."
                   >
                     ★ DEEP
@@ -1437,10 +1437,10 @@ function QualitativePanel(
                     <ul className="space-y-2">
                       {s.evidence.map((e, i) => (
                         <li key={i} className="text-[10px] leading-relaxed">
-                          <div className="text-indigo-300 font-semibold">
+                          <div className="text-content-high font-semibold">
                             {e.source} {e.date && <span className="text-muted-foreground/60 font-normal">· {e.date}</span>}
                           </div>
-                          <div className="text-foreground/80 italic pl-2 border-l border-indigo-500/30 mt-1">
+                          <div className="text-foreground/80 italic pl-2 border-l border-[var(--hairline)] mt-1">
                             “{e.quote}”
                           </div>
                         </li>
@@ -1479,7 +1479,7 @@ function QualitativePanel(
 
 function aggregateTier(score: number): { label: string; color: string; blurb: string } {
   if (score >= 75) return { label: 'EXCEPTIONAL', color: 'bg-surface-2 text-content-medium border-[var(--hairline)]',          blurb: 'Both quant and qualitative pillars at max conviction — textbook short setup' };
-  if (score >= 55) return { label: 'HIGH',        color: 'bg-orange-600/30 text-orange-200 border-orange-700/40', blurb: 'Strong combined signal — actionable short candidate' };
+  if (score >= 55) return { label: 'HIGH',        color: rankTone(1), blurb: 'Strong combined signal — actionable short candidate' };
   if (score >= 40) return { label: 'MODERATE',    color: 'bg-amber-600/30 text-amber-200 border-amber-700/40',    blurb: 'Mixed signal — track for confirmation before sizing' };
   if (score >= 25) return { label: 'WEAK',        color: 'bg-yellow-600/20 text-yellow-200 border-yellow-700/40', blurb: 'Limited setup — qualitative or quant pillar missing' };
   return { label: 'PASS', color: 'bg-surface-2 text-content-medium border-[var(--hairline)]', blurb: 'No actionable short signal' };
@@ -1529,7 +1529,7 @@ function AggregateScorePanel(
           title={`Quant: ${quantPts.toFixed(1)} / 50`}
         />
         <div
-          className="h-full bg-indigo-500/70"
+          className="h-full bg-brand/70"
           style={{ width: `${qualPts}%` }}
           title={`Qual: ${qualPts.toFixed(1)} / 50`}
         />
@@ -1538,7 +1538,7 @@ function AggregateScorePanel(
         <span className="text-cyan-300">
           ● Quant {quantPts.toFixed(1)} / 50
         </span>
-        <span className="text-indigo-300">
+        <span className="text-content-high">
           ● Qual {qualPts.toFixed(1)} / 50 {!hasQual && '(not scored)'}
         </span>
       </div>
@@ -1587,7 +1587,7 @@ const ACCENT_BORDER: Record<Accent, string> = {
 };
 const ACCENT_BG: Record<Accent, string> = {
   rose:    'bg-surface-2',
-  orange:  'bg-orange-500/10',
+  orange:  'bg-surface-2',
   cyan:    'bg-cyan-500/10',
   emerald: 'bg-surface-2',
 };

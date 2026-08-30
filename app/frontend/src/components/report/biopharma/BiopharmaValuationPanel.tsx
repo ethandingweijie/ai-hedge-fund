@@ -77,7 +77,7 @@ const PHASE_COLORS: Record<string, string> = {
   marketed:    'bg-surface-2 text-content-high',
   launched:    'bg-surface-2 text-content-high',
   filed:       'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
-  ph3:         'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400',
+  ph3:         'bg-surface-2-active text-content-high',
   ph2:         'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
   ph1:         'bg-surface-2 text-content-high',
   preclinical: 'bg-muted text-muted-foreground',
@@ -359,13 +359,13 @@ function CatalystsTimeline({ assets, sym }: {
 
   const colorCls = {
     blue:   'bg-blue-500',
-    purple: 'bg-purple-500',
+    purple: 'bg-chart-3',
     green:  'bg-surface-2',
     amber:  'bg-amber-500',
   };
   const chipCls = {
     blue:   'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
-    purple: 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400',
+    purple: 'bg-surface-2-active text-content-high',
     green:  'bg-surface-2 text-content-high',
     amber:  'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400',
   };

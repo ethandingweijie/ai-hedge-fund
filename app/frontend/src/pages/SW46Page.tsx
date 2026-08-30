@@ -67,7 +67,7 @@ const AICT_COLOR: Record<AICTTier, string> = {
   Fortress: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
   Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
-  Stone:    'bg-orange-600/20 text-orange-700 dark:text-orange-300 border-orange-700/40',
+  Stone:    'bg-surface-2 text-content-medium border-[var(--hairline)]',
   Wood:     'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
 

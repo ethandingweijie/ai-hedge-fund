@@ -58,7 +58,7 @@ function methodChip(method?: string) {
     ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
     : m.includes('fallback')
       ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-      : 'bg-violet-500/10 text-violet-600 dark:text-violet-400';
+      : 'bg-surface-2 text-content-high';
   return (
     <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium ${tone}`}>
       {m.replace(' (fallback)', ' · fb')}

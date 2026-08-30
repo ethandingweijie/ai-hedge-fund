@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
+import { rankTone } from '@/lib/semanticColors';
 
 
 function formatRunTime(iso: string | null): string {
@@ -33,29 +34,29 @@ function formatRunTime(iso: string | null): string {
 }
 
 function verdictColor(score: number): string {
-  if (score >= 60) return 'bg-surface-2 text-content-high';
+  if (score >= 60) return rankTone(0);
   if (score >= 45) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
   if (score >= 25) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
-  if (score >= 10) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
-  return 'bg-surface-2 text-content-high';
+  if (score >= 10) return rankTone(2);
+  return rankTone(3);
 }
 
 // Aggregate-score color (0-100 scale, INVERTED — high = bearish short signal)
 function aggColor(score: number | null | undefined): string {
   if (score == null) return 'bg-muted text-muted-foreground';
-  if (score >= 70) return 'bg-surface-2 text-content-high';
-  if (score >= 50) return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
+  if (score >= 70) return rankTone(0);
+  if (score >= 50) return rankTone(2);
   if (score >= 30) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
-  return 'bg-surface-2 text-content-high';
+  return rankTone(3);
 }
 
 // Screen-score color (0-100, NORMAL — high = strong screen fit)
 function screenScoreColor(score: number | null | undefined): string {
   if (score == null) return 'bg-muted text-muted-foreground';
-  if (score >= 75) return 'bg-surface-2 text-content-high';
+  if (score >= 75) return rankTone(0);
   if (score >= 55) return 'bg-blue-600/30 text-blue-900 dark:text-blue-200';
   if (score >= 35) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
-  return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
+  return rankTone(3);
 }
 
 // Long vs short framing for each cohort idea. SW46 (cheap-quality software)
@@ -90,11 +91,12 @@ function ideaSides(id: string): Array<{ label: string; cls: string }> {
 // Signed-composite chip color for the momentum preview (-6..+6).
 function momentumColor(composite: number | null | undefined): string {
   if (composite == null) return 'bg-muted text-muted-foreground';
-  if (composite >= 4) return 'bg-surface-2 text-content-high';
-  if (composite >= 1) return 'bg-surface-2 text-content-high';
-  if (composite <= -4) return 'bg-surface-2 text-content-high';
-  if (composite <= -1) return 'bg-surface-2 text-content-high';
-  return 'bg-muted text-muted-foreground';
+  // Prominence tracks conviction magnitude; the sign in the adjacent label
+  // carries direction, which monochrome cannot encode. (The green/red sweep
+  // had flattened all four branches to the same class.)
+  if (composite >= 4 || composite <= -4) return rankTone(0);
+  if (composite >= 1 || composite <= -1) return rankTone(2);
+  return rankTone(null);
 }
 
 

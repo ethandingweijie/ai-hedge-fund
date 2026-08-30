@@ -27,7 +27,7 @@ const accentBg: Record<SectorKpiAccent, string> = {
   green:  'from-surface-2 to-surface-2 border-[var(--hairline)]',
   amber:  'from-amber-500/15 to-amber-500/0 border-amber-500/30',
   rose:   'from-surface-2 to-surface-2 border-[var(--hairline)]',
-  violet: 'from-violet-500/15 to-violet-500/0 border-violet-500/30',
+  violet: 'from-surface-2 to-transparent border-[var(--hairline)]',
 };
 
 const accentText: Record<SectorKpiAccent, string> = {
@@ -35,7 +35,7 @@ const accentText: Record<SectorKpiAccent, string> = {
   green:  'text-content-high',
   amber:  'text-amber-600 dark:text-amber-400',
   rose:   'text-content-high',
-  violet: 'text-violet-600 dark:text-violet-400',
+  violet: 'text-content-high',
 };
 
 function fmt(k: SectorKpi): string {
@@ -302,7 +302,7 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
         <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
           Composite Adjustment Bridge
           {hasAnyZ && (
-            <span className="ml-2 inline-flex items-center rounded border border-violet-500/40 bg-violet-500/10 px-1 py-px text-[8px] font-semibold text-violet-600 dark:text-violet-400">
+            <span className="ml-2 inline-flex items-center rounded border border-[var(--hairline)] bg-surface-2 px-1 py-px text-[8px] font-semibold text-content-high dark:text-brand">
               V4-β · Z-DRIVEN
             </span>
           )}

@@ -236,11 +236,9 @@ export function getProviderColor(_provider: string): string {
   return 'bg-muted text-foreground border-border';
   // switch (provider.toLowerCase()) {
   //   case 'anthropic':
-  //     return 'bg-orange-600/20 text-orange-300 border-orange-600/40';
+  //     return 'bg-surface-2 text-content-medium border-[var(--hairline)]';
   //   case 'google':
-  //     return 'bg-green-600/20 text-green-300 border-green-600/40';
   //   case 'groq':
-  //     return 'bg-red-600/20 text-red-300 border-red-600/40';
   //   case 'deepseek':
   //     return 'bg-blue-600/20 text-blue-300 border-blue-600/40';
   //   case 'openai':

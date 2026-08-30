@@ -19,8 +19,8 @@ import { getAssumptionWatch, type AssumptionWatchPayload } from '@/lib/api';
 const ANOMALY_CHIP: Record<string, string> = {
   divergence:         'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25',
   direction_reversal: 'bg-surface-2 text-content-high border-[var(--hairline)]',
-  theme_divergence:   'bg-violet-500/15 text-violet-600 dark:text-violet-400 border-violet-500/25',
-  earnings_quality:   'bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/25',
+  theme_divergence:   'bg-surface-2 text-content-high border-[var(--hairline)]',
+  earnings_quality:   'bg-surface-2 text-content-high border-[var(--hairline)]',
   margin_compression: 'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
 

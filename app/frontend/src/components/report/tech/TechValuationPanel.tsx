@@ -244,8 +244,8 @@ function SubtypeBanner({
 }) {
   if (subtype === 'hyperscaler') {
     return (
-      <div className="rounded-xl bg-gradient-to-r from-indigo-100 to-indigo-50 dark:from-indigo-950/60 dark:to-indigo-950/20 border border-indigo-200 dark:border-indigo-900 px-4 py-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-700 dark:text-indigo-300">
+      <div className="rounded-xl bg-gradient-to-r from-surface-2 to-transparent border border-[var(--hairline)] dark:border-[var(--hairline)] px-4 py-2.5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-content-high dark:text-content-300">
           Hyperscaler · AI Capex ROI
         </p>
         <p className="text-sm font-semibold text-foreground mt-0.5">{ticker}</p>

@@ -90,7 +90,7 @@ const AICT_COLOR: Record<string, string> = {
   Fortress: 'bg-surface-2 text-content-high border-[var(--hairline)]',
   Castle:   'bg-blue-600/20 text-blue-700 dark:text-blue-300 border-blue-700/40',
   Chapel:   'bg-amber-600/20 text-amber-700 dark:text-amber-300 border-amber-700/40',
-  Stone:    'bg-orange-600/20 text-orange-700 dark:text-orange-300 border-orange-700/40',
+  Stone:    'bg-surface-2 text-content-medium border-[var(--hairline)]',
   Wood:     'bg-surface-2 text-content-high border-[var(--hairline)]',
 };
 const aictClass = (tier: string): string =>
@@ -102,7 +102,7 @@ const SOURCE_DOT: Record<string, string> = {
   fmp_growth: 'bg-cyan-400',
   yfinance:   'bg-blue-400',
   compute:    'bg-amber-400',
-  structural: 'bg-purple-400',
+  structural: 'bg-chart-3',
   missing:    'bg-muted-foreground/40',
 };
 
@@ -152,7 +152,7 @@ const POLICY_TEXT: Record<string, string> = {
   Tailwind:  'text-content-high',
   Favorable: 'text-blue-700 dark:text-blue-300',
   Neutral:   'text-muted-foreground',
-  Headwind:  'text-orange-700 dark:text-orange-300',
+  Headwind:  'text-content-medium',
   Crackdown: 'text-content-high',
 };
 // Moat ladder reuses the AICT names generalised to every sector.
@@ -160,7 +160,7 @@ const MOAT_TEXT: Record<string, string> = {
   Fortress: 'text-content-high',
   Castle:   'text-blue-700 dark:text-blue-300',
   Chapel:   'text-amber-700 dark:text-amber-300',
-  Stone:    'text-orange-700 dark:text-orange-300',
+  Stone:    'text-content-medium',
   Wood:     'text-content-high',
 };
 
@@ -445,7 +445,7 @@ export function HK50Page() {
               title="LLM Policy + Moat deep-research over the top-20 names by lead score. Quant cards must exist first; runs sequentially to avoid rate limits and patches rows live."
               className="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card text-foreground text-sm font-medium hover:bg-muted disabled:opacity-50"
             >
-              {deepRunning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-violet-400" />}
+              {deepRunning ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} className="text-brand" />}
               {deepRunning ? 'Researching…' : 'Deep research'}
             </button>
             <button
@@ -461,10 +461,10 @@ export function HK50Page() {
 
         {/* ── Deep-research live progress strip ───────────────────────────── */}
         {deepJob && (deepJob.status === 'pending' || deepJob.status === 'running') && (
-          <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-md border border-violet-700/40 bg-violet-600/10 text-xs text-violet-200">
+          <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-md border border-[var(--hairline)] bg-brand/10 text-xs text-brand">
             <Loader2 size={12} className="animate-spin flex-shrink-0" />
             <span className="truncate">{deepJob.progress_msg || 'Starting deep research…'}</span>
-            <span className="ml-auto text-violet-300/70 hidden sm:inline flex-shrink-0">
+            <span className="ml-auto text-content-muted hidden sm:inline flex-shrink-0">
               Policy + Moat · cards update live · sequential to avoid 429s
             </span>
           </div>
@@ -1064,9 +1064,9 @@ function QualitativeBlock({ q, onGenerate, researching, researchMsg }: {
           onClick={onGenerate}
           disabled={researching}
           title="Run the LLM Policy + Moat deep-research for THIS name only. Patches the card live; ~2-5 min. Runs independently of the cohort-wide deep research."
-          className="ml-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-violet-700/40 bg-violet-600/10 text-violet-200 text-[10px] font-medium hover:bg-violet-600/20 disabled:opacity-50"
+          className="ml-auto inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-[var(--hairline)] bg-brand/10 text-brand text-[10px] font-medium hover:bg-brand/10 disabled:opacity-50"
         >
-          {researching ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} className="text-violet-400" />}
+          {researching ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} className="text-brand" />}
           {researching ? 'Researching…' : scored ? 'Re-run research' : 'Generate research'}
         </button>
       </h2>
@@ -1075,7 +1075,7 @@ function QualitativeBlock({ q, onGenerate, researching, researchMsg }: {
         (state tailwind ↔ crackdown) × competitive moat, confidence-weighted.
       </p>
       {researching && (
-        <div className="mb-2 flex items-center gap-2 px-2 py-1.5 rounded border border-violet-700/40 bg-violet-600/10 text-[10px] text-violet-200">
+        <div className="mb-2 flex items-center gap-2 px-2 py-1.5 rounded border border-[var(--hairline)] bg-brand/10 text-[10px] text-brand">
           <Loader2 size={10} className="animate-spin flex-shrink-0" />
           <span className="truncate">{researchMsg || 'Starting research…'}</span>
         </div>

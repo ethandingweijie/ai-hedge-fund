@@ -1005,7 +1005,7 @@ function WhatIfSection({
 
         {parentId && (
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-violet-700/40 bg-violet-600/10 text-violet-700 dark:text-violet-300 text-[11px]">
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand text-[11px]">
               <GitFork size={12} />
               Building on: {parentLabel ?? 'shared scenario'}
             </span>
@@ -1463,7 +1463,7 @@ function ScenarioLibrary({ entries, onRefresh, onBuildOn }: {
                     </span>
                   ))}
                 {e.build_count > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-violet-700/40 bg-violet-600/10 text-violet-700 dark:text-violet-300">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand">
                     <GitFork size={10} /> {e.build_count}
                   </span>
                 )}
@@ -1630,7 +1630,7 @@ function ScenarioDetail({ scenarioId, onBack, onOpen, onBuildOn }: {
             {detail.parent && (
               <button
                 onClick={() => onOpen(detail.parent!.scenario_id)}
-                className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-violet-700/40 bg-violet-600/10 text-violet-700 dark:text-violet-300 text-[11px] hover:bg-violet-600/20"
+                className="mt-2 inline-flex items-center gap-1.5 px-2 py-1 rounded border border-[var(--hairline)] bg-brand/10 text-content-high dark:text-brand text-[11px] hover:bg-brand/10"
                 title="Open the scenario this one was built on"
               >
                 <GitFork size={12} />

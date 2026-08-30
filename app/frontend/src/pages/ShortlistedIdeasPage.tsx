@@ -16,6 +16,7 @@ import { ArrowLeft, Loader2, Bookmark, X, Sparkles, ChevronRight } from 'lucide-
 import { toast } from 'sonner';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { rankTone } from '@/lib/semanticColors';
 
 
 function fmtDate(iso: string | null): string {
@@ -30,9 +31,9 @@ function fmtDate(iso: string | null): string {
 
 function convictionColor(score: number | null | undefined): string {
   if (score == null) return 'bg-muted text-muted-foreground';
-  if (score >= 8) return 'bg-surface-2 text-content-high';
+  if (score >= 8) return rankTone(0);
   if (score >= 6) return 'bg-amber-600/30 text-amber-900 dark:text-amber-200';
-  return 'bg-orange-600/30 text-orange-900 dark:text-orange-200';
+  return rankTone(3);
 }
 
 
@@ -110,7 +111,7 @@ export function ShortlistedIdeasPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <Sparkles size={12} className="text-purple-600 dark:text-purple-400" />
+                      <Sparkles size={12} className="text-brand" />
                       <span className="font-mono text-base font-bold text-foreground">{idea.ticker}</span>
                       <span className="text-xs text-muted-foreground truncate max-w-[200px]">{idea.company_name}</span>
                       <span className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-bold ${convictionColor(idea.conviction_score)}`}>
