@@ -49,7 +49,7 @@ import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { CardAuditBanner } from '@/components/report/CardAuditBanner';
 import type { DdCardAudit } from '@/lib/reportTypes';
 import { DeepResearchPanel } from '@/components/report/DeepResearchPanel';
-import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
+import { ChainOfThought } from '@/components/report/ChainOfThought';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
@@ -283,18 +283,13 @@ export function V2ReportView({
         </div>
       )}
 
-      {/* Live Qwen thinking stream — visible on ALL tabs while streaming.
-          User asked for this to sit directly below the progress bar so the
-          reasoning output is always visible regardless of which tab is active. */}
-      {isRunning && !isComplete && (isResearchPhase || !!(liveData.deep_research_thinking as string)) && (
+      {/* Chain of thought — visible on ALL tabs while streaming, directly
+          below the progress bar, so the reasoning is always visible whichever
+          tab is active. Bounded height keeps V2StockChart from being pushed
+          down the page as events arrive. */}
+      {isRunning && (
         <div className="px-4 pt-3">
-          <LiveSearchPanel
-            streamEvents={events}
-            liveData={liveData}
-            thinking={(liveData.deep_research_thinking as string) || ''}
-            isResearchPhase={isResearchPhase}
-            isComplete={isComplete}
-          />
+          <ChainOfThought events={events} phaseMap={phaseMap} liveData={liveData} isComplete={isComplete} />
         </div>
       )}
 
@@ -308,6 +303,19 @@ export function V2ReportView({
       {/* Tab bodies */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'summary'    && <SummaryBody    ticker={ticker} stockMetrics={stockMetrics} decision={decision} vgpm={vgpm} isRunning={isRunning} prior={priorRecap} delta={freshnessDelta} />}
+        {/* Persisted chain-of-thought trail (data.progress_log). Mounted here as
+            well as in ReportViewPage: the desktop JSX is bypassed on this path,
+            so a card added only there is invisible on mobile. */}
+        {tab === 'summary' && !isRunning
+          && Array.isArray((data as { progress_log?: unknown[] }).progress_log)
+          && ((data as { progress_log?: unknown[] }).progress_log!.length > 0) && (
+          <div className="px-4 pb-3">
+            <ChainOfThought
+              archived
+              events={(data as unknown as { progress_log: ProgressEvent[] }).progress_log}
+            />
+          </div>
+        )}
         {tab === 'valuation'  && <ValuationBody
           dcfRange={dcfRange}
           dcfSkipReason={dcfSkipReason}

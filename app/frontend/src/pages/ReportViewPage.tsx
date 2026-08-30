@@ -35,6 +35,7 @@ import { StockPanel } from '@/components/report/StockPanel';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { NewsPanel } from '@/components/report/NewsPanel';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
+import { ChainOfThought } from '@/components/report/ChainOfThought';
 
 // Mirrors the mobile tab order in V2ReportView so the two render paths present
 // the same information architecture.
@@ -295,6 +296,17 @@ export function ReportViewPage() {
         </div>
 
         {/* ── M1 recency — what the last report said + what changed since ── */}
+        {/* Chain-of-thought trail persisted with the run (data.progress_log,
+            written by analysis_service). Collapsed by default: it is an audit
+            trail, not part of the thesis. */}
+        {Array.isArray((data as { progress_log?: unknown[] }).progress_log)
+          && ((data as { progress_log?: unknown[] }).progress_log!.length > 0) && (
+          <ChainOfThought
+            archived
+            events={(data as unknown as { progress_log: import('@/lib/reportTypes').ProgressEvent[] }).progress_log}
+          />
+        )}
+
         <PriorReportCard
           prior={data.prior_recap?.[ticker]}
           delta={data.freshness_delta?.[ticker]}

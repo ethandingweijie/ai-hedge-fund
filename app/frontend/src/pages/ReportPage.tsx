@@ -16,9 +16,9 @@ import { Search as V2Search } from '@/components/v2/shared';
 import { V2ReportView } from '@/components/v2/V2ReportView';
 import { useActiveRun, mergeDataPreserve } from '@/contexts/active-run-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
-import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
+import { useProgressDerived } from '@/hooks/useProgressDerived';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
-import { LiveSearchPanel } from '@/components/report/LiveSearchPanel';
+import { ChainOfThought } from '@/components/report/ChainOfThought';
 // MobileBottomNav removed — hamburger menu in MobileTopBar replaces bottom tabs
 // MobileReportView removed — replaced by V2ReportView (dead legacy mobile fallback gated on `if (false && ...)` removed 2026-04).
 import type { ProgressEvent } from '@/lib/reportTypes';
@@ -132,7 +132,7 @@ function phaseLabel(phase: string): string {
   return phase.replace(/_agent$/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// Desktop live progress now uses the same ProgressHeader + LiveSearchPanel
+// Desktop live progress now uses the same ProgressHeader + ChainOfThought
 // as mobile (app/frontend/src/hooks/useProgressDerived.ts,
 // app/frontend/src/components/report/ProgressHeader.tsx) instead of the
 // quip-rotating LiveResearchLabel this file used to define locally.
@@ -673,8 +673,8 @@ export function ReportPage() {
 
   // Same derivation mobile (V2ReportView) uses for its ProgressHeader —
   // shared so desktop shows identical phase/thinking text, not a re-derived
-  // approximation.
-  const isResearchPhase = useIsResearchPhase(phaseMap);
+  // approximation. (isResearchPhase is no longer needed here: ChainOfThought
+  // covers the whole run rather than gating on the deep-research phase.)
   const progressDerived = useProgressDerived(phaseMap);
 
   // ── Prompt for notification permission on first visit (PWA home screen) ─────
@@ -1216,15 +1216,11 @@ export function ReportPage() {
           />
         </div>
       )}
-      {isRunning && !isComplete && (isResearchPhase || !!(liveData.deep_research_thinking as string)) && (
+      {/* Chain of thought — the whole run, not just deep research. Scrolls
+          inside its own bounded box so the stock chart below never shifts. */}
+      {isRunning && (
         <div className="max-w-6xl mx-auto px-4 md:px-8 pt-3">
-          <LiveSearchPanel
-            streamEvents={events}
-            liveData={liveData}
-            thinking={(liveData.deep_research_thinking as string) || ''}
-            isResearchPhase={isResearchPhase}
-            isComplete={isComplete}
-          />
+          <ChainOfThought events={events} phaseMap={phaseMap} liveData={liveData} isComplete={isComplete} />
         </div>
       )}
       {/* ── Completion confirmation — the explicit "update once done" the

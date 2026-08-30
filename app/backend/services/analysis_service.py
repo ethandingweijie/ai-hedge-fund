@@ -376,6 +376,57 @@ def _extract_web_run_summary(result: dict, ticker: str) -> tuple[str, str, str, 
         return "", "", "", ""
 
 
+# ── Chain-of-thought log ──────────────────────────────────────────────────────
+# The live timeline (frontend: components/report/ChainOfThought.tsx) is built
+# from the progress stream. Keeping a trimmed copy here lets a completed report
+# show the same trail, which is otherwise lost when the SSE connection closes.
+#
+# Bounded on both axes: a run emits ~177 events, and web_runs rows are read back
+# whole, so the log is capped and repeated intra-phase chatter is dropped.
+_PROGRESS_LOG: dict[str, list[dict]] = {}
+_PROGRESS_LOG_CAP = 400
+
+
+def _append_progress_log(run_id: str, event: dict) -> None:
+    """Record one progress event against a run, cheaply and without raising."""
+    if not run_id:
+        return
+    try:
+        log = _PROGRESS_LOG.setdefault(run_id, [])
+        if len(log) >= _PROGRESS_LOG_CAP:
+            return
+        # `summary` carries the descriptive text; `status` is normalised to
+        # "Done" for terminal rows, so dedupe on the pair that is displayed.
+        prev = log[-1] if log else None
+        if prev and prev.get("phase") == event.get("phase") \
+                and prev.get("summary") == event.get("summary"):
+            return
+        log.append({
+            "phase":     event.get("phase"),
+            "status":    event.get("status"),
+            "summary":   event.get("summary"),
+            "ticker":    event.get("ticker"),
+            "timestamp": event.get("timestamp"),
+            # Only the two structured payloads the timeline renders as
+            # grandchildren; the rest are large result blobs already stored.
+            "partial_data": {
+                k: v for k, v in (event.get("partial_data") or {}).items()
+                if k in ("live_search_query", "live_search_sources")
+            } or None,
+        })
+    except Exception:  # never let telemetry break a run
+        pass
+
+
+def _pop_progress_log(run_id: str) -> list[dict]:
+    """Read and release a run's log."""
+    return _PROGRESS_LOG.pop(run_id, [])
+
+
+def _peek_progress_log(run_id: str) -> list[dict]:
+    return list(_PROGRESS_LOG.get(run_id, []))
+
+
 def _save_partial_web_run(
     run_id: str,
     ticker: str,
@@ -454,6 +505,9 @@ def _save_partial_web_run(
             # card mid-run as soon as DCF + framework metrics are ready.
             # See src/data/sector_kpi_framework.render_card_payloads_for_run.
             "sector_card":                 data.get("sector_card"),
+            # Chain-of-thought trail (see _PROGRESS_LOG). Written on every
+            # checkpoint so a run abandoned mid-flight still keeps its trail.
+            "progress_log":                _peek_progress_log(run_id),
         },
     }
     try:
@@ -1572,18 +1626,20 @@ async def run_analysis_pipeline(
             or _sl.startswith("trap risk")       # value_trap live: "TRAP RISK LOW/MEDIUM/HIGH"
         )
         normalized_status = "Done" if _terminal else status
+        _event = {
+            "phase": agent_name,
+            "status": normalized_status,
+            "summary": status,
+            "reasoning": (analysis or ""),
+            "ticker": ticker_sym,
+            "timestamp": timestamp,
+            "partial_data": partial_data,
+        }
+        # Keep a trimmed copy so the finished report can replay the trail.
+        _append_progress_log(run_id, _event)
+
         def _enqueue():
-            progress_queue.put_nowait(
-                {
-                    "phase": agent_name,
-                    "status": normalized_status,
-                    "summary": status,
-                    "reasoning": (analysis or ""),
-                    "ticker": ticker_sym,
-                    "timestamp": timestamp,
-                    "partial_data": partial_data,
-                }
-            )
+            progress_queue.put_nowait(_event)
 
         loop.call_soon_threadsafe(_enqueue)
 
@@ -1748,6 +1804,12 @@ async def run_analysis_pipeline(
         _enrich_sotp_report_extras(run_id, t, result)
     except Exception as _enr_err:
         logger.warning("[report-extras] %s: enrichment failed: %s", t, _enr_err)
+    # Fold the chain-of-thought trail into the final payload and release the
+    # in-memory copy, so a completed report can replay how it was researched.
+    try:
+        result.setdefault("data", {})["progress_log"] = _pop_progress_log(run_id)
+    except Exception as _pl_err:
+        logger.warning("[progress-log] %s: could not attach trail: %s", t, _pl_err)
     _save_web_run(run_id, t, model_name, result, archive_run_id=archive_run_id, user_id=user_id)
 
     # ── M1: recap of the just-finished report ─────────────────────────────
