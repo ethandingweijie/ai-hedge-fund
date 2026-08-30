@@ -642,6 +642,7 @@ def get_kpi_prompt(
     sector: str,
     profile_name: str = "",
     reit_subtype: str | None = None,
+    market: str = "",
 ) -> str:
     """
     Returns the matched 2F KPI prompt block for the given classification.
@@ -656,6 +657,19 @@ def get_kpi_prompt(
     Callers pass sector + profile_name from state["data"]. reit_subtype
     is optional — only populated when REIT classifier has run.
     """
+    # Tier 0: learned industry knowledge, composed from deposited sector
+    # notes. Wins over the hand-written blocks because it is sourced and
+    # dated where they are neither, and because it is the only tier that can
+    # reach the 54 routes nobody has written a block for. Falls through
+    # silently on any store error — a missing 2F block must degrade to the
+    # hand-written one, never to an exception in the research prompt.
+    try:
+        learned = _learned_kpi_block(sector, profile_name, market)
+        if learned:
+            return learned
+    except Exception:                      # pragma: no cover - defensive
+        pass
+
     # Tier 1: REIT sub-type specialization
     if reit_subtype and sector in {"RealEstate", "REIT"}:
         specialized = _REIT_SUBTYPE_SPECIALIZATIONS.get(reit_subtype)
@@ -674,6 +688,105 @@ def get_kpi_prompt(
 
     # Tier 4: generic fallback
     return _GENERIC_KPI_PROMPT
+
+
+# ── Learned 2F composition ──────────────────────────────────────────────────
+
+def _fmt_trend(t: dict) -> str:
+    bits = [str(t.get("name") or "").strip()]
+    for key in ("direction", "stage", "horizon"):
+        v = str(t.get(key) or "").strip()
+        if v:
+            bits.append(v)
+    return " — ".join(b for b in bits if b)
+
+
+def _learned_kpi_block(sector: str, profile_name: str,
+                       market: str = "") -> str | None:
+    """Compose a 2F block from stored sector notes, or None.
+
+    Everything an analyst asserted is attributed and dated, and the forward
+    view is posed as a question to test rather than a conclusion to repeat.
+    That framing is load-bearing: 2F feeds the KPI extractor, not just the
+    prose, so an unchallenged claim here can move a composite multiplier.
+    """
+    from src.memory.industry_knowledge import get_industry_knowledge
+
+    notes = get_industry_knowledge(sector, profile_name, market)
+    if not notes:
+        return None
+
+    parts: list[str] = []
+    seen_anchor = False
+    for n in notes[:3]:                    # newest / most specific first
+        src = f"{n.get('house') or 'sell-side'} {n.get('as_of') or ''}".strip()
+
+        if n.get("anchor_kpi") and not seen_anchor:
+            parts.append(
+                f"ANCHOR KPI for this industry, per {src}: "
+                f"{n['anchor_kpi']}\nReport it explicitly, with its value and "
+                f"date, or write \"not disclosed\"."
+            )
+            seen_anchor = True
+
+        if n.get("disclosed_metrics"):
+            parts.append(
+                "Metrics companies in this industry actually publish — ask for "
+                "these by name rather than for generic financials:\n  "
+                + ", ".join(str(m) for m in n["disclosed_metrics"][:12])
+            )
+
+        if n.get("economics"):
+            parts.append(
+                "What decides economics here (" + src + "):\n  - "
+                + "\n  - ".join(str(e) for e in n["economics"][:4])
+            )
+
+        if n.get("competitive"):
+            parts.append(
+                "Competitive structure (" + src + "):\n  - "
+                + "\n  - ".join(str(c) for c in n["competitive"][:4])
+            )
+
+        q = n.get("quantitative") or {}
+        if q:
+            shown = ", ".join(f"{k} {v}" for k, v in list(q.items())[:6] if v)
+            if shown:
+                parts.append(f"Industry scale and growth, per {src}: {shown}")
+
+        if n.get("trends"):
+            parts.append(
+                f"{src} frames these as the structural shifts:\n  - "
+                + "\n  - ".join(_fmt_trend(t) for t in n["trends"][:4])
+                + "\nASSESS whether this company's own disclosures support or "
+                  "contradict each. Do not restate the view as ours."
+            )
+
+        if n.get("positioning"):
+            rows = []
+            for p in n["positioning"][:8]:
+                tk = str(p.get("ticker") or "").strip()
+                stance = str(p.get("stance") or "").strip()
+                why = str(p.get("why") or "").strip()
+                if tk and stance:
+                    rows.append(f"{tk}: {stance}" + (f" ({why})" if why else ""))
+            if rows:
+                parts.append(
+                    f"{src} positions the field as follows — this is one "
+                    f"house's dated view, to be tested against evidence, NOT "
+                    f"a conclusion to adopt:\n  - " + "\n  - ".join(rows)
+                )
+
+    if not parts:
+        return None
+
+    return (_SECTION_2F_HEADER
+            + "\n" + "\n\n".join(parts)
+            + "\n\nEverything above is sourced from deposited sector research "
+              "and carries its publisher and date. Where this company's "
+              "disclosures disagree with it, say so and prefer the company's "
+              "own filing.\n")
+
 
 
 # ── Public loose-match sector helpers ─────────────────────────────────────────
