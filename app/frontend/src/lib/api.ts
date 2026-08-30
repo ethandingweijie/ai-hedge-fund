@@ -61,6 +61,26 @@ export function deleteRun(runId: string): Promise<{ deleted: string }> {
   return fetchJson(`${BASE}/analysis/runs/${encodeURIComponent(runId)}`, { method: 'DELETE' });
 }
 
+/**
+ * Cancel an in-flight run and clear what it leaves behind.
+ *
+ * Cancel used to be client-only: the browser stopped reading the SSE stream
+ * while the server ran on to completion, holding its dedup slot and leaving a
+ * partial web_runs row that showed as a run stuck forever. This tells the
+ * backend to stop and clean up.
+ *
+ * Deliberately never rejects: cancelling is a UI affordance and must not leave
+ * the user stuck on a progress bar because the cleanup call failed.
+ */
+export function cancelAnalysisRun(
+  ticker: string,
+): Promise<{ cancelled: boolean; rows_removed?: number } | null> {
+  return fetchJson<{ cancelled: boolean; rows_removed?: number }>(
+    `${BASE}/analysis/cancel/${encodeURIComponent(ticker)}`,
+    { method: 'POST' },
+  ).catch(() => null);
+}
+
 /** R3: Assumption Watch payload — the steward's open challenges, variant
  * drivers and source hit-rates for one ticker (Assumption Watch card). */
 export interface AssumptionWatchPayload {

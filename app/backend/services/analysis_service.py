@@ -623,6 +623,74 @@ def _build_resume_bundle(
     }
 
 
+# ── Run cancellation ──────────────────────────────────────────────────────────
+# Pressing Cancel used to be a purely client-side reset: the browser stopped
+# reading the SSE stream and forgot the run, while the server carried on to
+# completion. The run then sat in web_runs at is_checkpoint=1 forever -- a
+# "stale run" the user could see but never finish or clear.
+#
+# Cancellation is cooperative. The pipeline runs in a worker thread and cannot
+# be killed safely from outside, so a cancel request sets a flag that the
+# checkpoint callback checks; the run unwinds at the next boundary instead of
+# being torn down mid-write.
+_CANCELLED_RUNS: set[str] = set()
+_CANCELLED_TICKERS: set[str] = set()
+
+
+class RunCancelled(Exception):
+    """Raised inside the pipeline thread when a cancel has been requested."""
+
+
+def request_cancel(run_id: Optional[str] = None, ticker: Optional[str] = None) -> None:
+    """Mark a run (by id and/or ticker) as cancelled.
+
+    Ticker is accepted because the client often knows only that: the run_id is
+    assigned server-side and a waiter-flavour SSE client never learns it.
+    """
+    if run_id:
+        _CANCELLED_RUNS.add(run_id)
+    if ticker:
+        _CANCELLED_TICKERS.add(ticker.upper())
+
+
+def is_cancelled(run_id: Optional[str] = None, ticker: Optional[str] = None) -> bool:
+    if run_id and run_id in _CANCELLED_RUNS:
+        return True
+    if ticker and ticker.upper() in _CANCELLED_TICKERS:
+        return True
+    return False
+
+
+def clear_cancel(run_id: Optional[str] = None, ticker: Optional[str] = None) -> None:
+    """Drop the flag once a run has actually stopped, so the next run is clean."""
+    if run_id:
+        _CANCELLED_RUNS.discard(run_id)
+    if ticker:
+        _CANCELLED_TICKERS.discard(ticker.upper())
+
+
+def purge_run_rows(ticker: str, run_id: Optional[str] = None) -> int:
+    """Delete abandoned checkpoint rows for a ticker (never final rows).
+
+    Guarded on is_checkpoint = 1 so a completed run is never removed: a
+    successful run upserts its row to is_checkpoint = 0.
+    """
+    _ensure_web_runs_table()
+    try:
+        if run_id:
+            return _exec(
+                "DELETE FROM web_runs WHERE is_checkpoint = 1 AND run_id = ?",
+                [run_id],
+            )
+        return _exec(
+            "DELETE FROM web_runs WHERE is_checkpoint = 1 AND UPPER(ticker) = UPPER(?)",
+            [ticker],
+        )
+    except Exception as exc:
+        logger.warning("[cancel] purge_run_rows failed for %s: %s", ticker, exc)
+        return 0
+
+
 def cleanup_stale_checkpoints(retention_days: Optional[float] = None) -> int:
     """
     Delete abandoned checkpoint rows older than the retention window.
@@ -1648,7 +1716,16 @@ async def run_analysis_pipeline(
 
     # ── Checkpoint callback (runs inside the pipeline thread) ────────────────
     def _on_checkpoint(state: dict, checkpoint_name: str) -> None:
-        """Save partial pipeline state to web_runs so the run is visible early."""
+        """Save partial pipeline state to web_runs so the run is visible early.
+
+        Also the cancellation boundary: the pipeline runs in a worker thread
+        that cannot be killed safely from outside, so a cancel request raises
+        here and the run unwinds at a clean point rather than mid-write.
+        """
+        if is_cancelled(run_id, ticker):
+            logger.info("[cancel] %s (%s): stopping at checkpoint %s",
+                        ticker, run_id, checkpoint_name)
+            raise RunCancelled(f"{ticker} cancelled by user")
         try:
             _save_partial_web_run(run_id, ticker.upper(), model_name, checkpoint_name, state,
                                   user_id=user_id)

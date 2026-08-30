@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
-import { getStockData, searchCompanies, getPopularTickers, getRunResult, type CompanySearchResult, type PopularTicker } from '@/lib/api';
+import { cancelAnalysisRun, getPopularTickers, getRunResult, getStockData, searchCompanies, type CompanySearchResult, type PopularTicker } from '@/lib/api';
 import { API_BASE_URL } from '@/config';
 import { extractLatestFinancials, isBiopharmaSector, isTechSector, classifyTechSubtype } from '@/lib/utils';
 // v2 imports
@@ -508,12 +508,20 @@ export function ReportPage() {
   };
 
   const handleReset = useCallback(() => {
+    // Tell the server first. Cancel used to be purely local: the browser
+    // stopped reading the stream while the pipeline ran on to completion,
+    // held its dedup slot for the full 65-minute TTL, and left a partial
+    // web_runs row the user saw as a run stuck forever. Fire-and-forget --
+    // cancelAnalysisRun never rejects, and the UI must reset either way.
+    const t = (ticker || activeRun?.ticker || '').trim();
+    if (t && state === 'running') void cancelAnalysisRun(t);
+
     reset();           // calls resetStream() which clears liveResult in context
     markRunCleared();
     setLiveMode(false);
     setLivePrice(null);
     setActiveSection('valuation');
-  }, [reset, markRunCleared]);
+  }, [reset, markRunCleared, ticker, activeRun?.ticker, state]);
 
   // ── Auto-run when navigated from Screener ───────────────────────────────────
   useEffect(() => {

@@ -721,6 +721,87 @@ _PULSE_INFLIGHT: dict[str, asyncio.Task] = {}
 _PULSE_KEEPALIVE_S = 10.0
 
 
+@router.post("/cancel/{ticker}")
+async def cancel_analysis(ticker: str, request: Request, db: Session = Depends(get_db)):
+    """Cancel an in-flight run and remove the partial row it leaves behind.
+
+    Pressing Cancel used to only stop the browser reading the stream. The
+    server kept going, so the run finished invisibly, held its dedup slot for
+    the full 65-minute TTL, and left an is_checkpoint=1 row that the user saw
+    as a run stuck forever.
+
+    Cancellation is cooperative: the pipeline runs in a worker thread that
+    cannot be killed safely, so a flag is set and the run unwinds at its next
+    checkpoint. Everything else here is cleanup, and each step is guarded
+    separately -- a cancel must never fail loudly.
+    """
+    t = (ticker or "").strip().upper()
+    if not t:
+        raise HTTPException(status_code=400, detail="ticker required")
+    # MUST match the normalisation run_analysis() applies, or the dedup key and
+    # the stored ticker will not match and the cancel silently no-ops. HK and SG
+    # tickers are canonicalised there (e.g. 700.HK -> 00700.HK), and SG is
+    # exactly where this matters most.
+    from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canon
+    from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canon
+    if is_hk_ticker(t):
+        t = _hk_canon(t)
+    elif is_sg_ticker(t):
+        t = _sg_canon(t)
+
+    from app.backend.services import analysis_service
+
+    result = {"ticker": t, "cancelled": True}
+
+    # 1. Ask the pipeline to stop at its next checkpoint.
+    try:
+        analysis_service.request_cancel(ticker=t)
+    except Exception as exc:
+        logger.warning("[cancel] %s: flag failed: %s", t, exc)
+
+    # 2. Release the distributed dedup slot so the ticker can be re-run at
+    #    once, rather than waiting out the 65-minute TTL.
+    try:
+        from app.backend.services import queue_client
+        await queue_client.release_run(queue_client.build_dedup_key(t))
+        result["slot_released"] = True
+    except Exception as exc:
+        logger.warning("[cancel] %s: dedup release failed: %s", t, exc)
+        result["slot_released"] = False
+
+    # 3. Unblock the in-process dedup waiters, if this run took that path.
+    try:
+        async with _in_flight_lock:
+            ev = _in_flight.pop(t, None)
+        if ev is not None:
+            ev.set()
+    except Exception as exc:
+        logger.warning("[cancel] %s: in-flight clear failed: %s", t, exc)
+
+    # 4. Drop live phase state so a reconnecting client is not shown the
+    #    cancelled run's progress as if it were still going.
+    try:
+        await progress_bus.clear_ticker(t)
+    except Exception as exc:
+        logger.warning("[cancel] %s: progress bus clear failed: %s", t, exc)
+    try:
+        _live_phases.pop(t, None)
+    except Exception:
+        pass
+
+    # 5. Remove the partial row. Guarded on is_checkpoint = 1 inside
+    #    purge_run_rows, so a completed run is never deleted.
+    try:
+        result["rows_removed"] = await asyncio.to_thread(analysis_service.purge_run_rows, t)
+    except Exception as exc:
+        logger.warning("[cancel] %s: row purge failed: %s", t, exc)
+        result["rows_removed"] = 0
+
+    logger.info("[cancel] %s: slot_released=%s rows_removed=%s",
+                t, result.get("slot_released"), result.get("rows_removed"))
+    return result
+
+
 def _pulse_today() -> str:
     from datetime import timezone as _tz
     return datetime.now(_tz.utc).strftime("%Y-%m-%d")
