@@ -111,7 +111,15 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
           )}
           {baseDelta != null && bearDelta != null && (
             <p className="text-[11px] text-muted-foreground leading-relaxed mt-2.5">
-              Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside; bear-case downside is {Math.abs(bearDelta).toFixed(0)}%.
+              Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside;{' '}
+              {/* A bear case ABOVE spot is not a downside. Math.abs() printed
+                  the sign away and called it one — MELI showed "bear-case
+                  downside is 562%" when the bear IV sat 5.6x above the price,
+                  which reads as risk where the model is in fact saying there
+                  is none at that level. */}
+              {bearDelta < 0
+                ? `bear-case downside is ${Math.abs(bearDelta).toFixed(0)}%.`
+                : `even the bear case sits ${bearDelta.toFixed(0)}% above spot.`}
             </p>
           )}
         </div>

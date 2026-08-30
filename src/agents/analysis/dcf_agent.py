@@ -439,6 +439,12 @@ def _historical_cagr(series: list[dict], revenue_base: Optional[float] = None) -
 # which bind — while MELI's 4.6x excess does.
 _CASH_CONVERSION_TOLERANCE = 1.25
 
+# How far base IV may sit from the Street's own 12-month consensus before the
+# run says so. Deliberately wide — a model that never disagreed with consensus
+# would be worthless — but MELI's pre-fix 8.7x was not a disagreement, it was
+# an error nothing objected to.
+_CONSENSUS_DIVERGENCE_MULT = 3.0
+
 
 def _mean_fcf_margin(series: list[dict], field: str = "free_cash_flow") -> Optional[float]:
     """Compute 5-year average FCF margin with outlier exclusion.
@@ -8054,6 +8060,42 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             except Exception as _sotp_x_err:
                 _log.warning("[dcf] %s: sotp_breakdown build failed: %s",
                              ticker, _sotp_x_err)
+
+        # ── Model-vs-consensus sanity gate ────────────────────────────────
+        # `consensus_pt` was fetched for frontend display only. It is also the
+        # cheapest available check that a valuation has left the realm of the
+        # arguable: the Street's own 12-month target is right there, and a
+        # model many multiples above it is making a claim no analyst covering
+        # the name will recognise.
+        #
+        # A flag, not a clamp. The model is allowed to disagree with the
+        # Street — that is the point of building one — but it should say so
+        # out loud rather than publishing an 8.7x divergence silently, which
+        # is how MELI reached $18,401 against a $2,106 consensus without
+        # anything in the run objecting.
+        try:
+            _cons = (_consensus_pt or {}).get("consensus")
+            _base_iv_chk = (scenario_results.get("base") or {}).get(
+                "intrinsic_value")
+            if _cons and _base_iv_chk and float(_cons) > 0:
+                _cons_mult = float(_base_iv_chk) / float(_cons)
+                if _cons_mult >= _CONSENSUS_DIVERGENCE_MULT:
+                    ticker_forward_flags.append(
+                        f"Model vs consensus: base IV "
+                        f"{_output_currency} {_base_iv_chk:,.0f} is "
+                        f"{_cons_mult:.1f}x the Street 12m consensus "
+                        f"{_cons:,.0f} — review the growth and margin "
+                        f"assumptions before relying on this"
+                    )
+                elif _cons_mult <= (1.0 / _CONSENSUS_DIVERGENCE_MULT):
+                    ticker_forward_flags.append(
+                        f"Model vs consensus: base IV "
+                        f"{_output_currency} {_base_iv_chk:,.0f} is "
+                        f"{_cons_mult:.2f}x the Street 12m consensus "
+                        f"{_cons:,.0f} — review before relying on this"
+                    )
+        except Exception:                       # never fail a run on a flag
+            pass
 
         dcf_range[ticker] = {
             **scenario_results,
