@@ -45,6 +45,7 @@ from typing import Any
 from src.graph.state import AgentState
 from src.data.models import EarningsQualityOutput
 from src.tools.api import search_line_items, get_financial_metrics
+from src.utils.progress import progress
 
 
 # ── Thresholds ──────────────────────────────────────────────────────────────
@@ -444,6 +445,12 @@ def run_earnings_quality_agent(state: AgentState) -> AgentState:
     Falls back to INSUFFICIENT if fewer than 2 periods are available.
     """
     tickers  = state["data"]["tickers"]
+    # Phase 2.5 runs five agents concurrently; each announces what it is
+    # scanning under the shared `intelligence_agents` phase so the run
+    # timeline shows the sources being read rather than one silent row.
+    for _t in tickers:
+        progress.update_status("intelligence_agents", _t,
+                               "Scanning earnings quality (accruals, cash conversion)")
     end_date = state["data"]["end_date"]
     api_key  = (
         os.environ.get("FMP_API_KEY")

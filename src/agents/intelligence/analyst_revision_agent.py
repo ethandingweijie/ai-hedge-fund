@@ -32,6 +32,7 @@ from datetime import datetime, timedelta
 from src.graph.state import AgentState
 from src.data.models import AnalystRevisionOutput, EarningsSurprise, AnalystEstimates
 from src.tools.api import get_analyst_estimates, get_earnings_surprises
+from src.utils.progress import progress
 
 # Dispersion thresholds (EPS high-low spread as % of |avg|)
 _DISPERSION_LOW    = 10.0   # < 10% — analysts agree
@@ -131,6 +132,12 @@ def run_analyst_revision_agent(state: AgentState) -> AgentState:
     Writes:  state["data"]["analyst_revisions"][ticker]
     """
     tickers  = state["data"]["tickers"]
+    # Phase 2.5 runs five agents concurrently; each announces what it is
+    # scanning under the shared `intelligence_agents` phase so the run
+    # timeline shows the sources being read rather than one silent row.
+    for _t in tickers:
+        progress.update_status("intelligence_agents", _t,
+                               "Scanning analyst estimate revisions")
     end_date = state["data"]["end_date"]
     api_key  = (
         os.environ.get("FMP_API_KEY")

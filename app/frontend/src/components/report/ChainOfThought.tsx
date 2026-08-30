@@ -31,20 +31,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ProgressEvent } from '@/lib/reportTypes';
-import {
-  PHASE_LABELS,
-  PHASE_ORDER,
-  canonicalPhase,
-
-  refinePhaseLabel,
-} from '@/lib/phaseLabels';
+import { PHASE_LABELS, PHASE_ORDER, canonicalPhase, refinePhaseLabel } from '@/lib/phaseLabels';
+import { buildPhaseRecord, derivePhaseState } from '@/lib/runProgress';
 
 /* ── Structured payloads only deep research emits ─────────────────────────── */
 interface SearchQuery { index: number; total: number; query: string }
 interface SearchSource { url: string; title: string }
-
-/** Completion wording for rows predating status normalisation. */
-const SETTLED_RE = /^✓|\bcomplete\b|\bready\b|\bskipp?(ed|ing)\b/i;
 
 type PhaseState = 'pending' | 'running' | 'done';
 
@@ -138,37 +130,13 @@ export function buildNodes(
     byPhase.get(key)!.push(ev);
   }
 
-  // phaseMap is the durable record: one entry per phase, persisted to
-  // sessionStorage and rehydrated from /analysis/status/{ticker}. `events` is
-  // capped at the last 50 on persist, so after a reconnect it holds only the
-  // tail of the run -- never derive phase STATE from it, or completed early
-  // phases fall back to "pending" and the run appears to run backwards.
-  const lastByPhase = new Map<string, ProgressEvent>();
-  for (const ev of Object.values(phaseMap ?? {})) {
-    if (ev?.phase) lastByPhase.set(canonicalPhase(ev.phase), ev);
-  }
-  // A live event is newer than its phaseMap entry by construction.
-  for (const ev of events) {
-    if (ev?.phase) lastByPhase.set(canonicalPhase(ev.phase), ev);
-  }
-
-  const isSettled = (ev?: ProgressEvent) => {
-    if (!ev) return false;
-    const raw = (ev.status ?? '').trim();
-    return raw === 'Done' || SETTLED_RE.test((ev.summary ?? '').trim() || raw);
-  };
-
-  // Working phase = the most recent entry that has not settled.
-  let activePhase: string | null = null;
-  let activeTs = '';
-  for (const [phase, ev] of lastByPhase) {
-    if (isSettled(ev)) continue;
-    const ts = ev.timestamp ?? '';
-    if (activePhase === null || ts >= activeTs) {
-      activePhase = phase;
-      activeTs = ts;
-    }
-  }
+  // Durable record + order-aware completion live in lib/runProgress so the
+  // ProgressHeader derives the identical current phase. Critically, several
+  // agents (scenario_agent among them) never emit a terminal status, so a
+  // phase is also complete once a later one has settled -- otherwise it spins
+  // for the rest of the run.
+  const lastByPhase = buildPhaseRecord(events, phaseMap);
+  const { activePhase, donePhases } = derivePhaseState(lastByPhase);
 
   // Known phases in pipeline order first, then anything unexpected in the order
   // it actually appeared — so a new backend phase still shows up rather than
@@ -245,7 +213,9 @@ export function buildNodes(
     // State comes from the durable record, so an evicted early phase still
     // reads as done rather than regressing to pending after a reconnect.
     let state: PhaseState = 'pending';
-    if (record) state = phase === activePhase ? 'running' : 'done';
+    if (record) {
+      state = donePhases.has(phase) ? 'done' : phase === activePhase ? 'running' : 'done';
+    }
 
     return {
       phase,

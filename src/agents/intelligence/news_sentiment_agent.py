@@ -52,6 +52,7 @@ from typing import Literal
 from src.graph.state import AgentState
 from src.data.models import NewsSentimentOutput, ScoredArticle
 from src.tools.api import get_company_news, get_press_releases
+from src.utils.progress import progress
 
 # ── Sentiment lexicons ──────────────────────────────────────────────────────
 
@@ -230,6 +231,12 @@ def run_news_sentiment_agent(state: AgentState) -> AgentState:
     Writes:  state["data"]["news_sentiment"][ticker]
     """
     tickers  = state["data"]["tickers"]
+    # Phase 2.5 runs five agents concurrently; each announces what it is
+    # scanning under the shared `intelligence_agents` phase so the run
+    # timeline shows the sources being read rather than one silent row.
+    for _t in tickers:
+        progress.update_status("intelligence_agents", _t,
+                               "Scanning company news sentiment")
     end_date = state["data"]["end_date"]
     api_key  = (
         os.environ.get("FMP_API_KEY")

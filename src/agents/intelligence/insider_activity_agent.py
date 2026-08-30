@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from src.graph.state import AgentState
 from src.data.models import InsiderActivityOutput, InsiderTransaction
 from src.tools.api import get_insider_trades, get_insider_trades_edgar
+from src.utils.progress import progress
 
 # Role-weight table — higher weight = stronger signal per dollar transacted
 _ROLE_WEIGHTS: dict[str, float] = {
@@ -69,6 +70,12 @@ def run_insider_activity_agent(state: AgentState) -> AgentState:
     Writes:  state["data"]["insider_activity"][ticker]
     """
     tickers  = state["data"]["tickers"]
+    # Phase 2.5 runs five agents concurrently; each announces what it is
+    # scanning under the shared `intelligence_agents` phase so the run
+    # timeline shows the sources being read rather than one silent row.
+    for _t in tickers:
+        progress.update_status("intelligence_agents", _t,
+                               "Scanning insider transactions (Form 4 buys / sells)")
     end_date = state["data"]["end_date"]
     api_key  = (
         os.environ.get("FMP_API_KEY")

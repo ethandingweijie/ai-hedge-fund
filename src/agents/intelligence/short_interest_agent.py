@@ -42,6 +42,7 @@ from __future__ import annotations
 from src.graph.state import AgentState
 from src.data.models import ShortInterestOutput
 from src.tools.api import get_short_interest
+from src.utils.progress import progress
 
 # ── Thresholds ───────────────────────────────────────────────────────────────
 
@@ -234,6 +235,12 @@ def run_short_interest_agent(state: AgentState) -> AgentState:
     crowded-trade flag, and persona-specific notes for Burry and Druckenmiller.
     """
     tickers = state["data"]["tickers"]
+    # Phase 2.5 runs five agents concurrently; each announces what it is
+    # scanning under the shared `intelligence_agents` phase so the run
+    # timeline shows the sources being read rather than one silent row.
+    for _t in tickers:
+        progress.update_status("intelligence_agents", _t,
+                               "Scanning short interest and days-to-cover")
     results: dict[str, dict] = {}
 
     for ticker in tickers:

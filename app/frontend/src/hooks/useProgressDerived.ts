@@ -10,6 +10,7 @@
  */
 import { useMemo } from 'react';
 import type { ProgressEvent } from '@/lib/reportTypes';
+import { buildPhaseRecord, derivePhaseState } from '@/lib/runProgress';
 
 // Short display names for the backend phase keys. Row 1 of ProgressHeader
 // stays on a single line alongside % / Cancel, so these are intentionally
@@ -52,10 +53,15 @@ export function useProgressDerived(
     const events = Object.values(phaseMap);
     if (events.length === 0) return { phaseLabel: undefined, thinkingDetail: undefined };
 
-    // Latest non-done event (still running) → primary; else last completed.
-    const running = events.filter(p => !/done|complete|✓/i.test(p.status ?? ''));
-    const activePhase = running.length > 0 ? running[running.length - 1] : events[events.length - 1];
-    const phaseKey = activePhase.phase;
+    // Shared with ChainOfThought (lib/runProgress) so the header and the
+    // timeline never name different current phases. Object.values(phaseMap) is
+    // in key-insertion order, not chronological, so the previous
+    // "last non-done entry" pick was effectively arbitrary — and it never
+    // finished phases like scenario_agent that emit no terminal status.
+    const record = buildPhaseRecord([], phaseMap);
+    const { activePhase: activeKey } = derivePhaseState(record);
+    const activePhase = (activeKey && record.get(activeKey)) || events[events.length - 1];
+    const phaseKey = activeKey ?? activePhase.phase;
 
     const phaseLabel = PHASE_SHORT[phaseKey] ?? phaseKey.replace(/_/g, ' ');
 
