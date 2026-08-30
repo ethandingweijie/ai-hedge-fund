@@ -269,3 +269,50 @@ def test_the_spread_guard_is_tight_enough_for_a_misread_cell():
     basis = {**BASIS, "target_multiple": 97.5}
     comps = {"pe": {"value": 17.9, "peer_count": 13, "basis": "industry"}}
     assert _build(basis=basis, comps=comps) is None
+
+
+# ── REITs quote P/NAV, not P/E ───────────────────────────────────────────
+
+def test_a_reit_pnav_in_the_pe_column_is_re_labelled():
+    """Keppel DC REIT's note shows "1.32" beside a 5.1% dividend yield and no
+    P/B row at all. That is P/NAV — confirmed against the note — and read as
+    a P/E it looks like a 91% discount to the peer median.
+
+    Recovered rather than discarded: 1.32x against the REIT P/B median is a
+    real observation, and Singapore has the thinnest coverage of any market.
+    """
+    fixed = mc._repair_reit_pe("AJBU.SI", {"pe": "1.32", "dividend_yield": "5.1%"})
+    assert fixed["pe"] == ""
+    assert mc._num(fixed["pb"]) == pytest.approx(1.32)
+
+
+def test_an_identical_pe_and_pb_is_one_number_wearing_two_labels():
+    """CapitaLand India Trust came back with pe 0.7 AND pb 0.7 — the
+    extractor copied P/NAV into both slots. The P/B is right; the P/E is not,
+    and needs no profile lookup to detect."""
+    fixed = mc._repair_reit_pe("CY6U.SI", {"pe": "0.7", "pb": "0.7",
+                                           "ev_ebitda": "17.1"})
+    assert fixed["pe"] == ""
+    assert mc._num(fixed["pb"]) == pytest.approx(0.7)
+    assert fixed["ev_ebitda"] == "17.1", "other metrics must be untouched"
+
+
+def test_a_real_pe_is_left_alone():
+    row = {"pe": "20.2", "pb": "3.1"}
+    assert mc._repair_reit_pe("MSFT", row) == row
+
+
+def test_a_genuinely_low_pe_on_a_non_reit_survives():
+    """The repair keys on REIT-ness or an exact pe/pb duplicate, not on
+    lowness alone — a cheap industrial must keep its P/E."""
+    row = {"pe": "4.2", "pb": "0.9"}
+    assert mc._repair_reit_pe("D05.SI", row) == row
+
+
+def test_the_repair_runs_inside_the_forward_lookup():
+    rows = [{"fiscal_year_label": "FY26e", "pe": "1.32",
+             "dividend_yield": "5.1%"}]
+    with _with_table(rows):
+        got = mc._forward_table_multiples("AJBU.SI")
+    assert got["multiple_basis"] == "p_b", "must not be booked as a P/E"
+    assert got["target_multiple"] == pytest.approx(1.32)

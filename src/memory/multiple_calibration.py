@@ -152,6 +152,7 @@ def _forward_table_multiples(ticker: str) -> Optional[dict[str, Any]]:
         label = str(row.get("fiscal_year_label") or "")
         if "e" not in label.lower():
             continue                      # historic column
+        row = _repair_reit_pe(ticker, row)
         for basis, key in (("pe", "pe"), ("ev_ebitda", "ev_ebitda"),
                            ("p_s", "ev_sales"), ("p_b", "pb")):
             value = _num(row.get(key))
@@ -159,6 +160,52 @@ def _forward_table_multiples(ticker: str) -> Optional[dict[str, Any]]:
                 return {"multiple_basis": basis, "target_multiple": value,
                         "source": f"ratios table {label}"}
     return None
+
+
+# A REIT's ratios table quotes P/NAV, DPU yield and P/FFO — not P/E. When the
+# extractor lands a P/NAV in the P/E slot the number is arithmetically fine
+# and financially meaningless, and it reads as a 90% discount to the peer P/E.
+# Both live cases, confirmed against the notes:
+#
+#   AJBU.SI  pe 1.32, dividend_yield 5.1%, no pb   P/NAV in the pe slot
+#   CY6U.SI  pe 0.70 AND pb 0.70 — identical       one number, two labels
+#
+# Recover rather than discard: a 1.32x P/NAV is a real observation against the
+# REIT pb median, and throwing it away loses evidence from the market with the
+# thinnest coverage.
+_REIT_PE_FLOOR = 5.0
+
+
+def _repair_reit_pe(ticker: str, row: dict) -> dict:
+    """Re-label a P/NAV that was extracted into the P/E column."""
+    pe = _num(row.get("pe"))
+    if not pe or pe >= _REIT_PE_FLOOR:
+        return row                        # a plausible P/E — leave it alone
+
+    pb = _num(row.get("pb"))
+    duplicated = pb is not None and abs(pe - pb) < 1e-9
+
+    is_reit = False
+    try:
+        from src.data.sector_profiles import get_wacc_profile_for_ticker
+        sector, profile = get_wacc_profile_for_ticker(ticker)
+        blob = f"{sector} {profile}".lower()
+        is_reit = "reit" in blob or "trust" in blob
+    except Exception:
+        pass
+
+    if not (duplicated or is_reit):
+        return row
+
+    fixed = dict(row)
+    fixed["pe"] = ""                      # never a P/E
+    if pb is None:
+        fixed["pb"] = row.get("pe")       # it was the P/NAV all along
+    logger.info(
+        "multiple_calibration: %s P/E %.2f re-read as P/NAV (%s)",
+        ticker, pe, "duplicate of pb" if duplicated else "REIT profile",
+    )
+    return fixed
 
 
 def build_observation(ticker: str) -> Optional[dict[str, Any]]:
