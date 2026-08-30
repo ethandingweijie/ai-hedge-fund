@@ -26,7 +26,7 @@ import requests
 
 from src.data.cache import get_cache
 from src.tools.hk.ticker import is_hk_ticker, to_canonical
-from src.tools.intl_provider import fmp_forced, try_fmp
+from src.tools.intl_provider import detect_market, fmp_forced, try_fmp
 from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
 from src.data.models import (
     AnalystEstimates,
@@ -947,6 +947,57 @@ def search_line_items(
 
 # ── 4. Insider Trades ─────────────────────────────────────────────────────────
 
+# ── HK/SG coverage gaps ───────────────────────────────────────────────────────
+# FMP serves HKEX and SGX well for profile, quote, the three statements,
+# key-metrics, ratios, prices and analyst estimates. It has NO rows for these
+# five datasets on either venue -- verified live against /stable on an Ultimate
+# key with AAPL as the control, so it is dataset coverage, not plan gating:
+#
+#     news/stock · insider-trading/search · insider-trading/statistics
+#     price-target-consensus · revenue product + geographic segmentation
+#
+# Insider is SEC Form 4 by construction, so HK/SG will never appear in it.
+#
+# Scope note: company news and insider TRADES are excluded on purpose. They
+# have legacy HK/SG branches (src/tools/{hk,sg}/news.py and insider_trades.py)
+# that return real rows, so flagging them would be false. Only the datasets with
+# no provider at all are noted:
+#
+#     insider statistics · price-target consensus
+#     revenue product + geographic segmentation
+#
+# Those return empty for HK/SG by design. Without a word of explanation that
+# looks like a bug, so each notes itself once per market.
+#
+# CAUTION if FMP news is ever revisited: /stable/news/stock silently IGNORES a
+# `symbol=` (singular) param and returns an unfiltered US feed -- U96.SI,
+# 0700.HK and even a nonsense ZZZZ.XX all returned identical AAPL articles. The
+# real filter is `symbols=` (plural), which correctly returns 0 for HK/SG. Do
+# not "fix" an empty result by switching to the singular param; that silently
+# attaches Apple headlines to Asian stocks.
+_UNCOVERED_LOGGED: set[tuple[str, str]] = set()
+
+
+def _note_uncovered(dataset: str, ticker: str) -> None:
+    """Log once per (dataset, market) that FMP has no HK/SG data for it."""
+    try:
+        market = detect_market(ticker)
+    except Exception:
+        return
+    if not market:
+        return  # US — covered, nothing to say
+    key = (dataset, market)
+    if key in _UNCOVERED_LOGGED:
+        return
+    _UNCOVERED_LOGGED.add(key)
+    # print(), not logging: this module reports through print throughout (the
+    # "[FMP] ..." lines), and there is no logger bound here.
+    print(
+        f"  [coverage] {market.upper()}: FMP has no {dataset} data for this "
+        f"venue (e.g. {ticker}) - empty result is by design, not a failure"
+    )
+
+
 def get_insider_trades(
     ticker: str,
     end_date: str,
@@ -1085,6 +1136,7 @@ def get_insider_statistics(
     Used as a supplementary signal in the value trap agent.
     Returns the most recent quarter (index 0), or {} on failure.
     """
+    _note_uncovered("insider statistics", ticker)
     data = _fmp_get(
         f"{_STABLE}/insider-trading/statistics",
         {"symbol": ticker},
@@ -1520,6 +1572,7 @@ def get_price_target_consensus(
     FMP plan: free tier exposes consensus PT (verified 2026-04-25).
     HK/SG tickers: not available — returns None.
     """
+    _note_uncovered("price-target consensus", ticker)
     # price-target-consensus is empty for HK and SG even on global coverage
     # (verified 2026-08-27) — grades-consensus exists for some HK names but
     # carries no price target, so there is nothing to return here.
@@ -1627,6 +1680,7 @@ def get_revenue_product_segmentation(
     Endpoint: /stable/revenue-product-segmentation
     Paid-tier endpoint on FMP; returns [] on 402/403.
     """
+    _note_uncovered("product segmentation", ticker)
     return _fetch_revenue_segmentation(
         "revenue-product-segmentation", ticker, end_date, period, api_key,
     )
@@ -1645,6 +1699,7 @@ def get_revenue_geographic_segments(
     to match the product-segmentation naming convention.)
     Paid-tier endpoint on FMP; returns [] on 402/403.
     """
+    _note_uncovered("geographic segmentation", ticker)
     return _fetch_revenue_segmentation(
         "revenue-geographic-segmentation", ticker, end_date, period, api_key,
     )

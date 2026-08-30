@@ -4,6 +4,8 @@ Phase 2.7 — EDGAR_HKEX Resolver  (lightweight, no LLM, ~0.5 s per ticker)
 Resolves annual filing references for all tickers:
   • US / ADR tickers  → SEC EDGAR submissions API (10-K / 20-F)
   • HK-listed tickers → HKEXnews titleSearchServlet (Annual Report / 年報)
+  • SG-listed tickers → skipped; there is no SGXNet client, and querying
+    SEC EDGAR for an SGX company can only ever miss
 
 For US tickers, looks up the most recent SEC annual filing using the free SEC
 EDGAR submissions API.  No API key required; respects SEC rate-limit guideline.
@@ -33,6 +35,7 @@ from src.graph.state import AgentState
 from src.tools.api import get_edgar_filing_refs
 from src.tools.hk.ticker import is_hk_ticker
 from src.tools.hkex_api import get_hkex_filing_refs
+from src.tools.sg.ticker import is_sg_ticker
 from src.utils.progress import progress
 
 
@@ -42,6 +45,7 @@ def run_edgar_hkex_resolver(state: AgentState) -> AgentState:
 
     For US/ADR tickers : looks up the SEC EDGAR submissions API (10-K / 20-F).
     For HK tickers     : looks up HKEXnews titleSearchServlet (Annual Report / 年報).
+    For SG tickers     : skipped — see the SG branch below.
 
     Reads:
         state["data"]["tickers"]   — list of ticker symbols
@@ -73,6 +77,30 @@ def run_edgar_hkex_resolver(state: AgentState) -> AgentState:
                     agent_id, ticker,
                     "HKEXnews: no Annual Report found — AKShare attribution will be used"
                 )
+            continue
+
+        # ── SG-listed stocks: no filings registry wired ───────────────────
+        # Singapore companies do not file with the SEC, so the EDGAR
+        # fallthrough below could only ever miss — and it did, emitting
+        # "EDGAR CIK not found" on every .SI run and leaving deep research to
+        # believe it had merely failed to find a filing.
+        #
+        # There is no SGXNet client to call: src/tools/hk/ has hkex_api.py and
+        # hkex_news_api.py, src/tools/sg/ has no filings module. So this is a
+        # deliberate skip, not a resolution. Deep research proceeds without an
+        # annual-report anchor and relies on FMP attribution, exactly as it
+        # already did -- but without the misleading SEC status.
+        #
+        # The status text is load-bearing: refinePhaseLabel() in
+        # app/frontend/src/lib/phaseLabels.ts derives the venue name from it,
+        # so naming SGX here is what stops the UI reading "SEC filings
+        # resolved" on a Singapore ticker.
+        if is_sg_ticker(ticker):
+            edgar_refs[ticker] = {}
+            progress.update_status(
+                agent_id, ticker,
+                "SGX: no filings registry wired — FMP attribution will be used"
+            )
             continue
 
         progress.update_status(agent_id, ticker, "Resolving SEC EDGAR annual filing...")
