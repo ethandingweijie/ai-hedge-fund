@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { pulseTicker } from '@/lib/api';
 import { currencySymbol } from '@/lib/utils';
 import { actionTone } from '@/lib/semanticColors';
+import { Markdown } from '@/components/report/shared/Markdown';
 
 interface PulsePrior {
   ticker: string;
@@ -235,14 +236,23 @@ export function PulseCard({ ticker, onOpenReport, onRunFull, suppressed }: Props
           )}
         </div>
       ) : prior ? (
-        <p className="text-[12px] text-muted-foreground">{prior.summary}</p>
+        <Markdown className="[&_p]:text-[12px] [&_p]:text-muted-foreground [&_li]:text-[12px] [&_p]:mb-2">
+          {prior.summary}
+        </Markdown>
       ) : null}
 
       {/* Beat 2 — what changed since */}
       {delta && (
         <div className="mt-2.5 pt-2.5 border-t border-border/60">
           {delta.discovery && delta.brief ? (
-            <p className="text-[12px] text-foreground/85 leading-relaxed whitespace-pre-line">{delta.brief}</p>
+            /* The discovery brief is LLM-written markdown — headings, bold
+               labels, bullet lists. Rendering it as preformatted text leaked
+               the markup verbatim ("**Sembcorp Industries Ltd ...**"). The
+               arbitrary variants keep Pulse's compact 12px scale, since the
+               shared Markdown map is sized for full report body copy. */
+            <Markdown className="[&_p]:text-[12px] [&_li]:text-[12px] [&_p]:mb-2 [&_h3]:text-[13px] [&_h4]:text-[12px] [&_h5]:text-[12px] [&_h6]:text-[11px]">
+              {delta.brief}
+            </Markdown>
           ) : (delta.events?.length ?? 0) > 0 ? (
             <ul className="space-y-1">
               {(delta.events ?? []).map((ev, i) => (
