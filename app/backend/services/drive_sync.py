@@ -385,6 +385,325 @@ def match_tickers(name: str, gazetteer: set[str] | None = None) -> list[str]:
     return found
 
 
+
+# ── Filename → industry routing ─────────────────────────────────────────────
+#
+# A sector report matches no ticker: `match_tickers` resolves company names,
+# and an industry title resolves to nothing. The document is downloaded,
+# registered, counted as `unmatched`, and never read.
+#
+# The routing target is `(market, sector, profile)` — the same key an equity
+# is routed through, and the key `industry_knowledge` and the 2F prompt block
+# already use. Nothing new is mapped by hand: the vocabulary is derived from
+# the profile names themselves, so it stays in step with the taxonomy for
+# free, exactly as `build_derived_aliases` does for tickers.
+
+# Only a filename that SAYS it is a sector document is routed. Without this
+# an equity note for a company missing from the gazetteer ("Sea Limited
+# 2026.pdf") would resolve to its industry and be filed as sector knowledge —
+# one company's numbers stored as the whole industry's.
+_INDUSTRY_MARKERS = (
+    "sector", "industry", "handbook", "primer", "outlook", "thematic",
+    "landscape", "chartbook", "playbook", "deep dive", "deep-dive",
+    "state of", "market map",
+)
+
+# Market words as they appear in report titles. "global" and "asia" resolve
+# to the market-agnostic bucket rather than to a market: a global handbook is
+# not a claim about one exchange.
+_MARKET_WORDS: dict[str, str] = {
+    "singapore": "SES", "sgx": "SES", "s-reit": "SES", "s-reits": "SES",
+    "hong kong": "HKSE", "hongkong": "HKSE", "hsi": "HKSE",
+    "china": "SHH", "a-share": "SHH", "a-shares": "SHH",
+    "shanghai": "SHH", "shenzhen": "SHZ",
+    "japan": "JPX", "japanese": "JPX", "topix": "JPX",
+    "korea": "KSC", "korean": "KSC", "kospi": "KSC",
+    "us": "US", "u.s.": "US", "united states": "US", "america": "US",
+    "global": "", "worldwide": "", "asia": "", "apac": "", "emea": "",
+}
+
+# A phrase that also means something outside this taxonomy is only accepted
+# when its sector is named too. "China" is a REIT sub-profile AND a country;
+# "Office", "Retail", "Healthcare" and "Industrial" are sub-profiles AND
+# ordinary English. Requiring the sector word is what stops a Singapore
+# retail-sector note from being filed as a retail REIT note.
+_QUALIFIER_REQUIRED = {
+    "china", "india", "european", "office", "us office", "usoffice",
+    "retail", "commercial", "industrial", "healthcare", "hospitality",
+    "logistics", "outlet", "accommodation", "datacentre", "insurance",
+    "brokerage", "equipment", "proxy", "consulting", "mortgage",
+    "conglomerate",
+}
+
+# What naming a sector looks like in a title.
+_SECTOR_KEYWORDS: dict[str, tuple[str, ...]] = {
+    "REIT": ("reit", "reits"),
+    "RealEstate": ("real estate", "property"),
+    "Property": ("property", "real estate"),
+    "Semiconductor": ("semiconductor", "semiconductors", "semis", "chip", "chips"),
+    "Financials": ("bank", "banks", "banking", "financial", "financials",
+                   "insurer", "insurers", "insurance"),
+    "Industrials": ("industrial", "industrials", "manufacturing"),
+    "Consumer": ("consumer", "retail", "staples", "discretionary"),
+    "Energy": ("energy", "power", "utility", "utilities"),
+    "Tech": ("tech", "technology", "software", "internet"),
+    "ProfessionalServices": ("services", "consulting", "outsourcing"),
+    "Crypto": ("crypto", "digital asset", "bitcoin"),
+    "Biopharma": ("pharma", "pharmaceutical", "pharmaceuticals", "biotech",
+                  "life science", "biopharma"),
+    "Resources": ("mining", "resources", "oil", "gas", "commodities"),
+    "Transportation": ("transport", "transportation", "airline", "airlines",
+                       "shipping"),
+    "Telco": ("telco", "telecom", "telecoms", "telecommunications"),
+    "Healthcare": ("healthcare", "health care", "hospital"),
+    "HealthcareServices": ("healthcare", "health care", "managed care", "payer"),
+    "Materials": ("materials", "chemicals", "packaging"),
+}
+
+# Sectors coherent enough that a note about the SECTOR is a note about every
+# name in it. `(Semiconductor, "")` is 18 semiconductor companies, so a
+# semiconductor primer applies to all of them. `(Tech, "")` is 44 names
+# spanning search, e-commerce, hardware and enterprise software, and
+# `(RealEstate, "")` is 43 — a note filed against either would describe none
+# of them. Blank-profile routes outside this set are therefore NOT routable.
+_SECTOR_ONLY_ROUTABLE = {
+    "Semiconductor", "Biopharma", "Telco", "Transportation", "Crypto",
+    "Energy", "Materials", "Resources", "REIT", "Property",
+    "HealthcareServices",
+}
+
+# How sector notes actually title themselves, where that differs from the
+# profile name. Derivation covers the rest.
+# A phrase can name more than one route and honestly so: an automotive
+# sector note is about OEMs and EV names alike, and the taxonomy splits them.
+_INDUSTRY_SYNONYMS: dict[str, tuple[tuple[str, str], ...]] = {
+    "banking": (("Financials", "Money Center Bank"),),
+    "banks": (("Financials", "Money Center Bank"),),
+    "money centre bank": (("Financials", "Money Center Bank"),),
+    "regional banks": (("Financials", "Regional Bank"),),
+    "investment banks": (("Financials", "Investment Bank"),),
+    "insurers": (("Financials", "Insurance"),),
+    "payments": (("Financials", "Payment Networks"),),
+    "asset management": (("Financials", "Asset Manager"),),
+    "exchanges": (("Financials", "Market Infrastructure"),),
+    "semiconductors": (("Semiconductor", ""),),
+    "semis": (("Semiconductor", ""),),
+    "dram": (("Semiconductor", "Memory / DRAM-NAND"),),
+    "nand": (("Semiconductor", "Memory / DRAM-NAND"),),
+    "hbm": (("Semiconductor", "Memory / DRAM-NAND"),),
+    "foundries": (("Semiconductor", "IDM / Foundry"),),
+    "wafer fab equipment": (("Semiconductor", "Equipment / EDA"),),
+    "cyber security": (("Tech", "Cybersecurity / Mission-Critical SaaS"),),
+    "hyperscalers": (("Tech", "Hyperscaler / Tech Conglomerate"),),
+    "neoclouds": (("Tech", "AI Infrastructure / Neocloud"),),
+    "managed care organisations": (("HealthcareServices", "Managed Care"),),
+    "health insurers": (("HealthcareServices", "Managed Care"),),
+    "pharmaceuticals": (("Biopharma", "Large Cap Pharma"),),
+    "big pharma": (("Biopharma", "Large Cap Pharma"),),
+    "biotech": (("Biopharma", ""),),
+    "biopharma": (("Biopharma", ""),),
+    "airlines": (("Transportation", "Airlines"),),
+    "utilities": (("Energy", "Regulated Utility"),),
+    "independent power": (("Energy", "IPP"),),
+    "sports betting": (("Consumer", "Online Gaming / Sports Betting"),),
+    "igaming": (("Consumer", "Online Gaming / Sports Betting"),),
+    "telecoms": (("Telco", ""),),
+    "telecommunications": (("Telco", ""),),
+    "reits": (("REIT", ""),),
+    "s-reits": (("REIT", ""),),
+    "aerospace": (("Industrials", "Aerospace & Defense"),),
+    "defense": (("Industrials", "Aerospace & Defense"),),
+    "defence": (("Industrials", "Aerospace & Defense"),),
+    "upstream oil": (("Resources", "Upstream Oil & Gas"),),
+    "oil & gas": (("Resources", "Upstream Oil & Gas"),),
+    "it services": (("ProfessionalServices", "IT Services"),),
+    "reit": (("REIT", ""),),
+    "s-reit": (("REIT", ""),),
+    "automotive": (("Consumer", "Automotive & EV"),
+                   ("Industrials", "Automotive (OEM)")),
+    "autos": (("Consumer", "Automotive & EV"),
+              ("Industrials", "Automotive (OEM)")),
+}
+
+# `RealEstate / REIT` is a single legacy ticker route that duplicates the
+# whole REIT sector. As a PHRASE, "reit" must mean the sector, not that one
+# name, so the route is excluded from the derived vocabulary. It still routes
+# equities exactly as before; only the filename vocabulary ignores it.
+_DUPLICATE_ROUTES = {("RealEstate", "REIT")}
+
+_MARKET_SUFFIX_RE = re.compile(r"\((SG|EU|US|HK)\)\s*$")
+_SUFFIX_TO_MARKET = {"SG": "SES", "US": "US", "HK": "HKSE", "EU": ""}
+_MARKET_TO_SUFFIX = {"SES": "SG", "US": "US", "HKSE": "HK"}
+
+
+def _all_routes() -> set[tuple[str, str]]:
+    """Every (sector, profile) an equity is actually routed through."""
+    routes: set[tuple[str, str]] = set()
+    try:
+        from src.data import sector_profiles as _sp
+    except Exception as exc:                       # pragma: no cover
+        logger.warning("sector_profiles unavailable: %s", exc)
+        return routes
+    for attr in ("TICKER_SECTOR_LOOKUP", "SGX_TICKER_SECTOR_LOOKUP"):
+        for entry in (getattr(_sp, attr, {}) or {}).values():
+            if entry and len(entry) >= 2 and entry[0]:
+                routes.add((entry[0], entry[1] or ""))
+    return routes
+
+
+def build_industry_vocabulary() -> dict[str, list[tuple[str, str, str]]]:
+    """phrase → [(market, sector, profile)], derived from the taxonomy.
+
+    Derived rather than hand-listed for the same reason `build_derived_aliases`
+    is: a hand-maintained table drifts out of step with the routes the engine
+    actually uses, and the drift is invisible until a document has been filed
+    against a key nothing reads.
+    """
+    vocab: dict[str, list[tuple[str, str, str]]] = {}
+
+    def _add(phrase: str, market: str, sector: str, profile: str):
+        phrase = (phrase or "").strip().lower()
+        if len(phrase) < 3:
+            return
+        entry = (market, sector, profile)
+        vocab.setdefault(phrase, [])
+        if entry not in vocab[phrase]:
+            vocab[phrase].append(entry)
+
+    for sector, profile in _all_routes():
+        if (sector, profile) in _DUPLICATE_ROUTES:
+            continue
+        if not profile:
+            if sector in _SECTOR_ONLY_ROUTABLE:
+                for kw in _SECTOR_KEYWORDS.get(sector, ()):
+                    _add(kw, "", sector, "")
+            continue
+        suffix = _MARKET_SUFFIX_RE.search(profile)
+        market = _SUFFIX_TO_MARKET.get(suffix.group(1), "") if suffix else ""
+        base = _MARKET_SUFFIX_RE.sub("", profile).strip()
+        # The whole name, plus each side of a "/" — sector notes title
+        # themselves "Memory", not "Memory / DRAM-NAND".
+        for phrase in {base, *[f.strip() for f in base.split("/")]}:
+            _add(phrase, market, sector, profile)
+
+    for phrase, routes_ in _INDUSTRY_SYNONYMS.items():
+        for sector, profile in routes_:
+            _add(phrase, "", sector, profile)
+
+    return vocab
+
+
+def _market_variant(sector: str, profile: str, market: str) -> str:
+    """The market-scoped sibling of a profile, when the taxonomy has one.
+
+    A synonym like "banking" is market-agnostic, but "Singapore Banking Sector
+    Outlook" is not: the taxonomy carries `Money Center Bank (SG)` (DBS, OCBC,
+    UOB) alongside `Money Center Bank` (JPM, BAC, C, WFC). Filing the
+    Singapore note against the US route is exactly the market collision the
+    store is keyed to prevent.
+    """
+    suffix = _MARKET_TO_SUFFIX.get(market)
+    if not suffix or not profile:
+        return profile
+    candidate = f"{profile} ({suffix})"
+    return candidate if (sector, candidate) in _all_routes() else profile
+
+
+def _detect_market(lowered: str) -> str:
+    """Longest market word wins — 'united states' over 'us'."""
+    for word in sorted(_MARKET_WORDS, key=len, reverse=True):
+        if re.search(r"(?<![a-z])" + re.escape(word) + r"(?![a-z])", lowered):
+            return _MARKET_WORDS[word]
+    return ""
+
+
+def _sector_named(lowered: str, sector: str) -> bool:
+    return any(
+        re.search(r"(?<![a-z])" + re.escape(kw) + r"(?![a-z])", lowered)
+        for kw in _SECTOR_KEYWORDS.get(sector, ())
+    )
+
+
+def looks_like_sector_document(name: str) -> bool:
+    """Does the filename claim to be a sector document at all?
+
+    Separated from `match_industry` so the sync can tell the two failures
+    apart. "Global eCommerce Handbook.pdf" is a sector note the taxonomy has
+    no route for — a gap worth reporting. "invoice.pdf" is not, and reporting
+    it would be noise.
+    """
+    stem = re.sub(r"\.(pdf|docx?|txt)$", "", name or "", flags=re.IGNORECASE)
+    lowered = f" {re.sub(r'[_-]+', ' ', stem).lower()} "
+    return any(m in lowered for m in _INDUSTRY_MARKERS)
+
+
+def match_industry(name: str,
+                   vocabulary: dict[str, list[tuple[str, str, str]]] | None = None
+                   ) -> list[dict]:
+    """Map a sector-document filename to [{market, sector, profile}].
+
+    Same longest-match / span-consumption discipline as `match_tickers`, for
+    the same reason: "Memory / DRAM-NAND" and "Memory" both hit a memory
+    handbook, and without consuming the matched span the document is filed
+    twice — once against a route nobody reads.
+    """
+    vocab = vocabulary if vocabulary is not None else build_industry_vocabulary()
+    stem = re.sub(r"\.(pdf|docx?|txt)$", "", name or "", flags=re.IGNORECASE)
+    stem = stem.replace("_", " ")
+
+    # Hyphens are scanned BOTH ways. They separate words in one filename
+    # ("Korea-Memory-Sector.pdf") and belong to the term itself in the next
+    # ("S-REIT", "DRAM-NAND", "A-shares"), and nothing in the character says
+    # which. Collapsing them lost "S-REIT"; keeping them lost "managed-care".
+    # Two passes cost one extra scan of a filename.
+    forms = [f" {stem.lower()} "]
+    spaced = f" {re.sub(r'-+', ' ', stem).lower()} "
+    if spaced != forms[0]:
+        forms.append(spaced)
+
+    if not any(m in f for f in forms for m in _INDUSTRY_MARKERS):
+        return []
+
+    market = next((m for m in (_detect_market(f) for f in forms) if m), "")
+    out: list[dict] = []
+
+    for lowered in forms:
+        consumed: list[tuple[int, int]] = []
+
+        def _overlaps(a: int, b: int) -> bool:
+            return any(a < e and st < b for st, e in consumed)
+
+        for phrase in sorted(vocab, key=len, reverse=True):
+            hit = re.search(r"(?<![a-z])" + re.escape(phrase) + r"(?![a-z])",
+                            lowered)
+            if hit is None or _overlaps(hit.start(), hit.end()):
+                continue
+            candidates = vocab[phrase]
+            if phrase in _QUALIFIER_REQUIRED and not any(
+                    _sector_named(lowered, sec) for _m, sec, _p in candidates):
+                continue
+            # Where one phrase serves several markets ("Money Center Bank"
+            # and "Money Center Bank (SG)"), the market in the title decides.
+            # A market-agnostic route is the fallback, never a different
+            # market's.
+            chosen = [c for c in candidates if c[0] == market] or                      [c for c in candidates if not c[0]]
+            if not chosen:
+                continue
+            consumed.append(hit.span())
+            for _m, sector, profile in chosen:
+                row = {"market": market, "sector": sector,
+                       "profile": _market_variant(sector, profile, market)}
+                if row not in out:
+                    out.append(row)
+
+    # A named profile outranks the bare sector it sits in. "US Office REIT
+    # Sector Outlook" hits both `REIT / US Office` and `REIT / (sector)`;
+    # storing both files the same note twice, and the sector copy would then
+    # also serve every other REIT sub-profile.
+    specific = {r["sector"] for r in out if r["profile"]}
+    return [r for r in out if r["profile"] or r["sector"] not in specific]
+
+
 # ── Download ─────────────────────────────────────────────────────────────────
 
 def download_drive_file(file_id: str, dest_dir: str) -> Optional[str]:
@@ -417,6 +736,55 @@ def _already_extracted(tickers: list[str], content_hash: str) -> bool:
 
 
 
+def _ingest_sector_document(name: str, fid: str, routes: list[dict],
+                            pdf_dir: str, auto_allow: bool,
+                            result: dict, _progress) -> None:
+    """Download and extract one sector note.
+
+    Deliberately NOT registered in the research manifest: every manifest
+    consumer keys by ticker, and a sector note has none — `register_documents`
+    writes one entry per ticker and so writes nothing for an empty list. Its
+    record of ingestion is the `industry_knowledge` row, which carries the
+    content hash and the source path. Re-downloading each sync is cheap and
+    does not accumulate: download names are deterministic
+    (<sha12>_<fid8>.pdf), so a re-sync overwrites the same file, and the
+    expensive half — the extraction — is deduped on that hash.
+    """
+    from src.memory.assumption_extract import extract_and_persist_industry_pdf
+    from src.utils import research_pdf
+
+    labels = ", ".join(
+        f"{r['sector']}" + (f"/{r['profile']}" if r["profile"] else "")
+        + (f" [{r['market']}]" if r["market"] else "")
+        for r in routes)
+    result["industry_matched"].append(
+        {"file_id": fid, "name": name, "routes": routes})
+
+    dest = download_drive_file(fid, pdf_dir)
+    if not dest:
+        result["errors"].append(f"download failed: {name[:60]} ({fid})")
+        return
+    content_hash = research_pdf.file_content_hash(dest)
+    _progress(f"sector note {name[:50]} -> {labels}")
+
+    if not auto_allow:
+        result["gated"] += 1
+        return
+    try:
+        summary = extract_and_persist_industry_pdf(
+            dest, routes, ai_input_allowed=True, drive_file_id=fid,
+            source_url=f"https://drive.google.com/file/d/{fid}")
+        done = [k for k, v in (summary.get("routes") or {}).items()
+                if v == "extracted"]
+        result["industry_extracted"] += len(done)
+        _progress(f"extracted {len(done)}/{len(routes)} industry route(s) "
+                  f"for {name[:40]} (hash {str(content_hash)[:8]})")
+    except Exception as exc:
+        result["errors"].append(f"industry extraction failed {name[:40]}: {exc}")
+    # Be polite to the extraction API between documents
+    time.sleep(1.0)
+
+
 def sync_drive_folder(repo_root: str | None = None,
                       folder_ref: str | None = None,
                       auto_allow: bool | None = None,
@@ -439,6 +807,7 @@ def sync_drive_folder(repo_root: str | None = None,
     result: dict = {
         "folder_id": folder_id, "listed": 0, "matched": [], "unmatched": [],
         "downloaded": 0, "unchanged": 0, "extracted": 0, "gated": 0,
+        "industry_matched": [], "industry_extracted": 0,
         "errors": [],
     }
     if not folder_id:
@@ -458,6 +827,7 @@ def sync_drive_folder(repo_root: str | None = None,
     _progress(f"listed {len(entries)} files in folder {folder_id}")
 
     gazetteer = build_gazetteer()
+    industry_vocab = build_industry_vocabulary()
     raw_manifest = research_pdf._load_manifest_raw(root)
     drive_entries = [e for e in raw_manifest["documents"]
                      if e.get("drive_file_id")]
@@ -483,7 +853,20 @@ def sync_drive_folder(repo_root: str | None = None,
         fid, name = entry["file_id"], entry["name"]
         tickers = match_tickers(name, gazetteer)
         if not tickers:
-            result["unmatched"].append({"file_id": fid, "name": name})
+            # A sector note names an industry, not a company. It takes the
+            # industry path only when it resolves to a route an equity is
+            # actually valued through; anything else is reported, never
+            # guessed onto a ticker.
+            routes = match_industry(name, industry_vocab)
+            if routes:
+                _ingest_sector_document(name, fid, routes, pdf_dir,
+                                        auto_allow, result, _progress)
+                continue
+            entry = {"file_id": fid, "name": name}
+            if looks_like_sector_document(name):
+                entry["reason"] = ("sector document — no (sector, profile) "
+                                   "route in the taxonomy for it")
+            result["unmatched"].append(entry)
             continue
         result["matched"].append({"file_id": fid, "name": name,
                                   "tickers": tickers})
@@ -591,6 +974,8 @@ def sync_drive_folder(repo_root: str | None = None,
               f"unmatched={len(result['unmatched'])} downloaded="
               f"{result['downloaded']} unchanged={result['unchanged']} "
               f"extracted={result['extracted']} gated={result['gated']} "
+              f"industry={len(result['industry_matched'])}/"
+              f"{result['industry_extracted']} "
               f"calibrated={result.get('calibration_observations', 0)}")
     return result
 

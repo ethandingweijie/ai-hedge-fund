@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS industry_knowledge (
     trends_json       TEXT,
     positioning_json  TEXT,
     doc_path          TEXT,
+    content_hash      TEXT,
     extracted_at      TEXT NOT NULL,
     PRIMARY KEY (market, sector, profile, as_of, house)
 );
@@ -87,6 +88,13 @@ def ensure_industry_table() -> None:
         if _ensured:
             return
         db.execute_script(_DDL)
+        # CREATE TABLE IF NOT EXISTS never ALTERs, so a table created before
+        # this column existed keeps the old shape and the dedupe query fails
+        # at read time rather than at deploy time.
+        try:
+            db.add_column_if_missing("industry_knowledge", "content_hash", "TEXT")
+        except Exception:
+            pass
         for stmt in _INDEXES:
             try:
                 db.execute(stmt)
@@ -132,6 +140,7 @@ def upsert_industry_knowledge(
     trends=None,
     positioning=None,
     doc_path: str | None = None,
+    content_hash: str | None = None,
 ) -> None:
     """Record one sector note's view of one (market, sector, profile).
 
@@ -146,8 +155,8 @@ def upsert_industry_knowledge(
             (market, sector, profile, as_of, house, anchor_kpi,
              disclosed_metrics_json, economics_json, competitive_json,
              quantitative_json, peer_multiples_json, trends_json,
-             positioning_json, doc_path, extracted_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             positioning_json, doc_path, content_hash, extracted_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(market, sector, profile, as_of, house) DO UPDATE SET
             anchor_kpi=excluded.anchor_kpi,
             disclosed_metrics_json=excluded.disclosed_metrics_json,
@@ -158,13 +167,14 @@ def upsert_industry_knowledge(
             trends_json=excluded.trends_json,
             positioning_json=excluded.positioning_json,
             doc_path=excluded.doc_path,
+            content_hash=excluded.content_hash,
             extracted_at=excluded.extracted_at
         """,
         [market or ANY_MARKET, sector, profile, as_of or "unknown",
          house or "sell-side", anchor_kpi,
          _dumps(disclosed_metrics), _dumps(economics), _dumps(competitive),
          _dumps(quantitative), _dumps(peer_multiples), _dumps(trends),
-         _dumps(positioning), doc_path, _now()],
+         _dumps(positioning), doc_path, content_hash, _now()],
     )
 
 
@@ -203,7 +213,8 @@ def get_industry_knowledge(sector: str, profile: str,
         ensure_industry_table()
         rows = db.query(
             "SELECT * FROM industry_knowledge "
-            "WHERE sector = ? AND profile = ? AND (market = ? OR market = ?) "
+            "WHERE sector = ? AND (profile = ? OR profile = '') "
+            "AND (market = ? OR market = ?) "
             "ORDER BY as_of DESC",
             [sector, profile, market or ANY_MARKET, ANY_MARKET],
         )
@@ -212,10 +223,50 @@ def get_industry_knowledge(sector: str, profile: str,
         return []
 
     out = [_row(r) for r in rows or []]
-    # Market-specific first, then market-agnostic; newest within each.
-    out.sort(key=lambda d: (0 if (d.get("market") or "") == (market or ANY_MARKET)
-                            and market else 1))
+    # Two rungs, in the same order `get_kpi_prompt` already resolves its
+    # hand-written blocks: profile-exact beats sector-level, and within each,
+    # market-specific beats market-agnostic. A semiconductor primer filed at
+    # `(Semiconductor, "")` is largely true of a memory maker, so it should
+    # reach one; it should not outrank a note written about memory itself.
+    def _rank(d: dict) -> tuple[int, int]:
+        exact_profile = 0 if (d.get("profile") or "") == (profile or "") else 1
+        exact_market = 0 if (market and (d.get("market") or "") == market) else 1
+        return (exact_profile, exact_market)
+
+    out.sort(key=_rank)
     return out
+
+
+def has_profile_specific_knowledge(sector: str, profile: str,
+                                   market: str = ANY_MARKET) -> bool:
+    """Is there a note about THIS industry, rather than about its sector?"""
+    return any((n.get("profile") or "") == (profile or "")
+               for n in get_industry_knowledge(sector, profile, market))
+
+
+def industry_note_exists(market: str, sector: str, profile: str,
+                         content_hash: str) -> bool:
+    """Has this exact document already been filed against this route?
+
+    Checked BEFORE extraction rather than after, because the extraction call
+    is the expensive half — a re-synced folder must not re-read every sector
+    note it already knows. Returns False on any store error so a broken read
+    causes a re-extraction (wasteful) rather than a silent skip (lossy).
+    """
+    if not content_hash:
+        return False
+    try:
+        ensure_industry_table()
+        rows = db.query(
+            "SELECT 1 FROM industry_knowledge "
+            "WHERE market = ? AND sector = ? AND profile = ? "
+            "AND content_hash = ? LIMIT 1",
+            [market or ANY_MARKET, sector, profile, content_hash],
+        )
+    except Exception as exc:
+        logger.warning("industry_knowledge dedupe check failed: %s", exc)
+        return False
+    return bool(rows)
 
 
 def industry_coverage() -> list[dict[str, Any]]:

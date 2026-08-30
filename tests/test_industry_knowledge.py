@@ -162,3 +162,62 @@ def test_a_read_failure_returns_no_notes_rather_than_raising():
          patch.object(ik.db, "query", side_effect=RuntimeError("boom")):
         assert ik.get_industry_knowledge("X", "Y", "US") == []
         assert ik.industry_coverage() == []
+
+
+# ── The sector rung ──────────────────────────────────────────────────────
+
+SECTOR_NOTE = {**NOTE, "sector": "Semiconductor", "profile": "",
+               "anchor_kpi": "Bit supply/demand balance",
+               "trends": [], "positioning": []}
+
+
+def test_a_sector_note_reaches_a_profile_that_has_no_block_of_its_own():
+    """A semiconductor primer is largely true of a memory maker, and
+    `Memory / DRAM-NAND` is one of the 54 routes with no hand-written block."""
+    block = _block("Semiconductor", "Memory / DRAM-NAND", "KSC", [SECTOR_NOTE])
+    assert "Bit supply/demand balance" in block
+
+
+def test_a_sector_note_does_not_displace_a_hand_written_profile_block():
+    """The sector note is the broader claim; the tailored REIT and bank
+    blocks are the more specific one. Tier 0 exists to reach the routes with
+    no block at all, not to overrule the 26 that have one."""
+    re_note = {**SECTOR_NOTE, "sector": "RealEstate",
+               "anchor_kpi": "cap rate spread"}
+    block = _block("RealEstate", "R.E.I.T.", "US", [re_note])
+    assert "cap rate spread" not in block
+    assert block is not sp._GENERIC_KPI_PROMPT
+
+
+def test_a_profile_note_still_wins_where_one_exists():
+    profile_note = {**NOTE, "sector": "RealEstate", "profile": "R.E.I.T.",
+                    "anchor_kpi": "cap rate spread vs cost of debt"}
+    block = _block("RealEstate", "R.E.I.T.", "US", [profile_note])
+    assert "cap rate spread vs cost of debt" in block
+
+
+def test_the_query_admits_sector_level_notes():
+    captured = {}
+
+    def _q(sql, params=None):
+        captured["sql"], captured["params"] = sql, params
+        return []
+
+    with patch.object(ik, "ensure_industry_table", return_value=None), \
+         patch.object(ik.db, "query", side_effect=_q):
+        ik.get_industry_knowledge("Semiconductor", "Memory / DRAM-NAND", "KSC")
+
+    assert "profile = ''" in captured["sql"], "sector-level rung missing"
+
+
+def test_profile_exact_notes_sort_ahead_of_sector_level_ones():
+    rows = [{"sector": "Semiconductor", "profile": "", "market": "",
+             "anchor_kpi": "sector"},
+            {"sector": "Semiconductor", "profile": "Memory / DRAM-NAND",
+             "market": "KSC", "anchor_kpi": "profile"}]
+    with patch.object(ik, "ensure_industry_table", return_value=None), \
+         patch.object(ik.db, "query", return_value=rows), \
+         patch.object(ik, "_row", side_effect=lambda r: r):
+        got = ik.get_industry_knowledge("Semiconductor", "Memory / DRAM-NAND",
+                                        "KSC")
+    assert got[0]["anchor_kpi"] == "profile"

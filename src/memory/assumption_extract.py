@@ -812,6 +812,362 @@ def extract_analyst_report(ticker: str, extracted_pdf: dict,
     }
 
 
+
+# ── Sector notes ────────────────────────────────────────────────────────────
+#
+# A sector note carries three kinds of content an equity note does not, and
+# they are stored apart because they age apart. The quantitative half (TAM,
+# penetration, category CAGR, a comparative multiple table) is a measurement.
+# The structural half (anchor KPI, disclosed-metric vocabulary, competitive
+# axis) changes on the timescale of an industry. The forward half (named
+# trends, who is positioned to win) is one house's dated opinion and is
+# stored as such, never as fact — the discipline the PM prompt already
+# applies to a deposited equity thesis.
+
+class IndustryMetricItem(BaseModel):
+    """One stated industry-level number. Kept as a name/value pair rather
+    than a fixed column per metric: sector notes disagree about what to
+    measure, and TAM / penetration / take rate / ARPU / attach rate are not
+    a closed set."""
+    name: str = Field(default="", description="e.g. TAM, penetration, category CAGR")
+    value: str = Field(default="", description="as printed, e.g. US$1.4tn, 23%")
+    basis: str = Field(default="", description="year, region or segment it applies to")
+
+    @field_validator("name", "value", "basis", mode="before")
+    @classmethod
+    def _str(cls, v):
+        return "" if v is None else str(v)
+
+
+class PeerMultipleItem(BaseModel):
+    """One cell of a sector note's comparative valuation table.
+
+    This is a peer set curated by an analyst rather than by FMP's classifier,
+    which is worth having precisely because the classifier is fallible — it
+    files Sheng Siong, a supermarket, under "Luxury Goods". It is logged as a
+    third calibration observation and does NOT override the FMP median: a
+    handful of hand-picked names from one note should not replace a
+    systematic classification, and it goes stale as the note ages.
+    """
+    company: str = ""
+    ticker: str = ""
+    metric: str = Field(default="", description="P/E, EV/EBITDA, EV/sales, P/B")
+    value: str = Field(default="", description="as printed")
+    fiscal_year_label: str = ""
+
+    @field_validator("company", "ticker", "metric", "value",
+                     "fiscal_year_label", mode="before")
+    @classmethod
+    def _str(cls, v):
+        return "" if v is None else str(v)
+
+
+class IndustryTrendItem(BaseModel):
+    """A structural shift the note names, with enough shape to be tested."""
+    name: str = ""
+    direction: str = Field(default="", description="tailwind | headwind | mixed")
+    stage: str = Field(default="", description="early | mid | late")
+    horizon: str = Field(default="", description="e.g. 12-24m, 3-5y")
+    evidence: str = Field(default="", description="what the note cites for it")
+
+    @field_validator("name", "direction", "stage", "horizon", "evidence",
+                     mode="before")
+    @classmethod
+    def _str(cls, v):
+        return "" if v is None else str(v)
+
+
+class IndustryPositioningItem(BaseModel):
+    """Who the note says wins or loses. Stored WITH its house and vintage,
+    and consumed as a claim to test rather than a conclusion to adopt."""
+    company: str = ""
+    ticker: str = ""
+    stance: str = Field(default="", description="beneficiary | at risk | neutral")
+    why: str = ""
+
+    @field_validator("company", "ticker", "stance", "why", mode="before")
+    @classmethod
+    def _str(cls, v):
+        return "" if v is None else str(v)
+
+
+class IndustryNoteOutput(BaseModel):
+    house: str = ""
+    as_of: str = Field(default="", description="publication month, e.g. 2026-08")
+    industry_label: str = Field(default="", description="the industry as the note names it")
+    anchor_kpi: str = Field(
+        default="",
+        description="the single metric this industry's own analysts lead with")
+    disclosed_metrics: list[str] = Field(default_factory=list)
+    economics: list[str] = Field(default_factory=list)
+    competitive: list[str] = Field(default_factory=list)
+    quantitative: list[IndustryMetricItem] = Field(default_factory=list)
+    peer_multiples: list[PeerMultipleItem] = Field(default_factory=list)
+    trends: list[IndustryTrendItem] = Field(default_factory=list)
+    positioning: list[IndustryPositioningItem] = Field(default_factory=list)
+
+    @field_validator("house", "as_of", "industry_label", "anchor_kpi",
+                     mode="before")
+    @classmethod
+    def _str(cls, v):
+        return "" if v is None else str(v)
+
+    @field_validator("quantitative", "peer_multiples", "trends",
+                     "positioning", mode="before")
+    @classmethod
+    def _lists(cls, v):
+        return _coerce_list(v)
+
+    @field_validator("disclosed_metrics", "economics", "competitive",
+                     mode="before")
+    @classmethod
+    def _strlists(cls, v):
+        return _coerce_quotes(v)
+
+
+# A sector note prints a COVERAGE table (rating, 12-month price target) next
+# to its valuation table, and the extractor reads the wrong one often enough
+# to matter: the live eCommerce handbook returned ten "12-Month Price Target"
+# rows as peer multiples, so Amazon's $186 target would have been banked as a
+# multiple of 186x. Filtered here rather than by sharpening the prompt —
+# prompts drift back, a normalisation layer does not.
+_MULTIPLE_METRICS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("ev_ebitda", ("ev/ebitda", "ev / ebitda", "evebitda")),
+    ("ev_sales",  ("ev/sales", "ev/revenue", "ev / sales", "ev / revenue")),
+    ("ev_gmv",    ("ev/gmv", "ev / gmv")),
+    ("pe",        ("p/e", "pe ", "price/earnings", "price earnings", "per")),
+    ("pb",        ("p/b", "price/book", "price book", "p/bv")),
+    ("ps",        ("p/s", "price/sales", "price sales")),
+    ("peg",       ("peg",)),
+)
+# Any currency mark means a price, not a multiple.
+_CURRENCY_MARK = re.compile(r"[$€£¥₩]|(?:us|hk|sg|rmb|cny|jpy|krw|eur|gbp)\s*\$?", re.I)
+# A comparative table above this is a data-entry artefact, not a valuation.
+_MAX_PLAUSIBLE_MULTIPLE = 400.0
+
+
+def _canonical_multiple(metric: str) -> str:
+    m = f" {(metric or '').strip().lower()} "
+    for canon, needles in _MULTIPLE_METRICS:
+        if any(n in m for n in needles):
+            return canon
+    return ""
+
+
+def _clean_peer_multiples(rows: list[dict]) -> list[dict]:
+    """Keep only rows that are actually a multiple of something."""
+    out: list[dict] = []
+    for r in rows or []:
+        canon = _canonical_multiple(r.get("metric", ""))
+        if not canon:
+            continue
+        raw = str(r.get("value") or "").strip()
+        if not raw or _CURRENCY_MARK.search(raw):
+            continue
+        num = parse_amount(raw.rstrip("xX ").strip())
+        if num is None or num <= 0 or num > _MAX_PLAUSIBLE_MULTIPLE:
+            continue
+        out.append({**r, "metric": canon, "value": raw, "value_num": float(num)})
+    return out
+
+
+_INDUSTRY_SYSTEM = (
+    "You read sell-side SECTOR research and extract what is true of the "
+    "INDUSTRY, not of any one company in it. Respond in JSON format. "
+    "Report only what the document states; leave a field empty rather than "
+    "inferring it. Where the note expresses a forward view, record it as the "
+    "author's view — it will be tested against company disclosures, not "
+    "repeated as fact."
+)
+
+
+def extract_industry_note(routes: list[dict], extracted_pdf: dict,
+                          doc_meta: dict | None = None) -> Optional[dict]:
+    """One bundled pass over a deposited SECTOR note.
+
+    Unlike `extract_analyst_report`, this runs ONCE per document rather than
+    once per route: an industry note makes one set of claims about one
+    industry, so a second call would re-read the same pages to produce the
+    same answer. The routes only decide where the single result is filed.
+    """
+    text = (extracted_pdf or {}).get("text") or ""
+    if len(text.strip()) < 200:
+        return None
+    images: list = []
+    if os.environ.get("ASSUMPTION_VISION_MODEL"):
+        images = (extracted_pdf or {}).get("table_images") or []
+
+    labels = ", ".join(
+        f"{r.get('sector')}" + (f" / {r['profile']}" if r.get("profile") else "")
+        for r in (routes or [])) or "the industry this note covers"
+
+    human = (
+        f"Industry under coverage: {labels}\n\n"
+        f"=== SECTOR REPORT TEXT ===\n{text[:_PDF_MAX_CHARS]}\n\n"
+        "This is an INDUSTRY note. Extract what holds for the industry as a "
+        "whole. A number stated for ONE company belongs in peer_multiples or "
+        "positioning, never in quantitative — quantitative is for the "
+        "industry-level figures (market size, penetration, category growth, "
+        "take rate) that an equity note does not carry.\n\n"
+        "Extract into this exact JSON object shape (every collection MUST be "
+        "a JSON array — empty [] when nothing applies — never an object):\n"
+        "- house, as_of, industry_label: strings. as_of is the publication "
+        "month as YYYY-MM.\n"
+        "- anchor_kpi: string — the SINGLE metric this industry's analysts "
+        "lead with, the one the note returns to when it argues. For memory "
+        "semis that is the bit supply/demand balance; for managed care the "
+        "medical loss ratio; for REITs the cap-rate spread. Empty if the "
+        "note does not make one central.\n"
+        "- disclosed_metrics: array of strings — the metrics companies in "
+        "this industry actually PUBLISH, named as they appear in their own "
+        "reporting (e.g. 'GMV', 'take rate', 'bit growth', 'MLR'). This is a "
+        "vocabulary, not a set of values.\n"
+        "- economics: array of strings — the 2-4 variables that decide "
+        "returns here, each one sentence.\n"
+        "- competitive: array of strings — who competes and on what axis; "
+        "concentration, barriers, switching costs.\n"
+        "- quantitative: array of {name, value, basis} — TAM, penetration, "
+        "category CAGR, take rate and similar INDUSTRY-level figures, as "
+        "printed. basis is the year, region or segment it applies to.\n"
+        "- peer_multiples: array of {company, ticker, metric, value, "
+        "fiscal_year_label} — READ THE COMPARATIVE VALUATION TABLE. Sector "
+        "notes print one: a grid with ONE ROW PER COMPANY and columns for "
+        "P/E, EV/EBITDA, EV/sales, P/B, often per forward year. Emit ONE "
+        "OBJECT PER COMPANY PER METRIC. Copy numbers exactly as printed; "
+        "bracketed numbers are negative. Skip rows that are not valuation "
+        "metrics.\n"
+        "- trends: array of {name, direction, stage, horizon, evidence} — "
+        "the structural shifts the note argues for. direction is tailwind, "
+        "headwind or mixed; stage is early, mid or late; horizon is the time "
+        "frame the note gives. evidence is what it cites.\n"
+        "- positioning: array of {company, ticker, stance, why} — which "
+        "companies the note says are advantaged or exposed. stance is "
+        "beneficiary, at risk or neutral. Include only companies the note "
+        "explicitly positions; do not infer a stance from a mention."
+    )
+    client, model_name = _get_bundle_client()
+    if client is None:
+        return None
+    out = _structured_call(client, IndustryNoteOutput,
+                           _INDUSTRY_SYSTEM, human, images=images)
+    if out is None:
+        return None
+    meta = doc_meta or {}
+    return {
+        "house": (out.house or "")[:80],
+        "as_of": (out.as_of or "")[:16],
+        "industry_label": (out.industry_label or "")[:120],
+        "anchor_kpi": (out.anchor_kpi or "")[:300],
+        "disclosed_metrics": [m[:80] for m in out.disclosed_metrics[:20]],
+        "economics": [e[:300] for e in out.economics[:6]],
+        "competitive": [c[:300] for c in out.competitive[:6]],
+        "quantitative": [q.model_dump() for q in out.quantitative[:20]],
+        # Capped at 60: a comparative table runs ~10-15 companies across 4
+        # metrics. Materially more means the model has started emitting
+        # non-valuation rows as peers.
+        "peer_multiples": _clean_peer_multiples(
+            [p.model_dump() for p in out.peer_multiples[:60]]),
+        "trends": [t.model_dump() for t in out.trends[:10]],
+        "positioning": [p.model_dump() for p in out.positioning[:20]],
+        "model_used": f"{model_name}(industry)",
+        "doc_path": meta.get("path"),
+        "drive_file_id": meta.get("drive_file_id"),
+        "source_url": meta.get("source_url"),
+    }
+
+
+def extract_and_persist_industry_pdf(path: str, routes: list[dict], *,
+                                     ai_input_allowed: bool,
+                                     drive_file_id: str | None = None,
+                                     source_url: str | None = None) -> dict:
+    """Full ingestion for one deposited SECTOR note.
+
+    Returns {content_hash, routes: {"market/sector/profile": status}}.
+    """
+    import hashlib
+
+    from src.memory import industry_knowledge as ik
+
+    summary: dict = {"content_hash": None, "routes": {}}
+
+    def _key(r: dict) -> str:
+        return f"{r.get('market') or 'any'}/{r.get('sector')}/{r.get('profile') or '(sector)'}"
+
+    if not ai_input_allowed:
+        summary["routes"] = {_key(r): "gated" for r in routes or []}
+        return summary
+    if not routes:
+        return summary
+
+    with open(path, "rb") as fh:
+        content_hash = hashlib.sha256(fh.read()).hexdigest()
+    summary["content_hash"] = content_hash
+
+    # Dedupe BEFORE the extraction call, not after: the call is the expensive
+    # half, and every route of an unchanged document is already stored.
+    pending = [r for r in routes
+               if not ik.industry_note_exists(
+                   r.get("market") or "", r.get("sector") or "",
+                   r.get("profile") or "", content_hash)]
+    for r in routes:
+        if r not in pending:
+            summary["routes"][_key(r)] = "exists"
+    if not pending:
+        return summary
+
+    from src.utils.research_pdf import extract_research_pdf
+    try:
+        extracted_pdf = extract_research_pdf(path)
+    except Exception as exc:
+        logger.warning("sector PDF unreadable (%s): %s", path, exc)
+        summary["routes"].update({_key(r): "failed" for r in pending})
+        return summary
+
+    extraction = extract_industry_note(pending, extracted_pdf, {
+        "path": path, "drive_file_id": drive_file_id, "source_url": source_url,
+    })
+    if extraction is None:
+        summary["routes"].update({_key(r): "failed" for r in pending})
+        return summary
+
+    # Fold the name/value pairs into the mapping the 2F composer reads.
+    quantitative = {}
+    for q in extraction.get("quantitative") or []:
+        name, value = (q.get("name") or "").strip(), (q.get("value") or "").strip()
+        if name and value:
+            basis = (q.get("basis") or "").strip()
+            quantitative[name] = f"{value} ({basis})" if basis else value
+
+    for r in pending:
+        try:
+            ik.upsert_industry_knowledge(
+                sector=r.get("sector") or "",
+                profile=r.get("profile") or "",
+                market=r.get("market") or "",
+                house=extraction.get("house") or "sell-side",
+                as_of=extraction.get("as_of") or "",
+                anchor_kpi=extraction.get("anchor_kpi") or None,
+                disclosed_metrics=extraction.get("disclosed_metrics"),
+                economics=extraction.get("economics"),
+                competitive=extraction.get("competitive"),
+                quantitative=quantitative,
+                peer_multiples=extraction.get("peer_multiples"),
+                trends=extraction.get("trends"),
+                positioning=extraction.get("positioning"),
+                doc_path=path,
+                content_hash=content_hash,
+            )
+            summary["routes"][_key(r)] = "extracted"
+        except Exception as exc:
+            logger.warning("industry_knowledge write failed for %s: %s",
+                           _key(r), exc)
+            summary["routes"][_key(r)] = "failed"
+    summary["industry_label"] = extraction.get("industry_label")
+    summary["house"] = extraction.get("house")
+    summary["as_of"] = extraction.get("as_of")
+    return summary
+
+
 # ── assumption_versions row builders (R1 writes them too) ───────────────────
 
 def version_rows_from_company(ticker: str, extraction: dict) -> list[dict]:

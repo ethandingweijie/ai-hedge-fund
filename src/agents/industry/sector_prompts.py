@@ -716,6 +716,15 @@ def _learned_kpi_block(sector: str, profile_name: str,
     if not notes:
         return None
 
+    # A note filed at the SECTOR level must not displace a block hand-written
+    # for this exact profile. The sector note is the broader claim, and the
+    # tailored REIT and bank blocks are the more specific one; tier 0 exists
+    # to reach the 54 routes that have no block at all, not to overrule the
+    # 26 that do.
+    if (sector or "", profile_name or "") in _SECTOR_PROFILE_PROMPTS and             not any((n.get("profile") or "") == (profile_name or "")
+                    for n in notes):
+        return None
+
     parts: list[str] = []
     seen_anchor = False
     for n in notes[:3]:                    # newest / most specific first
