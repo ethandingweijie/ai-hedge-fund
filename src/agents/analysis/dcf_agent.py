@@ -433,6 +433,13 @@ def _historical_cagr(series: list[dict], revenue_base: Optional[float] = None) -
         return None
 
 
+# How far reported FCF may exceed what earnings plus the D&A-minus-capex gap
+# explain before the projection is capped. 25% headroom keeps the gate off
+# ordinary timing noise — verified against MU, JPM, BABA and COST, none of
+# which bind — while MELI's 4.6x excess does.
+_CASH_CONVERSION_TOLERANCE = 1.25
+
+
 def _mean_fcf_margin(series: list[dict], field: str = "free_cash_flow") -> Optional[float]:
     """Compute 5-year average FCF margin with outlier exclusion.
 
@@ -494,6 +501,90 @@ def _median_positive_fcf_margin(
     if not margins:
         return None
     return statistics.median(margins)
+
+
+def _scale_analyst_bands_to_cap(
+    bands: Optional[dict], cap: float
+) -> tuple[Optional[dict], Optional[float]]:
+    """Bring an analyst growth band under the revenue-scale cap.
+
+    Returns (bands, scale) with `scale` None when the cap does not bind.
+
+    The tiered cap mutates `growth_base`, which the analyst-band path never
+    reads — it takes g straight from the band. So any name with analyst
+    coverage escaped the tier entirely and kept only the flat +40% clamp.
+    MELI 2026-08-30 carried g = 40% on a $28.9bn revenue base against a 15%
+    tier, compounding to $194.9bn of year-10 revenue.
+
+    Scales the whole band rather than clipping each scenario, so the
+    bear/base/bull spread the analyst dispersion actually expresses survives.
+    This mirrors the CAGR path, where the cap binds the BASE and the scenario
+    multipliers (0.55/1.00/1.50) still carry bull above it.
+    """
+    if not bands or cap <= 0:
+        return bands, None
+    base = bands.get("base")
+    if not base or base <= cap:
+        return bands, None
+    scale = cap / base
+    scaled = {
+        k: (v * scale if k in ("bear", "base", "bull") else v)
+        for k, v in bands.items()
+    }
+    return scaled, scale
+
+
+def _projectable_fcf_margin_cap(
+    series: list[dict],
+) -> tuple[Optional[float], Optional[float]]:
+    """(cap, trailing_fcf_margin) — the FCF margin earnings can actually support.
+
+    Reported free cash flow is only projectable to the extent earnings and the
+    depreciation-versus-capex gap explain it. The owner-earnings identity is
+
+        FCF = net income + D&A - capex - change in working capital
+
+    so the first three terms are structural and the fourth is not: a working
+    capital benefit only recurs while the balance sheet keeps growing, and at
+    steady state it stops contributing. Projecting it flat for a decade
+    capitalises a financing flow as if it were operating profit.
+
+    MELI 2026-08-30 is the case that motivated this. Mercado Pago's float —
+    customer deposits and credit-book movements running through operating cash
+    flow — produced a reported FCF margin of 37.3% against a 6.9% net margin,
+    a 5.4x cash conversion. Held flat over ten years of compounding revenue it
+    projected $59.6bn of annual free cash flow in year 10, more than Alphabet
+    earns today, from a company that earned $2.0bn. Base IV came out at $18,401
+    against a $1,966 spot.
+
+    Aggregated over the window rather than averaged per year: a single loss
+    year sends a per-year ratio to infinity, and the sums are what the identity
+    is stated over anyway. Returns (None, None) when the window has no revenue
+    or no earnings signal, in which case the caller leaves the margin alone —
+    this gate only ever caps downward, and only when it can say why.
+    """
+    rev = fcf = ni = capex = dep = 0.0
+    have_ni = have_fcf = False
+    for row in series[-5:]:
+        r = row.get("revenue")
+        if not r or r <= 0:
+            continue
+        rev += r
+        if row.get("free_cash_flow") is not None:
+            fcf += row["free_cash_flow"]
+            have_fcf = True
+        if row.get("net_income") is not None:
+            ni += row["net_income"]
+            have_ni = True
+        capex += abs(row.get("capital_expenditure") or 0.0)
+        dep += row.get("depreciation_and_amortization") or 0.0
+    if rev <= 0 or not have_ni or not have_fcf:
+        return None, None
+    # Only the EXCESS of D&A over capex is a durable add-back. Where capex
+    # exceeds D&A the business is reinvesting, and net margin already reflects
+    # the depreciation of that spend — subtracting again would double-count.
+    cap = (ni + max(0.0, dep - capex)) / rev
+    return cap, fcf / rev
 
 
 def _analyst_revenue_growth(
@@ -4778,6 +4869,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"multiples-only"
                 )
 
+        # ── Cash-conversion gate: reported FCF that is not earnings ───────
+        # Runs AFTER the OE<=0 cascade so it caps whatever basis that settled
+        # on, and is skipped when the DCF family is already disabled (there is
+        # nothing left to project). Caps DOWNWARD only.
+        #
+        # Note the interaction with the SBC drag above: owner-earnings already
+        # removes unfunded stock comp, which is a real cost. This gate removes
+        # a different thing — a working-capital/float benefit that is not a
+        # cost at all, just not repeatable. A name can legitimately trip both.
+        if not _dcf_family_disabled:
+            _cc_cap, _cc_trailing = _projectable_fcf_margin_cap(series)
+            if (_cc_cap is not None and _cc_cap > 0
+                    and fcf_margin_base > _cc_cap * _CASH_CONVERSION_TOLERANCE):
+                _cc_ratio = (
+                    (_cc_trailing / _cc_cap) if _cc_cap else float("inf")
+                )
+                ticker_forward_flags.append(
+                    f"Cash-conversion cap: FCF margin {fcf_margin_base:.1%} → "
+                    f"{_cc_cap:.1%} — reported FCF is {_cc_ratio:.1f}x what "
+                    f"earnings plus D&A-less-capex support, so the excess is "
+                    f"working capital / float and is not projected"
+                )
+                fcf_margin_base = _cc_cap
+
         # ── Analyst estimates (fetched eagerly — cached) ──────────────────
         # Pulled BEFORE the growth waterfall so dispersion bands are available
         # for scenario construction even when guidance or historical drives the
@@ -5652,6 +5767,956 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"(revenue ${revenue_base/1e9:.1f}B exceeds ${_growth_base_cap:.0%} tier)"
             )
             growth_base = growth_base_capped
+
+        # The tier above binds growth_base only; the analyst-band path reads
+        # its own dict. See _scale_analyst_bands_to_cap for why this scales
+        # the band instead of clipping each scenario.
+        _analyst_bands, _band_scale = _scale_analyst_bands_to_cap(
+            _analyst_bands, _growth_base_cap)
+        if _band_scale is not None:
+            progress.update_status(
+                agent_id, ticker,
+                f"Growth cap applied to analyst bands: base → "
+                f"{_growth_base_cap:.1%} (revenue "
+                f"${revenue_base/1e9:.1f}B exceeds {_growth_base_cap:.0%} "
+                f"tier); bear/bull scaled {_band_scale:.2f}x"
+            )
+            ticker_forward_flags.append(
+                f"Revenue-scale cap on analyst bands: base growth capped to "
+                f"{_growth_base_cap:.1%} (${revenue_base/1e9:.1f}B revenue)"
+            )
+
+        # ── Cash-conversion gate: reported FCF that is not earnings ───────
+        # Runs AFTER the OE<=0 cascade so it caps whatever basis that settled
+        # on, and is skipped when the DCF family is already disabled (there is
+        # nothing left to project). Caps DOWNWARD only.
+        #
+        # Note the interaction with the SBC drag above: owner-earnings already
+        # removes unfunded stock comp, which is a real cost. This gate removes
+        # a different thing — a working-capital/float benefit that is not a
+        # cost at all, just not repeatable. A name can legitimately trip both.
+        if not _dcf_family_disabled:
+            _cc_cap, _cc_trailing = _projectable_fcf_margin_cap(series)
+            if (_cc_cap is not None and _cc_cap > 0
+                    and fcf_margin_base > _cc_cap * _CASH_CONVERSION_TOLERANCE):
+                _cc_ratio = (
+                    (_cc_trailing / _cc_cap) if _cc_cap else float("inf")
+                )
+                ticker_forward_flags.append(
+                    f"Cash-conversion cap: FCF margin {fcf_margin_base:.1%} → "
+                    f"{_cc_cap:.1%} — reported FCF is {_cc_ratio:.1f}x what "
+                    f"earnings plus D&A-less-capex support, so the excess is "
+                    f"working capital / float and is not projected"
+                )
+                fcf_margin_base = _cc_cap
+
+        # ── Analyst estimates (fetched eagerly — cached) ──────────────────
+        # Pulled BEFORE the growth waterfall so dispersion bands are available
+        # for scenario construction even when guidance or historical drives the
+        # point estimate. Feeds both growth_base (analyst revenue_avg) AND the
+        # bear/base/bull band scenarios + Forward P/E / Forward EV/EBITDA methods.
+        # FMP returns analyst-estimates sorted DESCENDING by date and `limit`
+        # truncates from the top. With limit=3 we got the FURTHEST 3 future
+        # years (e.g. MDB: FY2029/30/31) and never saw the nearest forward
+        # year (FY2027) which is what NTM growth/consensus actually needs.
+        # Bumping to limit=10 captures the full annual horizon; the downstream
+        # filter (period_end > end_date) + sort ASC in get_analyst_estimates
+        # then makes estimates[0] the nearest forward year. Bug fixed 2026-04-25.
+        try:
+            estimates = get_analyst_estimates(
+                ticker, end_date, period="annual", limit=10, api_key=api_key
+            )
+        except Exception:
+            estimates = []
+
+        # ── Growth rate — priority: guided > analyst > historical ────────
+        data_source = "historical"
+        guidance = mgmt_guidance_all.get(ticker, {})
+
+        # R1: structured company guidance from primary-source extraction
+        # (EDGAR press release + earnings call) takes Priority 0 over the
+        # regex-parsed management_guidance; the regex value stays as the
+        # fallback whenever the store has nothing usable.
+        _r1_guid = _r1_structured_guidance(ticker, revenue_base=revenue_base)
+        if _r1_guid:
+            _r1_merge = {k: v for k, v in _r1_guid.items()
+                         if not k.startswith("_r1")}
+            if _r1_merge:
+                guidance = {**guidance, **_r1_merge}
+                _r1_bits = []
+                if "revenue_guidance_mid" in _r1_merge and revenue_base \
+                        and revenue_base > 0:
+                    _r1_bits.append(
+                        f"revenue → "
+                        f"{(_r1_merge['revenue_guidance_mid'] / revenue_base) - 1.0:+.1%}")
+                if "ebitda_guidance_mid" in _r1_merge:
+                    _r1_bits.append(
+                        f"Yr1 EBITDA "
+                        f"{_r1_merge['ebitda_guidance_mid'] / 1e9:.2f}B")
+                ticker_forward_flags.append(
+                    "R1 structured guidance (Priority 0): "
+                    + (", ".join(_r1_bits) or "guidance on file")
+                    + f" [{_r1_guid.get('_r1_source') or 'edgar+transcript'}"
+                    + (f", {_r1_guid['_r1_period']}"
+                       if _r1_guid.get('_r1_period') else "")
+                    + (f", as of {_r1_guid['_r1_as_of']}"
+                       if _r1_guid.get('_r1_as_of') else "")
+                    + "]")
+
+        # R3: Assumption Steward — OPEN challenges on tracked assumption
+        # fields (guidance/margin/one-off) surface as an IV-haircut audit
+        # flag. Flag ONLY — the engine stays deterministic; no numbers move.
+        try:
+            from src.memory.assumption_steward import steward_enabled
+            if steward_enabled():
+                from src.memory import assumption_store
+                _open_ch = [
+                    c for c in assumption_store.get_open_challenges(ticker)
+                    if str(c.get("field_key") or "").startswith(
+                        ("guidance.", "ebitda.", "margin.", "one_off."))]
+                if _open_ch:
+                    ticker_forward_flags.append(
+                        f"R3 Assumption Steward: {len(_open_ch)} open "
+                        "challenge(s) on tracked guidance fields ("
+                        + ", ".join(sorted(
+                            {c["field_key"] for c in _open_ch})[:3])
+                        + ") — treat Year-1 guidance inputs with caution "
+                        "(IV-haircut flag; engine stays deterministic)")
+        except Exception:
+            pass
+
+        growth_base = _guided_growth(guidance, revenue_base=revenue_base)
+        if growth_base is not None:
+            data_source = "guided"
+        else:
+            growth_base = _analyst_revenue_growth(
+                estimates, revenue_base, fx_rate=fx_rate
+            )
+            if growth_base is not None:
+                data_source = "analyst"
+
+        if growth_base is None:
+            growth_base = _historical_cagr(series, revenue_base=revenue_base)
+            if growth_base is None:
+                # Last resort — guidance, analyst estimates, AND historical
+                # CAGR all failed (typically bad/missing revenue data despite
+                # passing the earlier history-length check). Rather than
+                # blank the panel, fall back to a sector-average base-case
+                # growth rate; data_source == "sector_default" flags this as
+                # the lowest-confidence tier on the frontend.
+                growth_base = _SECTOR_DEFAULT_GROWTH.get(sector, _DEFAULT_SECTOR_DEFAULT_GROWTH)
+                data_source = "sector_default"
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Cannot derive growth rate — using {sector} sector default ({growth_base:.1%})"
+                )
+                state["data"].setdefault("dcf_skip_reasons", {})[ticker] = (
+                    f"no_growth_rate_used_sector_default_{growth_base:.1%}: "
+                    f"guidance_keys={list(guidance.keys())[:5] if guidance else 'none'}, "
+                    f"estimates_count={len(estimates) if estimates else 0}, "
+                    f"series_count={len(series)}, "
+                    f"revenue_first={series[0]['revenue'] if series else None}, "
+                    f"revenue_last={series[-1]['revenue'] if series else None}"
+                )
+
+        # ── Consensus dispersion bands (Feature 1a) ─────────────────────
+        # Derives asymmetric bear / base / bull growth rates from analyst
+        # revenue low/avg/high when ≥3 analysts cover the name. Replaces the
+        # symmetric ±45% multiplier used when dispersion is unavailable.
+        # Per-ticker value — does not vary across the three scenarios.
+        # Banks: consensus "revenue" estimates are published on TOTAL INCOME
+        # (NII + non-interest income), while `revenue_base` for a bank is
+        # gross interest income plus non-II. Comparing the two implies a
+        # fictitious collapse — DBS consensus S$23.6bn against a S$37.9bn
+        # gross base reads as -38% growth, which pinned bear, base AND bull
+        # to the -30% clamp floor (the giveaway signature of this bug is
+        # three identical bands sitting exactly on the floor). The growth
+        # RATE is scale-free, so deriving it on the total-income base and
+        # applying it to the gross base downstream is correct.
+        # NOTE: `profile_name` is not bound yet at this point in the
+        # function (it is resolved further down), so the bank test is built
+        # from `sector` plus the ticker lookup, with a structural fallback
+        # for tickers that get classified in-situ. is_bank_sector() alone is
+        # too broad — it also matches insurers and asset managers, whose
+        # income statements do not carry the gross-interest-income
+        # convention this correction targets.
+        _bands_base = revenue_base
+        _lookup_profile_for_bands = ""
+        try:
+            from src.data.sector_profiles import get_wacc_profile_for_ticker as _gwp
+            _lookup_profile_for_bands = _gwp(ticker)[1] or ""
+        except Exception:
+            _lookup_profile_for_bands = ""
+        # Structural signature of a bank P&L reported gross: interest income
+        # is a component of revenue, and interest expense is a material
+        # share of it. An insurer or asset manager fails this test.
+        _mr_rev = _safe(most_recent.get("revenue")) or 0.0
+        _mr_ii = _safe(most_recent.get("interest_income"))
+        _mr_ie = _safe(most_recent.get("interest_expense"))
+        _looks_like_gross_bank_pl = bool(
+            _mr_rev > 0 and _mr_ii and _mr_ie
+            and _mr_rev > _mr_ii
+            and abs(_mr_ie) > _mr_rev * 0.10
+        )
+        _is_bank_for_bands = is_bank_sector(sector) and (
+            "Bank" in _lookup_profile_for_bands
+            or _lookup_profile_for_bands in _BANK_PROFILE_CALIBRATION
+            or _looks_like_gross_bank_pl
+        )
+        if _is_bank_for_bands:
+            _ti = _bank_total_income(most_recent)
+            if _ti and _ti > 0:
+                _bands_base = _ti
+        _analyst_bands = _analyst_growth_bands(
+            estimates, _bands_base, fx_rate=fx_rate
+        )
+        if _analyst_bands is not None:
+            if _bands_base != revenue_base:
+                ticker_forward_flags.append(
+                    f"Bank growth base: consensus measured against total income "
+                    f"{_bands_base / 1e9:.2f}B (NII + non-II), not gross revenue "
+                    f"{revenue_base / 1e9:.2f}B"
+                )
+            ticker_forward_flags.append(
+                f"Analyst dispersion ({_analyst_bands['analyst_count']} analysts): "
+                f"bear {_analyst_bands['bear']:+.1%} / "
+                f"base {_analyst_bands['base']:+.1%} / "
+                f"bull {_analyst_bands['bull']:+.1%}"
+            )
+
+        # ── Forward consensus point estimates (Feature 1b inputs) ──────
+        # Absolute EPS / EBITDA consensus by scenario, used by Forward P/E
+        # and Forward EV/EBITDA methods downstream. None-safe: methods skip
+        # when the particular scenario's value is missing. FMP returns these
+        # in reported currency, so we apply the same FX multiplier used on
+        # the historical series to keep everything in the target currency.
+        forward_consensus = None
+        if estimates:
+            _fwd = estimates[0]
+            _fxm = fx_rate if (fx_rate and fx_rate > 0) else 1.0
+            def _fx(v):
+                return (v * _fxm) if v is not None else None
+            forward_consensus = {
+                "eps":    {"bear": _fx(_safe(getattr(_fwd, "eps_low",  None))),
+                           "base": _fx(_safe(getattr(_fwd, "eps_avg",  None))),
+                           "bull": _fx(_safe(getattr(_fwd, "eps_high", None)))},
+                "ebitda": {"bear": _fx(_safe(getattr(_fwd, "ebitda_low",  None))),
+                           "base": _fx(_safe(getattr(_fwd, "ebitda_avg",  None))),
+                           "bull": _fx(_safe(getattr(_fwd, "ebitda_high", None)))},
+                # Tier 2 Tech: forward revenue + forward EBIT. FMP already
+                # exposes these in the same /stable/analyst-estimates payload
+                # (revenueLow/Avg/High, ebitLow/Avg/High) and get_analyst_estimates
+                # maps them — we just weren't wiring them into the method dispatch.
+                "revenue": {"bear": _fx(_safe(getattr(_fwd, "revenue_low",  None))),
+                            "base": _fx(_safe(getattr(_fwd, "revenue_avg",  None))),
+                            "bull": _fx(_safe(getattr(_fwd, "revenue_high", None)))},
+                "ebit":   {"bear": _fx(_safe(getattr(_fwd, "ebit_low",  None))),
+                           "base": _fx(_safe(getattr(_fwd, "ebit_avg",  None))),
+                           "bull": _fx(_safe(getattr(_fwd, "ebit_high", None)))},
+                "analyst_count_eps":     getattr(_fwd, "analyst_count_eps",     None),
+                "analyst_count_revenue": getattr(_fwd, "analyst_count_revenue", None),
+                "period_end":            getattr(_fwd, "period_end",            ""),
+            }
+
+        # ── R1: licensed analyst-report estimates vs street consensus ─────
+        # Deposited sell-side reports (analyst_reports table) are the ONLY
+        # estimate source for HK/SG names (FMP returns nothing there); where
+        # FMP consensus exists they become a cross-check. Comparison is on
+        # RAW reporting-currency figures (both sides pre-FX); a ratio
+        # outside 0.25–4.0 is reported as a basis mismatch, not a divergence.
+        if os.environ.get("EARNINGS_ASSUMPTIONS", "true").strip().lower() not in (
+                "0", "false", "no", "off", ""):
+            try:
+                from src.memory import assumption_store as _r1_store
+                _r1_reports = _r1_store.get_analyst_reports(ticker, limit=1)
+            except Exception:
+                _r1_reports = []
+            if _r1_reports:
+                _rep = _r1_reports[0]
+                _est_list = _rep.get("estimates") or []
+                _est = _est_list[0] if _est_list else {}
+                _house_lbl = (f"{_rep.get('house') or 'Sell-side'} "
+                              f"{_rep.get('report_date') or ''}").strip()
+                try:
+                    from src.memory.assumption_extract import (
+                        parse_amount as _r1_amt)
+                except Exception:
+                    _r1_amt = None
+                _h_rev = _r1_amt(_est.get("revenue")) if (_r1_amt and _est) else None
+                _s_rev = _safe(getattr(_fwd, "revenue_avg", None)) \
+                    if estimates else None
+                if _h_rev and _s_rev:
+                    _ratio = _h_rev / _s_rev
+                    if 0.25 <= _ratio <= 4.0:
+                        _div = _ratio - 1.0
+                        if abs(_div) >= 0.03:
+                            ticker_forward_flags.append(
+                                f"R1 house vs street FY+1 revenue: "
+                                f"{_house_lbl} {_div:+.1%} vs consensus")
+                    else:
+                        ticker_forward_flags.append(
+                            f"R1 house vs street FY+1 revenue: currency "
+                            f"basis differs ({_house_lbl} vs FMP) — not "
+                            f"compared")
+                elif _h_rev and not estimates:
+                    ticker_forward_flags.append(
+                        f"R1 house estimates on file ({_house_lbl}): FY+1 "
+                        f"revenue ≈ {_h_rev/1e9:.1f}B — no FMP consensus "
+                        f"for this name")
+
+        # ── Deep-research DCF calibration (from sections 2D + 2F) ────────
+        # Applied AFTER the guided/analyst/historical waterfall so it acts as a
+        # directional nudge, not an override.  Blended at 30% weight to avoid
+        # over-indexing on a single LLM parse of qualitative text.
+        dcf_cal = dcf_calibration_all.get(ticker, {})
+        _cal_adj = dcf_cal.get("growth_rate_adj")
+        if _cal_adj is not None and data_source == "historical":
+            # Apply when no hard guidance or analyst estimate overrides.
+            # Weight: 50% of the LLM signal (e.g. +0.08 → +0.04 applied).
+            # Increased from 30% to 50% to better capture secular growth
+            # inflections (AI supercycle, grid upgrade, GLP-1 ramp) that the
+            # deep research identifies but the historical CAGR misses.
+            _CAL_WEIGHT = 0.50
+            growth_base = growth_base + float(_cal_adj) * _CAL_WEIGHT
+            progress.update_status(
+                agent_id, ticker,
+                f"Growth nudge from deep research: {_cal_adj:+.3f} × {_CAL_WEIGHT:.0%} = "
+                f"{float(_cal_adj)*_CAL_WEIGHT:+.3f} → adjusted base={growth_base:.3f}"
+            )
+
+        # ── Margin guidance ───────────────────────────────────────────────
+        # Deep-research margin direction is used as a fallback when mgmt guidance
+        # does not specify a direction.
+        _cal_margin = dcf_cal.get("margin_direction")
+        guided_margin_direction = (
+            guidance.get("margin_direction")
+            or (_cal_margin if _cal_margin else "stable")
+        )
+        guidance_margin_adj = _GUIDANCE_MARGIN_DELTA.get(
+            guided_margin_direction or "stable", 0.0
+        )
+
+        _risk_appetite = macro_regime.get("risk_appetite", "neutral")
+
+        # ── Industry profile auto-classification (must precede WACC) ─────
+        # Profile is needed to select the correct Energy sub-type WACC base.
+        # v1.5 refactor: prefer pre-classified profile_name from strategic_router
+        # (state["data"]["profile_names"][ticker]) to eliminate a class of bugs
+        # where downstream code references profile_name before classify_valuation_
+        # profile runs. Fall back to in-situ classification for tickers without
+        # lookup overrides.
+        revenue_cagr = _historical_cagr(series) or growth_base
+        is_pre_revenue = (revenue_base < 10_000_000)  # <$10M revenue → treat as pre-revenue
+
+        _preclassified_profiles = state["data"].get("profile_names") or {}
+        _preclassified_name = _preclassified_profiles.get(ticker)
+        # D3: True when the intended profile did not resolve and a fallback
+        # was used. Surfaced in dcf_range[ticker]["profile_fallback_used"]
+        # so degradation is loud, not silent.
+        _profile_fallback_used = False
+        if _preclassified_name:
+            # Use the pre-classified profile_name from strategic_router
+            from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
+            _sector_lookup = "RealEstate" if sector == "REIT" else sector
+            profile_name = _preclassified_name
+            profile_data = INDUSTRY_VALUATION_PROFILES.get(_sector_lookup, {}).get(
+                _preclassified_name, {}
+            )
+            if not profile_data:
+                # D3: pre-classified name didn't resolve — LOUD warning, then
+                # fall through to in-situ classification.
+                _profile_fallback_used = True
+                _log.warning(
+                    "[dcf] %s: pre-classified profile %r not found in "
+                    "INDUSTRY_VALUATION_PROFILES[%r] — falling back to "
+                    "in-situ classification",
+                    ticker, _preclassified_name, _sector_lookup,
+                )
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Profile fallback: {_preclassified_name!r} unresolved — "
+                    f"re-classifying from financials",
+                )
+                profile_name, profile_data = get_valuation_profile(
+                    sector, revenue_cagr, _fcf_margin_for_classify, leverage,
+                    is_pre_revenue, revenue_base=revenue_base,
+                )
+        else:
+            profile_name, profile_data = get_valuation_profile(
+                sector, revenue_cagr, _fcf_margin_for_classify, leverage,
+                is_pre_revenue, revenue_base=revenue_base,
+            )
+
+        # ── Guardrail 4: ticker-level profile override ─────────────────────
+        # TICKER_SECTOR_LOOKUP can specify a hard profile override (second field).
+        # When set, it takes PRIORITY over classify_valuation_profile() — used for
+        # companies that can't be differentiated by financials alone (e.g.
+        # cybersecurity firms look like SaaS but need different TGR/methods).
+        _lookup_sector, _lookup_profile = get_wacc_profile_for_ticker(ticker)
+        if _lookup_profile and _lookup_profile != profile_name:
+            from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
+            _override_data = INDUSTRY_VALUATION_PROFILES.get(sector, {}).get(_lookup_profile, {})
+            if _override_data:
+                profile_name = _lookup_profile
+                profile_data = _override_data
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Profile override from TICKER_SECTOR_LOOKUP: {_lookup_profile}"
+                )
+            else:
+                # D3: the lookup override did not resolve in
+                # INDUSTRY_VALUATION_PROFILES — previously this was dropped
+                # SILENTLY and the ticker kept whatever profile the ladder
+                # picked. Loud warning + flag instead.
+                _profile_fallback_used = True
+                _log.warning(
+                    "[dcf] %s: TICKER_SECTOR_LOOKUP profile override %r did "
+                    "not resolve in INDUSTRY_VALUATION_PROFILES[%r] — keeping "
+                    "classified profile %r",
+                    ticker, _lookup_profile, sector, profile_name,
+                )
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Profile override {_lookup_profile!r} unresolved — "
+                    f"keeping {profile_name!r}",
+                )
+
+        # ── SOTP (analyst) blend promotion (task #25) ────────────────────
+        # With extractor-built assumptions on this ticker, lift the shadow
+        # method into the resolved profile at _SOTP_ANALYST_BLEND_WEIGHT
+        # (weight 3.0 → exactly 75% of the blended IV; the DCF+multiples
+        # blend keeps the other 25%, internally renormalized). Copy-on-
+        # write — the shared INDUSTRY_VALUATION_PROFILES dict is never
+        # mutated. The T-1 backward gate below receives the overlay too,
+        # but its historical t1_row carries no sotp_assumptions → method
+        # value None → skipped and renormalized → T-1 calibration and
+        # every no-SOTP ticker stay bit-identical.
+        profile_data = _promote_sotp_analyst_profile(
+            profile_data, bool(most_recent.get("sotp_assumptions")))
+
+        # v3.21 (Fix D) — write the locally-resolved profile_name back to state
+        # so late-pipeline consumers (sector_card render, reextract path, audit
+        # bridge) see the profile even when strategic_router skipped pre-
+        # classification (ticker not in TICKER_SECTOR_LOOKUP and no LLM-based
+        # router-side classifier in the v3.21 deploy yet). Belt-and-suspenders
+        # — won't help upstream extractors that already ran in deep_research,
+        # but ensures aggregation + frontend rendering picks up the resolved
+        # profile correctly.
+        if profile_name:
+            try:
+                _pn_dict = state["data"].setdefault("profile_names", {})
+                if isinstance(_pn_dict, dict) and not _pn_dict.get(ticker):
+                    _pn_dict[ticker] = profile_name
+                if not state["data"].get("profile_name"):
+                    state["data"]["profile_name"] = profile_name
+            except Exception:
+                pass  # state-write failure is non-fatal
+        if not profile_name:
+            _log.warning(
+                "[DCF] %s: No valuation profile found for sector='%s'. "
+                "All methods will fall back to DCF. "
+                "Consider adding '%s' to TICKER_SECTOR_LOOKUP.", ticker, sector, ticker
+            )
+            progress.update_status(
+                agent_id, ticker,
+                f"No valuation profile for sector='{sector}' — DCF only"
+            )
+
+        # ── REIT sub-type classification + audit (Tier 2) ───────────────────
+        # For RealEstate/REIT tickers, classify into 9 sub-types (data_center,
+        # lab, industrial, self_storage, residential, healthcare, retail,
+        # office, hospitality) using ticker + TICKER_SECTOR_LOOKUP notes as
+        # keyword source. Sub-type drives cap rate, P/FFO, P/AFFO multiples,
+        # and maintenance capex % for AFFO compute. Falls to "default" on no
+        # keyword match. Cached on most_recent so NAV/P/FFO/P/AFFO/DDM
+        # dispatches don't re-classify.
+        if sector in {"RealEstate", "REIT"} or "REIT" in (profile_name or ""):
+            from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as _TSL
+            from src.data.sector_profiles import SGX_TICKER_SECTOR_LOOKUP as _SGX_TSL
+            _lookup_notes = ""
+            _lookup_entry = _TSL.get(ticker.upper()) or _SGX_TSL.get(ticker.upper())
+            if _lookup_entry and len(_lookup_entry) >= 4:
+                _lookup_notes = _lookup_entry[3] or ""
+            _reit_subtype = _classify_reit_subtype(ticker, _lookup_notes)
+            most_recent["_reit_subtype"]  = _reit_subtype
+            # SGX sub-sector drives the DDM calibration and is resolved from
+            # the SGX lookup, not from the US sub-type keyword classifier.
+            if _SGX_TSL.get(ticker.upper()):
+                most_recent["_sreit_subtype"] = _sgx_reit_subtype(ticker)
+            most_recent["_ticker"]        = ticker
+            most_recent["_lookup_notes"]  = _lookup_notes
+
+            _reit_m = _compute_reit_metrics(most_recent, subtype=_reit_subtype)
+            _mults  = _REIT_SUBTYPE_MULTIPLES.get(_reit_subtype, _REIT_SUBTYPE_MULTIPLES["default"])
+
+            def _fmt_b(v):
+                if v is None:
+                    return "n/a"
+                if abs(v) >= 1e9:
+                    return f"${v/1e9:.2f}B"
+                if abs(v) >= 1e6:
+                    return f"${v/1e6:.0f}M"
+                return f"${v:.0f}"
+
+            _sreit_sub = most_recent.get("_sreit_subtype")
+            if _sreit_sub:
+                _ddm_dbg = _compute_sreit_ddm(ticker, _sreit_sub, most_recent,
+                                              shares, dpu_growth=growth_base)
+                if _ddm_dbg is not None:
+                    _dv, _dpu_f, _da = _ddm_dbg
+                    _sym = _CCY_SYMBOLS.get((reported_currency or "SGD").upper(),
+                                            (reported_currency or "SGD").upper() + " ")
+                    ticker_forward_flags.append(
+                        f"S-REIT DDM ({_sreit_sub}): DPU fwd {_dpu_f * 100:.2f} cents "
+                        f"-> {_sym}{_dv:,.2f}/unit [{', '.join(_da['provenance'])}]"
+                    )
+                else:
+                    ticker_forward_flags.append(
+                        f"S-REIT DDM ({_sreit_sub}): unavailable — no DPU or "
+                        f"CoE too close to terminal g"
+                    )
+
+            ticker_forward_flags.append(
+                f"REIT sub-type: {_reit_subtype} | cap_rate "
+                f"{_mults['cap_rate']:.2%} | P/FFO {_mults['p_ffo']:.0f}x | "
+                f"P/AFFO {_mults['p_affo']:.0f}x | maint_capex "
+                f"{_reit_m['maint_capex_pct_used']:.1%} rev | "
+                f"FFO={_fmt_b(_reit_m['ffo'])} AFFO={_fmt_b(_reit_m['affo'])} "
+                f"NOI={_fmt_b(_reit_m['noi'])}"
+            )
+
+            _rm_override = (reit_metrics_all or {}).get(ticker) or {}
+            if _rm_override:
+                if "cap_rate_market" in _rm_override:
+                    most_recent["cap_rate_market"] = _rm_override["cap_rate_market"]
+                if "affo_per_unit_cents" in _rm_override:
+                    most_recent["affo_per_share_research"] = _rm_override["affo_per_unit_cents"] / 100.0
+                # ── S-REIT DDM inputs ────────────────────────────────────
+                # Namespaced with an `_sreit_` prefix deliberately. These
+                # are read only by the DDM and must never shadow a
+                # statement line item — the framework bridge writes
+                # extracted KPIs onto the financial row by key, and an
+                # unprefixed name silently replaces real data.
+                if _rm_override.get("dpu_cents"):
+                    most_recent["_sreit_dpu_cents_research"] = _rm_override["dpu_cents"]
+                if _rm_override.get("sreit_cost_of_equity"):
+                    most_recent["_sreit_coe_research"] = _rm_override["sreit_cost_of_equity"]
+                if _rm_override.get("sreit_terminal_growth") is not None:
+                    most_recent["_sreit_terminal_g_research"] = _rm_override["sreit_terminal_growth"]
+                _rm_parts = []
+                if "cap_rate_market" in _rm_override:
+                    _rm_parts.append(f"cap_rate {_rm_override['cap_rate_market']:.2%} "
+                                     f"(override from default {_mults['cap_rate']:.2%})")
+                if "occupancy_rate" in _rm_override:
+                    _rm_parts.append(f"occupancy {_rm_override['occupancy_rate']:.0%}")
+                if "wale_years" in _rm_override:
+                    _rm_parts.append(f"WALE {_rm_override['wale_years']:.1f}y")
+                if "dpu_cents" in _rm_override and "affo_per_unit_cents" in _rm_override:
+                    _dpu = _rm_override['dpu_cents']
+                    _affo_u = _rm_override['affo_per_unit_cents']
+                    _cov = _dpu / _affo_u if _affo_u > 0 else 0
+                    _rm_parts.append(f"DPU/AFFO coverage {_cov:.1%} "
+                                     f"({'sustainable' if _cov <= 1.0 else 'UNSUSTAINABLE'})")
+                if "leverage_ratio" in _rm_override:
+                    _rm_parts.append(f"leverage {_rm_override['leverage_ratio']:.0%}")
+                if _rm_parts:
+                    ticker_forward_flags.append("REIT research metrics: " + " | ".join(_rm_parts))
+
+        # ── Bank metrics attachment + audit (Tier 2 item 3) ─────────────────
+        if (is_bank_sector(sector) and profile_name in _BANK_PROFILE_CALIBRATION) \
+                or "Bank" in (profile_name or "") or profile_name == "Mortgage/GSE":
+            _bank_m = _compute_bank_metrics(most_recent, profile_name=profile_name)
+            _bank_cfg = _bank_profile_calibration(profile_name)
+
+            _bm_override = (bank_metrics_all or {}).get(ticker) or {}
+            if _bm_override.get("cet1_ratio"):
+                most_recent["_bank_cet1_research"] = _bm_override["cet1_ratio"]
+            if _bm_override.get("management_target_roe"):
+                most_recent["_bank_target_roe_research"] = _bm_override["management_target_roe"]
+            # GGM assumptions lifted straight from the research note's
+            # valuation table, when the extractor found them.
+            if _bm_override.get("cost_of_equity"):
+                most_recent["_bank_coe_research"] = _bm_override["cost_of_equity"]
+            if _bm_override.get("terminal_growth_rate") is not None:
+                most_recent["_bank_ggm_g_research"] = _bm_override["terminal_growth_rate"]
+            if _bm_override.get("target_price_to_book"):
+                most_recent["_bank_target_pb_research"] = _bm_override["target_price_to_book"]
+
+            def _fmt_pct(v):
+                return f"{v:.2%}" if v is not None else "n/a"
+
+            # Use the actual reporting currency in the flags. Hard-coding "$"
+            # against SGD/HKD figures leaked into the LLM narrative and into
+            # the value-trap agent, which raised "currency mislabeling risk"
+            # as a genuine red flag on D05.SI and fed it into a SELL.
+            _ccy_sym = _CCY_SYMBOLS.get(
+                (reported_currency or "USD").upper(),
+                f"{(reported_currency or 'USD').upper()} ",
+            )
+
+            _bank_parts = [
+                f"ROE {_fmt_pct(_bank_m.get('roe'))}",
+                f"NIM {_fmt_pct(_bank_m.get('nim'))}",
+                f"eff {_fmt_pct(_bank_m.get('efficiency_ratio'))}",
+                f"credit_cost {_fmt_pct(_bank_m.get('credit_cost_ratio'))}",
+                (f"TBV/sh {_ccy_sym}{_bank_m.get('tbv_per_share'):.2f}"
+                 if _bank_m.get('tbv_per_share') else "TBV/sh n/a"),
+                f"CET1 implied {_fmt_pct(_bank_m.get('cet1_implied'))}",
+            ]
+            ticker_forward_flags.append(
+                f"Bank metrics ({profile_name}, target ROE {_bank_cfg['target_roe']:.1%} / "
+                f"CoE {_bank_cfg['coe']:.1%} / fade {_bank_cfg['fade_years']}y / "
+                f"target CET1 {_bank_cfg['target_cet1']:.1%}): " + " | ".join(_bank_parts)
+            )
+
+            # GGM audit line — the ROE / CoE / g triplet actually used, with
+            # the source of each field, plus the justified P/B it implies.
+            _ggm_dbg = _compute_ggm_pb(ticker, profile_name, most_recent, shares)
+            if _ggm_dbg is not None:
+                _gv, _gpb, _ga = _ggm_dbg
+                ticker_forward_flags.append(
+                    f"GGM (P/B): target P/B {_gpb:.2f}x → {_ccy_sym}{_gv:,.2f}/sh "
+                    f"[{', '.join(_ga['provenance'])}]"
+                )
+
+            if _bm_override:
+                _or_parts = []
+                if _bm_override.get("cet1_ratio"):
+                    _or_parts.append(f"CET1 {_bm_override['cet1_ratio']:.2%} (research override)")
+                if _bm_override.get("management_target_roe"):
+                    _or_parts.append(f"mgmt target ROE {_bm_override['management_target_roe']:.1%}")
+                if _bm_override.get("efficiency_ratio"):
+                    _or_parts.append(f"efficiency {_bm_override['efficiency_ratio']:.1%}")
+                if _bm_override.get("npl_ratio"):
+                    _or_parts.append(f"NPL {_bm_override['npl_ratio']:.2%}")
+                if _or_parts:
+                    ticker_forward_flags.append("Bank research overrides: " + " | ".join(_or_parts))
+
+        # ── SaaS metrics attach (Tier 2 Tech) ──────────────────────────────
+        if is_tech_sector(sector):
+            _saas_override = (saas_metrics_all or {}).get(ticker) or {}
+            if _saas_override:
+                most_recent["_saas_metrics"] = _saas_override
+                _saas_parts = []
+                if "nrr_pct" in _saas_override:
+                    _saas_parts.append(f"NRR {_saas_override['nrr_pct']:.0%}")
+                if "rule_of_40_score" in _saas_override:
+                    _saas_parts.append(f"Rule of 40 {_saas_override['rule_of_40_score']:.0f}")
+                if "cac_payback_months" in _saas_override:
+                    _saas_parts.append(f"CAC payback {_saas_override['cac_payback_months']:.0f}mo")
+                if "magic_number" in _saas_override:
+                    _saas_parts.append(f"magic # {_saas_override['magic_number']:.2f}")
+                if "gross_retention_pct" in _saas_override:
+                    _saas_parts.append(f"gross retention {_saas_override['gross_retention_pct']:.0%}")
+                if _saas_parts:
+                    ticker_forward_flags.append("SaaS research metrics: " + " | ".join(_saas_parts))
+
+        # ── Framework metrics attach (PR #6 — generic for new sub-profiles) ─
+        # Handles Regulated Utility, Upstream O&G, Semi Fabless / IDM/Foundry,
+        # Telco, Mining (Major), Automotive & EV, Managed Care — any ticker
+        # whose profile_name is registered in SECTOR_KPI_FRAMEWORK but NOT
+        # covered by a legacy dedicated extractor. Generic loop: each KPI
+        # in the framework spec is attached to most_recent under its key,
+        # and _<profile>_completeness / _<profile>_missing metadata is set
+        # for the downstream UI badge.
+        _fm_override = (framework_metrics_all or {}).get(ticker) or {}
+        if _fm_override and profile_name:
+            try:
+                from src.data.sector_kpi_framework import attach_overrides
+                _audit_lines = attach_overrides(profile_name, _fm_override, most_recent)
+                if _audit_lines:
+                    _completeness = _fm_override.get("_completeness_score", "n/a")
+                    ticker_forward_flags.append(
+                        f"Framework metrics ({profile_name}, "
+                        f"completeness={_completeness}): "
+                        + " | ".join(_audit_lines)
+                    )
+            except Exception as _exc:
+                # Framework attach is fail-safe — never crash the pipeline.
+                # Audit trail captures the failure for debug.
+                ticker_forward_flags.append(
+                    f"Framework attach skipped ({type(_exc).__name__}: {str(_exc)[:80]})"
+                )
+
+        # Live-mNAV audit line — the NAV Discount branch of
+        # _compute_method_value consumes most_recent["mNAV_multiple"] when
+        # present. Appended pre-loop so it lands in the per-scenario
+        # forward_flags snapshot and is visible in the payload/PDF.
+        try:
+            _mnav_live = float(most_recent.get("mNAV_multiple"))
+        except (TypeError, ValueError):
+            _mnav_live = None
+        if _mnav_live and 0.1 <= _mnav_live <= 8.0:
+            ticker_forward_flags.append(
+                f"NAV Discount anchor: live mNAV {_mnav_live:.2f}× book "
+                f"(framework extractor; static peer P/B premium not used)"
+            )
+
+        # ── WACC (hybrid: Damodaran sector base + live credit overlay) ───
+        # The sector base WACC preserves all existing calibration (Damodaran
+        # Jan 2026, profile sub-types, HK CRP, macro regime, leverage premium).
+        # On top, a cyclical overlay uses FRED's live ICE BofA OAS to flex
+        # cost of debt by current credit conditions — tight credit shrinks WACC
+        # modestly, stressed credit widens it. The overlay falls to zero when
+        # FRED is unreachable or when market_cap / net_debt are unavailable,
+        # so WACC collapses to the legacy sector value as a safe no-op.
+        _ebit_v = most_recent.get("ebit")
+        _int_v  = most_recent.get("interest_expense")
+        if _int_v and _int_v > 0 and _ebit_v is not None:
+            _coverage = _ebit_v / _int_v
+        else:
+            _coverage = None  # no interest expense → rated AAA
+        try:
+            from src.data.sector_profiles import compute_wacc_hybrid as _compute_wacc_hybrid
+            _wacc_info = _compute_wacc_hybrid(
+                sector=sector,
+                leverage=leverage,
+                macro_regime=_risk_appetite,
+                profile=profile_name or "",
+                is_hk=_is_hk,
+                interest_coverage=_coverage,
+                net_debt=net_debt,
+                market_cap=_market_cap,
+            )
+            wacc = _wacc_info["wacc"]
+            ticker_forward_flags.append(_wacc_info["audit"])
+        except Exception as _wacc_exc:  # noqa: BLE001 — never block DCF on audit
+            _log.warning("[DCF] %s: hybrid WACC failed, using sector base: %s",
+                         ticker, _wacc_exc)
+            wacc = get_wacc_for_exchange(
+                sector, leverage, macro_regime=_risk_appetite,
+                profile=profile_name, is_hk=_is_hk,
+            )
+
+        # ── Insider-activity WACC overlay (Tier 3) ──────────────────────
+        # The Phase 2.5 insider_activity_agent populates
+        # state["data"]["insider_activity"][ticker] with 12m/90d/30d net
+        # buying and conviction flags. That data was previously unused by
+        # the DCF. Apply a small ±bp WACC modifier so net-buying signals
+        # tighten (lower WACC) and net-selling widens (higher WACC).
+        # Capped at ±50bp by the helper so no single signal dominates.
+        try:
+            _insider_data = (
+                state["data"].get("insider_activity", {}) or {}
+            ).get(ticker)
+            _ins_bps, _ins_audit = _insider_wacc_modifier(_insider_data, _market_cap)
+            if _ins_bps != 0.0:
+                wacc = wacc + _ins_bps / 10000.0
+                if _ins_audit:
+                    ticker_forward_flags.append(_ins_audit)
+        except Exception as _ins_exc:  # noqa: BLE001 — never block DCF on insider overlay
+            _log.warning("[DCF] %s: insider WACC overlay failed (ignored): %s",
+                         ticker, _ins_exc)
+
+        # Deep-research risk_flag → WACC loading (+50bps HIGH, +25bps MEDIUM)
+        _risk_flag = dcf_cal.get("risk_flag", "MEDIUM")
+        _wacc_loading = {"HIGH": 0.0050, "MEDIUM": 0.0025, "LOW": 0.0}.get(_risk_flag, 0.0025)
+        if _wacc_loading:
+            wacc = wacc + _wacc_loading
+            progress.update_status(
+                agent_id, ticker,
+                f"WACC loading from deep research risk_flag={_risk_flag}: "
+                # Fix (v3.21): was *100 (percentage points, not basis points)
+                # — a 25bps/50bps loading always displayed as "+0bps" since
+                # 0.25/0.50 both round to 0 under :.0f. Value applied to wacc
+                # was always correct; only this log line was wrong.
+                f"+{_wacc_loading*10000:.0f}bps → WACC={wacc:.3f}"
+            )
+
+        # REIT NAV: widen the research-extracted cap rate under the SAME
+        # risk_flag signal WACC loading just used above (v3.21). Previously
+        # a research-extracted cap_rate_market override (see _rm_override
+        # further below) was used as-is regardless of how risky deep
+        # research flagged the same company elsewhere in this run — e.g. a
+        # cap rate override MORE aggressive (lower) than the sector default
+        # for a name simultaneously flagged HIGH risk. A higher cap rate
+        # means a lower NAV (gross_asset_value = NOI / cap_rate), so this
+        # widening is directionally conservative, same as the WACC loading
+        # above. Deliberately does NOT touch the sub-type default cap rate
+        # (_REIT_SUBTYPE_MULTIPLES) when no research override exists — that
+        # table is already a calibrated multi-company baseline, not a
+        # single-point extraction, so it doesn't have the same failure mode.
+        if most_recent.get("cap_rate_market") is not None and _wacc_loading:
+            _cap_rate_before = most_recent["cap_rate_market"]
+            most_recent["cap_rate_market"] = _cap_rate_before + _wacc_loading
+            ticker_forward_flags.append(
+                f"REIT cap rate widened +{_wacc_loading*10000:.0f}bps for risk_flag={_risk_flag}: "
+                f"{_cap_rate_before:.2%} → {most_recent['cap_rate_market']:.2%}"
+            )
+
+        # ── Change 6: Country Risk Premium (CRP) for non-USD-reporting US-listed tickers ──
+        # Source: Damodaran Jan 2026 country risk premiums.
+        # Applied when the company reports in a non-USD currency (ADR or cross-listing)
+        # reflecting political/regulatory/FX tail risk not captured by the sector WACC.
+        _CRP_BY_CURRENCY = {
+            "CNY":  0.018,  # China (mainland) — VIE risk, regulatory, capital controls
+            "HKD":  0.010,  # Hong Kong — lower than CNY; separate legal system
+            "BRL":  0.022,  # Brazil — fiscal policy risk, FX volatility
+            "INR":  0.014,  # India — governance improving; lower than EM median
+            "MXN":  0.018,  # Mexico — AMLO/Sheinbaum policy uncertainty
+            "ZAR":  0.025,  # South Africa — load-shedding, governance risk
+            "KRW":  0.007,  # South Korea — high-quality governance; small premium
+            "IDR":  0.020,  # Indonesia — commodity, EM
+            "TRY":  0.040,  # Turkey — currency and political risk
+            "RUB":  0.080,  # Russia — sanctions; use only in non-sanction context
+        }
+        _crp = _CRP_BY_CURRENCY.get(reported_currency.upper(), 0.0)
+        if _crp > 0:
+            wacc = round(wacc + _crp, 4)
+            fx_note = (fx_note or "") + (
+                f" | CRP +{_crp:.1%} added for {reported_currency} jurisdiction risk "
+                f"(Damodaran 2026 country risk premium)."
+            )
+            progress.update_status(
+                agent_id, ticker,
+                f"CRP +{_crp:.1%} for {reported_currency} → WACC={wacc:.3f}"
+            )
+
+        # ── Contracted-revenue WACC discount ────────────────────────────────
+        # For Merchant Power / IPP companies with significant PPA or contracted
+        # revenue (detected via deep research / industry brief keywords), apply a
+        # -125 bps discount. This shifts WACC closer to IPP/Regulated profile,
+        # reflecting lower effective cash-flow risk from long-term contracts.
+        _CONTRACTED_DISCOUNT = -0.0125  # -125 bps
+        _CONTRACTED_KWS = ["ppa", "power purchase agreement", "behind-the-meter", "contracted revenue",
+                           "offtake agreement", "long-term contract", "nuclear ppa", "hyperscaler ppa",
+                           "capacity auction", "capacity payment", "tolling agreement"]
+        if sector == "Energy" and profile_name in ("Merchant Power", "IPP"):
+            _research_text = (
+                (state["data"].get("deep_research", "") or "") + " " +
+                (state["data"].get("industry_brief", "") or "")
+            ).lower()
+            _has_contracted = any(kw in _research_text for kw in _CONTRACTED_KWS)
+            if _has_contracted:
+                wacc = round(wacc + _CONTRACTED_DISCOUNT, 4)
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Contracted-revenue discount: {_CONTRACTED_DISCOUNT*100:+.0f}bps "
+                    f"(PPA/contracted keywords found) → WACC={wacc:.3f}"
+                )
+
+        # P1.1 — extract anchor method and rationale for PDF display (§6 Step 4)
+        _anchor_method = "DCF"  # fallback
+        _profile_rationale = ""
+        if profile_data:
+            for _m in profile_data.get("methods", []):
+                if _m.get("anchor"):
+                    _anchor_method = _m["name"]
+                    break
+            _profile_rationale = profile_data.get("rationale", "")
+
+        # ── Analyst valuation basis (benchmark, not an instruction) ──────
+        # Records what the sell-side used and what it put in. Where the
+        # analyst's method is not this profile's anchor, that is FLAGGED,
+        # never acted on: profile routing is ours, and letting a single
+        # extracted string reroute a valuation would put a broker's framing
+        # in charge of the engine.
+        try:
+            _ab = _analyst_basis(ticker, most_recent)
+            if _ab and _ab.get("method"):
+                _parts = [f"method={_ab['method']}"]
+                for _k, _lbl in (("wacc", "WACC"), ("cost_of_equity", "CoE"),
+                                 ("terminal_growth", "g"),
+                                 ("holdco_discount", "holdco disc")):
+                    if _ab.get(_k) is not None:
+                        _parts.append(f"{_lbl} {_ab[_k]:.2%}")
+                if _ab.get("target_multiple"):
+                    _parts.append(
+                        f"{_ab['target_multiple']:g}x "
+                        f"{_ab.get('multiple_basis') or ''}".strip())
+                if _ab.get("price_target"):
+                    _parts.append(f"TP {_ab['price_target']}")
+                if _ab.get("rating"):
+                    _parts.append(str(_ab["rating"]))
+                _src = (f"{_ab.get('house') or 'sell-side'} "
+                        f"{_ab.get('as_of') or ''}").strip()
+                ticker_forward_flags.append(
+                    f"Analyst basis ({_src}): " + " | ".join(_parts))
+
+                from src.memory.analyst_basis import method_disagrees as _disagrees
+                if _anchor_method and _disagrees(_ab, _anchor_method):
+                    ticker_forward_flags.append(
+                        f"⚠ Method divergence: analyst used "
+                        f"{_ab['method']}, profile '{profile_name}' anchors on "
+                        f"{_anchor_method} — profile routing retained, "
+                        f"flagged for review")
+        except Exception as _abe:
+            print(f"  [analyst_basis] {ticker}: {type(_abe).__name__}: {_abe!r}")
+
+        # P1.2 — cache most_recent EBITDA for accurate 12m PT computation
+        # Using historical EBITDA × (1+g) is far more accurate than FCF / 0.65
+        _hist_ebitda = most_recent.get("ebitda")
+
+        progress.update_status(
+            agent_id, ticker,
+            f"Profile: {profile_name} | Anchor: {_anchor_method} | WACC={wacc:.1%} | g={growth_base:.1%} | C_macro={c_macro:+.2f}"
+        )
+
+        # ── Revenue-scaled growth cap (Fix 2) ────────────────────────────
+        # Historical CAGRs from a company's high-growth startup phase routinely
+        # overstate the sustainable forward growth rate once revenue scale is large.
+        # A $10B revenue company cannot sustain 50%+ annual growth; applying it for
+        # 10 years produces terminal revenues larger than global GDP — mechanically
+        # possible but economically nonsensical.
+        #
+        # Caps are calibrated to Damodaran's sector growth databases:
+        #   > $10B : max base 15% (mega-cap platform  e.g. MSFT, GOOGL late-stage)
+        #   > $3B  : max base 22% (large growth-stage e.g. SNOW, DDOG at $3–10B)
+        #   > $1B  : max base 30% (mid-stage growers)
+        #   ≤ $1B  : no additional cap — small-cap hyper-growth is legitimate
+        #
+        # Caps are applied to growth_base BEFORE scenario multipliers so that
+        # bear/base/bull still produce differentiated values (0.55/1.00/1.50 × capped base).
+        if revenue_base >= 10_000_000_000:
+            _growth_base_cap = 0.15
+        elif revenue_base >= 3_000_000_000:
+            _growth_base_cap = 0.22
+        elif revenue_base >= 1_000_000_000:
+            _growth_base_cap = 0.30
+        else:
+            _growth_base_cap = 1.0   # no additional cap for sub-$1B companies
+
+        growth_base_capped = min(growth_base, _growth_base_cap)
+        if growth_base_capped < growth_base:
+            progress.update_status(
+                agent_id, ticker,
+                f"Growth cap applied: {growth_base:.1%} → {growth_base_capped:.1%} "
+                f"(revenue ${revenue_base/1e9:.1f}B exceeds ${_growth_base_cap:.0%} tier)"
+            )
+            growth_base = growth_base_capped
+
+        # The cap above mutates growth_base, which the ANALYST-BAND path never
+        # reads — it takes g straight from _analyst_bands below. So a name with
+        # analyst coverage escaped the tier entirely and kept only the flat
+        # +40% clamp. MELI 2026-08-30 carried g = 40% on a $28.9bn revenue base
+        # against a 15% tier, compounding to $194.9bn of year-10 revenue.
+        #
+        # Scale the whole band rather than clipping each scenario, so the
+        # bear/base/bull spread the analyst dispersion actually expresses is
+        # preserved. This mirrors the CAGR path exactly: there the cap binds
+        # the BASE and the scenario multipliers (0.55/1.00/1.50) still carry
+        # bull above it.
+        if _analyst_bands is not None:
+            _band_base = _analyst_bands.get("base")
+            if (_band_base and _band_base > _growth_base_cap > 0):
+                _band_scale = _growth_base_cap / _band_base
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Growth cap applied to analyst bands: base "
+                    f"{_band_base:.1%} → {_growth_base_cap:.1%} "
+                    f"(revenue ${revenue_base/1e9:.1f}B exceeds "
+                    f"{_growth_base_cap:.0%} tier); bear/bull scaled "
+                    f"{_band_scale:.2f}x"
+                )
+                ticker_forward_flags.append(
+                    f"Revenue-scale cap on analyst bands: base growth "
+                    f"{_band_base:.1%} → {_growth_base_cap:.1%} "
+                    f"(${revenue_base/1e9:.1f}B revenue)"
+                )
+                _analyst_bands = {
+                    k: (v * _band_scale if k in ("bear", "base", "bull") else v)
+                    for k, v in _analyst_bands.items()
+                }
 
         # ── Run three scenarios ───────────────────────────────────────────
         scenario_results: dict[str, dict] = {}
