@@ -218,3 +218,54 @@ def test_a_forward_column_with_no_usable_metric_yields_nothing():
     with _with_table([{"fiscal_year_label": "FY26e", "pe": "NM",
                        "pb": "", "ev_ebitda": "—"}]):
         assert mc._forward_table_multiples("AAPL") is None
+
+
+# ── Plausibility, learned from the first live backfill ───────────────────
+
+@pytest.mark.parametrize("field, multiple, label", [
+    ("pe", 0.7,  "CapitaLand India Trust — a P/E of 0.7 is not a P/E"),
+    ("pe", 250.0, "above the pe band ceiling"),
+    ("pb", 45.0,  "above the pb band ceiling"),
+])
+def test_an_implausible_street_multiple_is_rejected(field, multiple, label):
+    """A ratios table is a grid, and a mis-read column produces a number that
+    is arithmetically fine and financially impossible. Both real examples are
+    REITs quoting P/NAV or DPU yield in the row taken for P/E; banked, they
+    would have dragged a REIT median toward zero permanently."""
+    basis = {"house": "X", "as_of": "2026-06", "method": "pe",
+             "target_multiple": multiple, "multiple_basis": field
+             if field == "pe" else "p_b"}
+    comps = {field: {"value": 15.0, "peer_count": 12, "basis": "industry"}}
+    assert _build(basis=basis, comps=comps) is None, label
+
+
+def test_a_low_but_in_band_multiple_is_kept_and_that_is_a_known_limit():
+    """Keppel DC REIT came back at "P/E 1.3x" — almost certainly P/NAV read
+    from the P/E row, since REITs quote P/NAV and DPU yield rather than P/E.
+
+    It is NOT rejected, and deliberately so: 1.3 clears the band and a -91%
+    spread is within tolerance, and nothing mechanical distinguishes it from
+    a genuinely distressed name at that magnitude. Rejecting it would need a
+    rule that also discards real distress. The defence is statistical instead
+    — medians over a peer floor, which is why the aggregate reports its own
+    observation count.
+    """
+    basis = {**BASIS, "target_multiple": 1.3, "multiple_basis": "pe"}
+    comps = {"pe": {"value": 14.7, "peer_count": 8, "basis": "industry"}}
+    assert _build(basis=basis, comps=comps) is not None
+
+
+def test_a_plausible_multiple_at_the_band_edge_is_kept():
+    basis = {**BASIS, "target_multiple": 1.5, "multiple_basis": "pe"}
+    comps = {"pe": {"value": 15.0, "peer_count": 12, "basis": "industry"}}
+    assert _build(basis=basis, comps=comps) is not None
+
+
+def test_the_spread_guard_is_tight_enough_for_a_misread_cell():
+    """DKNG came back at +444% on the first backfill. A genuine street-vs-peer
+    disagreement beyond 3x is vanishingly rare; a parse error is not."""
+    from src.memory.multiple_calibration import _MAX_PLAUSIBLE_SPREAD
+    assert _MAX_PLAUSIBLE_SPREAD <= 3.0
+    basis = {**BASIS, "target_multiple": 97.5}
+    comps = {"pe": {"value": 17.9, "peer_count": 13, "basis": "industry"}}
+    assert _build(basis=basis, comps=comps) is None

@@ -2877,7 +2877,15 @@ def get_sector_peer_multiples(
     and stale-dynamic for the same field — each field is independently
     either live or static, never partially blended.
     """
-    table = HK_SECTOR_PEER_MULTIPLES if is_hk else SECTOR_PEER_MULTIPLES
+    # Static fallback comes from the market registry, not a two-way branch.
+    # The old `HK_SECTOR_PEER_MULTIPLES if is_hk else SECTOR_PEER_MULTIPLES`
+    # had no Singapore arm, so every SGX name that missed the live comps was
+    # valued on US multiples — which run 20-60% above comparable HK levels
+    # across 13 of 15 sectors, and SGX sits far closer to HK than to the US.
+    # A market with no authored table now returns {} and relies on live comps,
+    # rather than inheriting another market's economics.
+    _market = resolve_market(ticker=ticker, exchange=exchange, is_hk=is_hk)
+    table = market_peer_multiples(_market)
     static = (
         table.get(profile_name)
         or table.get(sector)
@@ -4432,6 +4440,146 @@ SG_SECTOR_WACC: dict[str, float] = {
     "Energy":        SECTOR_WACC.get("Energy", 0.065)       + _SG_CRP,  # 7.0%
     "Healthcare":    SECTOR_WACC.get("Biopharma", 0.085)    + _SG_CRP,  # 9.0%
 }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Market registry — one entry per catchment
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Replaces the `is_hk: bool` branch, which could express exactly two markets
+# and gave Singapore whichever one it was not. Keys match
+# `regional_comps.MARKETS` so a live comp set and a static fallback are always
+# looked up under the same name.
+#
+# Country risk premia are added to the US Damodaran sector base, the same
+# derivation `_HK_CHINA_CRP` and `_SG_CRP` already use. They are sovereign
+# ratings translated to an equity premium, not free parameters:
+#
+#   US    AA+   0.00%   the base itself
+#   SG    AAA   0.50%   already in use
+#   KR    AA    0.50%   comparable sovereign standing to Singapore
+#   JP    A+    0.60%   mature market, weaker sovereign rating
+#   CN    A+    1.50%   mainland; same China risk the HK constant carries
+#   HK    -     1.50%   HK-listed China exposure (existing constant)
+#
+# `peer_multiples: None` is deliberate and load-bearing. Singapore has no
+# static table, and the correct behaviour is to fall through to "no static
+# comps" rather than to borrow another market's economics. A caller that gets
+# {} keeps its own default and can tell that it did.
+_JP_CRP = 0.006
+_KR_CRP = 0.005
+_CN_CRP = 0.015
+
+MARKET_REGISTRY: dict[str, dict] = {
+    "US": {
+        "label":          "United States",
+        "exchanges":      ("NASDAQ", "NYSE", "AMEX"),
+        "crp":            0.0,
+        "peer_multiples": "SECTOR_PEER_MULTIPLES",
+        "sector_wacc":    None,            # SECTOR_WACC is the base itself
+    },
+    "HKSE": {
+        "label":          "Hong Kong",
+        "exchanges":      ("HKSE",),
+        "crp":            _HK_CHINA_CRP,
+        "peer_multiples": "HK_SECTOR_PEER_MULTIPLES",
+        "sector_wacc":    "HK_SECTOR_WACC",
+    },
+    "SES": {
+        "label":          "Singapore",
+        "exchanges":      ("SES",),
+        "crp":            _SG_CRP,
+        "peer_multiples": None,            # none authored — do NOT borrow US
+        "sector_wacc":    "SG_SECTOR_WACC",
+    },
+    "JPX": {
+        "label":          "Japan",
+        "exchanges":      ("JPX",),
+        "crp":            _JP_CRP,
+        "peer_multiples": None,
+        "sector_wacc":    None,            # derived from base + CRP
+    },
+    "KSC": {
+        "label":          "Korea",
+        "exchanges":      ("KSC",),
+        "crp":            _KR_CRP,
+        "peer_multiples": None,
+        "sector_wacc":    None,
+    },
+    "SHH": {
+        "label":          "Shanghai",
+        "exchanges":      ("SHH",),
+        "crp":            _CN_CRP,
+        "peer_multiples": None,
+        "sector_wacc":    None,
+    },
+    "SHZ": {
+        "label":          "Shenzhen",
+        "exchanges":      ("SHZ",),
+        "crp":            _CN_CRP,
+        "peer_multiples": None,
+        "sector_wacc":    None,
+    },
+}
+
+DEFAULT_MARKET = "US"
+
+# Exchange code -> market key, built once from the registry.
+_EXCHANGE_TO_MARKET: dict[str, str] = {
+    code.upper(): market
+    for market, cfg in MARKET_REGISTRY.items()
+    for code in cfg["exchanges"]
+}
+
+# Ticker suffix -> market, for the paths that only have a symbol.
+_SUFFIX_TO_MARKET: dict[str, str] = {
+    ".HK": "HKSE", ".SI": "SES", ".KS": "KSC",
+    ".T": "JPX", ".SS": "SHH", ".SZ": "SHZ",
+}
+
+
+def resolve_market(ticker: str = "", exchange: str = "",
+                   is_hk: bool | None = None) -> str:
+    """Market key for a ticker or exchange. Falls back to US.
+
+    `is_hk` is accepted so existing callers keep working while they migrate;
+    it wins only when nothing more specific is available.
+    """
+    code = (exchange or "").strip().upper()
+    if code in _EXCHANGE_TO_MARKET:
+        return _EXCHANGE_TO_MARKET[code]
+    if code in MARKET_REGISTRY:
+        return code
+    sym = (ticker or "").strip().upper()
+    for suffix, market in _SUFFIX_TO_MARKET.items():
+        if sym.endswith(suffix):
+            return market
+    if is_hk:
+        return "HKSE"
+    return DEFAULT_MARKET
+
+
+def market_crp(market: str) -> float:
+    """Country risk premium added to the US sector base."""
+    return float((MARKET_REGISTRY.get(market) or {}).get("crp") or 0.0)
+
+
+def market_peer_multiples(market: str) -> dict:
+    """Static peer-multiple table for a market, or {} when none is authored.
+
+    Empty is a real answer: it means this market has no hand-authored
+    fallback, and the caller should rely on live comps rather than inherit
+    another market's multiples.
+    """
+    name = (MARKET_REGISTRY.get(market) or {}).get("peer_multiples")
+    return globals().get(name, {}) if name else {}
+
+
+def market_sector_wacc(market: str) -> dict:
+    """Pre-computed per-market WACC table, or {} to derive from base + CRP."""
+    name = (MARKET_REGISTRY.get(market) or {}).get("sector_wacc")
+    return globals().get(name, {}) if name else {}
+
 
 
 # ── REIT-specific VGPM scoring weights ───────────────────────────────────────

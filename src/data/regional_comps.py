@@ -1,7 +1,7 @@
 """
 src/data/regional_comps.py
 ==========================
-Live industry- and sector-level valuation comps for the HK and SG markets.
+Live industry- and sector-level valuation comps, one universe per market.
 
 Why this exists
 ---------------
@@ -20,7 +20,9 @@ FMP global coverage makes real comps possible (verified 2026-08-27):
 
 That asymmetry drives the design: HK genuinely supports industry-level
 medians, SGX mostly does not, so both markets resolve through the same
-ladder and SG simply degrades to sector sooner. Every value carries the
+ladder and SG simply degrades to sector sooner. The ladder is market-agnostic,
+which is what let JPX, KSC, SHH and SHZ join as registry entries rather than
+as new code paths. Every value carries the
 basis it was computed at and its peer count, so a caller can never mistake a
 2-peer reading for a real comp set.
 
@@ -81,10 +83,24 @@ logger = logging.getLogger(__name__)
 # deep enough to clear the peer floor. HK and SG each stand alone because
 # their risk pricing genuinely differs — the whole point of keeping SGX
 # comps free of HK depositary receipts.
+# One entry per catchment. Adding a market is a line here plus a screener
+# sweep — no call-site changes, and no market inherits another's multiples.
+# Verified against FMP's screener (>=$300M, actively trading):
+#
+#   JPX  1,000 names / 117 industries      SHH  1,000 / 109
+#   KSC  1,000 names / 104 industries      SHZ  1,000 / 106
+#   HKSE 1,000 names / 125 industries      SES    156 /  69
+#
+# Korea is not speculative: Memory / DRAM-NAND already routes SK Hynix, which
+# until now was valued against US semiconductor comps for want of a KSC set.
 MARKETS: dict[str, tuple[str, ...]] = {
     "HKSE": ("HKSE",),
     "SES": ("SES",),
     "US": ("NASDAQ", "NYSE", "AMEX"),
+    "JPX": ("JPX",),
+    "KSC": ("KSC",),
+    "SHH": ("SHH",),
+    "SHZ": ("SHZ",),
 }
 
 EXCHANGES = tuple(MARKETS)

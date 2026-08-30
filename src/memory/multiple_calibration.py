@@ -73,7 +73,10 @@ BASIS_TO_FIELD = {
 # A street multiple this far from the peer median is far more likely to be a
 # parse error than a real view — a target price mistaken for a multiple, or a
 # year. Logged and skipped rather than banked.
-_MAX_PLAUSIBLE_SPREAD = 10.0
+# 3.0 = 300%. The first live backfill produced a +444% reading that was a
+# mis-read cell, not a view. A genuine street-vs-peer disagreement beyond
+# 3x is vanishingly rare; a parse error at that magnitude is not.
+_MAX_PLAUSIBLE_SPREAD = 3.0
 
 _ensure_lock = threading.Lock()
 _ensured = False
@@ -197,6 +200,27 @@ def build_observation(ticker: str) -> Optional[dict[str, Any]]:
             market, info.get("industry"), info.get("sector")
         ) or {}
     except Exception:
+        return None
+
+    # Plausibility band on the STREET multiple, reusing the same bands
+    # regional_comps applies to peer values (`pe` 1-200, `pb` 0.05-30, ...).
+    # A ratios table is a grid, and a mis-read column yields a number that is
+    # arithmetically fine and financially impossible. From the first live
+    # backfill: CapitaLand India Trust "P/E 0.7x" and Keppel DC REIT "1.3x" —
+    # both REITs, both quoting P/NAV or DPU yield in the row the extractor
+    # took for P/E. Banked, they would have dragged a REIT industry median
+    # toward zero permanently.
+    try:
+        from src.data.regional_comps import _BANDS
+        lo, hi = _BANDS.get(field, (None, None))
+    except Exception:
+        lo = hi = None
+    if lo is not None and not (lo <= float(multiple) <= hi):
+        logger.info(
+            "multiple_calibration: %s %s street %.2fx outside the plausible "
+            "band %.2f-%.2f — treating as a mis-read cell and skipping",
+            ticker, field, multiple, lo, hi,
+        )
         return None
 
     row = comps.get(field) or {}
