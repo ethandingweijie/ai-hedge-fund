@@ -547,35 +547,52 @@ def _scale_analyst_bands_to_cap(
 
 def _projectable_fcf_margin_cap(
     series: list[dict],
-) -> tuple[Optional[float], Optional[float]]:
-    """(cap, trailing_fcf_margin) — the FCF margin earnings can actually support.
+) -> tuple[Optional[float], Optional[float], str]:
+    """(cap, trailing_fcf_margin, basis) — the FCF margin that is repeatable.
 
-    Reported free cash flow is only projectable to the extent earnings and the
-    depreciation-versus-capex gap explain it. The owner-earnings identity is
+    Reported free cash flow is only projectable to the extent it recurs. The
+    owner-earnings identity says where the non-recurring part lives:
 
         FCF = net income + D&A - capex - change in working capital
 
-    so the first three terms are structural and the fourth is not: a working
+    The first three terms are structural. The fourth is not — a working
     capital benefit only recurs while the balance sheet keeps growing, and at
     steady state it stops contributing. Projecting it flat for a decade
     capitalises a financing flow as if it were operating profit.
 
     MELI 2026-08-30 is the case that motivated this. Mercado Pago's float —
     customer deposits and credit-book movements running through operating cash
-    flow — produced a reported FCF margin of 37.3% against a 6.9% net margin,
-    a 5.4x cash conversion. Held flat over ten years of compounding revenue it
-    projected $59.6bn of annual free cash flow in year 10, more than Alphabet
-    earns today, from a company that earned $2.0bn. Base IV came out at $18,401
-    against a $1,966 spot.
+    flow — produced a reported FCF margin of 37.3% against a 6.9% net margin.
+    Held flat over ten years of compounding revenue it projected $59.6bn of
+    annual free cash flow in year 10, more than Alphabet earns today, from a
+    company that earned $2.0bn. Base IV came out at $18,401 against a $1,966
+    spot.
 
-    Aggregated over the window rather than averaged per year: a single loss
-    year sends a per-year ratio to infinity, and the sums are what the identity
-    is stated over anyway. Returns (None, None) when the window has no revenue
-    or no earnings signal, in which case the caller leaves the margin alone —
-    this gate only ever caps downward, and only when it can say why.
+    **Two bases, and the direct measurement wins.** Where the cash-flow
+    statement discloses the working-capital line, subtract it: that IS the
+    non-recurring term, measured rather than inferred. Where it does not,
+    fall back to what earnings plus the D&A-less-capex gap support, which
+    approximates the same quantity from the other side.
+
+    Backtested against realised owner earnings over 8 gate firings
+    (`src/memory/gate_backtest.py`), mean absolute error:
+
+        ex-working-capital   5.96pp
+        raw (no cap)         7.21pp
+        earnings cap         8.11pp
+
+    and the split is structural — on businesses that stayed healthy the
+    earnings cap was off by 9.2pp against ex-WC's 2.1pp. It is a haircut, not
+    an estimator, and it won only where the business subsequently
+    deteriorated. Hence ex-WC leads and the earnings cap backstops.
+
+    Returns (None, None, "") when the window cannot support either basis, in
+    which case the caller leaves the margin alone — this gate only ever caps
+    downward, and only when it can say why.
     """
     rev = fcf = ni = capex = dep = 0.0
     have_ni = have_fcf = False
+    wc_margins: list[float] = []
     for row in series[-5:]:
         r = row.get("revenue")
         if not r or r <= 0:
@@ -584,18 +601,30 @@ def _projectable_fcf_margin_cap(
         if row.get("free_cash_flow") is not None:
             fcf += row["free_cash_flow"]
             have_fcf = True
+            wc = row.get("change_in_working_capital")
+            if wc is not None:
+                wc_margins.append((row["free_cash_flow"] - wc) / r)
         if row.get("net_income") is not None:
             ni += row["net_income"]
             have_ni = True
         capex += abs(row.get("capital_expenditure") or 0.0)
         dep += row.get("depreciation_and_amortization") or 0.0
-    if rev <= 0 or not have_ni or not have_fcf:
-        return None, None
-    # Only the EXCESS of D&A over capex is a durable add-back. Where capex
-    # exceeds D&A the business is reinvesting, and net margin already reflects
-    # the depreciation of that spend — subtracting again would double-count.
-    cap = (ni + max(0.0, dep - capex)) / rev
-    return cap, fcf / rev
+    if rev <= 0 or not have_fcf:
+        return None, None, ""
+    trailing = fcf / rev
+
+    # Preferred: the working-capital term as disclosed. Requires most of the
+    # window to carry the line — one year of it is a data point, not a basis.
+    if len(wc_margins) >= 3:
+        return (sum(wc_margins) / len(wc_margins)), trailing, "ex-working-capital"
+
+    # Fallback: only the EXCESS of D&A over capex is a durable add-back. Where
+    # capex exceeds D&A the business is reinvesting and net margin already
+    # reflects the depreciation of that spend, so subtracting again would
+    # double-count.
+    if not have_ni:
+        return None, None, ""
+    return ((ni + max(0.0, dep - capex)) / rev), trailing, "earnings-supported"
 
 
 def _analyst_revenue_growth(
@@ -4408,6 +4437,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      # REIT-specific
                      "depreciation_and_amortization", "operating_cash_flow",
                      "cash_and_equivalents",
+                     # The non-recurring term of the owner-earnings identity,
+                     # read by the cash-conversion gate. Same trap the SBC
+                     # note below records: _extract_annual_series() reads it,
+                     # so omitting it here yields None on every row and the
+                     # gate silently falls back to its weaker basis.
+                     "change_in_working_capital",
                      # Bank-specific (Tier 2)
                      "interest_income", "provision_for_loan_losses",
                      "goodwill", "intangible_assets",
@@ -4900,7 +4935,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # a different thing — a working-capital/float benefit that is not a
         # cost at all, just not repeatable. A name can legitimately trip both.
         if not _dcf_family_disabled:
-            _cc_cap, _cc_trailing = _projectable_fcf_margin_cap(series)
+            _cc_cap, _cc_trailing, _cc_basis = _projectable_fcf_margin_cap(
+                series)
             if (_cc_cap is not None and _cc_cap > 0
                     and fcf_margin_base > _cc_cap * _CASH_CONVERSION_TOLERANCE):
                 _cc_ratio = (
@@ -4909,15 +4945,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 ticker_forward_flags.append(
                     f"Cash-conversion cap: FCF margin {fcf_margin_base:.1%} → "
                     f"{_cc_cap:.1%} — reported FCF is {_cc_ratio:.1f}x what "
-                    f"earnings plus D&A-less-capex support, so the excess is "
-                    f"working capital / float and is not projected"
+                    f"a repeatable basis supports ({_cc_basis}), so the "
+                    f"excess is not projected"
                 )
                 gate_evaluations.append({
                     "gate_id": "GATE_CASH_CONVERSION",
                     "metric": "fcf_margin",
                     "raw_input_path_a": round(float(fcf_margin_base), 6),
                     "gated_output_path_b": round(float(_cc_cap), 6),
-                    "basis": "net_income + max(0, D&A - capex)",
+                    "basis": _cc_basis,
                 })
                 fcf_margin_base = _cc_cap
 

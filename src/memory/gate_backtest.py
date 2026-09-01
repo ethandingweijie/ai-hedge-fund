@@ -170,7 +170,7 @@ def backtest_cash_conversion(ticker: str, as_of: str,
     out["trailing_through"] = last_period
 
     margin_raw = _mean_fcf_margin(trailing)
-    cap, _trailing_margin = _projectable_fcf_margin_cap(trailing)
+    cap, _trailing_margin, _basis = _projectable_fcf_margin_cap(trailing)
     if margin_raw is None:
         out["skip_reason"] = "no trailing FCF margin"
         return out
@@ -293,7 +293,7 @@ def backtest_cash_conversion_owner_earnings(
     out["trailing_through"] = last_period
 
     margin_raw = _mean_fcf_margin(trailing)
-    cap, _tr = _projectable_fcf_margin_cap(trailing)
+    cap, _tr, _basis = _projectable_fcf_margin_cap(trailing)
     if margin_raw is None:
         out["skip_reason"] = "no trailing FCF margin"
         return out
