@@ -329,6 +329,11 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             # REIT-specific: D&A for FFO reconstruction, OCF for AFFO, cash for NAV bridge
             "depreciation_and_amortization": _safe(getattr(li, "depreciation_and_amortization", None)),
             "operating_cash_flow":  _safe(getattr(li, "operating_cash_flow", None)),
+            # The non-projectable term of the owner-earnings identity, fetched
+            # so a gate can state how much of reported FCF is working capital
+            # instead of inferring it.
+            "change_in_working_capital": _safe(
+                getattr(li, "change_in_working_capital", None)),
             "cash_and_equivalents": _safe(getattr(li, "cash_and_equivalents", None)),
             # Bank-specific: NII reconstruction, credit cost, TBV
             "interest_income":           _safe(getattr(li, "interest_income", None)),
@@ -4683,6 +4688,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # ── Ticker-level forward flags (seed; all subsequent blocks append) ──
         ticker_forward_flags: list[str] = []
+        # Forward-test substrate. A gate holds BOTH values at the moment it
+        # fires, but the flag records them only as prose, which cannot be
+        # scored. These structured pairs are what the reconciliation worker
+        # reads to compute (|B - actual| - |A - actual|) / |actual| once the
+        # period reports. Cheap now and impossible retroactively: a snapshot
+        # written without them can never be scored.
+        gate_evaluations: list[dict] = []
 
         # ── Normalized (cycle-adjusted) earnings for P/E (norm), EV/EBITDA (norm) ──
         # Damodaran-style: mean(field / revenue) over last 5 yrs × current revenue.
@@ -4900,6 +4912,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"earnings plus D&A-less-capex support, so the excess is "
                     f"working capital / float and is not projected"
                 )
+                gate_evaluations.append({
+                    "gate_id": "GATE_CASH_CONVERSION",
+                    "metric": "fcf_margin",
+                    "raw_input_path_a": round(float(fcf_margin_base), 6),
+                    "gated_output_path_b": round(float(_cc_cap), 6),
+                    "basis": "net_income + max(0, D&A - capex)",
+                })
                 fcf_margin_base = _cc_cap
 
         # ── Analyst estimates (fetched eagerly — cached) ──────────────────
@@ -5791,6 +5810,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 f"${revenue_base/1e9:.1f}B exceeds {_growth_base_cap:.0%} "
                 f"tier); bear/bull scaled {_band_scale:.2f}x"
             )
+            gate_evaluations.append({
+                "gate_id": "GATE_REVENUE_SCALE_CAP",
+                "metric": "revenue_growth",
+                "raw_input_path_a": round(
+                    float(_analyst_bands["base"]) / _band_scale, 6),
+                "gated_output_path_b": round(float(_analyst_bands["base"]), 6),
+                "basis": "revenue-tier cap",
+            })
             ticker_forward_flags.append(
                 f"Revenue-scale cap on analyst bands: base growth capped to "
                 f"{_growth_base_cap:.1%} (${revenue_base/1e9:.1f}B revenue)"
@@ -7229,6 +7256,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # display on the frontend. None for HK/SG or when FMP returns no
             # data. Shape: {high, low, consensus, median} or None.
             "consensus_pt":       _consensus_pt,
+            # Forward test: one (Path A, Path B) pair per gate firing. An
+            # empty list means no gate fired; absent means the run predates
+            # instrumentation. The reconciliation worker must tell those apart.
+            "gate_evaluations":   gate_evaluations,
             # FX metadata — populated when financials are not in USD
             # _output_currency = "HKD" for HK tickers (IV/PT converted USD→HKD);
             # reported_currency remains the original financial statement currency.
