@@ -139,3 +139,106 @@ def test_the_working_capital_term_is_extracted():
 
     src = inspect.getsource(dcf_agent)
     assert '"change_in_working_capital"' in src
+
+
+# ── Scoring the claim the gate actually makes ────────────────────────────
+#
+# The first harness scored the cash-conversion gate on year-1 reported FCF and
+# marked it a false alarm on MELI. But the gate never claimed to predict
+# reported FCF — it claims the working-capital portion is not repeatable and
+# must not be capitalised for ten years. Two corrections follow.
+
+from src.memory.gate_backtest import (
+    _owner_earnings_margin,
+    realised_owner_earnings_margin,
+)
+
+
+def test_owner_earnings_strips_the_working_capital_term():
+    """MELI FY25: $10.77bn reported FCF on $28.89bn revenue is a 37.3%
+    margin, but $5.92bn of it is working-capital inflow."""
+    m = _owner_earnings_margin({
+        "revenue": 28.893e9, "free_cash_flow": 10.773e9,
+        "change_in_working_capital": 5.923e9,
+    })
+    assert m == pytest.approx(0.1679, abs=0.001)
+
+
+def test_a_working_capital_outflow_raises_owner_earnings():
+    """Sign matters: a build in working capital depresses reported FCF, so
+    removing it must move the margin UP, not down."""
+    m = _owner_earnings_margin({
+        "revenue": 1000.0, "free_cash_flow": 50.0,
+        "change_in_working_capital": -30.0,
+    })
+    assert m == pytest.approx(0.08)
+
+
+def test_a_missing_working_capital_line_degrades_to_reported_fcf():
+    """Absent ΔWC must not be read as a huge adjustment."""
+    assert _owner_earnings_margin(
+        {"revenue": 100.0, "free_cash_flow": 10.0}) == pytest.approx(0.10)
+
+
+@pytest.mark.parametrize("row", [
+    {"revenue": 0, "free_cash_flow": 10},
+    {"revenue": -100, "free_cash_flow": 10},
+    {"revenue": 100},
+    {},
+])
+def test_a_degenerate_row_yields_no_margin(row):
+    assert _owner_earnings_margin(row) is None
+
+
+def test_the_metric_is_a_margin_so_growth_cannot_pollute_it():
+    """Scoring cash levels required projecting both paths forward, and the
+    growth assumption then swamped the intervention — BABA and JPM showed
+    300-450% error on BOTH paths. Comparing margin to margin removes the
+    growth rate, the revenue base and the compounding entirely."""
+    v = delta_error_verdict(0.232, 0.064, 0.168,
+                            metric="owner_earnings_margin")
+    assert v["verdict"] == "FALSE_ALARM"      # raw 6.4pp off, gated 10.4pp off
+    # Same margins, any revenue scale, same verdict.
+    assert epsilon_for("owner_earnings_margin") > 0
+
+
+def test_realised_uses_only_years_after_the_as_of_date(monkeypatch):
+    """Ground truth must be a figure that was unknowable at the as-of date."""
+    import src.memory.gate_backtest as gb
+
+    rows = [
+        {"period": "2023-12-31", "revenue": 100.0, "free_cash_flow": 40.0},
+        {"period": "2024-12-31", "revenue": 100.0, "free_cash_flow": 10.0},
+        {"period": "2025-12-31", "revenue": 100.0, "free_cash_flow": 20.0},
+    ]
+    monkeypatch.setattr(gb, "_series", lambda *a, **k: rows)
+    mean, n, periods = gb.realised_owner_earnings_margin(
+        "X", "2023-12-31", "2026-08-30")
+    assert periods == ["2024-12-31", "2025-12-31"]
+    assert n == 2
+    assert mean == pytest.approx(0.15)        # the 2023 year must not leak in
+
+
+def test_realised_averages_rather_than_taking_one_year(monkeypatch):
+    """"Terminal" means the level that persists; a single year is dominated
+    by timing."""
+    import src.memory.gate_backtest as gb
+
+    rows = [
+        {"period": "2023-12-31", "revenue": 100.0, "free_cash_flow": 0.0},
+        {"period": "2024-12-31", "revenue": 100.0, "free_cash_flow": 60.0},
+        {"period": "2025-12-31", "revenue": 100.0, "free_cash_flow": 0.0},
+    ]
+    monkeypatch.setattr(gb, "_series", lambda *a, **k: rows)
+    mean, n, _ = gb.realised_owner_earnings_margin("X", "2023-12-31",
+                                                   "2026-08-30")
+    assert n == 2 and mean == pytest.approx(0.30)
+
+
+def test_no_reported_year_yet_is_unscorable_not_zero(monkeypatch):
+    import src.memory.gate_backtest as gb
+    monkeypatch.setattr(gb, "_series", lambda *a, **k: [
+        {"period": "2024-12-31", "revenue": 100.0, "free_cash_flow": 10.0}])
+    mean, n, periods = gb.realised_owner_earnings_margin(
+        "X", "2024-12-31", "2026-08-30")
+    assert mean is None and n == 0 and periods == []

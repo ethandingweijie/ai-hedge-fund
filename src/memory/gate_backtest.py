@@ -39,6 +39,10 @@ logger = logging.getLogger(__name__)
 # revenue. Left as a parameter with a per-metric default rather than one
 # global constant.
 EPSILON_BY_METRIC: dict[str, float] = {
+    # The metric the cash-conversion gate actually makes a claim about. See
+    # `realised_owner_earnings_margin` for why reported FCF was the wrong
+    # target.
+    "owner_earnings_margin": 0.10,
     "free_cash_flow": 0.10,
     "revenue":        0.02,
     "ebitda":         0.05,
@@ -204,4 +208,114 @@ def backtest_cash_conversion(ticker: str, as_of: str,
         metric="free_cash_flow",
     )
     out.update(verdict)
+    return out
+
+
+# ── Scoring the claim the gate actually makes ───────────────────────────────
+
+def _owner_earnings_margin(row: dict) -> Optional[float]:
+    """(FCF - change in working capital) / revenue for one reported year.
+
+    The cash-conversion gate does not claim to predict next year's reported
+    free cash flow. It claims that the part of reported FCF which comes from
+    working capital is not repeatable and must not be capitalised for ten
+    years. Scoring it against reported FCF therefore tested a claim it never
+    made — and marked it a false alarm on MELI for correctly declining to
+    project a float that had not yet stopped growing.
+    """
+    rev = row.get("revenue")
+    fcf = row.get("free_cash_flow")
+    if not rev or rev <= 0 or fcf is None:
+        return None
+    dwc = row.get("change_in_working_capital") or 0.0
+    return (fcf - dwc) / rev
+
+
+def realised_owner_earnings_margin(
+    ticker: str, after_period: str, today: str, max_years: int = 3,
+) -> tuple[Optional[float], int, list[str]]:
+    """Mean owner-earnings MARGIN over the years reported after `after_period`.
+
+    Two deliberate choices, both to match what the gate asserts:
+
+    * **A margin, not a cash level.** The gate outputs a margin, so comparing
+      margin to margin removes the growth rate, the revenue base and the
+      compounding from the comparison entirely. Previously both paths were
+      projected forward and their absolute errors reached 300-450% on names
+      like BABA and JPM — noise from the growth assumption, which the gate
+      does not touch, swamping the intervention it does.
+    * **A mean over several years, not one.** "Terminal" means the level that
+      persists. A single year is dominated by timing; averaging is the closest
+      observable proxy for steady state.
+    """
+    margins: list[float] = []
+    periods: list[str] = []
+    for row in _series(ticker, today, limit=10):
+        if str(row.get("period") or "") <= str(after_period):
+            continue
+        m = _owner_earnings_margin(row)
+        if m is None:
+            continue
+        margins.append(m)
+        periods.append(str(row.get("period")))
+        if len(margins) >= max_years:
+            break
+    if not margins:
+        return None, 0, []
+    return sum(margins) / len(margins), len(margins), periods
+
+
+def backtest_cash_conversion_owner_earnings(
+    ticker: str, as_of: str, today: str = "2026-08-30", max_years: int = 3,
+) -> dict[str, Any]:
+    """Replay the cash-conversion gate and score it on terminal owner earnings.
+
+    Path A and Path B are the two margins the gate chose between. No
+    projection is involved, so nothing but the intervention is being scored.
+    """
+    from src.agents.analysis.dcf_agent import (
+        _CASH_CONVERSION_TOLERANCE,
+        _mean_fcf_margin,
+        _projectable_fcf_margin_cap,
+    )
+
+    out: dict[str, Any] = {
+        "ticker": ticker, "as_of": as_of, "gate_id": "GATE_CASH_CONVERSION",
+        "metric": "owner_earnings_margin", "fired": False,
+        "verdict": "UNSCORABLE",
+    }
+    trailing = _series(ticker, as_of, limit=5)
+    if len(trailing) < 2:
+        out["skip_reason"] = "insufficient trailing history"
+        return out
+
+    last_period = str(trailing[-1].get("period") or "")
+    out["trailing_through"] = last_period
+
+    margin_raw = _mean_fcf_margin(trailing)
+    cap, _tr = _projectable_fcf_margin_cap(trailing)
+    if margin_raw is None:
+        out["skip_reason"] = "no trailing FCF margin"
+        return out
+    out["margin_path_a"] = margin_raw
+    out["margin_cap"] = cap
+    if not (cap is not None and cap > 0
+            and margin_raw > cap * _CASH_CONVERSION_TOLERANCE):
+        out["skip_reason"] = "gate does not fire at this date"
+        return out
+
+    out["fired"] = True
+    realised, n, periods = realised_owner_earnings_margin(
+        ticker, last_period, today, max_years)
+    out["realised_periods"] = periods
+    out["realised_years"] = n
+    if realised is None:
+        out["skip_reason"] = "no reported year after the as-of date yet"
+        return out
+    out["realised_owner_earnings_margin"] = realised
+
+    out.update(delta_error_verdict(
+        path_a=margin_raw, path_b=cap, actual=realised,
+        metric="owner_earnings_margin",
+    ))
     return out
