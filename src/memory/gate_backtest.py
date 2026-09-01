@@ -299,6 +299,7 @@ def backtest_cash_conversion_owner_earnings(
         return out
     out["margin_path_a"] = margin_raw
     out["margin_cap"] = cap
+    out["basis"] = _basis
     if not (cap is not None and cap > 0
             and margin_raw > cap * _CASH_CONVERSION_TOLERANCE):
         out["skip_reason"] = "gate does not fire at this date"

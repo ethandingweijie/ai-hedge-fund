@@ -444,6 +444,27 @@ def _historical_cagr(series: list[dict], revenue_base: Optional[float] = None) -
 # which bind — while MELI's 4.6x excess does.
 _CASH_CONVERSION_TOLERANCE = 1.25
 
+# The cap must retain at least this fraction of the trailing margin. A deeper
+# cut is not a working-capital correction — it is a claim that the business
+# bears no resemblance to its own record, and empirically those are companies
+# still scaling into profitability, whose near-zero trailing earnings the
+# OE<=0 cascade already owns.
+#
+# Backtested over 141 ticker-dates / 32 firings (src/memory/gate_backtest.py).
+# Sweeping the threshold shows a plateau, not a knife-edge:
+#
+#     retain >=   n    H    F    N    Beta    gate MAE
+#       0.00     32   13   14    5   0.483     7.60pp
+#       0.35     23   13    5    5   0.700     6.03pp
+#       0.40     22   13    5    4   0.700     6.04pp   <- midpoint
+#       0.45     20   13    5    2   0.700     6.56pp
+#       0.50     18   11    5    2   0.667     6.47pp   <- starts losing wins
+#
+# At 0.40 the guard removes nine false alarms (JD, 09618.HK, SE, MELI 2023,
+# UBER, C6L.SI x2, ABNB, DASH) and zero correct firings. 0.40 is the middle of
+# the plateau rather than its edge, so the exact sample moves it less.
+_MIN_RETAINED_MARGIN_FRACTION = 0.40
+
 # How far base IV may sit from the Street's own 12-month consensus before the
 # run says so. Deliberately wide — a model that never disagreed with consensus
 # would be worthless — but MELI's pre-fix 8.7x was not a disagreement, it was
@@ -4937,7 +4958,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if not _dcf_family_disabled:
             _cc_cap, _cc_trailing, _cc_basis = _projectable_fcf_margin_cap(
                 series)
-            if (_cc_cap is not None and _cc_cap > 0
+            _cc_too_deep = (
+                _cc_cap is not None
+                and _cc_cap < _MIN_RETAINED_MARGIN_FRACTION * fcf_margin_base
+            )
+            if _cc_too_deep:
+                # Recorded rather than silent: the gate saw something and
+                # abstained, which is a different state from never having
+                # looked, and the learning loop needs to tell them apart.
+                ticker_forward_flags.append(
+                    f"Cash-conversion cap declined: would have cut "
+                    f"{fcf_margin_base:.1%} to {_cc_cap:.1%}, deeper than the "
+                    f"{_MIN_RETAINED_MARGIN_FRACTION:.0%} floor — a trailing "
+                    f"base this thin is a margin ramp, not float"
+                )
+            if (_cc_cap is not None and _cc_cap > 0 and not _cc_too_deep
                     and fcf_margin_base > _cc_cap * _CASH_CONVERSION_TOLERANCE):
                 _cc_ratio = (
                     (_cc_trailing / _cc_cap) if _cc_cap else float("inf")

@@ -272,3 +272,55 @@ def test_the_basis_is_reported_so_the_flag_can_name_it():
     src = inspect.getsource(dcf_agent)
     assert '"basis": _cc_basis,' in src
     assert "_cc_basis" in src
+
+
+# ── The retention floor ──────────────────────────────────────────────────
+#
+# Backtested over 141 ticker-dates / 32 firings, the gate was a coin flip
+# (Beta 0.483). Every marketplace false alarm shared one shape: the cap
+# collapsed to near zero — UBER 5.4% -> 1.3%, DASH 8.4% -> 2.7%,
+# SE 2.3% -> 0.4% — and realised owner earnings then came in at 14-20%.
+# Those are businesses scaling into profitability, whose near-zero trailing
+# earnings the OE<=0 cascade already owns, not businesses distorted by float.
+#
+# Requiring the cap to retain >=40% of the trailing margin removes nine false
+# alarms and zero correct firings, taking Beta to 0.700.
+
+from src.agents.analysis.dcf_agent import _MIN_RETAINED_MARGIN_FRACTION
+
+
+def test_a_cut_deeper_than_the_floor_is_declined():
+    """UBER 2025: 5.4% -> 1.3% keeps 24% of the trailing margin."""
+    assert 0.013 < _MIN_RETAINED_MARGIN_FRACTION * 0.054
+
+
+def test_the_motivating_case_still_fires():
+    """MELI live: 30.28% -> 15.69% retains 52%, comfortably above the floor.
+    A guard that silenced the case the gate was built for would be useless."""
+    assert 0.1569 >= _MIN_RETAINED_MARGIN_FRACTION * 0.3028
+
+
+def test_the_floor_sits_in_the_middle_of_the_measured_plateau():
+    """0.35, 0.40 and 0.45 all scored Beta 0.700 out of sample. 0.40 is the
+    midpoint, so the exact sample moves it least."""
+    assert 0.35 < _MIN_RETAINED_MARGIN_FRACTION < 0.45
+
+
+def test_declining_is_recorded_not_silent():
+    """The gate saw something and abstained. That is a different state from
+    never having looked, and the learning loop must tell them apart."""
+    import inspect
+
+    from src.agents.analysis import dcf_agent
+    src = inspect.getsource(dcf_agent)
+    assert "Cash-conversion cap declined" in src
+    assert "_cc_too_deep" in src
+
+
+def test_the_floor_is_applied_before_the_tolerance_test():
+    """Both conditions must gate the firing, not just the tolerance."""
+    import inspect
+
+    from src.agents.analysis import dcf_agent
+    src = inspect.getsource(dcf_agent)
+    assert "not _cc_too_deep" in src
