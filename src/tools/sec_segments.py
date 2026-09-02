@@ -137,6 +137,13 @@ _REVENUE_LABEL = re.compile(
 _PROFIT_LABEL = re.compile(
     r"^(?:income/?\(?loss\)?\s+from operations|operating income(?:\s*\(loss\))?|"
     r"adjusted ebita|segment (?:profit|result))", re.I)
+# Total segment assets. Anchored so it cannot catch a SUBSET of assets --
+# OtherAssets, AssetsCurrent, IntangibleAssetsNetExcludingGoodwill and
+# PropertyPlantAndEquipmentNet are all segment-sliced in the same filings,
+# and any of them read as invested capital would understate ROIC badly.
+_ASSET_QNAME = re.compile(
+    r"(?:^|_)Assets$|SegmentReportingInformationAssets", re.I)
+_ASSET_LABEL = re.compile(r"^(?:total\s+)?(?:segment\s+)?assets$", re.I)
 _SKIP_QNAME = re.compile(r"LineItems$|Abstract$|NumberOf.*Segments?", re.I)
 
 _MONTHS = {m: i + 1 for i, m in enumerate(
@@ -290,11 +297,15 @@ def _metric_of(defref: str, label: str) -> Optional[str]:
         return "profit"
     if _REVENUE_QNAME.search(defref):
         return "revenue"
+    if _ASSET_QNAME.search(defref):
+        return "assets"
     lab = (label or "").strip()
     if _PROFIT_LABEL.match(lab):
         return "profit"
     if _REVENUE_LABEL.match(lab):
         return "revenue"
+    if _ASSET_LABEL.match(lab):
+        return "assets"
     return None
 
 
@@ -311,6 +322,44 @@ def _row_label(tr) -> str:
     return a.get_text(" ", strip=True) if a else tr.get_text(" ", strip=True)
 
 
+def _build_columns(rows) -> tuple[Optional[list[dict]], int]:
+    """Column headers, and the row index where data begins.
+
+    Two header shapes occur in the same filing. An income-style table puts the
+    title in row 0 and the dates in row 1. A BALANCE-style table -- which is
+    what a segment-assets reconciliation is -- carries the title and the dates
+    in row 0 together and starts data at row 1. Reading row 1 there yields a
+    label row, no monetary column and a silent empty parse: AMZN does disclose
+    segment assets, and we were returning none for it.
+    """
+    for header_idx, data_start in ((1, 2), (0, 1)):
+        if len(rows) <= header_idx:
+            continue
+        cols: list[dict] = []
+        for th in rows[header_idx].find_all(["th", "td"]):
+            # The title cell spans the label column and is not a period.
+            if (th.get("class") or [""])[0] == "tl":
+                continue
+            divs = [d.get_text(" ", strip=True) for d in th.find_all("div")]
+            text = th.get_text(" ", strip=True)
+            period = _parse_period(divs[0] if divs else text)
+            unit = divs[1] if len(divs) > 1 else None
+            ccy = _parse_ccy(unit) if unit else None
+            # A column carrying an explicit non-currency unit is a COUNT
+            # column, not money -- JD's segment table leads with
+            # "Mar. 31, 2024 | segment" holding `Number of Reportable
+            # Segments = 3`. It parses as a period, so testing the date alone
+            # would admit it and shift every value one column left. A column
+            # with no unit div at all inherits the table's single currency
+            # (AAPL) and is monetary.
+            monetary = period is not None and (unit is None or ccy is not None)
+            cols.append({"period_end": period, "currency": ccy,
+                         "unit": unit, "monetary": monetary})
+        if any(c["monetary"] for c in cols):
+            return cols, data_start
+    return None, 2
+
+
 def _parse_segment_table(html: str) -> Optional[dict]:
     """Parse one rendered R-file into segments, corporate and eliminations."""
     soup = BeautifulSoup(html, "html.parser")
@@ -324,22 +373,9 @@ def _parse_segment_table(html: str) -> Optional[dict]:
     title = rows[0].get_text(" ", strip=True)
     units = _parse_units(title)
 
-    columns: list[dict] = []
-    for th in rows[1].find_all(["th", "td"]):
-        divs = [d.get_text(" ", strip=True) for d in th.find_all("div")]
-        text = th.get_text(" ", strip=True)
-        period = _parse_period(divs[0] if divs else text)
-        unit = divs[1] if len(divs) > 1 else None
-        ccy = _parse_ccy(unit) if unit else None
-        # A column carrying an explicit non-currency unit is a COUNT column,
-        # not money -- JD's segment table leads with "Mar. 31, 2024 | segment"
-        # holding `Number of Reportable Segments = 3`. It parses as a period,
-        # so testing the date alone would admit it and shift every value one
-        # column left. A column with no unit div at all inherits the table's
-        # single currency (AAPL) and is monetary.
-        monetary = period is not None and (unit is None or ccy is not None)
-        columns.append({"period_end": period, "currency": ccy,
-                        "unit": unit, "monetary": monetary})
+    columns, data_start = _build_columns(rows)
+    if columns is None:
+        return None
     n_cols = len(columns)
     if n_cols == 0:
         return None
@@ -350,7 +386,7 @@ def _parse_segment_table(html: str) -> Optional[dict]:
     current: Optional[str] = None
     profit_qname: str = ""
 
-    for tr in rows[2:]:
+    for tr in rows[data_start:]:
         classes = tr.get("class") or []
         kind_cls = classes[0] if classes else ""
         defref = _defref(tr)
@@ -368,7 +404,8 @@ def _parse_segment_table(html: str) -> Optional[dict]:
             # reconciled by _dedupe_groups once all rows are read.
             key = f"{kind}:{name}:{len(order)}"
             groups[key] = {"name": name, "kind": kind, "defref": defref,
-                           "revenue": {}, "profit": {}, "raw_label": label,
+                           "revenue": {}, "profit": {}, "assets": {},
+                           "raw_label": label,
                            "qualified": "|" in label}
             order.append(key)
             current = key
@@ -450,6 +487,76 @@ def _score_segment_report(short_name: str, long_name: str = "") -> Optional[int]
     if _SOFT_EXCLUDE_RE.search(short) and not _STRONG_RE.search(short):
         return None
     return sum(pts for rx, pts in _SCORE_TERMS if rx.search(text))
+
+
+_ASSET_HARD_EXCLUDE_RE = re.compile(
+    r"\(tables?\)|\(polic|goodwill|intangible|long-lived|"
+    r"property|equipment|depreciation|amortization", re.IGNORECASE)
+
+
+def normalize_key(name: str) -> str:
+    """Loose name key for matching a segment across two tables in one filing."""
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def _score_asset_report(short_name: str, long_name: str = "") -> Optional[int]:
+    """Rank a report as the SEGMENT ASSETS table.
+
+    Deliberately separate from `_score_segment_report`, which soft-excludes
+    "assets" precisely so it lands on the operating table. The subsets are
+    hard-excluded here: a segment-sliced goodwill or PP&E table parses just as
+    cleanly as total assets and would silently understate invested capital.
+    """
+    text = f"{short_name} {long_name}"
+    if not re.search(r"segment", text, re.I):
+        return None
+    short = short_name or ""
+    if _ASSET_HARD_EXCLUDE_RE.search(short):
+        return None
+    if not re.search(r"asset", text, re.I):
+        return None
+    score = 0
+    if re.search(r"total asset", text, re.I):
+        score += 3
+    if re.search(r"reportable", text, re.I):
+        score += 2
+    if re.search(r"\(detail", text, re.I):
+        score += 1
+    return score
+
+
+def _segment_assets(cik: str, filing: dict, reports: list[dict],
+                    base: str) -> dict[str, float]:
+    """Total assets per segment from a dedicated segment-assets table."""
+    scored = []
+    for rep in reports:
+        sc = _score_asset_report(rep["short_name"], rep["long_name"])
+        if sc is not None:
+            scored.append((sc, rep))
+    if not scored:
+        return {}
+    scored.sort(key=lambda x: -x[0])
+    for _sc, rep in scored[:2]:
+        html = _get_text(f"{base}/{rep['html_file']}")
+        if not html:
+            continue
+        parsed = _parse_segment_table(html)
+        if not parsed:
+            continue
+        monetary = [c for c in parsed["columns"] if c["monetary"]]
+        if not monetary:
+            continue
+        key = f"{monetary[0]['period_end']}|{monetary[0]['currency'] or ''}"
+        out = {}
+        for g in parsed["groups"]:
+            if g["kind"] != "segment":
+                continue
+            val = g.get("assets", {}).get(key)
+            if val is not None:
+                out[g["name"]] = val
+        if len(out) >= 2:
+            return out
+    return {}
 
 
 def _filing_summary_reports(cik: str, accession: str) -> list[dict]:
@@ -598,6 +705,21 @@ def _build_segment_footnote(ticker: str, filer: str,
                              if _is_geographic(built["segments"])
                              else "business_line")
     built["profit_disclosed"] = any(s.get("profit") is not None
+                                    for s in built["segments"])
+
+    # Segment assets proxy invested capital, which is what lets a segment be
+    # valued off its own economics instead of a peer's multiple. Many filers
+    # put them in the operating table already; only go back to SEC for a
+    # dedicated table when they are actually missing.
+    if not any(s.get("assets") is not None for s in built["segments"]):
+        assets = _segment_assets(cik, filing, reports, base)
+        if assets:
+            by_norm = {normalize_key(k): v for k, v in assets.items()}
+            for seg in built["segments"]:
+                val = by_norm.get(normalize_key(seg["name"]))
+                if val is not None:
+                    seg["assets"] = val
+    built["assets_disclosed"] = any(s.get("assets") is not None
                                     for s in built["segments"])
     if built["segment_axis"] != "geographic":
         return built
@@ -869,6 +991,11 @@ def _assemble(parsed: dict, ticker: str, filer: str, cik: str,
         segments.append({
             "name": g["name"], "revenue": rev, "profit": profit,
             "margin": (profit / rev) if (profit is not None and rev) else None,
+            # Segment assets stand in for invested capital, which is what the
+            # value-driver identity needs to turn a segment into a multiple
+            # without borrowing one from a peer. ASC 280 requires them only
+            # where the CODM reviews them, so this is often absent.
+            "assets": g.get("assets", {}).get(key),
             "member": g.get("defref", ""),
             # Prior years in the SAME currency. Segments grow at very
             # different rates -- AWS +19.7% against North America +10.0%,

@@ -380,3 +380,71 @@ def test_xbrl_member_suffix_is_stripped_from_segment_names():
     # ordinary names untouched, including legitimate internal brackets
     assert _strip_member_suffix("AWS") == "AWS"
     assert _strip_member_suffix("Data Center [1]") == "Data Center [1]"
+
+
+# ── segment assets (invested-capital proxy) ────────────────────────────────
+
+def test_asset_qname_never_matches_a_subset_of_assets():
+    """Total assets only. A subset read as invested capital understates ROIC.
+
+    The same filings carry segment-sliced goodwill, intangibles, PP&E and
+    current assets, and every one of them parses just as cleanly.
+    """
+    from src.tools.sec_segments import _ASSET_QNAME
+    assert _ASSET_QNAME.search("defref_us-gaap_Assets")
+    assert _ASSET_QNAME.search("defref_us-gaap_SegmentReportingInformationAssets")
+    for subset in ("defref_us-gaap_OtherAssets",
+                   "defref_us-gaap_AssetsCurrent",
+                   "defref_us-gaap_AssetsNoncurrent",
+                   "defref_us-gaap_IntangibleAssetsNetExcludingGoodwill",
+                   "defref_us-gaap_FiniteLivedIntangibleAssetsNet",
+                   "defref_us-gaap_PropertyPlantAndEquipmentNet"):
+        assert not _ASSET_QNAME.search(subset), subset
+
+
+def test_asset_report_scorer_rejects_subset_tables():
+    from src.tools.sec_segments import _score_asset_report
+    assert _score_asset_report(
+        "Segment Information - Reconciliation of Assets from Segment to "
+        "Consolidated (Details)") is not None
+    # subsets and non-segment tables are out
+    for bad in ("Segment Goodwill by Reportable Segment (Details)",
+                "Segments - Long-Lived Assets by Geography (Details)",
+                "Acquired Intangible Assets (Detail)",
+                "Segment Information (Tables)",
+                "Deferred Income Tax Assets and Liabilities (Detail)"):
+        assert _score_asset_report(bad) is None, bad
+    # a segment table with no asset subject is not an asset table
+    assert _score_asset_report("Segment Operating Results (Details)") is None
+
+
+def test_balance_style_header_is_detected():
+    """A segment-assets table carries its dates in row 0, beside the title.
+
+    Income-style tables put them in row 1. Reading row 1 on a balance-style
+    table finds a label row, no monetary column, and returns an empty parse --
+    which is why AMZN's disclosed segment assets came back as none.
+    """
+    from bs4 import BeautifulSoup
+    from src.tools.sec_segments import _build_columns
+    balance = BeautifulSoup("""
+      <table class="report">
+        <tr><th class="tl">Segment Information - Assets</th>
+            <th class="th">Dec. 31, 2025</th><th class="th">Dec. 31, 2024</th></tr>
+        <tr><td class="pl">Total assets</td>
+            <td class="nump">$ 818,042</td><td class="nump">$ 624,894</td></tr>
+      </table>""", "html.parser").find_all("tr")
+    cols, start = _build_columns(balance)
+    assert start == 1
+    assert [c["period_end"] for c in cols] == ["2025-12-31", "2024-12-31"]
+    assert all(c["monetary"] for c in cols)
+
+    income = BeautifulSoup("""
+      <table class="report">
+        <tr><th class="tl">Segment Results</th></tr>
+        <tr><th class="tl"></th><th class="th">12 Months Ended<br/>Dec. 31, 2025</th></tr>
+        <tr><td class="pl">Revenue</td><td class="nump">100</td></tr>
+      </table>""", "html.parser").find_all("tr")
+    cols, start = _build_columns(income)
+    assert start == 2
+    assert [c["period_end"] for c in cols] == ["2025-12-31"]
