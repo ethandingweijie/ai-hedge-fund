@@ -444,26 +444,28 @@ def _historical_cagr(series: list[dict], revenue_base: Optional[float] = None) -
 # which bind — while MELI's 4.6x excess does.
 _CASH_CONVERSION_TOLERANCE = 1.25
 
-# The cap must retain at least this fraction of the trailing margin. A deeper
-# cut is not a working-capital correction — it is a claim that the business
-# bears no resemblance to its own record, and empirically those are companies
-# still scaling into profitability, whose near-zero trailing earnings the
-# OE<=0 cascade already owns.
+# A deep cut is worth RECORDING but not acting on. Retaining <40% of the
+# trailing margin was shipped as a suppression rule on 2026-09-02 and reverted
+# the same day when held-out data inverted it:
 #
-# Backtested over 141 ticker-dates / 32 firings (src/memory/gate_backtest.py).
-# Sweeping the threshold shows a plateau, not a knife-edge:
+#                       declined firings      Beta of what it dropped
+#   original 141 dates   9 false / 0 correct          0.09
+#   held-out 188 dates   0 false / 8 correct          0.90
+#   combined             9 false / 8 correct          0.47  <- discriminates nothing
 #
-#     retain >=   n    H    F    N    Beta    gate MAE
-#       0.00     32   13   14    5   0.483     7.60pp
-#       0.35     23   13    5    5   0.700     6.03pp
-#       0.40     22   13    5    4   0.700     6.04pp   <- midpoint
-#       0.45     20   13    5    2   0.700     6.56pp
-#       0.50     18   11    5    2   0.667     6.47pp   <- starts losing wins
+# The rule conflated two situations that share one symptom. For operating
+# companies mid-ramp (UBER 5.4->1.3, DASH 8.4->2.7) a deep cut IS wrong — the
+# trailing earnings base is near zero and the OE<=0 cascade owns that regime.
+# But for financials a deep cut is the entire point: reported free cash flow is
+# meaningless when deposit and lending flows dominate operating cash flow, and
+# every firing the floor blocked on held-out data was one — MUFG raw 167%,
+# CCB 86% and 77%, Ping An 43%, SoftBank, Ally, all correct firings. The
+# original sample's banks happened to retain more than 40%, so it looked
+# perfect on the data that chose it.
 #
-# At 0.40 the guard removes nine false alarms (JD, 09618.HK, SE, MELI 2023,
-# UBER, C6L.SI x2, ABNB, DASH) and zero correct firings. 0.40 is the middle of
-# the plateau rather than its edge, so the exact sample moves it less.
-_MIN_RETAINED_MARGIN_FRACTION = 0.40
+# Kept as an observation so the deep-cut population stays visible for a rule
+# that can actually separate those two cases.
+_DEEP_CUT_OBSERVATION_FRACTION = 0.40
 
 # How far base IV may sit from the Street's own 12-month consensus before the
 # run says so. Deliberately wide — a model that never disagreed with consensus
@@ -4958,21 +4960,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         if not _dcf_family_disabled:
             _cc_cap, _cc_trailing, _cc_basis = _projectable_fcf_margin_cap(
                 series)
-            _cc_too_deep = (
+            _cc_deep_cut = (
                 _cc_cap is not None
-                and _cc_cap < _MIN_RETAINED_MARGIN_FRACTION * fcf_margin_base
+                and _cc_cap < _DEEP_CUT_OBSERVATION_FRACTION * fcf_margin_base
             )
-            if _cc_too_deep:
-                # Recorded rather than silent: the gate saw something and
-                # abstained, which is a different state from never having
-                # looked, and the learning loop needs to tell them apart.
-                ticker_forward_flags.append(
-                    f"Cash-conversion cap declined: would have cut "
-                    f"{fcf_margin_base:.1%} to {_cc_cap:.1%}, deeper than the "
-                    f"{_MIN_RETAINED_MARGIN_FRACTION:.0%} floor — a trailing "
-                    f"base this thin is a margin ramp, not float"
-                )
-            if (_cc_cap is not None and _cc_cap > 0 and not _cc_too_deep
+            if (_cc_cap is not None and _cc_cap > 0
                     and fcf_margin_base > _cc_cap * _CASH_CONVERSION_TOLERANCE):
                 _cc_ratio = (
                     (_cc_trailing / _cc_cap) if _cc_cap else float("inf")
@@ -4989,6 +4981,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "raw_input_path_a": round(float(fcf_margin_base), 6),
                     "gated_output_path_b": round(float(_cc_cap), 6),
                     "basis": _cc_basis,
+                    # Observation only. See _DEEP_CUT_OBSERVATION_FRACTION for
+                    # why this does not gate the firing.
+                    "deep_cut": bool(_cc_deep_cut),
                 })
                 fcf_margin_base = _cc_cap
 

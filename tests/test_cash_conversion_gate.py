@@ -274,53 +274,40 @@ def test_the_basis_is_reported_so_the_flag_can_name_it():
     assert "_cc_basis" in src
 
 
-# ── The retention floor ──────────────────────────────────────────────────
+# ── The deep-cut observation (a reverted suppression rule) ───────────────
 #
-# Backtested over 141 ticker-dates / 32 firings, the gate was a coin flip
-# (Beta 0.483). Every marketplace false alarm shared one shape: the cap
-# collapsed to near zero — UBER 5.4% -> 1.3%, DASH 8.4% -> 2.7%,
-# SE 2.3% -> 0.4% — and realised owner earnings then came in at 14-20%.
-# Those are businesses scaling into profitability, whose near-zero trailing
-# earnings the OE<=0 cascade already owns, not businesses distorted by float.
+# Retaining <40% of the trailing margin shipped as a SUPPRESSION rule and was
+# reverted the same day. On the 141 dates that chose it, it declined 9 false
+# alarms and 0 correct firings. On 188 held-out dates it declined 0 false
+# alarms and 8 correct ones — a perfect inversion, because every held-out
+# firing it blocked was a financial (MUFG raw 167%, CCB 86%, Ping An 43%),
+# where reported FCF is meaningless and a deep cut is the whole point.
+# Combined it dropped 8 wins and 9 losses: it discriminates nothing.
 #
-# Requiring the cap to retain >=40% of the trailing margin removes nine false
-# alarms and zero correct firings, taking Beta to 0.700.
+# These tests pin the revert so the rule cannot creep back as a gate.
 
-from src.agents.analysis.dcf_agent import _MIN_RETAINED_MARGIN_FRACTION
-
-
-def test_a_cut_deeper_than_the_floor_is_declined():
-    """UBER 2025: 5.4% -> 1.3% keeps 24% of the trailing margin."""
-    assert 0.013 < _MIN_RETAINED_MARGIN_FRACTION * 0.054
+from src.agents.analysis.dcf_agent import _DEEP_CUT_OBSERVATION_FRACTION
 
 
-def test_the_motivating_case_still_fires():
-    """MELI live: 30.28% -> 15.69% retains 52%, comfortably above the floor.
-    A guard that silenced the case the gate was built for would be useless."""
-    assert 0.1569 >= _MIN_RETAINED_MARGIN_FRACTION * 0.3028
-
-
-def test_the_floor_sits_in_the_middle_of_the_measured_plateau():
-    """0.35, 0.40 and 0.45 all scored Beta 0.700 out of sample. 0.40 is the
-    midpoint, so the exact sample moves it least."""
-    assert 0.35 < _MIN_RETAINED_MARGIN_FRACTION < 0.45
-
-
-def test_declining_is_recorded_not_silent():
-    """The gate saw something and abstained. That is a different state from
-    never having looked, and the learning loop must tell them apart."""
+def test_a_deep_cut_is_recorded_but_never_suppresses():
+    """The regression these tests exist for: this must not gate the firing."""
     import inspect
 
     from src.agents.analysis import dcf_agent
     src = inspect.getsource(dcf_agent)
-    assert "Cash-conversion cap declined" in src
-    assert "_cc_too_deep" in src
+    assert "_cc_deep_cut" in src, "the observation should still be computed"
+    assert '"deep_cut": bool(_cc_deep_cut),' in src, "and recorded"
+    assert "not _cc_too_deep" not in src, "but must NOT gate the firing"
+    assert "_MIN_RETAINED_MARGIN_FRACTION" not in src, "suppression is reverted"
 
 
-def test_the_floor_is_applied_before_the_tolerance_test():
-    """Both conditions must gate the firing, not just the tolerance."""
-    import inspect
-
-    from src.agents.analysis import dcf_agent
-    src = inspect.getsource(dcf_agent)
-    assert "not _cc_too_deep" in src
+def test_financials_are_why_the_suppression_was_wrong():
+    """A bank's reported FCF margin is dominated by deposit and lending flows,
+    so the cap SHOULD cut it hard. MUFG's trailing margin was 167%; a rule
+    that refused cuts deeper than 60% blocked exactly the firings that were
+    right."""
+    bank = [_wc_yr(100.0, 167.0, 8.0, dwc=150.0) for _ in range(4)]
+    cap, trailing, basis = _projectable_fcf_margin_cap(bank)
+    assert trailing > 1.0, "reported FCF margin above 100% of revenue"
+    assert cap < _DEEP_CUT_OBSERVATION_FRACTION * trailing, "a deep cut"
+    assert cap < trailing, "and it must still cap downward"

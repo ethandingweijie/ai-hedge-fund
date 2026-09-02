@@ -275,6 +275,7 @@ def backtest_cash_conversion_owner_earnings(
     """
     from src.agents.analysis.dcf_agent import (
         _CASH_CONVERSION_TOLERANCE,
+        _DEEP_CUT_OBSERVATION_FRACTION,
         _mean_fcf_margin,
         _projectable_fcf_margin_cap,
     )
@@ -282,7 +283,7 @@ def backtest_cash_conversion_owner_earnings(
     out: dict[str, Any] = {
         "ticker": ticker, "as_of": as_of, "gate_id": "GATE_CASH_CONVERSION",
         "metric": "owner_earnings_margin", "fired": False,
-        "verdict": "UNSCORABLE",
+        "deep_cut": False, "verdict": "UNSCORABLE",
     }
     trailing = _series(ticker, as_of, limit=5)
     if len(trailing) < 2:
@@ -305,6 +306,13 @@ def backtest_cash_conversion_owner_earnings(
         out["skip_reason"] = "gate does not fire at this date"
         return out
 
+    # The deep-cut flag is an observation, not a gate. It was briefly a
+    # suppression rule; held-out data inverted it (see
+    # _DEEP_CUT_OBSERVATION_FRACTION), so the gate fires regardless and the
+    # flag is carried for whatever rule eventually separates a thin-earnings
+    # ramp from a financial.
+    out["deep_cut"] = cap < _DEEP_CUT_OBSERVATION_FRACTION * margin_raw
+    out["retained_fraction"] = (cap / margin_raw) if margin_raw else None
     out["fired"] = True
     realised, n, periods = realised_owner_earnings_margin(
         ticker, last_period, today, max_years)
@@ -314,6 +322,7 @@ def backtest_cash_conversion_owner_earnings(
         out["skip_reason"] = "no reported year after the as-of date yet"
         return out
     out["realised_owner_earnings_margin"] = realised
+    # `deep_cut` segments the firings without changing which of them happen.
 
     out.update(delta_error_verdict(
         path_a=margin_raw, path_b=cap, actual=realised,
