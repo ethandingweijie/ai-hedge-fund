@@ -63,17 +63,33 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
 }) {
   const fairValue = bb.fair_value_per_share;
   const upside = (fairValue && price) ? (fairValue - price) / price : null;
+  // This profile does not value the bank on P/TBV, so headlining a P/TBV fair
+  // value contradicts the methodology card. Keep the book and capital stats
+  // below — those hold regardless of which multiple does the valuing.
+  const ptbvExcluded = bb.ptbv_excluded === true;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5 text-center">
-      <p className={`${SECTION_HEADING_CLS} mb-3`}>P/TBV Fair Value — {ticker}</p>
-      <p className="text-5xl font-bold tabular-nums text-foreground">
-        {fmtMoney(fairValue, sym)}
+      <p className={`${SECTION_HEADING_CLS} mb-3`}>
+        {ptbvExcluded ? `Book & Capital — ${ticker}` : `P/TBV Fair Value — ${ticker}`}
       </p>
-      {upside != null && (
-        <p className={`text-base font-semibold mt-2 ${upside >= 0 ? 'text-gain' : 'text-loss'}`}>
-          {upside >= 0 ? '+' : ''}{(upside * 100).toFixed(1)}% vs price
+      {ptbvExcluded ? (
+        <p className="text-sm text-muted-foreground">
+          Valued on {bb.primary_anchor ?? 'GGM (P/B)'} — P/TBV is excluded for this
+          profile{bb.profile ? ` (${bb.profile})` : ''}, which carries negligible
+          goodwill, so tangible and total book coincide.
         </p>
+      ) : (
+        <>
+          <p className="text-5xl font-bold tabular-nums text-foreground">
+            {fmtMoney(fairValue, sym)}
+          </p>
+          {upside != null && (
+            <p className={`text-base font-semibold mt-2 ${upside >= 0 ? 'text-gain' : 'text-loss'}`}>
+              {upside >= 0 ? '+' : ''}{(upside * 100).toFixed(1)}% vs price
+            </p>
+          )}
+        </>
       )}
       <p className="text-xs text-muted-foreground mt-0.5">
         {bb.profile ?? 'Bank'} · Target ROE {fmtPct(bb.target_roe, 1)} · CoE {fmtPct(bb.coe, 1)}
@@ -144,7 +160,7 @@ function PTBVHeroCard({ bb, price, sym, ticker }: {
         </div>
       </div>
 
-      {bb.fair_p_tbv != null && bb.tbv_per_share != null && (
+      {!ptbvExcluded && bb.fair_p_tbv != null && bb.tbv_per_share != null && (
         <p className="text-[11px] text-muted-foreground mt-4 font-mono">
           {bb.ggm_terminal_growth != null ? (
             <>

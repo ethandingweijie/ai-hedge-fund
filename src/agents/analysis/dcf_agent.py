@@ -2397,9 +2397,48 @@ def _analyst_basis(ticker: str, most_recent: dict) -> dict:
 
 
 
+# Gap between the RoTE being valued and the RoTE the filings imply, beyond
+# which the run carries a flag. 300bps is roughly the width of a genuine
+# statutory-vs-underlying difference for a large bank; wider than that and
+# the two numbers are usually measuring different things.
+_BANK_ROTE_DIVERGENCE_BPS = 300.0
+
+
+def _return_on_book_basis(rote: Optional[float], bvps: Optional[float],
+                          tbvps: Optional[float]) -> Optional[float]:
+    """Convert a TANGIBLE-basis return (RoTE) to a BOOK-basis return (ROE).
+
+    Same earnings, larger denominator: ROE = RoTE x TBV/BV.
+
+    A Gordon multiple is only valid against the book it was derived on. The
+    engine holds one return per bank but applies it two ways -- P/TBV x TBV
+    on the valuation card, P/B x BVPS for the 12m target -- so exactly one
+    of those needs the conversion. Skipping it inflated the P/B path: on
+    02888.HK a research RoTE of 18% was used as though it were a return on
+    total book, giving 2.15x x BVPS 183.46 = HK$395/sh against HK$350 on
+    the tangible route for the same bank on the same day.
+
+    Returns `rote` unchanged when the two books are indistinguishable or the
+    inputs cannot support the conversion -- the caller then just gets the
+    old behaviour rather than a None it has to special-case.
+    """
+    if rote is None:
+        return None
+    if not (bvps and tbvps and bvps > 0 and tbvps > 0):
+        return rote
+    return rote * (tbvps / bvps)
+
+
 def _bank_ggm_assumptions(ticker: str, profile_name: str,
                           most_recent: dict) -> dict:
     """Resolve the (ROE, CoE, g) triplet driving the Gordon Growth P/B.
+
+    The returned `roe` is on a TANGIBLE basis (RoTE) -- see `roe_basis`.
+    Banks guide on RoTE, published broker GGM tables state RoTE, and the
+    profile calibration targets are set against the same convention, so the
+    three precedence sources below already agree on basis. Consumers that
+    apply the multiple to total book must convert first, via
+    `_return_on_book_basis`.
 
     Precedence, highest first:
       1. live deep-research extraction (_bank_target_roe_research)
@@ -2427,10 +2466,16 @@ def _bank_ggm_assumptions(ticker: str, profile_name: str,
         # ~19.5% against a 12% fade target). Take the midpoint of realised
         # and target ROE: mean-reversion, without pretending today's return
         # persists forever.
+        # Realised return must be on the same TANGIBLE basis as the target
+        # it is averaged with, or the midpoint silently mixes two books.
         _realised = None
-        _ni, _eq = _safe(most_recent.get("net_income")), _safe(most_recent.get("total_equity"))
-        if _ni and _eq and _eq > 0:
-            _realised = _ni / _eq
+        _ni = _safe(most_recent.get("net_income"))
+        _eq = _safe(most_recent.get("total_equity"))
+        _gw = _safe(most_recent.get("goodwill")) or 0.0
+        _in = _safe(most_recent.get("intangible_assets")) or 0.0
+        _teq = max(_eq - _gw - _in, _eq * 0.70) if _eq else None
+        if _ni and _teq and _teq > 0:
+            _realised = _ni / _teq
         if _realised and 0.0 < _realised < 0.60:
             roe, src = (cfg["target_roe"] + _realised) / 2.0, "realised+target midpoint"
         else:
@@ -2492,7 +2537,7 @@ def _bank_ggm_assumptions(ticker: str, profile_name: str,
         prov.append(f"src: {ovr['source']} ({ovr.get('as_of', 'n/a')})")
 
     return {"roe": roe, "coe": coe, "g": g, "provenance": prov,
-            "source_note": ovr.get("source")}
+            "roe_basis": "tangible", "source_note": ovr.get("source")}
 
 
 def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
@@ -2525,7 +2570,18 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
         bvps = (eq / shares) if eq else None
     if bvps is None or bvps <= 0:
         return None
-    target_pb = (roe - g) / (coe - g)
+    # The triplet's ROE is a RoTE (a["roe_basis"] == "tangible"); this method
+    # applies its multiple to TOTAL book, so it needs the book-basis return.
+    # Without the conversion the multiple is derived on tangible equity and
+    # then charged against the larger book — free franchise value equal to
+    # the goodwill and intangibles the bank has already paid for.
+    _bank_m = _compute_bank_metrics(most_recent, profile_name=profile_name)
+    _tbvps = _safe(_bank_m.get("tbv_per_share"))
+    roe_book = _return_on_book_basis(roe, bvps, _tbvps)
+    a = {**a, "roe_book": roe_book, "bvps": bvps, "tbv_per_share": _tbvps}
+    if roe_book is None or roe_book <= g:
+        return None          # conversion pushed it under g — no franchise value
+    target_pb = (roe_book - g) / (coe - g)
     # Guard against an implausible multiple from a bad ROE extraction.
     target_pb = max(0.3, min(target_pb, 4.0))
     return round(bvps * target_pb, 4), round(target_pb, 4), a
@@ -2740,6 +2796,15 @@ def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> d
     # per Gemini critique) — otherwise retention is wildly overstated for
     # banks like JPM that return 60%+ of earnings via buybacks.
     roe = (ni / equity) if (ni is not None and equity and equity > 0) else None
+    # RoTE — return on TANGIBLE equity. Distinct from `roe` and NOT
+    # interchangeable with it: a justified P/TBV multiple requires a return
+    # measured on the same book it will be applied to. Feeding `roe` (total
+    # equity, goodwill and intangibles included) into a P/TBV identity and
+    # then multiplying by tangible book understates fair value by roughly
+    # the BV/TBV ratio — on 02888.HK that was 9.59% against a 10.84% RoTE.
+    # Banks also guide on RoTE, so this is the basis a research-sourced
+    # target ROE is already stated on.
+    rote = (ni / tbv) if (ni is not None and tbv and tbv > 0) else None
     buybacks = most_recent.get("share_buyback") or most_recent.get("common_stock_repurchased") or 0
     # Normalize sign — cash flow statement may report buybacks as negative
     buybacks = abs(buybacks) if buybacks else 0
@@ -2768,6 +2833,7 @@ def _compute_bank_metrics(most_recent: dict, profile_name: str = "default") -> d
         "tbv":                 tbv,
         "tbv_per_share":       tbv_per_share,
         "roe":                 roe,
+        "rote":                rote,
         "retention_rate":      retention_rate,
         "rwa_estimate":        rwa_estimate,
         "cet1_implied":        cet1_implied,
@@ -7195,25 +7261,63 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # reflects short-lived cycle peaks not sustainable long-term.
             _bb_fair_ptbv = None
             _bb_fair_value = None
+            _bb_rote_divergence_bps = None
             _bb_ggm_a: dict = {}
-            if _bb_roe is not None and _bb_coe > 0:
-                # Full Gordon Growth: P/B = (ROE - g) / (CoE - g). The
-                # previous form, 1 + (ROE - CoE) / CoE, is the SAME formula
+            _bb_rote = _bb_m.get("rote")
+            # ONE (ROE, CoE, g) triplet for the whole bank panel. This card
+            # used to resolve its own: realised ROE on total equity against
+            # the profile's CoE, while the 12m PT ran the research RoTE
+            # against the research CoE. Two triplets, one page — on 02888.HK
+            # 0.93x (HK$151) beside 2.15x (HK$350), a 2.3x spread readers had
+            # no way to reconcile. The resolver below is the repo's single
+            # documented precedence (research > broker table > profile), and
+            # it reports on a TANGIBLE basis, which is the basis this card's
+            # TBV denominator requires — so no conversion here.
+            _bb_ggm_a = _bank_ggm_assumptions(ticker, profile_name, most_recent)
+            _bb_ggm_g = _bb_ggm_a.get("g") or 0.0
+            _bb_ggm_roe = _bb_ggm_a.get("roe")
+            _bb_coe = _bb_ggm_a.get("coe") or _bb_coe
+            if _bb_ggm_roe is not None and _bb_coe and _bb_coe > 0:
+                # Full Gordon Growth: P/TBV = (RoTE - g) / (CoE - g). The
+                # older form, 1 + (RoTE - CoE) / CoE, is the SAME formula
                 # with g pinned to zero, which systematically understates a
                 # bank with any terminal growth at all — DBS came out at
                 # 1.86x against the 2.51x its own 3.3% g supports, i.e. a
                 # 26% haircut to fair value purely from the missing term.
-                _bb_ggm_a = _bank_ggm_assumptions(ticker, profile_name, most_recent)
-                _bb_ggm_g = _bb_ggm_a.get("g") or 0.0
-                if (_bb_coe - _bb_ggm_g) > 0.005 and _bb_roe > _bb_ggm_g:
+                if (_bb_coe - _bb_ggm_g) > 0.005 and _bb_ggm_roe > _bb_ggm_g:
                     _bb_fair_ptbv = max(0.3, min(4.0,
-                                        (_bb_roe - _bb_ggm_g) / (_bb_coe - _bb_ggm_g)))
+                                        (_bb_ggm_roe - _bb_ggm_g) / (_bb_coe - _bb_ggm_g)))
                 else:
                     # Degenerate inputs — fall back to the zero-growth form
                     # rather than emitting a diverging multiple.
-                    _bb_fair_ptbv = max(0.3, min(3.0, 1.0 + (_bb_roe - _bb_coe) / _bb_coe))
+                    _bb_fair_ptbv = max(0.3, min(3.0, 1.0 + (_bb_ggm_roe - _bb_coe) / _bb_coe))
                 if _bb_tbv_ps and _bb_tbv_ps > 0:
                     _bb_fair_value = round(_bb_tbv_ps * _bb_fair_ptbv, 2)
+
+            # ── Divergence guard: realised RoTE vs the RoTE being valued ────
+            # The multiple is more sensitive to this input than to any other,
+            # and it is the one input the engine takes on trust. On 02888.HK
+            # the filings imply ~10.8% while the research leg reported 17.9%
+            # — an ~8pt gap that is the entire investment case, and nothing
+            # flagged it. The existing divergence check watches revenue, and
+            # there it fired on a false positive (gross income vs network
+            # income). Flag, never silently override: a wide gap can be a
+            # genuine statutory-vs-underlying difference, a stale filing, or
+            # management guidance the market does not believe.
+            if _bb_rote is not None and _bb_ggm_roe is not None:
+                _bb_rote_divergence_bps = round((_bb_ggm_roe - _bb_rote) * 10000, 0)
+                if abs(_bb_rote_divergence_bps) > _BANK_ROTE_DIVERGENCE_BPS:
+                    _msg = (
+                        f"RoTE divergence: valuing at {_bb_ggm_roe:.1%} "
+                        f"({(_bb_ggm_a.get('provenance') or ['?'])[0]}) vs "
+                        f"{_bb_rote:.1%} realised in the filings "
+                        f"({_bb_rote_divergence_bps:+.0f} bps). The P/TBV "
+                        f"multiple is driven by this input — verify the basis "
+                        f"(underlying vs statutory, AT1 and minorities) before "
+                        f"relying on the fair value."
+                    )
+                    print(f"  [bank-rote] {ticker}: {_msg}")
+                    ticker_forward_flags.append(_msg)
 
             # CET1 ratio — prefer research-sourced (directly reported by the
             # bank), fall back to the RWA-based implied estimate
@@ -7313,6 +7417,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "fade_years":            _bb_cfg.get("fade_years"),
                 # Core per-share / ratio metrics (latest year)
                 "roe":                   _bb_roe,
+                # Realised return on TANGIBLE equity — the like-for-like
+                # comparison against ggm_roe, which is what the card values.
+                "rote":                  _bb_rote,
+                "rote_divergence_bps":   _bb_rote_divergence_bps,
                 "roa":                   _bb_roa,
                 "nim":                   _bb_m.get("nim"),
                 "efficiency_ratio":      _bb_m.get("efficiency_ratio"),
@@ -7331,6 +7439,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "ggm_coe":               _bb_ggm_a.get("coe"),
                 "ggm_provenance":        _bb_ggm_a.get("provenance"),
                 "ggm_source":            _bb_ggm_a.get("source_note"),
+                # Whether this profile's method set actually values the bank on
+                # P/TBV. SG money-center banks exclude it deliberately ("GGM P/B
+                # supersedes it and SG banks carry minimal goodwill") — DBS and
+                # OCBC both carry zero goodwill, so P/TBV collapses onto P/B and
+                # adds nothing. The UI still headlined a P/TBV fair value there,
+                # contradicting the methodology card two panels above it. The
+                # flag lets the panel drop the headline while keeping the book
+                # and capital stats, which stay informative either way.
+                "ptbv_excluded":         "P/TBV" in (profile_data.get("excluded") or []),
+                "primary_anchor":        next(
+                    (m["name"] for m in (profile_data.get("methods") or [])
+                     if m.get("anchor")), None
+                ),
                 # Capital adequacy
                 "cet1_ratio":            _bb_cet1,
                 "cet1_buffer_bps":       _bb_cet1_buffer_bps,

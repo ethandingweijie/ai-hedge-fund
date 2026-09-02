@@ -205,9 +205,20 @@ export interface BankBreakdown {
   bvps?: number | null;
   total_equity?: number | null;
   total_assets?: number | null;
+  // Realised return on TANGIBLE equity, and its gap to the RoTE actually
+  // being valued (ggm_roe). Wide gaps mean the multiple rests on guidance
+  // the filings do not yet show.
+  rote?: number | null;
+  rote_divergence_bps?: number | null;
   // P/TBV-based Fair Value (Gordon-growth identity)
   fair_p_tbv?: number | null;
   fair_value_per_share?: number | null;
+  // True when this profile's method set deliberately excludes P/TBV (SG
+  // money-center banks: GGM P/B supersedes it and they carry no goodwill).
+  // The panel then drops the fair-value headline but keeps the book and
+  // capital stats.
+  ptbv_excluded?: boolean | null;
+  primary_anchor?: string | null;
   // Gordon Growth inputs behind fair_p_tbv = (ROE − g) / (CoE − g).
   // ggm_provenance names the source of each input (research / broker /
   // profile) so the card can show where the assumptions came from.

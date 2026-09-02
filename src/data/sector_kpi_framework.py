@@ -6839,6 +6839,43 @@ def extract_via_framework(
 
 # ── Renderer 5: dcf_agent attachment (override most_recent in one loop) ──────
 
+def _protected_line_item_keys() -> frozenset[str]:
+    """Names that carry values sourced from filings, not from an LLM.
+
+    Anything declared on the financial models is data the pipeline reads off
+    a statement or a provider ratio endpoint. A KPI key that matches one of
+    these names lands on the same slot in `most_recent`, and the consumer
+    reading it back has no way to tell which source won.
+    """
+    names: set[str] = set()
+    try:
+        from src.data.models import FinancialMetrics, LineItem
+        names |= set(FinancialMetrics.model_fields)
+        names |= set(LineItem.model_fields)
+    except Exception:      # pragma: no cover — models must not break the bridge
+        pass
+    # Statement line items the DCF requests explicitly. LineItem allows extra
+    # fields, so its declared set does not cover these.
+    names |= {
+        "revenue", "gross_profit", "cost_of_revenue", "operating_income",
+        "operating_expense", "ebit", "ebitda", "net_income", "interest_income",
+        "interest_expense", "research_and_development", "stock_based_compensation",
+        "depreciation_and_amortization", "free_cash_flow", "operating_cash_flow",
+        "capital_expenditure", "change_in_working_capital", "share_buyback",
+        "common_stock_repurchased", "total_assets", "total_equity",
+        "total_liabilities", "net_debt", "total_debt", "invested_capital",
+        "cash_and_equivalents", "goodwill", "intangible_assets",
+        "loans_receivable", "loans_held_for_investment", "total_deposits",
+        "provision_for_loan_losses", "dividends_per_share",
+        "book_value_per_share", "tangible_book_value_per_share",
+        "shares_outstanding", "earnings_per_share", "minority_interest",
+    }
+    return frozenset(names)
+
+
+PROTECTED_LINE_ITEM_KEYS: frozenset[str] = _protected_line_item_keys()
+
+
 def attach_overrides(
     profile_name: str,
     extractor_output: dict,
@@ -6861,11 +6898,35 @@ def attach_overrides(
     for kpi in spec["kpis"]:
         key = kpi["key"]
         if key in extractor_output:
-            most_recent[key] = extractor_output[key]
+            value = extractor_output[key]
+            # An LLM-extracted KPI must never silently replace a value that
+            # came off the filings. 36 KPI keys across the framework are also
+            # real fields on the financial models — `net_debt_to_ebitda` on 34
+            # profiles, `nav_per_unit` on the two REIT profiles, and that one
+            # feeds the NAV Discount method directly. Overwriting is invisible
+            # once it happens: the downstream branch reads `.get(key)` and
+            # cannot tell a filing apart from a sentence in a research note.
+            #
+            # Filling a GAP is legitimate and stays supported — REIT NAV per
+            # unit is disclosed in filings the data provider often omits — so
+            # the guard only diverts when a filed value is already present.
+            # The research figure is kept under `_research_<key>` so a
+            # cross-check can still read it.
+            if key in PROTECTED_LINE_ITEM_KEYS and most_recent.get(key) is not None:
+                most_recent[f"_research_{key}"] = value
+                audit.append(
+                    f"{key}={value} NOT applied — collides with the filed value "
+                    f"({most_recent[key]}); kept as _research_{key}"
+                )
+                continue
+            filled_gap = key in PROTECTED_LINE_ITEM_KEYS
+            most_recent[key] = value
             if "compute_hint" in kpi:
-                audit.append(f"{key}={extractor_output[key]} ({kpi['compute_hint']})")
+                audit.append(f"{key}={value} ({kpi['compute_hint']})")
             else:
-                audit.append(f"{key}={extractor_output[key]}")
+                audit.append(f"{key}={value}")
+            if filled_gap:
+                audit[-1] += " [research-sourced — no filed value]"
 
     # Surface metadata
     if "_completeness_score" in extractor_output:
