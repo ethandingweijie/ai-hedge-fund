@@ -311,3 +311,47 @@ def test_financials_are_why_the_suppression_was_wrong():
     assert trailing > 1.0, "reported FCF margin above 100% of revenue"
     assert cap < _DEEP_CUT_OBSERVATION_FRACTION * trailing, "a deep cut"
     assert cap < trailing, "and it must still cap downward"
+
+
+# ── Observed, not applied ────────────────────────────────────────────────
+#
+# Backtested over 329 ticker-dates in two independent samples, the cap is
+# validated on financials (10H/1F, Beta 0.85) and reliably wrong on
+# marketplaces (7H/19F, Beta 0.29) — both replicated. In production those
+# populations are inverted against where it can act: every financial resolves
+# to a multiples-only blend (GGM, Residual Income, P/TBV, P/E norm, Excess
+# Capital) with weight_dcf = 0.0, while marketplaces carry 0.45-0.80. The
+# gate's effect sits precisely where it is wrong.
+
+def test_the_cap_is_recorded_but_does_not_move_the_margin():
+    """The regression this file now exists to prevent. Re-applying the cap
+    needs new evidence, not a refactor that quietly restores it."""
+    import inspect
+
+    from src.agents.analysis import dcf_agent
+    src = inspect.getsource(dcf_agent)
+    assert '"applied": False,' in src, "the telemetry must say it did not act"
+    assert "fcf_margin_base = _cc_cap" not in src, (
+        "the cap must not be assigned back onto the projection margin"
+    )
+    assert "OBSERVED, NOT APPLIED." in src, "and the reason must be recorded"
+
+
+def test_the_observation_still_carries_both_paths():
+    """Turning it off must not cost the evidence — the learning loop needs the
+    (A, B) pair to keep scoring the cap it is no longer applying."""
+    import inspect
+
+    from src.agents.analysis import dcf_agent
+    src = inspect.getsource(dcf_agent)
+    assert '"raw_input_path_a"' in src and '"gated_output_path_b"' in src
+    assert '"basis": _cc_basis,' in src
+
+
+def test_the_helper_still_computes_so_the_backtest_keeps_working():
+    """`_projectable_fcf_margin_cap` is now consumed by the harness rather
+    than by the engine. It must keep returning a real cap."""
+    series = [_wc_yr(100.0, 30.0, 5.0, dwc=15.0) for _ in range(4)]
+    cap, trailing, basis = _projectable_fcf_margin_cap(series)
+    assert cap == pytest.approx(0.15) and trailing == pytest.approx(0.30)
+    assert basis == "ex-working-capital"

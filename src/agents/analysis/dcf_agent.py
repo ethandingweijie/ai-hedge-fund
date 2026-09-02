@@ -286,6 +286,80 @@ def _safe(val) -> Optional[float]:
         return None
 
 
+def _convergence_bound(scen_iv: float, spot: float, max_capture: float) -> float:
+    """Furthest a 12m price target may sit from `spot` toward `scen_iv`.
+
+    The 12m PT engine is forward-multiple-driven and decoupled from intrinsic
+    value, so without a bound it can imply a full re-rating to IV inside a
+    year. `max_capture` is the fraction of the spot→IV gap a target is allowed
+    to close (profile-dependent: 20-35%).
+
+    Deliberately sign-agnostic. Applying this only when `scen_iv > spot`
+    exempts exactly the case a bear scenario is meant to produce, which is how
+    02888.HK ended up with a bear target of $296.36 above its bull of $252.93
+    — the bear IV sat below spot, skipped the cap, and kept its raw multiple
+    while base and bull were compressed.
+
+    Callers clamp one-sided (`min(pt, bound)`): a target already inside the
+    bound is left alone, so this only ever tightens.
+
+    >>> round(_convergence_bound(258.04, 228.60, 0.35), 2)   # IV above spot
+    238.9
+    >>> round(_convergence_bound(215.89, 228.60, 0.35), 2)   # IV below spot
+    224.15
+    >>> _convergence_bound(228.60, 228.60, 0.35)             # IV at spot
+    228.6
+    """
+    return spot + max_capture * (scen_iv - spot)
+
+
+# ── FX classification for every field _extract_annual_series() puts on a row ──
+# These live HERE, next to the row builder, because they previously sat ~200k
+# characters downstream inside run_dcf_agent(): fields were added to the row
+# builder and silently never registered for conversion. On 02888.HK that left
+# `tangible_book_value_per_share` in USD while `total_equity`/`book_value_per_share`
+# were converted to HKD, so the bank panel rendered a HK$19.32 "P/TBV fair value"
+# against a HK$228.60 share, plus a negative NIM (interest_income unconverted
+# against a converted interest_expense) and an 8.27% cost-income ratio.
+#
+# Every key the row builder emits MUST appear in exactly one of these two sets;
+# test_fx_field_coverage pins that, so a newly-added field fails the suite
+# rather than silently producing mixed-currency arithmetic.
+#
+# Per-share fields are converted too — they are denominated in the reporting
+# currency just like the totals. Counts (shares) and ratios (debt_to_equity)
+# are dimensionless and must NOT be converted.
+_FX_MONETARY_FIELDS: frozenset[str] = frozenset({
+    # Income statement
+    "revenue", "gross_profit", "cost_of_revenue", "operating_income",
+    "operating_expense", "ebit", "ebitda", "net_income",
+    "interest_income", "interest_expense",
+    "research_and_development", "stock_based_compensation",
+    "depreciation_and_amortization",
+    # Cash flow
+    "free_cash_flow", "fcf_owner_earnings", "operating_cash_flow",
+    "capital_expenditure", "change_in_working_capital",
+    "share_buyback", "common_stock_repurchased",
+    # Balance sheet
+    "total_assets", "total_equity", "total_liabilities",
+    "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
+    "goodwill", "intangible_assets",
+    # Bank-specific balance sheet
+    "loans_receivable", "loans_held_for_investment", "total_deposits",
+    "provision_for_loan_losses",
+    # Per-share (denominated in the reporting currency)
+    "dividends_per_share", "book_value_per_share",
+    "tangible_book_value_per_share",
+})
+
+# Dimensionless or non-numeric — never FX-converted.
+_FX_NON_MONETARY_FIELDS: frozenset[str] = frozenset({
+    "period",              # date string
+    "shares_outstanding",  # a count
+    "debt_to_equity",      # a ratio
+})
+
+
 def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
     """
     Extract annual records from LineItem objects (sorted newest-first).
@@ -4666,14 +4740,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         fx_rate    = 1.0
         fx_note    = ""
         revenue_base_raw_ccy = None  # Set only for non-USD tickers (Change 9)
-        _FX_MONETARY = {
-            "revenue", "free_cash_flow", "fcf_owner_earnings",
-            "net_debt", "ebitda", "net_income",
-            "total_assets", "total_equity", "ebit", "interest_expense",
-            "invested_capital", "capital_expenditure",
-            "research_and_development", "stock_based_compensation",
-            "dividends_per_share", "book_value_per_share",
-        }
+        _FX_MONETARY = _FX_MONETARY_FIELDS
         # For HK-listed tickers (prices quoted in HKD), convert financials directly
         # into HKD so that all per-share outputs are already in HKD.
         # This eliminates the two-step CNY→USD→HKD chain (and its rounding noise).
@@ -4970,7 +5037,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     (_cc_trailing / _cc_cap) if _cc_cap else float("inf")
                 )
                 ticker_forward_flags.append(
-                    f"Cash-conversion cap: FCF margin {fcf_margin_base:.1%} → "
+                    f"Cash-conversion (observed, not applied): FCF margin "
+                    f"{fcf_margin_base:.1%} vs "
                     f"{_cc_cap:.1%} — reported FCF is {_cc_ratio:.1f}x what "
                     f"a repeatable basis supports ({_cc_basis}), so the "
                     f"excess is not projected"
@@ -4981,11 +5049,32 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "raw_input_path_a": round(float(fcf_margin_base), 6),
                     "gated_output_path_b": round(float(_cc_cap), 6),
                     "basis": _cc_basis,
-                    # Observation only. See _DEEP_CUT_OBSERVATION_FRACTION for
-                    # why this does not gate the firing.
                     "deep_cut": bool(_cc_deep_cut),
+                    "applied": False,
                 })
-                fcf_margin_base = _cc_cap
+                # OBSERVED, NOT APPLIED.
+                #
+                # Backtested over 329 ticker-dates across two independent
+                # samples, the cap is validated on financials (10 helped, 1
+                # false alarm, Beta 0.85, replicated) and reliably WRONG on
+                # marketplaces (7 helped, 19 false alarms, Beta 0.29, also
+                # replicated at 0.31 and 0.29).
+                #
+                # In production those populations are exactly inverted against
+                # where it can act. Every financial resolves to a profile whose
+                # blend is multiples-only — GGM, Residual Income, P/TBV,
+                # P/E(norm), Excess Capital — so `weight_dcf` is 0.0 and the
+                # cap changes nothing. Marketplaces carry 0.45 to 0.80. The
+                # gate's effect is concentrated precisely where it is wrong and
+                # absent precisely where it is right.
+                #
+                # It is also likely a compensating error. `_project_dcf` holds
+                # the margin flat while revenue compounds, charging nothing for
+                # the investment that growth requires, so capping the margin
+                # makes the OUTPUT look sane by breaking an INPUT. That is why
+                # it improves plausibility while degrading forecast accuracy.
+                # The reinvestment charge is the real fix; until it lands this
+                # records what it would have done and moves nothing.
 
         # ── Analyst estimates (fetched eagerly — cached) ──────────────────
         # Pulled BEFORE the growth waterfall so dispersion bands are available
@@ -6850,17 +6939,33 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _cap_diagnostics.append(f"{_sn}: no scen_iv/pt")
                     continue
                 # ── Convergence Velocity cap (IV-gap based) ──────────────
-                if _scen_iv > _spot_for_cap and _pt > _spot_for_cap:
-                    _gap = _scen_iv - _spot_for_cap
-                    _conv_cap = _spot_for_cap + _max_capture * _gap
-                    if _pt > _conv_cap:
-                        _12m_targets[_sn] = round(_conv_cap, 2)
-                        _pt = _12m_targets[_sn]
-                        _capped_any = True
-                        _cap_diagnostics.append(
-                            f"{_sn}: pt→${_conv_cap:.0f} (conv cap {_max_capture:.0%} of "
-                            f"IV-spot gap)"
-                        )
+                # The cap bounds how far a 12m target may travel from spot
+                # toward that scenario's OWN intrinsic value. That bound is
+                # just as meaningful when the IV sits below spot, so it is
+                # applied on both sides.
+                #
+                # This used to be gated on `_scen_iv > spot and _pt > spot`,
+                # which exempted precisely the case a bear scenario produces.
+                # On 02888.HK (spot 228.60) bear IV 215.89 fell below spot, so
+                # the bear target skipped the cap and kept its raw multiple of
+                # 296.36 while base and bull were compressed to 238.90 and
+                # 252.93 — a bear target above the bull, and the highest of
+                # the three. Any name where bear IV < spot < base IV inverted
+                # the same way, which is a very common configuration rather
+                # than an edge case.
+                #
+                # Still a one-sided clamp: a target already below its
+                # convergence bound is left alone (the market is free to
+                # overshoot downward), so this only ever tightens a target.
+                _conv_cap = _convergence_bound(_scen_iv, _spot_for_cap, _max_capture)
+                if _pt > _conv_cap:
+                    _12m_targets[_sn] = round(_conv_cap, 2)
+                    _pt = _12m_targets[_sn]
+                    _capped_any = True
+                    _cap_diagnostics.append(
+                        f"{_sn}: pt→${_conv_cap:.0f} (conv cap {_max_capture:.0%} of "
+                        f"IV-spot gap, IV {'above' if _scen_iv >= _spot_for_cap else 'below'} spot)"
+                    )
                 # ── Bear floor for high-SBC names (Gemini Fix 2) ─────────
                 # Even with Convergence Cap, a bear 12m PT above spot is
                 # contradictory: a 'bear' should price multiple compression.
@@ -6913,6 +7018,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _12m_targets[_sn] = round(min(
                             _12m_targets[_sn], _scen_iv * 1.5
                         ), 2)
+
+        # ── Ordering diagnostic: bear ≤ base ≤ bull ──────────────────────────
+        # With the convergence cap applied on both sides of spot, the targets
+        # are min() of two monotonic sequences (raw multiple × 0.75/1.00/1.25,
+        # and the per-scenario convergence bound), so ordering holds by
+        # construction. A violation therefore means an input is disordered —
+        # scenario IVs out of sequence, or a profile-specific branch above
+        # producing a non-monotonic raw target. Surface it rather than
+        # silently re-sorting, which would hide the upstream fault.
+        _ordered = [_12m_targets.get(s) for s in ("bear", "base", "bull")]
+        if all(v is not None for v in _ordered) and not (
+            _ordered[0] <= _ordered[1] <= _ordered[2]
+        ):
+            _msg = (
+                f"12m PT ordering violated: bear ${_ordered[0]:.2f} / "
+                f"base ${_ordered[1]:.2f} / bull ${_ordered[2]:.2f} — "
+                f"scenario IVs bear/base/bull = "
+                + " / ".join(
+                    f"{(scenario_results.get(s, {}).get('intrinsic_value') or 0):.2f}"
+                    for s in ("bear", "base", "bull")
+                )
+            )
+            print(f"  [12m-pt] {ticker}: {_msg}")
+            ticker_forward_flags.append(_msg)
 
         # ── HK tickers: ensure per-share outputs are in HKD ─────────────────
         # When reported_currency != "HKD" (e.g. CNY), the FX conversion above
