@@ -142,6 +142,21 @@ def _is_china_internet(ticker: str) -> bool:
     return (ticker or "").upper() in _CHINA_INTERNET_TICKERS
 
 
+def _filing_segments_enabled(data: dict) -> bool:
+    """Whether to source segments from the SEC filing footnote.
+
+    Default OFF. src/data/sotp_assumptions_v1.json and the validation deltas
+    recorded in its _meta were produced by the research-note path; they are
+    the baseline this change is measured against, so the baseline has to stay
+    reproducible. Enabled per-run by the eval harness, never in production
+    until the experiment says it should be.
+    """
+    if data.get("sotp_filing_segments") is not None:
+        return bool(data.get("sotp_filing_segments"))
+    return os.getenv("SOTP_FILING_SEGMENTS", "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
 def _deterministic_skeleton(ticker: str, end_date: str, api_key) -> dict:
     """Reported facts from FMP line items — no LLM (nature: facts).
 
@@ -498,6 +513,27 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
         skeleton = _deterministic_skeleton(ticker, end_date, api_key)
         anchors = _fmp_segment_anchor(ticker, end_date, api_key)
         fwd_est = _fmp_estimates_anchor(ticker, end_date, api_key)
+        # SEC segment footnote (ASC 280 / IFRS 8): the only source that
+        # carries segment PROFIT. Feature-flagged and default off so the
+        # frozen snapshot in src/data/sotp_assumptions_v1.json and its
+        # recorded validation deltas stay bit-reproducible.
+        filing_anchor = None
+        if _filing_segments_enabled(data):
+            from src.agents.analysis.sotp_filing_anchor import (
+                filing_segment_anchor,
+            )
+            # NTM+1, not NTM: the research notes value the year after
+            # next (GS AMZN is explicit -- "NTM+1 SOTP ... CY27E"), so
+            # anchoring the filing on NTM compares two different years.
+            from src.agents.analysis.sotp_filing_anchor import (
+                forward_estimate,
+            )
+            _fwd_ntm1 = forward_estimate(ticker, end_date, api_key,
+                                         years_ahead=2) or fwd_est
+            filing_anchor = filing_segment_anchor(
+                ticker, end_date, api_key, fwd_est=_fwd_ntm1,
+                group_revenue_usd=skeleton.get("revenue"),
+                state=state)
 
         dr_sections = data.get("deep_research_sections", {}) or {}
         research_ctx = "\n\n".join(filter(None, [
@@ -540,6 +576,32 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
             f"- {a['name']}: ${a['revenue']/1e9:.2f}B (FY {a['period_end']})"
             for a in anchors
         ) or "Not available (no FMP segmentation for this listing) — reconstruct the segment map from research."
+        if filing_anchor:
+            # The overlay overwrites these numbers deterministically after the
+            # LLM returns, so the prompt says they are fixed. Asking a model to
+            # honour an anchor it can silently restate is the failure mode
+            # _units_scale_factor exists to clean up after.
+            _fa_lines = "\n".join(
+                f"- {s['name']}: revenue ${s['revenue_fwd']/1e9:.1f}B, "
+                f"reported margin {(s['margin'] or 0):.1%}"
+                for s in filing_anchor["segments"])
+            _metric = filing_anchor.get("profit_metric") or "segment profit"
+            _nongaap = ("" if filing_anchor.get("profit_is_gaap_operating_income")
+                        else " (NON-GAAP: excludes SBC and amortisation, not EBIT)")
+            anchor_txt = (
+                "=== REPORTED SEGMENT ECONOMICS (PRIMARY, from the filing) ===\n"
+                f"Source: {filing_anchor['form']} {filing_anchor['accession']} "
+                f"{filing_anchor['report_file']}, FY ending "
+                f"{filing_anchor['period_end']}. Profit metric as reported: "
+                f"{_metric}{_nongaap}.\n"
+                "Revenues are re-based from the reported segment mix to forward "
+                "consensus.\n"
+                f"{_fa_lines}\n"
+                "These revenue and margin figures are FIXED downstream: do not "
+                "restate, re-split or re-scale them. Your job for these segments "
+                "is the naming and the multiples.\n\n"
+                "=== FMP product segmentation (cross-check only) ===\n"
+                + anchor_txt)
 
         if fwd_est:
             _fwd_txt = (
@@ -697,6 +759,17 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
         #       the model CI or divergence >25% vs comp basis flags). ─────
         _grp_fwd = _fwd_multiples(ticker, end_date)
         _group_g_pct = (_grp_fwd or {}).get("g_pct")
+        # Reported figures overwrite revenue/EBIT before the learned margin
+        # model runs: apply_margin_basis skips entries that already carry an
+        # `ebit` (status `researched_kept`), so this is what preempts the
+        # model fill without touching sotp_multiple_basis.
+        filing_detail = {"status": "disabled"}
+        if filing_anchor:
+            from src.agents.analysis.sotp_filing_anchor import (
+                apply_filing_overlay,
+            )
+            merged_segments, filing_detail = apply_filing_overlay(
+                merged_segments, filing_anchor)
         merged_segments, margin_detail = apply_margin_basis(
             merged_segments, (rs_block or {}).get("segments") or [],
             china=_is_china_internet(ticker),
@@ -772,6 +845,10 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
             "net_cash": _net_cash,
             "_multiple_basis": basis_detail,
             "_margin_basis": margin_detail,
+            # Provenance for the filing-sourced segment economics: which
+            # filing, which table, how names were matched, and whether the
+            # reported profit line is GAAP operating income.
+            "_filing_basis": filing_detail,
             "_shares": skeleton["shares"],
             "_fwd_estimates": fwd_est,
             # Tier 3.8: optional bear/bull per-segment multiple overrides
@@ -782,8 +859,15 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
                 "net_cash": "fmp_line_items" if skeleton["net_cash"] is not None else (
                     "deep_research_2a5" if (rs_block or {}).get("net_cash") is not None else "none"),
                 "associates": assoc_source,
-                "segment_revenues": "fmp_anchor" if anchors else (
-                    "deep_research_2a5" if (rs_block and rs_block["segments"]) else "research_llm"),
+                "segment_revenues": (
+                    "sec_segment_footnote"
+                    if filing_detail.get("status") in (
+                        "applied", "partial_taxonomy_mismatch")
+                    else "fmp_anchor" if anchors else (
+                        "deep_research_2a5"
+                        if (rs_block and rs_block["segments"])
+                        else "research_llm")),
+                "segment_economics_filing": filing_detail.get("status"),
                 "forward_estimates": "fmp_consensus" if fwd_est else "none",
                 "research_block": "deep_research_2a5" if rs_block else "none",
                 "economics": "research_llm" + ("+pdf_evidence" if pdf_evidence else ""),
