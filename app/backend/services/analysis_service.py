@@ -28,6 +28,7 @@ from typing import Any, Callable, Optional
 
 from src.utils import run_config
 from src.data import db
+from src.tools.ticker_canonical import ticker_match_forms
 
 logger = logging.getLogger(__name__)
 
@@ -1258,8 +1259,17 @@ def get_history(
     web_params: list[Any] = ["dd_%"]
 
     if ticker:
-        web_where.append("UPPER(w.ticker) = UPPER(?)")
-        web_params.append(ticker)
+        # Match every form the row might hold. Runs are stored canonicalised
+        # ("2888" -> "02888.HK"), so filtering on the raw form alone returned
+        # zero rows — which the frontend's completion check reads as "still
+        # running", leaving an ongoing card next to the run's own finished
+        # report. Rows written before ingest canonicalisation can still hold
+        # the raw form, so both are matched.
+        _t_forms = ticker_match_forms(ticker)
+        web_where.append(
+            "UPPER(w.ticker) IN (" + ", ".join(["UPPER(?)"] * len(_t_forms)) + ")"
+        )
+        web_params.extend(_t_forms)
     if date_from:
         web_where.append("w.run_at >= ?")
         web_params.append(date_from)
@@ -1324,8 +1334,13 @@ def get_history(
     cli_params: list[Any] = list(imported_archive_ids)
 
     if ticker:
-        cli_where.append("UPPER(ts.ticker) = UPPER(?)")
-        cli_params.append(ticker)
+        # Same tolerant match as the web_runs filter above — CLI archive rows
+        # are keyed by the same canonical ticker.
+        _t_forms_cli = ticker_match_forms(ticker)
+        cli_where.append(
+            "UPPER(ts.ticker) IN (" + ", ".join(["UPPER(?)"] * len(_t_forms_cli)) + ")"
+        )
+        cli_params.extend(_t_forms_cli)
     if date_from:
         cli_where.append("r.run_at >= ?")
         cli_params.append(date_from)

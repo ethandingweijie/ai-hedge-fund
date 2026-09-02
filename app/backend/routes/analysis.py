@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.backend.database import get_db
 from app.backend.services.api_key_service import ApiKeyService
 from app.backend.services import analysis_service
+from src.tools.ticker_canonical import canonical_ticker
 from app.backend.services.auth_service import get_user_from_token
 
 logger = logging.getLogger(__name__)
@@ -115,15 +116,9 @@ async def run_analysis(body: dict, request: Request, db: Session = Depends(get_d
       event: complete  {run_id, ticker}
       event: error     {error}
     """
-    ticker = (body.get("ticker") or "").strip().upper()
-    # Normalise HK tickers to canonical "NNNNN.HK" form so the routing cache
+    # Normalise HK/SG tickers to their canonical form so the routing cache
     # and web_runs DB always see a consistent key regardless of input format.
-    from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canonical
-    from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
-    if is_hk_ticker(ticker):
-        ticker = _hk_canonical(ticker)
-    elif is_sg_ticker(ticker):
-        ticker = _sg_canonical(ticker)
+    ticker = canonical_ticker(body.get("ticker"))
     model_name = body.get("model", "claude-sonnet-4-6")
     # M2 Track E: the investor committee is decommissioned — runs are
     # per-ticker with no agent selection. A legacy "agents" body key from
@@ -661,7 +656,10 @@ async def get_pipeline_status(ticker: str):
     """Return the latest progress phase for an in-flight pipeline run.
     Safe to call repeatedly — read-only, never triggers a new run.
     Returns null fields if no run is in progress for this ticker."""
-    t = ticker.strip().upper()
+    # MUST canonicalise: run_analysis() stores progress under the canonical
+    # key ("2888" -> "02888.HK"), so looking up the raw form returned an empty
+    # phase map and the client's progress bar froze mid-run with no error.
+    t = canonical_ticker(ticker)
     # Queue mode (Phase 2d): the worker publishes live phases to progress_bus.
     # Consult the bus first — when a queued run is in flight this is the only
     # place its state lives. When nothing is there, fall through to the local
@@ -735,19 +733,13 @@ async def cancel_analysis(ticker: str, request: Request, db: Session = Depends(g
     checkpoint. Everything else here is cleanup, and each step is guarded
     separately -- a cancel must never fail loudly.
     """
-    t = (ticker or "").strip().upper()
-    if not t:
-        raise HTTPException(status_code=400, detail="ticker required")
     # MUST match the normalisation run_analysis() applies, or the dedup key and
     # the stored ticker will not match and the cancel silently no-ops. HK and SG
     # tickers are canonicalised there (e.g. 700.HK -> 00700.HK), and SG is
     # exactly where this matters most.
-    from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canon
-    from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canon
-    if is_hk_ticker(t):
-        t = _hk_canon(t)
-    elif is_sg_ticker(t):
-        t = _sg_canon(t)
+    t = canonical_ticker(ticker)
+    if not t:
+        raise HTTPException(status_code=400, detail="ticker required")
 
     from app.backend.services import analysis_service
 
@@ -896,13 +888,7 @@ async def _pulse_search_and_put(ticker: str, prior: dict | None) -> dict:
 async def pulse(request: Request, ticker: str = Query(...)):
     """Instant 'recent developments' for a ticker (SSE). Read-only: never
     starts a pipeline run. See the section header above for the contract."""
-    t = (ticker or "").strip().upper()
-    from src.tools.hk.ticker import is_hk_ticker, to_canonical as _hk_canonical
-    from src.tools.sg.ticker import is_sg_ticker, to_canonical as _sg_canonical
-    if is_hk_ticker(t):
-        t = _hk_canonical(t)
-    elif is_sg_ticker(t):
-        t = _sg_canonical(t)
+    t = canonical_ticker(ticker)
     if not t:
         raise HTTPException(status_code=400, detail="ticker is required")
 
