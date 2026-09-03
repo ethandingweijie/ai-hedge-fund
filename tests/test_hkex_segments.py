@@ -282,3 +282,59 @@ class TestSingleSegmentFilers:
     def test_pages_without_the_word_segment_are_skipped(self):
         assert not hk.declares_single_segment(
             self._Doc(["Directors' report", "Auditor's opinion"]))
+
+
+class TestPageSelection:
+    """Structure decides which page to try FIRST, never which to skip."""
+
+    class _P:
+        def __init__(self, text, words=()):
+            self._t, self._w = text, words
+
+        def get_text(self, kind=None):
+            return self._w if kind == "words" else self._t
+
+    class _D:
+        def __init__(self, pages):
+            self._p = pages
+            self.page_count = len(pages)
+
+        def __getitem__(self, i):
+            return self._p[i]
+
+    def _rows(self, y0):
+        """A page whose text has enough numbers, with no parseable rows."""
+        return [(10.0, y0, 40.0, y0 + 8, "Segment", 0, 0, 0)]
+
+    def test_a_page_with_unrecognised_rows_is_still_a_candidate(self):
+        """Requiring two recognised metric rows to qualify dropped Lenovo and
+        SMIC from three candidate pages to none. A page whose rows are not
+        recognised YET is exactly the page still worth trying."""
+        text = "Segment information " + " ".join(["1,000"] * 8)
+        doc = self._D([self._P(text, self._rows(10.0))])
+        assert hk._candidate_pages(doc) == [0]
+
+    def test_pages_without_the_word_segment_are_excluded(self):
+        doc = self._D([self._P("Directors report " + " ".join(["1,000"] * 9))])
+        assert hk._candidate_pages(doc) == []
+
+    def test_sparse_pages_are_excluded(self):
+        doc = self._D([self._P("Segment information 1,000 2,000")])
+        assert hk._candidate_pages(doc) == []
+
+    def test_a_structured_page_outranks_a_merely_dense_one(self):
+        """Keyword-plus-density ranked Ping An's segment BALANCE SHEET above
+        its income table, and BYD's ASC 606 timing table above its segment
+        note. Both are dense and both say "segment"."""
+        def row(y, label, n):
+            out = [(10.0, y, 60.0, y + 8, w, 0, 0, i)
+                   for i, w in enumerate(label.split())]
+            out += [(100.0 + 60 * k, y, 140.0 + 60 * k, y + 8, "1,000", 0, 0, 9 + k)
+                    for k in range(n)]
+            return out
+
+        dense = self._P("segment " + " ".join(["1,000"] * 40),
+                        row(10.0, "Accounts payable", 4) + row(30.0, "Segment liabilities", 4))
+        good = self._P("segment " + " ".join(["1,000"] * 10),
+                       row(10.0, "Segment revenues", 4) + row(30.0, "Gross profit", 4))
+        assert hk._candidate_pages(self._D([dense, good]))[0] == 1

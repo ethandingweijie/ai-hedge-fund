@@ -39,6 +39,8 @@ _CACHE_DIR = Path(os.environ.get(
     Path(__file__).resolve().parents[2] / ".cache" / "hkex_reports"))
 
 _NUM_RE = re.compile(r"^\(?-?\d{1,3}(?:,\d{3})*(?:\.\d+)?\)?$")
+_SEG_WORD_RE = re.compile(r"segment", re.I)
+_NUM_ANY_RE = re.compile(r"\d{1,3}(?:,\d{3})+")
 _SEG_PAGE_RE = re.compile(
     r"segment information|reportable segment|segment revenue", re.I)
 _YEAR_BLOCK_RE = re.compile(
@@ -383,18 +385,54 @@ def _fetch_report(ticker: str, url: str) -> Optional[Path]:
         return None
 
 
-def _candidate_pages(doc, limit: int = 6) -> list[int]:
-    """Pages that look like a segment table: the words AND enough numbers."""
+def _structure_score(page) -> tuple[int, int, int]:
+    """How much a page LOOKS like a segment income table.
+
+    Returns (has_both, n_metric_rows, n_numbers). Keyword-plus-number-density
+    ranked Ping An's segment BALANCE SHEET above its income table and BYD's
+    ASC 606 timing table above its segment note -- both are dense with numbers
+    and both say "segment". What actually distinguishes the table wanted is
+    structural: a revenue row AND a profit row, over the same columns.
+    """
+    rev = prof = 0
+    for ln in _lines(page):
+        cells = _numeric_cells(ln["words"])
+        if len(cells) < 2:
+            continue
+        lab = _clean_label(_label_of(ln["words"]))
+        if not lab:
+            continue
+        if _EXTERNAL_REV_ROW.match(lab) or _REVENUE_ROW.match(lab):
+            rev += 1
+        elif _PROFIT_ROW.match(lab):
+            prof += 1
+    nums = len(_NUM_ANY_RE.findall(page.get_text()))
+    return (1 if (rev and prof) else 0, rev + prof, nums)
+
+
+def _candidate_pages(doc, limit: int = 8) -> list[int]:
+    """Pages worth parsing, best first.
+
+    Stage one is a cheap text filter on the word "segment" -- narrower phrase
+    matching missed these filings entirely, since Ping An mentions
+    "segment information" on only two of 382 pages. Stage two ranks what
+    survives by structure rather than by density.
+    """
     scored = []
     for i in range(doc.page_count):
         text = doc[i].get_text()
-        if not _SEG_PAGE_RE.search(text):
+        if not _SEG_WORD_RE.search(text):
             continue
-        nums = len(re.findall(r"\d{1,3}(?:,\d{3})+", text))
-        if nums >= 12:
-            scored.append((nums, i))
+        if len(_NUM_ANY_RE.findall(text)) < 6:
+            continue
+        both, rows, nums = _structure_score(doc[i])
+        # Structure RANKS, it never excludes. Requiring two recognised metric
+        # rows to be a candidate at all dropped Lenovo and SMIC from three
+        # candidate pages to none -- a page whose rows this does not recognise
+        # yet is exactly the page worth still trying.
+        scored.append((both, rows, nums, i))
     scored.sort(reverse=True)
-    return [i for _n, i in scored[:limit]]
+    return [i for _b, _r, _n, i in scored[:limit]]
 
 
 def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
