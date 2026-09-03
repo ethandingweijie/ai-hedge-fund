@@ -47,7 +47,10 @@ def to_fmp_symbol(ticker: str) -> str:
             return _sg_fmp(t)
     except Exception:
         pass
-    return t
+    # US class shares: FMP writes them with a hyphen (BRK-B, BF-B), and the
+    # dotted form silently returns nothing rather than erroring. Only US
+    # tickers reach here -- HK and SG returned above.
+    return t.replace(".", "-")
 
 
 # ── Prepared-remarks vs Q&A splitting ───────────────────────────────────────

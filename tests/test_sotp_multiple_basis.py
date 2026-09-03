@@ -606,3 +606,89 @@ class TestPinnedPeerSets:
         for filer, row in (_peer_sets().get("pins") or {}).items():
             for seg in row:
                 assert seg == normalize_key(seg), f"{filer}/{seg}"
+
+
+class TestFmpCompanyProxy:
+    """FMP company peers are a labelled fallback, never a segment comp.
+
+    FMP picks peers on sector and market cap: AMD's are AMAT, ARM and ASML --
+    semiconductor equipment and IP, none of them a comp for AMD's Client or
+    Gaming segment. Using them unlabelled would repeat, with a machine-built
+    peer list, the mistake that made `AMD Gaming -> games_media` dangerous.
+    """
+
+    def _fetch(self, peers, end_date):
+        return [{"pe": 20.0 + i, "ev_rev": 4.0, "g_pct": 10.0}
+                for i, _ in enumerate(peers)]
+
+    def test_uncovered_segment_falls_to_a_labelled_company_proxy(self, monkeypatch):
+        from src.agents.analysis import sotp_multiple_basis as mb
+        monkeypatch.setattr("src.tools.fmp_peers.get_fmp_peers",
+                            lambda t, d, **k: ["AMAT", "ARM", "ASML", "QCOM"])
+        b = mb.derive_segment_basis("Some Unmapped Line", profitable=True,
+                                    loss=False, end_date="2026-08-16",
+                                    haircut=1.0, fetch=self._fetch,
+                                    ticker="ZZZZ")
+        assert b["status"] == "ok"
+        assert b["basis_scope"] == "company_proxy"
+        assert b["archetype_source"] == "fmp_company_peers"
+        assert b["archetype"] is None
+
+    def test_a_pinned_archetype_still_wins(self, monkeypatch):
+        from src.agents.analysis import sotp_multiple_basis as mb
+        called = {"n": 0}
+
+        def _peers(*a, **k):
+            called["n"] += 1
+            return ["AMAT"]
+        monkeypatch.setattr("src.tools.fmp_peers.get_fmp_peers", _peers)
+        b = mb.derive_segment_basis("Gaming", profitable=True, loss=False,
+                                    end_date="2026-08-16", haircut=1.0,
+                                    fetch=self._fetch, ticker="AMD")
+        assert b["archetype"] == "semis_client_pc"
+        assert b.get("basis_scope") != "company_proxy"
+        assert called["n"] == 0, "must not reach for FMP when a pin exists"
+
+    def test_unsuitable_split_is_never_rescued_by_the_proxy(self, monkeypatch):
+        from src.agents.analysis import sotp_multiple_basis as mb
+        monkeypatch.setattr("src.tools.fmp_peers.get_fmp_peers",
+                            lambda *a, **k: ["TGT", "COST", "KR", "WMT"])
+        b = mb.derive_segment_basis("Food and Sundries", profitable=True,
+                                    loss=False, end_date="2026-08-16",
+                                    haircut=1.0, fetch=self._fetch,
+                                    ticker="COST")
+        # a decision that this is not a business must not be undone by a
+        # fallback tier -- it would put a multiple back on a shelf label
+        assert b["status"] == "unsuitable_split"
+
+
+class TestFmpSymbolForm:
+    """FMP rejects the repo's canonical HK form and dotted US class shares.
+
+    Both failures are SILENT -- an empty list, not an error -- so they read as
+    "this company has no peers" rather than "you asked with the wrong symbol".
+    """
+
+    def test_hk_and_class_share_forms(self):
+        from src.tools.fmp_transcripts import to_fmp_symbol
+        assert to_fmp_symbol("00700.HK") == "0700.HK"
+        assert to_fmp_symbol("0700.HK") == "0700.HK"
+        assert to_fmp_symbol("BRK.B") == "BRK-B"
+        assert to_fmp_symbol("AAPL") == "AAPL"
+        assert to_fmp_symbol("D05.SI") == "D05.SI"
+
+    def test_peers_never_include_the_subject(self, monkeypatch):
+        import src.tools.fmp_peers as fp
+        monkeypatch.setattr(fp, "_load", lambda *a, **k: None)
+        monkeypatch.setattr(fp, "_store", lambda *a, **k: None)
+        monkeypatch.setattr(
+            "src.tools.api._fmp_get",
+            lambda *a, **k: [{"symbol": "AMD"}, {"symbol": "QCOM"}])
+        assert fp.get_fmp_peers("AMD", "2026-08-16") == ["QCOM"]
+
+    def test_empty_response_is_not_cached(self, monkeypatch, tmp_path):
+        import src.tools.fmp_peers as fp
+        monkeypatch.setattr(fp, "_CACHE_DIR", tmp_path / "p")
+        monkeypatch.setattr("src.tools.api._fmp_get", lambda *a, **k: [])
+        assert fp.get_fmp_peers("AMD", "2026-08-16") == []
+        assert not list(tmp_path.glob("p/*.json"))

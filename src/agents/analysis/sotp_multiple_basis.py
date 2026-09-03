@@ -269,6 +269,50 @@ def adjusted_multiple(comp_median: float, comp_p75: float, *, haircut: float,
     return min(comp_median * xhc, comp_p75)
 
 
+def _company_proxy_basis(name: str, *, ticker: str | None, end_date: str,
+                         profitable: bool, loss: bool, haircut: float,
+                         fetch) -> dict:
+    """Company-level FMP peers standing in for an uncovered segment archetype.
+
+    Explicitly weaker than a pinned segment peer set and always labelled as
+    such: `basis_scope="company_proxy"`. It exists so an unpinned segment gets
+    a REPRODUCIBLE multiple rather than an LLM guess, and so HKEX/SGX names
+    have a tier at all before their pins are written.
+    """
+    if not ticker:
+        return {"status": "no_archetype"}
+    metric = "pe" if profitable else "ev_rev" if loss else None
+    if metric is None:
+        return {"status": "unknown_profitability"}
+    try:
+        from src.tools.fmp_peers import get_fmp_peers
+        peers = get_fmp_peers(ticker, end_date)
+    except Exception:                              # noqa: BLE001
+        peers = []
+    if not peers:
+        return {"status": "no_archetype"}
+    rows = fetch(peers, end_date)
+    vals = [r[metric] for r in rows if r.get(metric)]
+    if len(vals) < MIN_COMPS:
+        return {"status": "thin_comps", "metric": metric, "n_comps": len(vals),
+                "basis_scope": "company_proxy"}
+    med, lo, hi = med_iqr(vals)
+    g_vals = [r["g_pct"] for r in rows if r.get("g_pct") is not None]
+    g_comp = statistics.median(g_vals) if g_vals else None
+    derived = adjusted_multiple(med, hi, haircut=haircut, metric=metric,
+                                seg_growth_pct=None, comp_growth_pct=g_comp)
+    return {"status": "ok", "archetype": None,
+            "archetype_source": "fmp_company_peers",
+            "basis_scope": "company_proxy",
+            "metric": metric, "peers": peers, "n_comps": len(vals),
+            "comp_median": round(med, 2),
+            "iqr": [round(lo, 2), round(hi, 2)],
+            "comp_growth_pct": round(g_comp, 1) if g_comp else None,
+            "seg_growth_pct": None,
+            "haircut": round(haircut, 3),
+            "derived": round(derived, 2)}
+
+
 def derive_segment_basis(name: str, *, profitable: bool, loss: bool,
                          end_date: str, haircut: float, fetch,
                          ticker: str | None = None) -> dict:
@@ -279,12 +323,21 @@ def derive_segment_basis(name: str, *, profitable: bool, loss: bool,
     caller keeps the LLM/policy multiple (tiers 2/3).
     """
     arch_key, how = resolve_archetype(name, ticker)
-    if not arch_key:
+    if not arch_key and how == "pinned_unsuitable":
         # A pin to None is a decision, not a gap: the split is not a valuation
         # split (Costco's merchandise categories share one warehouse P&L), so
         # the group carries it rather than the LLM inventing a multiple.
-        return {"status": ("unsuitable_split" if how == "pinned_unsuitable"
-                           else "no_archetype")}
+        return {"status": "unsuitable_split"}
+    if not arch_key:
+        # No archetype covers this segment. FMP's company peers are a weak
+        # substitute -- they are chosen on sector and market cap, so AMD's are
+        # AMAT, ARM and ASML, none of which is a comp for its Client segment --
+        # but a deterministic company proxy beats an LLM inventing a segment
+        # multiple, and it is labelled so a report can never pass it off as a
+        # segment comp. FMP covers HKEX and SGX too, where no pins exist yet.
+        return _company_proxy_basis(name, ticker=ticker, end_date=end_date,
+                                    profitable=profitable, loss=loss,
+                                    haircut=haircut, fetch=fetch)
     spec = all_archetypes()[arch_key]
     metric = (spec.get("metric")
               or ("pe" if profitable else "ev_rev" if loss else None))
