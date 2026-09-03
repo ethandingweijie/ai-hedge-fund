@@ -56,25 +56,46 @@ _REVENUE_ROW = re.compile(
     r"revenue from external customers)", re.I)
 _DA_ROW = re.compile(r"^(?:depreciation|amortisation|amortization)", re.I)
 _TOTAL_NAME = re.compile(r"^(?:total|group|consolidated)$", re.I)
-# The apostrophe in "RMB’Million" is U+2019, not ASCII. Matching only the
-# ASCII form left the units token glued onto every column name, which in
-# turn stopped "Total" being recognised and lost both the consolidated
-# revenue and the reporting currency.
+# Units come in two tokenisations and BOTH occur. Tencent writes
+# "RMB’Million" as one token (with a U+2019 apostrophe, not ASCII); Cathay
+# writes "HK$M", which PyMuPDF splits into "HK$" and "M". A combined
+# currency-plus-scale pattern matches neither of Cathay's halves, so the units
+# multiplier stayed 1.0 -- every revenue read as ~0 -- and the leftover tokens
+# glued onto the column names as "Total HK$M HK$M". Match the two parts
+# independently and a split token is no longer a special case.
 _APOS = "['‘’´`]?"
+_CCY_RE = re.compile(r"(RMB|HK\$|US\$|S\$|USD|HKD|CNY|SGD|¥|€)", re.I)
+_SCALE_RE = re.compile(r"(millions?|bn\b|billions?|thousands?|m\b|000)", re.I)
+_CCY_TOKEN = re.compile(r"^" + _APOS + r"(RMB|HK\$|US\$|S\$|USD|HKD|CNY|SGD|"
+                        r"¥|€)" + _APOS + r"$", re.I)
+_SCALE_TOKEN = re.compile(r"^" + _APOS +
+                          r"(millions?|bn|billions?|thousands?|m|000)$", re.I)
+# A single token carrying both, e.g. "RMB’Million" or "HK$M".
 _UNIT_RE = re.compile(r"(RMB|HK\$|US\$|S\$|USD|HKD|CNY|SGD|¥|€)"
                       r"\s*" + _APOS + r"\s*"
-                      r"(million|m|billion|bn|000|thousand)", re.I)
+                      r"(millions?|m\b|billions?|bn\b|000|thousands?)", re.I)
+
+
+def _is_unit_token(w: str) -> bool:
+    """True for any token that is units plumbing rather than a segment name."""
+    return bool(_UNIT_RE.search(w) or _CCY_TOKEN.match(w)
+                or _SCALE_TOKEN.match(w))
 
 
 def _units_and_ccy(text: str) -> tuple[float, Optional[str]]:
-    m = _UNIT_RE.search(text or "")
-    if not m:
+    """(multiplier, currency) from a units caption, halves matched separately."""
+    t = text or ""
+    cm, sm = _CCY_RE.search(t), _SCALE_RE.search(t)
+    if not sm:
         return 1.0, None
-    ccy = {"RMB": "CNY", "HK$": "HKD", "US$": "USD", "S$": "SGD"}.get(
-        m.group(1).upper().replace("HK$", "HK$"), m.group(1).upper())
-    scale = m.group(2).lower()
+    ccy = None
+    if cm:
+        raw = cm.group(1).upper()
+        ccy = {"RMB": "CNY", "HK$": "HKD", "US$": "USD", "S$": "SGD",
+               "¥": "CNY", "€": "EUR"}.get(raw, raw)
+    scale = sm.group(1).lower()
     mult = (1e9 if scale.startswith(("billion", "bn"))
-            else 1e3 if scale in ("000", "thousand") else 1e6)
+            else 1e3 if scale in ("000", "thousand", "thousands") else 1e6)
     return mult, ccy
 
 
@@ -146,6 +167,17 @@ def _column_centers(data_lines: list[list[tuple[float, float, float]]]
     return [sum(m) / len(m) for m in mids]
 
 
+# Period words sit in the same x-bands as the column headers -- "Year ended
+# 31 December 2025" spans the table -- and get glued onto segment names as
+# "Year ended Smartphone x AIoT" or "December Other related business". They
+# are never part of a segment's name, so they are dropped before assignment.
+_PERIOD_WORD = re.compile(
+    r"^(?:year|years|period|periods|ended|ending|as|at|of|for|the|note|notes|"
+    r"jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+    r"jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|"
+    r"dec(?:ember)?|20\d\d|\(?[ivx]+\)?)$", re.I)
+
+
 def _header_names(header_lines: list[dict],
                   centers: list[float]) -> list[str]:
     """Stitch a multi-line header into one name per column.
@@ -162,7 +194,8 @@ def _header_names(header_lines: list[dict],
     picked: list[list[tuple[float, float, str]]] = [[] for _ in centers]
     for ln in header_lines:
         for x0, x1, w in ln["words"]:
-            if _NUM_RE.match(w) or _UNIT_RE.search(w):
+            if (_NUM_RE.match(w) or _is_unit_token(w)
+                    or _PERIOD_WORD.match(w)):
                 continue
             mid = (x0 + x1) / 2.0
             i = min(range(len(centers)), key=lambda k: abs(centers[k] - mid))
@@ -432,12 +465,19 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
 # derived figure carries `profit_basis` saying exactly how it was produced.
 
 _IS_ROWS = {
-    "gross_profit": re.compile(r"^gross profit$", re.I),
-    "selling": re.compile(r"^selling and marketing expenses?$", re.I),
-    "admin": re.compile(r"^general and administrative expenses?$", re.I),
+    # Filers write these lines several ways. "Operating profit/(loss)" and
+    # "Profit from operations" are the same line as "Operating profit"; missing
+    # the variant means the whole derivation is skipped and a gross margin
+    # reaches the engine as though it were operating.
+    "gross_profit": re.compile(r"^gross profit(?:/?\(loss\))?$", re.I),
+    "selling": re.compile(r"^selling and (?:marketing|distribution) "
+                          r"(?:expenses?|costs?)$", re.I),
+    "admin": re.compile(r"^(?:general and )?administrative expenses?$", re.I),
     "other_gains": re.compile(r"^other gains?/?\(?losses?\)?,?\s*net$", re.I),
-    "operating_profit": re.compile(r"^operating profit$", re.I),
-    "revenues": re.compile(r"^revenues?$", re.I),
+    "operating_profit": re.compile(
+        r"^(?:operating profit(?:/?\(loss\))?|profit from operations?|"
+        r"operating (?:profit|income)(?:\s*/\s*\(loss\))?)$", re.I),
+    "revenues": re.compile(r"^(?:revenues?|turnover)$", re.I),
 }
 
 
@@ -467,9 +507,14 @@ def _income_statement_page(doc) -> Optional[dict]:
     hits = []
     for i in range(doc.page_count):
         t = doc[i].get_text()
-        if not re.search(r"consolidated income statement|income statement", t, re.I):
+        # IFRS filers title it "Statement of Profit or Loss"; only US-style
+        # filers say "Income Statement". Requiring the latter found the
+        # statement for Tencent and missed it for Cathay and Xiaomi, so
+        # both were left carrying gross profit as though it were EBIT.
+        if not re.search(r"income statement|profit or loss|"
+                         r"statement of comprehensive income", t, re.I):
             continue
-        if not re.search(r"operating profit", t, re.I):
+        if not re.search(r"operating (?:profit|loss)", t, re.I):
             continue
         hits.append(i)
     for i in hits:

@@ -121,3 +121,67 @@ class TestIncomeStatementRows:
         assert hk._IS_ROWS["gross_profit"].match("Gross profit")
         assert hk._IS_ROWS["operating_profit"].match("Operating profit")
         assert not hk._IS_ROWS["gross_profit"].match("Gross profit margin")
+
+
+class TestUnitTokenisation:
+    """Units arrive as one token or two, and both occur in real filings."""
+
+    def test_split_currency_and_scale_tokens(self):
+        """PyMuPDF splits Cathay's "HK$M" into "HK$" and "M".
+
+        A combined currency-plus-scale pattern matched neither half, so the
+        units multiplier stayed 1.0 -- every revenue read as ~0 -- and the
+        leftovers glued onto names as "Total HK$M HK$M".
+        """
+        assert hk._is_unit_token("HK$")
+        assert hk._is_unit_token("M")
+        assert hk._is_unit_token("HK$M")
+        assert hk._units_and_ccy("HK$M") == (1e6, "HKD")
+
+    def test_a_scale_letter_inside_a_word_is_not_a_unit(self):
+        """A bare `m` alternative without a word boundary matches the m in
+        "Marketing", which would silently rescale a whole table."""
+        for name in ("Marketing", "Total", "VAS", "Smartphones", "Others"):
+            assert not hk._is_unit_token(name), name
+
+    def test_no_backspace_bytes_survive_in_the_source(self):
+        r"""`\b` written through a shell heredoc becomes 0x08, a literal
+        backspace, which as a regex matches a backspace character and never a
+        word boundary. It is invisible in a diff and in most editors."""
+        import io
+        import pathlib
+        root = pathlib.Path(hk.__file__).resolve().parents[2]
+        for path in list((root / "src").rglob("*.py")):
+            text = io.open(path, encoding="utf-8").read()
+            assert "\x08" not in text, f"backspace byte in {path}"
+
+
+class TestPeriodWords:
+    def test_date_fragments_never_become_segment_names(self):
+        """"Year ended 31 December 2025" spans the table and lands in the same
+        x-bands as the headers, producing "Year ended Smartphone x AIoT"."""
+        for w in ("Year", "ended", "December", "2025", "For", "the", "(i)"):
+            assert hk._PERIOD_WORD.match(w), w
+        for w in ("Smartphones", "Services", "Marketing", "Mar-a-Lago"):
+            assert not hk._PERIOD_WORD.match(w), w
+
+
+class TestIncomeStatementTitles:
+    def test_ifrs_titles_are_recognised(self):
+        """IFRS filers title it "Statement of Profit or Loss"; only US-style
+        filers say "Income Statement". Requiring the latter found Tencent's
+        and missed Cathay's and Xiaomi's, leaving both carrying gross profit
+        as though it were EBIT."""
+        import re
+        rx = re.compile(r"income statement|profit or loss|"
+                        r"statement of comprehensive income", re.I)
+        for title in ("Consolidated Income Statement",
+                      "Consolidated Statement of Profit or Loss",
+                      "Consolidated Statement of Comprehensive Income"):
+            assert rx.search(title), title
+
+    def test_operating_profit_row_variants(self):
+        for label in ("Operating profit", "Operating profit/(loss)",
+                      "Profit from operations"):
+            assert hk._IS_ROWS["operating_profit"].match(label), label
+        assert not hk._IS_ROWS["operating_profit"].match("Operating profit margin")

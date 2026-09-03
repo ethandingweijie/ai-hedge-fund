@@ -941,7 +941,7 @@ _MULTIPLE_METRICS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("peg",       ("peg",)),
 )
 # Any currency mark means a price, not a multiple.
-_CURRENCY_MARK = re.compile(r"[$€£¥₩]|(?:us|hk|sg|rmb|cny|jpy|krw|eur|gbp)\s*\$?", re.I)
+_CURRENCY_MARK = re.compile(r"[$€£¥₩]|\b(?:us|hk|sg|rmb|cny|jpy|krw|eur|gbp)\s*\$?", re.I)
 # A comparative table above this is a data-entry artefact, not a valuation.
 _MAX_PLAUSIBLE_MULTIPLE = 400.0
 
