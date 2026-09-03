@@ -357,6 +357,24 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
         return None
 
     segs = built["segments"]
+
+    # If the filer's own measure is already operating income there is nothing
+    # to derive. Where it is gross profit (Tencent) or another pre-opex
+    # measure, size the gap from the consolidated income statement and split
+    # it by an explicit rule -- an unconverted 60% gross margin reaching an
+    # engine that computes `ebit x (1-tax) x multiple` overstates enormously.
+    label = built.get("profit_label") or ""
+    is_opinc = bool(re.search(r"operating (?:profit|income)", label, re.I))
+    opex_detail = None
+    if not is_opinc and any(s.get("profit") is not None for s in segs):
+        income = _income_statement_page(doc)
+        if income:
+            opex_detail = _allocate_opex(segs, income)
+        if opex_detail is None:
+            print(f"  [hkex_segments] {ticker}: segment measure is "
+                  f"'{label}' and no income statement was parsed -- profit "
+                  f"left as reported, NOT operating income")
+
     return {
         "ticker": ticker,
         "segments": segs,
@@ -366,14 +384,20 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
         "sum_vs_consolidated": (
             sum(s["revenue"] for s in segs) / built["consolidated_revenue"]
             if built.get("consolidated_revenue") else None),
-        "profit_label": built.get("profit_label"),
+        "profit_label": ("Operating profit (derived from "
+                         f"{built.get('profit_label')})" if opex_detail
+                         else built.get("profit_label")),
+        "reported_profit_label": built.get("profit_label"),
         # Tencent reports GROSS profit by segment. Saying so is the difference
         # between a valuation and a fiction, because the engine multiplies
-        # whatever it is handed by (1-tax) and a P/E.
-        "profit_is_operating_income": bool(
-            built.get("profit_label") and
-            re.search(r"operating (?:profit|income)",
-                      built["profit_label"], re.I)),
+        # whatever it is handed by (1-tax) and a P/E. Once central opex has
+        # been allocated the number IS an operating profit -- but a derived
+        # one, and `profit_basis` says so.
+        "profit_is_operating_income": bool(is_opinc or opex_detail),
+        "profit_basis": ("reported" if is_opinc
+                         else "derived_gross_less_central_opex" if opex_detail
+                         else "reported_not_operating_income"),
+        "opex_allocation": opex_detail,
         "profit_disclosed": any(s.get("profit") is not None for s in segs),
         "assets_disclosed": False,
         "reported_currency": built.get("currency"),
@@ -385,4 +409,132 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
         "report_page": built.get("page"),
         "form": ref.get("filing_type") or "Annual Report",
         "warnings": [],
+    }
+
+
+# ── Gross profit -> operating profit ────────────────────────────────────────
+# Tencent's segment measure is GROSS profit, and the filing says why in as many
+# words: "selling and marketing and administrative expenses ... are managed
+# centrally ... therefore, they are not included in the measure of segment
+# performance." So there is no segment opex to extract -- the filer does not
+# allocate it, and any allocation is OUR assumption.
+#
+# What the filing does give, on the consolidated income statement, is every
+# line needed to size the gap: gross profit, the central opex lines, and the
+# operating profit they reconcile to. So the total is disclosed and only the
+# SPLIT is assumed, which is the same discipline used everywhere else here --
+# the filing supplies the level, an explicit rule supplies the split.
+#
+# The default rule is pro-rata to revenue. Selling cost broadly scales with
+# sales, and revenue is the only segment-level base the filer discloses that
+# is not already inside gross profit (the segment D&A lines sit within cost of
+# revenues, so they cannot allocate opex). It is stated, not hidden: every
+# derived figure carries `profit_basis` saying exactly how it was produced.
+
+_IS_ROWS = {
+    "gross_profit": re.compile(r"^gross profit$", re.I),
+    "selling": re.compile(r"^selling and marketing expenses?$", re.I),
+    "admin": re.compile(r"^general and administrative expenses?$", re.I),
+    "other_gains": re.compile(r"^other gains?/?\(?losses?\)?,?\s*net$", re.I),
+    "operating_profit": re.compile(r"^operating profit$", re.I),
+    "revenues": re.compile(r"^revenues?$", re.I),
+}
+
+
+def _parse_income_statement(page) -> Optional[dict]:
+    """Group income-statement lines from the consolidated statement page."""
+    mult, ccy = _units_and_ccy(page.get_text())
+    out: dict[str, float] = {}
+    for ln in _lines(page):
+        label = _label_of(ln["words"])
+        cells = _numeric_cells(ln["words"])
+        if not label or not cells:
+            continue
+        for key, rx in _IS_ROWS.items():
+            if key in out or not rx.match(label.strip()):
+                continue
+            # A "Note" column holds a small reference integer, never money.
+            money = [c for c in cells if abs(c[2]) >= 100]
+            if money:
+                out[key] = money[0][2] * mult
+    if "gross_profit" not in out or "operating_profit" not in out:
+        return None
+    out["currency"] = ccy
+    return out
+
+
+def _income_statement_page(doc) -> Optional[dict]:
+    hits = []
+    for i in range(doc.page_count):
+        t = doc[i].get_text()
+        if not re.search(r"consolidated income statement|income statement", t, re.I):
+            continue
+        if not re.search(r"operating profit", t, re.I):
+            continue
+        hits.append(i)
+    for i in hits:
+        parsed = _parse_income_statement(doc[i])
+        if parsed:
+            parsed["page"] = i
+            return parsed
+    return None
+
+
+def _allocate_opex(segments: list[dict], income: dict,
+                   weights: Optional[dict] = None) -> Optional[dict]:
+    """Derive segment operating profit from gross profit and central opex.
+
+    Returns the allocation detail, and mutates each segment to carry both the
+    reported gross profit and the derived operating profit. The reported
+    figure is never overwritten -- a derived number that cannot be traced back
+    to what the filer actually said is worse than no number.
+    """
+    gp = income.get("gross_profit")
+    op = income.get("operating_profit")
+    if not gp or op is None:
+        return None
+    seg_rev = sum(s["revenue"] for s in segments if s.get("revenue"))
+    if seg_rev <= 0:
+        return None
+
+    # `weights` lets a better split override revenue pro-rata -- sell-side
+    # models do publish segment operating margins, and the filer's silence is
+    # what makes an outside estimate worth having here rather than a liberty.
+    # It is normalised and labelled, never blended: a valuation should be able
+    # to say which split produced it.
+    basis = "pro_rata_revenue"
+    if weights:
+        picked = {s["name"]: float(weights[s["name"]]) for s in segments
+                  if s.get("name") in weights and weights[s["name"]] is not None}
+        if len(picked) == len(segments) and sum(picked.values()) > 0:
+            total_w = sum(picked.values())
+            shares = {k: v / total_w for k, v in picked.items()}
+            basis = "supplied_weights"
+        else:
+            shares = None
+    else:
+        shares = None
+
+    # Central costs are what stands between the two disclosed lines. Taking
+    # the difference rather than summing the expense lines keeps this right
+    # for filers whose statement carries lines we do not enumerate.
+    central = gp - op
+    for s in segments:
+        s["gross_profit"] = s.get("profit")
+        s["gross_margin"] = s.get("margin")
+        share = (shares[s["name"]] if shares
+                 else (s["revenue"] / seg_rev) if s.get("revenue") else 0.0)
+        if s.get("profit") is None:
+            s["operating_profit"] = None
+            continue
+        s["operating_profit"] = s["profit"] - central * share
+        s["profit"] = s["operating_profit"]
+        s["margin"] = (s["operating_profit"] / s["revenue"]
+                       if s.get("revenue") else None)
+    return {
+        "central_opex": central,
+        "group_gross_profit": gp,
+        "group_operating_profit": op,
+        "basis": basis,
+        "income_statement_page": income.get("page"),
     }
