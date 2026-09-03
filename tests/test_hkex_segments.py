@@ -185,3 +185,54 @@ class TestIncomeStatementTitles:
                       "Profit from operations"):
             assert hk._IS_ROWS["operating_profit"].match(label), label
         assert not hk._IS_ROWS["operating_profit"].match("Operating profit margin")
+
+
+class TestBilingualLabels:
+    """HK filings are bilingual and PRC filers use different terminology."""
+
+    def test_chinese_suffix_is_stripped_before_matching(self):
+        assert hk._clean_label(
+            "Operating income from external transactions \u5c0d\u5916\u4ea4\u6613\u6536\u5165"
+        ) == "Operating income from external transactions"
+        assert hk._clean_label("Overseas \u5883\u5916") == "Overseas"
+
+    def test_prc_operating_income_is_revenue_not_profit(self):
+        """"Operating income" means REVENUE to a PRC filer.
+
+        The profit patterns used to prefix-match it, so YOFC's revenue row was
+        classified as profit and the table came back with no revenue at all.
+        """
+        lab = hk._clean_label("Operating income from external transactions")
+        assert hk._EXTERNAL_REV_ROW.match(lab)
+        assert not hk._PROFIT_ROW.match(lab)
+
+    def test_inter_segment_revenue_is_not_external_revenue(self):
+        assert not hk._EXTERNAL_REV_ROW.match("Inter-segment revenue")
+        assert not hk._REVENUE_ROW.match("Inter-segment revenue")
+
+    def test_segment_balance_sheet_rows_are_not_metrics(self):
+        for lab in ("Segment liabilities", "Segment equity",
+                    "Capital expenditures", "Accounts payable"):
+            assert not hk._PROFIT_ROW.match(lab), lab
+            assert not hk._REVENUE_ROW.match(lab), lab
+
+
+class TestNilDashes:
+    """A nil entry prints as a dash, not a zero."""
+
+    def test_dash_forms_are_read_as_zero(self):
+        cells = hk._numeric_cells([(0, 1, "1,000"), (2, 3, "\u2013"),
+                                   (4, 5, "\u2014"), (6, 7, "-")])
+        assert [c[2] for c in cells] == [1000.0, 0.0, 0.0, 0.0]
+
+    def test_row_lengths_stay_aligned(self):
+        """Skipping nils makes a row carry FEWER cells than its neighbours,
+        the modal column count goes ambiguous and the block is discarded --
+        YOFC's table has rows of 4, 5 and 6 cells for exactly this reason."""
+        full = hk._numeric_cells([(0, 1, "1"), (2, 3, "2"), (4, 5, "3")])
+        nils = hk._numeric_cells([(0, 1, "1"), (2, 3, "\u2013"), (4, 5, "3")])
+        assert len(full) == len(nils) == 3
+
+    def test_hyphenated_words_do_not_truncate_a_label(self):
+        assert hk._label_of([(0, 1, "Non-operating"), (2, 3, "income"),
+                             (4, 5, "\u2013")]) == "Non-operating income"

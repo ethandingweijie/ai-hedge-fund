@@ -47,14 +47,36 @@ _YEAR_BLOCK_RE = re.compile(
 
 # Row labels, by what they measure. Order matters: the profit patterns are
 # tried before revenue so "gross profit" is never read as a revenue line.
+# HK filings are bilingual: a row reads "Operating income from external
+# transactions 對外交易收入". Anchored matching fails on the Chinese suffix, so it
+# is stripped before a label is classified.
+_CJK = re.compile(r"[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]+")
+
+
+def _clean_label(label: str) -> str:
+    return re.sub(r"\s+", " ", _CJK.sub(" ", label or "")).strip(" :-")
+
+
+# PRC filers say "operating income" where an IFRS filer says REVENUE --
+# YOFC's revenue line is "Operating income from external transactions". The
+# profit patterns used to prefix-match "operating income", so that revenue row
+# was classified as profit and the table came back with no revenue at all.
+# Anything naming external customers is revenue, and it is tested FIRST.
+_EXTERNAL_REV_ROW = re.compile(
+    r"^(?:operating income|revenues?|sales|turnover)[\s,]*"
+    r"(?:from|to)?[\s]*external", re.I)
 _PROFIT_ROW = re.compile(
-    r"^(?:segment\s+)?(?:gross profit|operating profit|adjusted ebita|"
-    r"segment (?:profit|result|results)|profit from operations|"
-    r"operating income)", re.I)
+    r"^(?:segment\s+)?(?:gross profit(?:/?\(loss\))?|"
+    r"operating profit(?:/?\(loss\))?|adjusted ebita|"
+    r"segment (?:profit|result|results|operating profit)"
+    r"(?:/?\(loss\))?(?:,.*)?|"
+    r"profit from operations?|operating income)$", re.I)
 _REVENUE_ROW = re.compile(
-    r"^(?:segment\s+)?(?:revenues?|turnover|net sales|"
-    r"revenue from external customers)", re.I)
-_DA_ROW = re.compile(r"^(?:depreciation|amortisation|amortization)", re.I)
+    r"^(?:total\s+|segment\s+|external\s+)?"
+    r"(?:revenues?|turnover|net sales|sales|operating income)"
+    r"(?:\s+from\s+(?:external\s+)?(?:customers|contracts).*)?$", re.I)
+_DA_ROW = re.compile(r"^(?:including:\s*)?"
+                     r"(?:depreciation|amortisation|amortization)", re.I)
 _TOTAL_NAME = re.compile(r"^(?:total|group|consolidated)$", re.I)
 # Units come in two tokenisations and BOTH occur. Tencent writes
 # "RMB’Million" as one token (with a U+2019 apostrophe, not ASCII); Cathay
@@ -124,10 +146,20 @@ def _lines(page) -> list[dict]:
     return out
 
 
+# A nil entry prints as a dash, not a zero. Skipping it makes a row carry
+# FEWER cells than its neighbours, the modal column count goes ambiguous,
+# and the block is discarded -- YOFC's segment table has rows of 4, 5 and
+# 6 cells for exactly this reason. A standalone dash is a zero.
+_DASH_RE = re.compile(r"^[-\u2010-\u2015\u2212]+$")
+
+
 def _numeric_cells(words) -> list[tuple[float, float, float]]:
     """(x0, x1, value) for every numeric token on a line."""
     out = []
     for x0, x1, w in words:
+        if _DASH_RE.match(w):
+            out.append((x0, x1, 0.0))
+            continue
         if _NUM_RE.match(w):
             v = _to_float(w)
             if v is not None:
@@ -138,7 +170,7 @@ def _numeric_cells(words) -> list[tuple[float, float, float]]:
 def _label_of(words) -> str:
     parts = []
     for _x0, _x1, w in words:
-        if _NUM_RE.match(w):
+        if _NUM_RE.match(w) or _DASH_RE.match(w):
             break
         parts.append(w)
     return " ".join(parts).strip()
@@ -231,11 +263,13 @@ def _parse_page(page) -> list[dict]:
             cells = _numeric_cells(ln["words"])
             label = _label_of(ln["words"])
             if len(cells) >= 2 and label:
-                kind = ("profit" if _PROFIT_ROW.match(label)
-                        else "revenue" if _REVENUE_ROW.match(label)
-                        else "da" if _DA_ROW.match(label) else None)
+                lab = _clean_label(label)
+                kind = ("revenue" if _EXTERNAL_REV_ROW.match(lab)
+                        else "profit" if _PROFIT_ROW.match(lab)
+                        else "revenue" if _REVENUE_ROW.match(lab)
+                        else "da" if _DA_ROW.match(lab) else None)
                 if kind:
-                    metric_rows.append({"kind": kind, "label": label,
+                    metric_rows.append({"kind": kind, "label": lab,
                                         "cells": cells, "y": ln["y"]})
                 continue
             if not cells:
@@ -273,7 +307,7 @@ def _block_to_segments(block: dict) -> Optional[dict]:
 
     segs, total_rev = [], None
     for i, raw in enumerate(names):
-        name = re.sub(r"\s+", " ", raw).strip()
+        name = _clean_label(raw)
         value = rev["cells"][i][2] * mult
         if not name or _TOTAL_NAME.match(name):
             total_rev = value
