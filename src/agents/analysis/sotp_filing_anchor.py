@@ -1,6 +1,6 @@
 """Bridge the SEC segment footnote into SOTP assumptions.
 
-`src/tools/sec_segments.py` returns reported segment revenue and profit in the
+`src/tools/segment_providers.py` returns reported segment revenue and profit in the
 filing's reporting currency for the last completed fiscal year. The SOTP engine
 wants FORWARD revenue in USD. This module does that conversion and nothing
 else -- it is kept separate from the parser so the parser stays offline-testable
@@ -242,7 +242,10 @@ def filing_segment_anchor(ticker: str, end_date: str, api_key: Any = None, *,
     can fall through to its existing sources untouched.
     """
     try:
-        from src.tools.sec_segments import get_segment_footnote
+        # Market registry, not the SEC parser directly: a US filer, an
+        # HKEX PDF and (later) SGX all answer the same contract, so the
+        # bridge never learns which market it is valuing.
+        from src.tools.segment_providers import get_segment_footnote
         filing = get_segment_footnote(ticker, end_date)
     except Exception as exc:                      # noqa: BLE001
         print(f"  [sotp-filing] {ticker}: lookup failed {type(exc).__name__}")
