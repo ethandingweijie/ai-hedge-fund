@@ -236,3 +236,49 @@ class TestNilDashes:
     def test_hyphenated_words_do_not_truncate_a_label(self):
         assert hk._label_of([(0, 1, "Non-operating"), (2, 3, "income"),
                              (4, 5, "\u2013")]) == "Non-operating income"
+
+
+class TestSingleSegmentFilers:
+    """One reportable segment is a VERDICT, not a parse failure.
+
+    MiniMax: "the Group has only one single operating segment and no further
+    analysis of the single segment". CATL: "the management believes that the
+    Company has only one operating segment and does not need to prepare a
+    segment report". Reporting those as "no segment map" sends someone hunting
+    a parser bug that does not exist, and hides that SOTP is the wrong method
+    for the company rather than merely unavailable.
+    """
+
+    class _Page:
+        def __init__(self, text):
+            self._t = text
+
+        def get_text(self):
+            return self._t
+
+    class _Doc:
+        def __init__(self, pages):
+            self._p = [TestSingleSegmentFilers._Page(t) for t in pages]
+            self.page_count = len(self._p)
+
+        def __getitem__(self, i):
+            return self._p[i]
+
+    def test_real_declarations_are_detected(self):
+        for text in (
+            "Accordingly, the Group has only one single operating segment and "
+            "no further analysis of the single segment is presented.",
+            "the management believes that the Company has only one operating "
+            "segment and does not need to prepare a segment report",
+            "The Group has one reportable segment.",
+        ):
+            assert hk.declares_single_segment(self._Doc([text])), text
+
+    def test_a_multi_segment_filing_is_not_flagged(self):
+        text = ("The Group has the following reportable segments: VAS; "
+                "Marketing Services; FinTech and Business Services; Others.")
+        assert not hk.declares_single_segment(self._Doc([text]))
+
+    def test_pages_without_the_word_segment_are_skipped(self):
+        assert not hk.declares_single_segment(
+            self._Doc(["Directors' report", "Auditor's opinion"]))

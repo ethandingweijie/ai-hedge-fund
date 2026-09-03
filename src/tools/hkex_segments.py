@@ -325,6 +325,38 @@ def _block_to_segments(block: dict) -> Optional[dict]:
             "heading": block["heading"]}
 
 
+# A filer that declares ONE operating segment has no SOTP by construction, and
+# that is a different answer from "the parser could not read this". MiniMax:
+# "the Group has only one single operating segment and no further analysis of
+# the single segment"; CATL: "the management believes that the Company has only
+# one operating segment and does not need to prepare a segment report".
+# Reporting both as "no segment map" would send someone hunting a parser bug
+# that does not exist, and would hide that the valuation method is wrong for
+# the company rather than merely unavailable.
+_SINGLE_SEGMENT_RE = re.compile(
+    r"(?:only |has |as )(?:a )?(?:one|single)(?: single)?\s+"
+    r"(?:operating|reportable|business)\s+segment|"
+    r"one reportable segment", re.I)
+
+_LAST_REASON: dict = {}
+
+
+def last_reason(ticker: str) -> str:
+    """Why the last lookup produced nothing, for diagnostics."""
+    return _LAST_REASON.get(ticker, "")
+
+
+def declares_single_segment(doc) -> bool:
+    """True when the filing states it has one operating segment."""
+    for i in range(doc.page_count):
+        text = doc[i].get_text()
+        if not re.search(r"segment", text, re.I):
+            continue
+        if _SINGLE_SEGMENT_RE.search(text):
+            return True
+    return False
+
+
 def _report_path(ticker: str, url: str) -> Path:
     import hashlib
     key = hashlib.sha1(url.encode()).hexdigest()[:16]
@@ -416,6 +448,11 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
             if best is None or gap < best[0]:
                 best = (gap, built)
     if best is None:
+        _LAST_REASON[ticker] = (
+            "filer declares a single operating segment -- SOTP is not "
+            "applicable, this is not a parse failure"
+            if declares_single_segment(doc)
+            else "no page parsed to >=2 reconciling segments")
         return None
     gap, built = best
     if gap > 0.6:

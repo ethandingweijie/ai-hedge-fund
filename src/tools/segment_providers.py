@@ -140,7 +140,21 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
             continue
         if out:
             return _conform(out, name)
-        reasons.append(f"{name}: no segment map")
+        # A provider may know WHY, and "this filer has one operating
+        # segment" is a different answer from "the parser failed".
+        detail = ""
+        try:
+            mod = provider.__globals__.get("__name__")
+            import importlib
+            m = importlib.import_module(
+                {"hkex": "src.tools.hkex_segments",
+                 "sec": "src.tools.sec_segments",
+                 "sgx": "src.tools.sgx_segments"}[name])
+            fn = getattr(m, "last_reason", None)
+            detail = fn(ticker) if fn else ""
+        except Exception:                          # noqa: BLE001
+            detail = ""
+        reasons.append(f"{name}: {detail or 'no segment map'}")
     _LAST_REASON[ticker] = "; ".join(reasons) or "no route"
     return None
 

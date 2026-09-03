@@ -125,3 +125,16 @@ def test_conformance_back_fills_the_names_the_bridge_reads():
     assert out["profit_metric"] == "Gross profit"
     assert out["profit_is_gaap_operating_income"] is False
     assert out["reporting_currency"] == "CNY"
+
+
+def test_registry_surfaces_a_providers_own_reason(monkeypatch):
+    """"This filer has one operating segment" must not be flattened into the
+    generic "no segment map" -- they call for opposite responses."""
+    import src.tools.hkex_segments as hkex
+    monkeypatch.setitem(
+        hkex._LAST_REASON, "03750.HK",
+        "filer declares a single operating segment -- SOTP is not applicable, "
+        "this is not a parse failure")
+    monkeypatch.setattr(hkex, "get_segment_footnote", lambda *a, **k: None)
+    assert sp.get_segment_footnote("03750.HK", "2026-08-16") is None
+    assert "single operating segment" in sp.last_reason("03750.HK")
