@@ -109,3 +109,19 @@ def test_known_absent_adr_does_not_trigger_a_sec_lookup():
         assert [n for n, _ in sp._routes(hk)] == ["hkex"], hk
     # while a real ADR filer still gets the preferred SEC route
     assert [n for n, _ in sp._routes("09618.HK")] == ["sec", "hkex"]
+
+
+def test_conformance_back_fills_the_names_the_bridge_reads():
+    """The bridge still reads the SEC parser's original key names.
+
+    A market that sets only the canonical name would lose its profit label on
+    the way through -- Tencent's "Gross profit" reaching the report as None is
+    precisely the disclosure that must not go missing, because the engine
+    multiplies whatever it is handed by (1-tax) and a multiple.
+    """
+    out = sp._conform({"segments": [], "profit_label": "Gross profit",
+                       "profit_is_operating_income": False,
+                       "reported_currency": "CNY"}, "hkex")
+    assert out["profit_metric"] == "Gross profit"
+    assert out["profit_is_gaap_operating_income"] is False
+    assert out["reporting_currency"] == "CNY"

@@ -107,6 +107,15 @@ def _conform(out: dict, provider: str) -> dict:
                 if out.get(a) is not None:
                     out[canon] = out[a]
                     break
+        # Back-fill the other way too. The bridge still reads the SEC parser's
+        # original names (`profit_metric`), so a market that only sets the
+        # canonical name would silently lose its profit label -- Tencent's
+        # "Gross profit" would reach the report as None, which is exactly the
+        # disclosure that must not go missing.
+        if out.get(canon) is not None:
+            for a in aliases:
+                if out.get(a) is None:
+                    out[a] = out[canon]
     for key in _REQUIRED:
         out.setdefault(key, None)
     out.setdefault("warnings", [])
