@@ -530,3 +530,79 @@ def test_margin_note_match_substring_variant():
     assert out[0].get("ebit_margin") is None
     assert detail["segments"]["Food Delivery and Local Commerce"]["status"] == \
         "research_note_kept"
+
+
+# ── pinned peer sets ───────────────────────────────────────────────────────
+
+class TestPinnedPeerSets:
+    """An explicit (ticker, segment) pin beats keyword inference.
+
+    Keyword containment classified 11 of 58 segments and three of those were
+    wrong. A miss falls through to the LLM and shows as variance; a false
+    positive is a confident wrong number.
+    """
+
+    def test_amd_gaming_is_silicon_not_a_games_publisher(self):
+        from src.agents.analysis.sotp_multiple_basis import (
+            resolve_archetype, classify_archetype)
+        # the bare keyword still says games_media -- that is the bug
+        assert classify_archetype("Gaming") == "games_media"
+        arch, how = resolve_archetype("Gaming", "AMD")
+        assert how == "pinned"
+        assert arch == "semis_client_pc"
+
+    def test_keyword_tier_still_serves_unpinned_filers(self):
+        from src.agents.analysis.sotp_multiple_basis import resolve_archetype
+        arch, how = resolve_archetype("Gaming", "NTES")
+        assert (arch, how) == ("games_media", "keyword")
+
+    def test_unsuitable_split_is_a_decision_not_a_gap(self):
+        from src.agents.analysis.sotp_multiple_basis import (
+            resolve_archetype, derive_segment_basis)
+        # Costco's segments are merchandise categories over one warehouse P&L.
+        arch, how = resolve_archetype("Food and Sundries", "COST")
+        assert arch is None and how == "pinned_unsuitable"
+        b = derive_segment_basis("Food and Sundries", profitable=True,
+                                 loss=False, end_date="2026-08-16",
+                                 haircut=1.0, fetch=lambda *a, **k: [],
+                                 ticker="COST")
+        assert b["status"] == "unsuitable_split"
+
+    def test_a_filer_is_never_its_own_comp(self):
+        from src.agents.analysis.sotp_multiple_basis import peers_for
+        assert "MSFT" not in peers_for("productivity_software", "MSFT")
+        assert "WMT" not in peers_for("mass_retail_us", "WMT")
+        assert "AAPL" not in peers_for("consumer_devices", "AAPL")
+        # and an unrelated subject keeps the full set
+        assert "MSFT" in peers_for("productivity_software", "ORCL")
+
+    def test_hk_ticker_forms_reach_the_same_pin(self):
+        from src.agents.analysis.sotp_multiple_basis import resolve_archetype
+        for form in ("BRK.B", "BRK-B"):
+            assert resolve_archetype("BNSF", form) == ("railroad", "pinned")
+
+    def test_every_pin_names_a_real_archetype(self):
+        from src.agents.analysis.sotp_multiple_basis import (
+            _peer_sets, all_archetypes)
+        known = all_archetypes()
+        for filer, row in (_peer_sets().get("pins") or {}).items():
+            for seg, arch in row.items():
+                assert arch is None or arch in known, f"{filer}/{seg} -> {arch}"
+
+    def test_pinned_sets_survive_self_exclusion(self):
+        """Dropping the subject must not starve a set below MIN_COMPS."""
+        from src.agents.analysis.sotp_multiple_basis import (
+            _peer_sets, peers_for, MIN_COMPS)
+        for filer, row in (_peer_sets().get("pins") or {}).items():
+            for seg, arch in row.items():
+                if arch is None:
+                    continue
+                n = len(peers_for(arch, filer))
+                assert n >= MIN_COMPS, f"{filer}/{seg} -> {arch}: {n} peers"
+
+    def test_segment_names_are_stored_normalised(self):
+        from src.agents.analysis.sotp_multiple_basis import (
+            _peer_sets, normalize_key)
+        for filer, row in (_peer_sets().get("pins") or {}).items():
+            for seg in row:
+                assert seg == normalize_key(seg), f"{filer}/{seg}"

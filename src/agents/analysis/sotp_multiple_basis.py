@@ -33,7 +33,9 @@ New Initiatives 1.3 EV/Rev vs 1.3):
 """
 
 import math
+import json
 import statistics
+from pathlib import Path
 
 from src.agents.analysis.multiple_learner import (
     load_artifact as _load_artifact,
@@ -170,6 +172,72 @@ def classify_archetype(name: str) -> str | None:
     return None
 
 
+_PEER_SETS_PATH = (Path(__file__).resolve().parents[2]
+                   / "data" / "segment_peer_sets.json")
+_PEER_SETS: dict | None = None
+
+
+def _peer_sets() -> dict:
+    """Cached load of the pinned segment->archetype map."""
+    global _PEER_SETS
+    if _PEER_SETS is None:
+        try:
+            _PEER_SETS = json.loads(
+                _PEER_SETS_PATH.read_text(encoding="utf-8"))
+        except Exception:                          # noqa: BLE001
+            _PEER_SETS = {"archetypes": {}, "pins": {}}
+    return _PEER_SETS
+
+
+def all_archetypes() -> dict:
+    """Built-in archetypes plus the pinned ones, pinned taking precedence."""
+    merged = dict(ARCHETYPES)
+    for k, v in (_peer_sets().get("archetypes") or {}).items():
+        merged[k] = {"keywords": [], **v}
+    return merged
+
+
+def resolve_archetype(name: str, ticker: str | None = None
+                      ) -> tuple[str | None, str]:
+    """(archetype, how) for a segment. An explicit pin always beats keywords.
+
+    Keyword containment alone classified 11 of 58 segments and three of those
+    eleven were wrong -- AMD's Gaming segment is console and GPU silicon, and
+    'gaming' matched a games-publisher archetype whose comps are EA and
+    Take-Two. A missed segment falls through to the LLM and is visible as
+    variance; a false positive is a confident wrong number, which is worse. So
+    a (ticker, segment) pin is consulted first, and it may pin to None --
+    meaning this is not a valuation split and the group should carry it.
+    """
+    pins = _peer_sets().get("pins") or {}
+    if ticker:
+        from src.tools.sec_segments import _resolve_filer
+        for key in (str(ticker).upper(), _resolve_filer(str(ticker)) or ""):
+            row = pins.get(key)
+            if row is None:
+                continue
+            nk = normalize_key(name)
+            if nk in row:
+                return row[nk], ("pinned" if row[nk] else "pinned_unsuitable")
+    return classify_archetype(name), "keyword"
+
+
+def peers_for(archetype: str, subject: str | None = None) -> list[str]:
+    """Peer set for an archetype, never including the company being valued.
+
+    A filer left in its own comp set makes the multiple partly a function of
+    the answer -- MSFT is a listed peer for productivity software, and valuing
+    Microsoft's own productivity segment against Microsoft is circular.
+    """
+    spec = all_archetypes().get(archetype) or {}
+    peers = list(spec.get("peers") or [])
+    if not subject:
+        return peers
+    from src.tools.sec_segments import _resolve_filer
+    drop = {str(subject).upper(), (_resolve_filer(str(subject)) or "").upper()}
+    return [p for p in peers if p.upper() not in drop]
+
+
 def med_iqr(vals: list[float]) -> tuple[float, float, float]:
     """Median + confidence band (quartiles when >=4 obs, range otherwise)."""
     vals = sorted(vals)
@@ -202,22 +270,28 @@ def adjusted_multiple(comp_median: float, comp_p75: float, *, haircut: float,
 
 
 def derive_segment_basis(name: str, *, profitable: bool, loss: bool,
-                         end_date: str, haircut: float, fetch) -> dict:
+                         end_date: str, haircut: float, fetch,
+                         ticker: str | None = None) -> dict:
     """Tier-1 comp basis for one segment (pure once ``fetch`` is given).
 
     Returns a status dict: ``ok`` carries the derived multiple + IQR band;
     ``thin_comps`` / ``unknown_profitability`` / ``no_archetype`` mean the
     caller keeps the LLM/policy multiple (tiers 2/3).
     """
-    arch_key = classify_archetype(name)
+    arch_key, how = resolve_archetype(name, ticker)
     if not arch_key:
-        return {"status": "no_archetype"}
-    spec = ARCHETYPES[arch_key]
+        # A pin to None is a decision, not a gap: the split is not a valuation
+        # split (Costco's merchandise categories share one warehouse P&L), so
+        # the group carries it rather than the LLM inventing a multiple.
+        return {"status": ("unsuitable_split" if how == "pinned_unsuitable"
+                           else "no_archetype")}
+    spec = all_archetypes()[arch_key]
     metric = (spec.get("metric")
               or ("pe" if profitable else "ev_rev" if loss else None))
     if metric is None:
         return {"status": "unknown_profitability", "archetype": arch_key}
-    rows = fetch(spec["peers"], end_date)
+    peers = peers_for(arch_key, ticker)
+    rows = fetch(peers, end_date)
     vals = [r[metric] for r in rows if r.get(metric)]
     if len(vals) < MIN_COMPS:
         return {"status": "thin_comps", "archetype": arch_key,
@@ -229,7 +303,8 @@ def derive_segment_basis(name: str, *, profitable: bool, loss: bool,
                                 seg_growth_pct=spec["g_pct"],
                                 comp_growth_pct=g_comp)
     return {"status": "ok", "archetype": arch_key, "metric": metric,
-            "peers": spec["peers"], "n_comps": len(vals),
+            "archetype_source": how,
+            "peers": peers, "n_comps": len(vals),
             "comp_median": round(med, 2),
             "iqr": [round(lo, 2), round(hi, 2)],
             "comp_growth_pct": round(g_comp, 1),
@@ -396,7 +471,7 @@ def apply_multiple_basis(segments: list[dict], rs_segments: list[dict], *,
 
         basis = derive_segment_basis(name, profitable=profitable, loss=loss,
                                      end_date=end_date, haircut=hc,
-                                     fetch=fetch)
+                                     fetch=fetch, ticker=ticker)
 
         # Learned-model prediction when the artifact covers this archetype
         # (containment gate lives in predict: thin/unseen archetypes return

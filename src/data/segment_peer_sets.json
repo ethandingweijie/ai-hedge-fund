@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "_doc": [
+    "Explicit segment -> archetype pins, and the archetypes' pinned peer sets.",
+    "",
+    "Keyword containment alone classified 11 of 58 segments (19%) and got three",
+    "of those eleven WRONG: AMD's Gaming segment is console and GPU silicon, not",
+    "a games publisher, but 'gaming' matched games_media and would have valued",
+    "it against EA and Take-Two. A miss falls through to the LLM and shows up as",
+    "variance; a false positive produces a confident wrong number. So an",
+    "explicit (ticker, segment) pin always wins over keyword inference.",
+    "",
+    "PEER SETS ARE INVESTMENT JUDGEMENT, NOT DATA. They are the load-bearing",
+    "assumption in the whole SOTP and belong under review and version control,",
+    "not regenerated per run. Bump `version` when a peer set changes so a",
+    "valuation can be traced to the peer set that produced it.",
+    "",
+    "archetype null = this split is not a valuation split. Costco's segments are",
+    "merchandise categories sharing one warehouse P&L; Cisco's overlap three",
+    "different cuts of the same revenue; 'All Other' is a residual. Valuing",
+    "these as businesses invents precision, so they fall back to the group."
+  ],
+
+  "archetypes": {
+    "semis_ai_datacenter": {
+      "label": "AI / datacenter silicon",
+      "peers": ["NVDA", "AMD", "AVGO", "MRVL"], "g_pct": 35.0
+    },
+    "semis_client_pc": {
+      "label": "Client / PC silicon",
+      "peers": ["INTC", "AMD", "QCOM", "NVDA"], "g_pct": 5.0
+    },
+    "semis_foundry": {
+      "label": "Foundry / contract manufacturing",
+      "peers": ["TSM", "UMC", "GFS"], "g_pct": 8.0, "metric": "ev_rev"
+    },
+    "semis_diversified": {
+      "label": "Diversified / infrastructure semiconductors",
+      "peers": ["AVGO", "QCOM", "TXN", "ADI", "NXPI"], "g_pct": 12.0
+    },
+    "infrastructure_software": {
+      "label": "Infrastructure / systems software",
+      "peers": ["ORCL", "IBM", "NOW", "MSFT"], "g_pct": 12.0
+    },
+    "productivity_software": {
+      "label": "Productivity / business applications",
+      "peers": ["MSFT", "ORCL", "CRM", "ADBE", "NOW"], "g_pct": 12.0
+    },
+    "consumer_devices": {
+      "label": "Consumer hardware",
+      "peers": ["AAPL", "DELL", "HPQ", "SONY", "LOGI"], "g_pct": 4.0
+    },
+    "platform_services": {
+      "label": "High-margin platform / app-store services",
+      "peers": ["GOOGL", "ADBE", "MSFT", "NFLX"], "g_pct": 12.0
+    },
+    "social_advertising": {
+      "label": "Social / digital advertising",
+      "peers": ["GOOGL", "META", "SNAP", "PINS"], "g_pct": 14.0
+    },
+    "frontier_rd": {
+      "label": "Pre-revenue frontier R&D (structurally loss-making)",
+      "peers": ["RBLX", "SNAP", "U"], "g_pct": 20.0, "metric": "ev_rev"
+    },
+    "enterprise_networking": {
+      "label": "Enterprise networking hardware",
+      "peers": ["ANET", "JNPR", "HPE", "CSCO"], "g_pct": 6.0
+    },
+    "cybersecurity": {
+      "label": "Cybersecurity",
+      "peers": ["PANW", "FTNT", "CRWD", "ZS"], "g_pct": 18.0
+    },
+    "collaboration_software": {
+      "label": "Collaboration software",
+      "peers": ["ZM", "TEAM", "MSFT"], "g_pct": 8.0
+    },
+    "observability_software": {
+      "label": "Observability / monitoring software",
+      "peers": ["DDOG", "DT", "ESTC", "MDB"], "g_pct": 20.0
+    },
+    "it_services": {
+      "label": "IT services / support",
+      "peers": ["ACN", "IBM", "CTSH", "DXC"], "g_pct": 4.0
+    },
+    "mass_retail_us": {
+      "label": "US mass-market / club retail",
+      "peers": ["WMT", "TGT", "COST", "KR"], "g_pct": 4.0
+    },
+    "retail_international": {
+      "label": "International brick-and-mortar retail",
+      "peers": ["WMT", "TGT", "COST", "KR"], "g_pct": 5.0
+    },
+    "auto_oem": {
+      "label": "Automotive OEM",
+      "peers": ["GM", "F", "STLA", "TM"], "g_pct": 5.0
+    },
+    "energy_storage": {
+      "label": "Energy generation and storage",
+      "peers": ["ENPH", "FSLR", "SEDG", "NEE"], "g_pct": 15.0
+    },
+    "railroad": {
+      "label": "Class I railroad",
+      "peers": ["UNP", "CSX", "NSC"], "g_pct": 3.0
+    },
+    "regulated_utility": {
+      "label": "Regulated utility",
+      "peers": ["DUK", "SO", "AEP", "D"], "g_pct": 4.0
+    },
+    "food_distribution": {
+      "label": "Foodservice / grocery distribution",
+      "peers": ["SYY", "USFD", "PFGC"], "g_pct": 3.0
+    },
+    "building_products": {
+      "label": "Building products and materials",
+      "peers": ["MAS", "OC", "BLDR", "MHK"], "g_pct": 3.0
+    }
+  },
+
+  "pins": {
+    "NVDA": {"computeandnetworking": "semis_ai_datacenter",
+             "graphics": "semis_client_pc"},
+    "AMD":  {"datacenter": "semis_ai_datacenter", "client": "semis_client_pc",
+             "gaming": "semis_client_pc", "embedded": "semis_diversified"},
+    "INTC": {"dcai": "semis_ai_datacenter", "ccg": "semis_client_pc",
+             "intelfoundry": "semis_foundry", "allother": null},
+    "AVGO": {"semiconductorsolutions": "semis_diversified",
+             "infrastructuresoftware": "infrastructure_software"},
+    "AAPL": {"iphone": "consumer_devices", "mac": "consumer_devices",
+             "ipad": "consumer_devices",
+             "wearableshomeandaccessories": "consumer_devices",
+             "services": "platform_services"},
+    "META": {"familyofapps": "social_advertising",
+             "realitylabs": "frontier_rd"},
+    "MSFT": {"productivityandbusinessprocesses": "productivity_software",
+             "morepersonalcomputing": "consumer_devices"},
+    "CSCO": {"networking": "enterprise_networking", "security": "cybersecurity",
+             "collaboration": "collaboration_software",
+             "observability": "observability_software",
+             "services": "it_services",
+             "product": null, "subscription": null,
+             "subscriptionproduct": null, "subscriptionservice": null},
+    "WMT":  {"walmartus": "mass_retail_us", "samsclubus": "mass_retail_us",
+             "walmartinternational": "retail_international"},
+    "TSLA": {"automotivesegment": "auto_oem",
+             "energygenerationandstoragesegment": "energy_storage"},
+    "COST": {"foodandsundries": null, "nonfoods": null, "freshfoods": null,
+             "warehouseancillaryandotherbusinesses": null},
+    "BRK-B": {"bnsf": "railroad", "berkshirehathawayenergy": "regulated_utility",
+              "electricityandnaturalgas": "regulated_utility",
+              "mclane": "food_distribution",
+              "foodandbeveragedistribution": "food_distribution",
+              "building": "building_products",
+              "serviceandretailing": null, "service": null, "consumer": null,
+              "autosales": null, "industrialandcommercial": null},
+    "JD":   {"newbusinesses": null},
+    "BABA": {"alibabachinaecommercegroup": "ecommerce_core",
+             "allothers": null}
+  }
+}
