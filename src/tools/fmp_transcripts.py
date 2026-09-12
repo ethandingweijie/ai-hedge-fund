@@ -25,6 +25,16 @@ from src.tools.api import _STABLE, _fmp_get
 # ── Symbol normalisation ────────────────────────────────────────────────────
 
 
+#: Dotted suffixes that name an EXCHANGE rather than a share class. FMP keeps
+#: these as-is; only a US share class takes the hyphen form.
+_EXCHANGE_SUFFIXES = frozenset({
+    "HK", "SI", "JK", "SS", "SZ", "TW", "TWO", "T", "KS", "KQ", "AX", "NZ",
+    "L", "PA", "DE", "F", "MI", "AS", "BR", "LS", "MC", "SW", "VI", "ST",
+    "HE", "CO", "OL", "IC", "IR", "WA", "PR", "BD", "AT", "IS", "TA",
+    "BK", "KL", "NS", "BO", "JO", "SA", "MX", "BA", "SN", "CN", "TO", "V",
+})
+
+
 def to_fmp_symbol(ticker: str) -> str:
     """Route a ticker to the symbol form FMP's transcript endpoints accept.
 
@@ -48,8 +58,17 @@ def to_fmp_symbol(ticker: str) -> str:
     except Exception:
         pass
     # US class shares: FMP writes them with a hyphen (BRK-B, BF-B), and the
-    # dotted form silently returns nothing rather than erroring. Only US
-    # tickers reach here -- HK and SG returned above.
+    # dotted form silently returns nothing rather than erroring.
+    #
+    # But a dot is ALSO an exchange suffix, and those must survive untouched.
+    # Converting blindly turned ASII.JK into ASII-JK, which FMP answered with
+    # zero records -- Jardine Cycle & Carriage's Astra stake, its entire
+    # valuation, silently resolved to nothing. A share class is one or two
+    # letters and so is an exchange code, so they cannot be told apart by
+    # shape; the exchange codes are listed instead.
+    head, _, suffix = t.rpartition(".")
+    if head and suffix in _EXCHANGE_SUFFIXES:
+        return t
     return t.replace(".", "-")
 
 

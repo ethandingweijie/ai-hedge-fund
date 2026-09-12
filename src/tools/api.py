@@ -2495,3 +2495,36 @@ def get_fx_rate(
     # ── 3. Unknown pair ───────────────────────────────────────────────────
     print(f"  [FX] {pair} — unknown pair, returning 1.0 (no conversion applied)")
     return 1.0
+
+
+# ── Company industry (for valuation-profile routing) ────────────────────────
+_INDUSTRY_CACHE: dict[str, str | None] = {}
+
+
+def get_company_industry(ticker: str, api_key: str | None = None) -> str | None:
+    """FMP's industry label for a ticker, or None.
+
+    Used to route a company to a valuation profile. The INDUSTRY is the signal
+    the financial-characteristics classifier cannot see: it reads growth,
+    margin and leverage within a sector, so a gold miner and a speciality
+    chemical company look identical to it.
+
+    Cached per process. Returns None rather than raising -- an unresolved
+    industry must fall through to the existing classifier, not abort a run.
+    """
+    t = (ticker or "").strip().upper()
+    if not t:
+        return None
+    if t in _INDUSTRY_CACHE:
+        return _INDUSTRY_CACHE[t]
+    industry = None
+    try:
+        from src.tools.fmp_transcripts import to_fmp_symbol
+        rows = _fmp_get(f"{_STABLE}/profile", {"symbol": to_fmp_symbol(t)},
+                        api_key or os.environ.get("FMP_API_KEY"))
+        if isinstance(rows, list) and rows:
+            industry = (rows[0] or {}).get("industry") or None
+    except Exception:                                      # noqa: BLE001
+        industry = None
+    _INDUSTRY_CACHE[t] = industry
+    return industry

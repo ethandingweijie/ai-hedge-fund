@@ -4216,6 +4216,36 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
 #: perpetuity back in. Terminal salvage/reclamation is ZERO absent real data:
 #: for most mines reclamation is a liability, so assuming none is already the
 #: generous end of the range.
+def _industry_routing_enabled() -> bool:
+    """Industry-based profile routing, behind the same flag as the holdco map."""
+    from src.agents.analysis.holdco_sotp import FLAG
+    return os.getenv(FLAG, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _industry_routed_profile(ticker: str, sector: str):
+    """(sector, profile, profile_data) from the industry map, or None.
+
+    Returns None rather than guessing when the industry is unmapped, so an
+    unknown industry falls through to the existing classifier VISIBLY instead
+    of being assigned a neighbouring row.
+    """
+    try:
+        from src.data.industry_profile_map import profile_for_ticker
+        from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
+        from src.tools.api import get_company_industry
+        industry = get_company_industry(ticker)
+        hit = profile_for_ticker(ticker, industry)
+        if not hit:
+            return None
+        r_sector, r_profile = hit
+        data = INDUSTRY_VALUATION_PROFILES.get(r_sector, {}).get(r_profile)
+        return (r_sector, r_profile, data) if data else None
+    except Exception as exc:                               # noqa: BLE001
+        _log.warning("[dcf] %s: industry routing unavailable (%s)",
+                     ticker, type(exc).__name__)
+        return None
+
+
 _DEPLETING_DCF = "Depleting Asset DCF (Finite Life, No TV)"
 _DEPLETING_HORIZON_YEARS = 15
 
@@ -5518,6 +5548,29 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # When set, it takes PRIORITY over classify_valuation_profile() — used for
         # companies that can't be differentiated by financials alone (e.g.
         # cybersecurity firms look like SaaS but need different TGR/methods).
+        #
+        # Guardrail 4a: INDUSTRY routing (FEATURE_RESOURCE_HOLDCO_MAP_V2).
+        # `classify_valuation_profile` reads financial characteristics within a
+        # sector and never reads the INDUSTRY, so it cannot distinguish a gold
+        # miner from a speciality chemical company. Measured across 100 HK and
+        # 100 SG large caps it valued BYD as Apparel / Athletic Wear, CATL as
+        # Aerospace & Defense, AIA as FinTech and Bukit Sembawang -- a landed
+        # residential developer -- as Travel & Dining. It never fails loudly;
+        # it returns something plausible.
+        #
+        # This sits BELOW the ticker override that follows (a company fact
+        # still beats an industry rule) and ABOVE the financial ladder.
+        if _industry_routing_enabled():
+            _routed = _industry_routed_profile(ticker, sector)
+            if _routed and _routed[1] != profile_name:
+                _r_sector, _r_profile, _r_data = _routed
+                _log.info("[dcf] %s: industry routing -> %s/%s (was %r)",
+                          ticker, _r_sector, _r_profile, profile_name)
+                progress.update_status(
+                    agent_id, ticker,
+                    f"Profile from industry routing: {_r_profile}")
+                profile_name, profile_data = _r_profile, _r_data
+
         _lookup_sector, _lookup_profile = get_wacc_profile_for_ticker(ticker)
         if _lookup_profile and _lookup_profile != profile_name:
             from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES

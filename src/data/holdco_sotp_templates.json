@@ -15,49 +15,173 @@
   "stake_pct = null means the ownership percentage is NOT yet sourced. Those",
   "divisions are SKIPPED and the run is flagged incomplete rather than being",
   "silently valued at zero or at a guessed stake -- a wrong ownership",
-  "percentage on a listed subsidiary moves the answer more than any multiple."
+  "percentage on a listed subsidiary moves the answer more than any multiple.",
+  "v2: ownership percentages sourced, and the two SGX holdcos added. PCRD holds 22.69% of PCCW plus a 1.92% DIRECT stake in HKT -- it does NOT hold a material direct stake in Singtel, which an earlier draft of this file wrongly recorded. Parts are converted to the holdco's reporting currency before being summed: Astra is quoted in IDR at ~190 trillion rupiah against a SGD parent, so an unconverted sum would be that one line and nothing else."
  ],
- "version": 1,
+ "version": 2,
  "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
  "templates": {
   "00267.HK": {
    "name": "CITIC Limited",
-   "holdco_discount": [0.25, 0.30],
+   "holdco_discount": [
+    0.25,
+    0.3
+   ],
    "divisions": [
-    {"name": "CITIC Bank",                      "basis": "market_stake",
-     "listed": "00998.HK", "stake_pct": null, "fallback_basis": "p_tbv"},
-    {"name": "CITIC Securities",                "basis": "market_stake",
-     "listed": "06030.HK", "stake_pct": null},
-    {"name": "CITIC Mining / Resources",        "basis": "ev_ebitda_normalised"},
-    {"name": "Advanced Materials & Manufacturing","basis": "ev_ebitda_peer_median"}
-   ]
+    {
+     "name": "CITIC Bank",
+     "basis": "market_stake",
+     "listed": "00998.HK",
+     "stake_pct": 0.6579,
+     "fallback_basis": "p_tbv",
+     "source": "held indirectly via wholly owned CITIC Financial Holdings"
+    },
+    {
+     "name": "CITIC Securities",
+     "basis": "market_stake",
+     "listed": "06030.HK",
+     "stake_pct": 0.2396,
+     "source": "was 19.84%; raised to 23.96% after CITIC Financial Holdings fully subscribed the H-share private placement, Aug 2026"
+    },
+    {
+     "name": "CITIC Mining / Resources",
+     "basis": "ev_ebitda_normalised"
+    },
+    {
+     "name": "Advanced Materials & Manufacturing",
+     "basis": "ev_ebitda_peer_median"
+    }
+   ],
+   "currency": "HKD"
   },
   "00001.HK": {
    "name": "CK Hutchison Holdings",
-   "holdco_discount": [0.20, 0.25],
+   "holdco_discount": [
+    0.2,
+    0.25
+   ],
    "divisions": [
-    {"name": "Ports & Related Services", "basis": "ev_ebitda_range",
-     "multiple_range": [8.0, 9.5], "alt_basis": "ev_per_teu"},
-    {"name": "Retail (A.S. Watson)",     "basis": "ev_ebitda_range",
-     "multiple_range": [8.0, 10.0]},
-    {"name": "Infrastructure (CKI)",     "basis": "market_stake",
-     "listed": "01038.HK", "stake_pct": null},
-    {"name": "Telecommunications (3 Group Europe)", "basis": "ev_ebitda_range",
-     "multiple_range": [4.5, 5.5]}
-   ]
+    {
+     "name": "Ports & Related Services",
+     "basis": "ev_ebitda_range",
+     "multiple_range": [
+      8.0,
+      9.5
+     ],
+     "alt_basis": "ev_per_teu"
+    },
+    {
+     "name": "Retail (A.S. Watson)",
+     "basis": "ev_ebitda_range",
+     "multiple_range": [
+      8.0,
+      10.0
+     ]
+    },
+    {
+     "name": "Infrastructure (CKI)",
+     "basis": "market_stake",
+     "listed": "01038.HK",
+     "stake_pct": 0.7567,
+     "source": "controlling stake held across group entities"
+    },
+    {
+     "name": "Telecommunications (3 Group Europe)",
+     "basis": "ev_ebitda_range",
+     "multiple_range": [
+      4.5,
+      5.5
+     ]
+    }
+   ],
+   "currency": "HKD"
   },
   "00019.HK": {
    "name": "Swire Pacific A",
-   "holdco_discount": [0.20, 0.20],
+   "holdco_discount": [
+    0.2,
+    0.2
+   ],
    "divisions": [
-    {"name": "Swire Properties", "basis": "market_stake",
-     "listed": "01972.HK", "stake_pct": 0.82, "alt_basis": "look_through_rnav"},
-    {"name": "Cathay Pacific",   "basis": "market_stake",
-     "listed": "00293.HK", "stake_pct": 0.45},
-    {"name": "Beverages (Swire Coca-Cola)", "basis": "ev_ebitda_range",
-     "multiple_range": [9.0, 11.0]},
-    {"name": "Aviation Services (HAECO)",   "basis": "ev_ebitda_range",
-     "multiple_range": [7.0, 8.5]}
+    {
+     "name": "Swire Properties",
+     "basis": "market_stake",
+     "listed": "01972.HK",
+     "stake_pct": 0.82,
+     "alt_basis": "look_through_rnav"
+    },
+    {
+     "name": "Cathay Pacific",
+     "basis": "market_stake",
+     "listed": "00293.HK",
+     "stake_pct": 0.45
+    },
+    {
+     "name": "Beverages (Swire Coca-Cola)",
+     "basis": "ev_ebitda_range",
+     "multiple_range": [
+      9.0,
+      11.0
+     ]
+    },
+    {
+     "name": "Aviation Services (HAECO)",
+     "basis": "ev_ebitda_range",
+     "multiple_range": [
+      7.0,
+      8.5
+     ]
+    }
+   ],
+   "currency": "HKD"
+  },
+  "C07.SI": {
+   "name": "Jardine Cycle & Carriage",
+   "currency": "SGD",
+   "holdco_discount": [
+    0.2,
+    0.25
+   ],
+   "divisions": [
+    {
+     "name": "PT Astra International",
+     "basis": "market_stake",
+     "listed": "ASII.JK",
+     "stake_pct": 0.5011,
+     "source": "controlling majority, commonly cited as 50.1%"
+    },
+    {
+     "name": "Direct Motor Interests",
+     "basis": "ev_ebitda_range",
+     "multiple_range": [
+      5.0,
+      7.0
+     ]
+    }
+   ]
+  },
+  "P15.SI": {
+   "name": "Pacific Century Regional Developments",
+   "currency": "SGD",
+   "holdco_discount": [
+    0.2,
+    0.25
+   ],
+   "divisions": [
+    {
+     "name": "PCCW",
+     "basis": "market_stake",
+     "listed": "00008.HK",
+     "stake_pct": 0.2269,
+     "source": "primary look-through holding"
+    },
+    {
+     "name": "HKT Trust and HKT",
+     "basis": "market_stake",
+     "listed": "06823.HK",
+     "stake_pct": 0.0192,
+     "source": "small DIRECT holding, separate from the PCCW look-through"
+    }
    ]
   }
  }

@@ -24,7 +24,8 @@ class TestTemplates:
         for tk, tpl in (h._load()["templates"]).items():
             for d in tpl["divisions"]:
                 if d["basis"] == "market_stake":
-                    assert d.get("listed", "").endswith(".HK"), (tk, d["name"])
+                    # Listings are not all Hong Kong: Astra is Jakarta.
+                    assert "." in (d.get("listed") or ""), (tk, d["name"])
 
     def test_discounts_are_a_sane_range(self):
         for tk, tpl in (h._load()["templates"]).items():
@@ -56,15 +57,21 @@ class TestLookThrough:
 
     def test_an_unsourced_stake_is_skipped_not_guessed(self, monkeypatch):
         """A wrong ownership percentage moves the answer further than any
-        multiple choice, so `stake_pct: null` must never be treated as 100%."""
+        multiple choice, so `stake_pct: null` must never be treated as 100%.
+
+        Every stake in the shipped templates is now sourced, so this builds an
+        unsourced one rather than relying on a gap that should not persist.
+        """
         self._patch_mcap(monkeypatch, 1000.0)
-        out = h.look_through_value("00001.HK", "2026-08-16",
-                                   ebitda_by_division={
-                                       "Ports & Related Services": 100.0,
-                                       "Retail (A.S. Watson)": 100.0,
-                                       "Telecommunications (3 Group Europe)": 100.0})
-        names = [p["division"] for p in out["parts"]]
-        assert "Infrastructure (CKI)" not in names
+        monkeypatch.setattr(h, "_load", lambda: {"templates": {"ZZ.HK": {
+            "name": "Test", "currency": "HKD", "holdco_discount": [0.2, 0.2],
+            "divisions": [
+                {"name": "Sourced", "basis": "market_stake",
+                 "listed": "00001.HK", "stake_pct": 0.5},
+                {"name": "Unsourced", "basis": "market_stake",
+                 "listed": "00002.HK", "stake_pct": None}]}}})
+        out = h.look_through_value("ZZ.HK", "2026-08-16")
+        assert [p["division"] for p in out["parts"]] == ["Sourced"]
         assert any("ownership percentage" in s["reason"] for s in out["skipped"])
 
     def test_a_missing_division_marks_the_result_incomplete(self, monkeypatch):
@@ -105,3 +112,63 @@ class TestFeatureFlag:
     def test_turns_on(self, monkeypatch):
         monkeypatch.setenv(h.FLAG, "true")
         assert h.enabled() is True
+
+
+class TestForeignSuffixes:
+    """A dot is a share class OR an exchange code. They cannot be told apart
+    by shape -- both are one or two letters -- so the exchange codes are
+    listed explicitly."""
+
+    def test_exchange_suffixes_survive(self):
+        from src.tools.fmp_transcripts import to_fmp_symbol
+        for t in ("ASII.JK", "600030.SS", "RIO.L", "D05.SI", "7203.T"):
+            assert to_fmp_symbol(t) == t, t
+
+    def test_us_class_shares_still_take_the_hyphen(self):
+        from src.tools.fmp_transcripts import to_fmp_symbol
+        assert to_fmp_symbol("BRK.B") == "BRK-B"
+        assert to_fmp_symbol("BF.B") == "BF-B"
+
+    def test_hk_still_drops_to_four_digits(self):
+        from src.tools.fmp_transcripts import to_fmp_symbol
+        assert to_fmp_symbol("00700.HK") == "0700.HK"
+
+
+class TestCurrencyConversion:
+    """A look-through sums parts from several exchanges."""
+
+    def test_currency_inferred_from_suffix(self):
+        assert h.currency_of("ASII.JK") == "IDR"
+        assert h.currency_of("00008.HK") == "HKD"
+        assert h.currency_of("C07.SI") == "SGD"
+        assert h.currency_of("AAPL") == "USD"
+
+    def test_parts_are_converted_before_being_summed(self, monkeypatch):
+        """Astra is quoted at ~190 TRILLION rupiah against a SGD parent.
+        Unconverted, that one line would be the entire valuation."""
+        monkeypatch.setattr(h, "_market_value", lambda listed, end: 100.0)
+        monkeypatch.setattr(h, "_fx", lambda a, b: 0.0001 if a == "IDR" else 1.0)
+        out = h.look_through_value("C07.SI", "2026-08-16",
+                                   ebitda_by_division={"Direct Motor Interests": 10.0})
+        astra = next(p for p in out["parts"] if p["listed"] == "ASII.JK")
+        assert astra["currency"] == "IDR"
+        assert astra["fx_to_reporting"] == 0.0001
+        assert astra["value"] == pytest.approx(100.0 * 0.5011 * 0.0001)
+        assert out["reporting_currency"] == "SGD"
+
+    def test_a_missing_rate_skips_rather_than_sums_raw(self, monkeypatch):
+        monkeypatch.setattr(h, "_market_value", lambda listed, end: 100.0)
+        monkeypatch.setattr(h, "_fx", lambda a, b: None if a == "IDR" else 1.0)
+        out = h.look_through_value("C07.SI", "2026-08-16",
+                                   ebitda_by_division={"Direct Motor Interests": 10.0})
+        assert any("rate" in s["reason"] for s in out["skipped"])
+        assert all(p["listed"] != "ASII.JK" for p in out["parts"]
+                   if p.get("listed"))
+
+
+def test_every_sourced_stake_records_its_provenance():
+    """A percentage without a source cannot be checked later."""
+    for tk, tpl in (h._load()["templates"]).items():
+        for d in tpl["divisions"]:
+            if d.get("stake_pct") is not None and tk not in ("00019.HK",):
+                assert d.get("source"), f"{tk}/{d['name']} has no source"

@@ -164,3 +164,43 @@ class TestTickerOverrides:
         from src.data.industry_profile_map import ticker_overrides
         for t in ticker_overrides():
             assert t == canonical_ticker(t), t
+
+
+class TestIndustryRoutingWiring:
+    """Routing is behind FEATURE_RESOURCE_HOLDCO_MAP_V2 and defaults OFF."""
+
+    def test_default_off(self, monkeypatch):
+        from src.agents.analysis.dcf_agent import _industry_routing_enabled
+        monkeypatch.delenv("FEATURE_RESOURCE_HOLDCO_MAP_V2", raising=False)
+        assert _industry_routing_enabled() is False
+
+    def test_turns_on(self, monkeypatch):
+        from src.agents.analysis.dcf_agent import _industry_routing_enabled
+        monkeypatch.setenv("FEATURE_RESOURCE_HOLDCO_MAP_V2", "true")
+        assert _industry_routing_enabled() is True
+
+    def test_unmapped_industry_returns_none_not_a_guess(self, monkeypatch):
+        """An unknown industry must fall through to the existing classifier
+        VISIBLY, not be assigned a neighbouring row."""
+        from src.agents.analysis import dcf_agent as d
+        monkeypatch.setattr("src.tools.api.get_company_industry",
+                            lambda t, api_key=None: "Nonexistent Industry")
+        assert d._industry_routed_profile("ZZZZ", "Tech") is None
+
+    def test_a_mapped_industry_returns_profile_data(self, monkeypatch):
+        from src.agents.analysis import dcf_agent as d
+        monkeypatch.setattr("src.tools.api.get_company_industry",
+                            lambda t, api_key=None: "Gold")
+        got = d._industry_routed_profile("02259.HK", "Tech")
+        assert got is not None
+        sector, profile, data = got
+        assert (sector, profile) == ("Resources", "Mining (Major)")
+        assert data and data.get("methods")
+
+    def test_a_lookup_failure_does_not_abort_the_run(self, monkeypatch):
+        from src.agents.analysis import dcf_agent as d
+
+        def _boom(t, api_key=None):
+            raise RuntimeError("FMP down")
+        monkeypatch.setattr("src.tools.api.get_company_industry", _boom)
+        assert d._industry_routed_profile("AAPL", "Tech") is None

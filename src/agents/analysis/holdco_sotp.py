@@ -56,12 +56,40 @@ def template_for(ticker: str) -> Optional[dict]:
     return (_load().get("templates") or {}).get(canonical_ticker(ticker))
 
 
+#: Listing suffix -> the currency that listing's market cap is quoted in.
+#: A look-through sums parts from several exchanges, so every part has to be
+#: converted before it is added. Jardine Cycle & Carriage reports in SGD while
+#: Astra is quoted in IDR at ~190 TRILLION rupiah -- added unconverted, that
+#: one line would be the entire valuation.
+_SUFFIX_CCY = {".HK": "HKD", ".SI": "SGD", ".JK": "IDR", ".SS": "CNY",
+               ".SZ": "CNY", ".TW": "TWD", ".T": "JPY", ".L": "GBP",
+               ".AX": "AUD", ".KS": "KRW"}
+
+
+def currency_of(listed: str) -> str:
+    for suf, ccy in _SUFFIX_CCY.items():
+        if (listed or "").upper().endswith(suf):
+            return ccy
+    return "USD"
+
+
 def _market_value(listed: str, end_date: str) -> Optional[float]:
     """Market capitalisation of a listed subsidiary, in its own currency."""
     try:
         from src.tools.api import get_market_cap
         from src.tools.fmp_transcripts import to_fmp_symbol
         return get_market_cap(to_fmp_symbol(listed), end_date)
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _fx(from_ccy: str, to_ccy: str) -> Optional[float]:
+    if not from_ccy or not to_ccy or from_ccy == to_ccy:
+        return 1.0
+    try:
+        from src.tools.api import get_fx_rate
+        rate = get_fx_rate(from_ccy, to_ccy)
+        return float(rate) if rate else None
     except Exception:                                      # noqa: BLE001
         return None
 
@@ -80,6 +108,7 @@ def look_through_value(ticker: str, end_date: str, *,
     if not tpl:
         return None
     ebitda_by_division = ebitda_by_division or {}
+    ccy = tpl.get("currency") or currency_of(ticker)
 
     parts, skipped = [], []
     for div in tpl.get("divisions") or []:
@@ -90,14 +119,22 @@ def look_through_value(ticker: str, end_date: str, *,
                 skipped.append({"division": name,
                                 "reason": "ownership percentage not sourced"})
                 continue
-            mcap = _market_value(div.get("listed") or "", end_date)
+            listed = div.get("listed") or ""
+            mcap = _market_value(listed, end_date)
             if not mcap:
                 skipped.append({"division": name,
-                                "reason": f"no market cap for {div.get('listed')}"})
+                                "reason": f"no market cap for {listed}"})
+                continue
+            src_ccy = currency_of(listed)
+            rate = _fx(src_ccy, ccy)
+            if rate is None:
+                skipped.append({"division": name,
+                                "reason": f"no {src_ccy}->{ccy} rate"})
                 continue
             parts.append({"division": name, "basis": "market_stake",
-                          "listed": div.get("listed"), "stake_pct": stake,
-                          "value": mcap * stake})
+                          "listed": listed, "stake_pct": stake,
+                          "currency": src_ccy, "fx_to_reporting": rate,
+                          "value": mcap * stake * rate})
             continue
         ebitda = ebitda_by_division.get(name)
         if ebitda is None:
@@ -122,6 +159,7 @@ def look_through_value(ticker: str, end_date: str, *,
         "name": tpl.get("name"),
         "parts": parts,
         "skipped": skipped,
+        "reporting_currency": ccy,
         "gross_asset_value": gross,
         "holdco_discount": disc,
         "holdco_discount_range": [d_lo, d_hi],
