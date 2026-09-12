@@ -250,3 +250,31 @@ class TestInsurancePandC:
             "Financials", "Insurance (P&C)")
         assert market_map("SG")["Insurance - Property & Casualty"] == (
             "Financials", "Insurance (P&C)")
+
+
+class TestAnchorImplementabilityGuard:
+    """Routing must not send a name into a profile it cannot compute.
+
+    The anchor carries the largest weight, so routing to a profile whose
+    anchor is `implementable: False` swaps a possibly-wrong number for a proxy
+    standing in for the very method that was meant to be the improvement.
+    Measured against consensus this was the worst effect of routing: every
+    holding company regressed, because Holding Company anchors `SOTP / NAV` at
+    0.70 with implementable False -- CITIC 71.5% -> 1310.1%.
+    """
+
+    def test_declines_a_profile_whose_anchor_is_not_implementable(self, monkeypatch):
+        from src.agents.analysis import dcf_agent as d
+        monkeypatch.setattr("src.tools.api.get_company_industry",
+                            lambda t, api_key=None: "Conglomerates")
+        # Conglomerates -> Financials/Holding Company, anchor SOTP / NAV
+        assert P["Financials"]["Holding Company"]["methods"][0]["name"] == "SOTP / NAV"
+        assert not P["Financials"]["Holding Company"]["methods"][0]["implementable"]
+        assert d._industry_routed_profile("00267.HK", "Financials") is None
+
+    def test_still_routes_where_the_anchor_computes(self, monkeypatch):
+        from src.agents.analysis import dcf_agent as d
+        monkeypatch.setattr("src.tools.api.get_company_industry",
+                            lambda t, api_key=None: "Gold")
+        got = d._industry_routed_profile("02259.HK", "Materials")
+        assert got and got[1] == "Mining (Major)"

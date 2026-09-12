@@ -4239,7 +4239,32 @@ def _industry_routed_profile(ticker: str, sector: str):
             return None
         r_sector, r_profile = hit
         data = INDUSTRY_VALUATION_PROFILES.get(r_sector, {}).get(r_profile)
-        return (r_sector, r_profile, data) if data else None
+        if not data:
+            return None
+        # Do NOT route into a profile whose ANCHOR cannot be computed. The
+        # anchor carries the largest weight, so routing there replaces a
+        # possibly-wrong number with a proxy standing in for the method that
+        # was supposed to be the improvement. Measured against consensus this
+        # was the single worst effect of routing: every holding company got
+        # worse, because Holding Company anchors `SOTP / NAV` at 0.70 with
+        # implementable: False --
+        #   CITIC           71.5% ->1310.1%
+        #   Swire Pacific   15.3% -> 684.2%
+        #   CK Hutchison     4.2% -> 185.3%
+        # Falling through to the classifier is not a good answer either, but
+        # it is an honest one, and the routing becomes correct for these names
+        # the moment the look-through in holdco_sotp.py is wired into the
+        # method dispatcher.
+        methods = [m for m in (data.get("methods") or []) if isinstance(m, dict)]
+        anchor = next((m for m in methods if m.get("anchor")),
+                      max(methods, key=lambda m: m.get("weight") or 0)
+                      if methods else None)
+        if anchor and not anchor.get("implementable"):
+            _log.info("[dcf] %s: industry routing DECLINED -> %s/%s "
+                      "(anchor %r is not implementable)",
+                      ticker, r_sector, r_profile, anchor.get("name"))
+            return None
+        return (r_sector, r_profile, data)
     except Exception as exc:                               # noqa: BLE001
         _log.warning("[dcf] %s: industry routing unavailable (%s)",
                      ticker, type(exc).__name__)
