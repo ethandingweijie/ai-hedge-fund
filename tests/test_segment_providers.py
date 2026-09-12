@@ -138,3 +138,61 @@ def test_registry_surfaces_a_providers_own_reason(monkeypatch):
     monkeypatch.setattr(hkex, "get_segment_footnote", lambda *a, **k: None)
     assert sp.get_segment_footnote("03750.HK", "2026-08-16") is None
     assert "single operating segment" in sp.last_reason("03750.HK")
+
+
+class TestProfitNormalisationRunsForEveryMarket:
+    """Normalisation lives in the registry, not in a provider.
+
+    Doing it per-provider is how the HK path came to convert gross profit to
+    EBIT while the SEC path passed Alibaba's ADJUSTED EBITA straight through --
+    the same overstatement the HK conversion existed to prevent.
+    """
+
+    def _out(self, label):
+        return {"segments": [{"name": "A", "revenue": 600.0, "profit": 300.0},
+                             {"name": "B", "revenue": 400.0, "profit": 100.0}],
+                "profit_label": label, "profit_is_operating_income": False}
+
+    def test_a_non_ebit_measure_is_converted(self, monkeypatch):
+        monkeypatch.setattr(sp, "_group_operating_profit", lambda *a: 150.0)
+        out = sp._normalize_profit(self._out("Adjusted EBITA"), "X", "2026-08-16")
+        assert out["profit_is_operating_income"] is True
+        assert out["profit_basis"] == "derived_from_reported_less_central"
+        assert out["reported_profit_label"] == "Adjusted EBITA"
+        assert sum(s["operating_profit"] for s in out["segments"]) == 150.0
+
+    def test_the_sec_flag_is_updated_too(self, monkeypatch):
+        """The bridge reads `profit_is_gaap_operating_income`; leaving it False
+        after converting would understate what the number now is."""
+        monkeypatch.setattr(sp, "_group_operating_profit", lambda *a: 150.0)
+        out = sp._normalize_profit(self._out("Gross profit"), "X", "2026-08-16")
+        assert out["profit_is_gaap_operating_income"] is True
+
+    def test_an_ebit_measure_is_left_alone(self, monkeypatch):
+        called = {"n": 0}
+
+        def _g(*a):
+            called["n"] += 1
+            return 150.0
+        monkeypatch.setattr(sp, "_group_operating_profit", _g)
+        src = self._out("Operating profit")
+        src["profit_is_operating_income"] = True
+        out = sp._normalize_profit(src, "X", "2026-08-16")
+        assert called["n"] == 0
+        assert out["segments"][0]["profit"] == 300.0
+
+    def test_no_group_figure_leaves_the_measure_flagged(self, monkeypatch):
+        monkeypatch.setattr(sp, "_group_operating_profit", lambda *a: None)
+        out = sp._normalize_profit(self._out("Segment results"), "X", "2026-08-16")
+        assert out["profit_basis"] == "reported_not_operating_income"
+        assert out["profit_is_operating_income"] is False
+        assert any("NOT operating income" in w for w in out["warnings"])
+
+    def test_a_provider_supplied_figure_is_the_fallback(self, monkeypatch):
+        """FMP first, but a provider that read the figure out of the filing
+        itself covers years and listings FMP does not carry."""
+        monkeypatch.setattr(sp, "_group_operating_profit", lambda *a: None)
+        src = self._out("Gross profit")
+        src["group_operating_profit"] = 150.0
+        out = sp._normalize_profit(src, "X", "2026-08-16")
+        assert out["profit_basis"] == "derived_from_reported_less_central"

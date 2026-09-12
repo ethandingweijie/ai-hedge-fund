@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+from src.tools.segment_normalize import normalize_segment_profit
+
 # Why a provider declined, for diagnostics. Never raised -- a missing segment
 # map is an ordinary outcome, not an error.
 _LAST_REASON: dict[str, str] = {}
@@ -129,6 +131,68 @@ def _conform(out: dict, provider: str) -> dict:
     return out
 
 
+def _group_operating_profit(ticker: str, end_date: str) -> Optional[float]:
+    """Group operating profit in the REPORTING currency, from FMP.
+
+    FMP carries this for all three markets -- verified live for 0700.HK,
+    9988.HK and D05.SI -- which is what lets one rule serve every provider
+    instead of each market parsing its own income statement.
+    """
+    try:
+        import os
+
+        from src.tools.api import search_line_items
+        from src.tools.fmp_transcripts import to_fmp_symbol
+        rows = search_line_items(
+            to_fmp_symbol(ticker), ["operating_income"], end_date,
+            period="annual", limit=1,
+            api_key=os.getenv("FINANCIAL_DATASETS_API_KEY"))
+    except Exception:                                  # noqa: BLE001
+        return None
+    if not rows:
+        return None
+    val = getattr(rows[0], "operating_income", None)
+    return float(val) if isinstance(val, (int, float)) else None
+
+
+def _normalize_profit(out: dict, ticker: str, end_date: str) -> dict:
+    """Put every market's segment profit on an operating-profit basis.
+
+    Runs here rather than inside a provider so the markets cannot drift: the
+    HK path was converting gross profit to EBIT while the SEC path passed
+    Alibaba's ADJUSTED EBITA straight through, which is the same overstatement
+    the HK conversion exists to prevent.
+    """
+    if out.get("profit_is_operating_income"):
+        return out
+    segs = out.get("segments") or []
+    if not any(s.get("profit") is not None for s in segs):
+        return out
+    # FMP first -- it covers all three markets. A provider that read the figure
+    # out of the filing itself is the fallback, which matters for years or
+    # listings FMP does not carry.
+    group_op = (_group_operating_profit(ticker, end_date)
+                or out.get("group_operating_profit"))
+    detail = normalize_segment_profit(
+        segs, group_op, reported_label=out.get("profit_label"))
+    if detail is None:
+        out.setdefault("warnings", []).append(
+            f"segment measure is {out.get('profit_label') or 'unknown'} and no "
+            f"group operating profit was available -- profit left as reported, "
+            f"NOT operating income")
+        out["profit_basis"] = "reported_not_operating_income"
+        return out
+    out["reported_profit_label"] = out.get("profit_label")
+    out["profit_label"] = (f"Operating profit (derived from "
+                           f"{out.get('profit_label')})")
+    out["profit_metric"] = out["profit_label"]
+    out["profit_is_operating_income"] = True
+    out["profit_is_gaap_operating_income"] = True
+    out["profit_basis"] = "derived_from_reported_less_central"
+    out["profit_normalisation"] = detail
+    return out
+
+
 def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
     """Segment map for `ticker`, from whichever market source has one."""
     reasons = []
@@ -139,7 +203,8 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
             reasons.append(f"{name}: {type(exc).__name__}: {exc}")
             continue
         if out:
-            return _conform(out, name)
+            return _normalize_profit(_conform(out, name),
+                                     ticker, end_date)
         # A provider may know WHY, and "this filer has one operating
         # segment" is a different answer from "the parser failed".
         detail = ""

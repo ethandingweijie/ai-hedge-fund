@@ -213,3 +213,86 @@ def _filter_segments(segments: list[dict],
         kept.append(seg)
     kept = kept if len(kept) >= 2 else segments
     return _drop_hierarchy_parents(kept, consolidated)
+
+
+# ── Reported segment profit -> operating profit ─────────────────────────────
+
+def normalize_segment_profit(segments: list[dict],
+                             group_operating_profit: Optional[float],
+                             *, weights: Optional[dict] = None,
+                             reported_label: Optional[str] = None
+                             ) -> Optional[dict]:
+    """Convert whatever the filer reports per segment into operating profit.
+
+    ASC 280 and IFRS 8 report whatever the CODM reviews, and it is usually not
+    EBIT: Tencent's segment measure is GROSS PROFIT, Alibaba's ADJUSTED EBITA,
+    Kingboard's "segment results", Cathay's "segment profit before
+    non-recurring items". The engine computes `ebit x (1-tax) x multiple` on
+    whatever it is handed, so passing any of those through unconverted
+    overstates -- Tencent's segment gross margins run near 60% against a group
+    operating margin around 32%.
+
+    The conversion needs exactly ONE outside number, the group's reported
+    operating profit, because the gap is whatever stands between the sum of
+    the segment measure and that total:
+
+        central cost = sum(segment reported profit) - group operating profit
+
+    Stating it that way means the rule does not have to KNOW which measure the
+    filer used. It is the same arithmetic for gross profit, adjusted EBITA and
+    a bespoke "segment result", and it reconciles exactly by construction.
+
+    The split is pro-rata to revenue by default. That is an assumption and it
+    is labelled as one: filers that report a pre-opex measure say explicitly
+    that the costs are managed centrally and NOT allocated -- Tencent's note
+    reads "selling and marketing and administrative expenses ... are managed
+    centrally ... therefore, they are not included in the measure of segment
+    performance" -- so there is nothing to extract and any split is ours.
+    `weights` overrides it where a better one exists (a sell-side model's
+    segment margins); partial weights fall back rather than half-apply.
+
+    Reported figures are never overwritten. A derived number that cannot be
+    traced back to what the filer actually said is worse than no number.
+    """
+    if group_operating_profit is None:
+        return None
+    priced = [s for s in segments if s.get("profit") is not None]
+    if len(priced) < 2:
+        return None
+    seg_rev = sum(s["revenue"] for s in segments if s.get("revenue"))
+    if seg_rev <= 0:
+        return None
+
+    reported_total = sum(s["profit"] for s in priced)
+    central = reported_total - group_operating_profit
+
+    basis = "pro_rata_revenue"
+    shares = None
+    if weights:
+        picked = {s["name"]: float(weights[s["name"]]) for s in segments
+                  if s.get("name") in weights
+                  and weights.get(s["name"]) is not None}
+        if len(picked) == len(segments) and sum(picked.values()) > 0:
+            total_w = sum(picked.values())
+            shares = {k: v / total_w for k, v in picked.items()}
+            basis = "supplied_weights"
+
+    for s in segments:
+        s["reported_profit"] = s.get("profit")
+        s["reported_margin"] = s.get("margin")
+        if s.get("profit") is None:
+            s["operating_profit"] = None
+            continue
+        share = (shares[s["name"]] if shares
+                 else (s["revenue"] / seg_rev) if s.get("revenue") else 0.0)
+        s["operating_profit"] = s["profit"] - central * share
+        s["profit"] = s["operating_profit"]
+        s["margin"] = (s["operating_profit"] / s["revenue"]
+                       if s.get("revenue") else None)
+    return {
+        "central_cost": central,
+        "reported_segment_total": reported_total,
+        "group_operating_profit": group_operating_profit,
+        "reported_measure": reported_label,
+        "basis": basis,
+    }

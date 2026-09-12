@@ -477,14 +477,26 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
                 built.get("consolidated_revenue"))
             if len(segs) < 2:
                 continue
+            # Duplicate names mean the header was not read, not that the
+            # filer has two segments with one name -- BYD came back as
+            # ["and other products", "and other products", "and eliminations"],
+            # which reconciles on revenue while being unusable.
+            names = [s["name"] for s in segs]
+            if len(set(names)) != len(names):
+                continue
             built["segments"] = segs
             built["page"] = page_no
-            # Prefer the block whose revenue reconciles best to the group.
             cons = built.get("consolidated_revenue")
             gap = (abs(sum(s["revenue"] for s in segs) / cons - 1.0)
                    if cons else 1.0)
-            if best is None or gap < best[0]:
-                best = (gap, built)
+            # Profit FIRST, then reconciliation. Ranking on revenue fit alone
+            # let a revenue-only table win on a perfect 1.000 over the segment
+            # table that actually carries profit -- Cathay and BYD both ended
+            # up with maps that could never be valued.
+            has_profit = any(s.get("profit") is not None for s in segs)
+            rank = (0 if has_profit else 1, gap)
+            if best is None or rank < best[0]:
+                best = (rank, built)
     if best is None:
         _LAST_REASON[ticker] = (
             "filer declares a single operating segment -- SOTP is not "
@@ -492,7 +504,7 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
             if declares_single_segment(doc)
             else "no page parsed to >=2 reconciling segments")
         return None
-    gap, built = best
+    (_has_profit, gap), built = best
     if gap > 0.6:
         print(f"  [hkex_segments] {ticker}: segments sum {gap:+.0%} from the "
               f"group total -- rejected rather than half-parsed")
@@ -500,22 +512,16 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
 
     segs = built["segments"]
 
-    # If the filer's own measure is already operating income there is nothing
-    # to derive. Where it is gross profit (Tencent) or another pre-opex
-    # measure, size the gap from the consolidated income statement and split
-    # it by an explicit rule -- an unconverted 60% gross margin reaching an
-    # engine that computes `ebit x (1-tax) x multiple` overstates enormously.
+    # Profit normalisation is NOT done here. It lives in the registry so it
+    # runs identically for every market -- doing it per-provider is how the HK
+    # path came to convert gross profit to EBIT while the SEC path passed
+    # Alibaba's adjusted EBITA straight through, which is the same
+    # overstatement. This provider reports what the filer said, and offers the
+    # group operating profit it can read from the filing as a fallback for
+    # markets or years where FMP carries none.
     label = built.get("profit_label") or ""
     is_opinc = bool(re.search(r"operating (?:profit|income)", label, re.I))
-    opex_detail = None
-    if not is_opinc and any(s.get("profit") is not None for s in segs):
-        income = _income_statement_page(doc)
-        if income:
-            opex_detail = _allocate_opex(segs, income)
-        if opex_detail is None:
-            print(f"  [hkex_segments] {ticker}: segment measure is "
-                  f"'{label}' and no income statement was parsed -- profit "
-                  f"left as reported, NOT operating income")
+    _income = _income_statement_page(doc) or {}
 
     return {
         "ticker": ticker,
@@ -526,20 +532,16 @@ def get_segment_footnote(ticker: str, end_date: str) -> Optional[dict]:
         "sum_vs_consolidated": (
             sum(s["revenue"] for s in segs) / built["consolidated_revenue"]
             if built.get("consolidated_revenue") else None),
-        "profit_label": ("Operating profit (derived from "
-                         f"{built.get('profit_label')})" if opex_detail
-                         else built.get("profit_label")),
-        "reported_profit_label": built.get("profit_label"),
+        "profit_label": built.get("profit_label"),
         # Tencent reports GROSS profit by segment. Saying so is the difference
         # between a valuation and a fiction, because the engine multiplies
         # whatever it is handed by (1-tax) and a P/E. Once central opex has
         # been allocated the number IS an operating profit -- but a derived
         # one, and `profit_basis` says so.
-        "profit_is_operating_income": bool(is_opinc or opex_detail),
-        "profit_basis": ("reported" if is_opinc
-                         else "derived_gross_less_central_opex" if opex_detail
-                         else "reported_not_operating_income"),
-        "opex_allocation": opex_detail,
+        "profit_is_operating_income": is_opinc,
+        "profit_basis": "reported" if is_opinc else "as_reported",
+        "group_operating_profit": _income.get("operating_profit"),
+        "group_gross_profit": _income.get("gross_profit"),
         "profit_disclosed": any(s.get("profit") is not None for s in segs),
         "assets_disclosed": False,
         "reported_currency": built.get("currency"),
@@ -632,63 +634,3 @@ def _income_statement_page(doc) -> Optional[dict]:
             parsed["page"] = i
             return parsed
     return None
-
-
-def _allocate_opex(segments: list[dict], income: dict,
-                   weights: Optional[dict] = None) -> Optional[dict]:
-    """Derive segment operating profit from gross profit and central opex.
-
-    Returns the allocation detail, and mutates each segment to carry both the
-    reported gross profit and the derived operating profit. The reported
-    figure is never overwritten -- a derived number that cannot be traced back
-    to what the filer actually said is worse than no number.
-    """
-    gp = income.get("gross_profit")
-    op = income.get("operating_profit")
-    if not gp or op is None:
-        return None
-    seg_rev = sum(s["revenue"] for s in segments if s.get("revenue"))
-    if seg_rev <= 0:
-        return None
-
-    # `weights` lets a better split override revenue pro-rata -- sell-side
-    # models do publish segment operating margins, and the filer's silence is
-    # what makes an outside estimate worth having here rather than a liberty.
-    # It is normalised and labelled, never blended: a valuation should be able
-    # to say which split produced it.
-    basis = "pro_rata_revenue"
-    if weights:
-        picked = {s["name"]: float(weights[s["name"]]) for s in segments
-                  if s.get("name") in weights and weights[s["name"]] is not None}
-        if len(picked) == len(segments) and sum(picked.values()) > 0:
-            total_w = sum(picked.values())
-            shares = {k: v / total_w for k, v in picked.items()}
-            basis = "supplied_weights"
-        else:
-            shares = None
-    else:
-        shares = None
-
-    # Central costs are what stands between the two disclosed lines. Taking
-    # the difference rather than summing the expense lines keeps this right
-    # for filers whose statement carries lines we do not enumerate.
-    central = gp - op
-    for s in segments:
-        s["gross_profit"] = s.get("profit")
-        s["gross_margin"] = s.get("margin")
-        share = (shares[s["name"]] if shares
-                 else (s["revenue"] / seg_rev) if s.get("revenue") else 0.0)
-        if s.get("profit") is None:
-            s["operating_profit"] = None
-            continue
-        s["operating_profit"] = s["profit"] - central * share
-        s["profit"] = s["operating_profit"]
-        s["margin"] = (s["operating_profit"] / s["revenue"]
-                       if s.get("revenue") else None)
-    return {
-        "central_opex": central,
-        "group_gross_profit": gp,
-        "group_operating_profit": op,
-        "basis": basis,
-        "income_statement_page": income.get("page"),
-    }

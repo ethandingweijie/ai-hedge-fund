@@ -60,61 +60,6 @@ class TestHeaderGeometry:
         assert hk._header_names(lines, centers)[0] == "VAS"
 
 
-class TestOpexAllocation:
-    """Tencent's filing says opex is managed centrally and NOT allocated.
-
-    So the total is disclosed and only the split is assumed. The invariant
-    that matters is that the derived segment profits reconcile exactly to the
-    group operating profit the filer reported.
-    """
-
-    def _segs(self):
-        return [{"name": "A", "revenue": 600.0, "profit": 300.0, "margin": 0.5},
-                {"name": "B", "revenue": 400.0, "profit": 100.0, "margin": 0.25}]
-
-    def _income(self):
-        return {"gross_profit": 400.0, "operating_profit": 150.0, "page": 129}
-
-    def test_derived_profits_reconcile_to_group_operating_profit(self):
-        segs = self._segs()
-        d = hk._allocate_opex(segs, self._income())
-        assert d["central_opex"] == pytest.approx(250.0)
-        assert sum(s["operating_profit"] for s in segs) == pytest.approx(150.0)
-
-    def test_reported_gross_profit_is_preserved(self):
-        """A derived number that cannot be traced to what the filer said is
-        worse than no number."""
-        segs = self._segs()
-        hk._allocate_opex(segs, self._income())
-        assert segs[0]["gross_profit"] == 300.0
-        assert segs[0]["gross_margin"] == 0.5
-        assert segs[0]["profit"] != 300.0        # profit now operating
-
-    def test_split_is_pro_rata_revenue_by_default(self):
-        segs = self._segs()
-        d = hk._allocate_opex(segs, self._income())
-        assert d["basis"] == "pro_rata_revenue"
-        # A carries 60% of revenue, so 60% of the 250 central cost
-        assert segs[0]["operating_profit"] == pytest.approx(300.0 - 150.0)
-        assert segs[1]["operating_profit"] == pytest.approx(100.0 - 100.0)
-
-    def test_supplied_weights_override_and_are_labelled(self):
-        segs = self._segs()
-        d = hk._allocate_opex(segs, self._income(), weights={"A": 3, "B": 1})
-        assert d["basis"] == "supplied_weights"
-        assert segs[0]["operating_profit"] == pytest.approx(300.0 - 187.5)
-        assert sum(s["operating_profit"] for s in segs) == pytest.approx(150.0)
-
-    def test_partial_weights_fall_back_rather_than_half_apply(self):
-        segs = self._segs()
-        d = hk._allocate_opex(segs, self._income(), weights={"A": 3})
-        assert d["basis"] == "pro_rata_revenue"
-
-    def test_no_income_statement_means_no_derivation(self):
-        assert hk._allocate_opex(self._segs(), {"gross_profit": None,
-                                                "operating_profit": None}) is None
-
-
 class TestIncomeStatementRows:
     def test_note_reference_column_is_not_read_as_money(self):
         """The statement carries a small "Note" integer beside each line."""
