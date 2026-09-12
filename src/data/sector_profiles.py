@@ -1682,11 +1682,12 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Mature SaaS": {
             "methods": [
-                {"name": "EPV",           "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "EPV",           "weight": 0.30, "anchor": True,  "implementable": True},
                 {"name": "DCF (2-stage)", "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "EV/Revenue",    "weight": 0.15, "anchor": False, "implementable": True, "note": "pre-profit cross-check"},
-                {"name": "EV/EBITDA",     "weight": 0.15, "anchor": False, "implementable": True},
-                {"name": "LBO Floor",     "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "P/E",           "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",    "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",     "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "LBO Floor",     "weight": 0.05, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": "Earnings Power Value tests the sustainability of current earnings without growth assumptions.",

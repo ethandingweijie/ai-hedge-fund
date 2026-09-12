@@ -44,6 +44,21 @@ def ticker_overrides() -> dict[str, tuple[str, str]]:
     return {k: (v[0], v[1]) for k, v in (_load().get("ticker_overrides") or {}).items()}
 
 
+def market_of(ticker: str | None) -> str:
+    """US / HK / SG from the ticker suffix."""
+    t = (ticker or "").strip().upper()
+    if t.endswith(".SI"):
+        return "SG"
+    if t.endswith(".HK"):
+        return "HK"
+    return "US"
+
+
+def market_map(market: str) -> dict[str, tuple[str, str]]:
+    rows = ((_load().get("markets") or {}).get(market) or {})
+    return {k: (v[0], v[1]) for k, v in rows.items()}
+
+
 def profile_for_ticker(ticker: str | None,
                        industry: str | None) -> Optional[tuple[str, str]]:
     """(sector, profile), preferring a ticker override over the industry row.
@@ -57,6 +72,13 @@ def profile_for_ticker(ticker: str | None,
     if ticker:
         from src.tools.ticker_canonical import canonical_ticker
         hit = ticker_overrides().get(canonical_ticker(ticker))
+        if hit:
+            return hit
+        # A market with CALIBRATED profiles gets its own table first. Singapore
+        # has S-REIT, Money Center Bank (SG), Telco / Infrastructure (SG) and
+        # more; routing an S-REIT through the US REIT row prices a Singapore
+        # trust off US cap rates, which is the DBS incident in reverse.
+        hit = market_map(market_of(ticker)).get((industry or "").strip())
         if hit:
             return hit
     return profile_for_industry(industry)
