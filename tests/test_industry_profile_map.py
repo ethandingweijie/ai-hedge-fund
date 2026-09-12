@@ -326,3 +326,41 @@ class TestTencentIsTheExceptionInsideACorrectRow:
         from src.data.industry_profile_map import profile_for_ticker
         assert profile_for_ticker("00700.HK", "Internet Content & Information") == (
             "Tech", "Hyperscaler / Tech Conglomerate")
+
+
+class TestRoutedSectorPropagates:
+    """The sector must move with the profile.
+
+    Peer-relative methods look their multiples up BY SECTOR. Adopting an
+    Insurance profile while leaving sector="Tech" prices an insurer off
+    software comparables, and that mismatch was worth multiples of the answer:
+
+        China Taiping   112.13 -> 21.45   (price ~25)
+        Cathay Pacific   64.46 -> 25.79   (price ~14)
+        CR Power         49.80 -> 21.51   (target 21.01)
+
+    It bites whenever the incoming sector differs from the routed one, which
+    is the normal case for any ticker absent from TICKER_SECTOR_LOOKUP -- that
+    table has 162 HK rows curated ad-hoc and covers only half of the HK large
+    caps.
+    """
+
+    def test_the_routing_block_adopts_the_routed_sector(self):
+        import inspect
+        from src.agents.analysis import dcf_agent as d
+        src = inspect.getsource(d.run_dcf_agent)
+        i = src.index("industry routing")
+        window = src[i:i + 1800]
+        assert "sector = _r_sector" in window, (
+            "routed sector is not adopted; peer multiples would be looked up "
+            "under the incoming sector")
+
+    def test_routing_returns_the_sector_alongside_the_profile(self, monkeypatch):
+        from src.agents.analysis import dcf_agent as d
+        monkeypatch.setattr("src.tools.api.get_company_industry",
+                            lambda t, api_key=None: "Insurance - Life")
+        got = d._industry_routed_profile("00966.HK", "Tech")
+        assert got is not None
+        r_sector, r_profile, _data = got
+        assert r_sector == "Financials"
+        assert r_profile == "Insurance"

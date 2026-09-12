@@ -5589,12 +5589,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             _routed = _industry_routed_profile(ticker, sector)
             if _routed and _routed[1] != profile_name:
                 _r_sector, _r_profile, _r_data = _routed
-                _log.info("[dcf] %s: industry routing -> %s/%s (was %r)",
-                          ticker, _r_sector, _r_profile, profile_name)
+                _log.info("[dcf] %s: industry routing -> %s/%s (was %s/%r)",
+                          ticker, _r_sector, _r_profile, sector, profile_name)
                 progress.update_status(
                     agent_id, ticker,
-                    f"Profile from industry routing: {_r_profile}")
+                    f"Profile from industry routing: {_r_sector}/{_r_profile}")
                 profile_name, profile_data = _r_profile, _r_data
+                # The SECTOR has to move with the profile. Peer-relative
+                # methods look their multiples up by sector, so adopting an
+                # Insurance profile while leaving sector="Tech" prices an
+                # insurer off software comparables. That mismatch was worth
+                # multiples of the answer: China Taiping came out at 105.5
+                # against a ~25 share price, Longyuan 40.5 against ~8, Cathay
+                # 52.9 against ~14. With the sector carried across they land
+                # at 21.4, 11.9 and 25.8.
+                sector = _r_sector
 
         _lookup_sector, _lookup_profile = get_wacc_profile_for_ticker(ticker)
         if _lookup_profile and _lookup_profile != profile_name:

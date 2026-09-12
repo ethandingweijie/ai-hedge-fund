@@ -46,6 +46,14 @@ _SENTENCE = re.compile(
 _LOW = re.compile(r"lowest is\s+\$?([\d,]+\.?\d*)", re.I)
 _HIGH = re.compile(r"highest is\s+\$?([\d,]+\.?\d*)", re.I)
 _RATING = re.compile(r'consensus rating of\s+"?([A-Za-z ]+?)"?\s+and', re.I)
+#: The page states the implied move alongside the target. It is the only
+#: internal cross-check available, and it catches a stale or mis-scaled
+#: target that is otherwise indistinguishable from a good one.
+_MOVE = re.compile(
+    r"forecast is\s+([\d.]+)%\s+(higher|lower)\s+than the current stock price",
+    re.I)
+_BULLISH = ("buy", "strong buy", "outperform", "overweight")
+_BEARISH = ("sell", "strong sell", "underperform", "underweight")
 
 
 def _num(raw: str | None) -> Optional[float]:
@@ -111,13 +119,41 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
     if not target:
         return None
     low_m, high_m, rating_m = _LOW.search(body), _HIGH.search(body), _RATING.search(body)
+    rating = rating_m.group(1).strip() if rating_m else None
+
+    # Cross-check the target against the implied move the page states itself.
+    # MMG carried a "Strong Buy" with a target 83.57% BELOW the traded price --
+    # internally contradictory, and it made MMG the single worst deviation in
+    # a 144-name benchmark (IV 21.5 against a "target" of 1.49) purely because
+    # the reference was broken. A benchmark that silently carries a bad value
+    # corrupts every comparison drawn from it, so say so rather than return it
+    # as though it were sound.
+    move_m = _MOVE.search(body)
+    implied_move = None
+    if move_m:
+        implied_move = float(move_m.group(1)) / 100.0
+        if move_m.group(2).lower() == "lower":
+            implied_move = -implied_move
+    suspect_reason = None
+    if implied_move is not None and rating:
+        r = rating.lower()
+        if r in _BULLISH and implied_move < -0.30:
+            suspect_reason = (f"rating {rating!r} with a target {implied_move:.0%} "
+                              f"vs price -- internally contradictory")
+        elif r in _BEARISH and implied_move > 0.30:
+            suspect_reason = (f"rating {rating!r} with a target {implied_move:+.0%} "
+                              f"vs price -- internally contradictory")
+
     out = {
         "ticker": ticker,
         "target": target,
         "low": _num(low_m.group(1)) if low_m else None,
         "high": _num(high_m.group(1)) if high_m else None,
         "analysts": int(m.group("n")),
-        "rating": (rating_m.group(1).strip() if rating_m else None),
+        "rating": rating,
+        "implied_move": implied_move,
+        "suspect": bool(suspect_reason),
+        "suspect_reason": suspect_reason,
         "currency": ccy,
         "source": "stockanalysis.com / S&P Global Market Intelligence",
         "url": url,
