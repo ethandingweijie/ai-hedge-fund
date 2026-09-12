@@ -14,9 +14,12 @@
   "",
   "Every value must resolve in INDUSTRY_VALUATION_PROFILES[sector][profile];",
   "a typo would otherwise fall through silently to the financial ladder, which",
-  "is precisely the failure this table exists to remove."
+  "is precisely the failure this table exists to remove.",
+  "v2: 'Real Estate - Services' moved off REIT. KE Holdings and CR Mixc are asset-light fee businesses -- a brokerage platform and a property manager -- and a cap-rate NAV anchor valued them on property they do not own.",
+  "v3: ticker_overrides. An industry row is right for the majority of an industry; where a label genuinely lumps different archetypes together, the override names the exception rather than distorting the row for everyone.",
+  "v4: WuXi Biologics override. FMP labels it 'Biotechnology', which routes to Pre-approval Biotech -- a profile anchored on rNPV precisely because a pre-revenue name has no cash flow to discount. WuXi Bio is a profitable CDMO. Adding DCF to the biotech profile to accommodate it was the wrong fix and the FIXBT fixture caught it: DCF returned no value for a genuine pre-revenue biotech and was reported as an unavailable method."
  ],
- "version": 1,
+ "version": 4,
  "map": {
   "Agricultural - Machinery": [
    "Industrials",
@@ -239,8 +242,8 @@
    "REIT"
   ],
   "Real Estate - Services": [
-   "RealEstate",
-   "REIT"
+   "ProfessionalServices",
+   "Ad / Consulting"
   ],
   "Regulated Electric": [
    "Energy",
@@ -301,6 +304,16 @@
   "Travel Services": [
    "Consumer",
    "Travel & Dining"
+  ]
+ },
+ "ticker_overrides": {
+  "01997.HK": [
+   "RealEstate",
+   "REIT"
+  ],
+  "02269.HK": [
+   "Biopharma",
+   "CDMO / Life Science Tools"
   ]
  }
 }

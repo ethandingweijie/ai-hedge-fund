@@ -1682,9 +1682,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Mature SaaS": {
             "methods": [
-                {"name": "EPV",           "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "DCF (2-stage)", "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",     "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EPV",           "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "DCF (2-stage)", "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",    "weight": 0.15, "anchor": False, "implementable": True, "note": "pre-profit cross-check"},
+                {"name": "EV/EBITDA",     "weight": 0.15, "anchor": False, "implementable": True},
                 {"name": "LBO Floor",     "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
@@ -1713,10 +1714,11 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Mature Platform": {
             "methods": [
-                {"name": "DCF (FCF+)",  "weight": 0.50, "anchor": True,  "implementable": True},
-                {"name": "EPV",         "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",   "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "LBO Floor",   "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "DCF (FCF+)", "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "P/E",        "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "EPV",        "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",  "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "LBO Floor",  "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
             "rationale": "Predictable cash flows allow for standard 2-stage DCF to be the primary anchor.",
@@ -1747,10 +1749,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Biopharma": {
         "Pre-approval Biotech": {
             "methods": [
-                {"name": "rNPV",          "weight": 0.45, "anchor": True,  "implementable": True},
-                {"name": "EV/R&D",        "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "Pipeline NAV",  "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
-                {"name": "Cash Runway",   "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "rNPV",         "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "EV/R&D",       "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "Pipeline NAV", "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
+                {"name": "Cash Runway",  "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": ["P/E", "EPV", "EV/EBITDA"],
             "rationale": (
@@ -1938,9 +1940,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Traditional Retail": {
             "methods": [
-                {"name": "EV/EBITDAR",   "weight": 0.50, "anchor": True,  "implementable": True,  "note": "proxied by EV/EBITDA"},
+                {"name": "EV/EBITDAR",   "weight": 0.40, "anchor": True,  "implementable": True},
                 {"name": "P/E",          "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "ROIC vs WACC", "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue",   "weight": 0.15, "anchor": False, "implementable": True, "note": "GMV-driven e-commerce"},
+                {"name": "ROIC vs WACC", "weight": 0.10, "anchor": False, "implementable": True},
                 {"name": "FCF Yield",    "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
@@ -1966,9 +1969,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # factor (applied in dcf_agent._compute_method_value when reported_currency=CNY).
         "Consumer Growth": {
             "methods": [
-                {"name": "DCF",         "weight": 0.50, "anchor": True,  "implementable": True},
-                {"name": "EV/Revenue",  "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "EV/EBITDA",   "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DCF",        "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "EV/Revenue", "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E",        "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",  "weight": 0.15, "anchor": False, "implementable": True},
             ],
             "excluded": ["P/E"],  # P/E is unreliable at high-growth stage (PEG >3x)
             "rationale": (
@@ -2378,9 +2382,10 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Rail / Logistics": {
             "methods": [
-                {"name": "EV/EBITDA", "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "FCF Yield", "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA", "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "FCF Yield", "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "P/E",       "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/BV",      "weight": 0.10, "anchor": False, "implementable": True, "note": "through-cycle asset floor for shipping"},
                 {"name": "DCF",       "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": [],
@@ -2532,10 +2537,11 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "IDM / Foundry": {
             "methods": [
-                {"name": "EV/EBITDA",    "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "P/E",          "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "DCF",          "weight": 0.25, "anchor": False, "implementable": True},
-                {"name": "FCF Yield",    "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",  "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "P/E",        "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF",        "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/Revenue", "weight": 0.10, "anchor": False, "implementable": True, "note": "pre-profit fabless designers"},
+                {"name": "FCF Yield",  "weight": 0.10, "anchor": False, "implementable": True},
             ],
             "excluded": ["EPV", "LBO Floor"],
             "rationale": (

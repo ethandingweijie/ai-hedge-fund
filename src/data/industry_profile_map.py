@@ -40,6 +40,28 @@ def industry_map() -> dict[str, tuple[str, str]]:
     return {k: (v[0], v[1]) for k, v in (_load().get("map") or {}).items()}
 
 
+def ticker_overrides() -> dict[str, tuple[str, str]]:
+    return {k: (v[0], v[1]) for k, v in (_load().get("ticker_overrides") or {}).items()}
+
+
+def profile_for_ticker(ticker: str | None,
+                       industry: str | None) -> Optional[tuple[str, str]]:
+    """(sector, profile), preferring a ticker override over the industry row.
+
+    An industry row is right for the MAJORITY of its industry. Where a label
+    genuinely lumps different archetypes -- FMP's "Real Estate - Services"
+    holds a prime-retail landlord alongside a brokerage platform and a
+    property manager -- the override names the exception instead of distorting
+    the row for everyone else in it.
+    """
+    if ticker:
+        from src.tools.ticker_canonical import canonical_ticker
+        hit = ticker_overrides().get(canonical_ticker(ticker))
+        if hit:
+            return hit
+    return profile_for_industry(industry)
+
+
 def profile_for_industry(industry: str | None) -> Optional[tuple[str, str]]:
     """(sector, profile) for an FMP industry label, or None if unmapped.
 
