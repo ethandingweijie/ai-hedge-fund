@@ -2190,13 +2190,23 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         },
         "Stable Growth": {
             "methods": [
-                {"name": "EPV",           "weight": 0.40, "anchor": True,  "implementable": True},
-                {"name": "DCF (2-stage)", "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "Rev DCF",       "weight": 0.20, "anchor": False, "implementable": True},
-                {"name": "LBO Floor",     "weight": 0.10, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",     "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "DDM",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DCF (2-stage)", "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "EPV",           "weight": 0.15, "anchor": False, "implementable": True},
             ],
             "excluded": [],
-            "rationale": "EPV serves as a no-growth floor; DCF captures the value of future reinvestment.",
+            "rationale": (
+                "Telcos are valued on EV/EBITDA and dividend yield: the asset base is "
+                "capital-intensive and the equity story is cash return, so EBITDA "
+                "multiples and the distribution are what the market actually prices. "
+                "This profile previously anchored on EPV with NO EV/EBITDA and NO DDM "
+                "in the method set at all -- an earnings-power floor as the primary "
+                "estimate for a regulated-utility-like cash machine, which is a floor "
+                "presented as a valuation. EPV is retained as the no-growth floor it "
+                "is, at a weight that reflects that role. DCF still carries the value "
+                "of future reinvestment."
+            ),
         },
     },
 

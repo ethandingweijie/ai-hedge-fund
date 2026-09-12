@@ -47,3 +47,52 @@ def test_known_rows_route_where_a_practitioner_would():
 def test_industry_labels_are_stored_trimmed():
     for ind in industry_map():
         assert ind == ind.strip() and ind, repr(ind)
+
+
+class TestTelcoProfile:
+    """Telcos are priced on EV/EBITDA and the distribution.
+
+    `Telco / Stable Growth` previously anchored on EPV with NO EV/EBITDA and
+    NO DDM anywhere in its method set -- an earnings-power FLOOR presented as
+    the primary estimate for a capital-intensive cash machine. Every telco in
+    every market routed through it.
+    """
+
+    def _methods(self):
+        return {m["name"]: m for m in P["Telco"]["Stable Growth"]["methods"]}
+
+    def test_anchored_on_ev_ebitda(self):
+        m = self._methods()
+        assert m["EV/EBITDA"]["anchor"] is True
+        assert m["EV/EBITDA"]["implementable"] is True
+
+    def test_the_distribution_is_valued(self):
+        m = self._methods()
+        assert "DDM" in m and m["DDM"]["implementable"] is True
+
+    def test_epv_is_retained_as_a_floor_not_the_anchor(self):
+        m = self._methods()
+        assert m["EPV"]["anchor"] is False
+        assert m["EPV"]["weight"] < m["EV/EBITDA"]["weight"]
+
+    def test_weights_sum_to_one(self):
+        assert round(sum(m["weight"] for m in
+                         P["Telco"]["Stable Growth"]["methods"]), 6) == 1.0
+
+
+def test_resources_profiles_are_mostly_proxied():
+    """Pins a known limitation so it cannot be forgotten.
+
+    `Mining (Major)` carries NAV (LoM) at 0.60 and P/NAV at 0.20, both
+    `implementable: False` -- so 80% of a miner's weight is a generic DCF and
+    P/BV wearing mine-life labels. Worse, the DCF proxy applies perpetual
+    terminal growth to a DEPLETING asset. If someone implements these, this
+    test should be updated deliberately, not silently.
+    """
+    proxied = {}
+    for prof in ("Mining (Major)", "Upstream Oil & Gas"):
+        ms = P["Resources"][prof]["methods"]
+        proxied[prof] = round(sum(m["weight"] for m in ms
+                                  if not m.get("implementable")), 2)
+    assert proxied["Mining (Major)"] == 0.80
+    assert proxied["Upstream Oil & Gas"] == 0.90
