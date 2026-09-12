@@ -21,9 +21,10 @@
   "v5: per-market tables. `markets.SG` is consulted before the default table for .SI listings, because Singapore has CALIBRATED profiles -- S-REIT, Money Center Bank (SG), Telco / Infrastructure (SG) and the rest -- that must not be used for other markets and must not be missed for this one. An S-REIT priced off US cap rates is the DBS incident in the other direction.",
   "v6: SGX ticker overrides. FMP carries no company profile for 24 of the SGX large/mid caps, so there is no industry to route on and the ticker is the only key available. A further five are labelled in a way that routes them to the wrong archetype -- Bukit Sembawang, a landed-residential developer, came through as Travel & Dining. Each choice follows the practitioner spec's PRIMARY method rather than name recognition.",
   "v7: distressed and foreign-asset trusts move off S-REIT. S-REIT anchors DDM (S-REIT) at 0.55, which is the wrong primary for a trust that has suspended or cut its distribution -- Manulife US REIT, Prime US REIT, Keppel Pacific Oak US REIT and Lippo Malls are all restructuring or liquidation cases whose value is the asset NAV net of debt. The REIT row anchors NAV (Cap Rates) instead. For the three US-office trusts the US calibration is also the CORRECT one: they are SGX-listed but hold American property priced on American cap rates.",
-  "v8: Insurance - Property & Casualty routes to the new Insurance (P&C) node instead of the life profile. Embedded Value discounts an in-force book of long-duration policies; a general insurer writes one-year contracts and has none, so PICC was anchored on a method that does not exist for it."
+  "v8: Insurance - Property & Casualty routes to the new Insurance (P&C) node instead of the life profile. Embedded Value discounts an in-force book of long-duration policies; a general insurer writes one-year contracts and has none, so PICC was anchored on a method that does not exist for it.",
+  "v9: platform businesses mislabelled as retail, and one exception inside a correct row. FMP's 'Specialty Retail' holds Meituan, SHEIN and a semiconductor test company -- none of them pays rent on a shop estate, which is all that Traditional Retail's EV/EBITDAR anchor measures. And 'Internet Content & Information' -> Mature Platform is right for Kuaishou and TME but wrong for Tencent, whose gaming, fintech, cloud and investment portfolio are a conglomerate. The row stays; the exception is named."
  ],
- "version": 8,
+ "version": 9,
  "map": {
   "Agricultural - Machinery": [
    "Industrials",
@@ -446,6 +447,22 @@
   "D5IU.SI": [
    "RealEstate",
    "REIT"
+  ],
+  "03690.HK": [
+   "Tech",
+   "Hyperscaler / Tech Conglomerate"
+  ],
+  "00700.HK": [
+   "Tech",
+   "Hyperscaler / Tech Conglomerate"
+  ],
+  "00625.HK": [
+   "Consumer",
+   "Consumer Growth"
+  ],
+  "AWI.SI": [
+   "Tech",
+   "Tech Manufacturing / EMS (SG)"
   ]
  },
  "markets": {

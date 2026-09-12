@@ -278,3 +278,51 @@ class TestAnchorImplementabilityGuard:
                             lambda t, api_key=None: "Gold")
         got = d._industry_routed_profile("02259.HK", "Materials")
         assert got and got[1] == "Mining (Major)"
+
+
+class TestPlatformsMislabelledAsRetail:
+    """EV/EBITDAR is a LEASE-ADJUSTED metric for a shop estate.
+
+    FMP's "Specialty Retail" holds Meituan, SHEIN and a semiconductor test
+    company. None of them pays rent on a retail estate, which is all that
+    Traditional Retail's anchor measures -- it valued Meituan at 290.4 against
+    a 110.5 consensus target.
+    """
+
+    def test_the_industry_row_still_serves_real_retailers(self):
+        from src.data.industry_profile_map import industry_map
+        assert industry_map()["Specialty Retail"] == ("Consumer", "Traditional Retail")
+
+    def test_the_mislabelled_platforms_are_overridden(self):
+        from src.data.industry_profile_map import profile_for_ticker
+        assert profile_for_ticker("03690.HK", "Specialty Retail") == (
+            "Tech", "Hyperscaler / Tech Conglomerate")
+        assert profile_for_ticker("00625.HK", "Specialty Retail") == (
+            "Consumer", "Consumer Growth")
+        assert profile_for_ticker("AWI.SI", "Specialty Retail") == (
+            "Tech", "Tech Manufacturing / EMS (SG)")
+
+
+class TestTencentIsTheExceptionInsideACorrectRow:
+    """"Internet Content & Information" -> Mature Platform is RIGHT for
+    Kuaishou (deviation 109.5% -> 24.7%) and for TME, and WRONG for Tencent
+    (2.3% -> 32.8%). Gaming, fintech, cloud and a large investment portfolio
+    are a conglomerate, not a single platform -- which is what Tencent's SOTP
+    primary reflects. The row stays; the exception is named.
+    """
+
+    def test_the_row_is_unchanged(self):
+        from src.data.industry_profile_map import industry_map
+        assert industry_map()["Internet Content & Information"] == (
+            "Tech", "Mature Platform")
+
+    def test_peers_still_take_the_row(self):
+        from src.data.industry_profile_map import profile_for_ticker
+        for peer in ("01024.HK", "01698.HK"):
+            assert profile_for_ticker(peer, "Internet Content & Information") == (
+                "Tech", "Mature Platform"), peer
+
+    def test_tencent_overrides_to_the_conglomerate_profile(self):
+        from src.data.industry_profile_map import profile_for_ticker
+        assert profile_for_ticker("00700.HK", "Internet Content & Information") == (
+            "Tech", "Hyperscaler / Tech Conglomerate")
