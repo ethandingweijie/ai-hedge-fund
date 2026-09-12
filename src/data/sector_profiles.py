@@ -1425,6 +1425,33 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": ["DCF", "P/BV", "ROE vs CoE"],  # GGM (P/B) supersedes the ROE-vs-CoE stub
             "rationale": "Neo/Challenger (NU/SOFI) — J-curve ROE. Target 18%, P/TBV 2.8x, 10-year fade (extended because current ROE still ramping).",
         },
+        "Insurance (P&C)": {
+            "methods": [
+                # EMBEDDED VALUE IS A LIFE CONCEPT. It discounts the in-force
+                # book of long-duration policies; a general insurer writes
+                # one-year contracts and has no in-force value to discount.
+                # Routing P&C through the life profile anchored PICC on
+                # Embedded Value, which does not exist for it. A general
+                # insurer is priced on book value against the return it earns
+                # on that book -- underwriting result plus investment yield.
+                {"name": "GGM (P/B)",           "weight": 0.40, "anchor": True,  "implementable": True},
+                {"name": "Combined Ratio Gate", "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/E (ops)",           "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DDM",                 "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["Embedded Value"],
+            "rationale": (
+                "P/B against ROE is the general-insurance anchor: the balance "
+                "sheet is the asset and the return on it comes from "
+                "underwriting margin plus investment yield. The combined ratio "
+                "gate carries the underwriting quality that separates a "
+                "disciplined book from a bought one -- below 100 the insurer "
+                "earns before investing a dollar, above it the float has to "
+                "pay for the underwriting. Embedded Value is EXCLUDED rather "
+                "than merely unweighted: it has no meaning for one-year "
+                "contracts and its presence invited the wrong anchor."
+            ),
+        },
         "Insurance": {
             "methods": [
                 # PR #1 — Embedded Value is now implementable for Life insurers

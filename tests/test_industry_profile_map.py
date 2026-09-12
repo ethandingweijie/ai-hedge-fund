@@ -204,3 +204,49 @@ class TestIndustryRoutingWiring:
             raise RuntimeError("FMP down")
         monkeypatch.setattr("src.tools.api.get_company_industry", _boom)
         assert d._industry_routed_profile("AAPL", "Tech") is None
+
+
+class TestInsurancePandC:
+    """Embedded Value is a LIFE concept.
+
+    It discounts an in-force book of long-duration policies. A general
+    insurer writes one-year contracts and has no in-force value to discount,
+    so routing P&C through the life profile anchored PICC on a method that
+    does not exist for it.
+    """
+
+    def _pc(self):
+        return P["Financials"]["Insurance (P&C)"]
+
+    def test_anchored_on_book_value_against_return(self):
+        ms = {m["name"]: m for m in self._pc()["methods"]}
+        assert ms["GGM (P/B)"]["anchor"] is True
+        assert ms["GGM (P/B)"]["implementable"] is True
+
+    def test_underwriting_quality_is_weighted(self):
+        ms = {m["name"]: m for m in self._pc()["methods"]}
+        assert ms["Combined Ratio Gate"]["weight"] >= 0.20
+
+    def test_embedded_value_is_excluded_not_merely_unweighted(self):
+        """Its presence in the method set invited the wrong anchor."""
+        names = {m["name"] for m in self._pc()["methods"]}
+        assert "Embedded Value" not in names
+        assert "Embedded Value" in self._pc()["excluded"]
+
+    def test_weights_sum_to_one(self):
+        assert round(sum(m["weight"] for m in self._pc()["methods"]), 6) == 1.0
+
+    def test_pc_and_life_route_apart(self):
+        from src.data.industry_profile_map import profile_for_ticker
+        assert profile_for_ticker("02328.HK", "Insurance - Property & Casualty") == (
+            "Financials", "Insurance (P&C)")
+        assert profile_for_ticker("01299.HK", "Insurance - Life") == (
+            "Financials", "Insurance")
+
+    def test_the_whole_industry_routes_not_just_one_ticker(self):
+        """Every P&C insurer needs this, not only the one that surfaced it."""
+        from src.data.industry_profile_map import industry_map, market_map
+        assert industry_map()["Insurance - Property & Casualty"] == (
+            "Financials", "Insurance (P&C)")
+        assert market_map("SG")["Insurance - Property & Casualty"] == (
+            "Financials", "Insurance (P&C)")
