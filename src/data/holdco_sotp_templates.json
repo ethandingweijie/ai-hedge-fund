@@ -1,0 +1,64 @@
+{
+ "_doc": [
+  "Division-level SOTP templates for conglomerate holding companies.",
+  "",
+  "These three route to Financials/Holding Company, whose anchor `SOTP / NAV`",
+  "carries 0.70 weight and is implementable: False -- so 70% of a holdco's",
+  "valuation was a proxy. A bottom-up segment model is not the answer either:",
+  "their filings do not publish segment BALANCE SHEETS, so there is no basis",
+  "for a per-division equity bridge.",
+  "",
+  "The practitioner method is a look-through: mark every listed stake at",
+  "MARKET (shares x price, never carrying value), value the unlisted operating",
+  "divisions on peer EV/EBITDA, sum, then apply a holding-company discount.",
+  "",
+  "stake_pct = null means the ownership percentage is NOT yet sourced. Those",
+  "divisions are SKIPPED and the run is flagged incomplete rather than being",
+  "silently valued at zero or at a guessed stake -- a wrong ownership",
+  "percentage on a listed subsidiary moves the answer more than any multiple."
+ ],
+ "version": 1,
+ "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
+ "templates": {
+  "00267.HK": {
+   "name": "CITIC Limited",
+   "holdco_discount": [0.25, 0.30],
+   "divisions": [
+    {"name": "CITIC Bank",                      "basis": "market_stake",
+     "listed": "00998.HK", "stake_pct": null, "fallback_basis": "p_tbv"},
+    {"name": "CITIC Securities",                "basis": "market_stake",
+     "listed": "06030.HK", "stake_pct": null},
+    {"name": "CITIC Mining / Resources",        "basis": "ev_ebitda_normalised"},
+    {"name": "Advanced Materials & Manufacturing","basis": "ev_ebitda_peer_median"}
+   ]
+  },
+  "00001.HK": {
+   "name": "CK Hutchison Holdings",
+   "holdco_discount": [0.20, 0.25],
+   "divisions": [
+    {"name": "Ports & Related Services", "basis": "ev_ebitda_range",
+     "multiple_range": [8.0, 9.5], "alt_basis": "ev_per_teu"},
+    {"name": "Retail (A.S. Watson)",     "basis": "ev_ebitda_range",
+     "multiple_range": [8.0, 10.0]},
+    {"name": "Infrastructure (CKI)",     "basis": "market_stake",
+     "listed": "01038.HK", "stake_pct": null},
+    {"name": "Telecommunications (3 Group Europe)", "basis": "ev_ebitda_range",
+     "multiple_range": [4.5, 5.5]}
+   ]
+  },
+  "00019.HK": {
+   "name": "Swire Pacific A",
+   "holdco_discount": [0.20, 0.20],
+   "divisions": [
+    {"name": "Swire Properties", "basis": "market_stake",
+     "listed": "01972.HK", "stake_pct": 0.82, "alt_basis": "look_through_rnav"},
+    {"name": "Cathay Pacific",   "basis": "market_stake",
+     "listed": "00293.HK", "stake_pct": 0.45},
+    {"name": "Beverages (Swire Coca-Cola)", "basis": "ev_ebitda_range",
+     "multiple_range": [9.0, 11.0]},
+    {"name": "Aviation Services (HAECO)",   "basis": "ev_ebitda_range",
+     "multiple_range": [7.0, 8.5]}
+   ]
+  }
+ }
+}
