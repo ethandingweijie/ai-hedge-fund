@@ -15,6 +15,11 @@ import pytest
 from src.data import db as _db
 
 
+def _iso_days_ago(days: int) -> str:
+    """A run timestamp `days` old, as the payloads store it."""
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+
 @pytest.fixture()
 def tmp_db(tmp_path, monkeypatch):
     """Point the dual-mode layer at a fresh tmp SQLite file."""
@@ -41,7 +46,12 @@ def _payload(ticker: str = "CRWD", action: str = "BUY") -> dict:
         "run_id": "run-abc",
         "ticker": t,
         "model_name": "claude-sonnet-4-6",
-        "run_at": "2026-08-10T09:30:00+00:00",
+        # RELATIVE, never a literal date. `build_and_save_recap` falls back to
+        # the payload's own run_at, and `get_recent_recap` filters on a 30-day
+        # window, so a hardcoded date silently becomes unreadable once it ages
+        # past the TTL -- this file's absolute dates expired mid-2026-09 and
+        # failed a test that had nothing to do with dates.
+        "run_at": _iso_days_ago(2),
         "data": {
             "dcf_range": {t: {
                 "wacc": 0.104,
@@ -220,12 +230,16 @@ def test_kill_switch_build_and_save(recap, monkeypatch):
 def test_build_and_save_recap_overrides(recap, monkeypatch):
     """Backfill passes the web_runs row's own run_id/run_at."""
     monkeypatch.setattr(recap, "_call_recap_llm", lambda s, t: None)
+    # Distinct from the payload's own run_at, so this still proves the OVERRIDE
+    # is what gets stored -- and relative, so it stays inside the TTL window
+    # that `get_recent_recap` applies.
+    override_at = _iso_days_ago(5)
     r = recap.build_and_save_recap(
-        _payload(), "CRWD",
-        run_id="web-run-id", run_at="2026-08-12T00:00:00+00:00")
+        _payload(), "CRWD", run_id="web-run-id", run_at=override_at)
     assert r is not None
     assert r["run_id"] == "web-run-id"
-    assert r["run_at"] == "2026-08-12T00:00:00+00:00"
+    assert r["run_at"] == override_at
+    assert r["run_at"] != _payload()["run_at"]
     assert recap.get_recent_recap("CRWD")["run_id"] == "web-run-id"
 
 
@@ -238,3 +252,25 @@ def test_save_sql_pg_compatible(recap):
     assert "ON CONFLICT(ticker, run_id) DO UPDATE" in " ".join(sql.split())
     assert "INSERT OR REPLACE" not in sql.upper()
     assert "?" in sql
+
+
+# ── the dates in this file must stay relative ────────────────────────────────
+
+def test_no_absolute_run_dates_in_this_file():
+    r"""Recaps are read back through a TTL, so a literal date expires.
+
+    `build_and_save_recap` falls back to the payload's own run_at and
+    `get_recent_recap` filters on a 30-day window, so a hardcoded timestamp
+    stops being readable once real time passes it. Two absolute dates in this
+    file aged out in 2026-09 and failed a test about override plumbing that
+    had nothing to do with dates -- a failure that looks like a code
+    regression and is not one.
+    """
+    import pathlib
+    import re
+    src = pathlib.Path(__file__).read_text(encoding="utf-8")
+    # ignore this guard's own prose
+    body = src.split("def test_no_absolute_run_dates_in_this_file")[0]
+    literals = re.findall(r'"\d{4}-\d{2}-\d{2}T[\d:]+', body)
+    assert not literals, (
+        f"absolute run timestamps found: {literals} -- use _iso_days_ago(n)")
