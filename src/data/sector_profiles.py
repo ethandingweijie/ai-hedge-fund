@@ -2414,23 +2414,55 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Resources": {
         "Upstream Oil & Gas": {
             "methods": [
-                {"name": "NAV (PV-10)",  "weight": 0.60, "anchor": True,  "implementable": False, "proxy": "DCF"},
-                {"name": "EV/DACF",      "weight": 0.25, "anchor": False, "implementable": False, "proxy": "EV/EBITDA"},
-                {"name": "P/CF",         "weight": 0.10, "anchor": False, "implementable": True},
-                {"name": "Real Options", "weight": 0.05, "anchor": False, "implementable": False, "proxy": "DCF"},
+                {"name": "P/CF",         "weight": 0.60, "anchor": True,  "implementable": True,  "note": "mid-cycle"},
+                {"name": "Depleting Asset DCF (Finite Life, No TV)",
+                                         "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/BV",         "weight": 0.10, "anchor": False, "implementable": True,  "note": "reserve-replacement / equity floor"},
             ],
             "excluded": [],
-            "rationale": "Reserve NPV (PV-10) at strip pricing is the industry standard; EV/DACF normalises for D&A distortions.",
+            "rationale": (
+                "Re-anchored on mid-cycle P/CF, which computes from reported cash "
+                "flow. Reserve NPV at strip pricing is the industry standard and "
+                "remains the right method -- but it needs PV-10 reserve disclosures "
+                "this engine does not ingest, and was previously carried at 0.60 "
+                "weight while silently resolving to a corporate DCF. With EV/DACF "
+                "(0.25) and Real Options (0.05) also proxied, 90% of an upstream "
+                "valuation was a label over a different calculation.\n\n"
+                "A producing field depletes, so the finite-horizon DCF replaces the "
+                "perpetual-growth proxy rather than renaming it."
+            ),
+            "data_limitation": (
+                "Reserve NPV (PV-10) omitted: no proven reserve or strip price-deck "
+                "data available. EV/DACF omitted: DACF is not derived."
+            ),
         },
         "Mining (Major)": {
             "methods": [
-                {"name": "NAV (LoM)",          "weight": 0.60, "anchor": True,  "implementable": False, "proxy": "DCF"},
-                {"name": "P/NAV",              "weight": 0.20, "anchor": False, "implementable": False, "proxy": "P/BV"},
-                {"name": "EV/EBITDA (norm)",   "weight": 0.15, "anchor": False, "implementable": True,  "note": "proxied by EV/EBITDA"},
-                {"name": "Price/CF",           "weight": 0.05, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA (norm)",   "weight": 0.60, "anchor": True,  "implementable": True,  "note": "through-cycle normalised"},
+                {"name": "Depleting Asset DCF (Finite Life, No TV)",
+                                               "weight": 0.30, "anchor": False, "implementable": True},
+                {"name": "P/BV",               "weight": 0.10, "anchor": False, "implementable": True,  "note": "reserve-replacement / equity floor"},
             ],
             "excluded": [],
-            "rationale": "Life-of-mine NAV discounts all future ore bodies; P/NAV premium reflects management and jurisdiction quality.",
+            "rationale": (
+                "Re-anchored on through-cycle normalised EV/EBITDA, which is how "
+                "sell-side and institutional desks price diversified majors when no "
+                "asset-level life-of-mine model is maintained, and which computes "
+                "cleanly from the income statement and balance sheet.\n\n"
+                "This profile previously anchored NAV (LoM) at 0.60 and P/NAV at "
+                "0.20 with BOTH marked implementable: False -- so 80% of a miner's "
+                "weight was a generic corporate DCF and P/BV wearing mine-life "
+                "labels. The proxy erred in a known DIRECTION: a perpetual terminal "
+                "growth term on a DEPLETING asset values ore that does not exist.\n\n"
+                "The finite-horizon replacement is deliberately NOT called NAV (LoM). "
+                "A life-of-mine NAV ingests proven & probable reserves, recovery "
+                "rates and a commodity price deck; none of that telemetry is "
+                "available, so asset-level LoM NAV is OMITTED rather than simulated."
+            ),
+            "data_limitation": (
+                "Asset-level life-of-mine NAV omitted: no reserve, grade or "
+                "commodity price-deck data available."
+            ),
         },
     },
 

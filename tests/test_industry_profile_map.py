@@ -80,19 +80,21 @@ class TestTelcoProfile:
                          P["Telco"]["Stable Growth"]["methods"]), 6) == 1.0
 
 
-def test_resources_profiles_are_mostly_proxied():
-    """Pins a known limitation so it cannot be forgotten.
+def test_resources_profiles_are_no_longer_proxied():
+    """This test previously asserted the OPPOSITE, deliberately.
 
-    `Mining (Major)` carries NAV (LoM) at 0.60 and P/NAV at 0.20, both
-    `implementable: False` -- so 80% of a miner's weight is a generic DCF and
-    P/BV wearing mine-life labels. Worse, the DCF proxy applies perpetual
-    terminal growth to a DEPLETING asset. If someone implements these, this
-    test should be updated deliberately, not silently.
+    It pinned `Mining (Major)` at 80% proxied and `Upstream Oil & Gas` at 90%
+    -- NAV (LoM) and NAV (PV-10) resolving to a generic corporate DCF, P/NAV
+    to P/BV -- so that implementing them would have to be a deliberate act
+    rather than a silent one. That act has now happened: both are re-anchored
+    on computable normalised multiples with a finite-horizon depleting-asset
+    DCF, and the reserve-model omission is stated in `data_limitation` instead
+    of being papered over with a label.
+
+    See tests/test_resources_valuation_policy.py for the policy itself.
     """
-    proxied = {}
     for prof in ("Mining (Major)", "Upstream Oil & Gas"):
         ms = P["Resources"][prof]["methods"]
-        proxied[prof] = round(sum(m["weight"] for m in ms
-                                  if not m.get("implementable")), 2)
-    assert proxied["Mining (Major)"] == 0.80
-    assert proxied["Upstream Oil & Gas"] == 0.90
+        proxied = sum(m["weight"] for m in ms if not m.get("implementable"))
+        assert proxied == 0.0, f"{prof} is {proxied:.0%} proxied again"
+        assert P["Resources"][prof].get("data_limitation"), prof

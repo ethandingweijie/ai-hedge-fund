@@ -1558,6 +1558,7 @@ def _project_dcf(
     growth_schedule: Optional[list[float]] = None,
     wacc_schedule: Optional[list[float]] = None,
     margin_delta_absolute: Optional[float] = None,
+    include_terminal: bool = True,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -1628,12 +1629,20 @@ def _project_dcf(
     rev_T    = rev_t
     fcf_T    = rev_T * margin_t
     wacc_T   = _w_by_year[years - 1]
-    # Safety: terminal WACC must exceed TGR by a margin
-    if wacc_T <= tgr:
-        wacc_T = tgr + 0.005
-    fcf_terminal = fcf_T * (1 + tgr)
-    tv           = fcf_terminal / (wacc_T - tgr)
-    pv_tv        = tv * disc_cum
+    if not include_terminal:
+        # A DEPLETING asset has no going concern past its reserve life. Setting
+        # tgr=0 is not the same thing: Gordon with g=0 still returns FCF/WACC,
+        # a perpetuity roughly 10x the final year's cash flow. For a mine, that
+        # perpetuity is the entire overstatement -- it values ore that does not
+        # exist. The projection simply stops.
+        tv = pv_tv = 0.0
+    else:
+        # Safety: terminal WACC must exceed TGR by a margin
+        if wacc_T <= tgr:
+            wacc_T = tgr + 0.005
+        fcf_terminal = fcf_T * (1 + tgr)
+        tv           = fcf_terminal / (wacc_T - tgr)
+        pv_tv        = tv * disc_cum
 
     equity_value = pv_sum + pv_tv - (net_debt or 0.0)
     iv = equity_value / shares
@@ -3318,6 +3327,22 @@ def _compute_method_value(
         )
         return iv
 
+    # ── Depleting Asset DCF (finite life, no terminal value) ───────────────
+    # For a mine or a producing field the going concern ENDS with the reserve.
+    # The label matters as much as the maths: this is deliberately NOT called
+    # "NAV (LoM)", because a life-of-mine NAV ingests proven & probable
+    # reserves, recovery rates and a commodity price deck, and none of that
+    # telemetry exists here. Calling a corporate DCF "NAV (LoM)" told the
+    # reader a reserve model had been run when it had not.
+    if method_name == _DEPLETING_DCF:
+        iv, _, _, _ = _project_dcf(
+            revenue_base, fcf_margin_base, growth_base, 0.0,
+            wacc, 0.0, fcf_floor, net_debt, shares,
+            years=_DEPLETING_HORIZON_YEARS,
+            include_terminal=False,
+        )
+        return iv
+
     # ── EPV (Earnings Power Value) ─────────────────────────────────────────
     # EPV = steady-state earnings power with NO growth assumed.
     # Scenario multiplier (sm) scales normalized EBIT to reflect:
@@ -4185,6 +4210,15 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
 #: _blend_methods but still PROJECT via fcf_margin_base. The OE≤0 disable
 #: gate (task #18) must knock out exactly the projecting set, so the
 #: dispatcher and the gate share this one constant and can never drift.
+#: Resources: the reserve runs out, so the projection stops. 15 years is the
+#: standard planning horizon for a major producer's mine portfolio — long
+#: enough to cover a typical asset life, short enough that it cannot smuggle a
+#: perpetuity back in. Terminal salvage/reclamation is ZERO absent real data:
+#: for most mines reclamation is a liability, so assuming none is already the
+#: generous end of the range.
+_DEPLETING_DCF = "Depleting Asset DCF (Finite Life, No TV)"
+_DEPLETING_HORIZON_YEARS = 15
+
 _DCF_PROJECTION_FAMILY: frozenset[str] = _DCF_FAMILY_NAMES | frozenset({
     "DCF (5-yr)", "DCF (LTG)", "Rev DCF (GMV)", "Rev DCF",
 })
