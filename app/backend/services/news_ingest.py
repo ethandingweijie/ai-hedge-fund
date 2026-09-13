@@ -227,10 +227,35 @@ async def ingest_ticker(ticker: str, *, force: bool = False,
             "errors": errors}
 
 
-def watched_tickers(recent_days: int = 7, limit: int = 200) -> list[str]:
-    """Tickers worth polling: anything on a watchlist, plus anything analysed
-    recently. Explicitly NOT the whole universe -- that would be thousands of
-    upstream calls an hour for pages nobody has open.
+def watchlist_tickers(user_id: Optional[int] = None) -> list[str]:
+    """What this user asked to monitor.
+
+    The watchlist is the explicit signal -- a ticker is there because someone
+    put it there -- so it leads the poll order and drives the news feed. Lives
+    in its own SQLite table rather than the run archive, hence the direct
+    service call rather than a db.query here.
+    """
+    try:
+        from app.backend.services import watchlist_service
+        rows = watchlist_service.get_watchlist(user_id=user_id) or []
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("news_ingest.watchlist_tickers: %s", exc)
+        return []
+    out: list[str] = []
+    for row in rows:
+        t = str((row or {}).get("ticker") or "").strip().upper()
+        if t and t not in out:
+            out.append(t)
+    return out
+
+
+def watched_tickers(recent_days: int = 7, limit: int = 200,
+                    user_id: Optional[int] = None) -> list[str]:
+    """Tickers worth polling, most-wanted first.
+
+    Watchlist, then holdings, then anything analysed recently. Explicitly NOT
+    the whole universe -- that would be thousands of upstream calls an hour for
+    pages nobody has open, and it is the main cost control in this service.
     """
     from src.data import db as _db
     out: list[str] = []
@@ -242,19 +267,22 @@ def watched_tickers(recent_days: int = 7, limit: int = 200) -> list[str]:
             seen.add(t)
             out.append(t)
 
+    for t in watchlist_tickers(user_id=user_id):
+        _add(t)
+
     for sql, params in (
         ("SELECT DISTINCT ticker FROM user_holdings", []),
         ("SELECT DISTINCT ticker FROM web_runs WHERE run_at > ?",
          [(datetime.now(timezone.utc)
            - timedelta(days=recent_days)).isoformat()]),
     ):
+        if len(out) >= limit:
+            break
         try:
             for row in (_db.query(sql, params) or []):
                 _add(row["ticker"])
         except Exception:                                  # noqa: BLE001
             continue          # a missing table is not an error here
-        if len(out) >= limit:
-            break
     return out[:limit]
 
 

@@ -63,6 +63,7 @@ import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
 import { DecisionInputsCard } from '@/components/report/DecisionInputsCard';
 import { AssumptionWatchCard } from '@/components/report/AssumptionWatchCard';
+import { NewsPanel } from '@/components/report/NewsPanel';
 import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDerived';
 // MobileChartStrip / MobileKeyStats replaced with v2-native components below
 
@@ -1016,12 +1017,22 @@ function ResearchBody({
     return (
       <div className="px-4 pt-5 pb-10 space-y-5">
         <LoadingCard label="Research streaming — 14+ source synthesis" minH={200} />
+        {/* News does not depend on the research phase, so it renders here too
+            rather than behind this early return. Mounted in V2ReportView as
+            well as ReportViewPage: the desktop JSX is bypassed on this path,
+            so a card added only there is invisible on mobile — which is
+            exactly what had happened to NewsPanel. */}
+        {ticker && <NewsPanel ticker={ticker} />}
       </div>
     );
   }
 
   return (
     <div className="px-4 pt-5 pb-10 space-y-5">
+      {/* Latest news — see the note in the early return above for why this is
+          mounted on this path as well as the desktop one. */}
+      {ticker && <NewsPanel ticker={ticker} />}
+
       {/* Research complete status card */}
       {hasData && (
         <div className="rounded-lg border border-brand/25 bg-brand/10 shadow-sm p-4 flex items-center gap-3">

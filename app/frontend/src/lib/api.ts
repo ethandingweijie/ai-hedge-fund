@@ -832,6 +832,7 @@ export function getIntelligence(ticker: string): Promise<IntelligenceData> {
 // ── News types ──────────────────────────────────────────────────────────────
 
 export interface NewsArticle {
+  id?: string;
   title: string;
   text: string;
   url: string;
@@ -839,13 +840,34 @@ export interface NewsArticle {
   site: string;
   image: string;
   symbol: string;
+  /** Provenance, not quality: 'regulatory' is the company or exchange
+   *  speaking, 'authoritative' a recognised wire, 'aggregator' everything
+   *  else. It RANKS and labels; it never decides what is shown, because an
+   *  unrecognised Chinese or Singaporean publisher is the only coverage
+   *  those tickers have. */
+  tier?: 'regulatory' | 'authoritative' | 'aggregator';
 }
 
-/** Fetch latest news for a ticker via FMP (proxied through backend). */
-export function getCompanyNews(ticker: string, limit = 10): Promise<{ ticker: string; articles: NewsArticle[] }> {
+export interface NewsFeed {
+  tickers: string[];
+  /** Tickers that had to be fetched on this request rather than served warm. */
+  cold: string[];
+  articles: NewsArticle[];
+}
+
+/** Latest news for one ticker, served from the backend store. */
+export function getCompanyNews(
+  ticker: string,
+  limit = 10,
+): Promise<{ ticker: string; articles: NewsArticle[]; no_coverage?: boolean }> {
   return fetchJson(
     `${BASE}/analysis/news/${encodeURIComponent(ticker.toUpperCase())}?limit=${limit}`,
   );
+}
+
+/** Merged news across everything on the watchlist — what the user monitors. */
+export function getNewsFeed(limit = 40): Promise<NewsFeed> {
+  return fetchJson(`${BASE}/analysis/news/feed?limit=${limit}`);
 }
 
 // ── Financials types ────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import { ReportViewPage } from './pages/ReportViewPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { ScreenerPage } from './pages/ScreenerPage';
 import { WatchlistPage } from './pages/WatchlistPage';
+import { NewsPage } from '@/pages/NewsPage';
 import { DiscussPage } from './pages/DiscussPage';
 import { TickerChatPage } from './pages/TickerChatPage';
 import { ResearchIdeasPage } from './pages/ResearchIdeasPage';
@@ -73,6 +74,7 @@ export default function App() {
           <Route path="/history" element={<RequireAuth><HistoryPage /></RequireAuth>} />
           <Route path="/screener" element={<RequireAuth><ScreenerPage /></RequireAuth>} />
           <Route path="/watchlist" element={<RequireAuth><WatchlistPage /></RequireAuth>} />
+          <Route path="/news" element={<RequireAuth><NewsPage /></RequireAuth>} />
           <Route path="/portfolio" element={<RequireAuth><PortfolioPage /></RequireAuth>} />
           <Route path="/discuss" element={<RequireAuth><DiscussPage /></RequireAuth>} />
           <Route path="/discuss/:ticker" element={<RequireAuth><TickerChatPage /></RequireAuth>} />

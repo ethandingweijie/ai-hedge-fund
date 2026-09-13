@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import (APIRouter, Depends, Header, HTTPException, Query,
+                     Request)
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -2186,179 +2187,103 @@ async def get_intelligence(ticker: str):
 
 # ── GET /analysis/news/{ticker} ──────────────────────────────────────────────
 
+# ── News ────────────────────────────────────────────────────────────────────
+#: Re-poll a ticker no more often than this when someone opens its page. The
+#: scheduled sweep is the normal path; this is the cold-start safety net.
+_NEWS_MAX_AGE_MINUTES = 15
+
+
+def _news_user_id(authorization: Optional[str] = Header(default=None),
+                  db: Session = Depends(get_db)) -> Optional[int]:
+    """Same optional-auth shape as routes/watchlist.py -- the feed works
+    signed-out against the shared watchlist and scopes to the user when a
+    token is present."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        user = get_user_from_token(
+            authorization.removeprefix("Bearer ").strip(), db)
+        return user.id if user else None
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def _news_article(item: dict) -> dict:
+    """Store row -> the shape NewsPanel already renders, plus provenance.
+
+    `publishedDate` and `site` keep their names so the existing component and
+    its NewsArticle type keep working unchanged.
+    """
+    return {
+        "id":            item.get("item_id"),
+        "title":         item.get("title") or "",
+        "text":          item.get("summary") or "",
+        "url":           item.get("url") or "",
+        "publishedDate": item.get("published_at") or "",
+        "site":          item.get("site") or "",
+        "image":         item.get("image") or "",
+        "symbol":        item.get("ticker") or "",
+        "tier":          item.get("source_tier") or "aggregator",
+    }
+
+
+@router.get("/news/feed")
+async def get_news_feed(limit: int = 40,
+                        user_id: Optional[int] = Depends(_news_user_id)):
+    """Merged news across whatever this user asked to monitor.
+
+    The watchlist IS the subscription: a ticker appears here because someone
+    added it. Served from the store, so opening the page is a local read.
+    Tickers the store has never seen are ingested once, in parallel, and only
+    those -- a warm watchlist costs nothing.
+    """
+    from app.backend.services import news_ingest, news_store
+
+    tickers = news_ingest.watchlist_tickers(user_id=user_id)
+    if not tickers:
+        return {"tickers": [], "articles": [], "cold": []}
+
+    cold = [t for t in tickers
+            if not news_store.is_fresh(t, _NEWS_MAX_AGE_MINUTES)]
+    if cold:
+        await asyncio.gather(*[news_ingest.ingest_ticker(t) for t in cold],
+                             return_exceptions=True)
+
+    items = news_store.get_items_multi(tickers, limit=limit)
+    return {"tickers": tickers, "cold": cold,
+            "articles": [_news_article(i) for i in items]}
+
+
 @router.get("/news/{ticker}")
 async def get_news(ticker: str, limit: int = 8):
+    """Latest news for one ticker, served from the store.
+
+    This used to call FMP on every page open, filter to an allow-list of about
+    twenty-five western domains, and return nothing at all for HK or SG --
+    FMP publishes no news rows for either venue. It now reads the local store,
+    which is filled by adapters that already route by market (US to FMP, HK to
+    AKShare and HKEXnews, SG to yfinance), and ingests on the spot only when a
+    ticker has never been polled.
+
+    Provenance rides along per item as `tier` rather than deciding what is
+    shown. An unrecognised Chinese or Singaporean publisher is the only
+    coverage those tickers have.
     """
-    Fetch latest news articles for a ticker from FMP /stable/news/stock.
-    Filters to authoritative financial sources (Bloomberg, FT, Reuters, WSJ, etc.).
-    Fetches 3× the requested limit so filtering still returns enough results.
-    Returns list of {title, text, url, publishedDate, site, image, symbol}.
-    """
-    try:
-        import requests as _req
-    except ImportError:
-        raise HTTPException(status_code=503, detail="requests package not installed")
+    from app.backend.services import news_ingest, news_store
 
-    fmp_key = _get_fmp_key()
-    if not fmp_key:
-        raise HTTPException(status_code=503, detail="FMP_API_KEY not configured — add it to .env.local")
+    sym = (ticker or "").strip().upper()
+    if not sym:
+        raise HTTPException(status_code=400, detail="ticker required")
 
-    # Authoritative financial sources — exact domain fragments (lowercase)
-    AUTHORITATIVE = {
-        "bloomberg.com", "ft.com", "reuters.com", "wsj.com", "barrons.com",
-        "cnbc.com", "marketwatch.com", "seekingalpha.com", "thestreet.com",
-        "investopedia.com", "morningstar.com",
-        "businessinsider.com", "forbes.com", "nytimes.com", "economist.com",
-        "financialtimes.com", "ap.org", "apnews.com",
-        "nasdaq.com", "nyse.com",
-        "prnewswire.com", "businesswire.com", "globenewswire.com",  # official IR wires
-        "sec.gov", "ir.", "investor.",                               # company IR pages
-    }
-    # Noise sources to always exclude
-    EXCLUDED = {
-        "fool.com", "motleyfool.com", "zacks.com", "benzinga.com",
-        "stockanalysis.com", "stockcharts.com", "barchart.com",
-        "tipranks.com", "finviz.com",
-    }
-
-    def _is_authoritative(site: str) -> bool:
-        s = (site or "").lower()
-        if any(ex in s for ex in EXCLUDED):
-            return False
-        return any(auth in s for auth in AUTHORITATIVE if auth)
-
-    import re as _re
-    sym = ticker.strip().upper()
-
-    # Ticker word-boundary pattern  e.g. r'\bBABA\b'
-    _sym_pat = _re.compile(r'\b' + _re.escape(sym) + r'\b', _re.IGNORECASE)
-
-    # ADR / foreign-listed stocks: ticker ≠ company name in headlines.
-    # Map ticker → lowercase name fragments that unambiguously identify the company.
-    _ALIASES: dict[str, list[str]] = {
-        "BABA":  ["alibaba"],
-        "CHA":   ["china telecom"],
-        "CHU":   ["china unicom"],
-        "CHL":   ["china mobile"],
-        "BIDU":  ["baidu"],
-        "JD":    ["jd.com", "jingdong"],
-        "NIO":   ["nio inc"],
-        "TCEHY": ["tencent"],
-        "XPEV":  ["xpeng"],
-        "LI":    ["li auto"],
-        "PDD":   ["pinduoduo", "temu"],
-        "NTES":  ["netease"],
-        "WB":    ["weibo"],
-        "VIPS":  ["vipshop"],
-        "TME":   ["tencent music"],
-        "FUTU":  ["futu holdings"],
-        "TIGR":  ["up fintech"],
-        "SAP":   ["sap se"],
-        "TSM":   ["tsmc", "taiwan semiconductor"],
-        "ASML":  ["asml"],
-        "SHOP":  ["shopify"],
-        "SE":    ["sea limited", "sea group"],
-    }
-    _aliases = _ALIASES.get(sym, [])
-
-    # Use FMP's dedicated Search Stock News endpoint:
-    # GET /stable/news/stock?symbols={sym}  (symbols is required)
-    # Supports: symbols, from, to, page, limit (max 250, page max 100)
-    # The response `symbol` field per article lets us verify relevance.
-    # Only fetch articles from the last 7 days; start with a 2-day window and
-    # widen to 7 days so we always have enough articles after source filtering.
-    from datetime import datetime, timedelta
-    _from_date = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d")
-    _to_date   = datetime.now().strftime("%Y-%m-%d")
-
-    def _fetch_stock_news(page: int) -> list:
-        url = (
-            f"https://financialmodelingprep.com/stable/news/stock"
-            f"?symbols={sym}&page={page}&limit=50"
-            f"&from={_from_date}&to={_to_date}&apikey={fmp_key}"
-        )
+    if not news_store.is_fresh(sym, _NEWS_MAX_AGE_MINUTES):
         try:
-            r = _req.get(url, timeout=15)
-            r.raise_for_status()
-            data = r.json()
-            return data if isinstance(data, list) else []
-        except Exception:
-            return []
+            await news_ingest.ingest_ticker(sym)
+        except Exception as exc:                           # noqa: BLE001
+            logger.warning("news ingest on read failed for %s: %s", sym, exc)
 
-    # Fetch pages 0 and 1 concurrently — 100 articles, all pre-filtered by FMP to this ticker
-    pages = await asyncio.gather(
-        asyncio.to_thread(_fetch_stock_news, 0),
-        asyncio.to_thread(_fetch_stock_news, 1),
-    )
-    raw: list = [article for page_data in pages for article in page_data]
-
-    # Tiered fallback: widen date window progressively so low-coverage tickers
-    # still surface something. 2d → 7d → 30d; empty list is valid, not an error.
-    for _fallback_days in (7, 30):
-        if raw:
-            break
-        _from_wide = (datetime.now() - timedelta(days=_fallback_days)).strftime("%Y-%m-%d")
-
-        def _fetch_wide(page: int, _from=_from_wide) -> list:
-            url = (
-                f"https://financialmodelingprep.com/stable/news/stock"
-                f"?symbols={sym}&page={page}&limit=50"
-                f"&from={_from}&to={_to_date}&apikey={fmp_key}"
-            )
-            try:
-                r = _req.get(url, timeout=15)
-                r.raise_for_status()
-                data = r.json()
-                return data if isinstance(data, list) else []
-            except Exception:
-                return []
-
-        pages_wide = await asyncio.gather(
-            asyncio.to_thread(_fetch_wide, 0),
-            asyncio.to_thread(_fetch_wide, 1),
-        )
-        raw = [article for page_data in pages_wide for article in page_data]
-
-    # No news at all — return empty list gracefully (not a server error)
-    if not raw:
-        return {"ticker": sym, "articles": []}
-
-    # Verify relevance using the symbol field + alias match (removes any FMP false-positives)
-    def _is_ticker_relevant(a: dict) -> bool:
-        article_sym = str(a.get("symbol") or "").upper()
-        tagged = {s.strip() for s in article_sym.split(",")}
-        if sym in tagged:
-            return True
-        title = a.get("title") or ""
-        if _sym_pat.search(title):
-            return True
-        title_lower = title.lower()
-        return any(alias in title_lower for alias in _aliases)
-
-    relevant = [a for a in raw if _is_ticker_relevant(a)]
-    # If FMP returned articles but none matched our strict check, trust FMP's pre-filter
-    if not relevant:
-        relevant = raw
-
-    # Authoritative source filter; fall back to all relevant if none qualify
-    filtered = [a for a in relevant if _is_authoritative(a.get("site", ""))]
-    if not filtered:
-        filtered = relevant   # keep ticker-specific articles even from minor sources
-
-    articles = [
-        {
-            "title":         a.get("title", ""),
-            "text":          (a.get("text") or "")[:300],
-            "url":           a.get("url", ""),
-            "publishedDate": a.get("publishedDate", ""),
-            "site":          a.get("site", ""),
-            "image":         a.get("image", ""),
-            "symbol":        a.get("symbol", sym),
-        }
-        for a in filtered[:limit]
-    ]
-
-    return {"ticker": sym, "articles": articles}
+    items = news_store.get_items(sym, limit=limit)
+    return {"ticker": sym, "articles": [_news_article(i) for i in items],
+            "no_coverage": not items}
 
 
 # ── GET /analysis/financials/{ticker} ────────────────────────────────────────

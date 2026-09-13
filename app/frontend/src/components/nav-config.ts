@@ -21,8 +21,7 @@
  */
 import {
   Plus, BarChart2, Filter, BookMarked, Lightbulb, History, Wallet, MessageSquare, PieChart,
-  type LucideIcon,
-} from 'lucide-react';
+  Newspaper, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export interface NavItem {
@@ -40,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Current Analysis', icon: BarChart2,  path: '/report',         action: 'resume', hint: 'Resume your in-progress or most recent analysis' },
   { label: 'Screener',         icon: Filter,     path: '/screener'       },
   { label: 'Watchlist',        icon: BookMarked, path: '/watchlist'      },
+  { label: 'News',             icon: Newspaper,  path: '/news',           hint: 'Latest coverage across everything on your watchlist' },
   { label: 'Portfolio',        icon: PieChart,   path: '/portfolio',     hint: 'Your holdings vs the system\'s latest valuation signals' },
   { label: 'Discuss',          icon: MessageSquare, path: '/discuss'     },
   { label: 'Robo Strategy',    icon: Wallet,     path: '/robo-strategy',  hint: 'Get a personalized portfolio recommendation' },

@@ -1,20 +1,20 @@
 /**
- * NewsPanel — latest news articles for the ticker, sourced from FMP.
- * Displayed in the right column beneath the stock chart.
+ * NewsPanel — latest news for one ticker.
+ *
+ * Served from the backend news store rather than a live upstream call, so a
+ * warm ticker renders from a local read. Mounted on BOTH render paths: the
+ * desktop report pages and V2ReportView. It previously lived only on desktop,
+ * which meant news did not exist on mobile at all — the exact trap the
+ * comments in ReportViewPage and V2ReportView warn about.
  */
 
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { getCompanyNews, type NewsArticle } from '@/lib/api';
-import { timeAgo } from '@/lib/utils';
+import { NewsItemRow } from '@/components/report/NewsItemRow';
 
 interface NewsPanelProps {
   ticker: string;
-}
-
-function cleanDomain(site: string): string {
-  if (!site) return '';
-  return site.replace(/^https?:\/\/(www\.)?/, '').replace(/\/.*$/, '');
 }
 
 export function NewsPanel({ ticker }: NewsPanelProps) {
@@ -57,49 +57,15 @@ export function NewsPanel({ ticker }: NewsPanelProps) {
       )}
 
       {!loading && !error && articles.length === 0 && (
-        <p className="text-xs text-muted-foreground py-2">No recent news found.</p>
+        <p className="text-xs text-muted-foreground py-2">
+          No recent news for {ticker}.
+        </p>
       )}
 
       {!loading && !error && articles.length > 0 && (
         <div className="flex-1 overflow-y-auto min-h-0 pr-1 flex flex-col divide-y divide-border/40">
           {articles.map((article, i) => (
-            <a
-              key={i}
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group flex gap-3 py-2.5 hover:bg-muted/30 -mx-1 px-1 rounded transition-colors shrink-0"
-            >
-              {/* Thumbnail */}
-              {article.image ? (
-                <img
-                  src={article.image}
-                  alt=""
-                  className="w-12 h-12 rounded object-cover shrink-0 bg-muted"
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                />
-              ) : (
-                <div className="w-12 h-12 rounded bg-muted shrink-0 flex items-center justify-center">
-                  <span className="text-[10px] text-muted-foreground font-bold">
-                    {(article.site || ticker).slice(0, 2).toUpperCase()}
-                  </span>
-                </div>
-              )}
-
-              {/* Content */}
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <p className="text-xs font-medium leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                  {article.title}
-                </p>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span className="font-medium truncate max-w-[100px]">
-                    {cleanDomain(article.site) || article.site}
-                  </span>
-                  <span>·</span>
-                  <span className="shrink-0">{timeAgo(article.publishedDate)}</span>
-                </div>
-              </div>
-            </a>
+            <NewsItemRow key={article.id || i} article={article} fallbackLabel={ticker} />
           ))}
         </div>
       )}
