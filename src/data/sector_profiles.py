@@ -4753,7 +4753,10 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "U96.SI":  ("Industrials", "Conglomerate / Industrial (SG)",  "Utilities & Energy",     "Sembcorp Industries"),
     "S63.SI":  ("Industrials", "Aerospace & Engineering (SG)",    "Aerospace & Defence",    "ST Engineering"),
     "S58.SI":  ("Industrials", "Aerospace & Engineering (SG)",    "Airport Services",       "SATS"),
-    "C52.SI":  ("Industrials", "Conglomerate / Industrial (SG)",  "Transportation",         "ComfortDelGro"),
+    # A bus and rail operator, not a conglomerate -- the row's own
+    # sub-industry field already said Transportation while the profile put it
+    # on SOTP (published), which ComfortDelGro does not publish.
+    "C52.SI":  ("Transportation", "Rail / Logistics",              "Public Transit",         "ComfortDelGro"),
     "J36.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Jardine Matheson"),
     "J37.SI":  ("Industrials", "Conglomerate / Industrial (SG)","Conglomerates",         "Jardine C&C"),
     "S51.SI":  ("Industrials", "Aviation & Marine (SG)",     "Marine & Offshore",      "Seatrium"),

@@ -5673,10 +5673,42 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _lookup_sector, _lookup_profile = get_wacc_profile_for_ticker(ticker)
         if _lookup_profile and _lookup_profile != profile_name:
             from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
-            _override_data = INDUSTRY_VALUATION_PROFILES.get(sector, {}).get(_lookup_profile, {})
+            # The curated pair travels TOGETHER, the same way the routed pair
+            # does. Resolving the override against whatever `sector` happens
+            # to hold made this branch fail in two ways at once:
+            #
+            #   * industry routing had just reassigned `sector`, so the
+            #     override was looked up under the routed sector and silently
+            #     declined -- inverting the intended precedence, which is that
+            #     a company fact beats an industry rule. Sembcorp is not a
+            #     regulated utility (Singapore's power market is liberalised)
+            #     and ComfortDelGro is not a railway; both had a correct
+            #     curated entry that lost to the router.
+            #   * sector "REIT" has no entry in INDUSTRY_VALUATION_PROFILES at
+            #     all -- S-REIT lives under "RealEstate" -- so all thirteen
+            #     S-REITs had their curated override declined. The alias
+            #     already existed one branch above and simply was not applied
+            #     here.
+            _cands = []
+            for _s in (_lookup_sector, sector):
+                if not _s:
+                    continue
+                _cands.append(_s)
+                if _s == "REIT":
+                    _cands.append("RealEstate")
+            _override_data, _override_sector = {}, sector
+            for _s in _cands:
+                _d = INDUSTRY_VALUATION_PROFILES.get(_s, {}).get(_lookup_profile, {})
+                if _d:
+                    _override_data, _override_sector = _d, _s
+                    break
             if _override_data:
                 profile_name = _lookup_profile
                 profile_data = _override_data
+                # Carry the sector too: peer multiples are looked up by
+                # sector, so adopting a profile without its sector prices the
+                # company off the wrong comparables (35dc0f1).
+                sector = _override_sector
                 progress.update_status(
                     agent_id, ticker,
                     f"Profile override from TICKER_SECTOR_LOOKUP: {_lookup_profile}"
