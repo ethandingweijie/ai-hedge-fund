@@ -18,9 +18,12 @@
     "percentage on a listed subsidiary moves the answer more than any multiple.",
     "v2: ownership percentages sourced, and the two SGX holdcos added. PCRD holds 22.69% of PCCW plus a 1.92% DIRECT stake in HKT -- it does NOT hold a material direct stake in Singtel, which an earlier draft of this file wrongly recorded. Parts are converted to the holdco's reporting currency before being summed: Astra is quoted in IDR at ~190 trillion rupiah against a SGD parent, so an unconverted sum would be that one line and nothing else.",
     "v3: five more templates from user-supplied ownership percentages with filing context (Kingboard/Laminates 61.74%, ThaiBev/F&N 69.61%, Wilmar/YKA 89.99% and AWL 56.94%, GenScript/Legend 45.03%). Each pairs its listed stakes with ONE stub division so the residual-EBITDA rule can complete them: group EBITDA less the whole of each CONSOLIDATED subsidiary's. Legend is an associate and is therefore not subtracted. Every stub multiple_range is an ASSUMPTION and says so in its source field -- the ownership percentages are sourced, the multiples are not.",
-    "v4: holdco discounts set by the user per name, replacing the placeholders. Two are STAKE-level, not group-level -- Kingboard 25% on the Laminates holding, GenScript 20% on the Legend mark -- so `discount_pct` now exists on a division and those two carry a group discount of zero. Discounts compose one way only: division first, group once on the total. Each template records the reasoning in `discount_source`."
+    "v4: holdco discounts set by the user per name, replacing the placeholders. Two are STAKE-level, not group-level -- Kingboard 25% on the Laminates holding, GenScript 20% on the Legend mark -- so `discount_pct` now exists on a division and those two carry a group discount of zero. Discounts compose one way only: division first, group once on the total. Each template records the reasoning in `discount_source`.",
+    "v6: Olam and SingPost added with segment economics recorded in the template -- SGX publishes no machine-readable segment note, so the figures are user-supplied FY2024 / FY23-24 and each division states its own fiscal_year and source. Four bases beyond market_stake: transaction_anchor (a completed deal priced the division), cap_rate (income over a yield, for property), ev_ebit_range (stated EBIT against a peer band) and nil (an explicit, reasoned zero, which is not the same as a missing division). ThaiBev's template correctly excludes Frasers Property -- the ~28.78% stake was transferred to TCC Assets in the September 2024 swap that took F&N to 69.61%.",
+    "v6a: stated-figure divisions declare units_multiplier = 1e6. The published segment tables are in millions while market caps and net debt are absolute; without the scale the bridge subtracted a 13.8bn net debt from a 12,139 gross asset value and returned negative equity.",
+    "v6b: Olam's template currency is SGD, not USD. Divisions stay in their reported USD and convert per-division; the TEMPLATE currency has to be the listing currency because parent net debt reaches the bridge in it. Stated in USD, the bridge subtracted an SGD net debt from a USD gross asset value."
   ],
-  "version": 5,
+  "version": 6,
   "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
   "templates": {
     "00267.HK": {
@@ -312,6 +315,110 @@
         }
       ],
       "discount_source": "20% applied to the LEGEND EQUITY MARK, not to the group: high-beta Nasdaq biotech volatility, Carvykti commercial execution overhang, and parent-level holding frictions. Legend has been an associate since the October 2024 deconsolidation."
+    },
+    "VC2.SI": {
+      "name": "Olam Group",
+      "currency": "SGD",
+      "holdco_discount": [
+        0.1,
+        0.15
+      ],
+      "discount_source": "Modest: the post-reorganisation structure IS the SOTP (ofi / Olam Agri / OGH), and Olam Agri carries a completed third-party transaction mark rather than a comp estimate, so less of the total is inferred.",
+      "divisions": [
+        {
+          "name": "Olam Agri",
+          "basis": "transaction_anchor",
+          "enterprise_value": 3500.0,
+          "currency": "USD",
+          "fiscal_year": 2024,
+          "source": "SALIC acquired 35.4% for ~US$1.24bn, marking the whole at ~US$3.5bn enterprise value. A completed transaction outranks a peer median. Segment FY2024 revenue US$22,654.5m, EBIT US$891.2m.",
+          "units_multiplier": 1000000
+        },
+        {
+          "name": "ofi (Olam Food Ingredients)",
+          "basis": "ev_ebit_range",
+          "ebit": 785.4,
+          "currency": "USD",
+          "fiscal_year": 2024,
+          "multiple_range": [
+            10.0,
+            12.0
+          ],
+          "source": "FY2024 segment EBIT US$785.4m on revenue US$15,920.0m. 10-12x EV/EBIT from the standalone-IPO peer group (Kerry Group, Tate & Lyle, Givaudan).",
+          "units_multiplier": 1000000
+        },
+        {
+          "name": "Remaining Olam Group (OGH)",
+          "basis": "nil",
+          "fiscal_year": 2024,
+          "source": "FY2024 revenue US$1,482.3m on EBIT of MINUS US$124.6m: de-prioritised assets, gestating investments, Olam Ventures and MindSprint. Valued at an explicit zero rather than skipped -- a loss-making stub under divestment is worth about nothing, and saying so is a judgement, whereas omitting it is a gap. This UNDERSTATES to the extent the assets fetch anything."
+        }
+      ],
+      "net_debt_note": "UNRESOLVED: the bridge subtracts reported consolidated net debt (SGD 13.83bn), which for a commodity trader includes readily-marketable inventories -- liquid, self-liquidating stock that the street nets off before calling anything net debt. On the reported figure the SOTP reads SGD 0.355 against a 1.183 price, a 70% discount that is an artefact of the debt definition rather than a view. An RMI or adjusted-net-debt figure is needed before this name is anchored on its SOTP."
+    },
+    "S08.SI": {
+      "name": "Singapore Post",
+      "currency": "SGD",
+      "holdco_discount": [
+        0.1,
+        0.15
+      ],
+      "discount_source": "A breakup candidate, so the conglomerate frictions are smaller than usual -- the property and Australian logistics assets are separable and under active review.",
+      "divisions": [
+        {
+          "name": "Property (SingPost Centre)",
+          "basis": "cap_rate",
+          "ebit": 42.1,
+          "currency": "SGD",
+          "fiscal_year": 2024,
+          "cap_rate_range": [
+            0.04,
+            0.045
+          ],
+          "source": "FY23/24 operating profit S$42.1m on revenue S$77.3m. Retail mall plus office tower, capitalised at a 4.0-4.5% Singapore commercial cap rate -> ~S$0.94-1.05bn. Income over a yield, not a multiple of it.",
+          "units_multiplier": 1000000
+        },
+        {
+          "name": "Logistics (Australia FMH, Famous Holdings)",
+          "basis": "ev_ebit_range",
+          "ebit": 68.3,
+          "currency": "SGD",
+          "fiscal_year": 2024,
+          "multiple_range": [
+            7.0,
+            9.0
+          ],
+          "source": "FY23/24 operating profit S$68.3m on revenue S$1,180.2m. The 7-9x band is quoted for EV/EBITDA and is applied here to EBIT, which UNDERSTATES the division -- EBITDA exceeds EBIT and the segment note discloses no D&A split. Conservative on purpose rather than adjusted by assumption.",
+          "units_multiplier": 1000000
+        },
+        {
+          "name": "Post and Parcel",
+          "basis": "ev_ebit_range",
+          "ebit": 7.5,
+          "currency": "SGD",
+          "fiscal_year": 2024,
+          "multiple_range": [
+            3.0,
+            5.0
+          ],
+          "source": "FY23/24 operating profit S$7.5m on revenue S$514.1m -- near break-even. A zero-to-low multiple stub; 3-5x is an ASSUMPTION for a structurally declining domestic postal network.",
+          "units_multiplier": 1000000
+        },
+        {
+          "name": "Corporate and inter-segment",
+          "basis": "ev_ebit_range",
+          "ebit": -25.1,
+          "currency": "SGD",
+          "fiscal_year": 2024,
+          "multiple_range": [
+            7.0,
+            9.0
+          ],
+          "negative_ok": true,
+          "source": "Head office costs of S$25.1m capitalised at the group band and SUBTRACTED. Central costs are a real claim on the parts and leaving them out inflates every SOTP that forgets them.",
+          "units_multiplier": 1000000
+        }
+      ]
     }
   }
 }

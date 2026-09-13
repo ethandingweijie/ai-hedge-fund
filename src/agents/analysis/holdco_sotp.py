@@ -127,7 +127,9 @@ def residual_ebitda(ticker: str, end_date: str, to_ccy: str) -> Optional[float]:
     if not tpl:
         return None
     divs = tpl.get("divisions") or []
-    pending = [d for d in divs if d.get("basis") != "market_stake"]
+    _SELF_VALUING = {"market_stake", "transaction_anchor", "cap_rate",
+                     "ev_ebit_range", "nil"}
+    pending = [d for d in divs if d.get("basis") not in _SELF_VALUING]
     if len(pending) != 1:
         return None
     grp = _ebitda_of(ticker, end_date)
@@ -157,6 +159,86 @@ def residual_ebitda(ticker: str, end_date: str, to_ccy: str) -> Optional[float]:
     if rate is None:
         return None
     return total * rate
+
+
+def _stated_division_value(div: dict, to_ccy: str
+                          ) -> Optional[tuple[float, dict]]:
+    """Value a division from a figure recorded in the template.
+
+    Four bases, each answering a question a multiple cannot:
+
+      transaction_anchor  a real transaction priced the division -- SALIC paid
+                          US$1.24bn for 35.4% of Olam Agri, marking it at
+                          ~US$3.5bn. A completed deal outranks a comp set.
+      cap_rate            an income-producing property is worth its net income
+                          over a yield, not a multiple of it. SingPost Centre
+                          at S$42.1m and 4.0-4.5% is S$0.94-1.05bn.
+      ev_ebit_range       a stated segment EBIT against a peer EV/EBIT band.
+      nil                 an explicit, reasoned zero -- NOT the same as a
+                          missing division. A stub being wound down is worth
+                          about nothing and saying so is a judgement; failing
+                          to value it is an omission. The distinction matters
+                          because one is a number and the other is a gap.
+
+    Returns (value in `to_ccy`, detail) or None when the inputs are unusable.
+    """
+    basis = div.get("basis")
+    src_ccy = (div.get("currency") or to_ccy or "USD").upper()
+    rate = _fx(src_ccy, to_ccy)
+    if rate is None:
+        return None
+    # Segment tables are published in MILLIONS and market caps and net debt
+    # are absolute, so a template that records "785.4" against a net debt of
+    # 13,831,993,000 subtracts thirteen billion from twelve thousand. The
+    # scale is declared per division rather than inferred, because inferring
+    # it from magnitude is exactly how that error survives.
+    scale = div.get("units_multiplier")
+    scale = float(scale) if isinstance(scale, (int, float)) and scale > 0 else 1.0
+    rate = rate * scale
+
+    if basis == "nil":
+        return 0.0, {"rationale": div.get("source") or "explicit zero"}
+
+    if basis == "transaction_anchor":
+        ev = div.get("enterprise_value")
+        if not isinstance(ev, (int, float)) or ev <= 0:
+            return None
+        return float(ev) * rate, {"enterprise_value": float(ev),
+                                  "currency": src_ccy}
+
+    earnings = div.get("ebit")
+    if not isinstance(earnings, (int, float)):
+        return None
+
+    if basis == "cap_rate":
+        lo, hi = (div.get("cap_rate_range") or [None, None])
+        if not lo or not hi or lo <= 0 or hi <= 0:
+            return None
+        # A LOWER cap rate is a HIGHER value, so the midpoint is taken on the
+        # rate and not on the two values it implies.
+        mid = (lo + hi) / 2.0
+        if earnings <= 0:
+            return None
+        return (earnings / mid) * rate, {
+            "ebit": earnings, "cap_rate_range": [lo, hi], "currency": src_ccy,
+            "value_low": (earnings / hi) * rate,
+            "value_high": (earnings / lo) * rate}
+
+    # ev_ebit_range
+    lo, hi = (div.get("multiple_range") or [None, None])
+    if lo is None or hi is None:
+        return None
+    if earnings <= 0:
+        # A negative EBIT times a positive multiple is a negative value, which
+        # is right for a central-cost line and wrong for an operating stub.
+        # Only `negative_ok` divisions are allowed to subtract.
+        if not div.get("negative_ok"):
+            return None
+    mid = earnings * (lo + hi) / 2.0
+    return mid * rate, {"ebit": earnings, "multiple_range": [lo, hi],
+                        "currency": src_ccy,
+                        "value_low": earnings * lo * rate,
+                        "value_high": earnings * hi * rate}
 
 
 def look_through_value(ticker: str, end_date: str, *,
@@ -220,6 +302,29 @@ def look_through_value(ticker: str, end_date: str, *,
                           "gross_value": mcap * stake * rate,
                           "value": mcap * stake * rate * (1.0 - _d)})
             continue
+        # ── bases that carry their own figure ────────────────────────────
+        # SGX publishes no machine-readable segment note, so for Olam and
+        # SingPost the segment economics are recorded in the template with the
+        # fiscal year and currency they were reported in. That makes them
+        # STALE-ABLE in a way a parsed figure is not, which is why every such
+        # division states its own `fiscal_year` and the result reports it.
+        if basis in ("transaction_anchor", "cap_rate", "ev_ebit_range", "nil"):
+            _r = _stated_division_value(div, ccy)
+            if _r is None:
+                skipped.append({"division": name,
+                                "reason": f"{basis}: figure missing or unusable"})
+                continue
+            _val, _detail = _r
+            _d = div.get("discount_pct")
+            _d = float(_d) if isinstance(_d, (int, float)) else 0.0
+            parts.append({"division": name, "basis": basis,
+                          "discount_pct": _d,
+                          "gross_value": _val,
+                          "value": _val * (1.0 - _d),
+                          "fiscal_year": div.get("fiscal_year"),
+                          **_detail})
+            continue
+
         ebitda = ebitda_by_division.get(name)
         if ebitda is None:
             ebitda = residual_ebitda(ticker, end_date, ccy)

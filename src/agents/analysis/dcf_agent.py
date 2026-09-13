@@ -3521,6 +3521,15 @@ def _compute_method_value(
                     _all_assoc = bool(_divs) and all(
                         d.get("basis") == "market_stake"
                         and (d.get("stake_pct") or 1.0) < 0.5 for d in _divs)
+                    # A market_stake part is an EQUITY value -- the
+                    # subsidiary's own borrowings are already inside its
+                    # market cap. Every other basis produces an ENTERPRISE
+                    # value, so the debt funding those assets has to come out
+                    # or the SOTP counts debt-financed assets as if they were
+                    # equity. Olam and SingPost are valued entirely on
+                    # enterprise bases.
+                    _any_ev = any(d.get("basis") != "market_stake" for d in _divs)
+                    _nd = net_debt if (_all_assoc or _any_ev) else None
                     # The engine works in the currency the ticker TRADES in,
                     # so the look-through is converted to that, not to the
                     # reporting currency.
@@ -3528,7 +3537,7 @@ def _compute_method_value(
                     _lt = holdco_sotp.value_per_share(
                         ticker, end_date, shares,
                         to_currency=get_listing_currency(ticker),
-                        net_debt=(net_debt if _all_assoc else None))
+                        net_debt=_nd)
             except Exception:                              # noqa: BLE001
                 _lt = None
         if _lt is not None and _lt > 0:
@@ -4542,6 +4551,46 @@ _SEGMENT_SOTP_TICKERS: frozenset[str] = frozenset({
 #: this path still values each segment on a revenue multiple keyed off its
 #: name, so it earns a seat at the table rather than the table.
 _SEGMENT_SOTP_WEIGHT = 0.40
+
+
+#: Tickers whose profile gains SOTP / NAV from a COMPLETE look-through even
+#: though the profile itself does not declare the method. Explicit rather than
+#: "anyone with a template", for the same reason the segment pilot is:
+#: promoting a method moves every name that shares the profile.
+#:
+#: Olam (VC2.SI) is deliberately absent. Its look-through completes, but the
+#: bridge subtracts a reported net debt that includes readily-marketable
+#: inventories, and on that figure the SOTP reads SGD 0.355 against a 1.183
+#: price -- a discount that belongs to the debt definition, not to a view.
+_LOOKTHROUGH_PROMOTE: frozenset[str] = frozenset({"S08.SI"})
+_LOOKTHROUGH_PROMOTE_WEIGHT = 0.40
+
+
+def _promote_lookthrough_sotp(profile_data, ticker, end_date):
+    """Add SOTP / NAV to a ticker whose look-through completes.
+
+    SingPost is a breakup candidate whose SingPost Centre alone (SGD 991m at a
+    4.0-4.5% cap rate) exceeds the company's SGD 788m market capitalisation.
+    Rail / Logistics prices it on EV/EBITDA and cannot see that at all.
+    """
+    if (ticker not in _LOOKTHROUGH_PROMOTE or not profile_data
+            or not profile_data.get("methods")):
+        return profile_data, False
+    methods = profile_data["methods"]
+    if any(m.get("name") in _LOOKTHROUGH_ANCHORS for m in methods):
+        return profile_data, False
+    try:
+        from src.agents.analysis import holdco_sotp
+        if not (holdco_sotp.enabled() and holdco_sotp.can_value(ticker, end_date)):
+            return profile_data, False
+    except Exception:                                      # noqa: BLE001
+        return profile_data, False
+    scale = 1.0 - _LOOKTHROUGH_PROMOTE_WEIGHT
+    scaled = [{**m, "weight": float(m.get("weight") or 0.0) * scale,
+               "anchor": False} for m in methods]
+    scaled.append({"name": "SOTP / NAV", "weight": _LOOKTHROUGH_PROMOTE_WEIGHT,
+                   "anchor": True, "implementable": True})
+    return {**profile_data, "methods": scaled}, True
 
 
 def _promote_segment_sotp(profile_data: Optional[dict], ticker: str,
@@ -6009,6 +6058,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             progress.update_status(
                 agent_id, ticker,
                 "EV/Revenue gated off: profitable, so priced on earnings")
+
+        profile_data, _lt_sotp_on = _promote_lookthrough_sotp(
+            profile_data, ticker, end_date)
+        if _lt_sotp_on:
+            _log.info("[dcf] %s: SOTP / NAV promoted from a complete "
+                      "look-through", ticker)
 
         profile_data, _seg_sotp_on = _promote_segment_sotp(
             profile_data, ticker, bool(most_recent.get("segment_breakdown")))
