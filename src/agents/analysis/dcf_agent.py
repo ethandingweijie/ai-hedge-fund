@@ -4515,6 +4515,62 @@ _EV_REVENUE_NAMES = frozenset({"EV/Revenue", "EV/NTM Revenue", "EV/NTM Rev",
                                "EV/Fwd Rev"})
 
 
+#: Pilot set for filing-derived segment SOTP. Deliberately an explicit list
+#: rather than "any ticker whose filing parses": promoting a method changes
+#: the blend for every name it touches, and these four are the ones whose
+#: segment notes parse to two or more segments WITH profit. The remaining
+#: seven SOTP-primary names are blocked on data that does not exist -- SGX
+#: publishes no machine-readable segment note (Wilmar, ThaiBev, Olam,
+#: SingPost), Geely declares a single reportable segment, WH Group and
+#: Kingboard parse to revenue-only rows.
+_SEGMENT_SOTP_TICKERS: frozenset[str] = frozenset({
+    "00700.HK",   # Tencent  — VAS, Marketing, FinTech & Business Services, Others
+    "01810.HK",   # Xiaomi   — Smartphones, IoT, Internet services, EV
+    "03690.HK",   # Meituan  — core local commerce, new initiatives
+})
+#: GenScript was in this set and is deliberately NOT: its segment note covers
+#: Life Science, ProBio and Bestzyme, but the value is Legend Biotech, which
+#: has been an ASSOCIATE since the October 2024 deconsolidation and therefore
+#: contributes no revenue segment at all. A segment SOTP omits 45.03% of
+#: Legend's market capitalisation by construction -- it read 10.78 against a
+#: 30.66 target and moved the name from 43.2% to 46.0%. The look-through in
+#: holdco_sotp_templates.json is the right instrument for GenScript, and it
+#: already marks the Legend stake at market.
+
+#: Co-equal anchor weight, not the 3.0 (=75%) the ANALYST SOTP carries. A
+#: filing-derived segment map is better evidence than a research note, but
+#: this path still values each segment on a revenue multiple keyed off its
+#: name, so it earns a seat at the table rather than the table.
+_SEGMENT_SOTP_WEIGHT = 0.40
+
+
+def _promote_segment_sotp(profile_data: Optional[dict], ticker: str,
+                          has_breakdown: bool) -> tuple[Optional[dict], bool]:
+    """Add "SOTP (segments)" to this ticker's profile at a co-equal weight.
+
+    Copy-on-write: profile dicts are references into
+    INDUSTRY_VALUATION_PROFILES and mutating one leaks the method into every
+    later ticker sharing the profile. Existing weights are scaled down so the
+    total still sums to 1.0, which keeps the relative ordering of the methods
+    the profile author chose.
+
+    Returns the input unchanged when there is nothing to promote, so every
+    ticker outside the pilot set stays bit-identical.
+    """
+    if (not has_breakdown or ticker not in _SEGMENT_SOTP_TICKERS
+            or not profile_data or not profile_data.get("methods")):
+        return profile_data, False
+    methods = profile_data["methods"]
+    if any(m.get("name") in {"SOTP (segments)", "SOTP (Segments)"} for m in methods):
+        return profile_data, False
+    scale = 1.0 - _SEGMENT_SOTP_WEIGHT
+    scaled = [{**m, "weight": float(m.get("weight") or 0.0) * scale,
+               "anchor": False} for m in methods]
+    scaled.append({"name": "SOTP (segments)", "weight": _SEGMENT_SOTP_WEIGHT,
+                   "anchor": True, "implementable": True})
+    return {**profile_data, "methods": scaled}, True
+
+
 def _promote_sotp_analyst_profile(profile_data: Optional[dict],
                                   has_assumptions: bool) -> Optional[dict]:
     """Promote "SOTP (analyst)" into the resolved valuation profile.
@@ -5254,6 +5310,32 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             )
         except Exception:
             product_segments = []
+        # FMP's product segmentation returns [] for HKEX and SGX by design, so
+        # every Asian name arrived here with no segment map at all. The filing
+        # note is the authoritative disclosure anyway (IFRS 8 / ASC 280) and
+        # the extractor built earlier in this arc already parses it.
+        #
+        # NOTE what this feeds: _sotp_enterprise_value applies a REVENUE
+        # multiple per segment, keyed off the segment's name. The per-segment
+        # PROFIT this parser also returns is not consumed by that path, so a
+        # loss-making division is still valued on its top line. That is the
+        # next piece of work, not this one.
+        if not product_segments and ticker in _SEGMENT_SOTP_TICKERS:
+            try:
+                from src.tools.segment_providers import get_segment_footnote
+                _fn = get_segment_footnote(ticker, end_date)
+                _rows = [r for r in ((_fn or {}).get("segments") or [])
+                         if isinstance(r.get("revenue"), (int, float))
+                         and r["revenue"] > 0]
+                if len(_rows) >= 2:
+                    product_segments = [{
+                        "period_end": (_fn.get("period_end") or end_date),
+                        "segments": {r["name"]: float(r["revenue"]) for r in _rows},
+                    }]
+                    _log.info("[dcf] %s: segment map from the filing note "
+                              "(%d segments)", ticker, len(_rows))
+            except Exception:                              # noqa: BLE001
+                pass
         if product_segments:
             _latest_seg = product_segments[-1]
             _fxm = fx_rate if (fx_rate and fx_rate > 0) else 1.0
@@ -5927,6 +6009,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             progress.update_status(
                 agent_id, ticker,
                 "EV/Revenue gated off: profitable, so priced on earnings")
+
+        profile_data, _seg_sotp_on = _promote_segment_sotp(
+            profile_data, ticker, bool(most_recent.get("segment_breakdown")))
+        if _seg_sotp_on:
+            _log.info("[dcf] %s: SOTP (segments) promoted at %.2f from the "
+                      "filing segment note", ticker, _SEGMENT_SOTP_WEIGHT)
+            progress.update_status(agent_id, ticker,
+                                   "SOTP (segments) promoted from the filing")
 
         profile_data = _promote_sotp_analyst_profile(
             profile_data, bool(most_recent.get("sotp_assumptions")))
