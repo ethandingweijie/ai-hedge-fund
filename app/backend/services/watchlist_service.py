@@ -27,8 +27,8 @@ VGPM priority
   2. Fast VGPM    — screener_service.lookup_ticker() (FMP metrics, 24h cache)
 """
 import json
+import logging
 import os
-import sqlite3
 import requests
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -37,27 +37,18 @@ from typing import Optional
 # Dual-mode DB layer (SQLite local / Postgres production)
 from src.data import db as _db
 
+logger = logging.getLogger(__name__)
+
 _STABLE = "https://financialmodelingprep.com/stable"
 STALE_HOURS = 24   # refresh VGPM/price if older than this
 
 
-def _get_db_path() -> str:
-    import os
-    env_path = os.environ.get("RUN_ARCHIVE_PATH")
-    if env_path:
-        return env_path
-    this_file = Path(__file__)
-    project_root = this_file.parent.parent.parent.parent
-    return str(project_root / "src" / "data" / "run_archive.db")
-
-
-def _connect(path: str | None = None, **kwargs) -> sqlite3.Connection:
-    """Open run_archive.db with WAL mode, NORMAL sync, and a 5-second busy timeout."""
-    conn = sqlite3.connect(path or _get_db_path(), **kwargs)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=5000")
-    return conn
+# The raw-sqlite3 helpers that used to live here (_get_db_path, _connect) are
+# gone. They opened a FILE -- RUN_ARCHIVE_PATH, or src/data/run_archive.db --
+# which works locally and fails on a multi-replica container whose volume is
+# not mounted, with exactly the error users saw: "unable to open database
+# file". screener_service carries the same note for the same incident on
+# 2026-08-16; this module was the last one still doing it.
 
 
 def _get_fmp_key() -> Optional[str]:
@@ -66,9 +57,12 @@ def _get_fmp_key() -> Optional[str]:
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
+#: Portable across both modes. The id was INTEGER PRIMARY KEY AUTOINCREMENT,
+#: which Postgres rejects outright -- nothing reads it, so it is a plain
+#: surrogate here and the real key is the (user_id, ticker) unique index.
 _DDL = """
 CREATE TABLE IF NOT EXISTS watchlist (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    id              INTEGER,
     ticker          TEXT NOT NULL,
     company_name    TEXT,
     added_at        TEXT NOT NULL,
@@ -96,25 +90,25 @@ _POST_MIGRATIONS = [
 
 
 def _ensure_table():
-    conn = _connect()
+    """Create the watchlist table through the dual-mode layer.
+
+    Postgres in production, SQLite locally -- the same file and the same table
+    the raw-sqlite3 version used, so no local row moves.
+    """
     try:
-        conn.execute(_DDL)
-        conn.commit()
-        # Apply migrations idempotently (SQLite raises if column already exists)
-        for sql in _MIGRATIONS:
-            try:
-                conn.execute(sql)
-                conn.commit()
-            except Exception:
-                pass  # column already exists
-        for sql in _POST_MIGRATIONS:
-            try:
-                conn.execute(sql)
-                conn.commit()
-            except Exception:
-                pass
-    finally:
-        conn.close()
+        _db.ensure_table(_DDL)
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("watchlist _ensure_table: %s", exc)
+    for sql in _MIGRATIONS:
+        try:
+            _db.execute(sql)
+        except Exception:                                  # noqa: BLE001
+            pass          # column already exists; both engines raise
+    for sql in _POST_MIGRATIONS:
+        try:
+            _db.execute(sql)
+        except Exception:                                  # noqa: BLE001
+            pass
 
 
 # ── FMP helpers ───────────────────────────────────────────────────────────────
@@ -171,17 +165,12 @@ def _get_pipeline_vgpm(tickers: list[str]) -> dict[str, dict]:
             list(tickers),
         )
     else:
-        conn = _connect()
-        conn.row_factory = sqlite3.Row
-        try:
-            rows = conn.execute(
-                f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
-                f"FROM web_runs WHERE ticker IN ({placeholders}) AND full_result_json IS NOT NULL "
-                f"GROUP BY ticker",
-                tickers,
-            ).fetchall()
-        finally:
-            conn.close()
+        rows = _db.query(
+            f"SELECT ticker, full_result_json, MAX(run_at) AS latest "
+            f"FROM web_runs WHERE ticker IN ({placeholders}) "
+            f"AND full_result_json IS NOT NULL GROUP BY ticker",
+            list(tickers),
+        ) or []
 
     result = {}
     for row in rows:
@@ -281,7 +270,6 @@ def _write_vgpm_to_watchlist(
     to prevent cross-user writes. Previously, user_id=None would update ALL
     users' watchlists for that ticker.
     """
-    conn = _connect()
     now_iso = datetime.now(timezone.utc).isoformat()
     # Build WHERE clause — ALWAYS scope to user_id to prevent cross-user writes
     # When user_id is None, only update rows with NULL user_id (legacy rows)
@@ -293,18 +281,21 @@ def _write_vgpm_to_watchlist(
         params_suffix = [ticker]
     try:
         if price is not None:
-            conn.execute(
-                f"UPDATE watchlist SET vgpm_json = ?, price = ?, vgpm_updated_at = ?, vgpm_source = ? {where}",
-                [json.dumps(vgpm) if vgpm else None, price, now_iso, source] + params_suffix,
+            _db.execute(
+                f"UPDATE watchlist SET vgpm_json = ?, price = ?, "
+                f"vgpm_updated_at = ?, vgpm_source = ? {where}",
+                [json.dumps(vgpm) if vgpm else None, price, now_iso, source]
+                + params_suffix,
             )
         else:
-            conn.execute(
-                f"UPDATE watchlist SET vgpm_json = ?, vgpm_updated_at = ?, vgpm_source = ? {where}",
-                [json.dumps(vgpm) if vgpm else None, now_iso, source] + params_suffix,
+            _db.execute(
+                f"UPDATE watchlist SET vgpm_json = ?, vgpm_updated_at = ?, "
+                f"vgpm_source = ? {where}",
+                [json.dumps(vgpm) if vgpm else None, now_iso, source]
+                + params_suffix,
             )
-        conn.commit()
-    finally:
-        conn.close()
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("watchlist _write_vgpm(%s): %s", ticker, exc)
 
 
 # ── Composite score helper ────────────────────────────────────────────────────
@@ -325,22 +316,14 @@ def get_watchlist(user_id: Optional[int] = None) -> list[dict]:
     - Stale rows: refreshed from FMP (backed by screener caches), persisted back.
     """
     _ensure_table()
-    conn = _connect()
-    conn.row_factory = sqlite3.Row
-    try:
-        if user_id is not None:
-            rows = conn.execute(
-                "SELECT ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source "
-                "FROM watchlist WHERE user_id = ? ORDER BY added_at DESC",
-                (user_id,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source "
-                "FROM watchlist WHERE user_id IS NULL ORDER BY added_at DESC"
-            ).fetchall()
-    finally:
-        conn.close()
+    _cols = ("SELECT ticker, company_name, added_at, price, vgpm_json, "
+             "vgpm_updated_at, vgpm_source FROM watchlist ")
+    if user_id is not None:
+        rows = _db.query(_cols + "WHERE user_id = ? ORDER BY added_at DESC",
+                         [user_id]) or []
+    else:
+        rows = _db.query(
+            _cols + "WHERE user_id IS NULL ORDER BY added_at DESC") or []
 
     if not rows:
         return []
@@ -419,28 +402,20 @@ def add_ticker(ticker: str, user_id: Optional[int] = None) -> dict:
 
     source = fresh.get("source", "fast")
 
-    conn = _connect()
+    # INSERT OR IGNORE is SQLite-only; ON CONFLICT DO NOTHING is the portable
+    # spelling and is what the unique (user_id, ticker) index exists for.
+    _insert = (
+        "INSERT INTO watchlist "
+        "(ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, "
+        " vgpm_source, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT DO NOTHING")
     try:
-        conn.execute(
-            """
-            INSERT OR IGNORE INTO watchlist
-                (ticker, company_name, added_at, price, vgpm_json, vgpm_updated_at, vgpm_source, user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                ticker,
-                company_name,
-                now,
-                price,
-                json.dumps(vgpm) if vgpm else None,
-                now,
-                source,
-                user_id,
-            ),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+        _db.execute(_insert, [ticker, company_name, now, price,
+                              json.dumps(vgpm) if vgpm else None, now,
+                              source, user_id])
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("watchlist add_ticker(%s): %s", ticker, exc)
+        raise
 
     return {
         "ticker":          ticker,
@@ -455,34 +430,27 @@ def add_ticker(ticker: str, user_id: Optional[int] = None) -> dict:
 def remove_ticker(ticker: str, user_id: Optional[int] = None) -> bool:
     _ensure_table()
     ticker = ticker.strip().upper()
-    conn = _connect()
-    try:
-        if user_id is not None:
-            cur = conn.execute("DELETE FROM watchlist WHERE ticker = ? AND user_id = ?", (ticker, user_id))
-        else:
-            cur = conn.execute("DELETE FROM watchlist WHERE ticker = ? AND user_id IS NULL", (ticker,))
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
+    if user_id is not None:
+        return _db.execute(
+            "DELETE FROM watchlist WHERE ticker = ? AND user_id = ?",
+            [ticker, user_id]) > 0
+    return _db.execute(
+        "DELETE FROM watchlist WHERE ticker = ? AND user_id IS NULL",
+        [ticker]) > 0
 
 
 def is_in_watchlist(ticker: str, user_id: Optional[int] = None) -> bool:
     _ensure_table()
     ticker = ticker.strip().upper()
-    conn = _connect()
-    try:
-        if user_id is not None:
-            row = conn.execute(
-                "SELECT 1 FROM watchlist WHERE ticker = ? AND user_id = ?", (ticker, user_id)
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT 1 FROM watchlist WHERE ticker = ? AND user_id IS NULL", (ticker,)
-            ).fetchone()
-        return row is not None
-    finally:
-        conn.close()
+    if user_id is not None:
+        row = _db.query_one(
+            "SELECT 1 AS hit FROM watchlist WHERE ticker = ? AND user_id = ?",
+            [ticker, user_id])
+    else:
+        row = _db.query_one(
+            "SELECT 1 AS hit FROM watchlist WHERE ticker = ? AND user_id IS NULL",
+            [ticker])
+    return row is not None
 
 
 def refresh_ticker_vgpm(ticker: str):
