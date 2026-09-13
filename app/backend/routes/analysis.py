@@ -1788,7 +1788,13 @@ async def get_intelligence(ticker: str):
         _aio.to_thread(_fmp, "/stable/earnings",               symbol=sym, limit=8),
         _aio.to_thread(_fmp, "/stable/price-target-consensus", symbol=sym),
         _aio.to_thread(_fmp, "/stable/analyst-estimates",      symbol=sym, limit=4),
-        _aio.to_thread(_fmp, "/stable/news/stock",             tickers=sym, limit=30),
+        # `symbols` (plural). NOT `tickers`, and NOT `symbol`: FMP ignores an
+        # unrecognised filter and returns an unfiltered US feed, so this call
+        # was attaching the same Apple articles to every ticker -- TSLA,
+        # 0700.HK and D05.SI alike -- and those articles then scored the
+        # news_sentiment signal and filled top_headlines. src/tools/api.py:972
+        # documents the trap; this call site had it.
+        _aio.to_thread(_fmp, "/stable/news/stock",             symbols=sym, limit=30),
         _aio.to_thread(_fmp, "/stable/income-statement",       symbol=sym, period="annual", limit=4),
         _aio.to_thread(_fmp, "/stable/cash-flow-statement",    symbol=sym, period="annual", limit=4),
         _aio.to_thread(_fmp, "/stable/balance-sheet-statement",symbol=sym, period="annual", limit=4),
@@ -2036,6 +2042,11 @@ async def get_intelligence(ticker: str):
         "press_release_count":  pr_n,
         "volume_spike":         len(articles) > 20,
         "top_headlines":        headlines[:5],
+        # FMP carries no news rows for HKEX or SGX, so an Asian ticker now
+        # returns zero articles where it used to return Apple's. Zero articles
+        # scores composite 0.0 and reads as NEUTRAL, which is a different
+        # wrong answer -- say which one this is.
+        "no_coverage":          not articles,
     }
 
     # ─────────────────────────────────────────────────────────────────────────
