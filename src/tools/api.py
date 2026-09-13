@@ -2528,3 +2528,63 @@ def get_company_industry(ticker: str, api_key: str | None = None) -> str | None:
         industry = None
     _INDUSTRY_CACHE[t] = industry
     return industry
+
+
+# ── Listing currency (the currency a ticker actually TRADES in) ─────────────
+_LISTING_CCY_CACHE: dict[str, str | None] = {}
+
+#: Venue default -- correct for the large majority of lines on each venue.
+_VENUE_CCY = {".HK": "HKD", ".SI": "SGD", ".JK": "IDR", ".SS": "CNY",
+              ".SZ": "CNY", ".T": "JPY", ".L": "GBp", ".AX": "AUD"}
+
+#: SGX lists a material set of counters in USD, not SGD -- Jardine Matheson,
+#: Hongkong Land, DFI Retail, HPH Trust and the US-asset REITs among them.
+#: Assuming the venue currency values those names ~27% above the price they
+#: are compared against. Held as a static table so the fallback is right even
+#: when the profile lookup is unavailable; FMP is consulted first regardless.
+_KNOWN_USD_QUOTED = {
+    "NS8U.SI", "J36.SI", "J37.SI", "H78.SI", "D01.SI", "BTOU.SI", "OXMU.SI",
+    "DCRU.SI", "CMOU.SI", "KODU.SI", "ODBU.SI", "TS0U.SI", "BN2.SI",
+}
+
+
+def get_listing_currency(ticker: str, api_key: str | None = None) -> str:
+    """The currency ``ticker`` is QUOTED in -- not its reporting currency.
+
+    Intrinsic value must be expressed in the same currency as the price it is
+    compared with. Deriving that from the exchange suffix alone is wrong for
+    every USD-quoted SGX counter, and the error is silent: the valuation and
+    the spot price are both plausible numbers that simply are not comparable.
+
+    Never raises. Falls back to the venue default, which is right for most
+    lines and no worse than the assumption it replaces.
+    """
+    t = (ticker or "").strip().upper()
+    if not t:
+        return "USD"
+    if t in _LISTING_CCY_CACHE:
+        return _LISTING_CCY_CACHE[t] or "USD"
+
+    default = "USD"
+    for suf, ccy in _VENUE_CCY.items():
+        if t.endswith(suf):
+            default = ccy
+            break
+    if t in _KNOWN_USD_QUOTED:
+        default = "USD"
+
+    ccy = None
+    try:
+        from src.tools.fmp_transcripts import to_fmp_symbol
+        rows = _fmp_get(f"{_STABLE}/profile", {"symbol": to_fmp_symbol(t)},
+                        api_key or os.environ.get("FMP_API_KEY"))
+        if isinstance(rows, list) and rows:
+            raw = ((rows[0] or {}).get("currency") or "").strip().upper()
+            if len(raw) == 3 and raw.isalpha():
+                ccy = raw
+    except Exception:                                      # noqa: BLE001
+        ccy = None
+
+    out = ccy or default
+    _LISTING_CCY_CACHE[t] = out
+    return out

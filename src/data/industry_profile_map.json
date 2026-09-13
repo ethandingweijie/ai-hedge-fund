@@ -1,652 +1,656 @@
 {
- "_doc": [
-  "FMP industry -> (sector, valuation profile).",
-  "",
-  "The routing unit is the INDUSTRY, not the ticker. 71 rows cover 100/100 of",
-  "the HK large-cap universe and generalise to any future listing in the same",
-  "industry, where a per-ticker table would need a new row for every name.",
-  "",
-  "Profiles carrying an (SG) suffix are Singapore CALIBRATIONS and must never",
-  "be routed to a HK or US listing. The DBS incident was this in reverse: with",
-  "no deterministic profile, DBS was routed to the US Money Center Bank row",
-  "(ROE 12% / CoE 9.0% / P/TBV 1.4x) instead of the Singapore one. A test",
-  "fails the build if an (SG) profile appears here.",
-  "",
-  "Every value must resolve in INDUSTRY_VALUATION_PROFILES[sector][profile];",
-  "a typo would otherwise fall through silently to the financial ladder, which",
-  "is precisely the failure this table exists to remove.",
-  "v2: 'Real Estate - Services' moved off REIT. KE Holdings and CR Mixc are asset-light fee businesses -- a brokerage platform and a property manager -- and a cap-rate NAV anchor valued them on property they do not own.",
-  "v3: ticker_overrides. An industry row is right for the majority of an industry; where a label genuinely lumps different archetypes together, the override names the exception rather than distorting the row for everyone.",
-  "v4: WuXi Biologics override. FMP labels it 'Biotechnology', which routes to Pre-approval Biotech -- a profile anchored on rNPV precisely because a pre-revenue name has no cash flow to discount. WuXi Bio is a profitable CDMO. Adding DCF to the biotech profile to accommodate it was the wrong fix and the FIXBT fixture caught it: DCF returned no value for a genuine pre-revenue biotech and was reported as an unavailable method.",
-  "v5: per-market tables. `markets.SG` is consulted before the default table for .SI listings, because Singapore has CALIBRATED profiles -- S-REIT, Money Center Bank (SG), Telco / Infrastructure (SG) and the rest -- that must not be used for other markets and must not be missed for this one. An S-REIT priced off US cap rates is the DBS incident in the other direction.",
-  "v6: SGX ticker overrides. FMP carries no company profile for 24 of the SGX large/mid caps, so there is no industry to route on and the ticker is the only key available. A further five are labelled in a way that routes them to the wrong archetype -- Bukit Sembawang, a landed-residential developer, came through as Travel & Dining. Each choice follows the practitioner spec's PRIMARY method rather than name recognition.",
-  "v7: distressed and foreign-asset trusts move off S-REIT. S-REIT anchors DDM (S-REIT) at 0.55, which is the wrong primary for a trust that has suspended or cut its distribution -- Manulife US REIT, Prime US REIT, Keppel Pacific Oak US REIT and Lippo Malls are all restructuring or liquidation cases whose value is the asset NAV net of debt. The REIT row anchors NAV (Cap Rates) instead. For the three US-office trusts the US calibration is also the CORRECT one: they are SGX-listed but hold American property priced on American cap rates.",
-  "v8: Insurance - Property & Casualty routes to the new Insurance (P&C) node instead of the life profile. Embedded Value discounts an in-force book of long-duration policies; a general insurer writes one-year contracts and has none, so PICC was anchored on a method that does not exist for it.",
-  "v9: platform businesses mislabelled as retail, and one exception inside a correct row. FMP's 'Specialty Retail' holds Meituan, SHEIN and a semiconductor test company -- none of them pays rent on a shop estate, which is all that Traditional Retail's EV/EBITDAR anchor measures. And 'Internet Content & Information' -> Mature Platform is right for Kuaishou and TME but wrong for Tencent, whose gaming, fintech, cloud and investment portfolio are a conglomerate. The row stays; the exception is named."
- ],
- "version": 9,
- "map": {
-  "Agricultural - Machinery": [
-   "Industrials",
-   "Capital Goods"
-  ],
-  "Airlines, Airports & Air Services": [
-   "Transportation",
-   "Airlines"
-  ],
-  "Aluminum": [
-   "Resources",
-   "Mining (Major)"
-  ],
-  "Apparel - Manufacturers": [
-   "Consumer",
-   "Apparel / Athletic Wear"
-  ],
-  "Apparel - Retail": [
-   "Consumer",
-   "Traditional Retail"
-  ],
-  "Asset Management": [
-   "Financials",
-   "Asset Manager"
-  ],
-  "Auto - Manufacturers": [
-   "Consumer",
-   "Automotive & EV"
-  ],
-  "Auto - Parts": [
-   "Consumer",
-   "Consumer Durables"
-  ],
-  "Banks - Diversified": [
-   "Financials",
-   "Money Center Bank"
-  ],
-  "Banks - Regional": [
-   "Financials",
-   "EM Bank"
-  ],
-  "Beverages - Alcoholic": [
-   "Consumer",
-   "Food & Beverage"
-  ],
-  "Beverages - Non-Alcoholic": [
-   "Consumer",
-   "Food & Beverage"
-  ],
-  "Biotechnology": [
-   "Biopharma",
-   "Pre-approval Biotech"
-  ],
-  "Chemicals - Specialty": [
-   "Materials",
-   "Specialty Chemicals"
-  ],
-  "Coal": [
-   "Resources",
-   "Mining (Major)"
-  ],
-  "Computer Hardware": [
-   "Tech",
-   "Mature Platform"
-  ],
-  "Conglomerates": [
-   "Financials",
-   "Holding Company"
-  ],
-  "Consumer Electronics": [
-   "Tech",
-   "Hyperscaler / Tech Conglomerate"
-  ],
-  "Copper": [
-   "Resources",
-   "Mining (Major)"
-  ],
-  "Drug Manufacturers - General": [
-   "Biopharma",
-   "Large Cap Pharma"
-  ],
-  "Drug Manufacturers - Specialty & Generic": [
-   "Biopharma",
-   "Large Cap Pharma"
-  ],
-  "Electrical Equipment & Parts": [
-   "Industrials",
-   "Capital Goods"
-  ],
-  "Engineering & Construction": [
-   "Industrials",
-   "Capital Goods"
-  ],
-  "Financial - Capital Markets": [
-   "Financials",
-   "Brokerage"
-  ],
-  "Financial - Data & Stock Exchanges": [
-   "Financials",
-   "Market Infrastructure"
-  ],
-  "Food Distribution": [
-   "Consumer",
-   "Traditional Retail"
-  ],
-  "Furnishings, Fixtures & Appliances": [
-   "Consumer",
-   "Consumer Durables"
-  ],
-  "Gambling, Resorts & Casinos": [
-   "Consumer",
-   "Travel & Dining"
-  ],
-  "Gold": [
-   "Resources",
-   "Mining (Major)"
-  ],
-  "Hardware, Equipment & Parts": [
-   "Tech",
-   "Mature Platform"
-  ],
-  "Household & Personal Products": [
-   "Consumer",
-   "Household / Personal"
-  ],
-  "Independent Power Producers": [
-   "Energy",
-   "IPP"
-  ],
-  "Industrial - Machinery": [
-   "Industrials",
-   "Capital Goods"
-  ],
-  "Insurance - Diversified": [
-   "Financials",
-   "Insurance"
-  ],
-  "Insurance - Life": [
-   "Financials",
-   "Insurance"
-  ],
-  "Insurance - Property & Casualty": [
-   "Financials",
-   "Insurance (P&C)"
-  ],
-  "Integrated Freight & Logistics": [
-   "Transportation",
-   "Rail / Logistics"
-  ],
-  "Internet Content & Information": [
-   "Tech",
-   "Mature Platform"
-  ],
-  "Leisure": [
-   "Consumer",
-   "Consumer Growth"
-  ],
-  "Luxury Goods": [
-   "Consumer",
-   "Luxury Goods"
-  ],
-  "Manufacturing - Tools & Accessories": [
-   "Industrials",
-   "Capital Goods"
-  ],
-  "Marine Shipping": [
-   "Transportation",
-   "Rail / Logistics"
-  ],
-  "Medical - Care Facilities": [
-   "HealthcareServices",
-   "Healthcare Providers / Services"
-  ],
-  "Medical - Diagnostics & Research": [
-   "Biopharma",
-   "CDMO / Life Science Tools"
-  ],
-  "Medical - Instruments & Supplies": [
-   "Biopharma",
-   "MedTech / Devices"
-  ],
-  "Medical - Pharmaceuticals": [
-   "Biopharma",
-   "Large Cap Pharma"
-  ],
-  "Oil & Gas Integrated": [
-   "Resources",
-   "Upstream Oil & Gas"
-  ],
-  "Oil & Gas Refining & Marketing": [
-   "Energy",
-   "Merchant Power"
-  ],
-  "Other Industrial Metals & Mining": [
-   "Resources",
-   "Mining (Major)"
-  ],
-  "Other Precious Metals": [
-   "Resources",
-   "Mining (Major)"
-  ],
-  "Packaged Foods": [
-   "Consumer",
-   "Food & Beverage"
-  ],
-  "REIT - Retail": [
-   "RealEstate",
-   "REIT"
-  ],
-  "Railroads": [
-   "Transportation",
-   "Rail / Logistics"
-  ],
-  "Real Estate - Development": [
-   "RealEstate",
-   "REIT"
-  ],
-  "Real Estate - Diversified": [
-   "RealEstate",
-   "REIT"
-  ],
-  "Real Estate - Services": [
-   "ProfessionalServices",
-   "Ad / Consulting"
-  ],
-  "Regulated Electric": [
-   "Energy",
-   "Regulated Utility"
-  ],
-  "Regulated Gas": [
-   "Energy",
-   "Regulated Utility"
-  ],
-  "Renewable Utilities": [
-   "Energy",
-   "IPP"
-  ],
-  "Restaurants": [
-   "Consumer",
-   "Travel & Dining"
-  ],
-  "Security & Protection Services": [
-   "Industrials",
-   "Capital Goods"
-  ],
-  "Semiconductor Equipment & Materials": [
-   "Semiconductor",
-   "Equipment / EDA"
-  ],
-  "Semiconductors": [
-   "Semiconductor",
-   "IDM / Foundry"
-  ],
-  "Software - Application": [
-   "Tech",
-   "Mature SaaS"
-  ],
-  "Software - Infrastructure": [
-   "Tech",
-   "Mature SaaS"
-  ],
-  "Specialty Business Services": [
-   "ProfessionalServices",
-   "IT Services"
-  ],
-  "Specialty Retail": [
-   "Consumer",
-   "Traditional Retail"
-  ],
-  "Telecommunications Services": [
-   "Telco",
-   "Stable Growth"
-  ],
-  "Tobacco": [
-   "Consumer",
-   "Household / Personal"
-  ],
-  "Travel Lodging": [
-   "Consumer",
-   "Travel & Dining"
-  ],
-  "Travel Services": [
-   "Consumer",
-   "Travel & Dining"
-  ]
- },
- "ticker_overrides": {
-  "01997.HK": [
-   "RealEstate",
-   "REIT"
-  ],
-  "02269.HK": [
-   "Biopharma",
-   "CDMO / Life Science Tools"
-  ],
-  "H15.SI": [
-   "Property",
-   "Property Developer (SG)"
-  ],
-  "541.SI": [
-   "Property",
-   "Property Developer (SG)"
-  ],
-  "5OT.SI": [
-   "Property",
-   "Property Developer (SG)"
-  ],
-  "O08.SI": [
-   "Property",
-   "Property Developer (SG)"
-  ],
-  "Q0X.SI": [
-   "Property",
-   "Real Estate Agency (SG)"
-  ],
-  "K75U.SI": [
-   "RealEstate",
-   "S-REIT"
-  ],
-  "B9S.SI": [
-   "RealEstate",
-   "S-REIT"
-  ],
-  "A68U.SI": [
-   "RealEstate",
-   "S-REIT"
-  ],
-  "KODU.SI": [
-   "RealEstate",
-   "REIT"
-  ],
-  "2BU.SI": [
-   "Consumer",
-   "Agribusiness & Food (SG)"
-  ],
-  "KJ5.SI": [
-   "Consumer",
-   "Agribusiness & Food (SG)"
-  ],
-  "564.SI": [
-   "Consumer",
-   "Packaged Consumer & Lifestyle (SG)"
-  ],
-  "5WJ.SI": [
-   "Tech",
-   "Tech Manufacturing / EMS (SG)"
-  ],
-  "575.SI": [
-   "Tech",
-   "Tech Manufacturing / EMS (SG)"
-  ],
-  "5EF.SI": [
-   "Tech",
-   "Tech Manufacturing / EMS (SG)"
-  ],
-  "BVA.SI": [
-   "Tech",
-   "Mature SaaS"
-  ],
-  "H19.SI": [
-   "ProfessionalServices",
-   "Ad / Consulting"
-  ],
-  "S35.SI": [
-   "Financials",
-   "Bank / Lending Institution"
-  ],
-  "4LJ.SI": [
-   "Financials",
-   "Brokerage"
-  ],
-  "580.SI": [
-   "Industrials",
-   "Conglomerate / Industrial (SG)"
-  ],
-  "5LE.SI": [
-   "Industrials",
-   "Offshore Marine & Resources (SG)"
-  ],
-  "584.SI": [
-   "Industrials",
-   "Offshore Marine & Resources (SG)"
-  ],
-  "S2D.SI": [
-   "Industrials",
-   "Aviation & Marine (SG)"
-  ],
-  "VZS.SI": [
-   "Industrials",
-   "Aviation & Marine (SG)"
-  ],
-  "C07.SI": [
-   "Financials",
-   "Holding Company"
-  ],
-  "P15.SI": [
-   "Financials",
-   "Holding Company"
-  ],
-  "B58.SI": [
-   "Property",
-   "Property Developer (SG)"
-  ],
-  "O10.SI": [
-   "Property",
-   "Property Developer (SG)"
-  ],
-  "NS8U.SI": [
-   "RealEstate",
-   "S-REIT"
-  ],
-  "BTOU.SI": [
-   "RealEstate",
-   "REIT"
-  ],
-  "OXMU.SI": [
-   "RealEstate",
-   "REIT"
-  ],
-  "D5IU.SI": [
-   "RealEstate",
-   "REIT"
-  ],
-  "03690.HK": [
-   "Tech",
-   "Hyperscaler / Tech Conglomerate"
-  ],
-  "00700.HK": [
-   "Tech",
-   "Hyperscaler / Tech Conglomerate"
-  ],
-  "00625.HK": [
-   "Consumer",
-   "Consumer Growth"
-  ],
-  "AWI.SI": [
-   "Tech",
-   "Tech Manufacturing / EMS (SG)"
-  ]
- },
- "markets": {
-  "SG": {
-   "Aerospace & Defense": [
-    "Industrials",
-    "Aerospace & Engineering (SG)"
-   ],
-   "Agricultural Farm Products": [
-    "Consumer",
-    "Agribusiness & Food (SG)"
-   ],
-   "Airlines, Airports & Air Services": [
-    "Industrials",
-    "Aviation & Marine (SG)"
-   ],
-   "Auto - Manufacturers": [
-    "Consumer",
-    "Automotive & EV"
-   ],
-   "Banks": [
-    "Financials",
-    "Money Center Bank (SG)"
-   ],
-   "Banks - Regional": [
-    "Financials",
-    "Money Center Bank (SG)"
-   ],
-   "Beverages - Non-Alcoholic": [
-    "Consumer",
-    "Packaged Consumer & Lifestyle (SG)"
-   ],
-   "Beverages - Wineries & Distilleries": [
-    "Consumer",
-    "Packaged Consumer & Lifestyle (SG)"
-   ],
-   "Conglomerates": [
-    "Industrials",
-    "Conglomerate / Industrial (SG)"
-   ],
-   "Diversified Utilities": [
-    "Energy",
-    "Regulated Utility"
-   ],
-   "Drug Manufacturers - General": [
-    "Biopharma",
-    "Large Cap Pharma"
-   ],
-   "Engineering & Construction": [
-    "Industrials",
-    "Capital Goods"
-   ],
-   "Financial - Capital Markets": [
-    "Financials",
-    "WealthTech & Specialty Financials (SG)"
-   ],
-   "Financial - Conglomerates": [
-    "Financials",
-    "WealthTech & Specialty Financials (SG)"
-   ],
-   "Financial - Credit Services": [
-    "Financials",
-    "WealthTech & Specialty Financials (SG)"
-   ],
-   "Financial - Data & Stock Exchanges": [
-    "Financials",
-    "Market Infrastructure (SG)"
-   ],
-   "Food Distribution": [
-    "Consumer",
-    "Agribusiness & Food (SG)"
-   ],
-   "Gambling, Resorts & Casinos": [
-    "Consumer",
-    "Travel & Dining"
-   ],
-   "General Transportation": [
-    "Transportation",
-    "Rail / Logistics"
-   ],
-   "Grocery Stores": [
-    "Consumer",
-    "Traditional Retail"
-   ],
-   "Hardware, Equipment & Parts": [
-    "Tech",
-    "Tech Manufacturing / EMS (SG)"
-   ],
-   "Industrial - Machinery": [
-    "Industrials",
-    "Offshore Marine & Resources (SG)"
-   ],
-   "Integrated Freight & Logistics": [
-    "Transportation",
-    "Rail / Logistics"
-   ],
-   "Marine Shipping": [
-    "Industrials",
-    "Aviation & Marine (SG)"
-   ],
-   "Medical - Care Facilities": [
-    "Healthcare",
-    "Healthcare Provider (SG)"
-   ],
-   "Medical - Instruments & Supplies": [
-    "Biopharma",
-    "MedTech / Devices"
-   ],
-   "Oil & Gas Equipment & Services": [
-    "Industrials",
-    "Offshore Marine & Resources (SG)"
-   ],
-   "Packaging & Containers": [
-    "Materials",
-    "Specialty Chemicals"
-   ],
-   "REIT - Diversified": [
-    "RealEstate",
-    "S-REIT"
-   ],
-   "REIT - Healthcare Facilities": [
-    "RealEstate",
-    "S-REIT"
-   ],
-   "REIT - Hotel & Motel": [
-    "RealEstate",
-    "S-REIT"
-   ],
-   "REIT - Industrial": [
-    "RealEstate",
-    "S-REIT"
-   ],
-   "REIT - Office": [
-    "RealEstate",
-    "S-REIT"
-   ],
-   "REIT - Retail": [
-    "RealEstate",
-    "S-REIT"
-   ],
-   "Railroads": [
-    "Transportation",
-    "Rail / Logistics"
-   ],
-   "Real Estate - Development": [
-    "Property",
-    "Property Developer (SG)"
-   ],
-   "Real Estate - Diversified": [
-    "Property",
-    "Property Developer (SG)"
-   ],
-   "Real Estate - Services": [
-    "Property",
-    "Real Estate Agency (SG)"
-   ],
-   "Restaurants": [
-    "Consumer",
-    "Travel & Dining"
-   ],
-   "Semiconductors": [
-    "Tech",
-    "Tech Manufacturing / EMS (SG)"
-   ],
-   "Software - Application": [
-    "Tech",
-    "Mature SaaS"
-   ],
-   "Specialty Retail": [
-    "Consumer",
-    "Traditional Retail"
-   ],
-   "Telecommunications Services": [
-    "Telco",
-    "Telco / Infrastructure (SG)"
-   ],
-   "Travel Lodging": [
-    "Property",
-    "Specialised Accommodation (SG)"
-   ],
-   "Insurance - Property & Casualty": [
-    "Financials",
-    "Insurance (P&C)"
-   ]
+  "_doc": [
+    "FMP industry -> (sector, valuation profile).",
+    "",
+    "The routing unit is the INDUSTRY, not the ticker. 71 rows cover 100/100 of",
+    "the HK large-cap universe and generalise to any future listing in the same",
+    "industry, where a per-ticker table would need a new row for every name.",
+    "",
+    "Profiles carrying an (SG) suffix are Singapore CALIBRATIONS and must never",
+    "be routed to a HK or US listing. The DBS incident was this in reverse: with",
+    "no deterministic profile, DBS was routed to the US Money Center Bank row",
+    "(ROE 12% / CoE 9.0% / P/TBV 1.4x) instead of the Singapore one. A test",
+    "fails the build if an (SG) profile appears here.",
+    "",
+    "Every value must resolve in INDUSTRY_VALUATION_PROFILES[sector][profile];",
+    "a typo would otherwise fall through silently to the financial ladder, which",
+    "is precisely the failure this table exists to remove.",
+    "v2: 'Real Estate - Services' moved off REIT. KE Holdings and CR Mixc are asset-light fee businesses -- a brokerage platform and a property manager -- and a cap-rate NAV anchor valued them on property they do not own.",
+    "v3: ticker_overrides. An industry row is right for the majority of an industry; where a label genuinely lumps different archetypes together, the override names the exception rather than distorting the row for everyone.",
+    "v4: WuXi Biologics override. FMP labels it 'Biotechnology', which routes to Pre-approval Biotech -- a profile anchored on rNPV precisely because a pre-revenue name has no cash flow to discount. WuXi Bio is a profitable CDMO. Adding DCF to the biotech profile to accommodate it was the wrong fix and the FIXBT fixture caught it: DCF returned no value for a genuine pre-revenue biotech and was reported as an unavailable method.",
+    "v5: per-market tables. `markets.SG` is consulted before the default table for .SI listings, because Singapore has CALIBRATED profiles -- S-REIT, Money Center Bank (SG), Telco / Infrastructure (SG) and the rest -- that must not be used for other markets and must not be missed for this one. An S-REIT priced off US cap rates is the DBS incident in the other direction.",
+    "v6: SGX ticker overrides. FMP carries no company profile for 24 of the SGX large/mid caps, so there is no industry to route on and the ticker is the only key available. A further five are labelled in a way that routes them to the wrong archetype -- Bukit Sembawang, a landed-residential developer, came through as Travel & Dining. Each choice follows the practitioner spec's PRIMARY method rather than name recognition.",
+    "v7: distressed and foreign-asset trusts move off S-REIT. S-REIT anchors DDM (S-REIT) at 0.55, which is the wrong primary for a trust that has suspended or cut its distribution -- Manulife US REIT, Prime US REIT, Keppel Pacific Oak US REIT and Lippo Malls are all restructuring or liquidation cases whose value is the asset NAV net of debt. The REIT row anchors NAV (Cap Rates) instead. For the three US-office trusts the US calibration is also the CORRECT one: they are SGX-listed but hold American property priced on American cap rates.",
+    "v8: Insurance - Property & Casualty routes to the new Insurance (P&C) node instead of the life profile. Embedded Value discounts an in-force book of long-duration policies; a general insurer writes one-year contracts and has none, so PICC was anchored on a method that does not exist for it.",
+    "v9: platform businesses mislabelled as retail, and one exception inside a correct row. FMP's 'Specialty Retail' holds Meituan, SHEIN and a semiconductor test company -- none of them pays rent on a shop estate, which is all that Traditional Retail's EV/EBITDAR anchor measures. And 'Internet Content & Information' -> Mature Platform is right for Kuaishou and TME but wrong for Tencent, whose gaming, fintech, cloud and investment portfolio are a conglomerate. The row stays; the exception is named."
+  ],
+  "version": 10,
+  "map": {
+    "Agricultural - Machinery": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "Airlines, Airports & Air Services": [
+      "Transportation",
+      "Airlines"
+    ],
+    "Aluminum": [
+      "Resources",
+      "Mining (Major)"
+    ],
+    "Apparel - Manufacturers": [
+      "Consumer",
+      "Apparel / Athletic Wear"
+    ],
+    "Apparel - Retail": [
+      "Consumer",
+      "Traditional Retail"
+    ],
+    "Asset Management": [
+      "Financials",
+      "Asset Manager"
+    ],
+    "Auto - Manufacturers": [
+      "Consumer",
+      "Automotive & EV"
+    ],
+    "Auto - Parts": [
+      "Consumer",
+      "Consumer Durables"
+    ],
+    "Banks - Diversified": [
+      "Financials",
+      "Money Center Bank"
+    ],
+    "Banks - Regional": [
+      "Financials",
+      "EM Bank"
+    ],
+    "Beverages - Alcoholic": [
+      "Consumer",
+      "Food & Beverage"
+    ],
+    "Beverages - Non-Alcoholic": [
+      "Consumer",
+      "Food & Beverage"
+    ],
+    "Biotechnology": [
+      "Biopharma",
+      "Pre-approval Biotech"
+    ],
+    "Chemicals - Specialty": [
+      "Materials",
+      "Specialty Chemicals"
+    ],
+    "Coal": [
+      "Resources",
+      "Mining (Major)"
+    ],
+    "Computer Hardware": [
+      "Tech",
+      "Mature Platform"
+    ],
+    "Conglomerates": [
+      "Financials",
+      "Holding Company"
+    ],
+    "Consumer Electronics": [
+      "Tech",
+      "Hyperscaler / Tech Conglomerate"
+    ],
+    "Copper": [
+      "Resources",
+      "Mining (Major)"
+    ],
+    "Drug Manufacturers - General": [
+      "Biopharma",
+      "Large Cap Pharma"
+    ],
+    "Drug Manufacturers - Specialty & Generic": [
+      "Biopharma",
+      "Large Cap Pharma"
+    ],
+    "Electrical Equipment & Parts": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "Engineering & Construction": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "Financial - Capital Markets": [
+      "Financials",
+      "Brokerage"
+    ],
+    "Financial - Data & Stock Exchanges": [
+      "Financials",
+      "Market Infrastructure"
+    ],
+    "Food Distribution": [
+      "Consumer",
+      "Traditional Retail"
+    ],
+    "Furnishings, Fixtures & Appliances": [
+      "Consumer",
+      "Consumer Durables"
+    ],
+    "Gambling, Resorts & Casinos": [
+      "Consumer",
+      "Travel & Dining"
+    ],
+    "Gold": [
+      "Resources",
+      "Mining (Major)"
+    ],
+    "Hardware, Equipment & Parts": [
+      "Tech",
+      "Mature Platform"
+    ],
+    "Household & Personal Products": [
+      "Consumer",
+      "Household / Personal"
+    ],
+    "Independent Power Producers": [
+      "Energy",
+      "IPP"
+    ],
+    "Industrial - Machinery": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "Insurance - Diversified": [
+      "Financials",
+      "Insurance"
+    ],
+    "Insurance - Life": [
+      "Financials",
+      "Insurance"
+    ],
+    "Insurance - Property & Casualty": [
+      "Financials",
+      "Insurance (P&C)"
+    ],
+    "Integrated Freight & Logistics": [
+      "Transportation",
+      "Rail / Logistics"
+    ],
+    "Internet Content & Information": [
+      "Tech",
+      "Mature Platform"
+    ],
+    "Leisure": [
+      "Consumer",
+      "Consumer Growth"
+    ],
+    "Luxury Goods": [
+      "Consumer",
+      "Luxury Goods"
+    ],
+    "Manufacturing - Tools & Accessories": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "Marine Shipping": [
+      "Transportation",
+      "Rail / Logistics"
+    ],
+    "Medical - Care Facilities": [
+      "HealthcareServices",
+      "Healthcare Providers / Services"
+    ],
+    "Medical - Diagnostics & Research": [
+      "Biopharma",
+      "CDMO / Life Science Tools"
+    ],
+    "Medical - Instruments & Supplies": [
+      "Biopharma",
+      "MedTech / Devices"
+    ],
+    "Medical - Pharmaceuticals": [
+      "Biopharma",
+      "Large Cap Pharma"
+    ],
+    "Oil & Gas Integrated": [
+      "Resources",
+      "Upstream Oil & Gas"
+    ],
+    "Oil & Gas Refining & Marketing": [
+      "Energy",
+      "Merchant Power"
+    ],
+    "Other Industrial Metals & Mining": [
+      "Resources",
+      "Mining (Major)"
+    ],
+    "Other Precious Metals": [
+      "Resources",
+      "Mining (Major)"
+    ],
+    "Packaged Foods": [
+      "Consumer",
+      "Food & Beverage"
+    ],
+    "REIT - Retail": [
+      "RealEstate",
+      "REIT"
+    ],
+    "Railroads": [
+      "Transportation",
+      "Rail / Logistics"
+    ],
+    "Real Estate - Development": [
+      "RealEstate",
+      "REIT"
+    ],
+    "Real Estate - Diversified": [
+      "RealEstate",
+      "REIT"
+    ],
+    "Real Estate - Services": [
+      "ProfessionalServices",
+      "Ad / Consulting"
+    ],
+    "Regulated Electric": [
+      "Energy",
+      "Regulated Utility"
+    ],
+    "Regulated Gas": [
+      "Energy",
+      "Regulated Utility"
+    ],
+    "Renewable Utilities": [
+      "Energy",
+      "IPP"
+    ],
+    "Restaurants": [
+      "Consumer",
+      "Travel & Dining"
+    ],
+    "Security & Protection Services": [
+      "Industrials",
+      "Capital Goods"
+    ],
+    "Semiconductor Equipment & Materials": [
+      "Semiconductor",
+      "Equipment / EDA"
+    ],
+    "Semiconductors": [
+      "Semiconductor",
+      "IDM / Foundry"
+    ],
+    "Software - Application": [
+      "Tech",
+      "Mature SaaS"
+    ],
+    "Software - Infrastructure": [
+      "Tech",
+      "Mature SaaS"
+    ],
+    "Specialty Business Services": [
+      "ProfessionalServices",
+      "IT Services"
+    ],
+    "Specialty Retail": [
+      "Consumer",
+      "Traditional Retail"
+    ],
+    "Telecommunications Services": [
+      "Telco",
+      "Stable Growth"
+    ],
+    "Tobacco": [
+      "Consumer",
+      "Household / Personal"
+    ],
+    "Travel Lodging": [
+      "Consumer",
+      "Travel & Dining"
+    ],
+    "Travel Services": [
+      "Consumer",
+      "Travel & Dining"
+    ]
+  },
+  "ticker_overrides": {
+    "01997.HK": [
+      "RealEstate",
+      "REIT"
+    ],
+    "02269.HK": [
+      "Biopharma",
+      "CDMO / Life Science Tools"
+    ],
+    "H15.SI": [
+      "Property",
+      "Property Developer (SG)"
+    ],
+    "541.SI": [
+      "Property",
+      "Property Developer (SG)"
+    ],
+    "5OT.SI": [
+      "Property",
+      "Property Developer (SG)"
+    ],
+    "O08.SI": [
+      "Property",
+      "Property Developer (SG)"
+    ],
+    "Q0X.SI": [
+      "Property",
+      "Real Estate Agency (SG)"
+    ],
+    "K75U.SI": [
+      "RealEstate",
+      "S-REIT"
+    ],
+    "B9S.SI": [
+      "RealEstate",
+      "S-REIT"
+    ],
+    "A68U.SI": [
+      "RealEstate",
+      "S-REIT"
+    ],
+    "KODU.SI": [
+      "RealEstate",
+      "REIT"
+    ],
+    "2BU.SI": [
+      "Consumer",
+      "Agribusiness & Food (SG)"
+    ],
+    "KJ5.SI": [
+      "Consumer",
+      "Agribusiness & Food (SG)"
+    ],
+    "564.SI": [
+      "Consumer",
+      "Packaged Consumer & Lifestyle (SG)"
+    ],
+    "5WJ.SI": [
+      "Tech",
+      "Tech Manufacturing / EMS (SG)"
+    ],
+    "575.SI": [
+      "Tech",
+      "Tech Manufacturing / EMS (SG)"
+    ],
+    "5EF.SI": [
+      "Tech",
+      "Tech Manufacturing / EMS (SG)"
+    ],
+    "BVA.SI": [
+      "Tech",
+      "Mature SaaS"
+    ],
+    "H19.SI": [
+      "ProfessionalServices",
+      "Ad / Consulting"
+    ],
+    "S35.SI": [
+      "Financials",
+      "Bank / Lending Institution"
+    ],
+    "4LJ.SI": [
+      "Financials",
+      "Brokerage"
+    ],
+    "580.SI": [
+      "Industrials",
+      "Conglomerate / Industrial (SG)"
+    ],
+    "5LE.SI": [
+      "Industrials",
+      "Offshore Marine & Resources (SG)"
+    ],
+    "584.SI": [
+      "Industrials",
+      "Offshore Marine & Resources (SG)"
+    ],
+    "S2D.SI": [
+      "Industrials",
+      "Aviation & Marine (SG)"
+    ],
+    "VZS.SI": [
+      "Industrials",
+      "Aviation & Marine (SG)"
+    ],
+    "C07.SI": [
+      "Financials",
+      "Holding Company"
+    ],
+    "P15.SI": [
+      "Financials",
+      "Holding Company"
+    ],
+    "B58.SI": [
+      "Property",
+      "Property Developer (SG)"
+    ],
+    "O10.SI": [
+      "Property",
+      "Property Developer (SG)"
+    ],
+    "NS8U.SI": [
+      "Transportation",
+      "Rail / Logistics"
+    ],
+    "BTOU.SI": [
+      "RealEstate",
+      "REIT"
+    ],
+    "OXMU.SI": [
+      "RealEstate",
+      "REIT"
+    ],
+    "D5IU.SI": [
+      "RealEstate",
+      "REIT"
+    ],
+    "03690.HK": [
+      "Tech",
+      "Hyperscaler / Tech Conglomerate"
+    ],
+    "00700.HK": [
+      "Tech",
+      "Hyperscaler / Tech Conglomerate"
+    ],
+    "00625.HK": [
+      "Consumer",
+      "Consumer Growth"
+    ],
+    "AWI.SI": [
+      "Tech",
+      "Tech Manufacturing / EMS (SG)"
+    ],
+    "AIY.SI": [
+      "Financials",
+      "WealthTech & Specialty Financials (SG)"
+    ]
+  },
+  "markets": {
+    "SG": {
+      "Aerospace & Defense": [
+        "Industrials",
+        "Aerospace & Engineering (SG)"
+      ],
+      "Agricultural Farm Products": [
+        "Consumer",
+        "Agribusiness & Food (SG)"
+      ],
+      "Airlines, Airports & Air Services": [
+        "Industrials",
+        "Aviation & Marine (SG)"
+      ],
+      "Auto - Manufacturers": [
+        "Consumer",
+        "Automotive & EV"
+      ],
+      "Banks": [
+        "Financials",
+        "Money Center Bank (SG)"
+      ],
+      "Banks - Regional": [
+        "Financials",
+        "Money Center Bank (SG)"
+      ],
+      "Beverages - Non-Alcoholic": [
+        "Consumer",
+        "Packaged Consumer & Lifestyle (SG)"
+      ],
+      "Beverages - Wineries & Distilleries": [
+        "Consumer",
+        "Packaged Consumer & Lifestyle (SG)"
+      ],
+      "Conglomerates": [
+        "Industrials",
+        "Conglomerate / Industrial (SG)"
+      ],
+      "Diversified Utilities": [
+        "Energy",
+        "Regulated Utility"
+      ],
+      "Drug Manufacturers - General": [
+        "Biopharma",
+        "Large Cap Pharma"
+      ],
+      "Engineering & Construction": [
+        "Industrials",
+        "Capital Goods"
+      ],
+      "Financial - Capital Markets": [
+        "Financials",
+        "WealthTech & Specialty Financials (SG)"
+      ],
+      "Financial - Conglomerates": [
+        "Financials",
+        "WealthTech & Specialty Financials (SG)"
+      ],
+      "Financial - Credit Services": [
+        "Financials",
+        "WealthTech & Specialty Financials (SG)"
+      ],
+      "Financial - Data & Stock Exchanges": [
+        "Financials",
+        "Market Infrastructure (SG)"
+      ],
+      "Food Distribution": [
+        "Consumer",
+        "Agribusiness & Food (SG)"
+      ],
+      "Gambling, Resorts & Casinos": [
+        "Consumer",
+        "Travel & Dining"
+      ],
+      "General Transportation": [
+        "Transportation",
+        "Rail / Logistics"
+      ],
+      "Grocery Stores": [
+        "Consumer",
+        "Traditional Retail"
+      ],
+      "Hardware, Equipment & Parts": [
+        "Tech",
+        "Tech Manufacturing / EMS (SG)"
+      ],
+      "Industrial - Machinery": [
+        "Industrials",
+        "Offshore Marine & Resources (SG)"
+      ],
+      "Integrated Freight & Logistics": [
+        "Transportation",
+        "Rail / Logistics"
+      ],
+      "Marine Shipping": [
+        "Industrials",
+        "Aviation & Marine (SG)"
+      ],
+      "Medical - Care Facilities": [
+        "Healthcare",
+        "Healthcare Provider (SG)"
+      ],
+      "Medical - Instruments & Supplies": [
+        "Biopharma",
+        "MedTech / Devices"
+      ],
+      "Oil & Gas Equipment & Services": [
+        "Industrials",
+        "Offshore Marine & Resources (SG)"
+      ],
+      "Packaging & Containers": [
+        "Materials",
+        "Specialty Chemicals"
+      ],
+      "REIT - Diversified": [
+        "RealEstate",
+        "S-REIT"
+      ],
+      "REIT - Healthcare Facilities": [
+        "RealEstate",
+        "S-REIT"
+      ],
+      "REIT - Hotel & Motel": [
+        "RealEstate",
+        "S-REIT"
+      ],
+      "REIT - Industrial": [
+        "RealEstate",
+        "S-REIT"
+      ],
+      "REIT - Office": [
+        "RealEstate",
+        "S-REIT"
+      ],
+      "REIT - Retail": [
+        "RealEstate",
+        "S-REIT"
+      ],
+      "Railroads": [
+        "Transportation",
+        "Rail / Logistics"
+      ],
+      "Real Estate - Development": [
+        "Property",
+        "Property Developer (SG)"
+      ],
+      "Real Estate - Diversified": [
+        "Property",
+        "Property Developer (SG)"
+      ],
+      "Real Estate - Services": [
+        "Property",
+        "Real Estate Agency (SG)"
+      ],
+      "Restaurants": [
+        "Consumer",
+        "Travel & Dining"
+      ],
+      "Semiconductors": [
+        "Tech",
+        "Tech Manufacturing / EMS (SG)"
+      ],
+      "Software - Application": [
+        "Tech",
+        "Mature SaaS"
+      ],
+      "Specialty Retail": [
+        "Consumer",
+        "Traditional Retail"
+      ],
+      "Telecommunications Services": [
+        "Telco",
+        "Telco / Infrastructure (SG)"
+      ],
+      "Travel Lodging": [
+        "Property",
+        "Specialised Accommodation (SG)"
+      ],
+      "Insurance - Property & Casualty": [
+        "Financials",
+        "Insurance (P&C)"
+      ]
+    }
   }
- }
 }

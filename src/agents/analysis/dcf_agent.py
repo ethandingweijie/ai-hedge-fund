@@ -343,6 +343,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     # Balance sheet
     "total_assets", "total_equity", "total_liabilities",
     "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
+    "minority_interest",
     "goodwill", "intangible_assets",
     # Bank-specific balance sheet
     "loans_receivable", "loans_held_for_investment", "total_deposits",
@@ -388,6 +389,7 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "net_income":          _safe(getattr(li, "net_income", None)),
             "total_assets":        _safe(getattr(li, "total_assets", None)),
             "total_equity":        _safe(getattr(li, "total_equity", None)),
+            "minority_interest":   _safe(getattr(li, "minority_interest", None)),
             "dividends_per_share": _safe(getattr(li, "dividends_per_share", None)),
             "book_value_per_share":_safe(getattr(li, "book_value_per_share", None)),
             "capital_expenditure": _safe(getattr(li, "capital_expenditure", None)),
@@ -3259,6 +3261,49 @@ def _compute_rnpv(
 
 # ── Multi-Method Valuation Engine ─────────────────────────────────────────────
 
+def _minority_interest(most_recent: dict) -> float:
+    """Book value of the stake in consolidated subsidiaries owned by others.
+
+    Book is a proxy for market, and a rough one -- but the alternative in use
+    was zero, which is not a proxy for anything.
+    """
+    mi = _safe((most_recent or {}).get("minority_interest"))
+    # Some filers report it as a negative (accumulated deficit at the sub).
+    # Deducting a negative would ADD value on the strength of somebody else's
+    # losses, so floor it.
+    return max(mi, 0.0) if mi is not None else 0.0
+
+
+def _ev_to_equity_ps(
+    ev: float,
+    net_debt: Optional[float],
+    most_recent: dict,
+    shares: float,
+) -> Optional[float]:
+    """Enterprise value -> equity value per share.
+
+    An EV multiple prices the WHOLE enterprise, including the parts of
+    consolidated subsidiaries that belong to somebody else. The bridge is
+    EV - net debt - minority interest; this engine stopped at net debt, so
+    the minority's share of every consolidated terminal, mall and plantation
+    was handed to the parent's shareholders.
+
+    On SGX that is not an edge case: 19% of the large-cap universe carries
+    minority interest worth 10% or more of parent equity, and the worst
+    affected -- Jardine C&C 120%, Frasers Property 79%, HPH Trust 66%, Thai
+    Beverage 53% -- were exactly the names whose valuations would not
+    reconcile to their traded prices.
+
+    Preferred equity belongs in this bridge too, but is not carried in the
+    line items, so it is not deducted and remains a known overstatement for
+    the handful of names that have it.
+    """
+    if not shares or shares <= 0:
+        return None
+    equity = ev - (net_debt or 0.0) - _minority_interest(most_recent)
+    return max(equity / shares, 0.0)
+
+
 def _compute_method_value(
     method_name: str,
     most_recent: dict,
@@ -3354,7 +3399,7 @@ def _compute_method_value(
         if ebit is not None and ebit > 0 and wacc > 0:
             nopat = ebit * sm * (1 - _EFFECTIVE_TAX_RATE)   # sm ∈ {0.75, 1.00, 1.25}
             ev = nopat / wacc
-            return max((ev - (net_debt or 0.0)) / shares, 0.0)
+            return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
     # ── EV/EBITDA (+ EBITDAR proxy: same logic, EBITDAR ≈ EBITDA+rent) ────
@@ -3383,7 +3428,7 @@ def _compute_method_value(
         metric = ebitda if method_name != "EV/EBIT" else ebit
         if metric and metric > 0 and shares > 0:
             ev = metric * mult
-            return max((ev - (net_debt or 0.0)) / shares, 0.0)
+            return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
     # ── EV/EBITDA (norm) — uses 5-yr cycle-normalized EBITDA ──────────────
@@ -3399,7 +3444,7 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = norm_ebitda * mult
-        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── SOTP (Sum of Parts) — per-segment EV/Revenue multiples ────────────
     # Uses FMP product-segment revenue breakdown with keyword-matched multiples
@@ -3427,7 +3472,7 @@ def _compute_method_value(
         # Equity = EV − net_debt; when net_debt < 0 (net cash), this adds the
         # cash pile back — matches the standard SOTP accounting for AAPL etc.
         total_ev *= growth_premium
-        return max((total_ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(total_ev, net_debt, most_recent, shares)
 
     # ── SOTP 12m (probabilistic) — Monte Carlo with scenario trees ────────
     # Same tier-based multiples, but each segment revenue is grown by a rate
@@ -3574,7 +3619,7 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = fwd_rev * mult
-        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # EV/Revenue (trailing TTM) — legacy path for non-growth sectors
     if method_name in {"EV/Revenue"}:
@@ -3583,7 +3628,7 @@ def _compute_method_value(
             mult *= peer.get("cn_adr_haircut", 1.0)
         if revenue_base > 0 and shares > 0:
             ev = revenue_base * mult
-            return max((ev - (net_debt or 0.0)) / shares, 0.0)
+            return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
     # ── Forward P/S — forward Revenue / shares × peer P/S ─────────────────
@@ -3627,7 +3672,7 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebit_fwd * mult
-        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── P/E (TTM / operating) ─────────────────────────────────────────────
     # Uses trailing-12m net income. "P/E (ops)" and "P/E (Premium)" share
@@ -3704,7 +3749,7 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebitda_fwd * mult
-        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── P/BV ──────────────────────────────────────────────────────────────
     # ── Embedded Value (Insurance — Life sub-sub-profile) ────────────────
@@ -3851,7 +3896,7 @@ def _compute_method_value(
         if rd and rd > 0 and shares and shares > 0:
             rd_multiple = peer.get("ev_rd", 6.0) * sm * growth_premium
             ev = rd * rd_multiple
-            return max((ev - (net_debt or 0.0)) / shares, 0.0)
+            return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
     # ── DDM (Gordon Growth) ───────────────────────────────────────────────
@@ -3961,7 +4006,7 @@ def _compute_method_value(
             irr_gross = (exit_equity / equity_entry) ** (1 / 5) - 1 if equity_entry > 0 else 0
             # If LBO IRR > 20%, floor ≈ current equity entry
             if irr_gross >= 0.20:
-                return max((entry_ev - (net_debt or 0.0)) / shares, 0.0)
+                return _ev_to_equity_ps(entry_ev, net_debt, most_recent, shares)
         return None
 
     # ── Residual Income (2-stage institutional model) ─────────────────────
@@ -4085,7 +4130,7 @@ def _compute_method_value(
             roic = nopat / ic
             spread = roic - wacc
             ev = ic * (1.0 + spread / wacc) * sm
-            return max((ev - (net_debt or 0.0)) / shares, 0.0)
+            return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
     # ── Rule of 40 — SaaS quality governor (Tier 2 Tech) ─────────────────
@@ -4140,7 +4185,7 @@ def _compute_method_value(
             if abs(_sbc_v) / revenue_base > 0.10:
                 mult *= 0.93
         ev = fwd_rev * mult
-        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── EV/Gross Profit — Payment Processors (Tier 2 Tech) ────────────────
     # For net-vs-gross reporters (PYPL/ADYEN/SQ) EV/Revenue is incomparable
@@ -4160,7 +4205,7 @@ def _compute_method_value(
         # 18x default; can be overridden by peer.get("ev_gp") if set later
         gp_mult = peer.get("ev_gp", 18.0) * sm * growth_premium
         ev = gross_profit * gp_mult
-        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── EV/Volume — Payment Processors (TPV × take rate × multiple) ────────
     # For payment networks (V/MA) and processors (ADYEN/SQ) where TPV
@@ -4182,7 +4227,7 @@ def _compute_method_value(
         # Apply EV/Revenue multiple (payment networks 15x, processors 5-7x)
         volume_mult = peer.get("ev_revenue", 6.0) * sm * growth_premium
         ev = normalized_rev * volume_mult
-        return max((ev - (net_debt or 0.0)) / shares, 0.0)
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── Cash Runway (biotech-specific) ────────────────────────────────────
     if method_name == "Cash Runway":
@@ -4683,6 +4728,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     ["revenue", "free_cash_flow", "shares_outstanding",
                      "debt_to_equity", "net_debt", "total_debt", "ebitda", "net_income",
                      "total_equity", "total_assets", "dividends_per_share",
+                     # The EV -> equity bridge deducts this. Same trap the R&D
+                     # note below records: requested AND copied, or it is None
+                     # on every row and the deduction silently does nothing.
+                     "minority_interest",
                      "book_value_per_share", "capital_expenditure", "ebit",
                      "interest_expense", "invested_capital",
                      "research_and_development", "stock_based_compensation",
@@ -4912,7 +4961,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # intrinsic value by roughly the SGD/USD rate (~22%). The bug was
         # latent while SG had only a single yfinance TTM snapshot; it bites
         # now that SG carries real statement history.
-        _target_ccy = "HKD" if _is_hk else ("SGD" if _is_sg else "USD")
+        # The VENUE does not fix the quote currency. SGX lists Jardine
+        # Matheson, Hongkong Land, DFI Retail, HPH Trust and the US-asset
+        # REITs in USD, so assuming SGD converted their financials up by the
+        # SGD/USD rate while the spot price they were measured against stayed
+        # in USD -- a silent ~27% overstatement on some of the largest names
+        # on the exchange. Ask what the line actually trades in.
+        _venue_ccy = "HKD" if _is_hk else ("SGD" if _is_sg else "USD")
+        _target_ccy = _venue_ccy
+        if _is_hk or _is_sg:
+            try:
+                from src.tools.api import get_listing_currency
+                _target_ccy = get_listing_currency(ticker, api_key) or _venue_ccy
+            except Exception:                              # noqa: BLE001
+                _target_ccy = _venue_ccy
+            if _target_ccy != _venue_ccy:
+                print(f"  [fx] {ticker}: quoted in {_target_ccy}, not the "
+                      f"{_venue_ccy} venue default — valuing in {_target_ccy}")
 
         if reported_currency != _target_ccy:
             fx_rate = get_fx_rate(reported_currency, _target_ccy, api_key)

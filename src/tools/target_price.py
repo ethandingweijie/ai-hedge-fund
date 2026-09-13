@@ -52,6 +52,14 @@ _RATING = re.compile(r'consensus rating of\s+"?([A-Za-z ]+?)"?\s+and', re.I)
 _MOVE = re.compile(
     r"forecast is\s+([\d.]+)%\s+(higher|lower)\s+than the current stock price",
     re.I)
+#: The page states the venue currency, and separately the quote currency when
+#: the line trades in something else: "Currency is SGD - Price in USD". SGX
+#: lists Jardine Matheson, Hongkong Land, DFI Retail and HPH Trust in USD, so
+#: taking SGD from the .SI suffix compared a USD target against an SGD
+#: valuation and called the ~27% gap a modelling error.
+_CCY_VENUE = re.compile(r"Currency is\s+([A-Z]{3})\b")
+_CCY_QUOTE = re.compile(r"Price in\s+([A-Z]{3})\b")
+
 _BULLISH = ("buy", "strong buy", "outperform", "overweight")
 _BEARISH = ("sell", "strong sell", "underperform", "underweight")
 
@@ -76,10 +84,16 @@ def quote_path(ticker: str) -> Optional[tuple[str, str]]:
     return None
 
 
+#: Bump when the payload shape changes. Entries written before currency
+#: detection carry a currency that is simply wrong for USD-quoted SGX lines,
+#: and a cached wrong answer is worse than no answer -- it never gets retried.
+_SCHEMA = 2
+
+
 def _cache_file(ticker: str) -> Path:
     key = hashlib.sha1(ticker.encode()).hexdigest()[:12]
     safe = "".join(c if c.isalnum() else "_" for c in ticker)
-    return _CACHE_DIR / f"{safe}_{key}.json"
+    return _CACHE_DIR / f"{safe}_{key}_v{_SCHEMA}.json"
 
 
 def get_consensus_target(ticker: str, *, refresh: bool = False
@@ -111,6 +125,11 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         body = resp.text
     except Exception:                                      # noqa: BLE001
         return None
+
+    # Quote currency, straight from the page. "Price in X" wins over
+    # "Currency is Y" -- the target is quoted in whatever the line trades in.
+    q, v = _CCY_QUOTE.search(body), _CCY_VENUE.search(body)
+    page_ccy = (q.group(1) if q else (v.group(1) if v else None))
 
     m = _SENTENCE.search(body)
     if not m:
@@ -154,9 +173,11 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         "implied_move": implied_move,
         "suspect": bool(suspect_reason),
         "suspect_reason": suspect_reason,
-        "currency": ccy,
+        "currency": page_ccy or ccy,
+        "venue_currency": ccy,
         "source": "stockanalysis.com / S&P Global Market Intelligence",
         "url": url,
+        "schema": _SCHEMA,
     }
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
