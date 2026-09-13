@@ -266,7 +266,11 @@ class TestSectorProfilesWiring:
         assert got["ev_ebitda"] == sp.HK_SECTOR_PEER_MULTIPLES["Tech"]["ev_ebitda"], \
             "untouched fields keep their static value"
         assert got["_comp_basis"]["pe"]["basis"] == "industry"
-        assert "ev_ebitda" not in got["_comp_basis"]
+        # Fields that fell back are now labelled rather than omitted. An
+        # unlabelled fallback is what let the 2026-09-13 comps outage run for
+        # 17 days: a Hong Kong stock priced on US statics produced output
+        # indistinguishable from one priced on HKSE medians.
+        assert got["_comp_basis"]["ev_ebitda"]["basis"] == "static"
 
     def test_static_table_when_nothing_stored(self, store, monkeypatch):
         from src.data import sector_profiles as sp
@@ -276,15 +280,22 @@ class TestSectorProfilesWiring:
                        "industry": "Software - Application"},
         )
         got = sp.get_sector_peer_multiples("Tech", is_hk=True, ticker="00700.HK")
-        assert got == sp.HK_SECTOR_PEER_MULTIPLES["Tech"]
-        assert "_comp_basis" not in got
+        numeric = {k: v for k, v in got.items() if not k.startswith("_")}
+        assert numeric == sp.HK_SECTOR_PEER_MULTIPLES["Tech"]
+        # The VALUES are the static table; the provenance says so out loud.
+        assert all(b["basis"] == "static" for b in got["_comp_basis"].values())
 
     def test_us_path_is_untouched(self, store):
-        """No ticker, not HK — the US dynamic/static merge must be unchanged."""
+        """No ticker, not HK — the US dynamic/static merge must be unchanged.
+
+        Provenance is additive: the numeric fields a US caller reads are the
+        same, and the underscore keys alongside them are new information, not
+        a behaviour change.
+        """
         from src.data import sector_profiles as sp
         got = sp.get_sector_peer_multiples("Tech")
-        assert "_comp_basis" not in got
         assert got.get("pe") is not None
+        assert got["_comp_basis"]["pe"]["basis"] in ("static", "dynamic")
 
     def test_basis_key_does_not_disturb_numeric_consumers(self, store, monkeypatch):
         """_comp_basis is underscore-prefixed and non-numeric; anything that

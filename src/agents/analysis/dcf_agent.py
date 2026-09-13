@@ -3304,6 +3304,40 @@ def _ev_to_equity_ps(
     return max(equity / shares, 0.0)
 
 
+def _multiples_trace(peer: Optional[dict]) -> dict:
+    """The peer multiples a valuation actually used, with their provenance.
+
+    A multiple nobody can trace is a multiple nobody can check. Reads the
+    underscore-prefixed provenance `get_sector_peer_multiples` attaches, and
+    is deliberately tolerant of its absence -- an older caller that returns a
+    bare dict still yields the values, just with basis "unknown".
+    """
+    if not isinstance(peer, dict):
+        return {}
+    basis = peer.get("_comp_basis") or {}
+    fields = {}
+    for name, value in peer.items():
+        if name.startswith("_") or not isinstance(value, (int, float)):
+            continue
+        b = basis.get(name) or {}
+        fields[name] = {
+            "value": round(float(value), 4),
+            "basis": b.get("basis", "unknown"),
+            "cohort": b.get("cohort"),
+            "peer_count": b.get("peer_count"),
+        }
+    age = peer.get("_comp_age_days")
+    return {
+        "fields": fields,
+        "comp_market": peer.get("_comp_market"),
+        "comp_age_days": round(age, 2) if isinstance(age, (int, float)) else None,
+        # Stated rather than implied: a reader should not have to know
+        # MAX_AGE_DAYS to tell whether these are measured or fallback values.
+        "all_static": bool(fields) and all(
+            f["basis"] == "static" for f in fields.values()),
+    }
+
+
 def _compute_method_value(
     method_name: str,
     most_recent: dict,
@@ -7986,6 +8020,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # profile methods that produced no value in the base scenario.
             "profile_fallback_used": _profile_fallback_used,
             "methods_unavailable":   _methods_unavailable,
+            # Every relative method multiplies one of these by an earnings or
+            # revenue figure, so the multiple IS most of the answer -- and
+            # until now a run recorded the answer without recording it. That
+            # is how the 2026-09-13 comps outage survived 17 days: Hong Kong
+            # names were being priced on the static US table and the output
+            # looked identical to a run priced on HKSE medians. Each field
+            # carries where it came from (industry / sector comp median,
+            # static market table, or the US dynamic basket), the peer count
+            # behind it, and how old the comp refresh was.
+            "multiples_used":        _multiples_trace(peer),
         }
 
         base_iv = scenario_results["base"]["intrinsic_value"]

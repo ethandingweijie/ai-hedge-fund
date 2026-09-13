@@ -1616,6 +1616,39 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
         # Order-driven and cyclical: priced on forward earnings through the
         # cycle with a DCF cross-check. Book-to-bill is the leading
         # indicator and turns before the P/E does.
+        # A branded hardware ecosystem is not a contract manufacturer and not
+        # a carmaker. Xiaomi sat in Automotive & EV, which priced a smartphone
+        # company on auto comps; before that it was on a static US Consumer
+        # table. Neither reads the actual business: hardware at thin margin,
+        # an IoT attach, a high-margin internet-services layer, and an EV arm
+        # that is the smallest of the four.
+        #
+        # Earnings anchor it, because hardware volume without margin is what
+        # EV/Revenue mistakes for value. No sales multiple is declared at all
+        # -- that leg is the one the Automotive & EV gate exists to remove.
+        "Consumer Electronics / Hardware Ecosystem": {
+            "methods": [
+                {"name": "Forward P/E", "weight": 0.40,
+                 "anchor": True, "implementable": True},
+                {"name": "EV/EBITDA", "weight": 0.35,
+                 "anchor": False, "implementable": True},
+                {"name": "DCF", "weight": 0.15,
+                 "anchor": False, "implementable": True},
+                {"name": "FCF Yield", "weight": 0.10,
+                 "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue", "EV/NTM Revenue", "P/BV"],
+            "rationale": (
+                "Branded consumer hardware with a services attach (Xiaomi, "
+                "Lenovo). Blended forward P/E and EV/EBITDA: earnings and "
+                "cash operating profit, not top line. EV/Revenue is excluded "
+                "outright -- a hardware ecosystem's revenue is deliberately "
+                "low-margin to build the installed base the services layer "
+                "monetises, so a sales multiple reads the loss-leader as "
+                "value. A true SOTP would split hardware P/E, services P/E "
+                "and the EV arm on EV/Sales; that needs segment economics "
+                "the filings support but the parser does not yet map."),
+        },
         "Tech Manufacturing / EMS (SG)": {
             "methods": [
                 {"name": "Forward P/E",  "weight": 0.45, "anchor": True,  "implementable": True},
@@ -2976,6 +3009,38 @@ def get_sector_peer_multiples(
     # qualifying comp set, so this can only add information.
     regional = _regional_peer_multiples(ticker, exchange, industry, sector,
                                         market_cap)
+
+    def _stamp(values: dict, basis: dict) -> dict:
+        """Attach provenance for EVERY field, including the ones that fell
+        back to the static table.
+
+        Silence about a fallback is what let the 2026-09-13 comps outage run
+        for 17 days: `_comp_basis` was written only when live comps resolved,
+        so a run using US statics for a Hong Kong stock looked exactly like a
+        run with no provenance at all. A multiple nobody can trace is a
+        multiple nobody can check.
+        """
+        out = dict(values)
+        full = dict(basis)
+        for field in out:
+            if field.startswith("_") or not isinstance(out[field], (int, float)):
+                continue
+            if field not in full:
+                full[field] = {"basis": "static", "cohort": _market or "US",
+                               "peer_count": None}
+        out["_comp_basis"] = full
+        out["_comp_market"] = _market
+        try:
+            from src.data.regional_comps import latest_refresh_age_days
+            _ex = exchange or ""
+            if not _ex and ticker:
+                from src.data.regional_comps import get_fmp_classification
+                _ex = (get_fmp_classification(ticker) or {}).get("exchange") or ""
+            out["_comp_age_days"] = latest_refresh_age_days(_ex) if _ex else None
+        except Exception:                                  # noqa: BLE001
+            out["_comp_age_days"] = None
+        return out
+
     if regional:
         # Layering, weakest first: static table, then the curated-basket
         # median from the KG cache (US only), then the measured exchange
@@ -2994,15 +3059,16 @@ def get_sector_peer_multiples(
         # peer["pe"] / peer.get("ev_ebitda") are unaffected. Lets the report
         # and the LLM write-up state what a multiple was actually derived
         # from instead of implying a precision the peer set does not support.
-        merged["_comp_basis"] = basis
-        return merged
+        return _stamp(merged, basis)
     if is_hk:
-        return static
+        return _stamp(static, {})
 
     dynamic = get_dynamic_peer_multiples(sector, profile_name)
     if not dynamic:
-        return static
-    return {**static, **dynamic}
+        return _stamp(static, {})
+    merged = {**static, **dynamic}
+    return _stamp(merged, {f: {"basis": "dynamic", "cohort": sector,
+                               "peer_count": None} for f in dynamic})
 
 
 def _regional_peer_multiples(
@@ -4339,7 +4405,10 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "00709.HK": ("Consumer",    "",  "Retail (General)",         "Giordano International — casual wear retail"),
     # Consumer — Automotive & EV (profile override)
     "01211.HK": ("Consumer",    "Automotive & EV", "EV & Battery",    "BYD — global EV leader; P/E ~25x near US level"),
-    "01810.HK": ("Consumer",    "Automotive & EV", "Electronics/EV",  "Xiaomi — smartphone + EV pivot; SU7 production ramp"),
+    # Smartphones, IoT and internet services are the business; the EV arm is
+    # the smallest of the four segments. Pricing the whole company on auto
+    # comps put it 62% from consensus.
+    "01810.HK": ("Tech", "Consumer Electronics / Hardware Ecosystem", "Electronics/IoT", "Xiaomi — hardware ecosystem with a services attach and an EV arm"),
     "02015.HK": ("Consumer",    "Automotive & EV", "EV / Auto",       "Li Auto — profitable EV; EREV powertrain"),
     "09868.HK": ("Consumer",    "Automotive & EV", "EV / Auto",       "XPeng — EV + autonomous driving"),
     "00175.HK": ("Consumer",    "Automotive & EV", "Auto & Truck",    "Geely Automobile — traditional + EV transition"),
