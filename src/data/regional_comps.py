@@ -68,7 +68,7 @@ import re
 import statistics
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from src.data import db as _db
@@ -779,15 +779,47 @@ def seconds_until_next_fire() -> float:
     return (target - now).total_seconds()
 
 
-def already_ran_this_week() -> bool:
-    """True when every market has a refresh inside the idempotency window.
+def current_slot_start() -> datetime:
+    """Start of the scheduling slot we are currently inside.
 
-    Partial completion counts as NOT done, so a run that died halfway
-    through (say after HKSE but before US) is retried rather than skipped.
+    The most recent Saturday 01:00 UTC at or before now — the mirror image of
+    seconds_until_next_fire().
     """
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    start = now.replace(hour=_FIRE_HOUR_UTC, minute=0, second=0, microsecond=0)
+    start -= timedelta(days=(start.weekday() - _FIRE_WEEKDAY) % 7)
+    if start > now:
+        start -= timedelta(days=7)
+    return start
+
+
+def already_ran_this_week() -> bool:
+    """True when every market has been refreshed INSIDE the current slot.
+
+    Partial completion counts as NOT done, so a run that died halfway through
+    (say after HKSE but before US) is retried rather than skipped.
+
+    This asks about the SLOT, not about age, and the difference is not
+    academic. The gate used to accept any refresh younger than six days, which
+    meant a run that completed LATE poisoned the following slot: the week of
+    2026-09-01 finished on Tuesday the 8th (the recheck loop retrying after a
+    failed Saturday), so when Saturday the 12th came round the data was 3.7
+    days old, the gate said "already ran this week", and the whole refresh was
+    skipped. Cadence silently halves to fortnightly, and the comps peak at
+    ~11 days against a 14-day usability limit — three days of margin, on a
+    mechanism whose failure is invisible.
+
+    A slot-based gate cannot do that: work done in the previous slot never
+    satisfies this one, however recently it finished.
+    """
+    slot = current_slot_start()
     for market in EXCHANGES:
         age = latest_refresh_age_days(market)
-        if age is None or age * 24 >= _IDEMPOTENCY_HOURS:
+        if age is None:
+            return False
+        refreshed_at = datetime.now(timezone.utc) - timedelta(days=age)
+        if refreshed_at < slot:
             return False
     return True
 
