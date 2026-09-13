@@ -18,7 +18,7 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, Plus, BarChart2, MessageSquare, Zap, LogOut,
-  Sun, Moon, Monitor, User, PieChart, type LucideIcon,
+  Sun, Moon, Monitor, User, PieChart, BookMarked, Newspaper, type LucideIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/auth-context';
@@ -153,6 +153,13 @@ export function MenuPage() {
         <section>
           <SectionLabel>Explore</SectionLabel>
           <Card>
+            {/* Watchlist and News are in NAV_ITEMS and therefore in the desktop
+                sidebar, but this menu and FloatingNavBar each carry their own
+                list, so neither appeared on mobile at all — Watchlist was
+                reachable only by typing the URL. Looked up byPath so they stay
+                tied to the same nav definitions the sidebar uses. */}
+            <Row icon={BookMarked} label="Watchlist" onClick={() => handleNav(byPath('/watchlist'))} />
+            <Row icon={Newspaper} label="News" onClick={() => handleNav(byPath('/news'))} />
             <Row icon={PieChart} label="Portfolio" onClick={() => handleNav(byPath('/portfolio'))} />
             <Row icon={MessageSquare} label="Discuss" onClick={() => handleNav(byPath('/discuss'))} />
             <Row icon={Zap} label="Pricing" onClick={() => navigate('/pricing')} />

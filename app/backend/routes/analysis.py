@@ -2227,6 +2227,78 @@ def _news_article(item: dict) -> dict:
     }
 
 
+#: Comment-frame cadence. Matches /analysis/pulse, which sends these because
+#: edge proxies sever an idle SSE connection; a news stream is idle by nature.
+_NEWS_KEEPALIVE_S = 10.0
+
+#: Hard stop on one subscription. A phone that locks mid-stream leaves the
+#: server holding a reader that will never be read, and the client reconnects
+#: on its own when it wakes.
+_NEWS_STREAM_DEADLINE_S = 1800.0
+
+
+@router.get("/news/stream")
+async def stream_news(request: Request, tickers: str = Query(default="")):
+    """Push new items for `tickers` as they are ingested.
+
+    Snapshot first, then this: the page loads from the store and subscribes
+    here for what arrives afterwards, so the bus replays nothing on connect --
+    replaying would render headlines the page is already showing.
+
+    `tickers` is a comma-separated list; empty means the caller's watchlist.
+    """
+    from app.backend.services import news_bus, news_ingest
+
+    syms = [t.strip().upper() for t in (tickers or "").split(",") if t.strip()]
+    if not syms:
+        syms = news_ingest.watchlist_tickers()
+    if not syms:
+        raise HTTPException(status_code=400, detail="no tickers to stream")
+
+    async def _generator():
+        def _sse(name: str, data: dict) -> str:
+            return (f"event: {name}\n"
+                    f"data: {json.dumps(data, default=str)}\n\n")
+
+        started = asyncio.get_event_loop().time()
+        yield _sse("news_open", {"tickers": syms})
+        agen = news_bus.iter_items(syms).__aiter__()
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                if asyncio.get_event_loop().time() - started > _NEWS_STREAM_DEADLINE_S:
+                    yield _sse("news_closed", {"reason": "deadline"})
+                    break
+                try:
+                    item = await asyncio.wait_for(agen.__anext__(),
+                                                  timeout=_NEWS_KEEPALIVE_S)
+                except asyncio.TimeoutError:
+                    # Nothing published. Keep the connection warm; comment
+                    # frames carry no event:/data: lines so the client parser
+                    # ignores them.
+                    yield ": keep-alive\n\n"
+                    continue
+                except StopAsyncIteration:
+                    break
+                yield _sse("news_item", _news_article(item))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:                           # noqa: BLE001
+            logger.warning("news stream failed (%s): %s", syms[:3], exc)
+        finally:
+            try:
+                await agen.aclose()
+            except Exception:                              # noqa: BLE001
+                pass
+
+    return StreamingResponse(
+        _generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @router.get("/news/feed")
 async def get_news_feed(limit: int = 40,
                         user_id: Optional[int] = Depends(_news_user_id)):
