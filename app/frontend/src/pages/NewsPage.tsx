@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { NewsItemRow } from '@/components/report/NewsItemRow';
 import { getNewsFeed, type NewsArticle } from '@/lib/api';
+import { useNewsStream } from '@/hooks/useNewsStream';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
 
 export function NewsPage() {
@@ -42,6 +43,19 @@ export function NewsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const onItem = useCallback((a: NewsArticle) => {
+    setArticles(prev =>
+      prev.some(p => (p.id && a.id ? p.id === a.id : p.url === a.url))
+        ? prev
+        : [a, ...prev]);
+  }, []);
+
+  useNewsStream({
+    tickers,
+    onItem,
+    onResync: useCallback(() => load(true), [load]),
+  });
 
   const shown = filter ? articles.filter(a => a.symbol === filter) : articles;
 

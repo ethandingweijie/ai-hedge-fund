@@ -8,10 +8,11 @@
  * comments in ReportViewPage and V2ReportView warn about.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { getCompanyNews, type NewsArticle } from '@/lib/api';
 import { NewsItemRow } from '@/components/report/NewsItemRow';
+import { useNewsStream } from '@/hooks/useNewsStream';
 
 interface NewsPanelProps {
   ticker: string;
@@ -22,14 +23,34 @@ export function NewsPanel({ ticker }: NewsPanelProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
+  const load = useCallback((quiet = false) => {
+    if (!quiet) setLoading(true);
     setError(null);
     getCompanyNews(ticker, 8)
       .then(d => setArticles(d.articles))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => { if (!quiet) setError(e.message); })
+      .finally(() => { if (!quiet) setLoading(false); });
   }, [ticker]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Live items for this ticker. De-duplicated against what is already shown:
+  // the snapshot and the stream can legitimately carry the same item when a
+  // poll lands between the two, and the store's id is the same either way.
+  const onItem = useCallback((a: NewsArticle) => {
+    setArticles(prev =>
+      prev.some(p => (p.id && a.id ? p.id === a.id : p.url === a.url))
+        ? prev
+        : [a, ...prev].slice(0, 8));
+  }, []);
+
+  useNewsStream({
+    tickers: ticker ? [ticker] : [],
+    onItem,
+    // A reconnect means items may have been published while the stream was
+    // down; re-read quietly rather than flashing the panel back to Loading.
+    onResync: useCallback(() => load(true), [load]),
+  });
 
   return (
     <Card className="p-4 flex flex-col gap-3 h-full">
