@@ -295,8 +295,12 @@ class TestPlatformsMislabelledAsRetail:
 
     def test_the_mislabelled_platforms_are_overridden(self):
         from src.data.industry_profile_map import profile_for_ticker
+        # Meituan later normalised again, from the generic hyperscaler row to
+        # the taxonomy that matches its own reporting lines. What this test
+        # guards is that it is not a RETAILER -- the anchor Traditional Retail
+        # applies is rent on a retail estate, which Meituan does not pay.
         assert profile_for_ticker("03690.HK", "Specialty Retail") == (
-            "Tech", "Hyperscaler / Tech Conglomerate")
+            "Tech", "Local Services & Instant Retail")
         assert profile_for_ticker("00625.HK", "Specialty Retail") == (
             "Consumer", "Consumer Growth")
         assert profile_for_ticker("AWI.SI", "Specialty Retail") == (

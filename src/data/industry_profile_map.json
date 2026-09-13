@@ -24,7 +24,7 @@
     "v8: Insurance - Property & Casualty routes to the new Insurance (P&C) node instead of the life profile. Embedded Value discounts an in-force book of long-duration policies; a general insurer writes one-year contracts and has none, so PICC was anchored on a method that does not exist for it.",
     "v9: platform businesses mislabelled as retail, and one exception inside a correct row. FMP's 'Specialty Retail' holds Meituan, SHEIN and a semiconductor test company -- none of them pays rent on a shop estate, which is all that Traditional Retail's EV/EBITDAR anchor measures. And 'Internet Content & Information' -> Mature Platform is right for Kuaishou and TME but wrong for Tencent, whose gaming, fintech, cloud and investment portfolio are a conglomerate. The row stays; the exception is named."
   ],
-  "version": 11,
+  "version": 12,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -450,7 +450,7 @@
     ],
     "03690.HK": [
       "Tech",
-      "Hyperscaler / Tech Conglomerate"
+      "Local Services & Instant Retail"
     ],
     "00700.HK": [
       "Tech",
@@ -475,6 +475,10 @@
     "01810.HK": [
       "Tech",
       "Consumer Electronics / Hardware Ecosystem"
+    ],
+    "00148.HK": [
+      "Tech",
+      "Electronic Materials & Industrial Diversified"
     ]
   },
   "markets": {

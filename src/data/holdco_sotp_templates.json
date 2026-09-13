@@ -20,7 +20,7 @@
     "v3: five more templates from user-supplied ownership percentages with filing context (Kingboard/Laminates 61.74%, ThaiBev/F&N 69.61%, Wilmar/YKA 89.99% and AWL 56.94%, GenScript/Legend 45.03%). Each pairs its listed stakes with ONE stub division so the residual-EBITDA rule can complete them: group EBITDA less the whole of each CONSOLIDATED subsidiary's. Legend is an associate and is therefore not subtracted. Every stub multiple_range is an ASSUMPTION and says so in its source field -- the ownership percentages are sourced, the multiples are not.",
     "v4: holdco discounts set by the user per name, replacing the placeholders. Two are STAKE-level, not group-level -- Kingboard 25% on the Laminates holding, GenScript 20% on the Legend mark -- so `discount_pct` now exists on a division and those two carry a group discount of zero. Discounts compose one way only: division first, group once on the total. Each template records the reasoning in `discount_source`."
   ],
-  "version": 4,
+  "version": 5,
   "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
   "templates": {
     "00267.HK": {
@@ -207,16 +207,22 @@
           "discount_pct": 0.25
         },
         {
-          "name": "PCB, Chemicals, Properties and Investments",
+          "name": "PCBs, Chemicals, Properties and Investments (stub)",
           "basis": "ev_ebitda_range",
           "multiple_range": [
             5.0,
             7.0
           ],
-          "source": "STUB: group EBITDA less the consolidated Laminates EBITDA, valued as one pool. The multiple range is an ASSUMPTION for cyclical industrial businesses, not a sourced figure; Properties would properly be valued on NAV and is not separated here."
+          "source": "STUB collapsing four reportable lines that should be valued separately: PCBs on peer P/E or EV/EBITDA, chemicals on commodity EV/EBITDA, investment properties and landbank on RNAV / cap rate, investments/others on carrying value. They are pooled because the HKEX segment note parses to revenue-only rows with unusable labels ('(Note a) a'), so a four-way split would be ALLOCATED rather than read. Valued as group EBITDA less the consolidated Laminates EBITDA at a cyclical-industrial range, which is an ASSUMPTION."
         }
       ],
-      "discount_source": "25% applied to the LISTED LAMINATES STAKE, not to the group. Kingboard monetises tranches of Laminates through secondary placements at 9-12% below last close, which caps how far the holdco gap can narrow. No second discount at group level -- that would take the same haircut twice."
+      "discount_source": "25% applied to the LISTED LAMINATES STAKE, not to the group. Kingboard monetises tranches of Laminates through secondary placements at 9-12% below last close, which caps how far the holdco gap can narrow. No second discount at group level -- that would take the same haircut twice.",
+      "_sotp_units_intended": [
+        "Kingboard Laminates (1888.HK stake at market value)",
+        "PCB Division (peer P/E or EV/EBITDA)",
+        "Chemicals (commodity EV/EBITDA)",
+        "Investment Properties / Landbank (RNAV / cap rate)"
+      ]
     },
     "Y92.SI": {
       "name": "Thai Beverage",

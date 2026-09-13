@@ -1649,6 +1649,80 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "and the EV arm on EV/Sales; that needs segment economics "
                 "the filings support but the parser does not yet map."),
         },
+        # Meituan is not a hyperscaler. Its reportable segments are core
+        # local commerce (food delivery, Instashopping, in-store, hotel and
+        # travel) and new initiatives (Select, Xiaoxiang, Keeta, B2B supply) --
+        # an on-demand commerce operator whose core is EBITDA-positive and
+        # whose growth arm is deliberately loss-making.
+        #
+        # Analysts split it four ways -- delivery and Instashopping on
+        # EV/Sales, in-store and travel on P/E or EV/EBITDA, retail/grocery,
+        # then overseas and mobility. That split is NOT declared here: the
+        # IFRS 8 note discloses two segments, not four, so a per-unit multiple
+        # would be applied to numbers the filing does not publish. No
+        # EV/Revenue leg either -- on the consolidated entity it would price
+        # the loss-making growth arm's revenue as though it earned core
+        # margins, which is the whole error the unbundling exists to avoid.
+        "Local Services & Instant Retail": {
+            "methods": [
+                # NORMALISED, because the raw metric is negative in a price
+                # war and the profile would then have no anchor at all.
+                # Meituan's FY2025 EBITDA is -24.0bn against +41.5bn in FY2024
+                # and +23.4bn in FY2023; raw EV/EBITDA and FCF Yield both
+                # return None, which left the blend averaging a 177 DCF
+                # against a 3.8 forward P/E and landing on a plausible number
+                # by arithmetic accident.
+                {"name": "EV/EBITDA (norm)", "weight": 0.40,
+                 "anchor": True, "implementable": True},
+                {"name": "DCF", "weight": 0.30,
+                 "anchor": False, "implementable": True},
+                {"name": "Forward P/E", "weight": 0.30,
+                 "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue", "EV/NTM Revenue", "P/BV", "FCF Yield"],
+            "rationale": (
+                "On-demand local commerce (Meituan). Core local commerce "
+                "carries the earnings and new initiatives consumes them, so "
+                "the company is priced on consolidated cash operating profit "
+                "with an earnings cross-check. A true SOTP would value "
+                "delivery, in-store/travel, grocery and overseas separately; "
+                "it needs segment economics the two-segment IFRS 8 note does "
+                "not disclose."),
+        },
+        # Kingboard Holdings reports five lines -- laminates, PCBs, chemicals,
+        # properties, investments/others -- of which laminates IS a separate
+        # listed company (1888.HK, 61.74% held). Specialty Chemicals priced
+        # the whole group off one of its five divisions.
+        #
+        # SOTP anchors because the largest division has a traded price: the
+        # look-through marks the Laminates stake at market and values the
+        # remainder as a stub. Splitting that stub into PCB, chemicals and
+        # property (RNAV / cap rate) is the right structure and is not done
+        # here -- the HKEX segment note parses to revenue-only rows with
+        # unusable labels, so a three-way split would be allocated rather than
+        # read.
+        "Electronic Materials & Industrial Diversified": {
+            "methods": [
+                {"name": "SOTP / NAV", "weight": 0.40, "anchor": True,
+                 "implementable": False, "proxy": "P/BV"},
+                {"name": "EV/EBITDA", "weight": 0.25,
+                 "anchor": False, "implementable": True},
+                {"name": "P/E", "weight": 0.20,
+                 "anchor": False, "implementable": True},
+                {"name": "P/BV", "weight": 0.15,
+                 "anchor": False, "implementable": True},
+            ],
+            "excluded": ["EV/Revenue"],
+            "rationale": (
+                "Diversified electronic materials with a listed subsidiary "
+                "(Kingboard Holdings / 1888.HK). SOTP anchors because the "
+                "dominant division trades separately; P/BV carries the "
+                "investment properties and landbank the other multiples "
+                "cannot see. Marked unimplementable with a P/BV proxy so a "
+                "name without a look-through template degrades to book rather "
+                "than to nothing -- the per-ticker guard promotes the real "
+                "method whenever the template completes."),
+        },
         "Tech Manufacturing / EMS (SG)": {
             "methods": [
                 {"name": "Forward P/E",  "weight": 0.45, "anchor": True,  "implementable": True},
@@ -4276,7 +4350,7 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # Technology
     "00700.HK": ("Tech",        "",  "Internet Platform",        "Tencent Holdings"),
     "09988.HK": ("Tech",        "",  "Software (Internet)",      "Alibaba Group HK listing"),
-    "03690.HK": ("Tech",        "",  "Internet Platform",        "Meituan"),
+    "03690.HK": ("Tech", "Local Services & Instant Retail", "On-Demand Commerce", "Meituan"),
     "09618.HK": ("Tech",        "",  "E-commerce",               "JD.com HK listing"),
     "09999.HK": ("Tech",        "",  "Gaming",                   "NetEase"),
     "09626.HK": ("Tech",        "",  "Internet Media",           "Bilibili"),
