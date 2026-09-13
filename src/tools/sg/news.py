@@ -28,11 +28,23 @@ def get_sg_company_news(
             source = content.get("provider", {}).get("displayName", "") or item.get("publisher", "")
             pub_date = content.get("pubDate", "") or item.get("providerPublishTime", "")
 
-            # Convert Unix timestamp if needed
+            # Convert Unix timestamp if needed. Keep the minute alongside:
+            # `date` is date-only by contract (the sentiment agent parses it
+            # with "%Y-%m-%d"), but a feed cannot order one day's items on a
+            # date alone.
+            from datetime import datetime, timezone
+            published_at = None
             if isinstance(pub_date, (int, float)):
-                from datetime import datetime
-                pub_date = datetime.fromtimestamp(pub_date).strftime("%Y-%m-%d")
+                _dt = datetime.fromtimestamp(pub_date, tz=timezone.utc)
+                published_at = _dt.strftime("%Y-%m-%d %H:%M:%S")
+                pub_date = _dt.strftime("%Y-%m-%d")
             elif isinstance(pub_date, str) and len(pub_date) > 10:
+                try:
+                    published_at = (
+                        datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+                        .strftime("%Y-%m-%d %H:%M:%S"))
+                except ValueError:
+                    published_at = None
                 pub_date = pub_date[:10]
 
             # Date filtering
@@ -49,6 +61,7 @@ def get_sg_company_news(
                 "date": pub_date,
                 "url": url,
                 "sentiment": None,
+                "published_at": published_at,
             })
 
         return articles

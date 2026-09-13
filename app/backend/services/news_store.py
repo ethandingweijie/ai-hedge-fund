@@ -205,9 +205,15 @@ def get_items(ticker: str, limit: int = 20) -> list[dict]:
         logger.warning("news_store.get_items: %s", exc)
         return []
     out = [_row_to_dict(r) for r in rows]
-    # Tier is a tie-break WITHIN the same day, not an override of recency: a
-    # week-old Reuters piece must not outrank this morning's filing.
-    out.sort(key=lambda i: (i["published_at"][:10],
+    # Newest first, to the MINUTE. Tier breaks exact ties only.
+    #
+    # This used to sort on the DATE and let tier decide the rest, which was a
+    # reasonable reading of "a filing matters more than a recap" while every
+    # provider truncated its timestamps to midnight. Now that the minute
+    # survives (CompanyNews.published_at), that rule actively misorders: a
+    # 17:30 filing ranked above a 23:24 story published six hours later. A
+    # feed whose top item is not the newest one is not a feed.
+    out.sort(key=lambda i: (i["published_at"],
                             -_TIER_RANK.get(i["source_tier"], 9)), reverse=True)
     return out[:limit]
 

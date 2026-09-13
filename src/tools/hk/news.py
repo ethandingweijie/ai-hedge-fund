@@ -61,8 +61,12 @@ def get_hk_company_news(
             raw_date = str(row.get("发布时间") or row.get("时间") or "").strip()
             if not raw_date:
                 continue
-            # Normalise to YYYY-MM-DD
+            # Normalise to YYYY-MM-DD. AKShare already gives the minute
+            # ("2024-11-07 08:30:00"); `date` stays date-only because the
+            # sentiment agent parses it as such, and the full value rides
+            # along in `published_at` so a feed can order one day's items.
             article_date = raw_date[:10]
+            published_at = raw_date if len(raw_date) >= 19 else None
 
             # Date filters
             if article_date > end_date:
@@ -86,6 +90,7 @@ def get_hk_company_news(
                     date=article_date,
                     url=url,
                     sentiment=None,  # classified downstream by news_sentiment_agent
+                    published_at=published_at,
                 )
             )
         except Exception as exc:

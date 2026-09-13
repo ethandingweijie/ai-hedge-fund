@@ -97,8 +97,11 @@ def _adapter_company_news(ticker: str) -> list[dict]:
     rows = get_company_news(ticker, end, start, limit=_PER_SOURCE_LIMIT) or []
     out = []
     for r in rows:
-        out.append(_item(ticker, getattr(r, "title", ""), getattr(r, "url", None),
-                         getattr(r, "date", None), getattr(r, "source", None)))
+        out.append(_item(
+            ticker, getattr(r, "title", ""), getattr(r, "url", None),
+            # published_at carries the minute; date is date-only by contract.
+            getattr(r, "published_at", None) or getattr(r, "date", None),
+            getattr(r, "source", None)))
     return [o for o in out if o]
 
 
@@ -111,9 +114,10 @@ def _adapter_press_releases(ticker: str) -> list[dict]:
     rows = get_press_releases(ticker, end, start, limit=10) or []
     out = []
     for r in rows:
-        out.append(_item(ticker, getattr(r, "title", ""), getattr(r, "url", None),
-                         getattr(r, "date", None), getattr(r, "source", None),
-                         tier=news_store.TIER_REGULATORY))
+        out.append(_item(
+            ticker, getattr(r, "title", ""), getattr(r, "url", None),
+            getattr(r, "published_at", None) or getattr(r, "date", None),
+            getattr(r, "source", None), tier=news_store.TIER_REGULATORY))
     return [o for o in out if o]
 
 

@@ -1208,6 +1208,31 @@ def get_treasury_rates(
     return sorted(data, key=lambda x: x.get("date", ""), reverse=True)
 
 
+def _full_timestamp(raw: str | None) -> str | None:
+    """"YYYY-MM-DD HH:MM:SS" from a provider timestamp, or None.
+
+    Providers truncate to a date at the CompanyNews boundary because the
+    sentiment agent compares `date` as "YYYY-MM-DD". A news feed needs the
+    minute to order items published on the same day, so the full value is
+    carried separately in `published_at`.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return None
+    from datetime import datetime as _dt
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S",
+                "%Y-%m-%d %H:%M"):
+        try:
+            return _dt.strptime(s, fmt).strftime("%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            continue
+    try:
+        return (_dt.fromisoformat(s.replace("Z", "+00:00"))
+                .strftime("%Y-%m-%d %H:%M:%S"))
+    except ValueError:
+        return None
+
+
 # ── 7. Company News ───────────────────────────────────────────────────────────
 
 def get_company_news(
@@ -1278,6 +1303,9 @@ def get_company_news(
         for row in data:
             raw_date = row.get("publishedDate", "") or row.get("date", "") or ""
             date_str = raw_date[:10] if raw_date else end_date
+            # Keep the minute too: `date` is date-only by contract (see
+            # CompanyNews), but a feed cannot order a day's items without it.
+            full_ts = _full_timestamp(raw_date)
             try:
                 all_news.append(CompanyNews(
                     ticker=row.get("symbol", ticker),
@@ -1287,6 +1315,7 @@ def get_company_news(
                     date=date_str,
                     url=row.get("url", ""),
                     sentiment=None,
+                    published_at=full_ts,
                 ))
             except Exception:
                 continue
@@ -1363,6 +1392,7 @@ def get_press_releases(
     for row in data:
         raw_date = row.get("publishedDate", "") or row.get("date", "") or ""
         date_str = raw_date[:10] if raw_date else end_date
+        full_ts = _full_timestamp(raw_date)
         # Skip if outside requested window
         if date_str > end_date:
             continue
@@ -1377,6 +1407,7 @@ def get_press_releases(
                 date=date_str,
                 url=row.get("url", ""),
                 sentiment=None,
+                published_at=full_ts,
             ))
         except Exception:
             continue

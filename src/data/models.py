@@ -119,6 +119,13 @@ class CompanyNews(BaseModel):
     date: str
     url: str
     sentiment: str | None = None
+    #: Full publication timestamp, "YYYY-MM-DD HH:MM:SS", when the provider
+    #: gave one. `date` stays DATE-ONLY on purpose: news_sentiment_agent parses
+    #: it with strptime(a.date, "%Y-%m-%d") and compares it as a string against
+    #: "YYYY-MM-DD" bounds, so widening that field would break the production
+    #: sentiment path. A news FEED needs the minute to order a day's items, so
+    #: it is carried alongside rather than instead.
+    published_at: str | None = None
 
 
 class CompanyNewsResponse(BaseModel):

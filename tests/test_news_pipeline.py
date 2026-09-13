@@ -74,6 +74,29 @@ class TestStore:
         assert ns.upsert_items(items) == 2
         assert ns.upsert_items(items) == 0
 
+    def test_the_newest_item_leads_even_if_it_is_an_aggregator(self):
+        """Ordering is by the MINUTE, not by date-then-tier. A 17:30 filing
+        must not outrank a story published at 23:24 the same evening."""
+        from app.backend.services import news_store as ns
+        ns.upsert_items([
+            self._item(url="http://x/f", title="filing", site="hkexnews.hk",
+                       published_at="2026-09-11 17:30:00"),
+            self._item(url="http://x/l", title="later story",
+                       site="gurufocus.com",
+                       published_at="2026-09-11 23:24:00"),
+        ])
+        assert ns.get_items("0700.HK", 5)[0]["title"] == "later story"
+
+    def test_tier_breaks_an_exact_tie(self):
+        from app.backend.services import news_store as ns
+        ns.upsert_items([
+            self._item(url="http://x/a", title="aggregated",
+                       site="gurufocus.com", published_at="2026-09-11 09:00:00"),
+            self._item(url="http://x/b", title="filing", site="hkexnews.hk",
+                       published_at="2026-09-11 09:00:00"),
+        ])
+        assert ns.get_items("0700.HK", 5)[0]["title"] == "filing"
+
     def test_a_filing_leads_the_day_it_shares_with_an_aggregator(self):
         from app.backend.services import news_store as ns
         ns.upsert_items([
