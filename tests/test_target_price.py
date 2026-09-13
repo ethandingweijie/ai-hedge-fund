@@ -90,3 +90,59 @@ class TestCaching:
         second = tp.get_consensus_target("D05.SI")
         assert first == second
         assert calls["n"] == 1, "a benchmark that moves between runs is not one"
+
+
+class TestUnusableTargets:
+    """A benchmark can be unusable without contradicting itself.
+
+    Kingboard Holdings carried HKD 175.50 against a HKD 52.75 price -- +233%
+    from two analysts -- and that alone made it one of the worst deviations in
+    a 200-name benchmark, while the model's own 31.16 sat far nearer the
+    traded price than the "consensus" did. A benchmark that carries a bad
+    value corrupts every comparison drawn from it.
+    """
+
+    def _page(self, target, price_move, rating="Strong Buy", n=8):
+        direction = "higher" if price_move > 0 else "lower"
+        return (f"According to {n} analysts polled by S&P Global, Test Co "
+                f"stock has a consensus rating of {rating} and an average "
+                f"price target of ${target}. The forecast is "
+                f"{abs(price_move) * 100:.2f}% {direction} than the current "
+                f"stock price. Currency is HKD")
+
+    def _parse(self, monkeypatch, body):
+        import src.tools.target_price as tp
+
+        class R:
+            status_code = 200
+            text = body
+
+        monkeypatch.setattr(tp, "_CACHE_DIR", __import__("pathlib").Path(
+            __import__("tempfile").mkdtemp()))
+        import requests
+        monkeypatch.setattr(requests, "get", lambda *a, **k: R())
+        return tp.get_consensus_target("0001.HK", refresh=True)
+
+    def test_absurd_move_is_suspect_however_many_analysts(self, monkeypatch):
+        r = self._parse(monkeypatch, self._page(175.5, 2.327, n=20))
+        assert r["suspect"] is True
+        assert "not a 12-month target" in r["suspect_reason"]
+
+    def test_thin_coverage_pointing_far_from_market_is_suspect(self, monkeypatch):
+        r = self._parse(monkeypatch, self._page(90.0, 0.80, n=2))
+        assert r["suspect"] is True
+        assert "whole consensus" in r["suspect_reason"]
+
+    def test_thin_coverage_near_the_market_is_usable(self, monkeypatch):
+        """Two analysts is thin, but a +10% target is not thereby wrong --
+        Yanlord must stay in the benchmark."""
+        r = self._parse(monkeypatch, self._page(0.56, 0.10, n=2))
+        assert r["suspect"] is False
+        assert r["thin_coverage"] is True
+
+    def test_a_large_move_with_real_coverage_is_a_genuine_disagreement(self, monkeypatch):
+        """Geely: +80% across 28 analysts. The model may still be wrong, but
+        the benchmark is sound and must not be discarded to flatter it."""
+        r = self._parse(monkeypatch, self._page(28.96, 0.797, n=28))
+        assert r["suspect"] is False
+        assert r["thin_coverage"] is False

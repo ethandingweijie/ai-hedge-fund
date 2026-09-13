@@ -24,8 +24,42 @@ class TestTemplates:
         for tk, tpl in (h._load()["templates"]).items():
             for d in tpl["divisions"]:
                 if d["basis"] == "market_stake":
-                    # Listings are not all Hong Kong: Astra is Jakarta.
-                    assert "." in (d.get("listed") or ""), (tk, d["name"])
+                    listed = (d.get("listed") or "").strip()
+                    assert listed, (tk, d["name"])
+                    # Listings span venues: Astra is Jakarta, Yihai Kerry
+                    # Shenzhen, AWL Agri Mumbai -- and Legend Biotech is on
+                    # Nasdaq, which carries no suffix at all. Requiring a "."
+                    # asserted "not US", which is not the property wanted.
+                    assert h.currency_of(listed), (tk, d["name"])
+
+    def test_every_listed_stake_resolves_to_a_currency(self):
+        """A part added in the wrong currency IS the valuation: Astra is
+        quoted in IDR at ~190 trillion against an SGD parent."""
+        for tk, tpl in (h._load()["templates"]).items():
+            for d in tpl["divisions"]:
+                if d["basis"] != "market_stake":
+                    continue
+                listed = d["listed"]
+                ccy = h.currency_of(listed)
+                if "." in listed:
+                    suffix = "." + listed.rsplit(".", 1)[1]
+                    assert suffix in h._SUFFIX_CCY, (tk, listed, "unmapped venue")
+                    assert ccy == h._SUFFIX_CCY[suffix]
+                else:
+                    assert ccy == "USD", (tk, listed)
+
+    def test_every_stake_percentage_is_sourced(self):
+        """A wrong ownership percentage moves the answer further than any
+        multiple choice, so an unsourced one must be null, not a guess."""
+        for tk, tpl in (h._load()["templates"]).items():
+            for d in tpl["divisions"]:
+                if d["basis"] != "market_stake":
+                    continue
+                pct = d.get("stake_pct")
+                if pct is None:
+                    continue
+                assert 0.0 < pct <= 1.0, (tk, d["name"], pct)
+                assert d.get("source"), (tk, d["name"], "stake without a source")
 
     def test_discounts_are_a_sane_range(self):
         for tk, tpl in (h._load()["templates"]).items():

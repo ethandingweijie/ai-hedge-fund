@@ -60,6 +60,11 @@ _MOVE = re.compile(
 _CCY_VENUE = re.compile(r"Currency is\s+([A-Z]{3})\b")
 _CCY_QUOTE = re.compile(r"Price in\s+([A-Z]{3})\b")
 
+#: Beyond this the figure is not a price target, whatever it is labelled.
+_ABSURD_MOVE = 1.50
+#: At or below this, "consensus" is a courtesy term.
+_THIN_COVERAGE = 2
+
 _BULLISH = ("buy", "strong buy", "outperform", "overweight")
 _BEARISH = ("sell", "strong sell", "underperform", "underweight")
 
@@ -87,7 +92,7 @@ def quote_path(ticker: str) -> Optional[tuple[str, str]]:
 #: Bump when the payload shape changes. Entries written before currency
 #: detection carry a currency that is simply wrong for USD-quoted SGX lines,
 #: and a cached wrong answer is worse than no answer -- it never gets retried.
-_SCHEMA = 2
+_SCHEMA = 3
 
 
 def _cache_file(ticker: str) -> Path:
@@ -153,6 +158,7 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         implied_move = float(move_m.group(1)) / 100.0
         if move_m.group(2).lower() == "lower":
             implied_move = -implied_move
+    analysts = int(m.group("n"))
     suspect_reason = None
     if implied_move is not None and rating:
         r = rating.lower()
@@ -162,13 +168,31 @@ def get_consensus_target(ticker: str, *, refresh: bool = False
         elif r in _BEARISH and implied_move > 0.30:
             suspect_reason = (f"rating {rating!r} with a target {implied_move:+.0%} "
                               f"vs price -- internally contradictory")
+    # A target can be unusable without contradicting itself. Kingboard
+    # Holdings carried HKD 175.50 against a HKD 52.75 price -- a +233% implied
+    # move from TWO analysts -- and that alone made it one of the worst
+    # "deviations" in the 200-name benchmark while the model's 31.16 sat much
+    # nearer the traded price than the benchmark did. Two failure modes:
+    #
+    #   * a move so large the figure is not a 12-month price target in any
+    #     ordinary sense, however many analysts stand behind it;
+    #   * a handful of analysts pointing a long way from the market, where
+    #     one outlier estimate IS the consensus.
+    if suspect_reason is None and implied_move is not None:
+        if abs(implied_move) > _ABSURD_MOVE:
+            suspect_reason = (f"target implies {implied_move:+.0%} vs price -- "
+                              f"not a 12-month target")
+        elif analysts <= _THIN_COVERAGE and abs(implied_move) > 0.50:
+            suspect_reason = (f"{analysts} analyst(s) implying {implied_move:+.0%} "
+                              f"-- one estimate is the whole consensus")
 
     out = {
         "ticker": ticker,
         "target": target,
         "low": _num(low_m.group(1)) if low_m else None,
         "high": _num(high_m.group(1)) if high_m else None,
-        "analysts": int(m.group("n")),
+        "analysts": analysts,
+        "thin_coverage": analysts <= _THIN_COVERAGE,
         "rating": rating,
         "implied_move": implied_move,
         "suspect": bool(suspect_reason),
