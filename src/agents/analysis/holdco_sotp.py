@@ -94,9 +94,75 @@ def _fx(from_ccy: str, to_ccy: str) -> Optional[float]:
         return None
 
 
+def _ebitda_of(ticker: str, end_date: str) -> Optional[tuple[float, str]]:
+    """(EBITDA, currency) for a ticker, or None."""
+    try:
+        from src.tools.api import search_line_items
+        rows = search_line_items(ticker, ["ebitda"], end_date, limit=1)
+        if not rows:
+            return None
+        v = getattr(rows[0], "ebitda", None)
+        c = getattr(rows[0], "currency", None) or "USD"
+        return (float(v), c) if isinstance(v, (int, float)) and v else None
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def residual_ebitda(ticker: str, end_date: str, to_ccy: str) -> Optional[float]:
+    """Group EBITDA less the EBITDA of the subsidiaries it CONSOLIDATES.
+
+    Consolidated accounts carry 100% of a majority-owned subsidiary's EBITDA
+    (the part that is not the parent's appears as minority interest, not as a
+    smaller EBITDA), so the whole of it is removed -- not the parent's share.
+    What remains is the operating earnings of everything the template values
+    on a multiple rather than at market.
+
+    Deliberately narrow: it is only returned when the template has exactly ONE
+    division awaiting EBITDA. With two or more, a single residual pool cannot
+    be split between them without inventing the split, and CK Hutchison's
+    divisions carry multiples from 4.5x to 10x -- the allocation would drive
+    the answer. Those stay declined.
+    """
+    tpl = template_for(ticker)
+    if not tpl:
+        return None
+    divs = tpl.get("divisions") or []
+    pending = [d for d in divs if d.get("basis") != "market_stake"]
+    if len(pending) != 1:
+        return None
+    grp = _ebitda_of(ticker, end_date)
+    if not grp:
+        return None
+    total, gccy = grp
+    for d in divs:
+        if d.get("basis") != "market_stake":
+            continue
+        stake = d.get("stake_pct")
+        if stake is None or stake < 0.5:
+            continue                      # associate: equity-accounted, not in EBITDA
+        sub = _ebitda_of(d.get("listed") or "", end_date)
+        if not sub:
+            return None                   # cannot verify the subtraction -- refuse
+        rate = _fx(sub[1], gccy)
+        if rate is None:
+            return None
+        total -= sub[0] * rate
+    if total <= 0:
+        return None                       # nothing left to value
+    # No guard on "nothing was removed": when every listed stake is an
+    # associate the group EBITDA IS the unlisted operations, and refusing
+    # there would decline a holdco the look-through can value exactly. A
+    # subsidiary whose EBITDA could not be fetched already returned above.
+    rate = _fx(gccy, to_ccy)
+    if rate is None:
+        return None
+    return total * rate
+
+
 def look_through_value(ticker: str, end_date: str, *,
                        ebitda_by_division: Optional[dict] = None,
-                       discount: Optional[float] = None) -> Optional[dict]:
+                       discount: Optional[float] = None,
+                       net_debt: Optional[float] = None) -> Optional[dict]:
     """Sum the parts and apply one holding-company discount.
 
     `ebitda_by_division` supplies EBITDA for the unlisted operating divisions;
@@ -138,6 +204,8 @@ def look_through_value(ticker: str, end_date: str, *,
             continue
         ebitda = ebitda_by_division.get(name)
         if ebitda is None:
+            ebitda = residual_ebitda(ticker, end_date, ccy)
+        if ebitda is None:
             skipped.append({"division": name, "reason": "no EBITDA supplied"})
             continue
         lo, hi = (div.get("multiple_range") or [None, None])
@@ -154,6 +222,14 @@ def look_through_value(ticker: str, end_date: str, *,
     gross = sum(p["value"] for p in parts)
     d_lo, d_hi = tpl.get("holdco_discount") or [0.0, 0.0]
     disc = discount if discount is not None else (d_lo + d_hi) / 2.0
+    # Only PARENT-level net debt belongs here. A listed stake marked at market
+    # has already netted that subsidiary's own borrowings inside its market
+    # capitalisation, so subtracting consolidated net debt would count the
+    # subsidiaries' debt twice. For a holdco that equity-accounts its stakes
+    # the consolidated figure IS parent-level; where it is not, the caller
+    # passes None and the bridge is stated without it.
+    nd = float(net_debt) if isinstance(net_debt, (int, float)) else 0.0
+    nav_pre_discount = gross - nd
     return {
         "ticker": ticker,
         "name": tpl.get("name"),
@@ -161,10 +237,69 @@ def look_through_value(ticker: str, end_date: str, *,
         "skipped": skipped,
         "reporting_currency": ccy,
         "gross_asset_value": gross,
+        "parent_net_debt": nd,
         "holdco_discount": disc,
         "holdco_discount_range": [d_lo, d_hi],
-        "net_asset_value": gross * (1.0 - disc),
+        "net_asset_value": nav_pre_discount * (1.0 - disc),
         # A SOTP missing a division is not conservative, it is wrong. The
         # consumer must be able to see that before using the number.
         "complete": not skipped,
     }
+
+
+def value_per_share(ticker: str, end_date: str, shares: float, *,
+                    to_currency: Optional[str] = None,
+                    ebitda_by_division: Optional[dict] = None,
+                    net_debt: Optional[float] = None) -> Optional[float]:
+    """Look-through NAV per share, or None when the SOTP does not complete.
+
+    A partial look-through is NOT returned. Skipping a division does not make
+    the answer conservative, it makes it wrong -- and this value is the 0.70
+    anchor of the Holding Company profile, so a silently-short NAV would drag
+    the whole valuation down while looking like a considered number. When a
+    division cannot be valued the method returns None, the blender drops it
+    and renormalises, and `decline_reason` says exactly what is missing.
+    """
+    if not shares or shares <= 0:
+        return None
+    res = look_through_value(ticker, end_date,
+                             ebitda_by_division=ebitda_by_division,
+                             net_debt=net_debt)
+    if not res or not res.get("complete"):
+        return None
+    nav = res.get("net_asset_value")
+    if not isinstance(nav, (int, float)) or nav <= 0:
+        return None
+    if to_currency:
+        rate = _fx(res.get("reporting_currency") or "", to_currency)
+        if rate is None:
+            return None
+        nav = nav * rate
+    return nav / shares
+
+
+def decline_reason(ticker: str, end_date: str, *,
+                   ebitda_by_division: Optional[dict] = None) -> Optional[str]:
+    """Why the look-through cannot be used for this ticker, or None if it can.
+
+    Stated per division so the gap is actionable -- a missing ownership
+    percentage is a question for a filing, a missing division EBITDA is a
+    question for the segment note, and they are not the same problem.
+    """
+    if not template_for(ticker):
+        return "no look-through template"
+    res = look_through_value(ticker, end_date,
+                             ebitda_by_division=ebitda_by_division)
+    if not res:
+        return "no division could be valued"
+    if res.get("complete"):
+        return None
+    return "; ".join(f"{s['division']}: {s['reason']}"
+                     for s in (res.get("skipped") or []))
+
+
+def can_value(ticker: str, end_date: str, *,
+              ebitda_by_division: Optional[dict] = None) -> bool:
+    """True when a COMPLETE look-through exists for this ticker."""
+    return decline_reason(
+        ticker, end_date, ebitda_by_division=ebitda_by_division) is None

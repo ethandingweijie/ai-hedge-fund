@@ -3325,6 +3325,7 @@ def _compute_method_value(
     profile_name: str = "",
     forward_consensus: Optional[dict] = None,
     ticker: str = "",
+    end_date: str = "",
 ) -> Optional[float]:
     """
     Compute intrinsic value per share for a single valuation method.
@@ -3454,6 +3455,54 @@ def _compute_method_value(
     # ignores scenario multiplier (sm) — the scenario signal lives in the
     # segment revenue levels when/if analysts update them, not in an artificial
     # ±25% overlay.
+    # ── SOTP / NAV, NAV Discount — conglomerate look-through ─────────────
+    # The Holding Company profile anchors SOTP / NAV at 0.70 and marked it
+    # implementable: False, so 70% of every conglomerate's valuation was a
+    # P/BV proxy. The look-through marks each listed stake at MARKET (shares x
+    # price x ownership, never carrying value) and applies one holding-company
+    # discount at the total.
+    #
+    # Returns None unless the look-through is COMPLETE. A SOTP missing a
+    # division is not conservative, it is wrong, and as the dominant-weight
+    # anchor a silently-short NAV would drag the whole valuation while looking
+    # deliberate. Incomplete names keep falling through, and
+    # holdco_sotp.decline_reason() names the division that is missing.
+    if method_name in {"SOTP / NAV", "NAV Discount", "SOTP / NAV (look-through)"}:
+        _lt = None
+        if ticker and end_date and shares and shares > 0:
+            try:
+                from src.agents.analysis import holdco_sotp
+                if holdco_sotp.enabled():
+                    # Parent-level net debt only. A listed stake marked at
+                    # market has already netted that subsidiary's borrowings
+                    # inside its market cap, so consolidated net debt would
+                    # double-count -- and for a holdco that consolidates a
+                    # BANK it is a deposit base, not corporate leverage (CITIC
+                    # reports HKD 1,989bn against a HKD 367bn look-through).
+                    # Passed only when every division is an equity-accounted
+                    # stake, which is when the consolidated figure IS the
+                    # parent's.
+                    _tpl = holdco_sotp.template_for(ticker) or {}
+                    _divs = _tpl.get("divisions") or []
+                    _all_assoc = bool(_divs) and all(
+                        d.get("basis") == "market_stake"
+                        and (d.get("stake_pct") or 1.0) < 0.5 for d in _divs)
+                    # The engine works in the currency the ticker TRADES in,
+                    # so the look-through is converted to that, not to the
+                    # reporting currency.
+                    from src.tools.api import get_listing_currency
+                    _lt = holdco_sotp.value_per_share(
+                        ticker, end_date, shares,
+                        to_currency=get_listing_currency(ticker),
+                        net_debt=(net_debt if _all_assoc else None))
+            except Exception:                              # noqa: BLE001
+                _lt = None
+        if _lt is not None and _lt > 0:
+            return _lt
+        # No complete look-through: fall through to the P/BV proxy below,
+        # which is what these names already had. Returning None here would
+        # drop the anchor entirely and make a partial fix a regression.
+
     if method_name in {"SOTP (segments)", "Sum of Parts", "SOTP", "SOTP (Segments)"}:
         seg = most_recent.get("segment_breakdown")
         if not seg or shares <= 0:
@@ -4267,7 +4316,18 @@ def _industry_routing_enabled() -> bool:
     return os.getenv(FLAG, "").strip().lower() in ("1", "true", "yes", "on")
 
 
-def _industry_routed_profile(ticker: str, sector: str):
+#: Anchors whose computability is per-ticker, not a property of the method.
+_LOOKTHROUGH_ANCHORS = frozenset({"SOTP / NAV", "SOTP / NAV (look-through)"})
+
+#: Every method the conglomerate look-through can answer. "NAV Discount"
+#: carries 0.20 in the Holding Company profile and is the same net-of-discount
+#: NAV; left unrequested it fell to a P/BV proxy of 0.0 and was dropped, so the
+#: profile quietly ran on 0.80 of its stated weight. Profiles without a
+#: template are unaffected -- the method returns None and the proxy stands.
+_LOOKTHROUGH_METHODS = _LOOKTHROUGH_ANCHORS | frozenset({"NAV Discount"})
+
+
+def _industry_routed_profile(ticker: str, sector: str, end_date: str = ""):
     """(sector, profile, profile_data) from the industry map, or None.
 
     Returns None rather than guessing when the industry is unmapped, so an
@@ -4305,6 +4365,26 @@ def _industry_routed_profile(ticker: str, sector: str):
                       max(methods, key=lambda m: m.get("weight") or 0)
                       if methods else None)
         if anchor and not anchor.get("implementable"):
+            # "implementable" is a property of the METHOD IN GENERAL; whether
+            # it can be computed for THIS ticker is a different question. A
+            # conglomerate with a complete look-through can compute SOTP / NAV
+            # exactly, and declining it on the static flag would send a name
+            # we can now value properly back to the financial ladder -- which
+            # is how Jardine Cycle & Carriage came to be valued as Mature SaaS.
+            if anchor.get("name") in _LOOKTHROUGH_ANCHORS:
+                try:
+                    from src.agents.analysis import holdco_sotp
+                    if holdco_sotp.enabled() and holdco_sotp.can_value(ticker, end_date):
+                        _log.info("[dcf] %s: anchor %r computable by "
+                                  "look-through -> %s/%s",
+                                  ticker, anchor.get("name"), r_sector, r_profile)
+                        return (r_sector, r_profile, data)
+                    _why = holdco_sotp.decline_reason(ticker, end_date)
+                except Exception:                          # noqa: BLE001
+                    _why = None
+                if _why:
+                    _log.info("[dcf] %s: look-through incomplete -- %s",
+                              ticker, _why)
             _log.info("[dcf] %s: industry routing DECLINED -> %s/%s "
                       "(anchor %r is not implementable)",
                       ticker, r_sector, r_profile, anchor.get("name"))
@@ -4424,7 +4504,14 @@ def _blend_methods(
         raw_name = m["name"]
         # Resolve proxy
         effective_name = m.get("proxy", raw_name) if not m.get("implementable", True) else raw_name
-        value = method_values.get(effective_name)
+        # The REAL method wins whenever it produced a value. A proxy exists to
+        # stand in for a method that could not be computed; once it can be, it
+        # is the answer and the proxy is not a second opinion. This mattered
+        # for the conglomerate look-through: P/BV came back as a literal 0.0,
+        # which is not None, so the proxy was taken and the exact NAV ignored.
+        value = method_values.get(raw_name)
+        if value is None or value <= 0:
+            value = method_values.get(effective_name)
         if value is None:
             value = method_values.get(raw_name)
         if value is None or value <= 0:
@@ -5651,7 +5738,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # This sits BELOW the ticker override that follows (a company fact
         # still beats an industry rule) and ABOVE the financial ladder.
         if _industry_routing_enabled():
-            _routed = _industry_routed_profile(ticker, sector)
+            _routed = _industry_routed_profile(ticker, sector, end_date)
             if _routed and _routed[1] != profile_name:
                 _r_sector, _r_profile, _r_data = _routed
                 _log.info("[dcf] %s: industry routing -> %s/%s (was %s/%r)",
@@ -6574,6 +6661,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         methods_to_compute.add(m["name"])
                     elif "proxy" in m:
                         methods_to_compute.add(m["proxy"])
+                        # A look-through anchor is unimplementable in general
+                        # but exact for a conglomerate whose template
+                        # completes, so ask for the real method too. When the
+                        # look-through does not complete it returns None and
+                        # the proxy already requested here stands, unchanged.
+                        if m["name"] in _LOOKTHROUGH_METHODS:
+                            methods_to_compute.add(m["name"])
 
                 # ── Growth premium: growth-vs-sector, quality-gated by ROIC ──
                 # v3.20 — the v3.19 PEG-style "growth vs sector avg" heuristic
@@ -6736,6 +6830,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 profile_name=profile_name,
                                 forward_consensus=forward_consensus,
                                 ticker=ticker,
+                                end_date=end_date,
                             )
 
                 # ── Shadow-compute Forward P/E, Forward EV/EBITDA (Feature 1b)
@@ -6777,6 +6872,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             profile_name=profile_name,
                             forward_consensus=forward_consensus,
                             ticker=ticker,
+                            end_date=end_date,
                         )
 
                 # Check excluded methods are not used
