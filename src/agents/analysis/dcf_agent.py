@@ -6915,7 +6915,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 revenue_base=revenue_base,
                                 shares=shares,
                                 net_debt=net_debt,
-                                market_cap=revenue_base * 10,   # rough proxy if not available
+                                # Size-matching the peer cohort is the only
+                                # thing this feeds. revenue x 10 is not a
+                                # market cap: for a thin-margin, high-revenue
+                                # name it overstates by an order of magnitude,
+                                # and it decided which comp basket a large cap
+                                # was measured against. Use the real one where
+                                # the price resolved.
+                                market_cap=(_market_cap or revenue_base * 10),
                                 wacc=wacc,
                                 growth_base=g,
                                 fcf_margin_base=fcf_margin_base,
@@ -6957,7 +6964,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             revenue_base=revenue_base,
                             shares=shares,
                             net_debt=net_debt,
-                            market_cap=revenue_base * 10,
+                            market_cap=(_market_cap or revenue_base * 10),
                             wacc=wacc,
                             growth_base=g,
                             fcf_margin_base=fcf_margin_base,
@@ -7208,8 +7215,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Framework §7: separate from intrinsic value — market pricing via sector multiples
         # For Financials sub-types (banks, GSEs, insurance), use the profile-level entry
         # which carries sector-appropriate multiples (P/E, P/TBV) rather than EV/EBITDA.
+        # market_cap must match what _compute_method_value passes, or the
+        # provenance recorded in "multiples_used" describes a different
+        # resolution from the one the methods actually used -- a trace that
+        # cannot be trusted is worse than none, because it looks checkable.
         peer = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
-                                         ticker=ticker)
+                                         ticker=ticker,
+                                         market_cap=(_market_cap or 0.0))
         _12m_targets: dict[str, Optional[float]] = {}
         _12m_pt_method_label = "forward multiple (profile-specific)"
         # Bank/GSE/financial profiles: EV-based multiples are meaningless because
