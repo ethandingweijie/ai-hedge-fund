@@ -64,7 +64,36 @@ class TestTemplates:
     def test_discounts_are_a_sane_range(self):
         for tk, tpl in (h._load()["templates"]).items():
             lo, hi = tpl["holdco_discount"]
-            assert 0.0 < lo <= hi < 0.6, tk
+            assert 0.0 <= lo <= hi < 0.6, tk
+
+    def test_a_zero_group_discount_means_the_discount_is_on_a_division(self):
+        """Kingboard's haircut is on the Laminates stake and GenScript's on the
+        Legend mark. A group discount of zero there is deliberate -- applying
+        both would take the same haircut twice -- but a template with NO
+        discount anywhere is an omission, not a policy."""
+        for tk, tpl in (h._load()["templates"]).items():
+            lo, hi = tpl["holdco_discount"]
+            if lo or hi:
+                continue
+            on_divisions = [d for d in tpl["divisions"] if d.get("discount_pct")]
+            assert on_divisions, f"{tk}: no discount at group OR division level"
+            assert tpl.get("discount_source"), f"{tk}: undocumented zero discount"
+
+    def test_every_discount_is_documented(self):
+        for tk, tpl in (h._load()["templates"]).items():
+            if tpl.get("discount_source"):
+                continue
+            # Pre-existing templates carry their reasoning in the file doc;
+            # any template whose discount was SET deliberately must say why.
+            assert tk in {"00267.HK", "00001.HK", "00019.HK"}, tk
+
+    def test_division_discounts_are_sane(self):
+        for tk, tpl in (h._load()["templates"]).items():
+            for d in tpl["divisions"]:
+                pct = d.get("discount_pct")
+                if pct is None:
+                    continue
+                assert 0.0 <= pct < 0.6, (tk, d["name"], pct)
 
 
 class TestLookThrough:

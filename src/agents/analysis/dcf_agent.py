@@ -4424,6 +4424,63 @@ _SOTP_ANALYST_METHOD_NAMES: frozenset[str] = frozenset(
     {"SOTP (analyst)", "Analyst SOTP"})
 
 
+#: Profiles where EV/Revenue is a growth-stage metric applied to a business
+#: that has already crossed into profit. Scoped deliberately: the same
+#: argument could be made for other sales-multiple profiles, but each has its
+#: own cohort and its own evidence, and one gate measured is worth five
+#: assumed.
+_EV_REVENUE_GATED_PROFILES = frozenset({"Automotive & EV"})
+
+#: Where the freed weight goes when the gate fires.
+_EV_REVENUE_REALLOCATION = (("Forward P/E", 0.5), ("EV/EBITDA", 0.5))
+
+
+def _gate_ev_revenue(profile_data: Optional[dict], profile_name: str,
+                     most_recent: dict) -> tuple[Optional[dict], bool]:
+    """Drop the sales multiple once a company earns something.
+
+    EV/Revenue prices gross top line. On a Chinese OEM in a domestic price
+    war that is a leveraged call on vehicle deliveries, not on equity: at a 6%
+    EBITDA margin a static 0.35x EV/Revenue implies ~6x EV/EBITDA, but at 3-4%
+    the SAME 0.35x implies 9-12x, so the multiple silently RISES as
+    profitability falls. Geely blended to 63.11 against a 28.96 consensus and
+    Chery to +172% -- the two worst genuine outliers in a 200-name universe --
+    while EV/EBITDA standalone put Geely at 32.93.
+
+    The gate is profitability, not sector: below breakeven a sales multiple is
+    the only thing left, and a pre-revenue EV stub keeps it.
+
+    Returns (profile, fired). Copy-on-write -- profile dicts are references
+    into INDUSTRY_VALUATION_PROFILES and mutating one leaks into every later
+    ticker sharing it.
+    """
+    if not profile_data or profile_name not in _EV_REVENUE_GATED_PROFILES:
+        return profile_data, False
+    methods = profile_data.get("methods") or []
+    sales_legs = [m for m in methods if m.get("name") in _EV_REVENUE_NAMES]
+    if not sales_legs:
+        return profile_data, False
+    ebitda = _safe((most_recent or {}).get("ebitda"))
+    if ebitda is None or ebitda <= 0:
+        return profile_data, False          # pre-breakeven: keep the sales leg
+
+    freed = sum(float(m.get("weight") or 0.0) for m in sales_legs)
+    kept = [dict(m) for m in methods if m.get("name") not in _EV_REVENUE_NAMES]
+    by_name = {m["name"]: m for m in kept}
+    for name, share in _EV_REVENUE_REALLOCATION:
+        add = freed * share
+        if name in by_name:
+            by_name[name]["weight"] = float(by_name[name].get("weight") or 0.0) + add
+        else:
+            kept.append({"name": name, "weight": add, "implementable": True})
+            by_name[name] = kept[-1]
+    return {**profile_data, "methods": kept}, True
+
+
+_EV_REVENUE_NAMES = frozenset({"EV/Revenue", "EV/NTM Revenue", "EV/NTM Rev",
+                               "EV/Fwd Rev"})
+
+
 def _promote_sotp_analyst_profile(profile_data: Optional[dict],
                                   has_assumptions: bool) -> Optional[dict]:
     """Promote "SOTP (analyst)" into the resolved valuation profile.
@@ -5828,6 +5885,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # but its historical t1_row carries no sotp_assumptions → method
         # value None → skipped and renormalized → T-1 calibration and
         # every no-SOTP ticker stay bit-identical.
+        profile_data, _ev_rev_gated = _gate_ev_revenue(
+            profile_data, profile_name, most_recent)
+        if _ev_rev_gated:
+            _log.info("[dcf] %s: EV/Revenue dropped (positive EBITDA) -- "
+                      "weight reallocated to Forward P/E and EV/EBITDA", ticker)
+            progress.update_status(
+                agent_id, ticker,
+                "EV/Revenue gated off: profitable, so priced on earnings")
+
         profile_data = _promote_sotp_analyst_profile(
             profile_data, bool(most_recent.get("sotp_assumptions")))
 

@@ -17,9 +17,10 @@
     "silently valued at zero or at a guessed stake -- a wrong ownership",
     "percentage on a listed subsidiary moves the answer more than any multiple.",
     "v2: ownership percentages sourced, and the two SGX holdcos added. PCRD holds 22.69% of PCCW plus a 1.92% DIRECT stake in HKT -- it does NOT hold a material direct stake in Singtel, which an earlier draft of this file wrongly recorded. Parts are converted to the holdco's reporting currency before being summed: Astra is quoted in IDR at ~190 trillion rupiah against a SGD parent, so an unconverted sum would be that one line and nothing else.",
-    "v3: five more templates from user-supplied ownership percentages with filing context (Kingboard/Laminates 61.74%, ThaiBev/F&N 69.61%, Wilmar/YKA 89.99% and AWL 56.94%, GenScript/Legend 45.03%). Each pairs its listed stakes with ONE stub division so the residual-EBITDA rule can complete them: group EBITDA less the whole of each CONSOLIDATED subsidiary's. Legend is an associate and is therefore not subtracted. Every stub multiple_range is an ASSUMPTION and says so in its source field -- the ownership percentages are sourced, the multiples are not."
+    "v3: five more templates from user-supplied ownership percentages with filing context (Kingboard/Laminates 61.74%, ThaiBev/F&N 69.61%, Wilmar/YKA 89.99% and AWL 56.94%, GenScript/Legend 45.03%). Each pairs its listed stakes with ONE stub division so the residual-EBITDA rule can complete them: group EBITDA less the whole of each CONSOLIDATED subsidiary's. Legend is an associate and is therefore not subtracted. Every stub multiple_range is an ASSUMPTION and says so in its source field -- the ownership percentages are sourced, the multiples are not.",
+    "v4: holdco discounts set by the user per name, replacing the placeholders. Two are STAKE-level, not group-level -- Kingboard 25% on the Laminates holding, GenScript 20% on the Legend mark -- so `discount_pct` now exists on a division and those two carry a group discount of zero. Discounts compose one way only: division first, group once on the total. Each template records the reasoning in `discount_source`."
   ],
-  "version": 3,
+  "version": 4,
   "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
   "templates": {
     "00267.HK": {
@@ -142,8 +143,8 @@
       "name": "Jardine Cycle & Carriage",
       "currency": "SGD",
       "holdco_discount": [
-        0.2,
-        0.25
+        0.05,
+        0.15
       ],
       "divisions": [
         {
@@ -161,14 +162,15 @@
             7.0
           ]
         }
-      ]
+      ],
+      "discount_source": "10% baseline; brokers span 5% (DBS) to 15%. Among the tightest holdco haircuts in ASEAN -- strong direct dividend pass-through from Astra plus capital recycling (special distributions, Vietnam portfolio trimming)."
     },
     "P15.SI": {
       "name": "Pacific Century Regional Developments",
       "currency": "SGD",
       "holdco_discount": [
-        0.2,
-        0.25
+        0.4,
+        0.5
       ],
       "divisions": [
         {
@@ -185,14 +187,15 @@
           "stake_pct": 0.0192,
           "source": "small DIRECT holding, separate from the PCCW look-through"
         }
-      ]
+      ],
+      "discount_source": "40% baseline (market applies 40-50%). ~1.75bn PCCW shares with virtually no independent operating earnings -- a dividend collection box, with no minority control and no near-term privatisation catalyst."
     },
     "00148.HK": {
       "name": "Kingboard Holdings",
       "currency": "HKD",
       "holdco_discount": [
-        0.25,
-        0.35
+        0.0,
+        0.0
       ],
       "divisions": [
         {
@@ -200,7 +203,8 @@
           "basis": "market_stake",
           "listed": "01888.HK",
           "stake_pct": 0.6174,
-          "source": "1,945,744,500 shares; direct parent holding, consolidated subsidiary"
+          "source": "1,945,744,500 shares; direct parent holding, consolidated subsidiary",
+          "discount_pct": 0.25
         },
         {
           "name": "PCB, Chemicals, Properties and Investments",
@@ -211,14 +215,15 @@
           ],
           "source": "STUB: group EBITDA less the consolidated Laminates EBITDA, valued as one pool. The multiple range is an ASSUMPTION for cyclical industrial businesses, not a sourced figure; Properties would properly be valued on NAV and is not separated here."
         }
-      ]
+      ],
+      "discount_source": "25% applied to the LISTED LAMINATES STAKE, not to the group. Kingboard monetises tranches of Laminates through secondary placements at 9-12% below last close, which caps how far the holdco gap can narrow. No second discount at group level -- that would take the same haircut twice."
     },
     "Y92.SI": {
       "name": "Thai Beverage",
       "currency": "SGD",
       "holdco_discount": [
-        0.15,
-        0.2
+        0.05,
+        0.1
       ],
       "divisions": [
         {
@@ -237,7 +242,8 @@
           ],
           "source": "STUB: group EBITDA less the consolidated F&N EBITDA. The four beverage segments carry different multiples and SGX publishes no machine-readable segment note, so they are valued as one pool. Frasers Property is NOT included -- ThaiBev exited its ~28.78% stake entirely in the same 2024 transaction."
         }
-      ]
+      ],
+      "discount_source": "0-5% at group level, or 10% when the listed legs are isolated -- and this template isolates F&N, so the upper end applies. The September 2024 swap removed the property drag (Frasers exited to take F&N to 69.61%) and brokers value ThaiBev on blended core EV/EBITDA rather than a penalised stub. CAVEAT: Sabeco is the OTHER listed leg and is NOT isolated here -- no sourced ownership percentage -- so it still sits inside the stub."
     },
     "F34.SI": {
       "name": "Wilmar International",
@@ -270,14 +276,15 @@
           ],
           "source": "STUB: group EBITDA less the two consolidated listed subsidiaries. Multiple range is an ASSUMPTION for tropical oils, oilseeds and oleochemicals, not a sourced figure."
         }
-      ]
+      ],
+      "discount_source": "15-20% conglomerate discount, the sell-side convention (RHB, CGS). Yihai Kerry trades on a domestic A-share P/E structurally above Wilmar's own SGX band, so an unhedged look-through would inflate the target price."
     },
     "01548.HK": {
       "name": "GenScript Biotech",
       "currency": "HKD",
       "holdco_discount": [
-        0.15,
-        0.25
+        0.0,
+        0.0
       ],
       "divisions": [
         {
@@ -285,7 +292,8 @@
           "basis": "market_stake",
           "listed": "LEGN",
           "stake_pct": 0.4503,
-          "source": "~87.25M ordinary shares. Deconsolidated 18 Oct 2024: an ASSOCIATE under the equity method, so its EBITDA is not in GenScript's group figure and must not be subtracted."
+          "source": "~87.25M ordinary shares. Deconsolidated 18 Oct 2024: an ASSOCIATE under the equity method, so its EBITDA is not in GenScript's group figure and must not be subtracted.",
+          "discount_pct": 0.2
         },
         {
           "name": "Life Science, ProBio and Bestzyme",
@@ -296,7 +304,8 @@
           ],
           "source": "STUB: group EBITDA, which already excludes Legend. Multiple range is an ASSUMPTION for CRO/CDMO peers, not a sourced figure."
         }
-      ]
+      ],
+      "discount_source": "20% applied to the LEGEND EQUITY MARK, not to the group: high-beta Nasdaq biotech volatility, Carvykti commercial execution overhang, and parent-level holding frictions. Legend has been an associate since the October 2024 deconsolidation."
     }
   }
 }

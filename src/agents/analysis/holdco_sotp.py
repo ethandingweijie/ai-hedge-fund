@@ -163,7 +163,13 @@ def look_through_value(ticker: str, end_date: str, *,
                        ebitda_by_division: Optional[dict] = None,
                        discount: Optional[float] = None,
                        net_debt: Optional[float] = None) -> Optional[dict]:
-    """Sum the parts and apply one holding-company discount.
+    """Sum the parts and apply the holding-company discount.
+
+    Discounts compose in one direction only: a division's own `discount_pct`
+    is applied to that part, and the template's `holdco_discount` is applied
+    once to the total afterwards. A name discounted at the stake therefore
+    carries a group discount of zero -- otherwise the same haircut would be
+    taken twice and nobody reading the output could tell.
 
     `ebitda_by_division` supplies EBITDA for the unlisted operating divisions;
     divisions without it are skipped and reported, never assumed to be zero --
@@ -197,10 +203,22 @@ def look_through_value(ticker: str, end_date: str, *,
                 skipped.append({"division": name,
                                 "reason": f"no {src_ccy}->{ccy} rate"})
                 continue
+            # A discount can belong to a SINGLE STAKE rather than to the
+            # group. Kingboard's haircut is on the Laminates holding, because
+            # it monetises tranches through placements at 9-12% below last
+            # close, which caps how far the holdco gap can narrow; GenScript's
+            # is on the Legend mark, for Nasdaq biotech beta and the Carvykti
+            # execution overhang. Neither is a statement about the parent's
+            # other businesses, and applying it at group level would say it
+            # was.
+            _d = div.get("discount_pct")
+            _d = float(_d) if isinstance(_d, (int, float)) else 0.0
             parts.append({"division": name, "basis": "market_stake",
                           "listed": listed, "stake_pct": stake,
                           "currency": src_ccy, "fx_to_reporting": rate,
-                          "value": mcap * stake * rate})
+                          "discount_pct": _d,
+                          "gross_value": mcap * stake * rate,
+                          "value": mcap * stake * rate * (1.0 - _d)})
             continue
         ebitda = ebitda_by_division.get(name)
         if ebitda is None:
@@ -212,10 +230,16 @@ def look_through_value(ticker: str, end_date: str, *,
         if lo is None:
             skipped.append({"division": name, "reason": "no multiple range"})
             continue
+        _d = div.get("discount_pct")
+        _d = float(_d) if isinstance(_d, (int, float)) else 0.0
+        _mid = ebitda * (lo + hi) / 2.0
         parts.append({"division": name, "basis": basis,
                       "multiple_range": [lo, hi], "ebitda": ebitda,
-                      "value_low": ebitda * lo, "value_high": ebitda * hi,
-                      "value": ebitda * (lo + hi) / 2.0})
+                      "discount_pct": _d,
+                      "value_low": ebitda * lo * (1.0 - _d),
+                      "value_high": ebitda * hi * (1.0 - _d),
+                      "gross_value": _mid,
+                      "value": _mid * (1.0 - _d)})
 
     if not parts:
         return None

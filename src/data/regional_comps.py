@@ -591,6 +591,30 @@ def get_regional_multiples(
                 "cohort": cohort,
                 "peer_count": row["peer_count"],
             }
+    # Aging out is the failure mode this module exists to prevent, and it is
+    # the one that hides best: every field simply goes missing, the caller
+    # keeps its static table, and an HK stock is quietly valued on US
+    # multiples again -- the exact regression described at the top of this
+    # file. It bit on 2026-09-13: the weekly refresh last ran on 2026-08-27,
+    # 17.3 days earlier against a 14-day limit, so the whole HK and SG
+    # universe fell back to the static Consumer/Tech tables. Chinese autos
+    # took EV/Revenue at 2.5x instead of the HKSE industry median of 0.68x,
+    # and Geely blended out at +112% over consensus.
+    #
+    # A weekly job against a 14-day limit has exactly one week of slack, so
+    # ONE missed run does this. Say so.
+    if not resolved:
+        try:
+            age = latest_refresh_age_days(exchange)
+        except Exception:                                  # noqa: BLE001
+            age = None
+        if age is not None and age > max_age_days:
+            logger.warning(
+                "[comps] %s: every field aged out — newest row is %.1f days "
+                "old against a %.0f-day limit, so STATIC (US-anchored) "
+                "multiples will be used for this market. The weekly refresh "
+                "has not run. Fix with refresh_regional_comps(%r).",
+                exchange, age, max_age_days, exchange)
     return resolved
 
 
