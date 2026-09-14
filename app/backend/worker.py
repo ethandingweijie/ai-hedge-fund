@@ -534,6 +534,52 @@ async def run_fundflow_brief_task(ctx: dict) -> dict:
     return {"ran": ran}
 
 
+async def _run_news_ingest(tier: str) -> dict:
+    """One news sweep, shared by both tiers."""
+    from app.backend.services import news_ingest
+    try:
+        report = await news_ingest.ingest_watched(tier=tier)
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("[sched] news_ingest(%s) raised %s: %s",
+                       tier, type(exc).__name__, exc)
+        return {"tier": tier, "error": str(exc)[:200]}
+    logger.info("[sched] news_ingest %s: %s", tier, report)
+    return report
+
+
+async def run_news_fast_task(ctx: dict) -> dict:
+    """HK and SG news, every fifteen minutes.
+
+    These are the only tickers a short cadence helps. HKEXnews carries filings
+    within minutes of release and yfinance is same-day, so the delay between
+    publication and the page is genuinely the poll interval.
+    """
+    return await _run_news_ingest("fast")
+
+
+async def run_news_slow_task(ctx: dict) -> dict:
+    """US news, hourly — and hourly is not a compromise, it is the ceiling.
+
+    FMP is the only US source and publishes on a ~4.4 hour delay: measured
+    2026-09-13, the newest item on four independent FMP feeds was 264-271
+    minutes old simultaneously. A fifteen-minute cadence would re-fetch the
+    same stale articles sixteen times an hour and learn nothing, at four times
+    the API cost.
+
+    Also prunes: news_store.prune() drops items past 45 days. It existed from
+    the start and nothing called it, so the table had no ceiling at all.
+    """
+    report = await _run_news_ingest("slow")
+    try:
+        from app.backend.services import news_store
+        removed = await asyncio.to_thread(news_store.prune)
+        report["pruned"] = removed
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("[sched] news prune raised %s: %s",
+                       type(exc).__name__, exc)
+    return report
+
+
 async def run_regional_comps_refresh_task(ctx: dict) -> dict:
     """Weekly exchange-comp refresh for US, HK and SG.
 
@@ -733,6 +779,8 @@ class WorkerSettings:
         run_idea_of_the_day_task,
         run_iv15_sweep_task,
         run_fundflow_brief_task,
+        run_news_fast_task,
+        run_news_slow_task,
         run_regional_comps_refresh_task,
         run_screener_refresh_task,
         run_hundred_q_daily_sweep_task,

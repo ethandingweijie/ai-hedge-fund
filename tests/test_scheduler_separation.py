@@ -48,11 +48,11 @@ def test_registry_shape():
     # 9 scheduled jobs + R2 daily maintenance: the weekly regional_comps
     # refresh (W2 — without it the valuation ladder reverts to the static
     # sector tables after its 14-day staleness window) and the weekly
-    # screener cache warm.
-    assert len(specs) == 10
+    # screener cache warm. Plus the two news-ingest tiers.
+    assert len(specs) == 12
 
     names = [s.name for s in specs]
-    assert len(set(names)) == 10  # unique lock/job-id namespaces
+    assert len(set(names)) == 12  # unique lock/job-id namespaces
 
     catch_up = {s.name for s in specs if s.catch_up}
     # Only these two had startup catch-up in the web-era code — preserved.

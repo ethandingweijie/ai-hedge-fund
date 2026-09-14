@@ -43,6 +43,11 @@ def test_worker_settings_shape():
         # Workstream R3 — Assumption Steward weekly sweep (opt-in via
         # ASSUMPTION_STEWARD_SWEEP_HOUR; manual trigger via research routes)
         "run_assumption_steward_sweep_task",
+        # News ingest — two tiers because the sources have different latency:
+        # HK/SG are near-real-time, FMP's US feed is ~4.4 h delayed and gains
+        # nothing from a shorter interval.
+        "run_news_fast_task",
+        "run_news_slow_task",
     }
     assert ws.max_jobs == 10
     assert ws.job_timeout == 3600       # 60 min — VGPM backfill can exceed 30

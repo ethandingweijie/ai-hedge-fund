@@ -147,6 +147,48 @@ def _weekly_slot(now: Optional[datetime] = None) -> str:
     return now.strftime("%G-W%V")  # ISO year-week (handles year boundaries)
 
 
+#: News runs far more often than anything else here, so it needs slots finer
+#: than a day. The slot is the bucket the fire moment falls in, which is what
+#: makes the idempotency gate answer "has THIS slot run" rather than "was
+#: something recent" -- the distinction that let a late regional_comps run
+#: suppress the following week entirely (e668e9c).
+NEWS_FAST_MINUTES = int(os.environ.get("NEWS_FAST_INTERVAL_MIN", "15"))
+NEWS_SLOW_MINUTES = int(os.environ.get("NEWS_SLOW_INTERVAL_MIN", "60"))
+
+
+def _bucket_slot(minutes: int, now: Optional[datetime] = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    bucket = (now.hour * 60 + now.minute) // max(1, minutes)
+    return f"{now.strftime('%Y-%m-%d')}-{minutes}m-{bucket}"
+
+
+def _seconds_until_bucket(minutes: int) -> float:
+    now = datetime.now(timezone.utc)
+    span = max(1, minutes) * 60
+    since_midnight = (now - now.replace(hour=0, minute=0, second=0,
+                                        microsecond=0)).total_seconds()
+    return span - (since_midnight % span)
+
+
+def _news_slot_done(tier: str, minutes: int) -> bool:
+    """True when every watched ticker in this tier was polled inside the
+    current slot.
+
+    Slot-based, not age-based. An age gate ("anything newer than N minutes")
+    lets a run that finished late satisfy the next slot and skip it, which is
+    exactly how the weekly comps cadence silently halved.
+    """
+    try:
+        from app.backend.services import news_ingest, news_store
+        tickers = [t for t in news_ingest.watched_tickers()
+                   if news_ingest.tier_of(t) == tier]
+        if not tickers:
+            return True                # nothing to do IS done
+        return all(news_store.is_fresh(t, minutes) for t in tickers)
+    except Exception:                                      # noqa: BLE001
+        return False                   # unknown means not done; retry
+
+
 def _quarterly_slot(now: Optional[datetime] = None) -> str:
     now = now or datetime.now(timezone.utc)
     return f"{now.year}-Q{(now.month - 1) // 3 + 1}"
@@ -268,6 +310,24 @@ def build_schedules() -> list[ScheduleSpec]:
             lock_ttl_s=_TTL_DAILY_S,
             is_disabled=lambda: _env_flag("IV15_ALERT_DISABLED"),
             gate_fn=iv15_sched._swept_today,
+        ),
+        ScheduleSpec(
+            name="news_fast",
+            task="run_news_fast_task",
+            next_fire_fn=lambda: _seconds_until_bucket(NEWS_FAST_MINUTES),
+            slot_fn=lambda: _bucket_slot(NEWS_FAST_MINUTES),
+            lock_ttl_s=NEWS_FAST_MINUTES * 60,
+            is_disabled=lambda: _env_flag("NEWS_INGEST_DISABLED"),
+            gate_fn=lambda: _news_slot_done("fast", NEWS_FAST_MINUTES),
+        ),
+        ScheduleSpec(
+            name="news_slow",
+            task="run_news_slow_task",
+            next_fire_fn=lambda: _seconds_until_bucket(NEWS_SLOW_MINUTES),
+            slot_fn=lambda: _bucket_slot(NEWS_SLOW_MINUTES),
+            lock_ttl_s=NEWS_SLOW_MINUTES * 60,
+            is_disabled=lambda: _env_flag("NEWS_INGEST_DISABLED"),
+            gate_fn=lambda: _news_slot_done("slow", NEWS_SLOW_MINUTES),
         ),
         ScheduleSpec(
             name="regional_comps_refresh",

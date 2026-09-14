@@ -184,6 +184,12 @@ GATED = {
     # partway through is retried rather than skipped for the week.
     "regional_comps_refresh",
     "screener_cache_refresh",
+    # News ingest, both tiers. Gated for the same reason as the others: a
+    # sweep that dies halfway must be retried within its slot, not dropped
+    # until the next one -- at a 15-minute cadence a silently skipped slot is
+    # invisible in a way a skipped weekly run is not.
+    "news_fast",
+    "news_slow",
 }
 
 

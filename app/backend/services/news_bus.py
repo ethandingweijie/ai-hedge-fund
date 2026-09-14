@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections import deque
 from typing import AsyncIterator, Iterable, Optional
 
@@ -36,6 +37,34 @@ _BUFFER_TTL = 7200          # 2 h
 
 _local_hubs: dict[str, set[asyncio.Queue]] = {}
 _local_buf: dict[str, deque] = {}
+#: Last publish time per ticker, so an idle ticker's buffer can be dropped.
+#: The Redis buffer expires on its own (_BUFFER_TTL); without this the
+#: in-process one only ever went away on a restart.
+_local_seen: dict[str, float] = {}
+_LOCAL_BUFFER_TTL_S = 7200.0        # matches the Redis TTL
+
+
+def _buffer_local(key: str, payload: str) -> None:
+    """Keep `payload` in the in-process replay buffer.
+
+    Called when Redis is absent, and also when a publish to a supposedly-live
+    Redis raises -- in both cases nothing else is holding replay, so the local
+    copy is the only one. In the healthy case it is never called, which is the
+    point: progress_bus keeps both unconditionally and that meant a 50-item
+    deque per ticker in every process that nothing ever read.
+    """
+    _local_buf.setdefault(key, deque(maxlen=_BUFFER_MAX)).append(payload)
+    _local_seen[key] = time.monotonic()
+    _evict_idle_buffers()
+
+
+def _evict_idle_buffers() -> None:
+    cutoff = time.monotonic() - _LOCAL_BUFFER_TTL_S
+    for key in [k for k, seen in _local_seen.items() if seen < cutoff]:
+        # Never drop a buffer someone is still subscribed to.
+        if not _local_hubs.get(key):
+            _local_buf.pop(key, None)
+            _local_seen.pop(key, None)
 
 
 def _encode(item: dict) -> str:
@@ -66,16 +95,20 @@ async def publish(ticker: str, item: dict) -> None:
     if not key:
         return
     payload = _encode(item)
+    live = await redis_ready()
 
-    buf = _local_buf.setdefault(key, deque(maxlen=_BUFFER_MAX))
-    buf.append(payload)
+    # Subscribers in THIS process are always fed directly -- that is not a
+    # buffer, it is the delivery path for anyone already listening here.
     for q in list(_local_hubs.get(key, ())):
         try:
             q.put_nowait(payload)
         except Exception:                                  # noqa: BLE001
             pass
 
-    if await redis_ready():
+    # The replay BUFFER is only kept when Redis is not serving it.
+    if not live:
+        _buffer_local(key, payload)
+    else:
         try:
             r = await get_redis()
             pipe = r.pipeline()
@@ -85,7 +118,11 @@ async def publish(ticker: str, item: dict) -> None:
             pipe.expire(_BUFFER_PREFIX + key, _BUFFER_TTL)
             await pipe.execute()
         except Exception as exc:                           # noqa: BLE001
+            # redis_ready() said yes but the write lost the connection, so
+            # Redis is NOT holding replay after all and "local only" has to be
+            # true rather than just logged.
             logger.warning("news_bus: redis publish failed (%s) — local only", exc)
+            _buffer_local(key, payload)
 
 
 async def publish_many(items: Iterable[dict]) -> int:
@@ -189,3 +226,4 @@ def reset_local_state() -> None:
     """Drop in-process hubs and buffers. For tests only."""
     _local_hubs.clear()
     _local_buf.clear()
+    _local_seen.clear()

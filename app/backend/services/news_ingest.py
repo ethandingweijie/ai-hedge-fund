@@ -16,7 +16,9 @@ thousands of upstream calls an hour for pages nobody has open.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
@@ -228,13 +230,7 @@ async def ingest_ticker(ticker: str, *, force: bool = False,
 
 
 def watchlist_tickers(user_id: Optional[int] = None) -> list[str]:
-    """What this user asked to monitor.
-
-    The watchlist is the explicit signal -- a ticker is there because someone
-    put it there -- so it leads the poll order and drives the news feed. Lives
-    in its own SQLite table rather than the run archive, hence the direct
-    service call rather than a db.query here.
-    """
+    """What one user asked to monitor. Drives that user's news feed."""
     try:
         from app.backend.services import watchlist_service
         rows = watchlist_service.get_watchlist(user_id=user_id) or []
@@ -244,6 +240,33 @@ def watchlist_tickers(user_id: Optional[int] = None) -> list[str]:
     out: list[str] = []
     for row in rows:
         t = str((row or {}).get("ticker") or "").strip().upper()
+        if t and t not in out:
+            out.append(t)
+    return out
+
+
+def all_watchlist_tickers() -> list[str]:
+    """Every ticker ANY user watches.
+
+    The scheduled sweep must cover all of them -- watchlists are per-user, and
+    polling only the user_id IS NULL rows would mean a signed-in user's page
+    is never warmed and pays the cold-fetch cost on every open.
+
+    Queried directly rather than through get_watchlist(), which enriches each
+    row with live prices and VGPM: the sweep wants symbols, not a rendered
+    watchlist, and that enrichment is an FMP call per sweep for nothing.
+    """
+    from src.data import db as _db
+    try:
+        from app.backend.services import watchlist_service
+        watchlist_service._ensure_table()
+        rows = _db.query("SELECT DISTINCT ticker FROM watchlist") or []
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("news_ingest.all_watchlist_tickers: %s", exc)
+        return []
+    out: list[str] = []
+    for row in rows:
+        t = str(row["ticker"] or "").strip().upper()
         if t and t not in out:
             out.append(t)
     return out
@@ -267,7 +290,10 @@ def watched_tickers(recent_days: int = 7, limit: int = 200,
             seen.add(t)
             out.append(t)
 
-    for t in watchlist_tickers(user_id=user_id):
+    # Every user's watchlist, not just the caller's: the sweep warms the store
+    # for whoever opens a page next.
+    for t in (watchlist_tickers(user_id=user_id) if user_id is not None
+              else all_watchlist_tickers()):
         _add(t)
 
     for sql, params in (
@@ -286,26 +312,73 @@ def watched_tickers(recent_days: int = 7, limit: int = 200,
     return out[:limit]
 
 
-async def ingest_watched(*, force: bool = False,
+#: Which markets each tier polls, and why the split exists.
+#:
+#: FMP is the ONLY source for US names and it publishes on a ~4.4 hour delay --
+#: measured 2026-09-13, when the newest item on four independent FMP feeds was
+#: 264-271 minutes old simultaneously. Polling it every fifteen minutes would
+#: re-fetch the same stale articles sixteen times an hour and learn nothing.
+#:
+#: HKEXnews carries filings within minutes of release and yfinance is same-day,
+#: so those are the only tickers a short cadence actually helps.
+TIER_FAST = "fast"          # HK + SG: sources that publish in near-real time
+TIER_SLOW = "slow"          # US: bounded by FMP's own delay, hourly is plenty
+
+_FAST_SUFFIXES = (".HK", ".SI")
+
+
+def tier_of(ticker: str) -> str:
+    t = (ticker or "").strip().upper()
+    return TIER_FAST if t.endswith(_FAST_SUFFIXES) else TIER_SLOW
+
+
+#: Concurrent tickers per sweep. HKEXnews costs ~21s a ticker, almost all of it
+#: waiting on their server, so a serial sweep of a large HK book cannot finish
+#: inside a fifteen-minute slot. Kept modest because this is scraping an
+#: official site, not calling an API: the risk of going faster is being
+#: blocked, not being billed.
+_SWEEP_CONCURRENCY = int(os.environ.get("NEWS_INGEST_CONCURRENCY", "6"))
+
+
+async def ingest_watched(*, tier: Optional[str] = None, force: bool = False,
                          max_age_minutes: int = DEFAULT_MAX_AGE_MINUTES,
-                         limit: int = 200) -> dict:
-    """One sweep over the watched set."""
+                         limit: int = 200,
+                         concurrency: int = _SWEEP_CONCURRENCY) -> dict:
+    """One sweep over the watched set, optionally restricted to a tier."""
     tickers = watched_tickers(limit=limit)
+    if tier:
+        tickers = [t for t in tickers if tier_of(t) == tier]
     started = datetime.now(timezone.utc)
+    if not tickers:
+        return {"tier": tier, "tickers": 0, "fetched": 0, "new": 0,
+                "skipped_fresh": 0, "tickers_with_errors": [],
+                "elapsed_s": 0.0}
+
+    sem = asyncio.Semaphore(max(1, concurrency))
+
+    async def _one(tk: str) -> dict:
+        async with sem:
+            return await ingest_ticker(tk, force=force,
+                                       max_age_minutes=max_age_minutes)
+
+    reports = await asyncio.gather(*[_one(t) for t in tickers],
+                                   return_exceptions=True)
+
     fetched = new = skipped = 0
     failures: list[str] = []
-    for tk in tickers:
-        report = await ingest_ticker(tk, force=force,
-                                     max_age_minutes=max_age_minutes)
-        if report.get("skipped"):
+    for tk, rep in zip(tickers, reports):
+        if isinstance(rep, BaseException):
+            failures.append(tk)
+            continue
+        if rep.get("skipped"):
             skipped += 1
             continue
-        fetched += report.get("fetched", 0)
-        new += report.get("new", 0)
-        if report.get("errors"):
+        fetched += rep.get("fetched", 0)
+        new += rep.get("new", 0)
+        if rep.get("errors"):
             failures.append(tk)
     return {
-        "tickers": len(tickers), "skipped_fresh": skipped,
+        "tier": tier, "tickers": len(tickers), "skipped_fresh": skipped,
         "fetched": fetched, "new": new,
         "tickers_with_errors": failures[:20],
         "elapsed_s": round(
