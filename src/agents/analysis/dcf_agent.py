@@ -8356,6 +8356,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                       "final_sector": sector,
                                       "final_profile": profile_name},
             "consensus_at_run":      _consensus_at_run(ticker, _consensus_pt),
+            # Trailing dividend per share, in the listing currency (the FX
+            # block above converts per-share fields in place). The research
+            # rating's 12-month total shareholder return adds it to the target.
+            "dividends_per_share":   _ledger_num(most_recent.get("dividends_per_share")),
             "param_version":         (f"{_active_cal['version_id']}+{_param_version()}"
                                       if _active_cal else _param_version()),
             "calibration":           ({"version_id": _active_cal["version_id"],

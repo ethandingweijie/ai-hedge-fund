@@ -700,6 +700,37 @@ export interface DecisionInputs {
   conviction?: { value?: number; notes?: string[] };
 }
 
+/** Research rating (src/decisions/ratings.py build_research_view). A view
+ *  relative to a benchmark over 12 months; `trade_action` is its executable
+ *  translation. Absent on runs before the rating layer and on runs with no
+ *  12-month target. */
+export interface ResearchView {
+  research_rating: 'OVERWEIGHT' | 'NEUTRAL' | 'UNDERWEIGHT';
+  rating_label: string;              // "Overweight" … or "Under Review"
+  under_review: boolean;
+  trade_action: 'BUY' | 'HOLD' | 'SELL';
+  tactical_rating: string;
+  structural_rating: string | null;
+  benchmark: { code: string; name: string; market: string; expected_return: number; basis: string };
+  price: number;
+  price_as_of: string | null;
+  target_12m: number;
+  intrinsic_value: number | null;
+  capital_gain_12m: number;
+  dividend_yield: number;
+  dividend_known: boolean;
+  projected_dps: number | null;
+  tsr_12m: number;
+  excess_return_bps: number;
+  callout: string;
+  rating_definition: string;
+  disclaimer: string;
+  compliance: {
+    status: 'clean' | 'explained_divergence' | 'under_review' | 'holdco_disclosure';
+    notes: string[];
+  };
+}
+
 export interface PortfolioDecision {
   action: string;        // BUY | SELL | SHORT | COVER | HOLD
   position_size_pct?: number;
@@ -709,6 +740,9 @@ export interface PortfolioDecision {
   time_horizon?: string;
   rationale?: string;
   decision_inputs?: DecisionInputs;
+  research_rating?: string | null;
+  rating_label?: string | null;
+  research_view?: ResearchView | null;
 }
 
 // ── VGPM Scorecard ─────────────────────────────────────────────────────────

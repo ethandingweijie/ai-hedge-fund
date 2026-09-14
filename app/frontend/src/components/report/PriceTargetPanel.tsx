@@ -90,6 +90,18 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
               vs current {sym}{current.toFixed(2)}
             </div>
           )}
+          {decision?.research_view && (
+            /* Same target, read as the rating reads it: price return plus
+               dividend, against the benchmark. */
+            <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+              {decision.research_view.dividend_known
+                ? `+ ${(decision.research_view.dividend_yield * 100).toFixed(1)}% dividend = `
+                : ''}
+              {(decision.research_view.tsr_12m * 100 >= 0 ? '+' : '')}
+              {(decision.research_view.tsr_12m * 100).toFixed(1)}% 12M TSR
+              {' · '}{decision.research_view.rating_label} vs {decision.research_view.benchmark.code}
+            </div>
+          )}
           {consensusPt != null && (
             <div className="mt-1.5 text-[11px] text-muted-foreground">
               Wall St. consensus{' '}

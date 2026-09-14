@@ -7,6 +7,7 @@ import { formatSector } from '@/lib/gradeColors';
 import { currencySymbol } from '@/lib/utils';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
 import { actionTone, gradeTone } from '@/lib/semanticColors';
+import { RatingPill, ResearchRatingBlock } from '@/components/report/shared/ResearchRatingBlock';
 
 interface ReportHeaderProps {
   ticker: string;
@@ -54,7 +55,9 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
         )}
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold tracking-tight">{ticker}</h1>
-          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${colorClass}`}>{action}</span>
+          {decision?.research_view
+            ? <RatingPill view={decision.research_view} />
+            : <span className={`px-3 py-1 rounded-full text-sm font-semibold ${colorClass}`}>{action}</span>}
           <Link
             to={`/discuss/${ticker}`}
             title={`Discuss ${ticker}`}
@@ -68,6 +71,13 @@ export function ReportHeader({ ticker, runAt, modelName, decision, regime, curre
           {runAt && !isNaN(new Date(runAt).getTime()) ? `Run ${new Date(runAt).toLocaleString()} · ` : ''}{modelName ?? 'N/A'}
         </p>
       </div>
+
+      {/* ── Research rating + disclosure checklist ── */}
+      {decision?.research_view && (
+        <div className="mt-4 pt-4 border-t border-border/60">
+          <ResearchRatingBlock view={decision.research_view} ticker={ticker} />
+        </div>
+      )}
 
       {/* ── Position / Target / Current / Regime ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">

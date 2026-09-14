@@ -94,9 +94,11 @@ def test_band_hold(pm_llm):
 
 
 def test_band_short(pm_llm):
-    # PT below spot keeps the B1 guard silent
-    d, _ = _run(_state(scenario=_scenario(-15.0, pt_12m=90.0)))
+    # SHORT is a ladder outcome: only reachable without a 12m target (with
+    # one, the research rating decides and maps to BUY / HOLD / SELL)
+    d, _ = _run(_state(scenario=_scenario(-15.0, pt_12m=None)))
     assert d["action"] == "SHORT"
+    assert d["decision_inputs"]["quantitative"]["rating_basis"] == "intrinsic_value_band"
 
 
 def test_band_sell(pm_llm):
@@ -147,7 +149,8 @@ def test_material_adverse_delta_shifts_one_step_bearish(pm_llm):
              "events": [{"headline": "Guidance cut after probe",
                          "date": "2026-08-18", "relevance": "thesis risk"}],
              "verdict": "material adverse change"}
-    state = _state(scenario=_scenario(0.0, pt_12m=95.0),
+    # legacy path (no 12m target): the ladder shift still applies
+    state = _state(scenario=_scenario(0.0, pt_12m=None),
                    extra_data={"freshness_delta": {"TEST": delta}})
     d, _ = _run(state)
     assert d["action"] == "SHORT"     # HOLD band shifted one step bearish
@@ -188,7 +191,8 @@ def test_delta_without_direction_does_not_shift(pm_llm):
              "events": [{"headline": "CEO commentary on strategy",
                          "date": "2026-08-18", "relevance": "mixed"}],
              "verdict": "material but unclear direction"}
-    state = _state(scenario=_scenario(0.0, pt_12m=100.0),
+    # 12m TSR +10% vs S&P 500 8.4% = +159 bps → Neutral either way
+    state = _state(scenario=_scenario(0.0, pt_12m=110.0),
                    extra_data={"freshness_delta": {"TEST": delta}})
     d, _ = _run(state)
     assert d["action"] == "HOLD"
@@ -274,7 +278,7 @@ def test_regime_risk_off_caps_buy_conviction(pm_llm):
 
 
 def test_regime_risk_on_caps_short_conviction(pm_llm):
-    state = _state(scenario=_scenario(-15.0, pt_12m=90.0, upside_pct=-8.0),
+    state = _state(scenario=_scenario(-15.0, pt_12m=None, upside_pct=-8.0),
                    extra_data={
                        "research_tier": "qwen_web",
                        "freshness_delta": {"TEST": {"material": False,

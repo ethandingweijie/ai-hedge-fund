@@ -90,22 +90,26 @@ def _run(state):
 
 # ── B1: SHORT-side directional guard ─────────────────────────────────────────
 
-def test_b1_short_pt_above_spot_clamps_to_bear(pm_llm):
-    """The BABA repro: PT $134.76 > spot $127.48, bear $100 < spot →
-    keep the bearish action, clamp PT to the bear-case IV."""
+def test_b1_the_baba_repro_cannot_recur_under_a_research_rating(pm_llm):
+    """The BABA repro: PT $134.76 > spot $127.48. Under the rating layer the
+    action comes from 12-month TSR (+5.7% vs S&P 500 8.4% → Neutral), so a
+    target above spot can never be carried by a SELL, and the target stays
+    the 12m target instead of being swapped for the bear-case IV."""
     decision, state = _run(_state(scenario=_scenario()))
-    assert decision["action"] == "SELL"
-    assert decision["price_target"] == 100.0
-    flag = state["data"]["consistency_flags"]["BABA"]
-    assert "clamped to downside anchor" in flag
-    assert decision["stop_loss"] == pytest.approx(127.48 * 1.10)
+    assert decision["action"] == "HOLD"
+    assert decision["research_rating"] == "NEUTRAL"
+    assert decision["price_target"] == pytest.approx(134.76)
+    assert "clamped to downside anchor" not in (
+        state["data"].get("consistency_flags", {}).get("BABA", ""))
 
+
+# Without a 12-month target there is no rating and the legacy guards stand.
 
 def test_b1_short_pt_above_spot_bear_also_above_downgrades(pm_llm):
-    """Neither the 12m PT nor the bear case below current → HOLD, and the
+    """Neither a 12m PT nor the bear case below current → HOLD, and the
     stop flips to the long-side 0.90× (HOLD semantics)."""
     decision, state = _run(
-        _state(scenario=_scenario(pt_12m=134.76, bear=150.0, ev=120.0)))
+        _state(scenario=_scenario(pt_12m=None, bear=150.0, ev=120.0)))
     assert decision["action"] == "HOLD"
     assert decision["stop_loss"] == pytest.approx(127.48 * 0.90)
     # neutral reference target (mirrors the BUY-downgrade path)
@@ -125,7 +129,7 @@ def test_b1_short_with_pt_below_spot_untouched(pm_llm):
 def test_b1_short_bear_missing_falls_back_to_default_anchor(pm_llm):
     """No usable bear fair value (None) → the 0.80×current anchor applies;
     it is below current, so the clamp path targets it instead of downgrading."""
-    scen = _scenario(bear=None)   # {"bear": {"fair_value": None}}
+    scen = _scenario(pt_12m=None, bear=None)   # {"bear": {"fair_value": None}}
     decision, _ = _run(_state(scenario=scen))
     assert decision["action"] == "SELL"
     assert decision["price_target"] == pytest.approx(127.48 * 0.80, rel=1e-3)

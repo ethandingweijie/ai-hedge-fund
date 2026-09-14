@@ -256,6 +256,25 @@ const ACTION_TONES: Record<string, Record<ActionVariant, string>> = {
     pill: 'bg-surface-2 text-content-high border border-[var(--hairline)]',
     text: 'text-content-high',
   },
+  // Research ratings (relative to benchmark). Overweight takes the BUY
+  // accent; Neutral, Underweight and Under Review stay monochrome, matching
+  // HOLD and SELL — direction reads from the label, never from green/red.
+  OVERWEIGHT: {
+    pill: 'bg-brand text-white border border-transparent',
+    text: 'text-brand',
+  },
+  NEUTRAL: {
+    pill: 'bg-surface-2 text-content-high border border-[var(--hairline)]',
+    text: 'text-content-high',
+  },
+  UNDERWEIGHT: {
+    pill: 'bg-surface-2 text-content-high border border-[var(--hairline)]',
+    text: 'text-content-high',
+  },
+  UNDER_REVIEW: {
+    pill: 'bg-transparent text-content-high border border-[var(--hairline)]',
+    text: 'text-content-high',
+  },
 };
 
 export function actionTone(

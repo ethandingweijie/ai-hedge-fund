@@ -53,6 +53,15 @@ _PM_RATIONALE_SYSTEM_PROMPT = (
     "Never quote a price target the supplied anchors do not support.\n"
     "Balance rule — carry at least one genuine negative even on a BUY, "
     "and at least one genuine positive even on a SELL.\n"
+    "Rating rule — when a research rating is supplied, theme 1 MUST open "
+    "with the rating and its benchmark (e.g. \"Overweight vs the Hang Seng "
+    "Tech Index\") and state the 12-month total shareholder return that "
+    "decides it (price return plus dividend yield). Express the view as "
+    "Overweight / Neutral / Underweight, not Buy / Hold / Sell. The price "
+    "target is the 12-month target: never call an intrinsic value, a bull "
+    "or bear case, or a SOTP value the target. When the structural and "
+    "tactical views differ, or a SOTP value is disclosed, state the reason "
+    "given in the disclosures.\n"
     "Analyst-thesis rule — when a deposited sell-side thesis is supplied, "
     "engage with it: say where we agree and where we differ, and why. It "
     "is another analyst's argument on a stated date, not a conclusion to "
@@ -630,7 +639,12 @@ def _quant_block_text(ticker: str, state, scenario: dict) -> str:
     # depending on dcf.base and falling through to USD. state["data"]
     # ["reported_currency"] is what strategic_router actually stores (FMP's
     # reportedCurrency) and is checked first.
-    _ccy = (data.get("reported_currency")
+    # dcf_range's own reported_currency is checked before either: it is the
+    # currency the engine OUTPUT its per-share figures in (HKD for 09988.HK),
+    # whereas state's is the statement currency (CNY) -- labelling HKD targets
+    # "RMB" is exactly the mislabel the currency rule forbids.
+    _ccy = (dcf.get("reported_currency")
+            or data.get("reported_currency")
             or (data.get("raw_financials") or {}).get("currency")
             or (dcf.get("base") or {}).get("reported_currency") or "USD")
     _sym = {"USD": "$", "SGD": "S$", "HKD": "HK$", "CNY": "RMB", "EUR": "€",
@@ -722,6 +736,105 @@ def _macro_one_liner(state) -> str:
     _line = "Macro regime: " + (" / ".join(_bits) if _bits else "unclassified")
     _notes = str(regime.get("regime_notes") or "")[:200]
     return _line + (f" — {_notes}" if _notes else "")
+
+
+def _research_view_for(ticker: str, state, scenario: dict,
+                       delta: dict) -> dict | None:
+    """The research rating for this ticker, or None without a 12-month target.
+
+    Everything is in the listing currency: the 12m target and spot come from
+    the scenario, dividends per share and the SOTP per-share value from
+    dcf_range after its FX block."""
+    from src.decisions.ratings import build_research_view
+
+    data = state["data"]
+    pt = scenario.get("12m_price_target")
+    price = scenario.get("current_price") or 0.0
+    if not (isinstance(pt, (int, float)) and pt > 0 and price > 0):
+        return None
+    dcf = (data.get("dcf_range") or {}).get(ticker) or {}
+    recon = scenario.get("reconciliation") or {}
+    sector = (data.get("sectors") or {}).get(ticker) or data.get("sector") or ""
+
+    catalyst = None
+    if delta and delta.get("material"):
+        heads = "; ".join((e.get("headline") or "")[:100]
+                          for e in (delta.get("events") or [])[:2]
+                          if e.get("headline"))
+        if heads:
+            catalyst = f"material news since the last report ({heads})"
+    method = dcf.get("12m_pt_method")
+    gap = (f"the 12-month target prices the stock on {method}, while intrinsic "
+           f"value blends long-run cash-flow and multiple methods"
+           if method else
+           "the 12-month target is a forward-multiple view, while intrinsic "
+           "value is a long-run blend")
+
+    if "next_earnings" in data:
+        next_earnings = (data.get("next_earnings") or {}).get(ticker)
+    else:
+        try:
+            from src.tools.earnings_calendar import next_earnings_date
+            next_earnings = next_earnings_date(ticker)
+        except Exception:
+            next_earnings = None
+
+    try:
+        return build_research_view(
+            ticker=ticker, sector=sector, price=float(price),
+            price_as_of=data.get("end_date"), target_12m=float(pt),
+            intrinsic_value=recon.get("blended_iv") or scenario.get("expected_value"),
+            dps=dcf.get("dividends_per_share"),
+            near_term_catalyst=catalyst, methodology_gap=gap,
+            next_earnings=next_earnings,
+            sotp_per_share=(dcf.get("sotp_breakdown") or {}).get("per_share_reporting"),
+        )
+    except Exception:
+        return None
+
+
+def _gate_rated_action(view: dict, trap_verdict: str,
+                       stale: bool) -> tuple[str, list[str]]:
+    """Trade action from the rating, after the absolute eligibility gates.
+
+    The gates only ever cap an Overweight: a value-trap verdict or stale
+    research means no new long, whatever the return arithmetic says. They
+    never upgrade -- a rating above what its TSR supports would contradict
+    the published rating definition. When a gate bites, the view is rewritten
+    to Neutral so the report header and the trade agree."""
+    action = view["trade_action"]
+    notes: list[str] = []
+    if action == "BUY" and trap_verdict == "TRAP RISK HIGH":
+        notes.append("TRAP RISK HIGH blocked BUY: Overweight capped to Neutral "
+                     "(value-trap gate)")
+    elif action == "BUY" and stale:
+        notes.append("degraded research capped Overweight to Neutral "
+                     "(no new positions on stale research)")
+    if notes:
+        action = "HOLD"
+        view["research_rating"] = "NEUTRAL"
+        if not view.get("under_review"):
+            view["rating_label"] = "Neutral"
+        view["trade_action"] = "HOLD"
+        view["compliance"]["notes"].append(notes[0])
+    return action, notes
+
+
+def _rating_block_text(view: dict | None) -> str:
+    if not view:
+        return ("Research rating: not available (no 12-month target); the "
+                "action comes from the intrinsic-value band.")
+    lines = [
+        f"Research rating: {view['rating_label']} vs {view['benchmark']['name']} "
+        f"(trade action {view['trade_action']})",
+        view["callout"],
+    ]
+    if view.get("structural_rating"):
+        lines.append(f"Structural (intrinsic value) view: {view['structural_rating'].title()}; "
+                     f"tactical 12-month view: {view['tactical_rating'].title()}")
+    for n in view["compliance"]["notes"]:
+        lines.append(f"Disclosure: {n}")
+    return "\n".join(lines)
 
 
 def run_advanced_portfolio_manager(state) -> dict:
@@ -831,6 +944,18 @@ def run_advanced_portfolio_manager(state) -> dict:
                     "(no new positions on stale research)")
             action = _PM_LADDER[_idx]
 
+        # ── Research rating: 12-month TSR vs benchmark decides the action ──
+        # The IV band above measures long-run value; a published rating
+        # promises a 12-month total return relative to a benchmark. When a
+        # 12-month target exists the rating governs, the band stays on record
+        # as the structural reference, and the one-step news shift is carried
+        # as the catalyst that explains any gap rather than moving the rating
+        # away from its own definition. Without a target the ladder stands.
+        research_view = _research_view_for(ticker, state, scenario, _delta)
+        if research_view is not None:
+            action, _gate_notes = _gate_rated_action(
+                research_view, trap_verdict, _research_is_stale(state))
+
         # ── M2 D2 step 2: qualitative conviction (sizing multiplier) ──────
         _reg_hits = _regulatory_watch_hits(_recent_news_txt, _delta)
         conviction, _conv_notes = _qualitative_conviction(
@@ -932,7 +1057,12 @@ def run_advanced_portfolio_manager(state) -> dict:
         #   (c) Add a flag so the PDF/editor agents can explain the gap (§8 Reconciliation)
         _blended_iv = recon.get("blended_iv") or expected_value
         _directional_flag: str = ""
-        if action == "BUY" and current_price > 0:
+        # These three guards swap in an intrinsic value (bull, bear or EV) as
+        # the target. Under a research rating the target IS the 12-month
+        # target -- 09988.HK published its HK$288 bull IV beside a HK$89.57
+        # 12m target -- so they run only on the no-target legacy path.
+        _legacy_guards = research_view is None
+        if action == "BUY" and current_price > 0 and _legacy_guards:
             if (price_target or 0) < current_price * 0.95:
                 if bull_fv and bull_fv > current_price:
                     # Bull case still above current — use bull target, keep BUY
@@ -964,7 +1094,7 @@ def run_advanced_portfolio_manager(state) -> dict:
         #       current price → the bearish action is inconsistent → HOLD
         #   (b) PT at/above current but bear case below it → keep the action,
         #       clamp PT to the bear anchor
-        if action in ("SELL", "SHORT") and current_price > 0:
+        if action in ("SELL", "SHORT") and current_price > 0 and _legacy_guards:
             if (price_target or 0) >= current_price:
                 # Same anchor the PT fallback chain uses (Fix 1a shape):
                 # bear fair value when positive, else 0.80 × current.
@@ -1004,7 +1134,8 @@ def run_advanced_portfolio_manager(state) -> dict:
         # compression), but using it as the price_target while the stop is 10% below
         # entry creates an inverted trade that can never reach target.
         # Resolution: if 12m PT < stop_loss, override target with long-term EV (DCF).
-        if action in ("BUY", "HOLD") and current_price > 0 and stop_loss > 0:
+        if (action in ("BUY", "HOLD") and current_price > 0 and stop_loss > 0
+                and _legacy_guards):
             if (price_target or 0) <= stop_loss:
                 _pt_override = expected_value if (expected_value or 0) > current_price else (bull_fv or expected_value or current_price * 1.10)
                 _pt_override = _pt_override or current_price * 1.10
@@ -1165,6 +1296,7 @@ def run_advanced_portfolio_manager(state) -> dict:
                 "Ticker: {ticker} | Action: {action} | Size: {size_pct:.1%}\n"
                 "IV-band upside: {upside_iv} | Qualitative conviction: {conviction:.2f} | Trap: {trap}\n"
                 "{macro_line}\n"
+                "{rating_block}\n"
                 "Quantitative anchors:\n{quant_block}\n"
                 "Catalyst continuity:\n{catalyst_block}\n"
                 "Research vs books checks:\n{div_block}\n"
@@ -1194,6 +1326,7 @@ def run_advanced_portfolio_manager(state) -> dict:
             "conviction": conviction,
             "trap": trap_verdict,
             "macro_line": _macro_line,
+            "rating_block": _rating_block_text(research_view),
             "quant_block": _quant_block,
             "analyst_thesis": _analyst_thesis_block(ticker),
             "catalyst_block": _catalyst_block,
@@ -1229,6 +1362,11 @@ def run_advanced_portfolio_manager(state) -> dict:
         d["position_size_pct"] = size_pct
         d["stop_loss"] = stop_loss
         d["price_target"] = price_target
+        # Reports lead with the rating; `action` stays the executable
+        # instruction for everything that trades, logs or scores.
+        d["research_rating"] = research_view["research_rating"] if research_view else None
+        d["rating_label"] = research_view["rating_label"] if research_view else None
+        d["research_view"] = research_view
 
         # Entry range is the one actionable field still left to the LLM, and
         # it is emitted without the spot price being in the prompt at all
@@ -1287,6 +1425,8 @@ def run_advanced_portfolio_manager(state) -> dict:
         d["decision_inputs"] = {
             "quantitative": {
                 "band_action": _band,
+                "rating_basis": ("tsr_vs_benchmark" if research_view
+                                 else "intrinsic_value_band"),
                 "upside_to_iv_pct": _upside_iv,
                 "blended_iv": recon.get("blended_iv"),
                 "expected_value": expected_value or None,

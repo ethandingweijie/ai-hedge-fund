@@ -51,6 +51,7 @@ _PROCESS_CACHES = (
     ("src.tools.api", "_STATEMENT_CACHE"),
     ("src.agents.routing.macro_regime", "_REGIME_CACHE"),
     ("src.memory.calibration", "_cache"),
+    ("src.tools.earnings_calendar", "_CALENDAR_CACHE"),
 )
 
 

@@ -69,7 +69,9 @@ import { useIsResearchPhase, useProgressDerived } from '@/hooks/useProgressDeriv
 
 import { ActionPill, GradeChip, Delta, BRAND } from '@/components/v2/shared';
 import { RationaleBlock } from '@/components/report/shared/RationaleBlock';
+import { ResearchRatingBlock } from '@/components/report/shared/ResearchRatingBlock';
 import { Markdown } from '@/components/report/shared/Markdown';
+import { currencySymbol } from '@/lib/utils';
 
 type TabId = 'summary' | 'valuation' | 'decision' | 'risk' | 'research' | 'financials';
 
@@ -444,24 +446,30 @@ function SummaryBody({
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 mb-2">
             Portfolio Manager
           </div>
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <ActionPill action={decision.action} size="lg" />
-            {/* Portfolio weight (position size). The PM's `confidence` field is
-                deliberately NOT shown — it was misread as a probability/quality
-                signal when the meaningful number here is the recommended
-                portfolio weight. Labelled "weight" to remove that ambiguity. */}
-            {typeof decision.position_size_pct === 'number' && (
-              <span className="text-[15px] font-semibold tabular-nums text-foreground">
-                {(decision.position_size_pct * 100).toFixed(1)}%
-                <span className="ml-1 text-[11px] font-normal text-muted-foreground">weight</span>
-              </span>
-            )}
-          </div>
-          {typeof decision.price_target === 'number' && (
+          {decision.research_view ? (
+            /* Rated runs lead with the research rating and its disclosure
+               checklist; shared with the desktop header. */
+            <ResearchRatingBlock view={decision.research_view} ticker={ticker} compact />
+          ) : (
+            <div className="flex items-baseline gap-3 flex-wrap">
+              <ActionPill action={decision.action} size="lg" />
+            </div>
+          )}
+          {/* Portfolio weight (position size). The PM's `confidence` field is
+              deliberately NOT shown — it was misread as a probability/quality
+              signal when the meaningful number here is the recommended
+              portfolio weight. Labelled "weight" to remove that ambiguity. */}
+          {typeof decision.position_size_pct === 'number' && (
+            <div className="mt-3 text-[15px] font-semibold tabular-nums text-foreground">
+              {(decision.position_size_pct * 100).toFixed(1)}%
+              <span className="ml-1 text-[11px] font-normal text-muted-foreground">weight</span>
+            </div>
+          )}
+          {!decision.research_view && typeof decision.price_target === 'number' && (
             <div className="mt-3 flex items-baseline gap-2">
               <span className="text-[11px] text-muted-foreground">Target</span>
               <span className="text-[15px] font-semibold tabular-nums text-foreground">
-                ${decision.price_target.toFixed(2)}
+                {currencySymbol(ticker)}{decision.price_target.toFixed(2)}
               </span>
             </div>
           )}
