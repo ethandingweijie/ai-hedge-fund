@@ -72,6 +72,54 @@ def test_ui_summary_carries_years_margins_citations_and_errors():
     assert next(t for t in ui["tickers"] if t["ticker"] == "JD")["error"].startswith("RuntimeError")
 
 
+def _entry(segments, reconciliation):
+    return {"_meta": {}, "tickers": {"X": {
+        "company": "X", "sotp_basis": "holdco_lookthrough", "fmp_reporting_currency": "CNY",
+        "reconciliation": reconciliation,
+        "history": {"reporting_currency": "CNY", "segment_definition_changes": "", "total_revenue": [],
+                    "segments": [{"name": n, "years": [_year("FY2023", "2023-12-31", v)]}
+                                 for n, v in segments.items()]}}}}
+
+
+def test_a_subtotal_row_is_removed_and_the_reconciliation_recomputed():
+    """Xiaomi FY2023 as returned: 'Smartphone x AIoT' alongside its four parts."""
+    mem = _entry({"Smartphone × AIoT": 270970, "Smartphones": 157461, "IoT and lifestyle": 80108,
+                  "Internet services": 30107, "Other": 3294},
+                 {"2023": {"segment_sum": 541940e6, "fmp_revenue": 270970e6, "segment_gap": 1.0, "total_gap": 0.0}})
+    ui = sm.ui_summary(memory=mem, fx_to=fx_to)["tickers"][0]
+    assert "Smartphone × AIoT" not in [s["name"] for s in ui["segments"]]
+    assert ui["reconciliation"]["2023"]["segment_gap"] == pytest.approx(0.0, abs=1e-3)
+    assert any("subtotal" in n for n in ui["notes"])
+    mix = sm.latest_mix("X", memory=mem, fx_to=fx_to)
+    assert sum(s["share"] for s in mix["segments"]) == pytest.approx(1.0)
+    assert len(mix["segments"]) == 4
+
+
+def test_a_coincidental_one_year_near_match_is_not_a_subtotal():
+    """CK Hutchison: Retail 209,267 vs Telecom + Infrastructure + Ports 208,981 (0.14%)."""
+    mem = _entry({"Retail": 209267, "Telecom": 101311, "Infrastructure": 58775, "Ports": 48895},
+                 {"2023": {"segment_sum": 418248e6, "fmp_revenue": 418248e6, "segment_gap": 0.0, "total_gap": 0.0}})
+    ui = sm.ui_summary(memory=mem, fx_to=fx_to)["tickers"][0]
+    assert "Retail" in [s["name"] for s in ui["segments"]]
+
+
+def test_segments_that_do_not_add_up_to_another_are_kept():
+    mem = _entry({"Retail": 209267, "Telecom": 101311, "Infrastructure": 58775, "Ports": 48895},
+                 {"2023": {"segment_sum": 418248e6, "fmp_revenue": 418248e6, "segment_gap": 0.0, "total_gap": 0.0}})
+    ui = sm.ui_summary(memory=mem, fx_to=fx_to)["tickers"][0]
+    assert len(ui["segments"]) == 4 and ui["notes"] == []
+
+
+def test_a_company_total_on_another_basis_is_labelled_not_hidden():
+    """CK Hutchison: segments and the company's own total both ~81% above FMP."""
+    mem = _entry({"Retail": 209267, "Telecom": 101311, "Infrastructure": 58775, "Ports": 48895,
+                  "Finance & Investments": 89049},
+                 {"2023": {"segment_sum": 507297e6, "fmp_revenue": 280000e6, "segment_gap": 0.8118, "total_gap": 0.8118}})
+    ui = sm.ui_summary(memory=mem, fx_to=fx_to)["tickers"][0]
+    assert ui["reconciliation"]["2023"]["segment_gap"] == pytest.approx(0.8118, abs=1e-3)
+    assert any("associates and joint ventures" in n for n in ui["notes"])
+
+
 def _ranges(**over):
     doc = {"multiples": [
         {"segment": "China E-commerce", "metric": "pe", "low": 9.0, "high": 11.0, "basis": "brokers",

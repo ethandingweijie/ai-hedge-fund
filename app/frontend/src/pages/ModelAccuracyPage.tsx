@@ -390,11 +390,19 @@ function SegmentMemorySection({ allowed }: { allowed: boolean }) {
                 <span className="text-sm font-semibold text-foreground">{current.company}</span>
                 <Chip>{BASIS_LABEL[current.sotp_basis] ?? current.sotp_basis}</Chip>
                 <span className="text-xs text-muted-foreground tabular-nums">
+                  {current.source === 'sec_segment_footnote' ? 'SEC filing · '
+                    : current.source === 'fmp_product_segmentation' ? 'FMP product split · '
+                    : 'Gemini, cited · '}
                   cited {Math.round((current.citation_coverage ?? 0) * 100)}% · profit disclosed {Math.round((current.profit_coverage ?? 0) * 100)}%
                   {current.retrieved ? ` · retrieved ${current.retrieved}` : ''}
                 </span>
               </div>
               <SegmentTable t={current} />
+              {(current.notes ?? []).length > 0 && (
+                <ul className="text-xs text-foreground/80 space-y-1 list-none">
+                  {current.notes!.map((n) => <li key={n}>• {n}</li>)}
+                </ul>
+              )}
               {current.resegmentation && (
                 <p className="text-xs text-muted-foreground">Resegmentation: {current.resegmentation}</p>
               )}

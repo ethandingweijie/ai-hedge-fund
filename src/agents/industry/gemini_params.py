@@ -369,7 +369,10 @@ def history_prompt(company: str, ticker: str, years: int = 5) -> str:
         "result) with that measure's name. Leave profit null where the company does not "
         "disclose it. Also group total revenue for the same years. Use the segment names "
         "the company used; if it resegmented, use the latest definition where the "
-        "company restated prior years and describe the change. Reported figures only, "
+        "company restated prior years and describe the change. List only reportable "
+        "segments -- never a subtotal row that adds up other segments. In "
+        "segment_definition_changes also state whether segment revenue includes the "
+        "company's share of associates and joint ventures. Reported figures only, "
         f"no estimates, never figures from broker valuation tables.\n{_AMOUNT_RULE}"
     )
 

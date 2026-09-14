@@ -268,6 +268,8 @@ export interface SegmentMemoryTicker {
     segment_gap: number | null; total_gap: number | null;
   }>;
   resegmentation?: string;
+  notes?: string[];
+  source?: string;
 }
 
 export interface SegmentMemory {

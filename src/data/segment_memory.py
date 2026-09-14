@@ -55,9 +55,53 @@ def _in(c: Optional[dict], ccy: str, fx_to: Callable[[str, str], Optional[float]
     return amount(c, lambda src: fx_to(src, ccy))
 
 
+#: A segment whose revenue equals the sum of two or more other segments in the
+#: same year within this tolerance is a subtotal, not a segment. Xiaomi's
+#: "Smartphone x AIoT" (RMB 270.97bn = 157.46 + 80.11 + 30.11 + 3.29) was
+#: returned alongside its components and inflated FY2023-25 by 77-100%.
+#: With many segments some combination lands close by chance -- CK Hutchison's
+#: Retail (209,267) is within 0.14% of Telecom + Infrastructure + Ports -- so a
+#: subtotal must match in EVERY year it appears, and a one-year match must be
+#: near exact.
+SUBTOTAL_TOLERANCE = 0.001
+SINGLE_YEAR_TOLERANCE = 0.0001
+#: A company whose own reported total sits this far from FMP's consolidated
+#: revenue, with the segments agreeing with the company, is on another basis
+#: (CK Hutchison reports revenue including its share of associates and JVs).
+BASIS_GAP = 0.15
+
+
+def _subtotal_names(years: dict[str, dict[str, dict]]) -> dict[str, list[str]]:
+    """{segment name: years} for rows that are sums of other segments."""
+    from itertools import combinations
+    errors: dict[str, list[tuple[str, Optional[float]]]] = {}
+    for year, segs in years.items():
+        for name, s in segs.items():
+            target = s["revenue"]
+            others = [v["revenue"] for m, v in segs.items() if m != name]
+            best: Optional[float] = None
+            if target > 0 and len(others) >= 2:
+                for k in range(2, len(others) + 1):
+                    for combo in combinations(others, k):
+                        err = abs(sum(combo) - target) / target
+                        best = err if best is None or err < best else best
+            errors.setdefault(name, []).append((year, best))
+    out: dict[str, list[str]] = {}
+    for name, errs in errors.items():
+        values = [e for _, e in errs]
+        if all(e is not None and e <= SUBTOTAL_TOLERANCE for e in values) and \
+                (len(values) >= 2 or values[0] <= SINGLE_YEAR_TOLERANCE):
+            out[name] = sorted(y for y, _ in errs)
+    return out
+
+
 def _years(entry: dict, fx_to) -> dict[str, dict[str, dict]]:
     """{period-end year: {segment: {revenue, profit, profit_measure, urls}}} in the
-    FMP reporting currency, cited values only."""
+    FMP reporting currency, cited values only, subtotal rows removed."""
+    return _years_and_notes(entry, fx_to)[0]
+
+
+def _years_and_notes(entry: dict, fx_to) -> tuple[dict[str, dict[str, dict]], list[str]]:
     ccy = entry.get("fmp_reporting_currency") or entry["history"].get("reporting_currency") or "USD"
     out: dict[str, dict[str, dict]] = {}
     for seg in entry["history"].get("segments") or []:
@@ -75,7 +119,37 @@ def _years(entry: dict, fx_to) -> dict[str, dict[str, dict]]:
                 "revenue_quote": (y.get("revenue") or {}).get("quote"),
                 "profit_url": (y.get("profit") or {}).get("source_url"),
             }
-    return out
+    notes: list[str] = []
+    subtotals = _subtotal_names(out)
+    for year in out:
+        out[year] = {k: v for k, v in out[year].items() if k not in subtotals}
+    for name, years in subtotals.items():
+        notes.append(f"'{name}' removed as a subtotal of other segments ({', '.join(years)})")
+    return out, notes
+
+
+def reconciliation(entry: dict, years: dict[str, dict[str, dict]]) -> tuple[dict, list[str]]:
+    """Segment sum vs FMP revenue recomputed from the cleaned segments, keeping
+    the stored FMP revenue and the company's cited total; plus a basis note."""
+    stored = entry.get("reconciliation") or {}
+    out: dict[str, dict] = {}
+    for year in sorted(set(stored) | set(years)):
+        s = stored.get(year) or {}
+        fmp = s.get("fmp_revenue")
+        seg_sum = sum(v["revenue"] for v in (years.get(year) or {}).values())
+        out[year] = {"segment_sum": seg_sum, "fmp_revenue": fmp,
+                     "segment_gap": round(seg_sum / fmp - 1, 4) if fmp and seg_sum else None,
+                     "total_gap": s.get("total_gap")}
+    notes: list[str] = []
+    basis = [y for y, v in out.items()
+             if v["total_gap"] is not None and abs(v["total_gap"]) > BASIS_GAP
+             and v["segment_gap"] is not None and abs(v["segment_gap"] - v["total_gap"]) < 0.05]
+    if basis:
+        gaps = ", ".join(f"{y} {out[y]['total_gap']:+.0%}" for y in basis)
+        notes.append("The company's own reported total differs from FMP consolidated revenue "
+                     f"({gaps}) and its segments agree with that total: segment revenue is on "
+                     "another basis, likely including its share of associates and joint ventures")
+    return out, notes
 
 
 def latest_mix(ticker: str, *, memory: Optional[dict] = None,
@@ -112,7 +186,8 @@ def ui_summary(*, memory: Optional[dict] = None,
         if entry.get("error") or not entry.get("history"):
             rows.append({**base, "error": entry.get("error") or "no history"})
             continue
-        years = _years(entry, fx_to)
+        years, notes = _years_and_notes(entry, fx_to)
+        rec, basis_notes = reconciliation(entry, years)
         names = sorted({n for segs in years.values() for n in segs},
                        key=lambda n: -max((years[y].get(n) or {}).get("revenue") or 0 for y in years))
         n_years = sum(len(s.get("years") or []) for s in entry["history"].get("segments") or [])
@@ -132,7 +207,9 @@ def ui_summary(*, memory: Optional[dict] = None,
                                if name in years[y] and years[y][name]["profit"] is not None else None),
                 } if name in years[y] else {"year": y} for y in sorted(years)],
             } for name in names],
-            "reconciliation": entry.get("reconciliation") or {},
+            "reconciliation": rec,
+            "notes": notes + basis_notes,
+            "source": entry.get("source") or "gemini_grounded",
             "resegmentation": (entry["history"].get("segment_definition_changes") or "").strip(),
         })
     return {"status": meta.get("status", "missing"), "updated": meta.get("updated"),
