@@ -406,6 +406,26 @@ async def valuation_outcomes_scorecard(request: Request, secret: str = "",
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.get("/admin/valuation-outcomes/attribution")
+async def valuation_outcomes_attribution(request: Request, secret: str = "",
+                                         horizon: str = "consensus_0d",
+                                         group_by: str = "market,profile",
+                                         worst_n: int = 10):
+    """B3: why each miss happened -- composite, weights, routing, shared
+    method bias or method values -- per group, plus the worst runs."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import valuation_attribution as va
+    groups = tuple(g.strip() for g in group_by.split(",") if g.strip())
+    try:
+        return await asyncio.to_thread(va.attribution_report, horizon,
+                                       groups or ("market", "profile"),
+                                       max(0, min(int(worst_n), 50)))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 # ── M1: report recap backfill + agent lesson browsing ───────────────────────
 
 @router.post("/admin/recap-backfill")
