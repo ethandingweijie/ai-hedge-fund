@@ -50,6 +50,8 @@ def test_worker_settings_shape():
         "run_news_slow_task",
         # B2 — daily valuation outcome labels (consensus + realised price)
         "run_valuation_outcomes_task",
+        # B4 — weekly calibration proposal fit (backtested, never promoted)
+        "run_calibration_fit_task",
     }
     assert ws.max_jobs == 10
     assert ws.job_timeout == 3600       # 60 min — VGPM backfill can exceed 30

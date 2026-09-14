@@ -193,6 +193,8 @@ GATED = {
     # B2 outcome labels: idempotent sweep, so a same-day retry only fills
     # what a failed sweep left.
     "valuation_outcomes",
+    # B4 weekly calibration fit: retried within its week if it dies.
+    "calibration_fit",
 }
 
 

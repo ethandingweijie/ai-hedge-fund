@@ -609,6 +609,27 @@ async def run_valuation_outcomes_task(ctx: dict) -> dict:
     return report
 
 
+async def run_calibration_fit_task(ctx: dict) -> dict:
+    """Weekly: fit a calibration proposal from the outcome ledger (B4).
+
+    Backtested before it is stored; a passing proposal enters shadow, a
+    failing one is kept as 'rejected' with its reasons. Nothing is promoted
+    here -- that is a human decision (B6).
+    """
+    from src.memory import calibration_fit as cf
+    try:
+        report = await asyncio.to_thread(cf.fit_and_record)
+        await asyncio.to_thread(cf.mark_fit_run, report)
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("[sched] calibration_fit raised %s: %s",
+                       type(exc).__name__, exc)
+        return {"error": str(exc)[:200]}
+    logger.info("[sched] calibration_fit: %s", {k: report.get(k) for k in
+                                                ("status", "version_id", "horizon")})
+    return {k: report.get(k) for k in ("status", "version_id", "horizon",
+                                       "backtest_verdict")}
+
+
 async def run_regional_comps_refresh_task(ctx: dict) -> dict:
     """Weekly exchange-comp refresh for US, HK and SG.
 
@@ -811,6 +832,7 @@ class WorkerSettings:
         run_news_fast_task,
         run_news_slow_task,
         run_valuation_outcomes_task,
+        run_calibration_fit_task,
         run_regional_comps_refresh_task,
         run_screener_refresh_task,
         run_hundred_q_daily_sweep_task,

@@ -119,6 +119,12 @@ MAINTENANCE_FIRE_MINUTE_UTC = 10
 OUTCOMES_FIRE_HOUR_UTC = 4
 OUTCOMES_FIRE_MINUTE_UTC = 40
 
+#: Calibration proposals fit weekly, Sunday 05:10 UTC -- after that day's
+#: outcome sweep has labelled whatever matured.
+CALIBRATION_FIT_WEEKDAY = 6
+CALIBRATION_FIT_HOUR_UTC = 5
+CALIBRATION_FIT_MINUTE_UTC = 10
+
 #: Screener caches refresh Saturday 01:00 UTC (= SGT 09:00) — same slot
 #: convention and env overrides as regional_comps.
 SCREENER_FIRE_HOUR_UTC = int(os.environ.get("SCREENER_REFRESH_HOUR_UTC", "1"))
@@ -234,6 +240,25 @@ def _outcomes_swept_today() -> bool:
     try:
         from src.memory import valuation_outcomes as _vo
         return _vo.swept_today()
+    except Exception:                                      # noqa: BLE001
+        return False                   # unknown means not done; retry
+
+
+def _seconds_until_calibration_fire() -> float:
+    """Seconds until the next Sunday 05:10 UTC boundary (calibration fit)."""
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=CALIBRATION_FIT_HOUR_UTC, minute=CALIBRATION_FIT_MINUTE_UTC,
+                         second=0, microsecond=0)
+    target += timedelta(days=(CALIBRATION_FIT_WEEKDAY - target.weekday()) % 7)
+    if target <= now:
+        target += timedelta(days=7)
+    return (target - now).total_seconds()
+
+
+def _calibration_fit_ran_this_week() -> bool:
+    try:
+        from src.memory import calibration_fit as _cf
+        return _cf.fit_ran_this_week()
     except Exception:                                      # noqa: BLE001
         return False                   # unknown means not done; retry
 
@@ -421,6 +446,17 @@ def build_schedules() -> list[ScheduleSpec]:
             # Gated: a sweep that dies halfway is retried the same day. The
             # sweep itself is idempotent, so a retry only fills what is left.
             gate_fn=_outcomes_swept_today,
+        ),
+        ScheduleSpec(
+            name="calibration_fit",
+            task="run_calibration_fit_task",
+            next_fire_fn=_seconds_until_calibration_fire,
+            slot_fn=_weekly_slot,
+            lock_ttl_s=_TTL_WEEKLY_S,
+            is_disabled=lambda: _env_flag("CALIBRATION_FIT_DISABLED"),
+            # Gated so a fit that dies partway is retried in its week rather
+            # than skipped until the next one.
+            gate_fn=_calibration_fit_ran_this_week,
         ),
         ScheduleSpec(
             name="maintenance",

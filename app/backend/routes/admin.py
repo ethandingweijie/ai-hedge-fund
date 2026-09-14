@@ -453,6 +453,47 @@ async def valuation_outcomes_walk_forward(request: Request, secret: str = "",
         raise HTTPException(status_code=409, detail=str(exc))
 
 
+# ── B4/B5: calibration proposals and their shadow test ──────────────────────
+
+@router.post("/admin/calibration/fit")
+async def calibration_fit(request: Request, secret: str = "", write: bool = False,
+                          horizon: str = ""):
+    """Fit and backtest a proposal now. write=false (default) reports only.
+    A passing proposal is stored in shadow; nothing is ever promoted here."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import calibration_fit as cf
+    try:
+        return await asyncio.to_thread(cf.fit_and_record, horizon=horizon or None,
+                                       write=write)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/admin/calibration/versions")
+async def calibration_versions(request: Request, secret: str = ""):
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import calibration_fit as cf
+    return await asyncio.to_thread(cf.list_versions)
+
+
+@router.get("/admin/calibration/{version_id}/shadow")
+async def calibration_shadow(version_id: str, request: Request, secret: str = ""):
+    """B5: live vs the proposal on runs made after it was proposed, and
+    whether it is eligible for promotion yet."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import calibration_fit as cf
+    try:
+        return await asyncio.to_thread(cf.shadow_report, version_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"no calibration {version_id!r}")
+
+
 # ── M1: report recap backfill + agent lesson browsing ───────────────────────
 
 @router.post("/admin/recap-backfill")

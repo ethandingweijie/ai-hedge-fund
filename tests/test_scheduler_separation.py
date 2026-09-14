@@ -49,11 +49,11 @@ def test_registry_shape():
     # refresh (W2 — without it the valuation ladder reverts to the static
     # sector tables after its 14-day staleness window) and the weekly
     # screener cache warm. Plus the two news-ingest tiers and the daily
-    # valuation outcome labels.
-    assert len(specs) == 13
+    # valuation outcome labels, and the weekly calibration fit.
+    assert len(specs) == 14
 
     names = [s.name for s in specs]
-    assert len(set(names)) == 13  # unique lock/job-id namespaces
+    assert len(set(names)) == 14  # unique lock/job-id namespaces
 
     catch_up = {s.name for s in specs if s.catch_up}
     # Only these two had startup catch-up in the web-era code — preserved.

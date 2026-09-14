@@ -744,5 +744,75 @@ def test_oe_cascade_reported_path_when_sbc_untrusted(seams):
     assert base["intrinsic_value"] > 0
 
 
+# ── B4: calibration hooks in the engine ──────────────────────────────────────
+
+_CYBER = "Cybersecurity / Mission-Critical SaaS"
+
+
+def _run_cyber(seams, ticker):
+    spec = _case_cyber_saas()
+    seams["rows"][ticker] = spec["rows"]
+    seams["price"][ticker] = spec["price"]
+    seams["mcap"][ticker] = spec["mcap"]
+    out = run_dcf_agent(_state(ticker, "Tech", _CYBER))
+    entry = out["data"]["dcf_range"].get(ticker)
+    assert entry, f"engine skipped {ticker}: {out['data'].get('dcf_skip_reasons')}"
+    return entry
+
+
+def _set_active(monkeypatch, params):
+    from src.memory import calibration
+    active = None if params is None else {"version_id": "cal-test", "params": params}
+    monkeypatch.setattr(calibration, "active_version", lambda: active)
+
+
+def test_calibration_that_does_not_apply_leaves_the_valuation_untouched(seams, monkeypatch):
+    _set_active(monkeypatch, None)
+    base = _run_cyber(seams, "FIXCAL1")
+    assert base["calibration"] is None
+    assert base["param_version"].startswith("constants-")
+
+    _set_active(monkeypatch, {"profile_weights": {"Tech|Some Other Profile": {"DCF": 1.0}},
+                              "market_iv_multiplier": {"HK": 0.5}})
+    other = _run_cyber(seams, "FIXCAL2")
+    for s in ("bear", "base", "bull"):
+        assert other[s]["intrinsic_value"] == base[s]["intrinsic_value"]
+    assert other["calibration"] == {"version_id": "cal-test", "iv_multiplier": None}
+    assert other["param_version"].startswith("cal-test+constants-")
+
+
+def test_an_active_market_multiplier_scales_every_scenario(seams, monkeypatch):
+    _set_active(monkeypatch, None)
+    base = _run_cyber(seams, "FIXCAL3")
+    _set_active(monkeypatch, {"market_iv_multiplier": {"US": 1.1}})
+    scaled = _run_cyber(seams, "FIXCAL4")
+    for s in ("bear", "base", "bull"):
+        assert scaled[s]["intrinsic_value"] == pytest.approx(
+            base[s]["intrinsic_value"] * 1.1, abs=0.02)
+    pre = base["base"].get("intrinsic_value_pre_composite")
+    if pre:
+        assert scaled["base"]["intrinsic_value_pre_composite"] == pytest.approx(pre * 1.1, abs=0.02)
+    assert scaled["calibration"]["iv_multiplier"] == 1.1
+
+
+def test_active_weights_reach_the_blend_without_touching_the_profile_table(seams, monkeypatch):
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    methods = P["Tech"][_CYBER]["methods"]
+    before = [(m["name"], m["weight"]) for m in methods]
+    names = [m["name"] for m in methods]
+    assert "DCF (FCF+)" in names
+    original = next(m["weight"] for m in methods if m["name"] == "DCF (FCF+)")
+
+    _set_active(monkeypatch, None)
+    base = _run_cyber(seams, "FIXCAL5")
+    _set_active(monkeypatch, {"profile_weights": {f"Tech|{_CYBER}": {"DCF (FCF+)": original + 0.3}}})
+    tuned = _run_cyber(seams, "FIXCAL6")
+
+    weights = {p["name"]: p["weight"] for p in tuned["base"]["profile_weights"]}
+    assert weights["DCF (FCF+)"] == pytest.approx(original + 0.3)
+    assert tuned["base"]["intrinsic_value"] != base["base"]["intrinsic_value"]
+    assert [(m["name"], m["weight"]) for m in methods] == before
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

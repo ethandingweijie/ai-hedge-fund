@@ -6191,6 +6191,20 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # but its historical t1_row carries no sotp_assumptions → method
         # value None → skipped and renormalized → T-1 calibration and
         # every no-SOTP ticker stay bit-identical.
+        # B4: an ACTIVE calibration's fitted method weights for this (sector,
+        # profile), and its market IV multiplier. Nothing is active until a
+        # proposal is promoted; until then both hooks hand back their input,
+        # so the blend is bit-identical. Applied before the gates and SOTP
+        # promotions below, which then act on the calibrated weights.
+        try:
+            from src.memory import calibration as _calibration_mod
+            _active_cal = _calibration_mod.active_version()
+            profile_data = _calibration_mod.apply_profile_weights(
+                profile_data, sector, profile_name, active=_active_cal)
+            _iv_calibration_k = _calibration_mod.iv_multiplier(ticker, active=_active_cal)
+        except Exception:                                  # noqa: BLE001
+            _active_cal, _iv_calibration_k = None, None
+
         profile_data, _ev_rev_gated = _gate_ev_revenue(
             profile_data, profile_name, most_recent)
         if _ev_rev_gated:
@@ -7316,6 +7330,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 final_iv = iv_dcf * (1.0 + c_macro)
                 methods_used = ["DCF (fallback)"]
 
+            # B4: the active calibration's market bias correction. The
+            # pre-composite figure moves with it, so attribution does not read
+            # a bias correction as a composite effect.
+            if _iv_calibration_k:
+                final_iv = final_iv * _iv_calibration_k
+                if blend_breakdown.get("iv_pre_composite"):
+                    blend_breakdown["iv_pre_composite"] *= _iv_calibration_k
+
             # Store per-method individual IVs for transparent PDF display
             # Each method gets its own bull/base/bear value — "Blended IV" is the weighted sum
             method_iv_table: dict[str, float] = {
@@ -8334,7 +8356,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                       "final_sector": sector,
                                       "final_profile": profile_name},
             "consensus_at_run":      _consensus_at_run(ticker, _consensus_pt),
-            "param_version":         _param_version(),
+            "param_version":         (f"{_active_cal['version_id']}+{_param_version()}"
+                                      if _active_cal else _param_version()),
+            "calibration":           ({"version_id": _active_cal["version_id"],
+                                       "iv_multiplier": _iv_calibration_k}
+                                      if _active_cal else None),
             "is_cache_copy":         False,
             "ledger_schema":         1,
         }
