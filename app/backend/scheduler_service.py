@@ -114,6 +114,11 @@ VGPM_FIRE_HOUR_UTC = 9
 MAINTENANCE_FIRE_HOUR_UTC = 3
 MAINTENANCE_FIRE_MINUTE_UTC = 10
 
+#: Valuation outcome labels fire daily at 04:40 UTC -- after the US close has
+#: settled into FMP's EOD series and clear of the 03:10 maintenance prune.
+OUTCOMES_FIRE_HOUR_UTC = 4
+OUTCOMES_FIRE_MINUTE_UTC = 40
+
 #: Screener caches refresh Saturday 01:00 UTC (= SGT 09:00) — same slot
 #: convention and env overrides as regional_comps.
 SCREENER_FIRE_HOUR_UTC = int(os.environ.get("SCREENER_REFRESH_HOUR_UTC", "1"))
@@ -212,6 +217,25 @@ def _seconds_until_maintenance_fire() -> float:
     if target <= now:
         target += timedelta(days=1)
     return (target - now).total_seconds()
+
+
+def _seconds_until_outcomes_fire() -> float:
+    """Seconds until the next 04:40 UTC boundary (valuation outcome labels)."""
+    now = datetime.now(timezone.utc)
+    target = now.replace(hour=OUTCOMES_FIRE_HOUR_UTC,
+                         minute=OUTCOMES_FIRE_MINUTE_UTC,
+                         second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
+
+
+def _outcomes_swept_today() -> bool:
+    try:
+        from src.memory import valuation_outcomes as _vo
+        return _vo.swept_today()
+    except Exception:                                      # noqa: BLE001
+        return False                   # unknown means not done; retry
 
 
 def _seconds_until_screener_fire() -> float:
@@ -386,6 +410,17 @@ def build_schedules() -> list[ScheduleSpec]:
             is_disabled=_hq_all_or("HUNDRED_Q_BACKSTOP_DISABLED"),
             gate_fn=lambda: hq_sched._already_ran_within(
                 "annual_backstop", days=hq_sched._BACKSTOP_IDEMPOTENCY_DAYS),
+        ),
+        ScheduleSpec(
+            name="valuation_outcomes",
+            task="run_valuation_outcomes_task",
+            next_fire_fn=_seconds_until_outcomes_fire,
+            slot_fn=_daily_slot,
+            lock_ttl_s=_TTL_DAILY_S,
+            is_disabled=lambda: _env_flag("VALUATION_OUTCOMES_DISABLED"),
+            # Gated: a sweep that dies halfway is retried the same day. The
+            # sweep itself is idempotent, so a retry only fills what is left.
+            gate_fn=_outcomes_swept_today,
         ),
         ScheduleSpec(
             name="maintenance",

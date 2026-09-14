@@ -190,6 +190,9 @@ GATED = {
     # invisible in a way a skipped weekly run is not.
     "news_fast",
     "news_slow",
+    # B2 outcome labels: idempotent sweep, so a same-day retry only fills
+    # what a failed sweep left.
+    "valuation_outcomes",
 }
 
 

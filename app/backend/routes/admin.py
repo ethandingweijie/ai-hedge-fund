@@ -350,7 +350,60 @@ async def admin_diag(request: Request, secret: str = ""):
     except Exception:
         out["timing"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
+    # 12. B2 valuation outcome labels: how many per horizon, and the last sweep.
+    try:
+        import asyncio as _aio
+
+        def _outcome_counts() -> dict:
+            from src.data import db as _db
+            from src.memory import valuation_outcomes as _vo
+            _vo._ensure_tables()
+            rows = _db.query("SELECT horizon, COUNT(*) AS n FROM valuation_outcomes "
+                             "GROUP BY horizon")
+            last = _db.query_one("SELECT sweep_date, finished_at FROM "
+                                 "valuation_outcome_sweeps ORDER BY sweep_date DESC LIMIT 1")
+            return {
+                "labels": {r["horizon"]: int(r["n"]) for r in rows},
+                "last_sweep": ({"sweep_date": last["sweep_date"],
+                                "finished_at": last["finished_at"]} if last else None),
+            }
+
+        out["valuation_outcomes"] = await _aio.to_thread(_outcome_counts)
+        out["valuation_outcomes"]["ok"] = True
+    except Exception:
+        out["valuation_outcomes"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
     return out
+
+
+# ── B2: valuation outcome labels ────────────────────────────────────────────
+
+@router.post("/admin/valuation-outcomes/score")
+async def valuation_outcomes_score(request: Request, secret: str = "",
+                                   write: bool = False):
+    """Run the outcome sweep now. write=false (default) reports what it WOULD
+    label; the sweep is idempotent, so write=true is safe to repeat."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import valuation_outcomes as vo
+    return await asyncio.to_thread(vo.score_matured, write=write)
+
+
+@router.get("/admin/valuation-outcomes/scorecard")
+async def valuation_outcomes_scorecard(request: Request, secret: str = "",
+                                       group_by: str = "market"):
+    """Accuracy by group (market, sector, profile, routing_winner,
+    param_version; comma-separated) and horizon, with the blended score."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import valuation_outcomes as vo
+    groups = tuple(g.strip() for g in group_by.split(",") if g.strip())
+    try:
+        return await asyncio.to_thread(vo.scorecard, groups or ("market",))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ── M1: report recap backfill + agent lesson browsing ───────────────────────

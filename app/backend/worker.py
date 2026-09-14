@@ -589,6 +589,26 @@ async def run_news_slow_task(ctx: dict) -> dict:
     return report
 
 
+async def run_valuation_outcomes_task(ctx: dict) -> dict:
+    """Daily: label every valuation horizon that has matured (B2).
+
+    Consensus at run time, then realised price at 30/90/180/365 days, into
+    valuation_outcomes; also fills the ±5% action outcome so the M1 lesson
+    loop has something to trigger on. The first sweep is the backfill.
+    """
+    from src.memory import valuation_outcomes as vo
+    try:
+        report = await asyncio.to_thread(vo.score_matured)
+        report["actions"] = await asyncio.to_thread(vo.score_actions)
+        await asyncio.to_thread(vo.mark_swept, report)
+    except Exception as exc:                               # noqa: BLE001
+        logger.warning("[sched] valuation_outcomes raised %s: %s",
+                       type(exc).__name__, exc)
+        return {"error": str(exc)[:200]}
+    logger.info("[sched] valuation_outcomes: %s", report)
+    return report
+
+
 async def run_regional_comps_refresh_task(ctx: dict) -> dict:
     """Weekly exchange-comp refresh for US, HK and SG.
 
@@ -790,6 +810,7 @@ class WorkerSettings:
         run_fundflow_brief_task,
         run_news_fast_task,
         run_news_slow_task,
+        run_valuation_outcomes_task,
         run_regional_comps_refresh_task,
         run_screener_refresh_task,
         run_hundred_q_daily_sweep_task,

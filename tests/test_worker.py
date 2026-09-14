@@ -48,6 +48,8 @@ def test_worker_settings_shape():
         # nothing from a shorter interval.
         "run_news_fast_task",
         "run_news_slow_task",
+        # B2 — daily valuation outcome labels (consensus + realised price)
+        "run_valuation_outcomes_task",
     }
     assert ws.max_jobs == 10
     assert ws.job_timeout == 3600       # 60 min — VGPM backfill can exceed 30
