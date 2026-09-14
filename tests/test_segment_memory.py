@@ -110,14 +110,43 @@ def test_segments_that_do_not_add_up_to_another_are_kept():
     assert len(ui["segments"]) == 4 and ui["notes"] == []
 
 
+def _multi_year(values_by_year, recon):
+    return {"_meta": {}, "tickers": {"X": {
+        "company": "X", "sotp_basis": "holdco_lookthrough", "fmp_reporting_currency": "SGD",
+        "reconciliation": recon,
+        "history": {"reporting_currency": "SGD", "segment_definition_changes": "", "total_revenue": [],
+                    "segments": [{"name": "Core", "years": [
+                        _year(f"FY{y}", f"{y}-12-31", v, ccy="SGD") for y, v in values_by_year.items()]}]}}}}
+
+
+def test_one_year_off_is_a_figure_to_check_not_a_basis():
+    """Geely 2024: cited RMB 275.9bn against 240.2bn reported; other years exact."""
+    mem = _multi_year({"2023": 179204, "2024": 275910, "2025": 345232},
+                      {"2023": {"fmp_revenue": 179204e6, "total_gap": 0.0},
+                       "2024": {"fmp_revenue": 240190e6, "total_gap": 0.1487},
+                       "2025": {"fmp_revenue": 345232e6, "total_gap": 0.0}})
+    notes = sm.ui_summary(memory=mem, fx_to=lambda a, b: 1.0)["tickers"][0]["notes"]
+    assert any("2024 +15% only" in n and "check the source" in n for n in notes)
+    assert not any("associates" in n for n in notes)
+
+
+def test_segments_modestly_above_an_agreed_total_read_as_eliminations():
+    mem = _multi_year({"2023": 105000, "2024": 106000},
+                      {"2023": {"fmp_revenue": 100000e6, "total_gap": 0.0},
+                       "2024": {"fmp_revenue": 100000e6, "total_gap": 0.0}})
+    notes = sm.ui_summary(memory=mem, fx_to=lambda a, b: 1.0)["tickers"][0]["notes"]
+    assert any("inter-segment eliminations" in n for n in notes)
+
+
 def test_a_company_total_on_another_basis_is_labelled_not_hidden():
-    """CK Hutchison: segments and the company's own total both ~81% above FMP."""
-    mem = _entry({"Retail": 209267, "Telecom": 101311, "Infrastructure": 58775, "Ports": 48895,
-                  "Finance & Investments": 89049},
-                 {"2023": {"segment_sum": 507297e6, "fmp_revenue": 280000e6, "segment_gap": 0.8118, "total_gap": 0.8118}})
-    ui = sm.ui_summary(memory=mem, fx_to=fx_to)["tickers"][0]
-    assert ui["reconciliation"]["2023"]["segment_gap"] == pytest.approx(0.8118, abs=1e-3)
-    assert any("associates and joint ventures" in n for n in ui["notes"])
+    """CK Hutchison: segments and the company's own total ~70-81% above FMP every year."""
+    mem = _multi_year({"2024": 476682, "2025": 507297},
+                      {"2024": {"fmp_revenue": 281400e6, "total_gap": 0.6943},
+                       "2025": {"fmp_revenue": 280000e6, "total_gap": 0.8118}})
+    ui = sm.ui_summary(memory=mem, fx_to=lambda a, b: 1.0)["tickers"][0]
+    assert ui["reconciliation"]["2025"]["segment_gap"] == pytest.approx(0.8118, abs=1e-3)
+    assert any("every year" in n and "associates and joint ventures" in n for n in ui["notes"])
+    assert not any("check the source" in n for n in ui["notes"])
 
 
 def _ranges(**over):

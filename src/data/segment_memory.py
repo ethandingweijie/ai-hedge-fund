@@ -69,6 +69,8 @@ SINGLE_YEAR_TOLERANCE = 0.0001
 #: revenue, with the segments agreeing with the company, is on another basis
 #: (CK Hutchison reports revenue including its share of associates and JVs).
 BASIS_GAP = 0.15
+#: A cited company total this far from FMP is flagged (Geely 2024: +14.87%).
+TOTAL_CHECK_GAP = 0.10
 
 
 def _subtotal_names(years: dict[str, dict[str, dict]]) -> dict[str, list[str]]:
@@ -141,14 +143,32 @@ def reconciliation(entry: dict, years: dict[str, dict[str, dict]]) -> tuple[dict
                      "segment_gap": round(seg_sum / fmp - 1, 4) if fmp and seg_sum else None,
                      "total_gap": s.get("total_gap")}
     notes: list[str] = []
-    basis = [y for y, v in out.items()
-             if v["total_gap"] is not None and abs(v["total_gap"]) > BASIS_GAP
-             and v["segment_gap"] is not None and abs(v["segment_gap"] - v["total_gap"]) < 0.05]
-    if basis:
-        gaps = ", ".join(f"{y} {out[y]['total_gap']:+.0%}" for y in basis)
-        notes.append("The company's own reported total differs from FMP consolidated revenue "
-                     f"({gaps}) and its segments agree with that total: segment revenue is on "
-                     "another basis, likely including its share of associates and joint ventures")
+    compared = [y for y, v in out.items() if v["fmp_revenue"] and v["segment_gap"] is not None]
+    # Company's cited total differs from FMP. Every compared year -> a standing
+    # basis difference (CK Hutchison: share of associates and JVs). Only some
+    # years -> a specific figure to check: a restatement for discontinued
+    # operations (Olam 2025, SingPost FY2025) or a misread number (Geely 2024
+    # cited RMB 275.9bn against a reported 240.2bn).
+    off = [y for y in compared
+           if out[y]["total_gap"] is not None and abs(out[y]["total_gap"]) > TOTAL_CHECK_GAP]
+    if off:
+        gaps = ", ".join(f"{y} {out[y]['total_gap']:+.0%}" for y in off)
+        if len(off) == len(compared) and len(compared) >= 2:
+            notes.append("The company's reported total differs from FMP consolidated revenue in every "
+                         f"year ({gaps}) and its segments agree with that total: segment revenue is on "
+                         "another basis, for example including its share of associates and joint ventures")
+        else:
+            notes.append(f"The cited total differs from FMP consolidated revenue in {gaps} only: check "
+                         "the source for that year -- a restatement (e.g. discontinued operations "
+                         "excluded) or a misread figure. Do not value on that year until confirmed")
+    # Segments above a total that FMP agrees with: inter-segment eliminations
+    # (JD reports RMB 83.7bn; BABA's 20-F has no elimination line).
+    elim = [y for y in compared if y not in off
+            and 0.02 <= out[y]["segment_gap"] <= BASIS_GAP]
+    if elim:
+        gaps = ", ".join(f"{y} {out[y]['segment_gap']:+.0%}" for y in elim)
+        notes.append(f"Segments sum above group revenue ({gaps}): consistent with inter-segment "
+                     "eliminations that are not a segment")
     return out, notes
 
 
