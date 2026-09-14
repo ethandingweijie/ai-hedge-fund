@@ -6,12 +6,17 @@ associates, net cash, holdco discount) come from a separate Gemini call with
 Google Search grounding, every figure carrying its source. The engine -- not
 the model -- turns them into a value.
 
+Amounts are taken exactly as the source prints them (value, currency, scale)
+and converted to USD here. The first live gemini-3.8-flash run returned
+Alibaba's RMB segment revenue labelled "USD bn" -- 7x too large -- and only
+the reconciliation to FMP revenue caught it.
+
 Transport is plain REST through `requests`. The google-genai SDK would force
 anyio>=4.8 / httpx>=0.28, and the locked fastapi 0.104.1 pins anyio<4: adding
-it means a FastAPI upgrade and a full Railway dependency reinstall. The REST
-endpoint takes the same tools / responseSchema / temperature.
+it broke Starlette's TestClient locally. The REST endpoint takes the same
+tools / responseSchema / temperature.
 
-Nothing here is wired into the pipeline yet: Part E evaluates it first
+Not wired into the pipeline: Part E evaluates it first
 (scripts/eval_gemini_valuation.py). Every failure raises a typed error so the
 caller can fall back to today's extractors.
 """
@@ -20,15 +25,19 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 _ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 DEFAULT_MODEL = "gemini-3.8-flash"
 TIMEOUT_S = 90
-SEGMENT_SUM_TOLERANCE = 0.03       # segments vs FMP forward revenue
+#: Segments vs group forward revenue. Reportable segments exclude eliminations
+#: and unallocated revenue: the validated BABA snapshot sums 12% under FMP's
+#: FY2027 consensus, so a +/-3% match would reject correct inputs.
+SEGMENT_SUM_TOLERANCE = 0.15
 MARGIN_BOUNDS = (0.0, 0.60)
+_SCALES = {"units": 1.0, "thousands": 1e3, "mn": 1e6, "bn": 1e9, "tn": 1e12}
 
 
 class GeminiUnavailable(RuntimeError):
@@ -46,17 +55,27 @@ def model_name() -> str:
 # ── schemas ─────────────────────────────────────────────────────────────────
 
 class Cited(BaseModel):
-    value: float = Field(description="The number, in the unit stated")
-    unit: str = Field(description="e.g. 'USD bn', 'pct', 'x'")
+    """A monetary amount exactly as the source states it."""
+    value: float = Field(description="The number exactly as printed in the source")
+    currency: str = Field(description="ISO code of the source's currency, e.g. CNY, HKD, USD, SGD")
+    scale: Literal["units", "thousands", "mn", "bn", "tn"] = Field(
+        description="Scale the source prints the number in")
     period: str = Field(description="Fiscal period the number refers to, e.g. 'FY2027E'")
     source_url: str = Field(description="URL of the page the number was taken from")
     quote: str = Field(description="Short verbatim quote containing the number")
 
 
+class CitedRatio(BaseModel):
+    value: float = Field(description="Decimal ratio, e.g. 0.28 for 28%")
+    period: str
+    source_url: str
+    quote: str
+
+
 class SegmentEstimate(BaseModel):
     name: str
-    revenue_fwd_usd_bn: Cited = Field(description="Next-fiscal-year revenue, USD billions")
-    ebit_margin: Optional[Cited] = Field(default=None, description="Segment EBIT or EBITA margin as a decimal")
+    revenue_fwd: Cited = Field(description="Next-fiscal-year segment revenue, in the source's currency and scale")
+    ebit_margin: Optional[CitedRatio] = Field(default=None, description="Segment EBIT or EBITA margin")
     multiple_metric: Literal["pe", "ev_rev"]
     multiple_low: float
     multiple_high: float
@@ -67,8 +86,8 @@ class SegmentEstimate(BaseModel):
 class SotpInputs(BaseModel):
     fiscal_year: str
     segments: list[SegmentEstimate]
-    associates_investments_usd_bn: Optional[Cited] = None
-    net_cash_usd_bn: Optional[Cited] = Field(
+    associates_investments: Optional[Cited] = None
+    net_cash: Optional[Cited] = Field(
         default=None, description="Cash + short-term investments - debt; negative if net debt")
     holdco_discount_pct: float = Field(description="Decimal, e.g. 0.15")
     holdco_basis: str
@@ -82,6 +101,25 @@ class DirectEstimate(BaseModel):
     per: Literal["ADS", "share"]
     reasoning: str
     source_urls: list[str]
+
+
+class SegmentYear(BaseModel):
+    fiscal_year: str = Field(description="e.g. 'FY2025'")
+    period_end: str = Field(description="ISO date the fiscal year ended, e.g. '2025-03-31'")
+    revenue: Cited
+
+
+class SegmentHistory(BaseModel):
+    name: str
+    years: list[SegmentYear]
+
+
+class SegmentRevenueHistory(BaseModel):
+    """Reported (not estimated) segment revenue, for the segment-revenue memory."""
+    reporting_currency: str
+    segments: list[SegmentHistory]
+    total_revenue: list[SegmentYear] = Field(description="Group total revenue for the same years, for reconciliation")
+    segment_definition_changes: str = Field(description="Any resegmentation during the period, else ''")
 
 
 # ── REST ────────────────────────────────────────────────────────────────────
@@ -98,7 +136,10 @@ def to_gemini_schema(model: type[BaseModel]) -> dict:
 
     def conv(node: dict) -> dict:
         if "$ref" in node:
-            return conv(defs[node["$ref"].split("/")[-1]])
+            out = conv(defs[node["$ref"].split("/")[-1]])
+            if node.get("description"):
+                out["description"] = node["description"]
+            return out
         if "anyOf" in node:
             options = [o for o in node["anyOf"] if o.get("type") != "null"]
             out = conv(options[0])
@@ -152,13 +193,24 @@ def _unpack(payload: dict) -> dict:
     text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts") or [])
     gm = cand.get("groundingMetadata") or {}
     usage = payload.get("usageMetadata") or {}
+    feedback = payload.get("promptFeedback") or {}
     return {
         "text": text,
-        "finish_reason": cand.get("finishReason"),
+        # A high-reasoning BABA call returned no text and no finish reason:
+        # record whether there was a candidate at all and any block reason.
+        "finish_reason": cand.get("finishReason") or (
+            f"no_candidate:{feedback.get('blockReason')}" if not cands else None),
+        "n_candidates": len(cands),
+        "block_reason": feedback.get("blockReason"),
         "grounding_urls": [((c.get("web") or {}).get("uri")) for c in gm.get("groundingChunks") or []
                            if (c.get("web") or {}).get("uri")],
         "queries": list(gm.get("webSearchQueries") or []),
+        # Our prompt is ~1.2k tokens; a grounded call bills ~27k input (search
+        # results the tool injects) and ~32k it spends reasoning. Recording
+        # them separately is what shows where the latency goes.
         "usage": {"in": usage.get("promptTokenCount"), "out": usage.get("candidatesTokenCount"),
+                  "thoughts": usage.get("thoughtsTokenCount"),
+                  "tool_prompt": usage.get("toolUsePromptTokenCount"),
                   "total": usage.get("totalTokenCount")},
     }
 
@@ -174,15 +226,31 @@ def _parse_json(text: str):
     return json.loads(t[start:t.rfind("}" if t[start] == "{" else "]") + 1])
 
 
+class GeminiParseError(ValueError):
+    """The call succeeded but returned no usable JSON; carries why."""
+
+    def __init__(self, message: str, *, finish_reason=None, text_head: str = "", usage=None):
+        super().__init__(f"{message} (finish_reason={finish_reason}, text={text_head!r})")
+        self.finish_reason = finish_reason
+        self.text_head = text_head
+        self.usage = usage
+
+
 def generate(prompt: str, *, schema: Optional[type[BaseModel]] = None, grounded: bool = True,
              model: Optional[str] = None, temperature: float = 0.1,
+             thinking: Optional[dict] = None,
              timeout: float = TIMEOUT_S, session=None) -> dict:
     """One Gemini call. With both grounding and a schema it tries a single call;
     if the model refuses that combination it runs grounded text first, then a
-    schema-only extraction over that text ("two_step")."""
+    schema-only extraction over that text ("two_step").
+
+    `thinking` is passed through as generationConfig.thinkingConfig, e.g.
+    {"thinkingLevel": "low"} -- reasoning tokens dominate a grounded call."""
     model = model or model_name()
     started = time.monotonic()
-    gen_cfg = {"temperature": temperature}
+    gen_cfg: dict = {"temperature": temperature}
+    if thinking:
+        gen_cfg["thinkingConfig"] = dict(thinking)
     body = {"contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": gen_cfg}
     if grounded:
@@ -199,7 +267,8 @@ def generate(prompt: str, *, schema: Optional[type[BaseModel]] = None, grounded:
             raise
         mode = "two_step"
         text_body = {"contents": body["contents"], "tools": body["tools"],
-                     "generationConfig": {"temperature": temperature}}
+                     "generationConfig": {k: v for k, v in gen_cfg.items()
+                                          if k not in ("responseMimeType", "responseSchema")}}
         grounded_out = _unpack(_post(model, text_body, timeout, session))
         extract_body = {
             "contents": [{"role": "user", "parts": [{"text": (
@@ -215,25 +284,53 @@ def generate(prompt: str, *, schema: Optional[type[BaseModel]] = None, grounded:
     out["latency_s"] = round(time.monotonic() - started, 2)
     out["json"] = None
     if schema is not None:
-        out["json"] = schema.model_validate(_parse_json(out["text"])).model_dump()
+        try:
+            out["json"] = schema.model_validate(_parse_json(out["text"])).model_dump()
+        except (ValueError, TypeError) as exc:
+            raise GeminiParseError(f"{type(exc).__name__}: {str(exc)[:200]}",
+                                   finish_reason=out.get("finish_reason"),
+                                   text_head=(out.get("text") or "")[:300],
+                                   usage=out.get("usage")) from exc
     return out
 
 
 # ── prompts ─────────────────────────────────────────────────────────────────
 
+_AMOUNT_RULE = (
+    "Report every amount EXACTLY as the source prints it: the number, the source's "
+    "currency (ISO code, e.g. CNY for RMB) and its scale (mn, bn...). Never convert "
+    "currencies or rescale yourself. Every number needs the URL it came from and a "
+    "short verbatim quote. Do not invent numbers; omit what you cannot source."
+)
+
+
 def sotp_prompt(company: str, ticker: str, anchors: dict) -> str:
     return (
-        f"You are building sum-of-the-parts valuation INPUTS for {company} ({ticker}). "
-        "Search the web for the latest company filings, results announcements and broker "
-        "SOTP notes. Return the next fiscal year's estimate for each reportable segment: "
-        "revenue in USD billions and EBIT/EBITA margin, and a valuation multiple RANGE "
-        "(P/E on segment NOPAT for profitable core businesses, EV/Sales otherwise) with "
-        "its basis. Also associates/strategic investments, net cash (cash + short-term "
-        "investments - debt) in USD billions, and a holding-company discount.\n"
-        "Rules: every number must come with the URL of the page it came from and a short "
-        "verbatim quote. Do not invent numbers; omit a field you cannot source. Do NOT "
-        "compute a per-share value.\n"
+        f"You are building sum-of-the-parts valuation INPUTS for {company} ({ticker}).\n"
+        "1. Segment revenue and margin: take them from the COMPANY's own results "
+        "announcements, annual reports or consensus estimates of REVENUE. Broker SOTP "
+        "tables list segment VALUES (enterprise value, value per share/ADS) next to "
+        "multiples -- never report a value from such a table as revenue. A segment's "
+        "revenue is always smaller than the group's total revenue.\n"
+        "2. Multiples: a RANGE per segment (P/E on segment NOPAT for profitable core "
+        "businesses, EV/Sales otherwise) with the basis; broker SOTP notes are a good "
+        "source for the multiple itself.\n"
+        "3. Associates and strategic investments (total, not per share), net cash "
+        "(cash + short-term investments - total debt; negative if net debt) and a "
+        "holding-company discount.\n"
+        f"Do NOT compute a per-share value.\n{_AMOUNT_RULE}\n"
         f"Fixed anchors from FMP (do not contradict): {json.dumps(anchors)}"
+    )
+
+
+def history_prompt(company: str, ticker: str, years: int = 5) -> str:
+    return (
+        f"From {company}'s ({ticker}) annual reports and results announcements, list the "
+        f"REPORTED revenue of each reportable business segment for each of the last "
+        f"{years} completed fiscal years, and group total revenue for the same years. "
+        "Use the segment names the company used; if it resegmented, use the latest "
+        "definition where the company restated prior years and describe the change. "
+        f"Reported figures only, no estimates.\n{_AMOUNT_RULE}"
     )
 
 
@@ -252,32 +349,59 @@ def _cited_ok(c: Optional[dict]) -> bool:
         and str(c.get("source_url", "")).startswith("http") and bool(str(c.get("quote", "")).strip())
 
 
+def _default_fx(currency: str) -> Optional[float]:
+    ccy = (currency or "").upper()
+    if ccy == "USD":
+        return 1.0
+    try:
+        from src.tools.api import get_fx_rate
+        rate = get_fx_rate(ccy, "USD")
+        return float(rate) if rate and rate > 0 else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def amount(c: Optional[dict], to_ccy_rate: Callable[[str], Optional[float]]) -> Optional[float]:
+    """Full-unit amount of a cited figure in the target currency, or None when
+    uncited, of unknown scale, or its currency cannot be converted."""
+    if not _cited_ok(c) or c.get("scale") not in _SCALES:
+        return None
+    rate = to_ccy_rate(c.get("currency") or "")
+    if not rate:
+        return None
+    return float(c["value"]) * _SCALES[c["scale"]] * rate
+
+
 def citation_coverage(sotp: dict) -> float:
-    cited = [s.get("revenue_fwd_usd_bn") for s in sotp.get("segments") or []]
+    cited = [s.get("revenue_fwd") for s in sotp.get("segments") or []]
     cited += [s.get("ebit_margin") for s in sotp.get("segments") or [] if s.get("ebit_margin")]
-    cited += [sotp.get(k) for k in ("associates_investments_usd_bn", "net_cash_usd_bn") if sotp.get(k)]
+    cited += [sotp.get(k) for k in ("associates_investments", "net_cash") if sotp.get(k)]
     return round(sum(_cited_ok(c) for c in cited) / len(cited), 4) if cited else 0.0
 
 
-def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = None) -> tuple[dict, dict]:
-    """Gemini SOTP inputs -> the assumptions dict `_sotp_analyst_style` consumes.
+def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = None,
+                          fx_to_usd: Optional[Callable[[str], Optional[float]]] = None) -> tuple[dict, dict]:
+    """Gemini SOTP inputs -> the USD assumptions dict `_sotp_analyst_style` consumes.
 
-    Uncited revenue drops the segment; uncited margins, associates or net cash
-    are left out; margins are clamped; the multiple is the midpoint of a sane
-    range. When FMP's forward revenue is known, segments must sum to it within
-    SEGMENT_SUM_TOLERANCE or the set is rejected (returned with no segments)."""
-    checks: dict = {"dropped_segments": [], "dropped_fields": [], "clamped": []}
+    Uncited or unconvertible revenue drops the segment; uncited margins,
+    associates or net cash are left out; margins are clamped; the multiple is
+    the midpoint of a sane range. When FMP's forward revenue is known, segments
+    must sum to it within SEGMENT_SUM_TOLERANCE or the set is rejected."""
+    fx = fx_to_usd or _default_fx
+    checks: dict = {"dropped_segments": [], "dropped_fields": [], "clamped": [], "currencies": []}
     segments = []
     for s in sotp.get("segments") or []:
-        rev = s.get("revenue_fwd_usd_bn")
-        if not _cited_ok(rev) or rev["value"] <= 0:
+        rev_c = s.get("revenue_fwd")
+        rev = amount(rev_c, fx)
+        if not rev or rev <= 0:
             checks["dropped_segments"].append(s.get("name"))
             continue
+        checks["currencies"].append(f"{(rev_c or {}).get('currency')} {(rev_c or {}).get('scale')}")
         lo, hi = s.get("multiple_low"), s.get("multiple_high")
         if not (isinstance(lo, (int, float)) and isinstance(hi, (int, float)) and 0 < lo <= hi):
             checks["dropped_segments"].append(s.get("name"))
             continue
-        seg = {"name": s["name"], "revenue_fwd": rev["value"] * 1e9,
+        seg = {"name": s["name"], "revenue_fwd": rev,
                "pe_multiple": None, "ev_rev_multiple": None,
                "rationale": f"{s.get('multiple_metric')} {lo}-{hi}x: {s.get('multiple_basis', '')}"[:300],
                "source": "gemini_grounded"}
@@ -286,6 +410,8 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
         if margin is not None:
             if _cited_ok(margin):
                 m = float(margin["value"])
+                if m > 1.0:                        # "28" meaning 28%
+                    m = m / 100.0
                 clamped = min(max(m, MARGIN_BOUNDS[0]), MARGIN_BOUNDS[1])
                 if clamped != m:
                     checks["clamped"].append(f"{s['name']} margin {m}")
@@ -296,25 +422,55 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
 
     total = sum(seg["revenue_fwd"] for seg in segments)
     if fmp_revenue_fwd_usd and fmp_revenue_fwd_usd > 0 and segments:
-        gap = abs(total - fmp_revenue_fwd_usd) / fmp_revenue_fwd_usd
+        gap = (total - fmp_revenue_fwd_usd) / fmp_revenue_fwd_usd
         checks["segment_sum_gap"] = round(gap, 4)
-        if gap > SEGMENT_SUM_TOLERANCE:
-            checks["rejected"] = (f"segments sum to {total / 1e9:.1f}bn vs FMP forward revenue "
-                                  f"{fmp_revenue_fwd_usd / 1e9:.1f}bn ({gap:.1%})")
+        if abs(gap) > SEGMENT_SUM_TOLERANCE:
+            checks["rejected"] = (f"segments sum to {total / 1e9:.1f}bn USD vs FMP forward revenue "
+                                  f"{fmp_revenue_fwd_usd / 1e9:.1f}bn ({gap:+.1%})")
             segments = []
 
     assumptions: dict = {"segments": segments,
                          "holdco_discount_pct": min(max(float(sotp.get("holdco_discount_pct") or 0.0), 0.0), 0.5),
                          "default_tax_rate": 0.15,
                          "_origin": "gemini", "_sources": {"all": "gemini_grounded"}}
-    for field, target in (("associates_investments_usd_bn", "associates_investments"),
-                          ("net_cash_usd_bn", "net_cash")):
+    for field in ("associates_investments", "net_cash"):
         c = sotp.get(field)
         if c is None:
             continue
-        if _cited_ok(c):
-            assumptions[target] = float(c["value"]) * 1e9
-        else:
+        value = amount(c, fx)
+        if value is None:
             checks["dropped_fields"].append(field)
+        else:
+            assumptions[field] = value
     checks["citation_coverage"] = citation_coverage(sotp)
     return assumptions, checks
+
+
+def reconcile_history(hist: dict, fmp_revenue_by_year: dict[str, float], reporting_ccy: str,
+                      fx_to: Callable[[str, str], Optional[float]]) -> dict:
+    """Per fiscal year: cited segment sum and cited group total vs FMP reported
+    revenue, all in the FMP reporting currency. Keys are period-end years."""
+    def to_rep(c):
+        return amount(c, lambda ccy: 1.0 if ccy.upper() == reporting_ccy.upper() else fx_to(ccy, reporting_ccy))
+
+    by_year: dict[str, dict] = {}
+    for seg in hist.get("segments") or []:
+        for y in seg.get("years") or []:
+            key = str(y.get("period_end", ""))[:4]
+            v = to_rep(y.get("revenue"))
+            slot = by_year.setdefault(key, {"segment_sum": 0.0, "segments": 0, "uncited": 0})
+            if v is None:
+                slot["uncited"] += 1
+            else:
+                slot["segment_sum"] += v
+                slot["segments"] += 1
+    for y in hist.get("total_revenue") or []:
+        key = str(y.get("period_end", ""))[:4]
+        by_year.setdefault(key, {"segment_sum": 0.0, "segments": 0, "uncited": 0})["cited_total"] = to_rep(y.get("revenue"))
+    for key, slot in by_year.items():
+        fmp = fmp_revenue_by_year.get(key)
+        slot["fmp_revenue"] = fmp
+        slot["segment_gap"] = round(slot["segment_sum"] / fmp - 1, 4) if fmp and slot["segment_sum"] else None
+        ct = slot.get("cited_total")
+        slot["total_gap"] = round(ct / fmp - 1, 4) if fmp and ct else None
+    return dict(sorted(by_year.items()))

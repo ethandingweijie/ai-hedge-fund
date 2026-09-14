@@ -53,6 +53,7 @@ from src.agents.analysis.sotp_snapshot import load_sotp_snapshot, lookup_snapsho
 from src.agents.industry import gemini_params as gp  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures" / "gemini"
+THINKING: dict | None = None        # set from --thinking-level
 USDHKD = 7.8
 
 # ticker -> company, listing currency, per-unit label, GS TP in listing currency
@@ -72,6 +73,11 @@ UNIVERSE = {
     "S68.SI": ("Singapore Exchange", "SGD", "share", None),
 }
 SOTP_NAMES = {"BABA", "09988.HK", "JD", "09618.HK", "PDD", "03690.HK", "MSFT", "AMZN"}
+
+#: Further broker targets in listing currency, reported next to the GS error.
+#: JPM BABA $210 / 09988.HK HK$205 (user-supplied 2026-09-15; consistent at
+#: 7.8 HKD/USD and 8 shares per ADS).
+BROKER_TPS = {"BABA": {"JPM": 210.0}, "09988.HK": {"JPM": 205.0}}
 
 
 def _fmp(endpoint: str, **params):
@@ -116,11 +122,19 @@ def _log_err(value, reference):
     return round(abs(math.log(value / reference)), 4)
 
 
+def _signed_pct(value, reference):
+    if not value or not reference:
+        return None
+    return round(value / reference - 1, 4)
+
+
 def _record(name: str, out: dict) -> None:
     FIXTURES.mkdir(parents=True, exist_ok=True)
     keep = {k: out.get(k) for k in ("text", "grounding_urls", "queries", "usage", "mode", "model",
-                                    "latency_s", "finish_reason")}
-    (FIXTURES / f"{name}.json").write_text(json.dumps(keep, indent=1), encoding="utf-8")
+                                    "latency_s", "finish_reason", "n_candidates", "block_reason")}
+    keep["thinking"] = THINKING
+    (FIXTURES / f"{name}_{(THINKING or {}).get('thinkingLevel', 'default')}.json").write_text(
+        json.dumps(keep, indent=1), encoding="utf-8")
 
 
 def engine_value(ticker: str, assumptions: dict, a: dict) -> dict:
@@ -165,7 +179,7 @@ def qwen_baseline(ticker: str, a: dict, snap: dict | None) -> dict | None:
     return None
 
 
-def run(repeats: int, record: bool, tickers: list[str]) -> dict:
+def run(repeats: int, record: bool, tickers: list[str], timeout: float = gp.TIMEOUT_S) -> dict:
     results = {}
     snapshot = load_sotp_snapshot()
     for ticker in tickers:
@@ -184,27 +198,35 @@ def run(repeats: int, record: bool, tickers: list[str]) -> dict:
             for i in range(repeats):
                 started = time.monotonic()
                 try:
-                    out = gp.generate(gp.sotp_prompt(company, ticker, fmp_anchor), schema=gp.SotpInputs)
+                    out = gp.generate(gp.sotp_prompt(company, ticker, fmp_anchor), schema=gp.SotpInputs,
+                                      timeout=timeout, thinking=THINKING)
                 except gp.GeminiBillingError:
                     raise
                 except Exception as exc:  # noqa: BLE001
-                    entry["G1"].append({"error": f"{type(exc).__name__}: {str(exc)[:300]}"})
+                    entry["G1"].append({"error": f"{type(exc).__name__}: {str(exc)[:300]}",
+                                        "wall_s": round(time.monotonic() - started, 2)})
+                    print(f"  G1[{i}] ERROR {type(exc).__name__} after "
+                          f"{time.monotonic() - started:.0f}s", flush=True)
                     continue
                 if record:
                     _record(f"{ticker}_G1_{i}", out)
-                assumptions, checks = gp.to_engine_assumptions(out["json"], fmp_revenue_fwd_usd=a["revenue_fwd_usd"])
+                assumptions, checks = gp.to_engine_assumptions(
+                    out["json"], fmp_revenue_fwd_usd=a["revenue_fwd_usd"])   # FX via get_fx_rate
                 val = engine_value(ticker, assumptions, a) if assumptions["segments"] and a["shares"] else {"value": None}
                 entry["G1"].append({
                     "value": val["value"], "log_err_vs_gs": _log_err(val["value"], gs_tp),
+                    "vs_brokers": {b: _signed_pct(val["value"], tp) for b, tp in BROKER_TPS.get(ticker, {}).items()},
                     "ground_truth": val.get("ground_truth"), "checks": checks, "mode": out["mode"],
                     "latency_s": out["latency_s"], "usage": out["usage"], "queries": len(out["queries"]),
                     "wall_s": round(time.monotonic() - started, 2), "inputs": out["json"],
                 })
                 print(f"  G1[{i}] value={val['value']} cites={checks['citation_coverage']} "
-                      f"{out['latency_s']}s mode={out['mode']}", flush=True)
+                      f"{out['latency_s']}s mode={out['mode']} ccy={sorted(set(checks['currencies']))} "
+                      f"gap={checks.get('segment_sum_gap')} {checks.get('rejected', '')}", flush=True)
         for i in range(repeats):
             try:
-                out = gp.generate(gp.direct_prompt(company, ticker, per), schema=gp.DirectEstimate)
+                out = gp.generate(gp.direct_prompt(company, ticker, per), schema=gp.DirectEstimate,
+                                  timeout=timeout, thinking=THINKING)
             except gp.GeminiBillingError:
                 raise
             except Exception as exc:  # noqa: BLE001
@@ -216,6 +238,9 @@ def run(repeats: int, record: bool, tickers: list[str]) -> dict:
             entry["G2"].append({"sotp_value": est["sotp_value"], "fair_value": est["fair_value"],
                                 "currency": est["currency"], "per": est["per"],
                                 "log_err_vs_gs": _log_err(est["sotp_value"], gs_tp) if est["currency"] == listing else None,
+                                "vs_brokers": ({b: _signed_pct(est["sotp_value"], tp)
+                                                for b, tp in BROKER_TPS.get(ticker, {}).items()}
+                                               if est["currency"] == listing else {}),
                                 "latency_s": out["latency_s"], "usage": out["usage"]})
             print(f"  G2[{i}] sotp={est['sotp_value']} {est['currency']}/{est['per']} {out['latency_s']}s", flush=True)
         results[ticker] = entry
@@ -273,13 +298,20 @@ def main() -> None:
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--out", required=True)
     ap.add_argument("--record", action="store_true")
+    ap.add_argument("--thinking-level", choices=["minimal", "low", "medium", "high"], default=None,
+                    help="generationConfig.thinkingConfig.thinkingLevel; default = model default")
+    ap.add_argument("--timeout", type=float, default=300.0,
+                    help="per-call seconds; the evaluation measures latency rather than enforcing it")
     ap.add_argument("--prod-db", action="store_true",
                     help="read the Qwen baseline from production web_runs (read-only)")
     ap.add_argument("--tickers", default=",".join(UNIVERSE))
     args = ap.parse_args()
     tickers = [t.strip() for t in args.tickers.split(",") if t.strip()]
+    global THINKING
+    if args.thinking_level:
+        THINKING = {"thinkingLevel": args.thinking_level}
     try:
-        results = run(args.repeats, args.record, tickers)
+        results = run(args.repeats, args.record, tickers, timeout=args.timeout)
     except gp.GeminiBillingError as exc:
         print(f"\nSTOPPED: Gemini billing -- {exc}")
         sys.exit(2)

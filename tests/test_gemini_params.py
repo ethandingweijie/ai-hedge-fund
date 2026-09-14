@@ -1,16 +1,19 @@
-"""Gemini valuation-parameter client: schema, REST handling, citations, guardrails.
+"""Gemini valuation-parameter client: schema, REST handling, citations, currency, guardrails.
 
-Response payloads here are SYNTHETIC, shaped like the v1beta generateContent
-REST response. They are replaced by recorded gemini-3.8-flash responses once
-the Part E harness can run (the account's prepaid credits were exhausted on
-2026-09-14).
+REST payloads here are SYNTHETIC, shaped like the v1beta generateContent
+response. Recorded gemini-3.8-flash responses (tests/fixtures/gemini/, written
+by scripts/eval_gemini_valuation.py --record) back the replay test below.
 """
 import json
+from pathlib import Path
 
 import pytest
 
 from src.agents.analysis.dcf_agent import _sotp_analyst_style
 from src.agents.industry import gemini_params as gp
+
+FX = {"USD": 1.0, "CNY": 0.14, "HKD": 0.128}
+fx = FX.get
 
 
 class _Resp:
@@ -42,23 +45,28 @@ def _ok(text, urls=("https://www.alibabagroup.com/ir",)):
     })
 
 
-def _cited(v, url="https://www.alibabagroup.com/ir"):
-    return {"value": v, "unit": "USD bn", "period": "FY2027E", "source_url": url, "quote": f"{v}"}
+def _cited(v, ccy="USD", scale="bn", url="https://www.alibabagroup.com/ir"):
+    return {"value": v, "currency": ccy, "scale": scale, "period": "FY2027E",
+            "source_url": url, "quote": f"{v}"}
+
+
+def _ratio(v):
+    return {"value": v, "period": "FY2027E", "source_url": "https://x.com/a", "quote": f"{v}"}
 
 
 def _sotp(**over):
     doc = {
         "fiscal_year": "FY2027",
         "segments": [
-            {"name": "Taobao and Tmall Group", "revenue_fwd_usd_bn": _cited(67.0),
-             "ebit_margin": _cited(0.30), "multiple_metric": "pe", "multiple_low": 9.0,
+            {"name": "Taobao and Tmall Group", "revenue_fwd": _cited(67.0),
+             "ebit_margin": _ratio(0.30), "multiple_metric": "pe", "multiple_low": 9.0,
              "multiple_high": 11.0, "multiple_basis": "broker SOTP", "multiple_source_url": "https://x"},
-            {"name": "Cloud Intelligence Group", "revenue_fwd_usd_bn": _cited(20.0),
+            {"name": "Cloud Intelligence Group", "revenue_fwd": _cited(20.0),
              "ebit_margin": None, "multiple_metric": "ev_rev", "multiple_low": 4.0,
              "multiple_high": 6.0, "multiple_basis": "cloud peers", "multiple_source_url": "https://y"},
         ],
-        "associates_investments_usd_bn": _cited(22.3),
-        "net_cash_usd_bn": _cited(68.0),
+        "associates_investments": _cited(22.3),
+        "net_cash": _cited(68.0),
         "holdco_discount_pct": 0.15, "holdco_basis": "conglomerate discount",
     }
     doc.update(over)
@@ -74,7 +82,9 @@ def test_schema_inlines_refs_and_marks_optionals_nullable():
     s = gp.to_gemini_schema(gp.SotpInputs)
     seg = s["properties"]["segments"]["items"]
     assert s["type"] == "OBJECT" and seg["type"] == "OBJECT"
-    assert seg["properties"]["revenue_fwd_usd_bn"]["properties"]["source_url"]["type"] == "STRING"
+    rev = seg["properties"]["revenue_fwd"]["properties"]
+    assert rev["currency"]["type"] == "STRING"
+    assert rev["scale"]["enum"] == ["units", "thousands", "mn", "bn", "tn"]
     assert seg["properties"]["ebit_margin"]["nullable"] is True
     assert seg["properties"]["multiple_metric"]["enum"] == ["pe", "ev_rev"]
     assert "$ref" not in json.dumps(s) and "$defs" not in json.dumps(s)
@@ -99,7 +109,7 @@ def test_when_tools_and_schema_cannot_combine_it_runs_two_steps():
     assert out["mode"] == "two_step"
     assert "tools" in session.bodies[1] and "responseSchema" not in session.bodies[1]["generationConfig"]
     assert "tools" not in session.bodies[2] and "responseSchema" in session.bodies[2]["generationConfig"]
-    assert out["grounding_urls"] == ["https://www.alibabagroup.com/ir"]    # from the grounded step
+    assert out["grounding_urls"] == ["https://www.alibabagroup.com/ir"]
 
 
 def test_exhausted_credits_are_a_billing_error_not_a_retry():
@@ -114,29 +124,67 @@ def test_no_key_is_unavailable(monkeypatch):
         gp.generate("p", session=_Session())
 
 
+def test_a_response_without_json_says_why():
+    empty = _Resp(200, {"candidates": [{"content": {"parts": [{"text": "I could not find"}]},
+                                        "finishReason": "MAX_TOKENS"}],
+                        "usageMetadata": {"promptTokenCount": 27000, "thoughtsTokenCount": 32000}})
+    with pytest.raises(gp.GeminiParseError) as info:
+        gp.generate("p", schema=gp.SotpInputs, session=_Session(empty))
+    assert info.value.finish_reason == "MAX_TOKENS"
+    assert info.value.usage["thoughts"] == 32000 and "could not find" in info.value.text_head
+
+
+def test_thinking_config_is_passed_through_to_both_steps():
+    refusal = _Resp(400, {"error": {"message": "unsupported combination"}})
+    session = _Session(refusal, _ok("text"), _ok(json.dumps(_sotp())))
+    gp.generate("p", schema=gp.SotpInputs, thinking={"thinkingLevel": "low"}, session=session)
+    assert all(b["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
+               for b in session.bodies)
+
+
 def test_fenced_json_is_tolerated():
     out = gp.generate("p", schema=gp.SotpInputs, session=_Session(_ok("```json\n" + json.dumps(_sotp()) + "\n```")))
     assert len(out["json"]["segments"]) == 2
 
 
 def test_engine_inputs_from_cited_numbers_value_through_the_engine():
-    assumptions, checks = gp.to_engine_assumptions(_sotp(), fmp_revenue_fwd_usd=87.5e9)
+    assumptions, checks = gp.to_engine_assumptions(_sotp(), fmp_revenue_fwd_usd=87.5e9, fx_to_usd=fx)
     seg = {s["name"]: s for s in assumptions["segments"]}
     assert seg["Taobao and Tmall Group"]["pe_multiple"] == 10.0        # midpoint of 9-11x
     assert seg["Cloud Intelligence Group"]["ev_rev_multiple"] == 5.0
     assert assumptions["net_cash"] == pytest.approx(68e9)
-    assert checks["segment_sum_gap"] == pytest.approx(0.0057, abs=1e-3)
+    assert checks["segment_sum_gap"] == pytest.approx(-0.0057, abs=1e-3)
     table = _sotp_analyst_style(assumptions, shares=2.39e9)
-    # 67bn x 30% x 0.85 x 10 + 20bn x 5 + 22.3 + 68, less 15%, per ADS
     assert table["per_share"] == pytest.approx((170.85e9 + 100e9 + 90.3e9) * 0.85 / 2.39e9, rel=1e-6)
+
+
+def test_the_rmb_labelled_as_usd_failure_is_converted_not_trusted():
+    """The live 2026-09-15 run: RMB 696bn China commerce. Stated as CNY bn it
+    converts to USD ~97bn; the same number claimed as USD bn fails reconciliation."""
+    doc = _sotp(segments=[{**_sotp()["segments"][0], "revenue_fwd": _cited(696.0, ccy="CNY")}])
+    assumptions, checks = gp.to_engine_assumptions(doc, fmp_revenue_fwd_usd=110e9, fx_to_usd=fx)
+    assert assumptions["segments"][0]["revenue_fwd"] == pytest.approx(696e9 * 0.14)
+    assert "rejected" not in checks and checks["currencies"] == ["CNY bn"]
+    mislabelled = _sotp(segments=[{**_sotp()["segments"][0], "revenue_fwd": _cited(696.0, ccy="USD")}])
+    assumptions, checks = gp.to_engine_assumptions(mislabelled, fmp_revenue_fwd_usd=110e9, fx_to_usd=fx)
+    assert assumptions["segments"] == [] and "rejected" in checks
+
+
+def test_an_unconvertible_currency_or_scale_drops_the_number():
+    doc = _sotp()
+    doc["segments"][1]["revenue_fwd"] = _cited(20.0, ccy="XYZ")
+    doc["net_cash"] = {**_cited(68.0), "scale": "lakh"}
+    assumptions, checks = gp.to_engine_assumptions(doc, fx_to_usd=fx)
+    assert [s["name"] for s in assumptions["segments"]] == ["Taobao and Tmall Group"]
+    assert "net_cash" not in assumptions and "net_cash" in checks["dropped_fields"]
 
 
 def test_uncited_numbers_never_reach_the_engine():
     doc = _sotp()
-    doc["segments"][1]["revenue_fwd_usd_bn"]["source_url"] = ""
+    doc["segments"][1]["revenue_fwd"]["source_url"] = ""
     doc["segments"][0]["ebit_margin"]["quote"] = " "
-    doc["net_cash_usd_bn"]["source_url"] = "not a url"
-    assumptions, checks = gp.to_engine_assumptions(doc)
+    doc["net_cash"]["source_url"] = "not a url"
+    assumptions, checks = gp.to_engine_assumptions(doc, fx_to_usd=fx)
     assert [s["name"] for s in assumptions["segments"]] == ["Taobao and Tmall Group"]
     assert "ebit_margin" not in assumptions["segments"][0]
     assert "net_cash" not in assumptions
@@ -144,17 +192,56 @@ def test_uncited_numbers_never_reach_the_engine():
     assert checks["citation_coverage"] < 1.0
 
 
-def test_segments_that_do_not_sum_to_fmp_revenue_are_rejected():
-    assumptions, checks = gp.to_engine_assumptions(_sotp(), fmp_revenue_fwd_usd=120e9)
+def test_segments_far_from_fmp_revenue_are_rejected_but_eliminations_are_tolerated():
+    _, checks = gp.to_engine_assumptions(_sotp(), fmp_revenue_fwd_usd=87.5e9 * 1.12, fx_to_usd=fx)
+    assert "rejected" not in checks                               # 11% short: eliminations
+    assumptions, checks = gp.to_engine_assumptions(_sotp(), fmp_revenue_fwd_usd=120e9, fx_to_usd=fx)
     assert assumptions["segments"] == [] and "rejected" in checks
 
 
-def test_margins_and_holdco_are_clamped_and_bad_ranges_dropped():
+def test_margins_percent_or_decimal_are_clamped_and_bad_ranges_dropped():
     doc = _sotp(holdco_discount_pct=0.9)
-    doc["segments"][0]["ebit_margin"]["value"] = 0.85
-    doc["segments"][1]["multiple_low"] = 7.0          # low > high
-    assumptions, checks = gp.to_engine_assumptions(doc)
+    doc["segments"][0]["ebit_margin"]["value"] = 85.0             # "85%"
+    doc["segments"][1]["multiple_low"] = 7.0                      # low > high
+    assumptions, checks = gp.to_engine_assumptions(doc, fx_to_usd=fx)
     assert assumptions["segments"][0]["ebit_margin"] == 0.60
     assert assumptions["holdco_discount_pct"] == 0.5
     assert checks["dropped_segments"] == ["Cloud Intelligence Group"]
     assert checks["clamped"]
+
+
+def test_history_reconciles_segments_and_cited_total_to_fmp_in_reporting_currency():
+    hist = {
+        "reporting_currency": "CNY",
+        "segments": [
+            {"name": "Commerce", "years": [
+                {"fiscal_year": "FY2025", "period_end": "2025-03-31", "revenue": _cited(450.0, "CNY")}]},
+            {"name": "Cloud", "years": [
+                {"fiscal_year": "FY2025", "period_end": "2025-03-31", "revenue": _cited(15.0, "USD")},
+                {"fiscal_year": "FY2024", "period_end": "2024-03-31", "revenue": {**_cited(100.0, "CNY"), "source_url": ""}}]},
+        ],
+        "total_revenue": [{"fiscal_year": "FY2025", "period_end": "2025-03-31", "revenue": _cited(996.0, "CNY")}],
+        "segment_definition_changes": "",
+    }
+    rates = {("USD", "CNY"): 7.1}
+    rec = gp.reconcile_history(hist, {"2025": 996.3e9}, "CNY", lambda a, b: rates.get((a, b)))
+    y = rec["2025"]
+    assert y["segment_sum"] == pytest.approx(450e9 + 15e9 * 7.1)
+    assert y["segments"] == 2 and y["total_gap"] == pytest.approx(-0.0003, abs=1e-4)
+    assert rec["2024"]["uncited"] == 1 and rec["2024"]["segment_gap"] is None
+
+
+def test_recorded_live_responses_still_parse():
+    """Replays whatever real gemini-3.8-flash responses the harness recorded."""
+    files = sorted((Path(__file__).parent / "fixtures" / "gemini").glob("*_G*.json"))
+    if not files:
+        pytest.skip("no recorded Gemini responses yet")
+    for f in files:
+        rec = json.loads(f.read_text(encoding="utf-8"))
+        schema = gp.SotpInputs if "_G1_" in f.name else gp.DirectEstimate
+        try:
+            schema.model_validate(gp._parse_json(rec["text"]))
+        except Exception as exc:  # recordings from an older schema version are skipped
+            if "_G1_" in f.name and "revenue_fwd_usd_bn" in rec["text"]:
+                continue
+            raise AssertionError(f"{f.name}: {exc}")
