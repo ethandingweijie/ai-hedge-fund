@@ -18,6 +18,8 @@ export interface AuthUser {
   name: string | null;
   avatar_url: string | null;
   provider: string;
+  /** 'admin' | 'member'. Decides what to render only -- the server enforces. */
+  role?: string;
 }
 
 interface AuthContextValue {

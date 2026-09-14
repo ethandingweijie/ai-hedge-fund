@@ -22,6 +22,7 @@ import { PortfolioPage } from './pages/PortfolioPage';
 import { LoginPage } from './pages/LoginPage';
 import { RoboStrategyPage } from './pages/RoboStrategyPage';
 import { MenuPage } from './pages/MenuPage';
+import { ModelAccuracyPage } from './pages/ModelAccuracyPage';
 import { ActiveRunProvider } from './contexts/active-run-context';
 import { ThemeProvider } from './contexts/theme-context';
 import { AuthProvider, useAuth } from './contexts/auth-context';
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="/watchlist" element={<RequireAuth><WatchlistPage /></RequireAuth>} />
           <Route path="/news" element={<RequireAuth><NewsPage /></RequireAuth>} />
           <Route path="/portfolio" element={<RequireAuth><PortfolioPage /></RequireAuth>} />
+          <Route path="/model-accuracy" element={<RequireAuth><ModelAccuracyPage /></RequireAuth>} />
           <Route path="/discuss" element={<RequireAuth><DiscussPage /></RequireAuth>} />
           <Route path="/discuss/:ticker" element={<RequireAuth><TickerChatPage /></RequireAuth>} />
           <Route path="/robo-strategy" element={<RequireAuth><RoboStrategyPage /></RequireAuth>} />

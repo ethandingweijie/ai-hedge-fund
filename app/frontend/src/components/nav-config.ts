@@ -21,7 +21,7 @@
  */
 import {
   Plus, BarChart2, Filter, BookMarked, Lightbulb, History, Wallet, MessageSquare, PieChart,
-  Newspaper, type LucideIcon } from 'lucide-react';
+  Newspaper, Gauge, type LucideIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export interface NavItem {
@@ -32,6 +32,8 @@ export interface NavItem {
   action?: 'new' | 'resume';
   /** Optional tooltip shown on hover (desktop sidebar). */
   hint?: string;
+  /** Rendered only for role='admin'. The server enforces access regardless. */
+  adminOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -45,7 +47,13 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Robo Strategy',    icon: Wallet,     path: '/robo-strategy',  hint: 'Get a personalized portfolio recommendation' },
   { label: 'Research Ideas',   icon: Lightbulb,  path: '/research-ideas' },
   { label: 'History',          icon: History,    path: '/history'        },
+  { label: 'Model Accuracy',   icon: Gauge,      path: '/model-accuracy', adminOnly: true, hint: 'How valuations turned out, and proposed corrections awaiting your approval' },
 ];
+
+/** NAV_ITEMS minus admin-only entries for anyone who is not an admin. */
+export function visibleNavItems(role?: string | null): NavItem[] {
+  return NAV_ITEMS.filter((item) => !item.adminOnly || role === 'admin');
+}
 
 /**
  * Returns a `handleNav(item)` callback wired to react-router. Pass an optional

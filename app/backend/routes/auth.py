@@ -48,6 +48,9 @@ class UserResponse(BaseModel):
     name: Optional[str]
     avatar_url: Optional[str]
     provider: str
+    # Lets the app show admin-only pages (Model Accuracy). Authorisation stays
+    # server-side in require_admin; this only decides what to render.
+    role: str = "member"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -143,4 +146,5 @@ def get_me(user=Depends(_current_user)):
         name=user.name,
         avatar_url=user.avatar_url,
         provider=user.provider,
+        role=getattr(user, "role", None) or "member",
     )

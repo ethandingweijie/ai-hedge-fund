@@ -18,6 +18,7 @@ from app.backend.routes.research import router as research_router
 from app.backend.routes.robo_strategy import router as robo_strategy_router
 from app.backend.routes.chat import router as chat_router
 from app.backend.routes.portfolio import router as portfolio_router
+from app.backend.routes.model_accuracy import router as model_accuracy_router
 
 # Main API router
 api_router = APIRouter()
@@ -41,3 +42,4 @@ api_router.include_router(research_router, prefix="/research", tags=["research"]
 api_router.include_router(robo_strategy_router, prefix="/robo-strategy", tags=["robo-strategy"])
 api_router.include_router(chat_router, tags=["chat"])
 api_router.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"])
+api_router.include_router(model_accuracy_router)

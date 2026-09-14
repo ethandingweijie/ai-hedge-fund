@@ -1,0 +1,377 @@
+/**
+ * ModelAccuracyPage.tsx
+ * =====================
+ * Admin-only. Where the valuation learning loop reports back and asks for a
+ * decision (B6):
+ *
+ *   • Recommendations — calibration proposals the system can apply ("Raise US
+ *     intrinsic values by 10.5%"), each with its backtest and shadow record.
+ *     Promote is enabled only once the server says the proposal is eligible.
+ *   • Live calibration — what is in force, its frozen-cohort record, Roll back.
+ *   • What the numbers say — problems re-weighting cannot fix (a method off by
+ *     7x, every method missing the same way, a misrouted profile). These need
+ *     a code change, so they carry no action button by design.
+ *
+ * Monochrome throughout: green/red are reserved for price change.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import { Gauge, Loader2, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { TabHero } from '@/components/layout/TabHero';
+import { useAuth } from '@/contexts/auth-context';
+import {
+  getModelAccuracyOverview, getCalibrationDetail,
+  promoteCalibration, rollbackCalibration, dismissCalibration,
+  type CalibrationCard, type CalibrationDetail, type DiagnosticCard, type ModelAccuracyOverview,
+} from '@/lib/api';
+
+const HORIZON_LABEL: Record<string, string> = {
+  consensus_0d: 'Street consensus',
+  px_30d: 'price after 30 days',
+  px_90d: 'price after 90 days',
+  px_180d: 'price after 180 days',
+  px_365d: 'price after a year',
+};
+
+const CATEGORY_LABEL: Record<DiagnosticCard['category'], string> = {
+  bias: 'Market bias',
+  method: 'Method accuracy',
+  shared_bias: 'Inputs & parameters',
+  routing: 'Profile routing',
+};
+
+function pct(v: number | null | undefined): string {
+  return v == null ? '—' : `${v.toFixed(1)}%`;
+}
+
+function Chip({ children, strong = false }: { children: React.ReactNode; strong?: boolean }) {
+  return (
+    <span className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border
+      ${strong ? 'bg-foreground text-background border-foreground' : 'bg-muted text-muted-foreground border-border'}`}>
+      {children}
+    </span>
+  );
+}
+
+function SectionTitle({ children, hint }: { children: React.ReactNode; hint?: string }) {
+  return (
+    <div className="mb-3">
+      <h2 className="text-sm font-semibold text-foreground">{children}</h2>
+      {hint && <p className="text-xs text-muted-foreground mt-0.5">{hint}</p>}
+    </div>
+  );
+}
+
+// ── proposal card ───────────────────────────────────────────────────────────
+
+function ShadowProgress({ card }: { card: CalibrationCard }) {
+  if (!card.shadow) return null;
+  const days = Math.min(card.shadow.days_in_shadow, 28);
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>Shadow period</span>
+        <span className="tabular-nums">day {card.shadow.days_in_shadow} of 28</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className="h-full bg-foreground/70" style={{ width: `${(days / 28) * 100}%` }} />
+      </div>
+      {Object.entries(card.shadow.horizons).map(([h, s]) => (
+        <p key={h} className="text-xs text-muted-foreground tabular-nums">
+          {HORIZON_LABEL[h] ?? h}: {s.n_touched} run(s) — live miss {pct(s.live_miss_pct)}, with this change {pct(s.cand_miss_pct)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function ProposalCard({ card, onChanged }: { card: CalibrationCard; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const blockers = card.status === 'rejected' ? card.backtest.reasons : card.shadow?.reasons ?? [];
+
+  const act = async (label: string, fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+      toast.success(label);
+      onChanged();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-base font-semibold text-foreground">{card.title}</p>
+          {card.changes.length > 1 && (
+            <ul className="text-sm text-foreground/80 list-disc pl-5">
+              {card.changes.map((c) => <li key={c}>{c}</li>)}
+            </ul>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Scored against the {card.label} · proposed {card.created_at.slice(0, 10)}
+          </p>
+        </div>
+        <Chip strong={card.actions.promote}>{card.stage}</Chip>
+      </div>
+
+      <p className="text-sm">
+        <span className="font-medium">Backtest:</span>{' '}
+        {card.backtest.passed ? 'passed on runs it never saw' : 'did not pass'}
+      </p>
+      <ShadowProgress card={card} />
+
+      {blockers.length > 0 && (
+        <div className="rounded-md border border-border bg-muted/40 p-3">
+          <p className="text-xs font-semibold text-foreground mb-1">
+            {card.status === 'rejected' ? 'Why it was rejected' : 'Before it can be promoted'}
+          </p>
+          <ul className="text-xs text-muted-foreground list-disc pl-4 space-y-0.5">
+            {blockers.map((r) => <li key={r}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {open && card.backtest.folds.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs tabular-nums">
+            <thead className="text-muted-foreground">
+              <tr><th className="text-left py-1">Trained to</th><th className="text-left">Tested to</th>
+                <th className="text-right">Runs</th><th className="text-right">Live miss</th>
+                <th className="text-right">With change</th><th className="text-right">Better</th></tr>
+            </thead>
+            <tbody>
+              {card.backtest.folds.map((f) => (
+                <tr key={f.cutoff} className="border-t border-border/60">
+                  <td className="py-1">{f.cutoff}</td><td>{f.test_end}</td>
+                  <td className="text-right">{f.test}</td><td className="text-right">{pct(f.live_miss_pct)}</td>
+                  <td className="text-right">{pct(f.cand_miss_pct)}</td><td className="text-right">{f.improved ? 'yes' : 'no'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <Button
+          size="sm"
+          disabled={!card.actions.promote || busy}
+          title={card.actions.promote ? 'Apply this calibration to live valuations' : 'Not eligible yet'}
+          onClick={() => {
+            if (!window.confirm(`Promote "${card.title}"? New valuations will use it; you can roll it back.`)) return;
+            void act('Calibration promoted', () => promoteCalibration(card.id));
+          }}
+        >
+          {busy ? <Loader2 size={14} className="animate-spin" /> : 'Promote'}
+        </Button>
+        {card.actions.dismiss && (
+          <Button size="sm" variant="outline" disabled={busy}
+            onClick={() => void act('Proposal dismissed', () => dismissCalibration(card.id))}>
+            Dismiss
+          </Button>
+        )}
+        {card.backtest.folds.length > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setOpen((o) => !o)}>
+            {open ? 'Hide evidence' : 'Show backtest'}
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ── live calibration ────────────────────────────────────────────────────────
+
+function ActiveCard({ card, onChanged }: { card: CalibrationCard; onChanged: () => void }) {
+  const [detail, setDetail] = useState<CalibrationDetail | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getCalibrationDetail(card.id).then(setDetail).catch(() => setDetail(null));
+  }, [card.id]);
+
+  return (
+    <Card className="p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-base font-semibold text-foreground">{card.title}</p>
+          {card.changes.length > 1 && (
+            <ul className="text-sm text-foreground/80 list-disc pl-5">{card.changes.map((c) => <li key={c}>{c}</li>)}</ul>
+          )}
+        </div>
+        <Chip strong>{card.stage}</Chip>
+      </div>
+      {detail?.cohort && (
+        <div className="text-xs text-muted-foreground space-y-0.5 tabular-nums">
+          <p>{detail.cohort.n_frozen} run(s) frozen at promotion — their record can never be refit:</p>
+          {Object.keys(detail.cohort.horizons).length === 0 && <p>No labels have matured for them yet.</p>}
+          {Object.entries(detail.cohort.horizons).map(([h, s]) => (
+            <p key={h}>{HORIZON_LABEL[h] ?? h}: {s.n} run(s) — before {pct(s.live_miss_pct)}, with it {pct(s.cand_miss_pct)}</p>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">
+        A daily check rolls this back on its own if runs made under it miss by more than the same runs without it.
+      </p>
+      <Button
+        size="sm" variant="outline" disabled={busy}
+        onClick={async () => {
+          const reason = window.prompt('Roll back this calibration? Optional reason:', '');
+          if (reason === null) return;
+          setBusy(true);
+          try {
+            const out = await rollbackCalibration(card.id, reason);
+            toast.success(`Rolled back — restored ${String(out.restored)}`);
+            onChanged();
+          } catch (e) {
+            toast.error((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        Roll back
+      </Button>
+    </Card>
+  );
+}
+
+// ── diagnostics ─────────────────────────────────────────────────────────────
+
+function DiagnosticItem({ card }: { card: DiagnosticCard }) {
+  return (
+    <div className="py-3 border-t border-border/60 first:border-t-0">
+      <div className="flex items-center gap-2 mb-1">
+        <Chip>{CATEGORY_LABEL[card.category]}</Chip>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+          {card.action === 'code_change' ? 'Needs a code change' : 'Addressed by a calibration proposal'}
+        </span>
+      </div>
+      <p className="text-sm font-medium text-foreground">{card.title}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{card.detail}</p>
+    </div>
+  );
+}
+
+// ── page ────────────────────────────────────────────────────────────────────
+
+export function ModelAccuracyPage() {
+  const { user } = useAuth();
+  const [data, setData] = useState<ModelAccuracyOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getModelAccuracyOverview()
+      .then((d) => { setData(d); setError(null); })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (user?.role === 'admin') load();
+    else setLoading(false);
+  }, [user?.role, load]);
+
+  if (user?.role !== 'admin') {
+    return (
+      <PageContainer size="prose">
+        <Card className="p-6 text-sm text-muted-foreground">Model Accuracy is available to administrators only.</Card>
+      </PageContainer>
+    );
+  }
+
+  const totalLabels = data ? Object.values(data.labels).reduce((a, b) => a + b, 0) : 0;
+
+  return (
+    <>
+      <TabHero
+        title="Model Accuracy"
+        icon={Gauge}
+        subtitle="How valuations turned out, and what to change"
+        actions={
+          <button onClick={load} aria-label="Refresh"
+            className="p-2 rounded-md text-hero-foreground hover:bg-hero-foreground/10">
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          </button>
+        }
+      />
+      <PageContainer size="default" className="space-y-8">
+        {error && <Card className="p-4 text-sm text-foreground">Could not load: {error}</Card>}
+        {loading && !data && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={16} className="animate-spin" /> Loading…</div>
+        )}
+
+        {data && (
+          <>
+            <p className="text-xs text-muted-foreground tabular-nums">
+              {totalLabels} outcome label(s) so far
+              {Object.entries(data.labels).map(([h, n]) => ` · ${HORIZON_LABEL[h] ?? h}: ${n}`).join('')}
+            </p>
+
+            <section>
+              <SectionTitle hint="Changes the system can apply. Each must pass a backtest and 28 days in shadow before Promote unlocks.">
+                Recommendations{data.eligible_count > 0 ? ` · ${data.eligible_count} ready for your decision` : ''}
+              </SectionTitle>
+              {data.proposals.length === 0 ? (
+                <Card className="p-4 text-sm text-muted-foreground">
+                  No proposals yet. One is fitted every Sunday once enough valuations have outcomes to learn from.
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {data.proposals.map((c) => <ProposalCard key={c.id} card={c} onChanged={load} />)}
+                </div>
+              )}
+            </section>
+
+            {data.active && (
+              <section>
+                <SectionTitle hint="In force for every new valuation.">Live calibration</SectionTitle>
+                <ActiveCard card={data.active} onChanged={load} />
+              </section>
+            )}
+
+            <section>
+              <SectionTitle hint={data.diagnostics_horizon
+                ? `From runs scored against the ${HORIZON_LABEL[data.diagnostics_horizon] ?? data.diagnostics_horizon}.`
+                : undefined}>
+                What the numbers say
+              </SectionTitle>
+              {data.diagnostics.length === 0 ? (
+                <Card className="p-4 text-sm text-muted-foreground">Nothing stands out yet — findings appear as outcomes accumulate.</Card>
+              ) : (
+                <Card className="px-4 py-1">
+                  {data.diagnostics.map((d) => <DiagnosticItem key={d.id} card={d} />)}
+                </Card>
+              )}
+            </section>
+
+            {data.history.length > 0 && (
+              <section>
+                <SectionTitle>History</SectionTitle>
+                <Card className="px-4 py-1">
+                  {data.history.map((c) => (
+                    <div key={c.id} className="py-2 border-t border-border/60 first:border-t-0 flex items-center justify-between gap-3">
+                      <span className="text-sm text-foreground truncate">{c.title}</span>
+                      <Chip>{c.stage}</Chip>
+                    </div>
+                  ))}
+                </Card>
+              </section>
+            )}
+          </>
+        )}
+      </PageContainer>
+    </>
+  );
+}

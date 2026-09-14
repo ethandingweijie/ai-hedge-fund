@@ -171,6 +171,92 @@ export function getPortfolioDashboard(): Promise<PortfolioDashboard> {
   return fetchJson(`${BASE}/portfolio`, { headers: { ..._authHeaders() } });
 }
 
+// ── Model Accuracy (admin) ─────────────────────────────────────────────────
+
+export interface CalibrationFold {
+  cutoff: string; test_end: string; train: number; test: number;
+  live_miss_pct: number | null; cand_miss_pct: number | null; improved: boolean;
+}
+
+export interface CalibrationCard {
+  id: string;
+  kind: 'calibration';
+  title: string;
+  changes: string[];
+  status: string;
+  stage: string;
+  horizon: string;
+  label: string;
+  created_at: string;
+  promoted_at: string | null;
+  backtest: { passed: boolean; reasons: string[]; folds: CalibrationFold[] };
+  shadow: {
+    days_in_shadow: number;
+    eligible_for_promotion: boolean;
+    reasons: string[];
+    horizons: Record<string, { n_touched: number; live_miss_pct: number | null; cand_miss_pct: number | null }>;
+  } | null;
+  actions: { promote: boolean; rollback: boolean; dismiss: boolean };
+}
+
+export interface DiagnosticCard {
+  id: string;
+  kind: 'diagnostic';
+  category: 'bias' | 'method' | 'shared_bias' | 'routing';
+  severity: number;
+  title: string;
+  detail: string;
+  group: string;
+  horizon: string;
+  action: 'code_change' | 'calibration';
+}
+
+export interface ModelAccuracyOverview {
+  generated_at: string;
+  labels: Record<string, number>;
+  active: CalibrationCard | null;
+  proposals: CalibrationCard[];
+  history: CalibrationCard[];
+  diagnostics: DiagnosticCard[];
+  diagnostics_horizon: string | null;
+  eligible_count: number;
+}
+
+export interface CalibrationDetail {
+  card: CalibrationCard;
+  cohort: {
+    version_id: string; n_frozen: number;
+    horizons: Record<string, { n: number; live_miss_pct: number | null; cand_miss_pct: number | null }>;
+  } | null;
+  events: Array<{ action: string; actor: string | null; reason: string | null; at: string }>;
+}
+
+export function getModelAccuracyOverview(): Promise<ModelAccuracyOverview> {
+  return fetchJson(`${BASE}/model-accuracy/overview`, { headers: { ..._authHeaders() } });
+}
+
+export function getModelAccuracyBadge(): Promise<{ eligible: number }> {
+  return fetchJson(`${BASE}/model-accuracy/badge`, { headers: { ..._authHeaders() } });
+}
+
+export function getCalibrationDetail(id: string): Promise<CalibrationDetail> {
+  return fetchJson(`${BASE}/model-accuracy/calibration/${encodeURIComponent(id)}`, {
+    headers: { ..._authHeaders() },
+  });
+}
+
+function _calibrationAction(id: string, action: 'promote' | 'rollback' | 'dismiss', reason = '') {
+  const q = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+  return fetchJson<Record<string, unknown>>(
+    `${BASE}/model-accuracy/calibration/${encodeURIComponent(id)}/${action}${q}`,
+    { method: 'POST', headers: { ..._authHeaders() } },
+  );
+}
+
+export const promoteCalibration = (id: string) => _calibrationAction(id, 'promote');
+export const rollbackCalibration = (id: string, reason: string) => _calibrationAction(id, 'rollback', reason);
+export const dismissCalibration = (id: string) => _calibrationAction(id, 'dismiss');
+
 export function addHolding(body: {
   ticker: string; quantity: number; avg_cost: number;
   opened_at?: string | null; notes?: string | null;

@@ -162,6 +162,13 @@ export function MenuPage() {
             <Row icon={Newspaper} label="News" onClick={() => handleNav(byPath('/news'))} />
             <Row icon={PieChart} label="Portfolio" onClick={() => handleNav(byPath('/portfolio'))} />
             <Row icon={MessageSquare} label="Discuss" onClick={() => handleNav(byPath('/discuss'))} />
+            {user?.role === 'admin' && (
+              <Row
+                icon={byPath('/model-accuracy').icon}
+                label="Model Accuracy"
+                onClick={() => handleNav(byPath('/model-accuracy'))}
+              />
+            )}
             <Row icon={Zap} label="Pricing" onClick={() => navigate('/pricing')} />
           </Card>
         </section>

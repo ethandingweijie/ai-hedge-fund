@@ -600,6 +600,14 @@ async def run_valuation_outcomes_task(ctx: dict) -> dict:
     try:
         report = await asyncio.to_thread(vo.score_matured)
         report["actions"] = await asyncio.to_thread(vo.score_actions)
+        # B6 FT4: the live canary for a promoted calibration. It reads the
+        # labels this sweep just wrote, so it runs after them; it rolls a
+        # regressing calibration back on its own.
+        try:
+            from src.memory import calibration_review as _review
+            report["canary"] = await asyncio.to_thread(_review.canary_check)
+        except Exception as exc:                           # noqa: BLE001
+            report["canary"] = {"error": str(exc)[:200]}
         await asyncio.to_thread(vo.mark_swept, report)
     except Exception as exc:                               # noqa: BLE001
         logger.warning("[sched] valuation_outcomes raised %s: %s",

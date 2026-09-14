@@ -19,10 +19,10 @@ import {
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useLayoutMode } from '@/contexts/layout-mode-context';
-import { getHistory } from '@/lib/api';
+import { getHistory, getModelAccuracyBadge } from '@/lib/api';
 import { parseBackendIso } from '@/lib/utils';
 import type { RunSummary } from '@/lib/reportTypes';
-import { NAV_ITEMS, useAppNav, type NavItem } from '@/components/nav-config';
+import { visibleNavItems, useAppNav, type NavItem } from '@/components/nav-config';
 import { LayoutModeToggle } from '@/components/LayoutModeToggle';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { EquitableMark } from '@/components/brand/EquitableMark';
@@ -51,6 +51,15 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
       .then((res) => setRecentRuns(res.items.slice(0, 5)))
       .catch(() => {});
   }, []);
+
+  // Admins see a count when a calibration proposal is ready for their decision.
+  const [eligibleProposals, setEligibleProposals] = useState(0);
+  useEffect(() => {
+    if (user?.role !== 'admin') return;
+    getModelAccuracyBadge()
+      .then((res) => setEligibleProposals(res.eligible))
+      .catch(() => {});
+  }, [user?.role]);
 
   const isActive = (item: NavItem) => {
     if (item.action === 'new') return false; // "New Analysis" never shows as active
@@ -87,7 +96,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
 
       {/* ── Nav items ──────────────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems(user?.role).map((item) => {
           const { label, icon: Icon, hint } = item;
           const active = isActive(item);
           return (
@@ -104,6 +113,14 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
             >
               <Icon size={18} strokeWidth={active ? 2.2 : 1.7} className={active ? 'text-primary shrink-0' : 'text-muted-foreground shrink-0'} />
               {!collapsed && <span className={`text-sm font-medium truncate ${active ? 'text-primary' : ''}`}>{label}</span>}
+              {!collapsed && item.path === '/model-accuracy' && eligibleProposals > 0 && (
+                <span
+                  className="ml-auto text-[10px] font-bold leading-none px-1.5 py-0.5 rounded-full bg-foreground text-background"
+                  title={`${eligibleProposals} proposal(s) eligible for promotion`}
+                >
+                  {eligibleProposals}
+                </span>
+              )}
             </button>
           );
         })}
