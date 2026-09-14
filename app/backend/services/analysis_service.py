@@ -33,6 +33,18 @@ from src.tools.ticker_canonical import ticker_match_forms
 
 logger = logging.getLogger(__name__)
 
+# Work that must outlive the request that started it (the report recap).
+# Held here until done: the event loop keeps only a weak reference to a task,
+# and an unreferenced one can be garbage-collected mid-flight.
+_BACKGROUND_TASKS: set = set()
+
+
+def _spawn_background(coro) -> "asyncio.Future":
+    task = asyncio.ensure_future(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+    return task
+
 
 # ── .env.local (process-wide, load once) ──────────────────────────────────────
 
@@ -1911,8 +1923,10 @@ async def run_analysis_pipeline(
             })
 
     _t0, _t0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
+    # Off the event loop: it loads and parses the previous run's full JSON,
+    # and the loop is shared with every other job's progress forwarding.
     try:
-        _enrich_sotp_report_extras(run_id, t, result)
+        await asyncio.to_thread(_enrich_sotp_report_extras, run_id, t, result)
     except Exception as _enr_err:
         logger.warning("[report-extras] %s: enrichment failed: %s", t, _enr_err)
     _post_timed("12_post_enrich_extras", _t0, _t0_at)
@@ -1923,7 +1937,8 @@ async def run_analysis_pipeline(
     except Exception as _pl_err:
         logger.warning("[progress-log] %s: could not attach trail: %s", t, _pl_err)
     _t0, _t0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
-    _save_web_run(run_id, t, model_name, result, archive_run_id=archive_run_id, user_id=user_id)
+    await asyncio.to_thread(_save_web_run, run_id, t, model_name, result,
+                            archive_run_id=archive_run_id, user_id=user_id)
     _post_timed("12_save_web_run", _t0, _t0_at, persist=False)
 
     # ── M1: recap of the just-finished report ─────────────────────────────
@@ -1931,16 +1946,23 @@ async def run_analysis_pipeline(
     # (pipeline phases 2.8/2.9) so reports become a continuous thread instead
     # of isolated snapshots. Runs in a worker thread (blocking LLM + DB),
     # fire-and-log: a recap failure must never fail the run itself.
-    try:
-        from src.memory import report_recap
-        if report_recap.recaps_enabled():
-            _t0, _t0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
+    #
+    # A1: the recap serves the NEXT run and the report is already saved, so it
+    # no longer holds "complete" back from the user -- it finishes afterwards.
+    async def _recap_in_background() -> None:
+        try:
+            from src.memory import report_recap
+            if not report_recap.recaps_enabled():
+                return
+            _r0, _r0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
             await asyncio.to_thread(
                 report_recap.build_and_save_recap,
                 result, t, run_id, result.get("run_at"),
             )
-            _post_timed("12_recap", _t0, _t0_at, persist=False)
-    except Exception as _recap_err:
-        logger.warning("[recap] %s: recap generation failed: %s", t, _recap_err)
+            _post_timed("12_recap", _r0, _r0_at, persist=False)
+        except Exception as _recap_err:
+            logger.warning("[recap] %s: recap generation failed: %s", t, _recap_err)
+
+    _spawn_background(_recap_in_background())
 
     return run_id, result

@@ -43,3 +43,22 @@ def _strip_live_api_keys():
             + ", ".join(sorted(removed))
         )
     yield
+
+
+#: Process-lifetime memo caches. Each would otherwise carry one test's stubbed
+#: upstream responses into the next test that asks for the same key.
+_PROCESS_CACHES = (
+    ("src.tools.api", "_STATEMENT_CACHE"),
+    ("src.agents.routing.macro_regime", "_REGIME_CACHE"),
+)
+
+
+@pytest.fixture(autouse=True)
+def _clear_process_caches():
+    import sys
+    for module_name, attr in _PROCESS_CACHES:
+        module = sys.modules.get(module_name)   # never import just to clear
+        cache = getattr(module, attr, None) if module is not None else None
+        if cache is not None:
+            cache.clear()
+    yield

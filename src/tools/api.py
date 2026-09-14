@@ -775,6 +775,48 @@ def get_financial_metrics(
 
 # ── 3. Search Line Items ───────────────────────────────────────────────────────
 
+# A1: one run asks for the same four statements on the same ticker up to six
+# times (data router, earnings quality x3, the knowledge-graph fallback, the
+# router on a cache miss) -- four requests plus 0.75 s of pacing each time.
+# Statements change quarterly, so a copy minutes old is indistinguishable from
+# a refetch. Keyed by what the request actually sends; the requested FIELDS and
+# the end_date cut are applied afterwards, so callers asking for different line
+# items share one fetch. FMP_STATEMENT_CACHE_TTL_S=0 disables.
+import threading as _threading
+
+_STATEMENT_CACHE: dict[tuple, tuple[float, tuple]] = {}
+_STATEMENT_CACHE_LOCK = _threading.Lock()
+_STATEMENT_CACHE_MAX = 256
+
+
+def _statement_cache_ttl_s() -> float:
+    try:
+        return max(0.0, float(os.environ.get("FMP_STATEMENT_CACHE_TTL_S", "900")))
+    except ValueError:
+        return 900.0
+
+
+def _statement_cache_get(key: tuple):
+    ttl = _statement_cache_ttl_s()
+    if ttl <= 0:
+        return None
+    with _STATEMENT_CACHE_LOCK:
+        hit = _STATEMENT_CACHE.get(key)
+    if not hit or time.monotonic() - hit[0] > ttl:
+        return None
+    return hit[1]
+
+
+def _statement_cache_put(key: tuple, value: tuple) -> None:
+    if _statement_cache_ttl_s() <= 0:
+        return
+    with _STATEMENT_CACHE_LOCK:
+        _STATEMENT_CACHE[key] = (time.monotonic(), value)
+        while len(_STATEMENT_CACHE) > _STATEMENT_CACHE_MAX:
+            oldest = min(_STATEMENT_CACHE, key=lambda k: _STATEMENT_CACHE[k][0])
+            _STATEMENT_CACHE.pop(oldest, None)
+
+
 def search_line_items(
     ticker: str,
     line_items: list[str],
@@ -830,18 +872,27 @@ def search_line_items(
     fmp_p = _fmp_period(period)
     fetch_limit = max(limit + 2, 10)
 
-    # Small delay between calls avoids burst-throttle 402s on FMP free tier
-    income   = _fmp_get(f"{_STABLE}/income-statement",
-                        {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
-    time.sleep(0.25)
-    balance  = _fmp_get(f"{_STABLE}/balance-sheet-statement",
-                        {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
-    time.sleep(0.25)
-    cashflow = _fmp_get(f"{_STABLE}/cash-flow-statement",
-                        {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
-    time.sleep(0.25)
-    ratios   = _fmp_get(f"{_STABLE}/ratios",
-                        {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
+    _stmt_key = (ticker, fmp_p, fetch_limit)
+    _stmts = _statement_cache_get(_stmt_key)
+    if _stmts is None:
+        # Small delay between calls avoids burst-throttle 402s on FMP free tier
+        income   = _fmp_get(f"{_STABLE}/income-statement",
+                            {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
+        time.sleep(0.25)
+        balance  = _fmp_get(f"{_STABLE}/balance-sheet-statement",
+                            {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
+        time.sleep(0.25)
+        cashflow = _fmp_get(f"{_STABLE}/cash-flow-statement",
+                            {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
+        time.sleep(0.25)
+        ratios   = _fmp_get(f"{_STABLE}/ratios",
+                            {"symbol": ticker, "period": fmp_p, "limit": fetch_limit}, api_key) or []
+        _stmts = (income, balance, cashflow, ratios)
+        # An empty income statement is a failed or unsupported fetch, not a
+        # fact worth remembering -- the next caller should try again.
+        if income:
+            _statement_cache_put(_stmt_key, _stmts)
+    income, balance, cashflow, ratios = _stmts
 
     bal_by_date = {r["date"]: r for r in balance  if "date" in r}
     cf_by_date  = {r["date"]: r for r in cashflow if "date" in r}

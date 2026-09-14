@@ -105,6 +105,47 @@ _PHASE7_TIMEOUT_S = _env_seconds("PIPELINE_PHASE7_TIMEOUT_S", 900.0)
 #     for CN names (FX artifact in _analyst_growth_bands) and no SOTP blend.
 #   v2: task #26 FX fix + task #27 SOTP(analyst) snapshot attachment.
 _DCF_CACHE_VERSION = 2
+# A1: the background peer-comparison and price-history joins had no deadline,
+# so one hung upstream call could hold a finished run open until the 3600 s
+# job timeout. Past this they are reported and the run continues without them.
+_BG_JOIN_TIMEOUT_S = _env_seconds("PIPELINE_BG_JOIN_TIMEOUT_S", 600.0)
+
+
+def _start_fmp_risk_prewarm(state, tickers):
+    """Fetch the FMP risk KPIs the post-PM augment will need, in the background.
+
+    Launched as the portfolio manager starts. It only populates
+    sector_kpi_framework's per-ticker process cache, so the augment afterwards
+    reads the same data it would have fetched itself -- without serially
+    waiting on up to five 8 s-timeout calls per ticker. Returns the futures,
+    or None when nothing needs fetching."""
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+        from src.data.sector_kpi_framework import _fmp_risk_kpis, is_legacy_profile
+        from src.utils.run_config import submit as _submit
+    except Exception:                                      # noqa: BLE001
+        return None
+    names = state["data"].get("profile_names", {}) or {}
+    fallback = state["data"].get("profile_name") or ""
+    todo = []
+    for t in (state["data"].get("tickers") or list(tickers)):
+        profile = names.get(t) or fallback
+        if profile and not is_legacy_profile(profile):
+            todo.append(t)
+    if not todo:
+        return None
+    ex = ThreadPoolExecutor(max_workers=min(4, len(todo)))
+    futures = [_submit(ex, _fmp_risk_kpis, t) for t in todo]
+    ex.shutdown(wait=False)
+    return futures
+
+
+def _join_prewarm(futures, timeout_s: float = 30.0) -> None:
+    """Wait for a prewarm to land; past the deadline the augment fetches itself."""
+    if not futures:
+        return
+    from concurrent.futures import wait
+    wait(futures, timeout=timeout_s)
 
 
 def _mark_cache_copy(dcf_entry, source_run_at):
@@ -1103,8 +1144,14 @@ def run_advanced_pipeline(
         with _timed("4_6_peer_comparison"):
             # B2: ran in the background since the front block — just join.
             # run_peer_comparison writes exactly one data key; extract it.
-            _st_peer_done = _f_peer_bg.result()
-            state["data"]["peer_comparison"] = _st_peer_done["data"].get("peer_comparison", {})
+            from concurrent.futures import TimeoutError as _BgTimeout
+            try:
+                _st_peer_done = _f_peer_bg.result(timeout=_BG_JOIN_TIMEOUT_S)
+                state["data"]["peer_comparison"] = _st_peer_done["data"].get("peer_comparison", {})
+            except _BgTimeout:
+                print(f"  [B2] peer comparison still running after "
+                      f"{_BG_JOIN_TIMEOUT_S:.0f}s — continuing without it")
+                state["data"]["peer_comparison"] = {}
         peer_comp = state["data"].get("peer_comparison", {})
         for ticker in tickers:
             peers_found = list(peer_comp.get(ticker, {}).keys())
@@ -1116,7 +1163,12 @@ def run_advanced_pipeline(
         # ----------------------------------------------------------------
         with _timed("4_7_price_history"):
             # B2: fetched in the background since the front block — join.
-            price_history_all: dict[str, list] = _f_ph_bg.result()
+            try:
+                price_history_all: dict[str, list] = _f_ph_bg.result(timeout=_BG_JOIN_TIMEOUT_S)
+            except _BgTimeout:
+                print(f"  [B2] price history still running after "
+                      f"{_BG_JOIN_TIMEOUT_S:.0f}s — continuing without it")
+                price_history_all = {}
             state["data"]["price_history"] = price_history_all
         _bg_peer_exec.shutdown(wait=False)
 
@@ -1272,6 +1324,7 @@ def run_advanced_pipeline(
         print(f"\n{'='*60}")
         print("[9/10] Conviction-Weighted Portfolio Manager")
         print('='*60)
+        _risk_prewarm = _start_fmp_risk_prewarm(state, tickers)
         with _timed("9_portfolio_manager"):
             pm_result = run_advanced_portfolio_manager(state)
             state["messages"] = pm_result["messages"]
@@ -1328,6 +1381,7 @@ def run_advanced_pipeline(
         #   4. Show up in the V3 audit_bridge Risk multiplier (no longer 1.0x)
         # ----------------------------------------------------------------
         with _timed("10_fmp_risk_augment"):
+            _join_prewarm(_risk_prewarm)
             try:
                 from src.data.sector_kpi_framework import (
                     _augment_metrics_with_fmp_risk,

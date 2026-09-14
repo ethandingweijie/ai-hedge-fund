@@ -188,7 +188,10 @@ def test_c2_cache_miss_runs_fanout_and_primes_store(tmp_archive, monkeypatch):
         base_url=None, synthesis_model="qwen3.6-plus", profile_name="SaaS",
     )
 
-    assert calls == {"fanout": 1, "dcf": 1}
+    # dcf_calibration runs INSIDE the fan-out (A1), not as a serial call
+    # before it -- so it is extracted exactly once, by the fan-out.
+    assert calls == {"fanout": 1, "dcf": 0}
+    assert out["dcf_calibration"] == {"wacc": 0.1}
     assert out["saas_metrics"] == {"nrr_pct": 1.3}
     # Primed: the next cache hit on these sections reuses without LLM calls
     h = dr._hash_research_sections(_CACHED_ROW["deep_research_sections"], "SaaS")

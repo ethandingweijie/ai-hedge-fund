@@ -117,6 +117,52 @@ def _apply_regime_rules(regime: dict) -> float:
     return position_size_cap
 
 
+# ── A1: same-day regime reuse ────────────────────────────────────────────────
+# Every input below is a function of end_date alone, so every run on the same
+# day asks the LLM the same question of the same data. One answer per
+# (end_date, model) per process, for MACRO_REGIME_CACHE_TTL_S (0 disables).
+# A default-fallback regime is never cached -- it would pin a failed call.
+import threading as _threading
+import time as _time
+
+_REGIME_CACHE: dict[str, tuple[float, dict]] = {}
+_REGIME_CACHE_LOCK = _threading.Lock()
+_REGIME_CACHE_MAX = 16
+
+
+def _regime_cache_ttl_s() -> float:
+    try:
+        return max(0.0, float(os.environ.get("MACRO_REGIME_CACHE_TTL_S", "21600")))
+    except ValueError:
+        return 21600.0
+
+
+def _regime_cache_key(state: AgentState, end_date: str) -> str:
+    md = state.get("metadata") or {}
+    return f"{end_date}|{md.get('model_provider') or ''}|{md.get('model_name') or ''}"
+
+
+def _regime_cache_get(key: str) -> dict | None:
+    ttl = _regime_cache_ttl_s()
+    if ttl <= 0:
+        return None
+    with _REGIME_CACHE_LOCK:
+        hit = _REGIME_CACHE.get(key)
+    if not hit or _time.monotonic() - hit[0] > ttl:
+        return None
+    return hit[1]
+
+
+def _regime_cache_put(key: str, value: dict) -> None:
+    if _regime_cache_ttl_s() <= 0:
+        return
+    with _REGIME_CACHE_LOCK:
+        _REGIME_CACHE[key] = (_time.monotonic(), value)
+        while len(_REGIME_CACHE) > _REGIME_CACHE_MAX:
+            oldest = min(_REGIME_CACHE, key=lambda k: _REGIME_CACHE[k][0])
+            _REGIME_CACHE.pop(oldest, None)
+
+
 def run_macro_regime_classifier(state: AgentState) -> AgentState:
     """Phase 1: classify macro regime using economic indicators + treasury rates + SPY prices."""
     agent_id = "macro_regime_classifier"
@@ -128,17 +174,46 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
         datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=90)
     ).strftime("%Y-%m-%d")
 
+    _cache_key = _regime_cache_key(state, end_date)
+    _hit = _regime_cache_get(_cache_key)
+    if _hit is not None:
+        state["data"]["macro_regime"] = dict(_hit["regime"])
+        state["data"]["position_size_cap"] = _hit["position_size_cap"]
+        progress.update_status(
+            agent_id, None,
+            f"Regime (reused for {end_date}): {_hit['regime'].get('risk_appetite')} / "
+            f"{_hit['regime'].get('volatility_regime')} vol")
+        return state
+
     # ── Fetch all data ────────────────────────────────────────────────────────
-    spy_prices  = get_prices("SPY", start_date, end_date, api_key=api_key)
-    spy_news    = get_company_news("SPY", end_date, start_date, limit=20, api_key=api_key)
-    fed_data    = get_economic_indicator("federalFunds",                       start_date, end_date, api_key=api_key)
-    infl_data   = get_economic_indicator("inflationRate",                      start_date, end_date, api_key=api_key)
-    rec_data    = get_economic_indicator("smoothedUSRecessionProbabilities",   start_date, end_date, api_key=api_key)
-    claims_data = get_economic_indicator("initialClaims",                      start_date, end_date, api_key=api_key)
-    sent_data   = get_economic_indicator("consumerSentiment",                  start_date, end_date, api_key=api_key)
-    rmf_data    = get_economic_indicator("retailMoneyFunds",                   start_date, end_date, api_key=api_key)
-    trade_data  = get_economic_indicator("tradeBalanceGoodsAndServices",       start_date, end_date, api_key=api_key)
-    tsy_data    = get_treasury_rates(start_date, end_date, api_key=api_key)
+    # Ten independent calls; the FMP token bucket still bounds the rate.
+    from concurrent.futures import ThreadPoolExecutor
+    from src.utils.run_config import submit as _ctx_submit
+
+    def _indicator(name: str):
+        return get_economic_indicator(name, start_date, end_date, api_key=api_key)
+
+    with ThreadPoolExecutor(max_workers=10) as _ex:
+        _f_spy_prices = _ctx_submit(_ex, get_prices, "SPY", start_date, end_date, api_key=api_key)
+        _f_spy_news   = _ctx_submit(_ex, get_company_news, "SPY", end_date, start_date, limit=20, api_key=api_key)
+        _f_fed        = _ctx_submit(_ex, _indicator, "federalFunds")
+        _f_infl       = _ctx_submit(_ex, _indicator, "inflationRate")
+        _f_rec        = _ctx_submit(_ex, _indicator, "smoothedUSRecessionProbabilities")
+        _f_claims     = _ctx_submit(_ex, _indicator, "initialClaims")
+        _f_sent       = _ctx_submit(_ex, _indicator, "consumerSentiment")
+        _f_rmf        = _ctx_submit(_ex, _indicator, "retailMoneyFunds")
+        _f_trade      = _ctx_submit(_ex, _indicator, "tradeBalanceGoodsAndServices")
+        _f_tsy        = _ctx_submit(_ex, get_treasury_rates, start_date, end_date, api_key=api_key)
+        spy_prices  = _f_spy_prices.result()
+        spy_news    = _f_spy_news.result()
+        fed_data    = _f_fed.result()
+        infl_data   = _f_infl.result()
+        rec_data    = _f_rec.result()
+        claims_data = _f_claims.result()
+        sent_data   = _f_sent.result()
+        rmf_data    = _f_rmf.result()
+        trade_data  = _f_trade.result()
+        tsy_data    = _f_tsy.result()
 
     # ── Helper: extract up to N most-recent values from sorted-desc series ────
     def vals(series: list[dict], n: int = 2) -> list[float]:
@@ -364,5 +439,9 @@ def run_macro_regime_classifier(state: AgentState) -> AgentState:
 
     state["data"]["macro_regime"]            = regime_dict
     state["data"]["position_size_cap"]        = position_size_cap
+
+    if "LLM fallback" not in str(regime_dict.get("regime_notes") or ""):
+        _regime_cache_put(_cache_key, {"regime": dict(regime_dict),
+                                       "position_size_cap": position_size_cap})
 
     return state

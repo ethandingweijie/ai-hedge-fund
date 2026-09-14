@@ -237,7 +237,8 @@ def _patch_delta_env(monkeypatch):
         dr, "_run_extractor_fanout",
         lambda c, m, sections, report, ticker, sector, profile_name,
                raw_financials, precomputed=None: (
-            {"dcf_calibration": precomputed.get("dcf_calibration", {}),
+            # the fan-out extracts dcf_calibration itself (A1)
+            {"dcf_calibration": {"wacc": 0.09},
              "saas_metrics": {"nrr_pct": 1.2}}, []),
     )
     monkeypatch.setattr(dr, "anthropic", SimpleNamespace(Anthropic=_FakeAnthropic))

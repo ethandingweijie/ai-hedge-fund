@@ -3937,7 +3937,6 @@ def _research_one_ticker(
             # (same canonicalization both section parsers already apply).
             _cached_text_hash = _hash_research_text(
                 _cached_text.split(LATEST_DEV_ADDENDUM_MARKER)[0])
-            _cal_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
             # R2: the registry rebuild is ONE long call over the full cached
             # text — the 60 s calibration client always times out at
             # qwen-tier generation speed (live 2026-08-24: two failed 60 s
@@ -3988,12 +3987,10 @@ def _research_one_ticker(
             else:
                 # ── C1: run the sector extractor fan-out on the cached sections.
                 # Before this, cache-hit runs (<3d) skipped ALL extractors and fed
-                # KPI-starved inputs to the DCF engine / blank sector cards. The
-                # dcf_calibration we re-extract here is passed as precomputed so
-                # it isn't extracted twice.
-                _dcf_cal = _extract_dcf_calibration(
-                    _cal_client, _synthesis_model, _cached["deep_research_sections"], ticker
-                )
+                # KPI-starved inputs to the DCF engine / blank sector cards.
+                # A1: dcf_calibration is one of the fan-out's universal
+                # extractors, so it runs there alongside the rest instead of
+                # as a serial LLM call ahead of them.
                 _ext_client = anthropic.Anthropic(
                     api_key=anthropic_key, base_url=base_url,
                     timeout=CLIENT_TIMEOUT, max_retries=4,
@@ -4002,8 +3999,8 @@ def _research_one_ticker(
                     _ext_client, _synthesis_model,
                     _cached["deep_research_sections"], _cached_text, ticker,
                     sector, profile_name, raw_financials,
-                    precomputed={"dcf_calibration": _dcf_cal},
                 )
+                _dcf_cal = _ext_results.get("dcf_calibration", {})
                 # C2: persist for the next cache hit (best-effort).
                 try:
                     from src.memory.run_archive import (
@@ -4248,8 +4245,10 @@ def _research_one_ticker(
             # citation_registry is not stored in the archive; rebuild from merged text
             # so the citation auditor receives structured source metadata for new delta
             # amendments as well as the original base research.
-            # B8: the two calls are independent — run citations concurrently
-            # with dcf_calibration (hides one call's wall time).
+            # B8/A1: the citation rebuild depends on nothing that follows, so
+            # it runs in the background across the news supplement AND the
+            # extractor fan-out (which now carries dcf_calibration too), and is
+            # collected once the fan-out returns.
             from concurrent.futures import ThreadPoolExecutor as _B8Pool
             _cit_ex_d = _B8Pool(max_workers=1)
             _cit_future_d = _cit_ex_d.submit(
@@ -4259,11 +4258,6 @@ def _research_one_ticker(
                 _merged_full, ticker,
                 edgar_filing_ref=edgar_filing_ref,
             )
-            _dcf_cal_d = _extract_dcf_calibration(
-                _delta_client, _synthesis_model, _merged_sections, ticker
-            )
-            _citations_d = _cit_future_d.result()
-            _cit_ex_d.shutdown(wait=False)
             # Inject Phase 2.5 news sentiment as a "recent_news" section (post-cache-date only)
             _ns_client = anthropic.Anthropic(api_key=anthropic_key, base_url=base_url, timeout=60.0, max_retries=1)
             _supplement = _build_news_supplement(
@@ -4281,13 +4275,15 @@ def _research_one_ticker(
 
             # ── C1: run the sector extractor fan-out on the MERGED sections.
             # Delta runs previously skipped all extractors like pure-cache
-            # runs. dcf_calibration already re-extracted above is reused.
+            # runs.
             _ext_results_d, _ext_failures_d = _run_extractor_fanout(
                 _delta_client, _synthesis_model,
                 _merged_sections, _merged_full, ticker,
                 sector, profile_name, raw_financials,
-                precomputed={"dcf_calibration": _dcf_cal_d},
             )
+            _dcf_cal_d = _ext_results_d.get("dcf_calibration", {})
+            _citations_d = _cit_future_d.result()
+            _cit_ex_d.shutdown(wait=False)
             # C2: persist keyed on the MERGED sections — this merged text is
             # what gets archived, so a follow-up run (<3d) hits the pure-cache
             # path with identical sections and reuses these outputs.
