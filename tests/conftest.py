@@ -21,6 +21,7 @@ import pytest
 # Keys whose presence routes code paths to live external services.
 _SENSITIVE_ENV_KEYS = (
     "FMP_API_KEY",
+    "GEMINI_API_KEY",
     "ANTHROPIC_API_KEY",
     "DEEP_RESEARCH_API_KEY",
     "DEEPSEEK_API_KEY",
