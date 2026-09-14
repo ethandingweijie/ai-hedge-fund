@@ -426,6 +426,33 @@ async def valuation_outcomes_attribution(request: Request, secret: str = "",
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.get("/admin/valuation-outcomes/walk-forward")
+async def valuation_outcomes_walk_forward(request: Request, secret: str = "",
+                                          horizon: str = "px_90d",
+                                          n_folds: int = 4):
+    """BT2: time-ordered backtest of the reference per-market bias correction
+    over the outcome ledger -- the baseline any calibration proposal must beat.
+    409 when a fold's training data reached past its cutoff."""
+    if not _secret_ok(request, secret):
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    import asyncio
+    from src.memory import walk_forward as wf
+
+    def _run() -> dict:
+        rows = wf.load_rows(horizon)
+        report = wf.walk_forward(rows, wf.market_bias_fit,
+                                 n_folds=max(2, min(int(n_folds), 12)))
+        report["n_rows"] = len(rows)
+        return report
+
+    try:
+        return await asyncio.to_thread(_run)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except wf.LeakageError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
 # ── M1: report recap backfill + agent lesson browsing ───────────────────────
 
 @router.post("/admin/recap-backfill")
