@@ -1,4 +1,9 @@
-"""Top up the segment-revenue memory for SOTP-valued tickers with gemini-3.8-flash.
+"""Top up the segment-revenue memory for SOTP-valued tickers.
+
+HK and SG names use gemini-3.8-flash. US / ADR names do not: their 10-K /
+20-F segment footnote already gives reportable segments with revenue AND
+operating profit (src/tools/sec_segments.py), and FMP's product segmentation
+covers single-segment filers like PDD (revenue only).
 
 FMP returns no segment revenue for HK/SG names (0 of 9 probed), and SGX
 publishes no machine-readable segment note -- which is what blocks segment
@@ -91,6 +96,66 @@ def _fx(from_ccy: str, to_ccy: str):
         return None
 
 
+def is_hk_sg(ticker: str) -> bool:
+    t = ticker.upper()
+    return t.endswith(".HK") or t.endswith(".SI")
+
+
+def _cited(value: float, ccy: str, period_end: str, url: str, quote: str) -> dict:
+    return {"value": float(value), "currency": ccy, "scale": "units", "period": period_end,
+            "source_url": url, "quote": quote}
+
+
+def sec_entry(ticker: str, company: str, basis: str) -> dict | None:
+    """US / ADR filers: reportable segments with revenue AND operating profit
+    from the latest 10-K / 20-F (src/tools/sec_segments.py). No model involved.
+    Covers the three periods the filing presents."""
+    from src.tools.sec_segments import get_segment_footnote
+    fp = get_segment_footnote(ticker, date.today().isoformat())
+    if not fp or not fp.get("segments"):
+        return None
+    ccy, url = fp["reporting_currency"], fp["source_url"]
+    quote = f"{fp['form']} filed {fp['filed']}: {fp['report_short_name']}"
+    segments = []
+    for s in fp["segments"]:
+        years = []
+        for end, rev in sorted((s.get("revenue_by_period") or {}).items()):
+            prof = (s.get("profit_by_period") or {}).get(end)
+            years.append({"fiscal_year": f"FY{end[:4]}", "period_end": end,
+                          "revenue": _cited(rev, ccy, end, url, quote),
+                          "profit": _cited(prof, ccy, end, url, quote) if prof is not None else None,
+                          "profit_measure": (fp.get("profit_metric") or "").split("_")[-1] or None})
+        segments.append({"name": s["name"], "years": years})
+    return {"source": "sec_segment_footnote", "form": fp["form"], "filed": fp["filed"],
+            "history": {"reporting_currency": ccy, "segments": segments, "total_revenue": [],
+                        "segment_definition_changes": ""}}
+
+
+def fmp_product_entry(ticker: str) -> dict | None:
+    """Fallback for single-segment filers (PDD): FMP's revenue split by product
+    or revenue type. Revenue only -- FMP carries no segment profit."""
+    from src.tools.fmp_transcripts import to_fmp_symbol
+    url = (f"https://financialmodelingprep.com/stable/revenue-product-segmentation?symbol="
+           f"{to_fmp_symbol(ticker)}&period=annual&apikey={os.environ['FMP_API_KEY']}")
+    with urllib.request.urlopen(url, timeout=30) as r:
+        rows = json.loads(r.read()) or []
+    if not rows:
+        return None
+    _, ccy = _fmp_revenue_by_year(ticker)
+    public = url.split("&apikey=")[0]
+    by_name: dict[str, list] = {}
+    for row in sorted(rows, key=lambda x: str(x.get("date")))[-5:]:
+        end = str(row.get("date"))[:10]
+        for name, value in (row.get("data") or {}).items():
+            if isinstance(value, (int, float)):
+                by_name.setdefault(name, []).append({
+                    "fiscal_year": f"FY{end[:4]}", "period_end": end, "profit": None, "profit_measure": None,
+                    "revenue": _cited(value, ccy, end, public, "FMP revenue-product-segmentation")})
+    return {"source": "fmp_product_segmentation",
+            "history": {"reporting_currency": ccy, "total_revenue": [], "segment_definition_changes": "",
+                        "segments": [{"name": n, "years": ys} for n, ys in by_name.items()]}}
+
+
 def _load() -> dict:
     if OUT.exists():
         return json.loads(OUT.read_text(encoding="utf-8"))
@@ -104,15 +169,54 @@ def main() -> None:
     ap.add_argument("--years", type=int, default=5)
     ap.add_argument("--timeout", type=float, default=300.0)
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--gemini-for-us", action="store_true",
+                    help="use Gemini for US/ADR names too (default: SEC segment footnote, then FMP)")
+    ap.add_argument("--us-only", action="store_true", help="only the US/ADR names (no Gemini calls)")
     args = ap.parse_args()
 
     memory = _load()
     for ticker in [t.strip() for t in args.tickers.split(",") if t.strip()]:
         company, basis = SOTP_UNIVERSE[ticker]
-        if ticker in memory["tickers"] and not args.force and not memory["tickers"][ticker].get("error"):
+        if args.us_only and is_hk_sg(ticker):
+            continue
+        entry = memory["tickers"].get(ticker) or {}
+        # a US entry still sourced from Gemini is replaced by its filing
+        stale_us = (not is_hk_sg(ticker) and not args.gemini_for_us
+                    and entry.get("source") not in ("sec_segment_footnote", "fmp_product_segmentation"))
+        if entry and not args.force and not entry.get("error") and not stale_us:
             print(f"{ticker}: already in memory, skipped")
             continue
         started = time.monotonic()
+        if not is_hk_sg(ticker) and not args.gemini_for_us:
+            # US / ADR: filings and FMP already carry segments -- no Gemini call.
+            try:
+                fmp_rev, rep_ccy = _fmp_revenue_by_year(ticker)
+                filed = sec_entry(ticker, company, basis) or fmp_product_entry(ticker)
+            except Exception as exc:  # noqa: BLE001
+                filed = None
+                print(f"{ticker}: SEC/FMP ERROR {type(exc).__name__}: {exc}")
+            if not filed:
+                memory["tickers"][ticker] = {"company": company, "sotp_basis": basis,
+                                             "error": "no SEC segment footnote or FMP segmentation",
+                                             "attempted": date.today().isoformat()}
+            else:
+                hist = filed.pop("history")
+                rec = gp.reconcile_history(hist, fmp_rev, rep_ccy, _fx)
+                n_values = sum(len(s["years"]) for s in hist["segments"])
+                n_profit = sum(1 for s in hist["segments"] for y in s["years"] if y.get("profit"))
+                memory["tickers"][ticker] = {
+                    "company": company, "sotp_basis": basis, "fmp_reporting_currency": rep_ccy,
+                    "retrieved": date.today().isoformat(), "model": None, **filed,
+                    "citation_coverage": 1.0 if n_values else 0.0,
+                    "profit_coverage": round(n_profit / n_values, 4) if n_values else 0.0,
+                    "reconciliation": rec, "history": hist,
+                }
+                gaps = [f"{y}:{v['segment_gap']:+.0%}" for y, v in rec.items() if v.get("segment_gap") is not None]
+                print(f"{ticker}: {filed['source']} {len(hist['segments'])} segments, {n_values} values, "
+                      f"profit {n_profit}/{n_values}, segment-sum vs FMP {' '.join(gaps) or 'n/a'}", flush=True)
+            memory["_meta"]["updated"] = date.today().isoformat()
+            OUT.write_text(json.dumps(memory, indent=1, ensure_ascii=False), encoding="utf-8")
+            continue
         try:
             fmp_rev, rep_ccy = _fmp_revenue_by_year(ticker)
             out = gp.generate(gp.history_prompt(company, ticker, args.years),
