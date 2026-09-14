@@ -187,7 +187,18 @@ def _post(model: str, body: dict, timeout: float, session=None) -> dict:
         resp = http.post(_ENDPOINT.format(model=model), params={"key": key},
                          json=body, timeout=timeout)
         if resp.status_code == 200:
-            return resp.json()
+            payload = resp.json()
+            # HTTP 200 with zero candidates and no block reason: JD and PDD in
+            # the 2026-09-15 memory build, and one high-reasoning BABA call.
+            # Nothing is wrong with the request, so it is retried like a 503;
+            # after the budget the empty payload is returned and surfaces as
+            # a GeminiParseError carrying its usage and model version.
+            empty = not (payload.get("candidates") or [])
+            blocked = (payload.get("promptFeedback") or {}).get("blockReason")
+            if empty and not blocked and attempt < RETRIES:
+                time.sleep(BACKOFF_S[min(attempt, len(BACKOFF_S) - 1)])
+                continue
+            return payload
         if resp.status_code not in _RETRY_STATUS or attempt == RETRIES:
             break
         try:
@@ -217,6 +228,8 @@ def _unpack(payload: dict) -> dict:
     usage = payload.get("usageMetadata") or {}
     feedback = payload.get("promptFeedback") or {}
     return {
+        "model_version": payload.get("modelVersion"),
+        "response_id": payload.get("responseId"),
         "text": text,
         # A high-reasoning BABA call returned no text and no finish reason:
         # record whether there was a candidate at all and any block reason.
@@ -309,7 +322,9 @@ def generate(prompt: str, *, schema: Optional[type[BaseModel]] = None, grounded:
         try:
             out["json"] = schema.model_validate(_parse_json(out["text"])).model_dump()
         except (ValueError, TypeError) as exc:
-            raise GeminiParseError(f"{type(exc).__name__}: {str(exc)[:200]}",
+            raise GeminiParseError(f"{type(exc).__name__}: {str(exc)[:200]} "
+                                   f"[candidates={out.get('n_candidates')}, usage={out.get('usage')}, "
+                                   f"model_version={out.get('model_version')}]",
                                    finish_reason=out.get("finish_reason"),
                                    text_head=(out.get("text") or "")[:300],
                                    usage=out.get("usage")) from exc

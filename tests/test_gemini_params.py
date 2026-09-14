@@ -137,6 +137,34 @@ def test_persistent_503_gives_up_after_the_retry_budget(monkeypatch):
     assert len(session.bodies) == gp.RETRIES + 1
 
 
+def test_an_empty_200_with_no_candidates_is_retried(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(gp.time, "sleep", sleeps.append)
+    empty = _Resp(200, {"usageMetadata": {"promptTokenCount": 9000, "thoughtsTokenCount": 11000},
+                        "modelVersion": "gemini-3.8-flash"})
+    session = _Session(empty, _ok(json.dumps(_sotp())))
+    out = gp.generate("p", schema=gp.SotpInputs, session=session)
+    assert len(session.bodies) == 2 and sleeps == [5.0]
+    assert out["json"]["segments"]
+
+
+def test_a_persistently_empty_200_reports_usage_and_model_version(monkeypatch):
+    monkeypatch.setattr(gp.time, "sleep", lambda s: None)
+    empty = _Resp(200, {"usageMetadata": {"thoughtsTokenCount": 11000}, "modelVersion": "gemini-3.8-flash"})
+    session = _Session(*([empty] * (gp.RETRIES + 1)))
+    with pytest.raises(gp.GeminiParseError) as info:
+        gp.generate("p", schema=gp.SotpInputs, session=session)
+    assert len(session.bodies) == gp.RETRIES + 1
+    assert "candidates=0" in str(info.value) and "gemini-3.8-flash" in str(info.value)
+
+
+def test_a_blocked_prompt_is_not_retried(monkeypatch):
+    monkeypatch.setattr(gp.time, "sleep", lambda s: pytest.fail("retried a blocked prompt"))
+    blocked = _Resp(200, {"promptFeedback": {"blockReason": "SAFETY"}})
+    with pytest.raises(gp.GeminiParseError, match="no_candidate:SAFETY"):
+        gp.generate("p", schema=gp.SotpInputs, session=_Session(blocked))
+
+
 def test_billing_429_is_not_retried(monkeypatch):
     monkeypatch.setattr(gp.time, "sleep", lambda s: pytest.fail("slept on a billing error"))
     msg = {"error": {"code": 429, "message": "Your prepayment credits are depleted."}}
@@ -264,9 +292,10 @@ def test_recorded_live_responses_still_parse():
     files = sorted((Path(__file__).parent / "fixtures" / "gemini").glob("*_G*.json"))
     if not files:
         pytest.skip("no recorded Gemini responses yet")
+    arms = {"_G1m_": gp.MultipleRanges, "_G1_": gp.SotpInputs, "_G2_": gp.DirectEstimate}
     for f in files:
         rec = json.loads(f.read_text(encoding="utf-8"))
-        schema = gp.SotpInputs if "_G1_" in f.name else gp.DirectEstimate
+        schema = next(s for marker, s in arms.items() if marker in f.name)
         try:
             schema.model_validate(gp._parse_json(rec["text"]))
         except Exception as exc:  # recordings from an older schema version are skipped
