@@ -1,0 +1,19 @@
+{
+ "text": "{\n  \"sotp_value\": 205.0,\n  \"fair_value\": 176.02,\n  \"currency\": \"HKD\",\n  \"per\": \"share\",\n  \"reasoning\": \"Sum-of-the-parts (SOTP) valuation yields approximately HK$205.00 per share based on separate appraisals of core business segments: (1) Taobao & Tmall Group valued at 8-10x forward EBITA, (2) Cloud Intelligence Group incorporating Alibaba Cloud and proprietary AI models (Qwen) valued at 2.5-3.0x EV/Sales, (3) Alibaba International Digital Commerce (AIDC) and Cainiao logistics at peer revenue multiples, (4) Local Services and Digital Media, (5) the 33% stake in Ant Group, and (6) substantial net cash and strategic investments. Applying a holding company discount of approximately 14% to account for domestic e-commerce competition and AI capital expenditure requirements aligns with the 12-month analyst consensus fair value target of HK$176.02 per share.\",\n  \"source_urls\": [\n    \"https://www.investing.com/equities/alibaba-group-holding-ltd-targets\",\n    \"https://www.dbs.com.sg/personal/market-insights/equities/alibaba-group\",\n    \"https://stockanalysis.com/quote/hkg/9988/statistics/\"\n  ]\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 1151,
+  "out": 332,
+  "thoughts": 1760,
+  "tool_prompt": null,
+  "total": 3243
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 19.09,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}

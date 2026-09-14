@@ -232,6 +232,14 @@ def main() -> None:
             OUT.write_text(json.dumps(memory, indent=1, ensure_ascii=False), encoding="utf-8")
             continue
         hist = out["json"]
+        if not hist.get("segments"):
+            # an empty list is a failed retrieval, and must stay retryable
+            memory["tickers"][ticker] = {"company": company, "sotp_basis": basis,
+                                         "error": f"no segments returned (mode {out.get('mode')})",
+                                         "attempted": date.today().isoformat()}
+            print(f"{ticker}: ERROR no segments returned after {time.monotonic() - started:.0f}s")
+            OUT.write_text(json.dumps(memory, indent=1, ensure_ascii=False), encoding="utf-8")
+            continue
         rec = gp.reconcile_history(hist, fmp_rev, rep_ccy, _fx)
         n_values = sum(len(s.get("years") or []) for s in hist.get("segments") or [])
         n_cited = sum(gp._cited_ok(y.get("revenue")) for s in hist.get("segments") or []

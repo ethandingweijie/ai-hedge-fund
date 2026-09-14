@@ -1,0 +1,29 @@
+{
+ "text": "{\"sotp_value\": 175.0, \"fair_value\": 165.0, \"currency\": \"USD\", \"per\": \"ADS\", \"reasoning\": \"Susquehanna estimates an SOTP-based valuation of $175 per ADS, Bernstein SocGen applies an SOTP framework yielding a $165 per ADS price target, and Citi Research estimates an SOTP-derived fair value of $192 per ADS. A segment-level sum-of-the-parts analysis values Alibaba Group at approximately $175 per ADS: (1) China Commerce (Taobao and Tmall Group) at ~$75 per ADS (~8x forward EBITA); (2) Cloud Intelligence Group at ~$35 per ADS (~3.5x EV/Sales, reflecting accelerating AI cloud adoption); (3) International Digital Commerce (AIDC) and Cainiao Logistics combined at ~$25 per ADS; (4) Strategic investments including the 33% stake in Ant Group at ~$22 per ADS; and (5) Net cash and liquid assets at ~$18 per ADS. Applying a prudent ~6% conglomerate holding discount for near-term capex commitments and macroeconomic frictions yields a 12-month fair value estimate of $165 per ADS, matching Bernstein's target cross-checked against 15x forward earnings.\", \"source_urls\": [\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHCAIQo0ZFbdwDYl-UgREzupsaKCAvf_Z0XjIVoNSNRNoT3estu1WNGrVju6u9M1yJZGDC_WOgasRKrS9z1EE9HmHn6_yvKbEl_etIr7WH_2er62NxBc7zcmdDebM9y1rgEvDFoaolVMSxeomW6gbdobNOGaWdt444jzSCf3RuZ-yhw-aoXLo4ssyhE41OiynhNAV-S6QIwMxbiDZojMSk7n9_8x35Lexu29Ds0bVIQP4y3DL8=\", \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG5rDpp1mdBgkCeEFrNuxaT3KydSH8p7QPMiLUVUEmk4kH857O3iHJYB-WdVPZ-pAGe6a8mTkcU_RfWIim1B1w10SDEKn3Kydwi5tiagY4s-Ve5iAknZ3QZH3VyRxBKDkZZH6_cBNC5jm0xLUFvN2l1mwIT5eH-_YhfP1xXHLeoYWvZw-YEn8PKBSZ_mMGT2bPK3gXPN2vF48MlrPw2B1_ObHU=\", \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFt5xfLOR56kx5soLXpIIUl0_sGLpfOpzF1J2_-1ZbR0KzKFpwBGJeNvr2PknNWMbMNTZJb2yALe_Z7Nuwy_ZBDpvweJ_jk-wZNQHpF_z9swb74Hu2OFCrfM-6w_6pCW0Pbm_Cumc0aN47XOM_iJvRPzQpT4IbLJToZZKdwemxfKHQY6WlkmWY1z2b5l2xd4qMS1Ax08auEVLVhO12K_9o71eXFmTqp\"]} ",
+ "grounding_urls": [
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG5rDpp1mdBgkCeEFrNuxaT3KydSH8p7QPMiLUVUEmk4kH857O3iHJYB-WdVPZ-pAGe6a8mTkcU_RfWIim1B1w10SDEKn3Kydwi5tiagY4s-Ve5iAknZ3QZH3VyRxBKDkZZH6_cBNC5jm0xLUFvN2l1mwIT5eH-_YhfP1xXHLeoYWvZw-YEn8PKBSZ_mMGT2bPK3gXPN2vF48MlrPw2B1_ObHU=",
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHCAIQo0ZFbdwDYl-UgREzupsaKCAvf_Z0XjIVoNSNRNoT3estu1WNGrVju6u9M1yJZGDC_WOgasRKrS9z1EE9HmHn6_yvKbEl_etIr7WH_2er62NxBc7zcmdDebM9y1rgEvDFoaolVMSxeomW6gbdobNOGaWdt444jzSCf3RuZ-yhw-aoXLo4ssyhE41OiynhNAV-S6QIwMxbiDZojMSk7n9_8x35Lexu29Ds0bVIQP4y3DL8=",
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFt5xfLOR56kx5soLXpIIUl0_sGLpfOpzF1J2_-1ZbR0KzKFpwBGJeNvr2PknNWMbMNTZJb2yALe_Z7Nuwy_ZBDpvweJ_jk-wZNQHpF_z9swb74Hu2OFCrfM-6w_6pCW0Pbm_Cumc0aN47XOM_iJvRPzQpT4IbLJToZZKdwemxfKHQY6WlkmWY1z2b5l2xd4qMS1Ax08auEVLVhO12K_9o71eXFmTqp"
+ ],
+ "queries": [
+  "Alibaba \"SOTP\" \"fair value\" 2026 ADS",
+  "site:investing.com \"Alibaba stock target raised to $175 at Susquehanna\"",
+  "site:streetinsider.com \"Alibaba (BABA) PT Lowered to $165 at Bernstein SocGen Group\" 2026"
+ ],
+ "usage": {
+  "in": 12013,
+  "out": 880,
+  "thoughts": 12895,
+  "tool_prompt": null,
+  "total": 25788
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 104.3,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": {
+  "thinkingLevel": "high"
+ }
+}

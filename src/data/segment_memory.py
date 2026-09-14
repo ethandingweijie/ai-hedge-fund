@@ -31,11 +31,17 @@ def load(path: Optional[Path] = None) -> dict:
         return {}
 
 
+def _has_segments(entry: dict) -> bool:
+    """CITIC, Swire, ThaiBev and GenScript came back from the search-then-format
+    fallback as a 'success' holding zero segments; that is not a retrieval."""
+    return bool(((entry.get("history") or {}).get("segments")))
+
+
 def entry_for(ticker: str, memory: Optional[dict] = None) -> Optional[dict]:
     from src.agents.analysis.sotp_snapshot import lookup_snapshot
     doc = memory if memory is not None else load()
     usable = {k: v for k, v in (doc.get("tickers") or {}).items()
-              if isinstance(v, dict) and v.get("history") and not v.get("error")}
+              if isinstance(v, dict) and _has_segments(v) and not v.get("error")}
     return lookup_snapshot(usable, ticker)[1]
 
 
@@ -203,8 +209,9 @@ def ui_summary(*, memory: Optional[dict] = None,
     rows = []
     for ticker, entry in sorted((doc.get("tickers") or {}).items()):
         base = {"ticker": ticker, "company": entry.get("company"), "sotp_basis": entry.get("sotp_basis")}
-        if entry.get("error") or not entry.get("history"):
-            rows.append({**base, "error": entry.get("error") or "no history"})
+        if entry.get("error") or not _has_segments(entry):
+            rows.append({**base, "error": entry.get("error")
+                         or "Gemini returned no segments after retries and the search-then-format fallback"})
             continue
         years, notes = _years_and_notes(entry, fx_to)
         rec, basis_notes = reconciliation(entry, years)

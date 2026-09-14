@@ -1,0 +1,19 @@
+{
+ "text": "{\n  \"multiples\": [\n    {\n      \"segment\": \"Alibaba China E-commerce Group\",\n      \"metric\": \"pe\",\n      \"low\": 7.0,\n      \"high\": 12.0,\n      \"basis\": \"Valued at 7.0x - 12.0x P/E on segment NOPAT based on broker SOTP benchmarks (CMB International applies 7.0x-8.0x post-tax adjusted EBITA in FY24E and 12.0x in FY28E) and domestic e-commerce peers (JD.com trading at ~7.0x-8.2x P/E and PDD Holdings trading at ~7.0x-10.0x P/E).\",\n      \"source_url\": \"https://data.eastmoney.com/report/zw_stock.jshtml?infocode=AP202401101616897217\"\n    },\n    {\n      \"segment\": \"Cloud Intelligence Group\",\n      \"metric\": \"pe\",\n      \"low\": 20.0,\n      \"high\": 30.0,\n      \"basis\": \"Valued at 20.0x - 30.0x P/E on segment NOPAT for profitable core business operations based on global cloud hyperscalers and enterprise software peers (Microsoft Azure, AWS implied multiple, Google Cloud); also corresponds to 4.0x - 6.0x EV/Sales in broker SOTP benchmarks such as CMB International.\",\n      \"source_url\": \"https://data.eastmoney.com/report/zw_stock.jshtml?infocode=AP202401101616897217\"\n    },\n    {\n      \"segment\": \"Alibaba International Digital Commerce Group\",\n      \"metric\": \"ev_rev\",\n      \"low\": 1.5,\n      \"high\": 3.0,\n      \"basis\": \"Valued at 1.5x - 3.0x EV/Sales based on broker SOTP convention for unprofitable international commerce platforms (CMB International applies 1.5x to 3.0x EV/revenue) and peers like Sea Ltd and Coupang.\",\n      \"source_url\": \"https://data.eastmoney.com/report/zw_stock.jshtml?infocode=AP202401101616897217\"\n    },\n    {\n      \"segment\": \"All others\",\n      \"metric\": \"ev_rev\",\n      \"low\": 0.8,\n      \"high\": 1.2,\n      \"basis\": \"Valued at 0.8x - 1.2x EV/Sales based on broker SOTP convention (centered at 1.0x EV/revenue per CMB International SOTP models) reflecting unlisted retail, logistics, and digital entertainment assets.\",\n      \"source_url\": \"https://data.eastmoney.com/report/zw_stock.jshtml?infocode=AP202401101616897217\"\n    }\n  ],\n  \"holdco_discount_low\": 0.1,\n  \"holdco_discount_high\": 0.3,\n  \"holdco_basis\": \"Broker SOTP convention typically applies a 10% to 30% holding-company discount across conglomerate assets (e.g. Goldman Sachs applies 10% citing ecosystem synergies, Morningstar applies 20% across non-wholly owned segments, and CMB International applies 30% to strategic investments).\",\n  \"associates_investments\": {\n    \"value\": 38856,\n    \"currency\": \"USD\",\n    \"scale\": \"mn\",\n    \"period\": \"FY24E\",\n    \"source_url\": \"https://data.eastmoney.com/report/zw_stock.jshtml?infocode=AP202307101590875704\",\n    \"quote\": \"Strategic investments. Market valuation, 30% holding discount applied to all investment. 38,856\"\n  },\n  \"net_cash\": {\n    \"value\": 352.1,\n    \"currency\": \"CNY\",\n    \"scale\": \"bn\",\n    \"period\": \"September 30, 2024\",\n    \"source_url\": \"https://www.investing.com/news/stock-market-news/earnings-call-alibaba-group-sees-steady-growth-in-q3-2024-amid-ai-push-93CH-3725482\",\n    \"quote\": \"As of September 30, 2024, we continue to maintain a strong net cash position of RMB 352.1 billion or $50.2 billion.\"\n  }\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 25162,
+  "out": 1133,
+  "thoughts": 32913,
+  "tool_prompt": null,
+  "total": 59208
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 132.55,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}

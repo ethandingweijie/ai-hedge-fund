@@ -1,0 +1,21 @@
+{
+ "text": "{\n  \"sotp_value\": 165.0,\n  \"fair_value\": 145.0,\n  \"currency\": \"USD\",\n  \"per\": \"ADS\",\n  \"reasoning\": \"Sum-of-the-parts (SOTP) valuation yields approximately $165 per ADS when aggregating the standalone values of Taobao and Tmall Group (8-10x forward EBITA), Cloud Intelligence Group (~4x EV/Sales driven by accelerated AI/cloud growth), International Digital Commerce (AIDC), Cainiao logistics, the ~33% stake in Ant Group, and substantial net cash and strategic investment portfolio. The 12-month fair value of $145 per ADS applies a moderate holding-company and geopolitical discount to reflect structural domestic e-commerce competition and heavy ongoing AI infrastructure capex.\",\n  \"source_urls\": [\n    \"https://in.investing.com/equities/alibaba-group-holding-ltd-adr-price-target\",\n    \"https://simplywall.st/stocks/us/retail/nyse-baba/alibaba-group-holding\",\n    \"https://capital.com/en-in/analysis/alibaba-baba-stock-forecast\"\n  ]\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 51,
+  "out": 278,
+  "thoughts": null,
+  "tool_prompt": null,
+  "total": 329
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 4.95,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": {
+  "thinkingLevel": "low"
+ }
+}

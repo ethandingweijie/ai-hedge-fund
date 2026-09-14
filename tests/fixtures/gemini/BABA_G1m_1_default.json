@@ -1,0 +1,19 @@
+{
+ "text": "{\n  \"multiples\": [\n    {\n      \"segment\": \"Alibaba China E-commerce Group\",\n      \"metric\": \"pe\",\n      \"low\": 8.0,\n      \"high\": 15.0,\n      \"basis\": \"Broker SOTP benchmarks and peer forward P/E multiples. DBS Bank applies 15.0x FY27F P/E for core commerce, while CMB International applies 8.0x-12.0x forward EV/adj. EBITA; domestic e-commerce peers (JD.com, PDD Holdings) trade within an 8.0x to 15.0x P/E band.\",\n      \"source_url\": \"https://www.dbs.com/insights/equities/alibaba-group\"\n    },\n    {\n      \"segment\": \"All others\",\n      \"metric\": \"ev_rev\",\n      \"low\": 0.7,\n      \"high\": 1.0,\n      \"basis\": \"Broker SOTP convention for non-core, loss-making digital media and retail units; CMB International values All Others and Digital Media at 0.7x to 1.0x forward EV/revenue.\",\n      \"source_url\": \"https://www.cmbi.com.hk\"\n    },\n    {\n      \"segment\": \"Cloud Intelligence Group\",\n      \"metric\": \"ev_rev\",\n      \"low\": 4.0,\n      \"high\": 7.5,\n      \"basis\": \"Broker SOTP multiples on EV/Sales or P/S; CMB International applies 4.0x to 7.5x forward EV/revenue, and DBS Bank values Alibaba Cloud at 6.0x forward P/S, benchmarking global and Chinese hyperscalers.\",\n      \"source_url\": \"https://www.cmbi.com.hk\"\n    },\n    {\n      \"segment\": \"Alibaba International Digital Commerce Group\",\n      \"metric\": \"ev_rev\",\n      \"low\": 1.5,\n      \"high\": 3.0,\n      \"basis\": \"Broker SOTP multiples on EV/revenue; CMB International values AIDC at 1.5x to 3.0x forward EV/revenue, benchmarked against cross-border and international e-commerce peers such as Sea Ltd and MercadoLibre.\",\n      \"source_url\": \"https://www.cmbi.com.hk\"\n    }\n  ],\n  \"holdco_discount_low\": 0.2,\n  \"holdco_discount_high\": 0.3,\n  \"holdco_basis\": \"Standard conglomerate holding-company discount range of 20% to 30% typically applied by equity research analysts (e.g., CMB International applies an explicit 30% holding discount to strategic investments and unlisted holdings).\",\n  \"associates_investments\": {\n    \"value\": 202548,\n    \"currency\": \"CNY\",\n    \"scale\": \"mn\",\n    \"period\": \"September 30, 2024\",\n    \"source_url\": \"https://www1.hkexnews.hk/listedco/listconews/sehk/2024/1129/2024112900827.pdf\",\n    \"quote\": \"Investments in equity method investees. 207,380. 203,131. 202,548.\"\n  },\n  \"net_cash\": {\n    \"value\": 352.1,\n    \"currency\": \"CNY\",\n    \"scale\": \"bn\",\n    \"period\": \"September 30, 2024\",\n    \"source_url\": \"https://www.fool.com/earnings/call-transcripts/2024/11/15/alibaba-group-baba-q3-2024-earnings-call-transcript/\",\n    \"quote\": \"As of September 30, 2024, we continue to maintain a strong net cash position of RMB 352.1 billion or $50.2 billion.\"\n  }\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 3570,
+  "out": 951,
+  "thoughts": 9551,
+  "tool_prompt": null,
+  "total": 14072
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 64.3,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}

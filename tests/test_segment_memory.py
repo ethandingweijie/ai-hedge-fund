@@ -56,6 +56,16 @@ def test_the_hk_line_reads_the_adr_entry_and_errors_are_not_used():
     assert sm.latest_mix("MSFT", memory=MEMORY, fx_to=fx_to) is None
 
 
+def test_an_entry_with_no_segments_is_not_a_retrieval():
+    mem = {"_meta": {}, "tickers": {"00267.HK": {
+        "company": "CITIC Limited", "sotp_basis": "holdco_lookthrough", "fmp_reporting_currency": "HKD",
+        "history": {"reporting_currency": "HKD", "segments": [], "total_revenue": [],
+                    "segment_definition_changes": ""}}}}
+    row = sm.ui_summary(memory=mem, fx_to=fx_to)["tickers"][0]
+    assert "no segments" in row["error"]
+    assert sm.latest_mix("00267.HK", memory=mem, fx_to=fx_to) is None
+
+
 def test_ui_summary_carries_years_margins_citations_and_errors():
     ui = sm.ui_summary(memory=MEMORY, fx_to=fx_to)
     assert ui["status"] == "pending_review" and ui["model"] == "gemini-3.8-flash"

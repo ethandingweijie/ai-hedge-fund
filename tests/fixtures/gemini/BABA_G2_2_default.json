@@ -1,0 +1,19 @@
+{
+ "text": "{\"sotp_value\": 245.0, \"fair_value\": 180.0, \"currency\": \"USD\", \"per\": \"ADS\", \"reasoning\": \"Sum-of-the-parts (SOTP) equity valuation stands at approximately $245 per ADS based on Wall Street analyst models (such as Morgan Stanley), which value core China Commerce (Taobao and Tmall), Cloud Intelligence & proprietary AI hardware (T-Head), International Digital Commerce (AIDC), Cainiao logistics, the ~33% stake in Ant Group, and substantial net cash balances. The 12-month fair value/target price is set at $180 per ADS, factoring in a conglomerate holding discount and heavy multi-year AI capital expenditures against accelerating cloud and model monetization.\", \"source_urls\": [\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHxrwN8-6FEDFpWtjM2fPFwLnEj9myl_EQsq3j0u6vsXP7t8ImjX_c4nSQn0dUeG6HxLnNlKPqXiylyj3CoB0cUfOHxb73hmvaSaQJq_EVJL-OjJYWqMwOGUYhBhbx05yyDLXfJbgmfm6qhEJNkgwsrjUSCiEpN5UdKq9wgaxvYXLz0hT_kcINpGHqXvILcLXV_HYz51pDwfhq5rYsFa_7G2WjEu1bI96FMHC_HJiysj0b9pEB4Gg==\", \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGhhYUI1UrZ1SzJk60DGVocsSRa72wSwSvMnjbkKF4i-Qiy81dUApq0PWvqng52cUbknbRcrDGnxO-rzOB2hpyqaFUeka7DoQbDEEKB-Y8EA349ahp2BhfePGstDQta0aLZiNRpb1T8JzTwUERge9ZS0uj9IK-volS2Pj_WnJ4bBljI9ZZrkqp6rzae6n-QaSO9YUSeWtOXYiLYqYeGgLwPTBs5fnMmBo_YjoJ2v-jP07KrmrJaKuSsyg==\", \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFhnPwN84CQoDx81nX9FZpFTvqgBUE2Fvf5OkLf-f96DbnwQqc2YpeY0ehoGXKB6ubqexlmLmFWkg3A1xSJOxGLrnj1kcIBaLVtwwh9ljYQ6J1Z0loHjtev_i3STsJ-n2T-XDj3Q1HUScVSijzKrbTBo3fFMRPMCtbIrGpHm7hB1v4Vs5iyRs3eM-55MVqOuGR25QFWlHQ28Q0=\"]} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 236,
+  "out": 738,
+  "thoughts": 1585,
+  "tool_prompt": null,
+  "total": 2559
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 16.72,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}

@@ -1,0 +1,14 @@
+{
+ "text": "{\n  \"sotp_value\": 165.0,\n  \"fair_value\": 156.24,\n  \"currency\": \"USD\",\n  \"per\": \"ADS\",\n  \"reasoning\": \"Sum-of-the-parts (SOTP) valuation aggregates Taobao and Tmall Group (valued at 8-10x normalized EBITA), Cloud Intelligence Group (benefiting from accelerating AI and public cloud revenue growth), International Digital Commerce (AIDC), Cainiao logistics, and other non-core units, plus Alibaba's net cash position, strategic portfolio, and 33% stake in Ant Group, yielding an estimated SOTP equity value of ~$165.00 per ADS. A 12-month fair value of $156.24 is derived from fundamental DCF and earnings multiple models after applying an approximate 20-25% structural China equity risk discount.\",\n  \"source_urls\": [\n    \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEpeX6Cy7J8M3HZ_Qh4dyJHLwQroN-5ra7B7mCqG_GHWsFCXkOv7feBCOl7vPxdHEQUDbdzzoFrDkQR8aCRiKzK1kKm3OnowAFaMxD1C-SXxXx1HIOeckRVUlkb7M51ViI3XyRlbMdwqdZQOLRHLgOqYVOETAFbFNXe6dP5_jYTu8bq84my5moagxe2oz_XdejG5ewxHSNCqX74OMJ5koWfL8JtImjAO57m5rTT0RFgSTxaEbSQMCoWbkmCbveM\",\n    \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGmcaqhKNuDP1fVrb5lIqex7UY9-bCZ53pYjTPa1ejfIgbdtUVlGOQYB_dGL7TnA-HFy5GD2i-rwuRWdJJpq1BXWTIj1H0k7eGuqsGNOSR3aNe1LxkQwfP8NR30Qtiq8n5pFbteBO9ZFjpBikCaEzCt-sisPcGjPPoy_Edjl7sNeBGt4uHk2KDa\",\n    \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF7VhgtQ_ZBGxUn8j3ixaNLikiLo9gwzw9nZmmhCg12uaoK3ANq8kon1t68vu2ZMUOeB4cqyZ_C5v0Srb7g8yI0YjltdoOpd9KIYD8BzFSEw4E6oO5blX8QMEv8Nr7ZgzYjCb61MvQRzfaOht11pFEmSbsVMxflb7E=\"\n  ]\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 120,
+  "out": 721,
+  "total": 2541
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 26.55,
+ "finish_reason": "STOP"
+}

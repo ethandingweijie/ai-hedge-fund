@@ -1,0 +1,21 @@
+{
+ "text": "{\n  \"sotp_value\": 157.7,\n  \"fair_value\": 145.0,\n  \"currency\": \"USD\",\n  \"per\": \"ADS\",\n  \"reasoning\": \"Sum-of-the-parts (SOTP) valuation yields approximately $157.70 per ADS based on segment-level multiples: Taobao & Tmall Group at ~$80.70/ADS (valued at ~8-9x forward EV/EBITA), Cloud Intelligence Group at ~$31-$33/ADS (supported by 3.5-4.0x EV/revenue on accelerating AI workloads and cloud growth), International Digital Commerce (AIDC) at ~$11.70/ADS, Local Services at ~$6.00/ADS, Cainiao Logistics at ~$2.70/ADS, Digital Media & Other at ~$12.40/ADS, and net cash/strategic investments (including Ant Group stake) at ~$11.00/ADS. A 12-month fair value estimate of $145.00 applies a modest ~8-10% conglomerate/holding discount to SOTP, reflecting near-term margin compressions from elevated AI capex and ongoing domestic e-commerce competition.\",\n  \"source_urls\": [\n    \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHsR6nwALQsinnjsVnYsELshhy-p0nLnqmoutpvJLxfwGlWCNXMasypbcSsFLQaQa8VozfummtAkT-3ghHiDGId6gcnZ9b0IFqkozOE-hNPBuKZtxoHm3nn8jjTnuiVE0X5cfTvAnBD7kyIA7uPN3lxfmjMntHD5h1wDNbS61A-twP4wA==\",\n    \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHXAHhdkyhGvKq7uQ_dfWAjD8NTJ85QWMyFofWLWBsmH_3dwtbhxmMaxVg-8dqW6MeNnE5W5OgSDwCVFutf0Z1cfEQUI-O5CZ6nhymjLTchOPp1wToMqCa5ErnWuIGQycA=\",\n    \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF9H25AESOudmDUEsdQHGNtMLcfkHTiOJxjxo0nJ-fA2bBsw_HbsC1f5Wme-Q00riT8D3n7atLHNz-_yOSVmz5EkTvtOllst81Hb_NBFYcs_u7q1vTBLcISN-wnzNauqqlItVjMaMGR7cI0iPmGyfICssahZhPFYvhkkUL8VEOLfT-KUDMXVEYb-wc77zDc8Yq3MwEWZCEF5Ps_XXbsxRxn7D2W\"\n  ]\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 51,
+  "out": 725,
+  "thoughts": null,
+  "tool_prompt": null,
+  "total": 776
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 4.62,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": {
+  "thinkingLevel": "low"
+ }
+}

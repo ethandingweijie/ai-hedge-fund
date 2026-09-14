@@ -1,0 +1,19 @@
+{
+ "text": "{\n  \"multiples\": [\n    {\n      \"segment\": \"Alibaba China E-commerce Group\",\n      \"metric\": \"pe\",\n      \"low\": 8.0,\n      \"high\": 12.0,\n      \"basis\": \"Broker SOTP convention (e.g., CMB International applies 12.0x EV/adjusted EBITA discounted) and domestic e-commerce peer multiples (JD.com, PDD Holdings trading at 7x-10x forward earnings)\",\n      \"source_url\": \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFA0HmuqTLkHto2M2Jqqb0INXnKFPopaGQC8D7zQB7d3x9sYZPEB4JnLCoEAYPTxUY4iBm_cTnVRsRiKPSQpwsBfk7wmcl2JMvjZMU1EoUJHTm5aRM0PfwAInn4Il5iG0pEQMTLisA8Iz8GhhrGt8l5HzYb3L2TBciY9eplV95nXjAdbQ==\"\n    },\n    {\n      \"segment\": \"Cloud Intelligence Group\",\n      \"metric\": \"ev_rev\",\n      \"low\": 4.0,\n      \"high\": 7.5,\n      \"basis\": \"Broker SOTP multiples (CMB International applies 6.0x-7.5x EV/revenue) benchmarked against global hyperscalers and enterprise cloud/SaaS peers\",\n      \"source_url\": \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFA0HmuqTLkHto2M2Jqqb0INXnKFPopaGQC8D7zQB7d3x9sYZPEB4JnLCoEAYPTxUY4iBm_cTnVRsRiKPSQpwsBfk7wmcl2JMvjZMU1EoUJHTm5aRM0PfwAInn4Il5iG0pEQMTLisA8Iz8GhhrGt8l5HzYb3L2TBciY9eplV95nXjAdbQ==\"\n    },\n    {\n      \"segment\": \"Alibaba International Digital Commerce Group\",\n      \"metric\": \"ev_rev\",\n      \"low\": 1.0,\n      \"high\": 1.5,\n      \"basis\": \"Broker SOTP benchmarks (CMB International applies 1.5x EV/revenue) and international cross-border e-commerce peers (Sea Ltd, Coupang, Amazon) reflecting near-breakeven operational profile\",\n      \"source_url\": \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFA0HmuqTLkHto2M2Jqqb0INXnKFPopaGQC8D7zQB7d3x9sYZPEB4JnLCoEAYPTxUY4iBm_cTnVRsRiKPSQpwsBfk7wmcl2JMvjZMU1EoUJHTm5aRM0PfwAInn4Il5iG0pEQMTLisA8Iz8GhhrGt8l5HzYb3L2TBciY9eplV95nXjAdbQ==\"\n    },\n    {\n      \"segment\": \"All others\",\n      \"metric\": \"ev_rev\",\n      \"low\": 0.2,\n      \"high\": 1.0,\n      \"basis\": \"Broker SOTP valuations applying 0.2x-1.0x EV/revenue across consolidated non-core assets, logistics (Cainiao), local services, and digital media\",\n      \"source_url\": \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFA0HmuqTLkHto2M2Jqqb0INXnKFPopaGQC8D7zQB7d3x9sYZPEB4JnLCoEAYPTxUY4iBm_cTnVRsRiKPSQpwsBfk7wmcl2JMvjZMU1EoUJHTm5aRM0PfwAInn4Il5iG0pEQMTLisA8Iz8GhhrGt8l5HzYb3L2TBciY9eplV95nXjAdbQ==\"\n    }\n  ],\n  \"holdco_discount_low\": 0.2,\n  \"holdco_discount_high\": 0.3,\n  \"holdco_basis\": \"Standard conglomerate holding-company discount applied in Chinese tech SOTP models (e.g., Morningstar applies a 20% discount across Alibaba's non-core business units; CMB International applies a 30% holding-company discount to strategic investments)\",\n  \"associates_investments\": null,\n  \"net_cash\": {\n    \"value\": 446.5,\n    \"currency\": \"CNY\",\n    \"scale\": \"bn\",\n    \"period\": \"FY2024\",\n    \"source_url\": \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHUH46fBDEAQyr6EfG-2mU5PoDhmqbTfPRWsnetQliHcEW74oiEZhYnWNHRWVQkujyUrx1IbN4Vi3H7pACso9Izs-khfJz8P4Zf6ly9OxT3bH8JoZyjB2FA6gSLp6UGNAGhEMHadaUCPnpbzid1VMhDTb3CaWwLMr9JqRGE7omQy79mk4XFO9zKChufUFGHfjA8EM2BQ4IB_35UQ4SW28wrsOsTQWXfEUdee_zUAYTGoQwDtbdxqYxeXhDU\",\n    \"quote\": \"As of March 31, 2024, we continued to maintain a strong net cash position of RMB 446.5 billion or $61.8 billion.\"\n  }\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 7422,
+  "out": 1428,
+  "thoughts": 10435,
+  "tool_prompt": null,
+  "total": 19285
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 54.24,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}

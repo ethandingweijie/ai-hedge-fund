@@ -1,0 +1,19 @@
+{
+ "text": "{\n  \"sotp_value\": 188.5,\n  \"fair_value\": 176.02,\n  \"currency\": \"HKD\",\n  \"per\": \"share\",\n  \"reasoning\": \"A sum-of-the-parts (SOTP) valuation for Alibaba Group (09988.HK) yields approximately HK$188.50 per share based on: (1) Taobao and Tmall Group at ~HK$92 per share (valued at 8-9x forward adjusted EBITA); (2) Cloud Intelligence Group (including generative AI/Qwen monetization) at ~HK$30 per share (~3.5x EV/Sales); (3) Alibaba International Digital Commerce (AIDC) at ~HK$14 per share; (4) Cainiao and Local Services/Digital Media at ~HK$13 per share; and (5) Net cash, liquid investments, and the 33% stake in Ant Group totaling ~HK$39.50 per share. The 12-month fair value consensus target is HK$176.02 per share, reflecting a ~64% upside from recent trading levels near HK$107, tempered by macroeconomic headwinds, domestic competitive dynamics, and regulatory considerations.\",\n  \"source_urls\": [\n    \"https://www.investing.com/equities/alibaba-group-holding-ltd-targets\",\n    \"https://www.tradingview.com/symbols/HKEX-9988/forecast/\",\n    \"https://www.morningstar.com/stocks/xhkg/09988/quote\"\n  ]\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 1391,
+  "out": 371,
+  "thoughts": 1350,
+  "tool_prompt": null,
+  "total": 3112
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 9.03,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}

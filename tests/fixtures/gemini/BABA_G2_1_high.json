@@ -1,0 +1,29 @@
+{
+ "text": "{\"sotp_value\":165.0,\"fair_value\":186.5,\"currency\":\"USD\",\"per\":\"ADS\",\"reasoning\":\"Alibaba's sum-of-the-parts (SOTP) valuation of approximately $165.00 per ADS values its operating segments independently: China Commerce (Taobao and Tmall Group) at ~8-9x forward earnings (~$65-$70/ADS), Cloud Intelligence and AI infrastructure (including Qwen models) at ~6-7x forward sales (~$45-$50/ADS), International Digital Commerce (AIDC) and Cainiao Smart Logistics (~$18-$22/ADS), and net cash balance along with strategic assets such as the ~33% Ant Group stake (~$25-$30/ADS), net of an applied conglomerate holding discount. The 12-month fair value estimate of $186.50 per ADS aligns with prevailing Wall Street consensus target prices, supported by accelerating enterprise cloud and AI revenue growth, stabilization in domestic commerce market share, and expected operating margin recovery.\",\"source_urls\":[\"https://www.marketbeat.com/stocks/NYSE/BABA/forecast/\",\"https://www.investing.com/equities/alibaba-group-holding-ltd-adr-consensus-estimates\",\"https://www.morningstar.com/stocks/xnys/baba/quote\"]} ",
+ "grounding_urls": [
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF14DMUfR_KyeweQt5UgtTASXHWQkV4ZaRGS1VlqqsxWsOT7O_AuGSaljqbj-ymZqpdRcMf2yXlTvY5QUpn16Kt-VTXh6SksB8-um4WYOW1636Uxv5UDL1rEUgc-aVZ01ZurrU8OkkwJFf2Gw==",
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFSc4KIYGYzQyleq13dM5G4xC7rmXD6ASna1aiMJg3SQONcJFEXBNgz1ZAuiCoSVJuKrVU4MM5UroSjE0b8PLqAodtL07mLb18L9ENCkKnF0NH9Av1SDNWiaB8fpxsU1Y4auxIDFN1Tg97p7zuhUS1QgzYa",
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGrYZIhVEHF_MSiRPug8FR21kKtyIAwiRMWL64zWqSWgI9HsUmnlfkMLdjNBKyQ6qNkBaslb4JmCp8taNRyvG0uEAry8bWpIEfc6oz9Sf5AiEBsd6IShBDo8D6ZJq4ENYlsOH-QHPUBf_hJbN_WtMtfN66DXrkWyC-R"
+ ],
+ "queries": [
+  "\"sum of the parts\" OR \"SOTP\" Alibaba \"per ADS\" OR \"per share\" 2024 OR 2025 OR 2026",
+  "Alibaba Group BABA sum of the parts SOTP target price 2024 2025",
+  "Alibaba stock fair value consensus price target BABA"
+ ],
+ "usage": {
+  "in": 3138,
+  "out": 323,
+  "thoughts": 4191,
+  "tool_prompt": null,
+  "total": 7652
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 35.55,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": {
+  "thinkingLevel": "high"
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "text": "{\"sotp_value\": 165.0, \"fair_value\": 186.12, \"currency\": \"USD\", \"per\": \"ADS\", \"reasoning\": \"A sum-of-the-parts (SOTP) approach values Alibaba's distinct businesses individually: Core China Commerce (Taobao and Tmall) valued at roughly 8x-10x forward EBITA (~$90/ADS), Cloud Intelligence Group at 3x-4x forward sales (~$28/ADS), Alibaba International Digital Commerce (AIDC) and Cainiao logistics combined at ~$18/ADS, equity investments including the 33% stake in Ant Group at ~$14/ADS, and net cash and investments after accounting for recent capital raises (~$20/ADS), minus holding discounts, aligning with Bernstein SocGen's SOTP model target of $165.00 per ADS. The 12-month fair value of $186.12 per ADS corresponds to the prevailing Wall Street consensus target across covering analysts, reflecting a ~14x-15x forward P/E multiple as AI cloud monetization accelerates and e-commerce retail profitability stabilizes.\", \"source_urls\": [\"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEI96EgBvhIMo4C0Iqze9mv3vLpboEg031nCtvIOFUTiR8oaY5YS9aeLUExZREK7zCUwxAMmigmrVPPvb8AlJJJHixnZ_AroIS2QG8RJWEYRtEa3Gh4dUdqFhegTOx8Vlc9kWA5t1e2BQskq-7l47rXvw4zq3Q6v4vHwEkRiFg1v8d8FsPdexft17R-e1hbBgBzBD8UxWHifQ==\", \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGTo5QwMvdKyBEvtR-9t4RRmc_eJoTp7cyMZld8s0o5zZ-Nn-cXo4h5fmyhRb9QsBcGxS3k-EqEohLBOzDU8n75JHr2LMuM1KSEx5OejX2kjfFkSGAG4SWVIr1qxIfW9YPT8Tfwm4O-qGEul85yfTqzuJI=\", \"https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFniliQhcu_btWvpnE_cbouTCOKqmZ_P6Zb-50-K0h64GLlHdaFKH57AdiqjuHkYy0QTwHkZfd1BfFCVJRN2Gr01EjKifvBoeDWfCQPi5Gq0Ospmm2VPR29nYVInMNztLPyXAa-JS4gF_eGkdXn3y1mu2UgwOc1oX4BGtPeEzweUwBdfA9oAgY4oZmUqYQ-uJi_Kj139Vr7vi-Li9-BJJgnjSvWWCTg2M4_RdFoh5J7vEpqLt4Vy7jLf_z8m7ia\"]} ",
+ "grounding_urls": [
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEI96EgBvhIMo4C0Iqze9mv3vLpboEg031nCtvIOFUTiR8oaY5YS9aeLUExZREK7zCUwxAMmigmrVPPvb8AlJJJHixnZ_AroIS2QG8RJWEYRtEa3Gh4dUdqFhegTOx8Vlc9kWA5t1e2BQskq-7l47rXvw4zq3Q6v4vHwEkRiFg1v8d8FsPdexft17R-e1hbBgBzBD8UxWHifQ==",
+  "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGTo5QwMvdKyBEvtR-9t4RRmc_eJoTp7cyMZld8s0o5zZ-Nn-cXo4h5fmyhRb9QsBcGxS3k-EqEohLBOzDU8n75JHr2LMuM1KSEx5OejX2kjfFkSGAG4SWVIr1qxIfW9YPT8Tfwm4O-qGEul85yfTqzuJI="
+ ],
+ "queries": [
+  "Alibaba BABA sum of the parts valuation target price",
+  "Alibaba fair value per ADS analyst price target 2024 2025"
+ ],
+ "usage": {
+  "in": 187,
+  "out": 797,
+  "thoughts": 1469,
+  "tool_prompt": null,
+  "total": 2453
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 9.92,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}

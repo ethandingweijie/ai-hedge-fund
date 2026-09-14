@@ -1,0 +1,19 @@
+{
+ "text": "{\n  \"multiples\": [\n    {\n      \"segment\": \"Alibaba China E-commerce Group\",\n      \"metric\": \"pe\",\n      \"low\": 8.0,\n      \"high\": 12.0,\n      \"basis\": \"Broker SOTP convention and domestic e-commerce peer multiples (CMB International applies 8.0x-12.0x target P/E on adjusted EBITA; domestic peers JD.com and PDD Holdings trade at comparable forward P/E ranges)\",\n      \"source_url\": \"https://www.cmbi.com.hk\"\n    },\n    {\n      \"segment\": \"Cloud Intelligence Group\",\n      \"metric\": \"ev_rev\",\n      \"low\": 3.0,\n      \"high\": 6.0,\n      \"basis\": \"Broker SOTP convention (CMB International applies 4.0x-6.0x EV/revenue; DBS applies 3.0x EV/sales) benchmarked against global cloud computing and infrastructure peers\",\n      \"source_url\": \"https://www.cmbi.com.hk\"\n    },\n    {\n      \"segment\": \"Alibaba International Digital Commerce Group\",\n      \"metric\": \"ev_rev\",\n      \"low\": 1.0,\n      \"high\": 2.0,\n      \"basis\": \"Broker SOTP convention (CMB International applies 1.5x EV/revenue) benchmarked against global and emerging market e-commerce peers (such as Sea Ltd and MercadoLibre)\",\n      \"source_url\": \"https://www.cmbi.com.hk\"\n    },\n    {\n      \"segment\": \"All others\",\n      \"metric\": \"ev_rev\",\n      \"low\": 0.5,\n      \"high\": 1.0,\n      \"basis\": \"Broker SOTP convention (CMB International applies 0.7x-1.0x EV/revenue for All Others, reflecting lower-margin direct sales, retail assets, and media)\",\n      \"source_url\": \"https://www.cmbi.com.hk\"\n    }\n  ],\n  \"holdco_discount_low\": 0.15,\n  \"holdco_discount_high\": 0.30,\n  \"holdco_basis\": \"15% to 30% conglomerate/holding company discount typically applied by brokers and research analysts to Alibaba's non-core holdings and strategic investments (e.g., CMB International applies 30% holding-company discount; Morningstar adopts 20%)\",\n  \"associates_investments\": {\n    \"value\": 203131,\n    \"currency\": \"CNY\",\n    \"scale\": \"mn\",\n    \"period\": \"FY2024\",\n    \"source_url\": \"https://www.nasdaq.com/press-release/alibaba-group-announces-march-quarter-2024-and-fiscal-year-2024-results-2024-05-14\",\n    \"quote\": \"Investment in equity method investees 207,380 203,131\"\n  },\n  \"net_cash\": {\n    \"value\": 446.5,\n    \"currency\": \"CNY\",\n    \"scale\": \"bn\",\n    \"period\": \"FY2024\",\n    \"source_url\": \"https://seekingalpha.com/article/4692742-alibaba-group-holding-limited-baba-q4-2024-earnings-call-transcript\",\n    \"quote\": \"As of March 31, 2024, we continued to maintain a strong net cash position of RMB 446.5 billion or $61.8 billion.\"\n  }\n} ",
+ "grounding_urls": [],
+ "queries": [],
+ "usage": {
+  "in": 4952,
+  "out": 868,
+  "thoughts": 9583,
+  "tool_prompt": null,
+  "total": 15403
+ },
+ "mode": "single",
+ "model": "gemini-3.8-flash",
+ "latency_s": 55.83,
+ "finish_reason": "STOP",
+ "n_candidates": 1,
+ "block_reason": null,
+ "thinking": null
+}
