@@ -35,6 +35,14 @@ async def badge(admin=Depends(require_model_accuracy_owner)):
     return {"eligible": await asyncio.to_thread(review.eligible_count)}
 
 
+@router.get("/segment-memory")
+async def segment_memory(admin=Depends(require_model_accuracy_owner)):
+    """Reported segment revenue and profit for SOTP-valued names, with citations
+    and the per-year reconciliation to FMP revenue (pending review)."""
+    from src.data import segment_memory as sm
+    return await asyncio.to_thread(sm.ui_summary)
+
+
 @router.get("/calibration/{version_id}")
 async def calibration_detail(version_id: str, admin=Depends(require_model_accuracy_owner)):
     from src.memory import calibration_review as review

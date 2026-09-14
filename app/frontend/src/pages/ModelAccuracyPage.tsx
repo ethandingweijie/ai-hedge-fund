@@ -23,9 +23,10 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
 import { useAuth } from '@/contexts/auth-context';
 import {
-  getModelAccuracyOverview, getCalibrationDetail,
+  getModelAccuracyOverview, getCalibrationDetail, getSegmentMemory,
   promoteCalibration, rollbackCalibration, dismissCalibration,
   type CalibrationCard, type CalibrationDetail, type DiagnosticCard, type ModelAccuracyOverview,
+  type SegmentMemory, type SegmentMemoryTicker,
 } from '@/lib/api';
 
 const HORIZON_LABEL: Record<string, string> = {
@@ -264,6 +265,147 @@ function DiagnosticItem({ card }: { card: DiagnosticCard }) {
 
 // ── page ────────────────────────────────────────────────────────────────────
 
+// ── segment memory ──────────────────────────────────────────────────────────
+
+const BASIS_LABEL: Record<string, string> = {
+  sotp_analyst: 'SOTP (analyst)',
+  'sotp_analyst+segment_sotp': 'SOTP (analyst) + segments',
+  segment_sotp: 'SOTP (segments)',
+  holdco_lookthrough: 'Holdco look-through',
+  sotp_blocked_no_segments: 'SOTP blocked: no segment data',
+};
+
+function fmtAmount(v: number | null | undefined, ccy?: string): string {
+  if (v == null) return '—';
+  const abs = Math.abs(v);
+  const [div, unit] = abs >= 1e12 ? [1e12, 'tn'] : abs >= 1e9 ? [1e9, 'bn'] : [1e6, 'mn'];
+  return `${ccy ? `${ccy} ` : ''}${(v / div).toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
+}
+
+function gapText(g: number | null | undefined): string {
+  return g == null ? '—' : `${g >= 0 ? '+' : ''}${(g * 100).toFixed(1)}%`;
+}
+
+function SegmentTable({ t }: { t: SegmentMemoryTicker }) {
+  const years = t.years ?? [];
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs tabular-nums">
+        <thead>
+          <tr className="text-muted-foreground">
+            <th className="text-left font-medium py-2 pr-3">Segment ({t.currency})</th>
+            {years.map((y) => <th key={y} className="text-right font-medium py-2 px-2">FY ending {y}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {(t.segments ?? []).map((s) => (
+            <tr key={s.name} className="border-t border-border/60 align-top">
+              <td className="py-2 pr-3 text-foreground">{s.name}</td>
+              {s.years.map((c) => (
+                <td key={c.year} className="py-2 px-2 text-right">
+                  {c.revenue == null ? <span className="text-muted-foreground">—</span> : (
+                    <>
+                      <a href={c.revenue_url} target="_blank" rel="noreferrer" title={c.revenue_quote}
+                         className="text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">
+                        {fmtAmount(c.revenue)}
+                      </a>
+                      <div className="text-muted-foreground" title={c.profit_measure ?? undefined}>
+                        {c.margin == null ? 'profit n/d' : (
+                          c.profit_url
+                            ? <a href={c.profit_url} target="_blank" rel="noreferrer" className="hover:text-foreground">
+                                {(c.margin * 100).toFixed(1)}% margin
+                              </a>
+                            : `${(c.margin * 100).toFixed(1)}% margin`
+                        )}
+                      </div>
+                    </>
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+          <tr className="border-t border-border text-muted-foreground">
+            <td className="py-2 pr-3">Segments vs FMP revenue</td>
+            {years.map((y) => {
+              const r = t.reconciliation?.[y];
+              return (
+                <td key={y} className="py-2 px-2 text-right" title={r?.fmp_revenue ? `FMP ${fmtAmount(r.fmp_revenue, t.currency)}` : undefined}>
+                  {gapText(r?.segment_gap)}
+                </td>
+              );
+            })}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SegmentMemorySection({ allowed }: { allowed: boolean }) {
+  const [memory, setMemory] = useState<SegmentMemory | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!allowed) return;
+    getSegmentMemory()
+      .then((m) => {
+        setMemory(m);
+        setSelected((cur) => cur ?? m.tickers.find((t) => !t.error)?.ticker ?? null);
+      })
+      .catch((e: Error) => setError(e.message));
+  }, [allowed]);
+
+  const current = memory?.tickers.find((t) => t.ticker === selected) ?? null;
+
+  return (
+    <section>
+      <SectionTitle hint={memory
+        ? `Reported segment revenue and profit for SOTP-valued names, each figure cited${memory.model ? ` · ${memory.model}` : ''}${memory.updated ? ` · updated ${memory.updated}` : ''}. Click a figure for its source.`
+        : 'Reported segment revenue and profit for SOTP-valued names.'}>
+        Segment memory {memory && <Chip strong={memory.status === 'pending_review'}>{memory.status.replace('_', ' ')}</Chip>}
+      </SectionTitle>
+      {error && <Card className="p-4 text-sm text-foreground">Could not load segment memory: {error}</Card>}
+      {memory && memory.tickers.length === 0 && (
+        <Card className="p-4 text-sm text-muted-foreground">Not built yet.</Card>
+      )}
+      {memory && memory.tickers.length > 0 && (
+        <Card className="p-4 space-y-4">
+          <div className="flex flex-wrap gap-1.5">
+            {memory.tickers.map((t) => (
+              <button key={t.ticker} onClick={() => setSelected(t.ticker)}
+                className={`text-xs px-2 py-1 rounded-md border tabular-nums
+                  ${t.ticker === selected ? 'bg-foreground text-background border-foreground'
+                    : t.error ? 'border-dashed border-border text-muted-foreground'
+                    : 'border-border text-foreground hover:bg-muted'}`}>
+                {t.ticker}
+              </button>
+            ))}
+          </div>
+          {current && (current.error ? (
+            <p className="text-sm text-muted-foreground">{current.company}: not retrieved ({current.error}).</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-sm font-semibold text-foreground">{current.company}</span>
+                <Chip>{BASIS_LABEL[current.sotp_basis] ?? current.sotp_basis}</Chip>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  cited {Math.round((current.citation_coverage ?? 0) * 100)}% · profit disclosed {Math.round((current.profit_coverage ?? 0) * 100)}%
+                  {current.retrieved ? ` · retrieved ${current.retrieved}` : ''}
+                </span>
+              </div>
+              <SegmentTable t={current} />
+              {current.resegmentation && (
+                <p className="text-xs text-muted-foreground">Resegmentation: {current.resegmentation}</p>
+              )}
+            </>
+          ))}
+        </Card>
+      )}
+    </section>
+  );
+}
+
 export function ModelAccuracyPage() {
   const { user } = useAuth();
   const [data, setData] = useState<ModelAccuracyOverview | null>(null);
@@ -357,6 +499,8 @@ export function ModelAccuracyPage() {
                 </Card>
               )}
             </section>
+
+            <SegmentMemorySection allowed={allowed} />
 
             {data.history.length > 0 && (
               <section>

@@ -107,6 +107,10 @@ class SegmentYear(BaseModel):
     fiscal_year: str = Field(description="e.g. 'FY2025'")
     period_end: str = Field(description="ISO date the fiscal year ended, e.g. '2025-03-31'")
     revenue: Cited
+    profit: Optional[Cited] = Field(
+        default=None, description="The segment profit measure the company reports for this year "
+                                  "(e.g. adjusted EBITA, operating profit); null if not disclosed")
+    profit_measure: Optional[str] = Field(default=None, description="Name of that measure as the company labels it")
 
 
 class SegmentHistory(BaseModel):
@@ -343,12 +347,52 @@ def sotp_prompt(company: str, ticker: str, anchors: dict) -> str:
 
 def history_prompt(company: str, ticker: str, years: int = 5) -> str:
     return (
-        f"From {company}'s ({ticker}) annual reports and results announcements, list the "
-        f"REPORTED revenue of each reportable business segment for each of the last "
-        f"{years} completed fiscal years, and group total revenue for the same years. "
-        "Use the segment names the company used; if it resegmented, use the latest "
-        "definition where the company restated prior years and describe the change. "
-        f"Reported figures only, no estimates.\n{_AMOUNT_RULE}"
+        f"From {company}'s ({ticker}) annual reports and results announcements, list for "
+        f"each reportable business segment and each of the last {years} completed fiscal "
+        "years: the REPORTED segment revenue, and the segment PROFIT measure the company "
+        "itself reports for segments (e.g. adjusted EBITA, operating profit, segment "
+        "result) with that measure's name. Leave profit null where the company does not "
+        "disclose it. Also group total revenue for the same years. Use the segment names "
+        "the company used; if it resegmented, use the latest definition where the "
+        "company restated prior years and describe the change. Reported figures only, "
+        f"no estimates, never figures from broker valuation tables.\n{_AMOUNT_RULE}"
+    )
+
+
+class SegmentMultiple(BaseModel):
+    segment: str = Field(description="Exactly one of the segment names supplied")
+    metric: Literal["pe", "ev_rev"]
+    low: float
+    high: float
+    basis: str = Field(description="Peers or broker SOTP convention the range rests on")
+    source_url: str
+
+
+class MultipleRanges(BaseModel):
+    """Gemini's part of the SOTP once revenue and margin come from the memory:
+    the multiples, the balance sheet items and the holdco discount, cited."""
+    multiples: list[SegmentMultiple]
+    associates_investments: Optional[Cited] = Field(default=None, description="Total, not per share")
+    net_cash: Optional[Cited] = Field(
+        default=None, description="Cash + short-term investments - total debt; negative if net debt")
+    holdco_discount_low: float
+    holdco_discount_high: float
+    holdco_basis: str
+
+
+def multiples_prompt(company: str, ticker: str, segments: list[dict]) -> str:
+    listing = "; ".join(f"{s['name']} (latest reported revenue share {s['share']:.0%}"
+                        + (f", margin {s['margin']:.0%}" if s.get("margin") is not None else "") + ")"
+                        for s in segments)
+    return (
+        f"Sum-of-the-parts for {company} ({ticker}). Segment revenue and margins are already "
+        f"known from the company's filings: {listing}.\n"
+        "For EACH of those segments give a valuation multiple RANGE with its basis and a "
+        "source (P/E on segment NOPAT for profitable core businesses, EV/Sales otherwise); "
+        "broker SOTP notes and listed peers are good sources. Also give associates and "
+        "strategic investments (total), net cash (cash + short-term investments - total "
+        "debt), and a holding-company discount range with its basis. Do NOT compute a "
+        f"per-share value and do NOT restate segment revenue.\n{_AMOUNT_RULE}"
     )
 
 
@@ -461,6 +505,70 @@ def to_engine_assumptions(sotp: dict, *, fmp_revenue_fwd_usd: Optional[float] = 
         else:
             assumptions[field] = value
     checks["citation_coverage"] = citation_coverage(sotp)
+    return assumptions, checks
+
+
+def memory_to_engine(mix: dict, ranges: dict, *, fmp_revenue_fwd_usd: float,
+                     fx_to_usd: Optional[Callable[[str], Optional[float]]] = None) -> tuple[dict, dict]:
+    """SOTP assumptions where revenue and margin are ours and only multiples,
+    balance-sheet items and the holdco discount come from Gemini.
+
+    Forward segment revenue = FMP consensus group revenue x the latest REPORTED
+    segment share (segment_memory.latest_mix); margin = latest reported segment
+    profit / revenue. A segment Gemini gave no valid multiple for is dropped and
+    listed, never valued on a guess."""
+    from src.agents.analysis.sotp_multiple_basis import normalize_key
+
+    fx = fx_to_usd or _default_fx
+    checks: dict = {"dropped_segments": [], "dropped_fields": [], "clamped": [],
+                    "mix_year": mix.get("year"), "revenue_basis": "fmp_consensus_x_reported_mix"}
+    by_key = {normalize_key(m.get("segment", "")): m for m in ranges.get("multiples") or []}
+
+    def match(name: str) -> Optional[dict]:
+        k = normalize_key(name)
+        if k in by_key:
+            return by_key[k]
+        return next((m for mk, m in by_key.items() if mk and (mk in k or k in mk)), None)
+
+    segments = []
+    for s in mix.get("segments") or []:
+        m = match(s["name"])
+        lo, hi = (m or {}).get("low"), (m or {}).get("high")
+        if not m or not (isinstance(lo, (int, float)) and isinstance(hi, (int, float)) and 0 < lo <= hi) \
+                or not str(m.get("source_url", "")).startswith("http"):
+            checks["dropped_segments"].append(s["name"])
+            continue
+        seg = {"name": s["name"], "revenue_fwd": fmp_revenue_fwd_usd * s["share"],
+               "pe_multiple": None, "ev_rev_multiple": None,
+               "rationale": f"{m['metric']} {lo}-{hi}x: {m.get('basis', '')}"[:300],
+               "source": "memory_mix+gemini_multiple"}
+        seg["pe_multiple" if m["metric"] == "pe" else "ev_rev_multiple"] = round((lo + hi) / 2, 3)
+        if s.get("margin") is not None:
+            clamped = min(max(float(s["margin"]), MARGIN_BOUNDS[0]), MARGIN_BOUNDS[1])
+            if clamped != s["margin"]:
+                checks["clamped"].append(f"{s['name']} margin {s['margin']:.3f}")
+            seg["ebit_margin"] = clamped
+        segments.append(seg)
+
+    lo_h, hi_h = ranges.get("holdco_discount_low"), ranges.get("holdco_discount_high")
+    holdco = ((float(lo_h) + float(hi_h)) / 2
+              if isinstance(lo_h, (int, float)) and isinstance(hi_h, (int, float)) else 0.0)
+    if holdco > 1.0:                                     # "15-25" meaning percent
+        holdco /= 100.0
+    assumptions: dict = {"segments": segments, "holdco_discount_pct": min(max(holdco, 0.0), 0.5),
+                         "default_tax_rate": 0.15, "_origin": "memory+gemini",
+                         "_sources": {"revenue": "fmp_consensus_x_reported_mix",
+                                      "margin": "reported_segment_profit",
+                                      "multiples": "gemini_grounded"}}
+    for field in ("associates_investments", "net_cash"):
+        c = ranges.get(field)
+        if c is None:
+            continue
+        value = amount(c, fx)
+        if value is None:
+            checks["dropped_fields"].append(field)
+        else:
+            assumptions[field] = value
     return assumptions, checks
 
 

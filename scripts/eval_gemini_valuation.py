@@ -54,6 +54,8 @@ from src.agents.industry import gemini_params as gp  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures" / "gemini"
 THINKING: dict | None = None        # set from --thinking-level
+SKIP_G1M = "--skip-g1m" in sys.argv
+SKIP_G1 = "--skip-g1" in sys.argv   # the one-shot grounded arm, superseded by G1m
 USDHKD = 7.8
 
 # ticker -> company, listing currency, per-unit label, GS TP in listing currency
@@ -187,7 +189,39 @@ def run(repeats: int, record: bool, tickers: list[str], timeout: float = gp.TIME
         print(f"\n== {ticker} ({company}) ==", flush=True)
         a = anchors(ticker)
         entry = {"anchors": a, "gs_tp": gs_tp, "listing": listing, "per": per,
-                 "G1": [], "G2": [], "S": None, "Q": None}
+                 "G1": [], "G1m": [], "G2": [], "S": None, "Q": None}
+        # G1m: revenue x reported mix and margins from the segment memory, only
+        # multiples / balance sheet / holdco from Gemini.
+        from src.data import segment_memory
+        mix = segment_memory.latest_mix(ticker) if ticker in SOTP_NAMES else None
+        entry["memory_mix"] = mix
+        if mix and a["shares"] and a["revenue_fwd_usd"] and not SKIP_G1M:
+            for i in range(repeats):
+                started = time.monotonic()
+                try:
+                    out = gp.generate(gp.multiples_prompt(company, ticker, mix["segments"]),
+                                      schema=gp.MultipleRanges, timeout=timeout, thinking=THINKING)
+                except gp.GeminiBillingError:
+                    raise
+                except Exception as exc:  # noqa: BLE001
+                    entry["G1m"].append({"error": f"{type(exc).__name__}: {str(exc)[:300]}",
+                                         "wall_s": round(time.monotonic() - started, 2)})
+                    print(f"  G1m[{i}] ERROR {type(exc).__name__} after {time.monotonic() - started:.0f}s", flush=True)
+                    continue
+                if record:
+                    _record(f"{ticker}_G1m_{i}", out)
+                assumptions, checks = gp.memory_to_engine(mix, out["json"], fmp_revenue_fwd_usd=a["revenue_fwd_usd"])
+                val = engine_value(ticker, assumptions, a) if assumptions["segments"] else {"value": None}
+                entry["G1m"].append({
+                    "value": val["value"], "log_err_vs_gs": _log_err(val["value"], gs_tp),
+                    "vs_brokers": {b: _signed_pct(val["value"], tp) for b, tp in BROKER_TPS.get(ticker, {}).items()},
+                    "ground_truth": val.get("ground_truth"), "checks": checks,
+                    "holdco": assumptions["holdco_discount_pct"],
+                    "latency_s": out["latency_s"], "usage": out["usage"],
+                    "wall_s": round(time.monotonic() - started, 2), "ranges": out["json"],
+                })
+                print(f"  G1m[{i}] value={val['value']} holdco={assumptions['holdco_discount_pct']:.2f} "
+                      f"dropped={checks['dropped_segments']} {out['latency_s']}s", flush=True)
         if ticker in SOTP_NAMES:
             _, snap = lookup_snapshot(snapshot, ticker)
             if snap and a["shares"]:
@@ -195,7 +229,7 @@ def run(repeats: int, record: bool, tickers: list[str], timeout: float = gp.TIME
             entry["Q"] = qwen_baseline(ticker, a, snap)
             fmp_anchor = {"revenue_next_fy_usd_bn": round((a["revenue_fwd_usd"] or 0) / 1e9, 2),
                           "period": a["revenue_fwd_period"], "reported_currency": a["reported_currency"]}
-            for i in range(repeats):
+            for i in range(0 if SKIP_G1 else repeats):
                 started = time.monotonic()
                 try:
                     out = gp.generate(gp.sotp_prompt(company, ticker, fmp_anchor), schema=gp.SotpInputs,
@@ -298,6 +332,8 @@ def main() -> None:
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--out", required=True)
     ap.add_argument("--record", action="store_true")
+    ap.add_argument("--skip-g1", action="store_true", help="skip the one-shot grounded SOTP arm")
+    ap.add_argument("--skip-g1m", action="store_true", help="skip the memory-mix + Gemini multiples arm")
     ap.add_argument("--thinking-level", choices=["minimal", "low", "medium", "high"], default=None,
                     help="generationConfig.thinkingConfig.thinkingLevel; default = model default")
     ap.add_argument("--timeout", type=float, default=300.0,

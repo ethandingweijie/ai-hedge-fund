@@ -6,6 +6,11 @@ SOTP for Wilmar, ThaiBev, Olam and SingPost. This fills the gap with cited,
 REPORTED (not estimated) segment revenue for the last five fiscal years,
 reconciled year by year against FMP's reported group revenue.
 
+Segment PROFIT (the measure the company reports, e.g. adjusted EBITA) is
+collected alongside revenue so SOTP margins come from filings too. Default
+reasoning: in the 2026-09-15 BABA comparison low reasoning misread tables and
+high was slower with more empty responses.
+
 Output: src/data/segment_revenue_memory.json, status "pending_review". Nothing
 reads it into a valuation until it is reviewed (plan A1 loads it as the seed
 for the user financials store). Resumable: tickers already present are
@@ -127,16 +132,20 @@ def main() -> None:
         n_values = sum(len(s.get("years") or []) for s in hist.get("segments") or [])
         n_cited = sum(gp._cited_ok(y.get("revenue")) for s in hist.get("segments") or []
                       for y in s.get("years") or [])
+        n_profit = sum(gp._cited_ok(y.get("profit")) for s in hist.get("segments") or []
+                       for y in s.get("years") or [])
         memory["tickers"][ticker] = {
             "company": company, "sotp_basis": basis, "fmp_reporting_currency": rep_ccy,
             "retrieved": date.today().isoformat(), "model": out["model"],
             "latency_s": out["latency_s"], "usage": out["usage"],
             "citation_coverage": round(n_cited / n_values, 4) if n_values else 0.0,
+            "profit_coverage": round(n_profit / n_values, 4) if n_values else 0.0,
             "reconciliation": rec, "history": hist,
         }
         gaps = [f"{y}:{v['segment_gap']:+.0%}" for y, v in rec.items() if v.get("segment_gap") is not None]
         print(f"{ticker}: {len(hist.get('segments') or [])} segments, {n_values} values, "
-              f"cited {n_cited}/{n_values}, {out['latency_s']:.0f}s, segment-sum vs FMP {' '.join(gaps) or 'n/a'}",
+              f"cited {n_cited}/{n_values}, profit {n_profit}/{n_values}, {out['latency_s']:.0f}s, "
+              f"segment-sum vs FMP {' '.join(gaps) or 'n/a'}",
               flush=True)
         memory["_meta"]["updated"] = date.today().isoformat()
         OUT.write_text(json.dumps(memory, indent=1, ensure_ascii=False), encoding="utf-8")

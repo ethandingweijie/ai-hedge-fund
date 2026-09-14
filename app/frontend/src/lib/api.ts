@@ -239,6 +239,48 @@ export function getModelAccuracyBadge(): Promise<{ eligible: number }> {
   return fetchJson(`${BASE}/model-accuracy/badge`, { headers: { ..._authHeaders() } });
 }
 
+export interface SegmentMemoryCell {
+  year: string;
+  fiscal_year?: string;
+  revenue?: number;
+  profit?: number | null;
+  margin?: number | null;
+  profit_measure?: string | null;
+  revenue_url?: string;
+  revenue_quote?: string;
+  profit_url?: string | null;
+}
+
+export interface SegmentMemoryTicker {
+  ticker: string;
+  company: string;
+  sotp_basis: string;
+  error?: string;
+  currency?: string;
+  retrieved?: string;
+  model?: string;
+  citation_coverage?: number;
+  profit_coverage?: number;
+  years?: string[];
+  segments?: { name: string; years: SegmentMemoryCell[] }[];
+  reconciliation?: Record<string, {
+    segment_sum: number; fmp_revenue: number | null;
+    segment_gap: number | null; total_gap: number | null;
+  }>;
+  resegmentation?: string;
+}
+
+export interface SegmentMemory {
+  status: string;
+  updated: string | null;
+  model: string | null;
+  tickers: SegmentMemoryTicker[];
+}
+
+export function getSegmentMemory(): Promise<SegmentMemory> {
+  return fetchJson(`${BASE}/model-accuracy/segment-memory`, { headers: { ..._authHeaders() } });
+}
+
 export function getCalibrationDetail(id: string): Promise<CalibrationDetail> {
   return fetchJson(`${BASE}/model-accuracy/calibration/${encodeURIComponent(id)}`, {
     headers: { ..._authHeaders() },
