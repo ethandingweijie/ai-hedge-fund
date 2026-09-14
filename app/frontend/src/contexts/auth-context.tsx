@@ -20,6 +20,8 @@ export interface AuthUser {
   provider: string;
   /** 'admin' | 'member'. Decides what to render only -- the server enforces. */
   role?: string;
+  /** Server-decided: this sign-in may open Model Accuracy. */
+  can_view_model_accuracy?: boolean;
 }
 
 interface AuthContextValue {

@@ -52,14 +52,14 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
       .catch(() => {});
   }, []);
 
-  // Admins see a count when a calibration proposal is ready for their decision.
+  // The owner sees a count when a calibration proposal is ready for a decision.
   const [eligibleProposals, setEligibleProposals] = useState(0);
   useEffect(() => {
-    if (user?.role !== 'admin') return;
+    if (!user?.can_view_model_accuracy) return;
     getModelAccuracyBadge()
       .then((res) => setEligibleProposals(res.eligible))
       .catch(() => {});
-  }, [user?.role]);
+  }, [user?.can_view_model_accuracy]);
 
   const isActive = (item: NavItem) => {
     if (item.action === 'new') return false; // "New Analysis" never shows as active
@@ -96,7 +96,7 @@ export function DesktopSidebar({ collapsed, onToggleCollapse }: DesktopSidebarPr
 
       {/* ── Nav items ──────────────────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
-        {visibleNavItems(user?.role).map((item) => {
+        {visibleNavItems(user).map((item) => {
           const { label, icon: Icon, hint } = item;
           const active = isActive(item);
           return (

@@ -225,28 +225,56 @@ class TestDiagnostics:
         assert review.diagnostics() == (None, [])
 
 
+OWNER = "owner@example.com"
+USERS = {"owner-token": SimpleNamespace(id=1, email="Owner@Example.com", role="member"),
+         "other-token": SimpleNamespace(id=2, email="someone@else.com", role="admin")}
+
+
 class TestRoutes:
+    """Only a signed-in email on MODEL_ACCURACY_EMAILS gets in -- not a role,
+    not the service secret."""
+
     @pytest.fixture
     def client(self, monkeypatch):
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
         from app.backend.database import get_db
+        from app.backend.routes import deps
         from app.backend.routes import model_accuracy as ma
         app = FastAPI()
         app.include_router(ma.router)
         app.dependency_overrides[get_db] = lambda: None
         monkeypatch.setenv("DB_UPLOAD_SECRET", "s3cret")
+        monkeypatch.setenv("MODEL_ACCURACY_EMAILS", f" {OWNER} ")
+        monkeypatch.setattr(deps, "get_user_from_token", lambda token, db: USERS.get(token))
+        monkeypatch.setattr(review, "overview", lambda: {"ok": True})
         return TestClient(app)
 
-    def test_anonymous_and_wrong_secret_are_refused(self, client):
+    @staticmethod
+    def _bearer(token):
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_the_owner_reaches_the_page_case_insensitively(self, client):
+        r = client.get("/model-accuracy/overview", headers=self._bearer("owner-token"))
+        assert r.status_code == 200 and r.json() == {"ok": True}
+
+    def test_another_sign_in_is_refused_even_as_an_admin(self, client):
+        assert client.get("/model-accuracy/overview",
+                          headers=self._bearer("other-token")).status_code == 403
+
+    def test_the_service_secret_does_not_grant_access(self, client):
+        assert client.get("/model-accuracy/overview",
+                          headers={"X-Admin-Secret": "s3cret"}).status_code == 403
+
+    def test_anonymous_and_bad_tokens_are_refused(self, client):
         assert client.get("/model-accuracy/overview").status_code == 403
         assert client.get("/model-accuracy/overview",
-                          headers={"X-Admin-Secret": "wrong"}).status_code == 403
+                          headers=self._bearer("nope")).status_code == 403
 
-    def test_an_admin_reaches_the_page(self, client, monkeypatch):
-        monkeypatch.setattr(review, "overview", lambda: {"ok": True})
-        r = client.get("/model-accuracy/overview", headers={"X-Admin-Secret": "s3cret"})
-        assert r.status_code == 200 and r.json() == {"ok": True}
+    def test_an_empty_allowlist_admits_nobody(self, client, monkeypatch):
+        monkeypatch.setenv("MODEL_ACCURACY_EMAILS", "")
+        assert client.get("/model-accuracy/overview",
+                          headers=self._bearer("owner-token")).status_code == 403
 
     def test_a_refused_change_is_409_and_an_unknown_version_404(self, client, monkeypatch):
         def refuse(vid, **kw):
@@ -256,14 +284,17 @@ class TestRoutes:
             raise KeyError(vid)
         monkeypatch.setattr(review, "promote", refuse)
         monkeypatch.setattr(review, "detail", missing)
-        h = {"X-Admin-Secret": "s3cret"}
+        h = self._bearer("owner-token")
         assert client.post("/model-accuracy/calibration/v/promote", headers=h).status_code == 409
         assert client.get("/model-accuracy/calibration/v", headers=h).status_code == 404
 
 
-class TestAuthRole:
-    def test_me_reports_the_role(self):
+class TestAuthMe:
+    def test_me_reports_role_and_whether_this_sign_in_may_see_model_accuracy(self, monkeypatch):
         from app.backend.routes import auth as A
-        base = dict(id=1, email="a@b.c", name=None, avatar_url=None, provider="google")
-        assert A.get_me(user=SimpleNamespace(**base, role="admin")).role == "admin"
-        assert A.get_me(user=SimpleNamespace(**base)).role == "member"
+        monkeypatch.setenv("MODEL_ACCURACY_EMAILS", OWNER)
+        base = dict(id=1, name=None, avatar_url=None, provider="google")
+        owner = A.get_me(user=SimpleNamespace(**base, email="OWNER@example.com"))
+        other = A.get_me(user=SimpleNamespace(**base, email="x@y.z", role="admin"))
+        assert owner.can_view_model_accuracy is True and owner.role == "member"
+        assert other.can_view_model_accuracy is False and other.role == "admin"

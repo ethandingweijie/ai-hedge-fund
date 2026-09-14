@@ -75,6 +75,37 @@ def require_admin(
     )
 
 
+def model_accuracy_emails() -> frozenset[str]:
+    """Sign-ins allowed to see Model Accuracy, from MODEL_ACCURACY_EMAILS
+    (comma-separated). Kept in the environment, not the repo, so no address is
+    committed. Unset means nobody."""
+    raw = os.environ.get("MODEL_ACCURACY_EMAILS", "")
+    return frozenset(e.strip().lower() for e in raw.split(",") if e.strip())
+
+
+def can_view_model_accuracy(user) -> bool:
+    email = (getattr(user, "email", None) or "").strip().lower()
+    return bool(email) and email in model_accuracy_emails()
+
+
+def require_model_accuracy_owner(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Dependency: a signed-in user whose email is on MODEL_ACCURACY_EMAILS.
+
+    Deliberately narrower than require_admin: no service secret and no role
+    grants it. Promoting a calibration changes every valuation, so only the
+    named sign-ins may see or act on it."""
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+        user = get_user_from_token(token, db)
+        if user is not None and can_view_model_accuracy(user):
+            return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Model Accuracy is not available to this account.")
+
+
 def require_user_or_service(
     authorization: Optional[str] = Header(default=None),
     x_admin_secret: Optional[str] = Header(default=None, alias="X-Admin-Secret"),

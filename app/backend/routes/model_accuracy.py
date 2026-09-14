@@ -1,8 +1,8 @@
-"""Model Accuracy -- the admin page's API (B6).
+"""Model Accuracy -- the page's API (B6).
 
-Every route requires an admin: a signed-in user with role='admin', or the
-service secret. This is the only way a calibration reaches the engine, so it
-is not reachable by members at all.
+Every route requires a signed-in user whose email is on MODEL_ACCURACY_EMAILS.
+No role and no service secret grants access: this is the only way a
+calibration reaches the engine, so only the named sign-ins can see or act on it.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.backend.routes.deps import require_admin
+from app.backend.routes.deps import require_model_accuracy_owner
 
 router = APIRouter(prefix="/model-accuracy", tags=["model-accuracy"])
 
@@ -21,7 +21,7 @@ def _actor(admin) -> Optional[str]:
 
 
 @router.get("/overview")
-async def overview(admin=Depends(require_admin)):
+async def overview(admin=Depends(require_model_accuracy_owner)):
     """Recommendations, proposals with their backtest and shadow record, the
     live calibration, and diagnostics that need a code change."""
     from src.memory import calibration_review as review
@@ -29,14 +29,14 @@ async def overview(admin=Depends(require_admin)):
 
 
 @router.get("/badge")
-async def badge(admin=Depends(require_admin)):
+async def badge(admin=Depends(require_model_accuracy_owner)):
     """How many proposals are eligible for promotion right now."""
     from src.memory import calibration_review as review
     return {"eligible": await asyncio.to_thread(review.eligible_count)}
 
 
 @router.get("/calibration/{version_id}")
-async def calibration_detail(version_id: str, admin=Depends(require_admin)):
+async def calibration_detail(version_id: str, admin=Depends(require_model_accuracy_owner)):
     from src.memory import calibration_review as review
     try:
         return await asyncio.to_thread(review.detail, version_id)
@@ -55,7 +55,7 @@ async def _change(fn, version_id: str, **kwargs):
 
 
 @router.post("/calibration/{version_id}/promote")
-async def promote(version_id: str, admin=Depends(require_admin)):
+async def promote(version_id: str, admin=Depends(require_model_accuracy_owner)):
     """Make a proposal live. Refused (409) unless it is in shadow and its
     shadow report says eligible."""
     from src.memory import calibration_review as review
@@ -63,12 +63,12 @@ async def promote(version_id: str, admin=Depends(require_admin)):
 
 
 @router.post("/calibration/{version_id}/rollback")
-async def rollback(version_id: str, reason: str = "", admin=Depends(require_admin)):
+async def rollback(version_id: str, reason: str = "", admin=Depends(require_model_accuracy_owner)):
     from src.memory import calibration_review as review
     return await _change(review.rollback, version_id, actor=_actor(admin), reason=reason)
 
 
 @router.post("/calibration/{version_id}/dismiss")
-async def dismiss(version_id: str, reason: str = "", admin=Depends(require_admin)):
+async def dismiss(version_id: str, reason: str = "", admin=Depends(require_model_accuracy_owner)):
     from src.memory import calibration_review as review
     return await _change(review.dismiss, version_id, actor=_actor(admin), reason=reason)

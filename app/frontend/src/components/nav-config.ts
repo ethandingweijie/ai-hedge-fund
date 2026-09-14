@@ -32,8 +32,9 @@ export interface NavItem {
   action?: 'new' | 'resume';
   /** Optional tooltip shown on hover (desktop sidebar). */
   hint?: string;
-  /** Rendered only for role='admin'. The server enforces access regardless. */
-  adminOnly?: boolean;
+  /** Rendered only for sign-ins the server marks as allowed. The server
+   *  enforces access regardless. */
+  modelAccuracyOnly?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -47,12 +48,12 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Robo Strategy',    icon: Wallet,     path: '/robo-strategy',  hint: 'Get a personalized portfolio recommendation' },
   { label: 'Research Ideas',   icon: Lightbulb,  path: '/research-ideas' },
   { label: 'History',          icon: History,    path: '/history'        },
-  { label: 'Model Accuracy',   icon: Gauge,      path: '/model-accuracy', adminOnly: true, hint: 'How valuations turned out, and proposed corrections awaiting your approval' },
+  { label: 'Model Accuracy',   icon: Gauge,      path: '/model-accuracy', modelAccuracyOnly: true, hint: 'How valuations turned out, and proposed corrections awaiting your approval' },
 ];
 
-/** NAV_ITEMS minus admin-only entries for anyone who is not an admin. */
-export function visibleNavItems(role?: string | null): NavItem[] {
-  return NAV_ITEMS.filter((item) => !item.adminOnly || role === 'admin');
+/** NAV_ITEMS minus restricted entries this sign-in may not open. */
+export function visibleNavItems(user?: { can_view_model_accuracy?: boolean } | null): NavItem[] {
+  return NAV_ITEMS.filter((item) => !item.modelAccuracyOnly || user?.can_view_model_accuracy === true);
 }
 
 /**

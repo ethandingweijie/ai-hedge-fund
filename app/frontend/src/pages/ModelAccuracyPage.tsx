@@ -1,7 +1,7 @@
 /**
  * ModelAccuracyPage.tsx
  * =====================
- * Admin-only. Where the valuation learning loop reports back and asks for a
+ * Owner-only (MODEL_ACCURACY_EMAILS). Where the valuation learning loop reports back and asks for a
  * decision (B6):
  *
  *   • Recommendations — calibration proposals the system can apply ("Raise US
@@ -278,15 +278,17 @@ export function ModelAccuracyPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (user?.role === 'admin') load();
-    else setLoading(false);
-  }, [user?.role, load]);
+  const allowed = user?.can_view_model_accuracy === true;
 
-  if (user?.role !== 'admin') {
+  useEffect(() => {
+    if (allowed) load();
+    else setLoading(false);
+  }, [allowed, load]);
+
+  if (!allowed) {
     return (
       <PageContainer size="prose">
-        <Card className="p-6 text-sm text-muted-foreground">Model Accuracy is available to administrators only.</Card>
+        <Card className="p-6 text-sm text-muted-foreground">Model Accuracy is not available to this account.</Card>
       </PageContainer>
     );
   }

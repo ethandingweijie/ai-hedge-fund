@@ -42,6 +42,9 @@ class AuthResponse(BaseModel):
     user: dict
 
 
+from app.backend.routes.deps import can_view_model_accuracy as _can_view_model_accuracy
+
+
 class UserResponse(BaseModel):
     id: int
     email: str
@@ -51,6 +54,8 @@ class UserResponse(BaseModel):
     # Lets the app show admin-only pages (Model Accuracy). Authorisation stays
     # server-side in require_admin; this only decides what to render.
     role: str = "member"
+    # Only the sign-ins on MODEL_ACCURACY_EMAILS see that page.
+    can_view_model_accuracy: bool = False
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -147,4 +152,5 @@ def get_me(user=Depends(_current_user)):
         avatar_url=user.avatar_url,
         provider=user.provider,
         role=getattr(user, "role", None) or "member",
+        can_view_model_accuracy=_can_view_model_accuracy(user),
     )
