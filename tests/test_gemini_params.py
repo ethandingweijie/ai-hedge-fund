@@ -118,6 +118,34 @@ def test_exhausted_credits_are_a_billing_error_not_a_retry():
         gp.generate("p", schema=gp.SotpInputs, session=_Session(_Resp(429, msg)))
 
 
+def test_high_demand_503_is_retried_with_backoff(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(gp.time, "sleep", sleeps.append)
+    busy = _Resp(503, {"error": {"message": "This model is currently experiencing high demand."}})
+    session = _Session(busy, busy, _ok(json.dumps(_sotp())))
+    out = gp.generate("p", schema=gp.SotpInputs, session=session)
+    assert len(session.bodies) == 3 and sleeps == [5.0, 15.0]
+    assert out["json"]["segments"]
+
+
+def test_persistent_503_gives_up_after_the_retry_budget(monkeypatch):
+    monkeypatch.setattr(gp.time, "sleep", lambda s: None)
+    busy = _Resp(503, {"error": {"message": "high demand"}})
+    session = _Session(*([busy] * (gp.RETRIES + 1)))
+    with pytest.raises(RuntimeError, match="gemini 503"):
+        gp.generate("p", session=session)
+    assert len(session.bodies) == gp.RETRIES + 1
+
+
+def test_billing_429_is_not_retried(monkeypatch):
+    monkeypatch.setattr(gp.time, "sleep", lambda s: pytest.fail("slept on a billing error"))
+    msg = {"error": {"code": 429, "message": "Your prepayment credits are depleted."}}
+    session = _Session(_Resp(429, msg))
+    with pytest.raises(gp.GeminiBillingError):
+        gp.generate("p", session=session)
+    assert len(session.bodies) == 1
+
+
 def test_no_key_is_unavailable(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY")
     with pytest.raises(gp.GeminiUnavailable):

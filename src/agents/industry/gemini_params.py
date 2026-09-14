@@ -164,6 +164,14 @@ def to_gemini_schema(model: type[BaseModel]) -> dict:
     return conv(raw)
 
 
+#: Transient statuses retried with backoff. 503 "model is currently
+#: experiencing high demand" hit 1 of 3 default-reasoning BABA calls on
+#: 2026-09-15; a billing 429 is never retried (see _post).
+_RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+RETRIES = 3
+BACKOFF_S = (5.0, 15.0, 45.0)
+
+
 def _post(model: str, body: dict, timeout: float, session=None) -> dict:
     key = os.getenv("GEMINI_API_KEY") or ""
     if not key:
@@ -171,10 +179,20 @@ def _post(model: str, body: dict, timeout: float, session=None) -> dict:
     http = session
     if http is None:
         import requests as http
-    resp = http.post(_ENDPOINT.format(model=model), params={"key": key},
-                     json=body, timeout=timeout)
-    if resp.status_code == 200:
-        return resp.json()
+    for attempt in range(RETRIES + 1):
+        resp = http.post(_ENDPOINT.format(model=model), params={"key": key},
+                         json=body, timeout=timeout)
+        if resp.status_code == 200:
+            return resp.json()
+        if resp.status_code not in _RETRY_STATUS or attempt == RETRIES:
+            break
+        try:
+            msg = str(((resp.json() or {}).get("error") or {}).get("message") or "")
+        except ValueError:
+            msg = ""
+        if resp.status_code == 429 and ("credit" in msg.lower() or "billing" in msg.lower()):
+            break
+        time.sleep(BACKOFF_S[min(attempt, len(BACKOFF_S) - 1)])
     try:
         err = (resp.json() or {}).get("error") or {}
     except ValueError:
