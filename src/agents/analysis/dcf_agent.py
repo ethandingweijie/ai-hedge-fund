@@ -4689,6 +4689,40 @@ _LEARNABLE_PARAM_NAMES: tuple[str, ...] = (
 )
 
 
+def _gate_live_sotp(ticker: str, assumptions: dict, shares: float,
+                    net_debt: Optional[float]) -> tuple[dict, Optional[str]]:
+    """Live-extracted SOTP inputs, or the validated snapshot when the live
+    value falls outside the ground-truth band.
+
+    The 25 Aug production BABA run extracted 8x P/E on EBIT and published
+    $61/ADS against a $152-201 consensus band; the validated snapshot for the
+    same name sat at $174. Snapshot entries themselves are never gated, and a
+    ticker without a ground-truth reference passes through untouched.
+    Returns (assumptions to use, forward flag or None)."""
+    if str(assumptions.get("_origin") or "").startswith("snapshot:") or shares <= 0:
+        return assumptions, None
+    try:
+        from src.agents.analysis.sotp_ground_truth import check_table
+        fx = float(assumptions.get("fx_usd_to_reporting") or 1.0)
+        grade = check_table(ticker, _sotp_analyst_style(
+            assumptions, shares=shares, net_debt=net_debt, fx_to_reporting=fx))
+        if not grade or grade["plausible"]:
+            return assumptions, None
+        from src.agents.analysis.sotp_snapshot import load_sotp_snapshot, lookup_snapshot
+        key, snap = lookup_snapshot(load_sotp_snapshot(), ticker)
+        live = grade["total"]
+        band = f"${live['range'][0]}-{live['range'][1]}/ADS"
+        if not snap:
+            return assumptions, (f"SOTP (analyst): live value ${live['value_per_ads']:.2f}/ADS "
+                                 f"outside the {band} reference and no validated snapshot "
+                                 f"to fall back to -- treat with caution")
+        return ({**snap, "_origin": f"snapshot:{key}", "fx_usd_to_reporting": fx},
+                f"SOTP (analyst): live value ${live['value_per_ads']:.2f}/ADS outside the "
+                f"{band} reference -- replaced with the validated snapshot ({key})")
+    except Exception:
+        return assumptions, None
+
+
 def _ledger_num(v) -> Optional[float]:
     try:
         return None if v is None else round(float(v), 6)
@@ -5534,6 +5568,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _ticker_sotp = dict(_ticker_sotp)
                 _usd_fx = get_fx_rate("USD", _target_ccy, api_key)
                 _ticker_sotp["fx_usd_to_reporting"] = _usd_fx if _usd_fx and _usd_fx > 0 else 1.0
+            _ticker_sotp, _sotp_gate_flag = _gate_live_sotp(
+                ticker, _ticker_sotp, shares, net_debt)
+            if _sotp_gate_flag:
+                ticker_forward_flags.append(_sotp_gate_flag)
             most_recent["sotp_assumptions"] = _ticker_sotp
             _segs = _ticker_sotp.get("segments") or []
             ticker_forward_flags.append(
@@ -8242,6 +8280,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             except Exception as _sotp_x_err:
                 _log.warning("[dcf] %s: sotp_breakdown build failed: %s",
                              ticker, _sotp_x_err)
+            # Segment-level grade against the sell-side reference, where one
+            # exists: a total inside the band can hide offsetting errors.
+            if sotp_breakdown:
+                try:
+                    from src.agents.analysis.sotp_ground_truth import check_table
+                    sotp_breakdown["ground_truth"] = check_table(ticker, sotp_breakdown)
+                except Exception:
+                    sotp_breakdown["ground_truth"] = None
 
         # ── Model-vs-consensus sanity gate ────────────────────────────────
         # `consensus_pt` was fetched for frontend display only. It is also the

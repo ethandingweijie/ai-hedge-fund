@@ -126,7 +126,29 @@ def test_attach_fills_gaps_but_live_output_wins():
                                        ["BABA", "JD"])
     assert attached == ["JD"]
     assert merged["BABA"] is live           # live extractor output untouched
-    assert merged["JD"] == snap_assume["JD"]
+    assert {k: v for k, v in merged["JD"].items() if k != "_origin"} == snap_assume["JD"]
+    assert merged["JD"]["_origin"] == "snapshot:JD"
+
+
+@pytest.mark.parametrize("run_ticker,snap_key", [
+    ("09988.HK", "BABA"),        # HK line -> ADR entry
+    ("9988.HK", "BABA"),         # 4-digit form canonicalises first
+    ("03690.HK", "3690.HK"),     # 4-digit snapshot key reachable from canonical
+    ("baba", "BABA"),
+])
+def test_attach_resolves_canonical_and_adr_aliases(run_ticker, snap_key):
+    snap_assume = {"BABA": {"segments": [{"name": "b"}]},
+                   "3690.HK": {"segments": [{"name": "m"}]}}
+    merged, attached = attach_snapshot({}, snap_assume, [run_ticker])
+    assert attached == [run_ticker]
+    assert merged[run_ticker]["segments"] == snap_assume[snap_key]["segments"]
+    assert merged[run_ticker]["_origin"] == f"snapshot:{snap_key}"
+
+
+def test_an_hk_line_without_an_adr_gets_nothing():
+    merged, attached = attach_snapshot({}, {"BABA": {"segments": [{"name": "b"}]}},
+                                       ["00700.HK"])
+    assert attached == [] and merged == {}
 
 
 def test_attach_only_covers_run_tickers():

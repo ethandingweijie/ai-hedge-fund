@@ -62,6 +62,45 @@ def load_sotp_snapshot(path: str | Path | None = None) -> dict:
     return out
 
 
+def canonical_sotp_key(ticker: str) -> str:
+    """Upper-cased, and HK codes in the repo's 5-digit form ("3690.HK" ->
+    "03690.HK"). Snapshot keys and run tickers are compared on this key; a
+    literal match left the "3690.HK" entry unreachable by any run."""
+    t = (ticker or "").strip().upper()
+    try:
+        from src.tools.hk.ticker import is_hk_ticker, to_canonical
+        if is_hk_ticker(t):
+            return to_canonical(t)
+    except Exception:
+        pass
+    return t
+
+
+def _adr_alias(key: str) -> str | None:
+    try:
+        from src.tools.sec_segments import _ADR_FILER_ALIAS
+        return _ADR_FILER_ALIAS.get(key)
+    except Exception:
+        return None
+
+
+def lookup_snapshot(snapshot: dict, ticker: str) -> tuple[str | None, dict | None]:
+    """(snapshot key, entry) for a ticker: exact, canonical, then the HK
+    line's ADR (09988.HK -> BABA). Engine inputs are USD and per-share values
+    divide by the run's own share count after USD->listing FX, so an ADR's
+    assumptions serve its HK line without an ADS ratio."""
+    if not snapshot:
+        return None, None
+    if snapshot.get(ticker):
+        return ticker, snapshot[ticker]
+    by_key = {canonical_sotp_key(k): k for k in snapshot}
+    key = canonical_sotp_key(ticker)
+    for candidate in (key, _adr_alias(key)):
+        if candidate and candidate in by_key:
+            return by_key[candidate], snapshot[by_key[candidate]]
+    return None, None
+
+
 def attach_snapshot(existing: dict | None, snapshot: dict,
                     tickers: list) -> tuple[dict, list]:
     """Merge snapshot assumptions into the run's ``sotp_assumptions`` dict.
@@ -77,9 +116,11 @@ def attach_snapshot(existing: dict | None, snapshot: dict,
     for ticker in tickers:
         if merged.get(ticker):
             continue
-        snap = snapshot.get(ticker)
+        snap_key, snap = lookup_snapshot(snapshot, ticker)
         if not snap:
             continue
-        merged[ticker] = snap
+        # _origin marks the entry as validated snapshot input, so the live
+        # plausibility gate in dcf_agent never second-guesses it.
+        merged[ticker] = {**snap, "_origin": f"snapshot:{snap_key}"}
         attached.append(ticker)
     return merged, attached
