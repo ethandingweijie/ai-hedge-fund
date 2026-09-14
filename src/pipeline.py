@@ -107,6 +107,19 @@ _PHASE7_TIMEOUT_S = _env_seconds("PIPELINE_PHASE7_TIMEOUT_S", 900.0)
 _DCF_CACHE_VERSION = 2
 
 
+def _mark_cache_copy(dcf_entry, source_run_at):
+    """Tag a dcf_range replayed from the archive (B1 ledger).
+
+    A replayed entry repeats an earlier prediction rather than making a new
+    one; counting it again would weight tickers by how often they are re-run.
+    The ORIGINAL run date survives repeated reuse."""
+    if not isinstance(dcf_entry, dict) or not dcf_entry:
+        return dcf_entry
+    return {**dcf_entry, "is_cache_copy": True,
+            "cache_source_run_at": (dcf_entry.get("cache_source_run_at")
+                                    or source_run_at)}
+
+
 def _bounded_join(executor, futures: list, timeout_s: float, label: str) -> list:
     """Join `futures` against ONE shared wall-clock deadline.
 
@@ -672,14 +685,15 @@ def run_advanced_pipeline(
         # call at all, and a gap that already produced lessons is
         # skipped too. Lazy/user-triggered exactly like the freshness
         # check above; failures are logged and never break the run.
-        try:
-            from src.memory import agent_lessons as _agent_lessons
-            if _agent_lessons.lessons_enabled():
-                for _t in tickers:
-                    _agent_lessons.maybe_generate_lessons(
-                        _t, _prior_reports.get(_t))
-        except Exception as _lessons_exc:
-            print(f"  [lessons] lesson generation failed: {_lessons_exc}")
+        with _timed("2_8b_agent_lessons"):
+            try:
+                from src.memory import agent_lessons as _agent_lessons
+                if _agent_lessons.lessons_enabled():
+                    for _t in tickers:
+                        _agent_lessons.maybe_generate_lessons(
+                            _t, _prior_reports.get(_t))
+            except Exception as _lessons_exc:
+                print(f"  [lessons] lesson generation failed: {_lessons_exc}")
 
         # Terminal ✓ event: archive_cache never got a completion marker,
         # so the progress bar froze at the front-block percentage for the
@@ -996,7 +1010,8 @@ def run_advanced_pipeline(
                 cached_dcf: dict = {}
                 for _t in tickers:
                     _cd = _phase_cache[_t]["dcf_range"]  # type: ignore[index]
-                    cached_dcf[_t] = _cd
+                    cached_dcf[_t] = _mark_cache_copy(
+                        _cd, _phase_cache[_t]["run_at"])  # type: ignore[index]
                     progress.update_status("dcf_engine", _t,
                                            f"[cache] Loaded from archive ({_phase_cache[_t]['age_days']:.1f}d old)")  # type: ignore[index]
                 state["data"]["dcf_range"] = cached_dcf

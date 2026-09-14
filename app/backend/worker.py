@@ -89,6 +89,15 @@ async def run_analysis_pipeline_task(
     ticker_key = ticker.upper()
     loop = asyncio.get_running_loop()
 
+    # A0: time the job sat queued before a worker took it. arq puts the
+    # enqueue timestamp in ctx; the pipeline's own timers cannot see it.
+    _enqueued = ctx.get("enqueue_time") if isinstance(ctx, dict) else None
+    if isinstance(_enqueued, datetime):
+        if _enqueued.tzinfo is None:
+            _enqueued = _enqueued.replace(tzinfo=timezone.utc)
+        _wait_s = (datetime.now(timezone.utc) - _enqueued).total_seconds()
+        print(f"  [timing] queue_wait ({ticker_key}): {max(0.0, _wait_s):.1f}s")
+
     q: asyncio.Queue = asyncio.Queue()
 
     async def _forwarder() -> None:

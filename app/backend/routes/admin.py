@@ -327,6 +327,29 @@ async def admin_diag(request: Request, secret: str = ""):
     except Exception:
         out["m1_memory"] = {"ok": False, "error": _tb.format_exc()[-800:]}
 
+    # 11. A0 run timing: p50/p90 per phase over the last 50 completed runs,
+    # split covered vs full research. Checkpoint rows are partial timings of
+    # an unfinished run and would drag every percentile down, so they are
+    # dropped here rather than in SQL (the column's type differs by backend).
+    try:
+        import asyncio as _aio
+
+        def _timing() -> dict:
+            from src.data import db as _db
+            from app.backend.services import run_timing as _rt
+            rows = _db.query(
+                "SELECT phase_durations, is_checkpoint FROM web_runs "
+                "WHERE phase_durations IS NOT NULL "
+                "ORDER BY run_at DESC LIMIT 80")
+            complete = [r["phase_durations"] for r in rows
+                        if not r["is_checkpoint"]][:50]
+            return _rt.summarize(complete)
+
+        out["timing"] = await _aio.to_thread(_timing)
+        out["timing"]["ok"] = True
+    except Exception:
+        out["timing"] = {"ok": False, "error": _tb.format_exc()[-800:]}
+
     return out
 
 

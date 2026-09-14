@@ -14,6 +14,7 @@ Key design:
 """
 
 import asyncio
+import time
 import json
 import logging
 import math
@@ -1892,17 +1893,38 @@ async def run_analysis_pipeline(
     # history strip) — runs before the save so it rides into full_result_json;
     # internally exception-safe, and doubly guarded here so the save itself
     # can never be blocked by enrichment.
+    _post_durations = (result.get("data") or {}).get("phase_durations")
+
+    def _post_timed(phase_name: str, t0: float, started_at: str,
+                    persist: bool = True) -> None:
+        # A0: the pipeline's timer stops at 11_save_archive, and these steps
+        # run after it. Steps before the save ride into
+        # web_runs.phase_durations; the save and the recap can only log.
+        _dur = time.perf_counter() - t0
+        print(f"  [timing] {phase_name}: {_dur:.1f}s")
+        if persist and isinstance(_post_durations, list):
+            _post_durations.append({
+                "phase":       phase_name,
+                "started_at":  started_at,
+                "finished_at": datetime.now().isoformat(timespec="seconds"),
+                "duration_s":  round(_dur, 2),
+            })
+
+    _t0, _t0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
     try:
         _enrich_sotp_report_extras(run_id, t, result)
     except Exception as _enr_err:
         logger.warning("[report-extras] %s: enrichment failed: %s", t, _enr_err)
+    _post_timed("12_post_enrich_extras", _t0, _t0_at)
     # Fold the chain-of-thought trail into the final payload and release the
     # in-memory copy, so a completed report can replay how it was researched.
     try:
         result.setdefault("data", {})["progress_log"] = _pop_progress_log(run_id)
     except Exception as _pl_err:
         logger.warning("[progress-log] %s: could not attach trail: %s", t, _pl_err)
+    _t0, _t0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
     _save_web_run(run_id, t, model_name, result, archive_run_id=archive_run_id, user_id=user_id)
+    _post_timed("12_save_web_run", _t0, _t0_at, persist=False)
 
     # ── M1: recap of the just-finished report ─────────────────────────────
     # Feeds the recency loop — the NEXT run on this ticker loads this recap
@@ -1912,10 +1934,12 @@ async def run_analysis_pipeline(
     try:
         from src.memory import report_recap
         if report_recap.recaps_enabled():
+            _t0, _t0_at = time.perf_counter(), datetime.now().isoformat(timespec="seconds")
             await asyncio.to_thread(
                 report_recap.build_and_save_recap,
                 result, t, run_id, result.get("run_at"),
             )
+            _post_timed("12_recap", _t0, _t0_at, persist=False)
     except Exception as _recap_err:
         logger.warning("[recap] %s: recap generation failed: %s", t, _recap_err)
 

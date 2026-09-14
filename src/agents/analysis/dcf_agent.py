@@ -4370,24 +4370,34 @@ _LOOKTHROUGH_ANCHORS = frozenset({"SOTP / NAV", "SOTP / NAV (look-through)"})
 _LOOKTHROUGH_METHODS = _LOOKTHROUGH_ANCHORS | frozenset({"NAV Discount"})
 
 
-def _industry_routed_profile(ticker: str, sector: str, end_date: str = ""):
+def _industry_routed_profile(ticker: str, sector: str, end_date: str = "",
+                             trace: Optional[dict] = None):
     """(sector, profile, profile_data) from the industry map, or None.
+
+    ``trace``, when given, is filled with what the router saw and why it
+    answered as it did -- the part of a routing decision the return value
+    cannot carry, and the part an error attribution needs.
 
     Returns None rather than guessing when the industry is unmapped, so an
     unknown industry falls through to the existing classifier VISIBLY instead
     of being assigned a neighbouring row.
     """
+    _t = trace if trace is not None else {}
     try:
         from src.data.industry_profile_map import profile_for_ticker
         from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
         from src.tools.api import get_company_industry
         industry = get_company_industry(ticker)
+        _t["industry"] = industry
         hit = profile_for_ticker(ticker, industry)
         if not hit:
+            _t["outcome"] = "unmapped"
             return None
         r_sector, r_profile = hit
+        _t.update(routed_sector=r_sector, routed_profile=r_profile)
         data = INDUSTRY_VALUATION_PROFILES.get(r_sector, {}).get(r_profile)
         if not data:
+            _t["outcome"] = "profile_missing"
             return None
         # Do NOT route into a profile whose ANCHOR cannot be computed. The
         # anchor carries the largest weight, so routing there replaces a
@@ -4408,6 +4418,7 @@ def _industry_routed_profile(ticker: str, sector: str, end_date: str = ""):
                       max(methods, key=lambda m: m.get("weight") or 0)
                       if methods else None)
         if anchor and not anchor.get("implementable"):
+            _why = None
             # "implementable" is a property of the METHOD IN GENERAL; whether
             # it can be computed for THIS ticker is a different question. A
             # conglomerate with a complete look-through can compute SOTP / NAV
@@ -4421,6 +4432,7 @@ def _industry_routed_profile(ticker: str, sector: str, end_date: str = ""):
                         _log.info("[dcf] %s: anchor %r computable by "
                                   "look-through -> %s/%s",
                                   ticker, anchor.get("name"), r_sector, r_profile)
+                        _t["outcome"] = "routed_via_lookthrough"
                         return (r_sector, r_profile, data)
                     _why = holdco_sotp.decline_reason(ticker, end_date)
                 except Exception:                          # noqa: BLE001
@@ -4431,11 +4443,17 @@ def _industry_routed_profile(ticker: str, sector: str, end_date: str = ""):
             _log.info("[dcf] %s: industry routing DECLINED -> %s/%s "
                       "(anchor %r is not implementable)",
                       ticker, r_sector, r_profile, anchor.get("name"))
+            _t.update(outcome="declined_anchor_not_implementable",
+                      anchor=anchor.get("name"), lookthrough_reason=_why)
             return None
+        # "routed", not "applied": the caller decides whether a route changes
+        # anything, and routing into the profile already chosen changes nothing.
+        _t["outcome"] = "routed"
         return (r_sector, r_profile, data)
     except Exception as exc:                               # noqa: BLE001
         _log.warning("[dcf] %s: industry routing unavailable (%s)",
                      ticker, type(exc).__name__)
+        _t.update(outcome="error", error=type(exc).__name__)
         return None
 
 
@@ -4653,6 +4671,77 @@ def _promote_sotp_analyst_profile(profile_data: Optional[dict],
     }
 
 
+# ── Prediction ledger (B1) ────────────────────────────────────────────────────
+# A run is only learnable if it records what produced its answer. These stamp
+# dcf_range with the parameters in force and the Street reference at the time
+# of the run -- two inputs a later outcome job cannot reconstruct, because
+# both drift.
+
+#: Constants a calibration would tune. The digest moves when any of them does
+#: -- a hand edit included -- so outcomes produced under different parameter
+#: sets are never pooled by accident.
+_LEARNABLE_PARAM_NAMES: tuple[str, ...] = (
+    "_GROWTH_MULT", "_MARGIN_DELTA_MULT",
+    "_TV_DOMINANCE_THRESHOLD", "_TV_DOMINANCE_REWEIGHT",
+    "_CALIBRATION_TOLERANCE", "_CONSENSUS_DIVERGENCE_MULT",
+    "_SEGMENT_SOTP_WEIGHT", "_LOOKTHROUGH_PROMOTE_WEIGHT",
+    "_SOTP_ANALYST_BLEND_WEIGHT",
+)
+
+
+def _ledger_num(v) -> Optional[float]:
+    try:
+        return None if v is None else round(float(v), 6)
+    except (TypeError, ValueError):
+        return None
+
+
+def _param_version() -> str:
+    """Digest of the valuation parameters in force, e.g. ``constants-3f2a9c…``.
+
+    Covers the named scalars and every profile's method weights -- the
+    table a calibration would change most."""
+    import hashlib
+    import json as _json
+    snap: dict = {n: globals().get(n) for n in _LEARNABLE_PARAM_NAMES}
+    try:
+        from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
+        snap["profile_weights"] = {
+            s: {p: [(m.get("name"), m.get("weight"))
+                    for m in (d.get("methods") or []) if isinstance(m, dict)]
+                for p, d in profiles.items() if isinstance(d, dict)}
+            for s, profiles in INDUSTRY_VALUATION_PROFILES.items()
+            if isinstance(profiles, dict)}
+    except Exception:                                      # noqa: BLE001
+        snap["profile_weights"] = None
+    blob = _json.dumps(snap, sort_keys=True, default=str)
+    return "constants-" + hashlib.sha1(blob.encode()).hexdigest()[:12]
+
+
+def _consensus_at_run(ticker: str, consensus_pt: Optional[dict]) -> dict:
+    """The Street reference as it stood when this run was made."""
+    from datetime import datetime as _dt, timezone as _tz
+    t = (ticker or "").upper()
+    if t.endswith((".HK", ".SI")):
+        # FMP has no consensus for HKEX/SGX. The S&P figure comes from a page
+        # scrape (target_price.py, 25 s timeout) that does not belong on the
+        # live path; the daily outcome job records it on the run's own day.
+        return {"status": "deferred", "source": "stockanalysis.com",
+                "fetched_at": None}
+    now = _dt.now(_tz.utc).isoformat(timespec="seconds")
+    cp = consensus_pt or {}
+    target = cp.get("consensus")
+    if not target:
+        return {"status": "unavailable", "source": "fmp", "fetched_at": now}
+    return {
+        "status": "recorded", "source": "fmp",
+        "target": target, "median": cp.get("median"),
+        "low": cp.get("low"), "high": cp.get("high"),
+        "currency": "USD" if "." not in t else None,
+        "fetched_at": now,
+    }
+
+
 def _blend_methods(
     profile_methods: list[dict],
     method_values: dict[str, Optional[float]],
@@ -4694,6 +4783,8 @@ def _blend_methods(
     """
     dcf_bucket: list[tuple[float, float]] = []
     multi_bucket: list[tuple[float, float]] = []
+    # (method, key whose value was used, weight after Gate A, bucket)
+    parts: list[tuple[str, str, float, str]] = []
     asset_floor_reweight = 0.0
 
     for m in profile_methods:
@@ -4705,11 +4796,11 @@ def _blend_methods(
         # is the answer and the proxy is not a second opinion. This mattered
         # for the conglomerate look-through: P/BV came back as a literal 0.0,
         # which is not None, so the proxy was taken and the exact NAV ignored.
-        value = method_values.get(raw_name)
+        value, value_key = method_values.get(raw_name), raw_name
         if value is None or value <= 0:
-            value = method_values.get(effective_name)
+            value, value_key = method_values.get(effective_name), effective_name
         if value is None:
-            value = method_values.get(raw_name)
+            value, value_key = method_values.get(raw_name), raw_name
         if value is None or value <= 0:
             continue
 
@@ -4727,12 +4818,15 @@ def _blend_methods(
             dcf_bucket.append((value, w))
         else:
             multi_bucket.append((value, w))
+        parts.append((raw_name, value_key, w, "dcf" if is_dcf else "multi"))
 
     # Asset floor reweight goes to multi (P/BV is a multi-method anchor)
     if asset_floor_reweight > 0:
         asset_floor_val = method_values.get("P/BV")
         if asset_floor_val and asset_floor_val > 0:
             multi_bucket.append((asset_floor_val, asset_floor_reweight))
+            parts.append(("P/BV (asset floor)", "P/BV",
+                          asset_floor_reweight, "multi"))
 
     if not dcf_bucket and not multi_bucket:
         return None, {}
@@ -4764,6 +4858,15 @@ def _blend_methods(
         "weight_multi":     round(multi_w_total / total_w, 4),
         "composite":        round(composite_mult, 4),
         "iv_pre_composite": round(iv_pre_composite, 4),
+        # The weight each method actually carried, after proxies, skipped
+        # methods and Gate A. The profile table states intent; this states
+        # what happened. IV = sum(weight x method_values[value_key]), with the
+        # composite applied to the "multi" bucket terms.
+        "effective_weights": [
+            {"method": n, "value_key": k, "bucket": b,
+             "weight": round(w * macro / total_w, 6)}
+            for n, k, w, b in parts
+        ],
     }
 
     return final_iv, breakdown
@@ -5905,6 +6008,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         _preclassified_profiles = state["data"].get("profile_names") or {}
         _preclassified_name = _preclassified_profiles.get(ticker)
+        # B1 ledger: which routing layer produced the profile. Five layers can
+        # each overwrite the last, and without this record an error cannot be
+        # pinned on routing rather than on the method values.
+        _routing_trace: dict = {
+            "router_profile": _preclassified_name,
+            "router_source": (state["data"].get("profile_sources") or {}).get(ticker),
+            "industry_routing": {"enabled": False},
+            "steps": [],
+        }
         # D3: True when the intended profile did not resolve and a fallback
         # was used. Surfaced in dcf_range[ticker]["profile_fallback_used"]
         # so degradation is loud, not silent.
@@ -5942,6 +6054,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 is_pre_revenue, revenue_base=revenue_base,
             )
 
+        if _preclassified_name and not _profile_fallback_used:
+            _routing_trace["winner"] = _routing_trace["router_source"] or "router"
+        else:
+            _routing_trace["winner"] = "ladder"
+            _routing_trace["ladder_inputs"] = {
+                "revenue_cagr":   _ledger_num(revenue_cagr),
+                "fcf_margin":     _ledger_num(_fcf_margin_for_classify),
+                "leverage":       _ledger_num(leverage),
+                "is_pre_revenue": bool(is_pre_revenue),
+                "revenue_base":   _ledger_num(revenue_base),
+            }
+        _routing_trace["steps"].append(
+            {"layer": _routing_trace["winner"], "sector": sector,
+             "profile": profile_name})
+
         # ── Guardrail 4: ticker-level profile override ─────────────────────
         # TICKER_SECTOR_LOOKUP can specify a hard profile override (second field).
         # When set, it takes PRIORITY over classify_valuation_profile() — used for
@@ -5960,7 +6087,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # This sits BELOW the ticker override that follows (a company fact
         # still beats an industry rule) and ABOVE the financial ladder.
         if _industry_routing_enabled():
-            _routed = _industry_routed_profile(ticker, sector, end_date)
+            _ir_trace: dict = {}
+            _routed = _industry_routed_profile(ticker, sector, end_date,
+                                               trace=_ir_trace)
+            _routing_trace["industry_routing"] = {
+                "enabled": True, **_ir_trace,
+                "changed_profile": bool(_routed and _routed[1] != profile_name)}
             if _routed and _routed[1] != profile_name:
                 _r_sector, _r_profile, _r_data = _routed
                 _log.info("[dcf] %s: industry routing -> %s/%s (was %s/%r)",
@@ -5978,6 +6110,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # 52.9 against ~14. With the sector carried across they land
                 # at 21.4, 11.9 and 25.8.
                 sector = _r_sector
+                _routing_trace["winner"] = "industry_map"
+                _routing_trace["steps"].append(
+                    {"layer": "industry_map", "sector": sector,
+                     "profile": profile_name})
 
         _lookup_sector, _lookup_profile = get_wacc_profile_for_ticker(ticker)
         if _lookup_profile and _lookup_profile != profile_name:
@@ -6022,12 +6158,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     agent_id, ticker,
                     f"Profile override from TICKER_SECTOR_LOOKUP: {_lookup_profile}"
                 )
+                _routing_trace["winner"] = "ticker_override"
+                _routing_trace["steps"].append(
+                    {"layer": "ticker_override", "sector": sector,
+                     "profile": profile_name})
             else:
                 # D3: the lookup override did not resolve in
                 # INDUSTRY_VALUATION_PROFILES — previously this was dropped
                 # SILENTLY and the ticker kept whatever profile the ladder
                 # picked. Loud warning + flag instead.
                 _profile_fallback_used = True
+                _routing_trace["override_unresolved"] = _lookup_profile
                 _log.warning(
                     "[dcf] %s: TICKER_SECTOR_LOOKUP profile override %r did "
                     "not resolve in INDUSTRY_VALUATION_PROFILES[%r] — keeping "
@@ -7286,6 +7427,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "iv_multi_post":     blend_breakdown.get("iv_multi_post"),
                 "weight_dcf":        blend_breakdown.get("weight_dcf"),
                 "weight_multi":      blend_breakdown.get("weight_multi"),
+                "effective_weights": blend_breakdown.get("effective_weights"),
                 "composite_applied": blend_breakdown.get("composite", _composite_mult),
             }
 
@@ -8187,6 +8329,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # static market table, or the US dynamic basket), the peer count
             # behind it, and how old the comp refresh was.
             "multiples_used":        _multiples_trace(peer),
+            # B1 prediction ledger -- see _param_version / _consensus_at_run.
+            "routing_trace":         {**_routing_trace,
+                                      "final_sector": sector,
+                                      "final_profile": profile_name},
+            "consensus_at_run":      _consensus_at_run(ticker, _consensus_pt),
+            "param_version":         _param_version(),
+            "is_cache_copy":         False,
+            "ledger_schema":         1,
         }
 
         base_iv = scenario_results["base"]["intrinsic_value"]

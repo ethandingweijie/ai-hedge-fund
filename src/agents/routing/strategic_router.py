@@ -58,6 +58,18 @@ _SECTOR_PROFILE_DEFAULT: dict[str, str] = {
 }
 
 
+def _record_profile_source(state: AgentState, ticker: str, source: str) -> None:
+    """Note which router layer assigned a ticker's profile (B1 ledger).
+
+    run_dcf_agent copies this into dcf_range.routing_trace. It is the only
+    record of whether a profile came from the curated table, the LLM, or a
+    per-sector default."""
+    try:
+        state["data"].setdefault("profile_sources", {})[ticker] = source
+    except Exception:                                      # noqa: BLE001
+        pass
+
+
 def _classify_unknown_profiles_with_llm(
     state: AgentState,
     all_tickers: list[str],
@@ -93,6 +105,7 @@ def _classify_unknown_profiles_with_llm(
                 _default = _SECTOR_PROFILE_DEFAULT.get(t_sector)
                 if _default:
                     existing_profile_names[t] = _default
+                    _record_profile_source(state, t, "router_sector_default")
                     _log.warning(
                         "[strategic_router] profile fallback (%s): no candidate "
                         "profiles for sector %r → sector-default %r",
@@ -138,6 +151,8 @@ def _classify_unknown_profiles_with_llm(
 
             _final = _picked or _SECTOR_PROFILE_DEFAULT.get(t_sector) or candidates[0]
             existing_profile_names[t] = _final
+            _record_profile_source(
+                state, t, "router_llm" if _picked else "router_sector_default")
             _src = "LLM" if _picked else "sector-default-fallback"
             if not _picked:
                 _log.warning(
@@ -250,6 +265,7 @@ def run_strategic_router(state: AgentState) -> AgentState:
                 _profile_data = INDUSTRY_VALUATION_PROFILES.get(_sector_key, {}).get(_lookup_profile)
                 if _profile_data:
                     profile_names[t] = _lookup_profile
+                    _record_profile_source(state, t, "router_lookup")
                     progress.update_status(agent_id, t, f"Profile (lookup): {_lookup_profile}")
             if profile_names:
                 state["data"]["profile_names"] = profile_names
@@ -462,6 +478,7 @@ def run_strategic_router(state: AgentState) -> AgentState:
             _profile_data = INDUSTRY_VALUATION_PROFILES.get(_sector_key, {}).get(_lookup_profile)
             if _profile_data:
                 profile_names[t] = _lookup_profile
+                _record_profile_source(state, t, "router_lookup")
                 progress.update_status(
                     agent_id, t,
                     f"Profile (lookup): {_lookup_profile}"
