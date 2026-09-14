@@ -18,16 +18,30 @@ def _snapshot_table(shares=ADS, fx=1.0):
                                fx_to_reporting=fx)
 
 
-def test_the_snapshot_total_is_in_range_for_the_wrong_reasons():
+def test_the_revised_snapshot_is_in_range_for_the_right_reasons():
+    """The v1 inputs reached $174 through offsetting errors (commerce ~$129,
+    net debt). Revised against the reference, the total and the segments that
+    carry the value sit inside their ranges; the two left outside are the ones
+    whose reference implies a revenue base the reported figures do not support."""
     g = check_table("BABA", _snapshot_table())
     assert g["total"]["status"] == "in_range" and g["plausible"]
     seg = {s["name"]: s for s in g["segments"]}
-    assert seg["China E-Commerce"]["status"] == "above"          # ~ $129 vs $60-75
-    assert seg["China E-Commerce"]["value_per_ads"] > 100
-    assert seg["Cloud & AI Infrastructure"]["status"] == "in_range"
-    assert g["balance_sheet"]["status"] == "below"               # net debt, not net cash
-    assert "China E-Commerce" in g["off_range"]
+    for name in ("China E-Commerce", "Cloud & AI Infrastructure", "AIDC (International Retail)"):
+        assert seg[name]["status"] == "in_range", name
+    assert g["balance_sheet"]["status"] == "in_range"            # net cash, not net debt
+    assert g["off_range"] == ["Cainiao Smart Logistics", "Digital Media & Other"]
     assert g["unmatched_rows"] == []
+
+
+def test_a_grade_catches_offsetting_errors_a_total_would_hide():
+    snap = load_sotp_snapshot()["BABA"]
+    v1 = {**snap, "net_cash": -11.85e9, "associates_investments": 40e9,
+          "segments": [{**s, "ebit_margin": 0.45, "pe_multiple": 12.0}
+                       if "Taobao" in s["name"] else s for s in snap["segments"]]}
+    g = check_table("BABA", _sotp_analyst_style(v1, shares=ADS))
+    assert g["plausible"]                                         # total alone passes
+    assert "China E-Commerce" in g["off_range"]
+    assert g["balance_sheet"]["status"] == "below"
 
 
 def test_the_hk_line_grades_identically_in_ads_terms():

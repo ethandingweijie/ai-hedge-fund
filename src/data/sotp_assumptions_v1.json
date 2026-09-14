@@ -10,20 +10,20 @@
   "validation_band_pct": 35.0,
   "per_ticker_validation": {
    "BABA": {
-    "tp": 173.75,
+    "tp": 154.41,
     "gs_tp": 186,
-    "delta_pct": -6.59,
+    "delta_pct": -16.98,
     "attempt": 1,
     "segments": 5,
     "holdco_discount_pct": 0.15,
     "sources": {
-     "net_cash": "fmp_line_items",
-     "associates": "max(llm_fair+research_2a5)",
+     "net_cash": "consensus_reference",
+     "associates": "consensus_reference",
      "segment_revenues": "fmp_anchor",
      "forward_estimates": "fmp_consensus",
      "research_block": "deep_research_2a5",
      "economics": "research_llm+pdf_evidence",
-     "multiples": "research_llm+pdf_evidence",
+     "multiples": "consensus_reference",
      "holdco": "research_llm",
      "multiple_basis": "research_override:5",
      "margin_basis": "filled:0",
@@ -144,10 +144,10 @@
     {
      "name": "Taobao and Tmall Group (China Commerce)",
      "revenue_fwd": 67000000000.0,
-     "ebit_margin": 0.45,
-     "pe_multiple": 12.0,
+     "ebit_margin": 0.3,
+     "pe_multiple": 10.4,
      "ev_rev_multiple": null,
-     "rationale": "12x P/E on FY27E NOPAT, core cash cow with single-digit growth (Source: sell-side SOTP convention)",
+     "rationale": "10.4x P/E on FY27E NOPAT, inside the 8-11x consensus range; 30% margin on forward revenue after quick-commerce investment, calibrated to the $60-75/ADS reference (Reference: consensus SOTP framework, 2026-09-14)",
      "evidence": "CMR take-rate on GMV, high-margin customer management revenue (Source: FMP FY26 segmentation scaled to FY27E)",
      "source": "deep_research_2a5"
     },
@@ -156,18 +156,18 @@
      "revenue_fwd": 20000000000.0,
      "ebit_margin": 0.09,
      "pe_multiple": null,
-     "ev_rev_multiple": 5.0,
-     "rationale": "5.0x EV/Rev forward sales, re-rated on AI demand (Source: GS cloud re-rating, Aug 2025-2026)",
+     "ev_rev_multiple": 5.3,
+     "rationale": "5.3x forward EV/Sales, inside the 4-6x consensus range on AI/MaaS re-acceleration (Reference: consensus SOTP framework, 2026-09-14)",
      "evidence": "AI-driven IaaS+PaaS growth re-accelerating 30%+ yoy (Source: FMP FY26 Cloud Services 112bn CNY scaled)",
      "source": "deep_research_2a5"
     },
     {
      "name": "Alibaba International Digital Commerce",
-     "revenue_fwd": 20000000000.0,
+     "revenue_fwd": 26000000000.0,
      "ebit_margin": null,
      "pe_multiple": null,
      "ev_rev_multiple": 1.2,
-     "rationale": "1.2x EV/Rev (Source: sell-side SOTP convention)",
+     "rationale": "1.2x EV/Sales (top of 0.8-1.2x) on FY27E revenue of ~$26B (FY25 RMB132B at ~19% growth) (Reference: consensus SOTP framework, 2026-09-14)",
      "evidence": "NA, near breakeven (AliExpress/Choice + Lazada)",
      "source": "deep_research_2a5"
     },
@@ -176,8 +176,8 @@
      "revenue_fwd": 14000000000.0,
      "ebit_margin": null,
      "pe_multiple": null,
-     "ev_rev_multiple": 0.7,
-     "rationale": "0.7x EV/Rev (Source: sell-side SOTP convention)",
+     "ev_rev_multiple": 1.0,
+     "rationale": "1.0x EV/Sales (top of 0.7-1.0x) on ~$14B revenue; the $8-12/ADS reference implies a larger revenue base than reported, left below range rather than inflated (Reference: consensus SOTP framework, 2026-09-14)",
      "evidence": "NA, thin-margin logistics",
      "source": "deep_research_2a5"
     },
@@ -186,16 +186,16 @@
      "revenue_fwd": 22000000000.0,
      "ebit_margin": null,
      "pe_multiple": null,
-     "ev_rev_multiple": 1.0,
-     "rationale": "1.0x EV/Rev (Source: sell-side SOTP convention)",
+     "ev_rev_multiple": 0.8,
+     "rationale": "0.8x EV/Sales (bottom of 0.8-1.2x); includes Local Services, which the reference books partly in commerce (Reference: consensus SOTP framework, 2026-09-14)",
      "evidence": "NA, Ele.me/Amap/Youku mix",
      "source": "deep_research_2a5"
     }
    ],
    "default_tax_rate": 0.15,
    "holdco_discount_pct": 0.15,
-   "associates_investments": 40000000000.0,
-   "net_cash": -11848077996.8,
+   "associates_investments": 22300000000.0,
+   "net_cash": 68000000000.0,
    "_multiple_basis": {
     "jurisdiction": {
      "value": 0.597,
@@ -205,10 +205,10 @@
     },
     "segments": {
      "Taobao and Tmall Group (China Commerce)": {
-      "status": "research_override",
+      "status": "reference_calibrated",
       "archetype": "ecommerce_core",
       "metric": "pe",
-      "applied": 12.0,
+      "applied": 10.4,
       "llm_original": 12.0,
       "derived": 19.04,
       "comp_median": 24.26,
@@ -230,10 +230,10 @@
       "flag": false
      },
      "Cloud Intelligence Group": {
-      "status": "research_override",
+      "status": "reference_calibrated",
       "archetype": "cloud",
       "metric": "pe",
-      "applied": 5.0,
+      "applied": 5.3,
       "llm_original": 5.0,
       "derived": 10.92,
       "comp_median": 18.45,
@@ -254,7 +254,7 @@
       "flag": false
      },
      "Alibaba International Digital Commerce": {
-      "status": "research_override",
+      "status": "reference_calibrated",
       "archetype": "international_commerce",
       "metric": "ev_rev",
       "applied": 1.2,
@@ -279,17 +279,17 @@
       "flag": false
      },
      "Cainiao Smart Logistics": {
-      "status": "research_override",
+      "status": "reference_calibrated",
       "archetype": "logistics",
       "metric": "ev_rev",
-      "applied": 0.7,
+      "applied": 1.0,
       "llm_original": 0.7
      },
      "All Others (Local Services + Digital Media + Membership)": {
-      "status": "research_override",
+      "status": "reference_calibrated",
       "archetype": null,
       "metric": "ev_rev",
-      "applied": 1.0,
+      "applied": 0.8,
       "llm_original": 1.0
      }
     },
@@ -342,7 +342,14 @@
     "economics": "high",
     "multiples": "high"
    },
-   "_data_limitations": "EBIT margins for AIDC, Cainiao, and All Others not substantiated in the SOTP block (marked UNKNOWN); forward revenues are anchored to the GS-style SOTP scaled to FY27E rather than the FY26 product-line segmentation | All SOTP multiples, associate fair value, net cash and holdco discount directly anchored to published GS-style SOTP block; no material gaps identified"
+   "_data_limitations": "EBIT margins for AIDC, Cainiao, and All Others not substantiated in the SOTP block (marked UNKNOWN); forward revenues are anchored to the GS-style SOTP scaled to FY27E rather than the FY26 product-line segmentation | All SOTP multiples, associate fair value, net cash and holdco discount directly anchored to published GS-style SOTP block; no material gaps identified",
+   "_reference_calibration": {
+    "as_of": "2026-09-14",
+    "notes": {
+     "associates": "Ant Group 33% at ~$67.5B (10-12x earnings), consensus reference",
+     "net_cash": "net cash incl. short-term investments + listed/unlisted stakes after a 15-20% discount, consensus reference midpoint $28.5/ADS; the FMP line-item figure (-$11.8B) excluded short-term investments"
+    }
+   }
   },
   "JD": {
    "segments": [
