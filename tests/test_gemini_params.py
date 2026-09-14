@@ -153,9 +153,32 @@ def test_a_persistently_empty_200_reports_usage_and_model_version(monkeypatch):
     empty = _Resp(200, {"usageMetadata": {"thoughtsTokenCount": 11000}, "modelVersion": "gemini-3.8-flash"})
     session = _Session(*([empty] * (gp.RETRIES + 1)))
     with pytest.raises(gp.GeminiParseError) as info:
-        gp.generate("p", schema=gp.SotpInputs, session=session)
+        gp.generate("p", schema=gp.SotpInputs, grounded=False, session=session)
     assert len(session.bodies) == gp.RETRIES + 1
     assert "candidates=0" in str(info.value) and "gemini-3.8-flash" in str(info.value)
+
+
+def test_a_persistently_empty_grounded_schema_call_falls_back_to_two_steps(monkeypatch):
+    monkeypatch.setattr(gp.time, "sleep", lambda s: None)
+    empty = _Resp(200, {"usageMetadata": {"thoughtsTokenCount": 11000}})
+    session = _Session(*([empty] * (gp.RETRIES + 1)),
+                       _ok("Swire Pacific segment revenue with sources"),
+                       _ok(json.dumps(_sotp()), urls=()))
+    out = gp.generate("p", schema=gp.SotpInputs, session=session)
+    assert out["mode"] == "two_step_after_empty"
+    grounded_text, extract = session.bodies[-2], session.bodies[-1]
+    assert "tools" in grounded_text and "responseSchema" not in grounded_text["generationConfig"]
+    assert "tools" not in extract and "responseSchema" in extract["generationConfig"]
+    assert out["json"]["segments"]
+
+
+def test_an_empty_ungrounded_call_is_not_rerouted(monkeypatch):
+    monkeypatch.setattr(gp.time, "sleep", lambda s: None)
+    empty = _Resp(200, {})
+    session = _Session(*([empty] * (gp.RETRIES + 1)))
+    with pytest.raises(gp.GeminiParseError):
+        gp.generate("p", schema=gp.SotpInputs, grounded=False, session=session)
+    assert len(session.bodies) == gp.RETRIES + 1
 
 
 def test_a_blocked_prompt_is_not_retried(monkeypatch):

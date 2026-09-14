@@ -294,13 +294,20 @@ def generate(prompt: str, *, schema: Optional[type[BaseModel]] = None, grounded:
         gen_cfg.update(responseMimeType="application/json",
                        responseSchema=to_gemini_schema(schema))
     mode = "single"
+    combined = grounded and schema is not None
     try:
         out = _unpack(_post(model, body, timeout, session))
+        # Swire Pacific: grounded + schema returned no candidate through every
+        # retry (597s) while other names succeeded. Splitting search from
+        # formatting is the one remaining lever, so an empty combined answer
+        # takes the two-step path instead of failing.
+        if combined and out.get("n_candidates") == 0 and not out.get("block_reason"):
+            raise RuntimeError("gemini empty: no candidate after retries")
     except RuntimeError as exc:
-        combined = grounded and schema is not None
-        if not combined or isinstance(exc, GeminiUnavailable) or not str(exc).startswith("gemini 400"):
+        if not combined or isinstance(exc, GeminiUnavailable) or not (
+                str(exc).startswith("gemini 400") or str(exc).startswith("gemini empty")):
             raise
-        mode = "two_step"
+        mode = "two_step" if str(exc).startswith("gemini 400") else "two_step_after_empty"
         text_body = {"contents": body["contents"], "tools": body["tools"],
                      "generationConfig": {k: v for k, v in gen_cfg.items()
                                           if k not in ("responseMimeType", "responseSchema")}}
