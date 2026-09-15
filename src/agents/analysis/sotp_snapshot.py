@@ -78,8 +78,8 @@ def canonical_sotp_key(ticker: str) -> str:
 
 def _adr_alias(key: str) -> str | None:
     try:
-        from src.tools.sec_segments import _ADR_FILER_ALIAS
-        return _ADR_FILER_ALIAS.get(key)
+        from src.data.dual_listings import adr_for
+        return adr_for(key)
     except Exception:
         return None
 

@@ -43,6 +43,27 @@ async def segment_memory(admin=Depends(require_model_accuracy_owner)):
     return await asyncio.to_thread(sm.ui_summary)
 
 
+async def _review(ticker: str, status: str, admin):
+    from src.data import segment_memory as sm
+    try:
+        return await asyncio.to_thread(sm.set_review, ticker, status, _actor(admin))
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"no usable segment memory for {ticker!r}")
+
+
+@router.post("/segment-memory/{ticker}/accept")
+async def accept_segment_memory(ticker: str, admin=Depends(require_model_accuracy_owner)):
+    """Accept these exact figures for live valuations (both listings of a
+    dual-listed company). A rebuilt entry with different figures needs a new
+    acceptance."""
+    return await _review(ticker, "accepted", admin)
+
+
+@router.post("/segment-memory/{ticker}/revoke")
+async def revoke_segment_memory(ticker: str, admin=Depends(require_model_accuracy_owner)):
+    return await _review(ticker, "revoked", admin)
+
+
 @router.get("/calibration/{version_id}")
 async def calibration_detail(version_id: str, admin=Depends(require_model_accuracy_owner)):
     from src.memory import calibration_review as review

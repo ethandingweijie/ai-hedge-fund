@@ -55,6 +55,10 @@ from src.agents.industry import gemini_params as gp  # noqa: E402
 FIXTURES = ROOT / "tests" / "fixtures" / "gemini"
 THINKING: dict | None = None        # set from --thinking-level
 SKIP_G1M = "--skip-g1m" in sys.argv
+#: Per-company caches: both listings of a dual-listed company reuse one
+#: consensus anchor and one set of Gemini multiple ranges per repeat.
+COMPANY_ANCHORS: dict[str, dict] = {}
+COMPANY_RANGES: dict[tuple[str, int], dict] = {}
 SKIP_G1 = "--skip-g1" in sys.argv   # the one-shot grounded arm, superseded by G1m
 USDHKD = 7.8
 
@@ -191,16 +195,34 @@ def run(repeats: int, record: bool, tickers: list[str], timeout: float = gp.TIME
         entry = {"anchors": a, "gs_tp": gs_tp, "listing": listing, "per": per,
                  "G1": [], "G1m": [], "G2": [], "S": None, "Q": None}
         # G1m: revenue x reported mix and margins from the segment memory, only
-        # multiples / balance sheet / holdco from Gemini.
+        # multiples / balance sheet / holdco from Gemini. Everything describing
+        # the COMPANY resolves once per company (dual_listings.company_key): the
+        # 2026-09-15 run asked Gemini separately for 09988.HK and BABA and got
+        # different multiples (HK line HK$117-129 vs BABA-equivalent HK$130-151)
+        # plus a different consensus anchor (48 vs 34 analysts).
         from src.data import segment_memory
+        from src.data.dual_listings import company_key
+        ckey = company_key(ticker)
         mix = segment_memory.latest_mix(ticker) if ticker in SOTP_NAMES else None
         entry["memory_mix"] = mix
+        entry["company_key"] = ckey
+        if ckey != ticker:
+            company_anchor = COMPANY_ANCHORS.setdefault(ckey, anchors(ckey))
+            a = {**a, "revenue_fwd_usd": company_anchor["revenue_fwd_usd"],
+                 "revenue_fwd_period": company_anchor["revenue_fwd_period"],
+                 "analysts": company_anchor["analysts"], "anchor_from": ckey}
+            entry["anchors"] = a
         if mix and a["shares"] and a["revenue_fwd_usd"] and not SKIP_G1M:
             for i in range(repeats):
                 started = time.monotonic()
+                cache_key = (ckey, i)
                 try:
-                    out = gp.generate(gp.multiples_prompt(company, ticker, mix["segments"]),
-                                      schema=gp.MultipleRanges, timeout=timeout, thinking=THINKING)
+                    if cache_key in COMPANY_RANGES:
+                        out = COMPANY_RANGES[cache_key]
+                    else:
+                        out = gp.generate(gp.multiples_prompt(company, ckey, mix["segments"]),
+                                          schema=gp.MultipleRanges, timeout=timeout, thinking=THINKING)
+                        COMPANY_RANGES[cache_key] = out
                 except gp.GeminiBillingError:
                     raise
                 except Exception as exc:  # noqa: BLE001

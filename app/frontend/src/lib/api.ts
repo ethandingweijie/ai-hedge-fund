@@ -270,6 +270,28 @@ export interface SegmentMemoryTicker {
   resegmentation?: string;
   notes?: string[];
   source?: string;
+  listings?: string[];
+  review?: SegmentMemoryReview;
+  live_effect?: {
+    applies: boolean;
+    reason?: string;
+    margin_basis?: string;
+    mapping?: { memory: string; row: string; share: number; margin_avg3: number | null }[];
+  };
+}
+
+export interface SegmentMemoryReview {
+  status: 'pending' | 'accepted' | 'revoked' | 'changed_since_acceptance' | 'unknown';
+  reviewer?: string | null;
+  reviewed_at?: string | null;
+  stale?: boolean;
+  memory_key?: string;
+}
+
+export function reviewSegmentMemory(ticker: string, action: 'accept' | 'revoke'): Promise<SegmentMemoryReview> {
+  return fetchJson(`${BASE}/model-accuracy/segment-memory/${encodeURIComponent(ticker)}/${action}`, {
+    method: 'POST', headers: { ..._authHeaders() },
+  });
 }
 
 export interface SegmentMemory {

@@ -65,14 +65,11 @@ _LAST_REJECTION: dict[str, str] = {}
 # snapshot's "3690.HK" can never attach because the pipeline canonicalises to
 # "03690.HK"). An explicit None means "known to have no SEC filer" and
 # short-circuits before any network call.
-_ADR_FILER_ALIAS: dict[str, Optional[str]] = {
-    "09988.HK": "BABA",   # Alibaba
-    "09618.HK": "JD",     # JD.com
-    "09888.HK": "BIDU",   # Baidu
-    "01810.HK": None,     # Xiaomi   -- no SEC filer
-    "03690.HK": None,     # Meituan  -- MPNGY is unsponsored, no SEC filing
-    "00700.HK": None,     # Tencent  -- TCEHY is unsponsored
-}
+#: The table itself lives in src/data/dual_listings.py so SEC parsing, the
+#: SOTP snapshot, the segment memory and the valuation all agree on it.
+from src.data.dual_listings import sec_filer_alias as _sec_filer_alias  # noqa: E402
+
+_ADR_FILER_ALIAS: dict[str, Optional[str]] = _sec_filer_alias()
 
 _ANNUAL_FORMS = ("10-K", "20-F")
 

@@ -4723,6 +4723,46 @@ def _gate_live_sotp(ticker: str, assumptions: dict, shares: float,
         return assumptions, None
 
 
+def _apply_accepted_segment_memory(ticker: str, assumptions: dict, end_date: str,
+                                   statement_ccy: str, api_key=None) -> tuple[dict, Optional[str]]:
+    """SOTP segment revenue and margin from owner-ACCEPTED segment memory.
+
+    Only an entry the owner accepted on the Model Accuracy page, with exactly
+    the figures accepted, is used (src/data/segment_memory.py). Both listings
+    of a dual-listed company resolve to one memory entry and one forward
+    consensus -- the ADR's (dual_listings.company_key) -- so 09988.HK and BABA
+    get the same company value and differ only by share count and currency.
+    Multiples stay with the current SOTP rows. Returns (assumptions, flag)."""
+    try:
+        from src.data import segment_memory as sm
+        from src.data.dual_listings import company_key
+        key, entry = sm.accepted_entry(ticker)
+        if not entry:
+            return assumptions, None
+        ckey = company_key(ticker)
+        estimates = get_analyst_estimates(ckey, end_date, period="annual", limit=10, api_key=api_key) or []
+        fwd = next((e for e in estimates if getattr(e, "revenue_avg", None)), None)
+        if fwd is None:
+            return assumptions, (f"Segment memory ({key}) accepted but {ckey} has no forward consensus "
+                                 f"revenue -- current SOTP inputs kept")
+        ccy = (statement_ccy or "USD").upper()
+        rate = 1.0 if ccy == "USD" else get_fx_rate(ccy, "USD", api_key)
+        if not rate or rate <= 0:
+            return assumptions, f"Segment memory ({key}) accepted but {ccy}->USD FX unavailable -- current SOTP inputs kept"
+        new, info = sm.apply_to_sotp(assumptions, entry, entry_key=key,
+                                     fwd_revenue_usd=float(fwd.revenue_avg) * float(rate))
+        if not info.get("applied"):
+            return assumptions, f"Segment memory ({key}) accepted but not applied: {info.get('reason')}"
+        new["_segment_memory"] = {**info, "consensus_ticker": ckey, "consensus_period_end": fwd.period_end,
+                                  "consensus_revenue_usd": float(fwd.revenue_avg) * float(rate)}
+        return new, (f"SOTP (analyst): segment revenue and margins from accepted segment memory ({key}, "
+                     f"FY{info['mix_year']} mix, 3-yr average margins) x {ckey} consensus revenue "
+                     f"{fwd.period_end}; multiples unchanged")
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("[dcf] %s: accepted segment memory not applied: %s", ticker, exc)
+        return assumptions, None
+
+
 def _ledger_num(v) -> Optional[float]:
     try:
         return None if v is None else round(float(v), 6)
@@ -5572,6 +5612,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 ticker, _ticker_sotp, shares, net_debt)
             if _sotp_gate_flag:
                 ticker_forward_flags.append(_sotp_gate_flag)
+            _ticker_sotp, _seg_mem_flag = _apply_accepted_segment_memory(
+                ticker, _ticker_sotp, end_date, reported_currency, api_key)
+            if _seg_mem_flag:
+                ticker_forward_flags.append(_seg_mem_flag)
             most_recent["sotp_assumptions"] = _ticker_sotp
             _segs = _ticker_sotp.get("segments") or []
             ticker_forward_flags.append(

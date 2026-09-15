@@ -40,6 +40,16 @@ MEMORY = {"_meta": {"status": "pending_review", "model": "gemini-3.8-flash", "up
 fx_to = lambda a, b: 1.0 if a == b else None                     # noqa: E731
 
 
+@pytest.fixture(autouse=True)
+def isolated_db(monkeypatch, tmp_path):
+    """Reviews go to a throwaway SQLite file, never the local run archive."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("RUN_ARCHIVE_PATH", str(tmp_path / "reviews.db"))
+    sm._reviews_ready_key = None
+    yield
+    sm._reviews_ready_key = None
+
+
 def test_latest_mix_uses_the_most_recent_reported_year():
     mix = sm.latest_mix("BABA", memory=MEMORY, fx_to=fx_to)
     assert mix["year"] == "2025" and mix["currency"] == "CNY"
@@ -157,6 +167,120 @@ def test_a_company_total_on_another_basis_is_labelled_not_hidden():
     assert ui["reconciliation"]["2025"]["segment_gap"] == pytest.approx(0.8118, abs=1e-3)
     assert any("every year" in n and "associates and joint ventures" in n for n in ui["notes"])
     assert not any("check the source" in n for n in ui["notes"])
+
+
+# ── live use: 3-year margins, mapping, acceptance ───────────────────────────
+
+def _sec_like(years):
+    """BABA-shaped SEC entry: {year: {segment: (revenue, profit)}} in CNY mn."""
+    names = sorted({n for segs in years.values() for n in segs})
+    return {"company": "Alibaba Group", "sotp_basis": "sotp_analyst", "fmp_reporting_currency": "CNY",
+            "source": "sec_segment_footnote",
+            "history": {"reporting_currency": "CNY", "total_revenue": [], "segment_definition_changes": "",
+                        "segments": [{"name": n, "years": [
+                            _year(f"FY{y}", f"{y}-03-31", segs[n][0], segs[n][1])
+                            for y, segs in sorted(years.items()) if n in segs]} for n in names]}}
+
+
+BABA_SEC = _sec_like({
+    "2024": {"Alibaba China E-commerce Group": (490101, 186970), "Cloud intelligence group": (106374, 6121),
+             "Alibaba International Digital Commerce Group": (102598, -8035), "All others": (317539, -11252)},
+    "2025": {"Alibaba China E-commerce Group": (508380, 193223), "Cloud intelligence group": (118028, 10556),
+             "Alibaba International Digital Commerce Group": (132300, -15137), "All others": (338347, -9499)},
+    "2026": {"Alibaba China E-commerce Group": (554217, 107509), "Cloud intelligence group": (158132, 14265),
+             "Alibaba International Digital Commerce Group": (144170, -2051), "All others": (254367, -35737)},
+})
+
+
+def _baba_snapshot():
+    from src.agents.analysis.sotp_snapshot import load_sotp_snapshot
+    return load_sotp_snapshot()["BABA"]
+
+
+def test_three_year_margin_smooths_the_trough_year():
+    mix = sm.mix_from_entry(BABA_SEC, fx_to=fx_to, margin_basis="avg3")
+    commerce = next(s for s in mix["segments"] if s["name"].startswith("Alibaba China"))
+    assert commerce["margin_latest"] == pytest.approx(107509 / 554217)            # 19.4%
+    expected = (186970 / 490101 + 193223 / 508380 + 107509 / 554217) / 3
+    assert commerce["margin"] == commerce["margin_avg3"] == pytest.approx(expected)  # ~32%
+    assert commerce["margin_years"] == 3 and mix["year"] == "2026"
+
+
+def test_baba_memory_maps_onto_the_live_snapshot_rows():
+    mix = sm.mix_from_entry(BABA_SEC, fx_to=fx_to, margin_basis="avg3")
+    pairs, reason = sm.plan_mapping(_baba_snapshot(), mix)
+    assert reason == ""
+    by_memory = {seg["name"]: row["name"] for seg, row in pairs}
+    assert by_memory["Alibaba China E-commerce Group"].startswith("Taobao and Tmall")   # supplement keyword
+    assert by_memory["Cloud intelligence group"] == "Cloud Intelligence Group"
+    assert by_memory["All others"].startswith("All Others")                              # by name
+    assert "Cainiao" not in " ".join(by_memory.values())                                 # 9% row folds in
+
+
+def test_rows_finer_than_the_memory_are_not_collapsed():
+    snap = {"segments": [{"name": "Food Delivery", "revenue_fwd": 23.3e9, "pe_multiple": 12},
+                         {"name": "Instashopping", "revenue_fwd": 5.7e9, "pe_multiple": 25},
+                         {"name": "In-store Hotel and Travel", "revenue_fwd": 9.9e9, "pe_multiple": 10},
+                         {"name": "New initiatives", "revenue_fwd": 11.8e9, "ev_rev_multiple": 1.3}]}
+    mix = {"segments": [{"name": "Core Local Commerce", "share": 0.715, "margin": 0.2},
+                        {"name": "New Initiatives", "share": 0.285, "margin": -0.2}]}
+    pairs, reason = sm.plan_mapping(snap, mix)
+    assert pairs is None and "finer than the memory" in reason
+
+
+def test_a_memory_segment_without_a_counterpart_blocks_the_mapping():
+    snap = {"segments": [{"name": "PDD Domestic Core", "revenue_fwd": 48.5e9, "pe_multiple": 12}]}
+    mix = {"segments": [{"name": "Transaction services", "share": 0.5, "margin": None},
+                        {"name": "Online marketing services and others", "share": 0.5, "margin": None}]}
+    pairs, reason = sm.plan_mapping(snap, mix)
+    assert pairs is None and "no counterpart" in reason
+
+
+def test_apply_takes_revenue_and_margin_from_memory_and_multiples_from_the_row():
+    snap = _baba_snapshot()
+    new, info = sm.apply_to_sotp(snap, BABA_SEC, entry_key="BABA", fwd_revenue_usd=170e9, fx_to=fx_to)
+    assert info["applied"] and info["margin_basis"] == "avg3"
+    seg = {s["name"]: s for s in new["segments"]}
+    commerce = seg["Alibaba China E-commerce Group"]
+    total = 554217 + 158132 + 144170 + 254367
+    assert commerce["revenue_fwd"] == pytest.approx(170e9 * 554217 / total)
+    assert commerce["pe_multiple"] == 10.4                                   # the Taobao row's
+    assert commerce["ebit_margin"] == pytest.approx(
+        (186970 / 490101 + 193223 / 508380 + 107509 / 554217) / 3)
+    assert seg["All others"]["ebit_margin"] == 0.0                           # negative clamped
+    assert new["net_cash"] == snap["net_cash"] and new["holdco_discount_pct"] == snap["holdco_discount_pct"]
+    assert new["_sources"]["segments"] == "accepted_segment_memory"
+    assert snap["segments"][0]["name"].startswith("Taobao")                  # input not mutated
+
+
+def test_acceptance_is_per_company_and_expires_when_the_figures_change():
+    memory = {"_meta": {}, "tickers": {"BABA": BABA_SEC}}
+    assert sm.accepted_entry("09988.HK", memory) == (None, None)
+    review = sm.set_review("9988.HK", "accepted", "owner@example.com", memory=memory)
+    assert review["memory_key"] == "BABA" and review["status"] == "accepted"
+    assert sm.accepted_entry("BABA", memory)[0] == "BABA"
+    assert sm.accepted_entry("09988.HK", memory)[0] == "BABA"                # both listings
+
+    changed = {"_meta": {}, "tickers": {"BABA": _sec_like({
+        "2026": {"Alibaba China E-commerce Group": (999999, 1), "All others": (1, 1)}})}}
+    assert sm.review_for("BABA", changed["tickers"]["BABA"])["status"] == "changed_since_acceptance"
+    assert sm.accepted_entry("BABA", changed) == (None, None)
+
+    sm.set_review("BABA", "revoked", "owner@example.com", memory=memory)
+    assert sm.accepted_entry("BABA", memory) == (None, None)
+
+
+def test_reviewing_a_name_without_memory_is_a_key_error():
+    with pytest.raises(KeyError):
+        sm.set_review("00267.HK", "accepted", "o", memory={"_meta": {}, "tickers": {}})
+
+
+def test_ui_summary_carries_listings_review_and_live_effect():
+    memory = {"_meta": {}, "tickers": {"BABA": BABA_SEC}}
+    ui = sm.ui_summary(memory=memory, fx_to=fx_to)["tickers"][0]
+    assert ui["listings"] == ["BABA", "09988.HK"]
+    assert ui["review"]["status"] == "pending"
+    assert ui["live_effect"]["applies"] is True and ui["live_effect"]["margin_basis"] == "avg3"
 
 
 def _ranges(**over):

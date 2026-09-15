@@ -23,7 +23,7 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { TabHero } from '@/components/layout/TabHero';
 import { useAuth } from '@/contexts/auth-context';
 import {
-  getModelAccuracyOverview, getCalibrationDetail, getSegmentMemory,
+  getModelAccuracyOverview, getCalibrationDetail, getSegmentMemory, reviewSegmentMemory,
   promoteCalibration, rollbackCalibration, dismissCalibration,
   type CalibrationCard, type CalibrationDetail, type DiagnosticCard, type ModelAccuracyOverview,
   type SegmentMemory, type SegmentMemoryTicker,
@@ -341,20 +341,83 @@ function SegmentTable({ t }: { t: SegmentMemoryTicker }) {
   );
 }
 
+const REVIEW_LABEL: Record<string, string> = {
+  pending: 'pending review',
+  accepted: 'accepted · live',
+  revoked: 'revoked',
+  changed_since_acceptance: 'figures changed · re-accept',
+  unknown: 'status unavailable',
+};
+
+function ReviewControls({ t, onChanged }: { t: SegmentMemoryTicker; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const status = t.review?.status ?? 'unknown';
+  const act = (action: 'accept' | 'revoke') => {
+    setBusy(true);
+    reviewSegmentMemory(t.ticker, action)
+      .then(() => { toast.success(action === 'accept' ? `${t.ticker} accepted for live valuations` : `${t.ticker} revoked`); onChanged(); })
+      .catch((e: Error) => toast.error(`Could not ${action}: ${e.message}`))
+      .finally(() => setBusy(false));
+  };
+  const effect = t.live_effect;
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip strong={status === 'accepted'}>{REVIEW_LABEL[status] ?? status}</Chip>
+        {t.review?.reviewed_at && (
+          <span className="text-xs text-muted-foreground">
+            {t.review.reviewer ? `${t.review.reviewer} · ` : ''}{t.review.reviewed_at.slice(0, 16).replace('T', ' ')} UTC
+          </span>
+        )}
+        <span className="ml-auto flex gap-2">
+          {status !== 'accepted' && (
+            <Button size="sm" disabled={busy} onClick={() => act('accept')}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : 'Accept for live valuations'}
+            </Button>
+          )}
+          {(status === 'accepted' || status === 'changed_since_acceptance') && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => act('revoke')}>Revoke</Button>
+          )}
+        </span>
+      </div>
+      {effect && (effect.applies ? (
+        <div className="text-xs text-muted-foreground space-y-1">
+          <p>
+            Live effect for {(t.listings ?? [t.ticker]).join(' and ')}: SOTP segment revenue = FMP consensus × this mix,
+            margin = 3-year average; multiples stay with the current SOTP row.
+          </p>
+          <ul className="list-none space-y-0.5 tabular-nums">
+            {effect.mapping!.map((m) => (
+              <li key={m.memory}>
+                {m.memory} ({(m.share * 100).toFixed(1)}%{m.margin_avg3 != null ? `, ${(m.margin_avg3 * 100).toFixed(1)}% margin` : ''}) ← multiple of “{m.row}”
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No live effect: {effect.reason}</p>
+      ))}
+    </div>
+  );
+}
+
 function SegmentMemorySection({ allowed }: { allowed: boolean }) {
   const [memory, setMemory] = useState<SegmentMemory | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!allowed) return;
+  const reload = useCallback(() => {
     getSegmentMemory()
       .then((m) => {
         setMemory(m);
         setSelected((cur) => cur ?? m.tickers.find((t) => !t.error)?.ticker ?? null);
       })
       .catch((e: Error) => setError(e.message));
-  }, [allowed]);
+  }, []);
+
+  useEffect(() => {
+    if (allowed) reload();
+  }, [allowed, reload]);
 
   const current = memory?.tickers.find((t) => t.ticker === selected) ?? null;
 
@@ -363,7 +426,11 @@ function SegmentMemorySection({ allowed }: { allowed: boolean }) {
       <SectionTitle hint={memory
         ? `Reported segment revenue and profit for SOTP-valued names, each figure cited${memory.model ? ` · ${memory.model}` : ''}${memory.updated ? ` · updated ${memory.updated}` : ''}. Click a figure for its source.`
         : 'Reported segment revenue and profit for SOTP-valued names.'}>
-        Segment memory {memory && <Chip strong={memory.status === 'pending_review'}>{memory.status.replace('_', ' ')}</Chip>}
+        Segment memory {memory && (
+          <Chip strong>
+            {memory.tickers.filter((t) => t.review?.status === 'accepted').length} of {memory.tickers.filter((t) => !t.error).length} accepted
+          </Chip>
+        )}
       </SectionTitle>
       {error && <Card className="p-4 text-sm text-foreground">Could not load segment memory: {error}</Card>}
       {memory && memory.tickers.length === 0 && (
@@ -388,6 +455,9 @@ function SegmentMemorySection({ allowed }: { allowed: boolean }) {
             <>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <span className="text-sm font-semibold text-foreground">{current.company}</span>
+                {(current.listings ?? []).length > 1 && (
+                  <span className="text-xs text-muted-foreground">serves {current.listings!.join(' · ')}</span>
+                )}
                 <Chip>{BASIS_LABEL[current.sotp_basis] ?? current.sotp_basis}</Chip>
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {current.source === 'sec_segment_footnote' ? 'SEC filing · '
@@ -397,6 +467,7 @@ function SegmentMemorySection({ allowed }: { allowed: boolean }) {
                   {current.retrieved ? ` · retrieved ${current.retrieved}` : ''}
                 </span>
               </div>
+              <ReviewControls t={current} onChanged={reload} />
               <SegmentTable t={current} />
               {(current.notes ?? []).length > 0 && (
                 <ul className="text-xs text-foreground/80 space-y-1 list-none">

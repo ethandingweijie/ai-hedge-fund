@@ -31,6 +31,13 @@ def load(path: Optional[Path] = None) -> dict:
         return {}
 
 
+def _safe(fn, default):
+    try:
+        return fn()
+    except Exception:  # noqa: BLE001
+        return default
+
+
 def _has_segments(entry: dict) -> bool:
     """CITIC, Swire, ThaiBev and GenScript came back from the search-then-format
     fallback as a 'success' holding zero segments; that is not a retrieval."""
@@ -178,11 +185,16 @@ def reconciliation(entry: dict, years: dict[str, dict[str, dict]]) -> tuple[dict
     return out, notes
 
 
-def latest_mix(ticker: str, *, memory: Optional[dict] = None,
-               fx_to: Callable[[str, str], Optional[float]] = _default_fx) -> Optional[dict]:
-    entry = entry_for(ticker, memory)
-    if not entry:
-        return None
+#: Live valuations use the 3-year average reported margin: BABA's FY2026 China
+#: commerce margin (19.4%, quick-commerce investment) against a 31.9% 3-year
+#: average moved the SOTP from $145 to $178/ADS, the latter within 4% of GS.
+LIVE_MARGIN_BASIS = "avg3"
+
+
+def mix_from_entry(entry: dict, *, fx_to: Callable[[str, str], Optional[float]] = _default_fx,
+                   margin_basis: str = "latest") -> Optional[dict]:
+    """Latest reported year's revenue share per segment, with its margin on the
+    chosen basis ("latest" or "avg3": mean of the last three reported years)."""
     years = _years(entry, fx_to)
     if not years:
         return None
@@ -191,24 +203,245 @@ def latest_mix(ticker: str, *, memory: Optional[dict] = None,
     total = sum(s["revenue"] for s in segs.values())
     if total <= 0:
         return None
-    return {
-        "year": year,
-        "currency": entry.get("fmp_reporting_currency"),
-        "segments": [{
-            "name": name, "revenue": s["revenue"], "share": s["revenue"] / total,
-            "profit": s["profit"], "profit_measure": s["profit_measure"],
-            "margin": (s["profit"] / s["revenue"]) if s["profit"] is not None and s["revenue"] else None,
-        } for name, s in sorted(segs.items(), key=lambda kv: -kv[1]["revenue"])],
-    }
+    recent = [y for y in sorted(years) if y <= year][-3:]
+
+    def margins(name: str) -> list[float]:
+        out = []
+        for y in recent:
+            s = years[y].get(name)
+            if s and s["profit"] is not None and s["revenue"]:
+                out.append(s["profit"] / s["revenue"])
+        return out
+
+    rows = []
+    for name, s in sorted(segs.items(), key=lambda kv: -kv[1]["revenue"]):
+        latest = (s["profit"] / s["revenue"]) if s["profit"] is not None and s["revenue"] else None
+        ms = margins(name)
+        avg3 = sum(ms) / len(ms) if ms else None
+        rows.append({"name": name, "revenue": s["revenue"], "share": s["revenue"] / total,
+                     "profit": s["profit"], "profit_measure": s["profit_measure"],
+                     "margin_latest": latest, "margin_avg3": avg3, "margin_years": len(ms),
+                     "margin": avg3 if margin_basis == "avg3" else latest})
+    return {"year": year, "currency": entry.get("fmp_reporting_currency"),
+            "margin_basis": margin_basis, "segments": rows}
+
+
+def latest_mix(ticker: str, *, memory: Optional[dict] = None,
+               fx_to: Callable[[str, str], Optional[float]] = _default_fx,
+               margin_basis: str = "latest") -> Optional[dict]:
+    entry = entry_for(ticker, memory)
+    if not entry:
+        return None
+    return mix_from_entry(entry, fx_to=fx_to, margin_basis=margin_basis)
+
+
+# ── mapping accepted memory onto live SOTP rows ─────────────────────────────
+
+#: Memory names the shared archetype keywords miss ("Alibaba China E-commerce
+#: Group" contains none of taobao / tmall / corecommerce). Local on purpose:
+#: ARCHETYPES also drives the extractor's learned multiple basis.
+_ARCHETYPE_SUPPLEMENT = {"chinaecommerce": "ecommerce_core"}
+#: Current SOTP rows whose revenue no memory segment absorbs, as a share of
+#: their revenue. BABA's Cainiao row (9%) folds into "All others" -- allowed;
+#: Meituan's Instashopping + In-store (31%) would lose real granularity -- not.
+UNMATCHED_ROW_SHARE = 0.15
+
+
+def _name_key(name: str) -> str:
+    from src.agents.analysis.sotp_multiple_basis import normalize_key
+    return normalize_key((name or "").split("(")[0])
+
+
+def _archetype(name: str) -> Optional[str]:
+    from src.agents.analysis.sotp_multiple_basis import classify_archetype
+    arch = classify_archetype(name)
+    if arch:
+        return arch
+    key = _name_key(name)
+    return next((a for kw, a in _ARCHETYPE_SUPPLEMENT.items() if kw in key), None)
+
+
+def plan_mapping(assumptions: dict, mix: dict) -> tuple[Optional[list[tuple[dict, dict]]], str]:
+    """Pair each memory segment with the current SOTP row carrying its multiple:
+    same archetype, else the same name. Returns (pairs, "") or (None, reason)."""
+    rows = [r for r in (assumptions or {}).get("segments") or [] if isinstance(r, dict) and r.get("name")]
+    if not rows:
+        return None, "no current SOTP rows to take multiples from"
+    pairs, used = [], set()
+    for seg in mix.get("segments") or []:
+        arch, key = _archetype(seg["name"]), _name_key(seg["name"])
+        candidates = []
+        for i, row in enumerate(rows):
+            rkey = _name_key(row["name"])
+            same_arch = arch is not None and _archetype(row["name"]) == arch
+            same_name = len(key) >= 5 and len(rkey) >= 5 and (key in rkey or rkey in key)
+            if same_arch or same_name:
+                candidates.append(i)
+        if not candidates:
+            return None, f"memory segment '{seg['name']}' has no counterpart among the current SOTP rows"
+        best = max(candidates, key=lambda i: rows[i].get("revenue_fwd") or 0.0)
+        pairs.append((seg, rows[best]))
+        used.add(best)
+    total = sum(r.get("revenue_fwd") or 0.0 for r in rows)
+    unmatched = sum(rows[i].get("revenue_fwd") or 0.0 for i in range(len(rows)) if i not in used)
+    if total > 0 and unmatched / total > UNMATCHED_ROW_SHARE:
+        names = ", ".join(rows[i]["name"] for i in range(len(rows)) if i not in used)
+        return None, (f"the current SOTP rows are finer than the memory: {unmatched / total:.0%} of their "
+                      f"revenue ({names}) has no memory segment")
+    return pairs, ""
+
+
+def apply_to_sotp(assumptions: dict, entry: dict, *, entry_key: str, fwd_revenue_usd: float,
+                  fx_to: Callable[[str, str], Optional[float]] = _default_fx) -> tuple[dict, dict]:
+    """Assumptions with segment revenue and margin from ACCEPTED memory.
+
+    Forward segment revenue = FMP consensus group revenue x latest reported
+    share; margin = 3-year average reported margin (clamped to 0-60%, omitted
+    when undisclosed); multiples stay those of the paired current row. Returns
+    the input unchanged with the reason when the memory does not map."""
+    info = {"applied": False, "memory_key": entry_key, "content_hash": content_hash(entry),
+            "margin_basis": LIVE_MARGIN_BASIS}
+    mix = mix_from_entry(entry, fx_to=fx_to, margin_basis=LIVE_MARGIN_BASIS)
+    if not mix or not fwd_revenue_usd or fwd_revenue_usd <= 0:
+        info["reason"] = "no usable memory mix or forward consensus revenue"
+        return assumptions, info
+    pairs, reason = plan_mapping(assumptions, mix)
+    if not pairs:
+        info["reason"] = reason
+        return assumptions, info
+    segments = []
+    for seg, row in pairs:
+        s = {"name": seg["name"], "revenue_fwd": fwd_revenue_usd * seg["share"],
+             "pe_multiple": row.get("pe_multiple"), "ev_rev_multiple": row.get("ev_rev_multiple"),
+             "rationale": (f"multiple from '{row['name']}': {row.get('rationale', '')}")[:300],
+             "source": "accepted_segment_memory"}
+        if seg["margin"] is not None:
+            s["ebit_margin"] = min(max(float(seg["margin"]), 0.0), 0.60)
+        segments.append(s)
+    sources = assumptions.get("_sources") if isinstance(assumptions.get("_sources"), dict) else {}
+    info.update(applied=True, mix_year=mix["year"],
+                mapping=[{"memory": seg["name"], "row": row["name"], "share": round(seg["share"], 4),
+                          "margin": None if seg["margin"] is None else round(seg["margin"], 4)}
+                         for seg, row in pairs])
+    return ({**assumptions, "segments": segments,
+             "_sources": {**sources, "segments": "accepted_segment_memory"},
+             "_segment_memory": info}, info)
+
+
+# ── owner review: accept / revoke ───────────────────────────────────────────
+
+_DDL_REVIEWS = """
+CREATE TABLE IF NOT EXISTS segment_memory_reviews (
+    memory_key   TEXT PRIMARY KEY,
+    status       TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    reviewer     TEXT,
+    reviewed_at  TEXT NOT NULL
+)
+"""
+_reviews_ready_key: Optional[tuple] = None
+
+
+def _ensure_reviews() -> None:
+    global _reviews_ready_key
+    from src.data import db as _db
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key != _reviews_ready_key:
+        _db.ensure_table(_DDL_REVIEWS)
+        _reviews_ready_key = key
+
+
+def content_hash(entry: dict) -> str:
+    """What was reviewed. A rebuilt entry with different figures no longer
+    matches, so an acceptance never silently carries over to new numbers."""
+    import hashlib
+    blob = json.dumps(entry.get("history") or {}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def resolve(ticker: str, memory: Optional[dict] = None) -> tuple[Optional[str], Optional[dict]]:
+    """(memory key, entry) for any listing of the company."""
+    from src.agents.analysis.sotp_snapshot import lookup_snapshot
+    doc = memory if memory is not None else load()
+    usable = {k: v for k, v in (doc.get("tickers") or {}).items()
+              if isinstance(v, dict) and _has_segments(v) and not v.get("error")}
+    return lookup_snapshot(usable, ticker)
+
+
+def review_for(memory_key: str, entry: dict) -> dict:
+    from src.data import db as _db
+    _ensure_reviews()
+    row = _db.query_one("SELECT status, content_hash, reviewer, reviewed_at FROM segment_memory_reviews "
+                        "WHERE memory_key = ?", [memory_key])
+    if not row:
+        return {"status": "pending", "reviewer": None, "reviewed_at": None, "stale": False}
+    stale = row["content_hash"] != content_hash(entry)
+    status = row["status"]
+    if stale and status == "accepted":
+        status = "changed_since_acceptance"
+    return {"status": status, "reviewer": row["reviewer"], "reviewed_at": row["reviewed_at"], "stale": stale}
+
+
+def set_review(ticker: str, status: str, reviewer: Optional[str], *, memory: Optional[dict] = None) -> dict:
+    """Record an owner decision for the company behind `ticker`. KeyError when
+    there is no usable memory entry."""
+    from datetime import datetime, timezone
+    from src.data import db as _db
+    if status not in ("accepted", "revoked"):
+        raise ValueError(status)
+    key, entry = resolve(ticker, memory)
+    if not entry:
+        raise KeyError(ticker)
+    _ensure_reviews()
+    _db.execute("DELETE FROM segment_memory_reviews WHERE memory_key = ?", [key])
+    _db.execute("INSERT INTO segment_memory_reviews (memory_key, status, content_hash, reviewer, reviewed_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                [key, status, content_hash(entry), reviewer, datetime.now(timezone.utc).isoformat()])
+    return {"memory_key": key, **review_for(key, entry)}
+
+
+def accepted_entry(ticker: str, memory: Optional[dict] = None) -> tuple[Optional[str], Optional[dict]]:
+    """(key, entry) only when the owner accepted exactly these figures."""
+    try:
+        key, entry = resolve(ticker, memory)
+        if entry and review_for(key, entry)["status"] == "accepted":
+            return key, entry
+    except Exception:  # noqa: BLE001
+        pass
+    return None, None
+
+
+def live_effect(ticker: str, entry: dict, *, fx_to=_default_fx) -> dict:
+    """What acceptance would do to live SOTP inputs, without changing anything."""
+    from src.agents.analysis.sotp_snapshot import load_sotp_snapshot, lookup_snapshot
+    _, snap = lookup_snapshot(load_sotp_snapshot(), ticker)
+    if not snap:
+        return {"applies": False, "reason": "no SOTP (analyst) inputs for this name yet -- "
+                                            "acceptance is recorded but moves no valuation"}
+    mix = mix_from_entry(entry, fx_to=fx_to, margin_basis=LIVE_MARGIN_BASIS)
+    if not mix:
+        return {"applies": False, "reason": "no usable memory mix"}
+    pairs, reason = plan_mapping(snap, mix)
+    if not pairs:
+        return {"applies": False, "reason": reason}
+    return {"applies": True, "margin_basis": LIVE_MARGIN_BASIS, "mapping": [
+        {"memory": s["name"], "row": r["name"], "share": round(s["share"], 4),
+         "margin_avg3": None if s["margin_avg3"] is None else round(s["margin_avg3"], 4)} for s, r in pairs]}
 
 
 def ui_summary(*, memory: Optional[dict] = None,
-               fx_to: Callable[[str, str], Optional[float]] = _default_fx) -> dict:
+               fx_to: Callable[[str, str], Optional[float]] = _default_fx,
+               reviews: Optional[Callable[[str, dict], dict]] = None,
+               effects: Optional[Callable[[str, dict], dict]] = None) -> dict:
+    from src.data.dual_listings import listings_for
     doc = memory if memory is not None else load()
+    reviews = reviews or review_for
+    effects = effects or (lambda t, e: live_effect(t, e, fx_to=fx_to))
     meta = doc.get("_meta") or {}
     rows = []
     for ticker, entry in sorted((doc.get("tickers") or {}).items()):
-        base = {"ticker": ticker, "company": entry.get("company"), "sotp_basis": entry.get("sotp_basis")}
+        base = {"ticker": ticker, "company": entry.get("company"), "sotp_basis": entry.get("sotp_basis"),
+                "listings": listings_for(ticker)}
         if entry.get("error") or not _has_segments(entry):
             rows.append({**base, "error": entry.get("error")
                          or "Gemini returned no segments after retries and the search-then-format fallback"})
@@ -236,6 +469,8 @@ def ui_summary(*, memory: Optional[dict] = None,
             } for name in names],
             "reconciliation": rec,
             "notes": notes + basis_notes,
+            "review": _safe(lambda: reviews(ticker, entry), {"status": "unknown"}),
+            "live_effect": _safe(lambda: effects(ticker, entry), {"applies": False, "reason": "not evaluated"}),
             "source": entry.get("source") or "gemini_grounded",
             "resegmentation": (entry["history"].get("segment_definition_changes") or "").strip(),
         })
