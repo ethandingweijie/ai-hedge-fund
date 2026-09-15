@@ -7914,6 +7914,1261 @@
     ],
     "segment_definition_changes": "WH Group operates and reports three primary segments: Packaged meats, Pork, and Others. There have been no resegmentations or changes in segment definitions over the 5-year period (FY2021–FY2025). Reported segment revenue represents external sales and excludes inter-segment revenue. Segment revenue does not include the company's share of profits/losses of associates and joint ventures; these items are reported separately below reportable segment profit in the reconciliation to consolidated profit before tax."
    }
+  },
+  "BN4.SI": {
+   "company": "Keppel Ltd",
+   "sotp_basis": "sotp_candidate",
+   "fmp_reporting_currency": "SGD",
+   "retrieved": "2026-09-15",
+   "model": "gemini-3.8-flash",
+   "latency_s": 154.44,
+   "usage": {
+    "in": 8062,
+    "out": 4940,
+    "thoughts": 26489,
+    "tool_prompt": null,
+    "total": 39491
+   },
+   "citation_coverage": 1.0,
+   "profit_coverage": 1.0,
+   "reconciliation": {
+    "2023": {
+     "segment_sum": 7050541000.0,
+     "segments": 4,
+     "uncited": 0,
+     "cited_total": 6966128000.0,
+     "fmp_revenue": 6966128000.0,
+     "segment_gap": 0.0121,
+     "total_gap": 0.0
+    },
+    "2024": {
+     "segment_sum": 5936837000.0,
+     "segments": 5,
+     "uncited": 0,
+     "cited_total": 5784058000.0,
+     "fmp_revenue": 6601158000.0,
+     "segment_gap": -0.1006,
+     "total_gap": -0.1238
+    },
+    "2025": {
+     "segment_sum": 6132268000.0,
+     "segments": 5,
+     "uncited": 0,
+     "cited_total": 5982987000.0,
+     "fmp_revenue": 5982987000.0,
+     "segment_gap": 0.025,
+     "total_gap": 0.0
+    }
+   },
+   "history": {
+    "reporting_currency": "SGD",
+    "segments": [
+     {
+      "name": "Infrastructure",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 4860941.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Total 4,860,941"
+        },
+        "profit": {
+         "value": 699226.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Shareholders of Company 699,226"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 4596013.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total 4,596,013"
+        },
+        "profit": {
+         "value": 677783.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company 677,783"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 4153869.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total 4,153,869"
+        },
+        "profit": {
+         "value": 803099.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company 803,099"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       }
+      ]
+     },
+     {
+      "name": "Real Estate",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 764310.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Total ... 764,310"
+        },
+        "profit": {
+         "value": 314623.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Shareholders of Company ... 314,623"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 144344.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 144,344"
+        },
+        "profit": {
+         "value": 107278.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... 107,278"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 221098.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 221,098"
+        },
+        "profit": {
+         "value": 272868.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... 272,868"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       }
+      ]
+     },
+     {
+      "name": "Connectivity",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 1365951.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Total ... 1,365,951"
+        },
+        "profit": {
+         "value": 127231.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Shareholders of Company ... 127,231"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 548105.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 548,105"
+        },
+        "profit": {
+         "value": 149315.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... 149,315"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 952871.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 952,871"
+        },
+        "profit": {
+         "value": 175082.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... 175,082"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       }
+      ]
+     },
+     {
+      "name": "Corporate Activities",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 59339.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Total ... 59,339"
+        },
+        "profit": {
+         "value": -255861.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2023",
+         "source_url": "https://www.keppel.com/annualreport2024/",
+         "quote": "Shareholders of Company ... (255,861)"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 107416.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 107,416"
+        },
+        "profit": {
+         "value": -140663.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... (140,663)"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 99267.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 99,267"
+        },
+        "profit": {
+         "value": -151462.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... (151,462)"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       }
+      ]
+     },
+     {
+      "name": "Non-Core Portfolio for Divestment",
+      "years": [
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 540959.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 540,959"
+        },
+        "profit": {
+         "value": -5895.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2024",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... (5,895)"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 705163.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Total ... 705,163"
+        },
+        "profit": {
+         "value": -83300.0,
+         "currency": "SGD",
+         "scale": "thousands",
+         "period": "FY2025",
+         "source_url": "https://www.keppel.com/annualreport2025/",
+         "quote": "Shareholders of Company ... (83,300)"
+        },
+        "profit_measure": "Net profit attributable to shareholders"
+       }
+      ]
+     }
+    ],
+    "total_revenue": [
+     {
+      "fiscal_year": "FY2023",
+      "period_end": "2023-12-31",
+      "revenue": {
+       "value": 6966128.0,
+       "currency": "SGD",
+       "scale": "thousands",
+       "period": "FY2023",
+       "source_url": "https://www.keppel.com/annualreport2024/",
+       "quote": "Total ... 6,966,128"
+      },
+      "profit": {
+       "value": 885219.0,
+       "currency": "SGD",
+       "scale": "thousands",
+       "period": "FY2023",
+       "source_url": "https://www.keppel.com/annualreport2024/",
+       "quote": "Shareholders of Company ... 885,219"
+      },
+      "profit_measure": "Net profit attributable to shareholders"
+     },
+     {
+      "fiscal_year": "FY2024",
+      "period_end": "2024-12-31",
+      "revenue": {
+       "value": 5784058.0,
+       "currency": "SGD",
+       "scale": "thousands",
+       "period": "FY2024",
+       "source_url": "https://www.keppel.com/annualreport2025/",
+       "quote": "Total ... 5,784,058"
+      },
+      "profit": {
+       "value": 787818.0,
+       "currency": "SGD",
+       "scale": "thousands",
+       "period": "FY2024",
+       "source_url": "https://www.keppel.com/annualreport2025/",
+       "quote": "Shareholders of Company ... 787,818"
+      },
+      "profit_measure": "Net profit attributable to shareholders"
+     },
+     {
+      "fiscal_year": "FY2025",
+      "period_end": "2025-12-31",
+      "revenue": {
+       "value": 5982987.0,
+       "currency": "SGD",
+       "scale": "thousands",
+       "period": "FY2025",
+       "source_url": "https://www.keppel.com/annualreport2025/",
+       "quote": "Total ... 5,982,987"
+      },
+      "profit": {
+       "value": 1016287.0,
+       "currency": "SGD",
+       "scale": "thousands",
+       "period": "FY2025",
+       "source_url": "https://www.keppel.com/annualreport2025/",
+       "quote": "Shareholders of Company ... 1,016,287"
+      },
+      "profit_measure": "Net profit attributable to shareholders"
+     }
+    ],
+    "segment_definition_changes": "In FY 2025, Keppel identified a portfolio of non-core assets to be divested and reported 'Non-Core Portfolio for Divestment' as a separate reportable operating segment alongside Infrastructure, Real Estate, Connectivity, and Corporate Activities (expanding reportable segments from four to five), with segment information for FY 2024 restated accordingly. FY 2023 was not restated under this five-segment structure and reflects the four reportable segments in place prior to the creation of the non-core portfolio segment. Keppel states in Note 37 of its financial statements that 'Segment performance is evaluated based on net profit or loss', which is reported as net profit attributable to Shareholders of the Company (from continuing operations). Note 37 also discloses Operating profit under 'Segment Results' (FY 2025: Infrastructure $792,046k, Real Estate $126,476k, Connectivity $110,121k, Corporate Activities $(130,682)k, Non-Core Portfolio $220,222k, Elimination $4,338k, Total $1,122,521k; FY 2024 restated: Infrastructure $744,285k, Real Estate $211,338k, Connectivity $118,512k, Corporate Activities $(130,079)k, Non-Core Portfolio $205,499k, Elimination $(3,907)k, Total $1,145,648k; FY 2023: Infrastructure $721,838k, Real Estate $330,213k [comprising Other operating profit $441,029k and Loss from dividend in specie of Keppel REIT units $(110,816)k], Connectivity $103,253k, Corporate Activities $(76,546)k, Elimination $(2,846)k, Total $1,075,912k). Segment revenue does not include the company's share of results of associated companies and joint ventures; share of results of associates and joint ventures is equity-accounted and presented separately within segment results below operating profit. Segment revenue reported above represents total segment sales including inter-segment sales before elimination. External sales alone were: FY 2025: Infrastructure $4,132,434k, Real Estate $215,775k, Connectivity $933,987k, Corporate Activities $1,072k, Non-Core Portfolio $699,719k; FY 2024 restated: Infrastructure $4,576,347k, Real Estate $142,108k, Connectivity $528,277k, Corporate Activities $1,447k, Non-Core Portfolio $535,879k; FY 2023: Infrastructure $4,845,450k, Real Estate $763,663k, Connectivity $1,351,068k, Corporate Activities $5,947k."
+   }
+  },
+  "U96.SI": {
+   "company": "Sembcorp Industries",
+   "sotp_basis": "sotp_candidate",
+   "fmp_reporting_currency": "SGD",
+   "retrieved": "2026-09-15",
+   "model": "gemini-3.8-flash",
+   "latency_s": 125.98,
+   "usage": {
+    "in": 15508,
+    "out": 4813,
+    "thoughts": 17651,
+    "tool_prompt": null,
+    "total": 37972
+   },
+   "citation_coverage": 1.0,
+   "profit_coverage": 1.0,
+   "reconciliation": {
+    "2023": {
+     "segment_sum": 7042000000.0,
+     "segments": 5,
+     "uncited": 0,
+     "cited_total": 7042000000.0,
+     "fmp_revenue": 7042000000.0,
+     "segment_gap": 0.0,
+     "total_gap": 0.0
+    },
+    "2024": {
+     "segment_sum": 6417000000.0,
+     "segments": 5,
+     "uncited": 0,
+     "cited_total": 6417000000.0,
+     "fmp_revenue": 6417000000.0,
+     "segment_gap": 0.0,
+     "total_gap": 0.0
+    },
+    "2025": {
+     "segment_sum": 5799000000.0,
+     "segments": 5,
+     "uncited": 0,
+     "cited_total": 5799000000.0,
+     "fmp_revenue": 5799000000.0,
+     "segment_gap": 0.0,
+     "total_gap": 0.0
+    }
+   },
+   "history": {
+    "reporting_currency": "SGD",
+    "segments": [
+     {
+      "name": "Gas and Related Services",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 5457.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Gas and Related Services. 4,637. 5,457. (15)."
+        },
+        "profit": {
+         "value": 1182.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted. EBITDA3. 1,040. 1,182. (12)."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 4637.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Gas and Related Services. 4,088. 4,637. (12)."
+        },
+        "profit": {
+         "value": 1043.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,043. 626. 269. (19). 136. (5). 2,050."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 4088.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Gas and. Related Services. Turnover. External sales. 4,088."
+        },
+        "profit": {
+         "value": 1006.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,006. 723. 247. (25). 73. (8). 2,016."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       }
+      ]
+     },
+     {
+      "name": "Renewables",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 703.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Renewables. 746. 703. 6."
+        },
+        "profit": {
+         "value": 601.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 622. 601. 3."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 746.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Renewables. 856. 746. 15."
+        },
+        "profit": {
+         "value": 626.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,043. 626. 269. (19). 136. (5). 2,050."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 856.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Renewables. Turnover. External sales. 856."
+        },
+        "profit": {
+         "value": 723.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,006. 723. 247. (25). 73. (8). 2,016."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       }
+      ]
+     },
+     {
+      "name": "Integrated Urban Solutions",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 418.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Integrated Urban Solutions. 431. 418. 3."
+        },
+        "profit": {
+         "value": 202.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 268. 202. 33."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 431.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Integrated Urban Solutions. 242. 431. (44)."
+        },
+        "profit": {
+         "value": 269.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,043. 626. 269. (19). 136. (5). 2,050."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 242.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Integrated. Urban Solutions. Turnover. External sales. 242."
+        },
+        "profit": {
+         "value": 247.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,006. 723. 247. (25). 73. (8). 2,016."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       }
+      ]
+     },
+     {
+      "name": "Decarbonisation Solutions",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 16.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Decarbonisation Solutions. 53. 16. 231."
+        },
+        "profit": {
+         "value": -14.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. (23). (14). (64)."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 53.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Decarbonisation Solutions. 42. 53. (21)."
+        },
+        "profit": {
+         "value": -19.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,043. 626. 269. (19). 136. (5). 2,050."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 42.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Decarbonisation. Solutions. Turnover. External sales. 42."
+        },
+        "profit": {
+         "value": -25.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,006. 723. 247. (25). 73. (8). 2,016."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       }
+      ]
+     },
+     {
+      "name": "Other Businesses and Corporate",
+      "years": [
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 448.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Other Businesses and Corporate. 550. 448. 23."
+        },
+        "profit": {
+         "value": 82.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Other Businesses and Corporate. 144. 82. 76."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 550.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Other Businesses and Corporate. 571. 550. 4."
+        },
+        "profit": {
+         "value": 136.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,043. 626. 269. (19). 136. (5). 2,050."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       },
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 571.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Other Businesses and Corporate. Turnover. External sales. 571."
+        },
+        "profit": {
+         "value": 73.0,
+         "currency": "SGD",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://www.sembcorp.com",
+         "quote": "Adjusted EBITDA. 1,006. 723. 247. (25). 73. (8). 2,016."
+        },
+        "profit_measure": "Adjusted EBITDA"
+       }
+      ]
+     }
+    ],
+    "total_revenue": [
+     {
+      "fiscal_year": "FY2023",
+      "period_end": "2023-12-31",
+      "revenue": {
+       "value": 7042.0,
+       "currency": "SGD",
+       "scale": "mn",
+       "period": "FY2023",
+       "source_url": "https://www.sembcorp.com",
+       "quote": "Turnover. 6,417. 7,042. (9)."
+      },
+      "profit": {
+       "value": 2053.0,
+       "currency": "SGD",
+       "scale": "mn",
+       "period": "FY2023",
+       "source_url": "https://www.sembcorp.com",
+       "quote": "Adjusted. EBITDA2. S$2,051m. 2023: S$2,053m."
+      },
+      "profit_measure": "Adjusted EBITDA"
+     },
+     {
+      "fiscal_year": "FY2024",
+      "period_end": "2024-12-31",
+      "revenue": {
+       "value": 6417.0,
+       "currency": "SGD",
+       "scale": "mn",
+       "period": "FY2024",
+       "source_url": "https://www.sembcorp.com",
+       "quote": "Turnover. 5,799. 6,417. (10)."
+      },
+      "profit": {
+       "value": 2050.0,
+       "currency": "SGD",
+       "scale": "mn",
+       "period": "FY2024",
+       "source_url": "https://www.sembcorp.com",
+       "quote": "Adjusted. EBITDA1. S$2,016m. 2024: S$2,050m."
+      },
+      "profit_measure": "Adjusted EBITDA"
+     },
+     {
+      "fiscal_year": "FY2025",
+      "period_end": "2025-12-31",
+      "revenue": {
+       "value": 5799.0,
+       "currency": "SGD",
+       "scale": "mn",
+       "period": "FY2025",
+       "source_url": "https://www.sembcorp.com",
+       "quote": "Turnover. S$5,799m. 2024: S$6,417m."
+      },
+      "profit": {
+       "value": 2016.0,
+       "currency": "SGD",
+       "scale": "mn",
+       "period": "FY2025",
+       "source_url": "https://www.sembcorp.com",
+       "quote": "Adjusted. EBITDA1. S$2,016m. 2024: S$2,050m."
+      },
+      "profit_measure": "Adjusted EBITDA"
+     }
+    ],
+    "segment_definition_changes": "In November 2023, Sembcorp Industries reorganized its reportable segments from four segments (Renewables, Integrated Urban Solutions, Conventional Energy, and Other Businesses and Corporate) into five segments: Gas and Related Services (previously Conventional Energy), Renewables, Integrated Urban Solutions, Decarbonisation Solutions (carved out as a standalone segment), and Other Businesses and Corporate. Prior-year comparatives for FY2023 were re-presented accordingly. In 2025, Sembcorp changed its accounting policy relating to the subsequent measurement of investment properties from the cost model to the fair value model, retrospectively restating FY2024 segment profit (Adjusted EBITDA) figures. Segment revenue (turnover) represents consolidated revenue from subsidiaries (external sales) and does not include the Group's share of revenue of associates and joint ventures; associates and joint ventures are equity-accounted and their post-tax results are included in segment Adjusted EBITDA (defined as reported EBITDA plus share of results of associates and joint ventures, net of tax)."
+   }
+  },
+  "BIDU": {
+   "company": "Baidu Inc",
+   "sotp_basis": "sotp_candidate",
+   "fmp_reporting_currency": "CNY",
+   "retrieved": "2026-09-15",
+   "model": "gemini-3.8-flash",
+   "latency_s": 655.0,
+   "usage": {
+    "in": 7180,
+    "out": 6876,
+    "thoughts": 635,
+    "tool_prompt": null,
+    "total": 14691
+   },
+   "citation_coverage": 1.0,
+   "profit_coverage": 1.0,
+   "reconciliation": {
+    "2021": {
+     "segment_sum": 125717000000.0,
+     "segments": 2,
+     "uncited": 0,
+     "cited_total": 124493000000.0,
+     "fmp_revenue": 124493000000.0,
+     "segment_gap": 0.0098,
+     "total_gap": 0.0
+    },
+    "2022": {
+     "segment_sum": 124429000000.0,
+     "segments": 2,
+     "uncited": 0,
+     "cited_total": 123675000000.0,
+     "fmp_revenue": 123675000000.0,
+     "segment_gap": 0.0061,
+     "total_gap": 0.0
+    },
+    "2023": {
+     "segment_sum": 135338000000.0,
+     "segments": 2,
+     "uncited": 0,
+     "cited_total": 134598000000.0,
+     "fmp_revenue": 134598000000.0,
+     "segment_gap": 0.0055,
+     "total_gap": 0.0
+    },
+    "2024": {
+     "segment_sum": 133937000000.0,
+     "segments": 2,
+     "uncited": 0,
+     "cited_total": 133125000000.0,
+     "fmp_revenue": 133125000000.0,
+     "segment_gap": 0.0061,
+     "total_gap": 0.0
+    },
+    "2025": {
+     "segment_sum": 129775000000.0,
+     "segments": 2,
+     "uncited": 0,
+     "cited_total": 129079000000.0,
+     "fmp_revenue": 129079000000.0,
+     "segment_gap": 0.0054,
+     "total_gap": 0.0
+    }
+   },
+   "history": {
+    "reporting_currency": "CNY",
+    "segments": [
+     {
+      "name": "Baidu General Business",
+      "years": [
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 102485.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFI5KKJSk6qNsJHfnz_BVTUYG6gUfWGqyNRebW88b_MDB_czOMvL6YiWmx_A_410kJZfkNvSVzOMCh5PxWJS0PiW1FBVuUri2pD0bK5e337RX4Tp9_qrWShWEfeCoX0-q2dcAVz0Ghh8etmPLhqNLRvKydHn9bGR32NZi1X0eyX9hRKqywLqQRiloqkDgBNsixVtRm4mz5-UsBHzwJmPNzK9VFA95EogFo=",
+         "quote": "Revenue ... Baidu General Business ... 102,485"
+        },
+        "profit": {
+         "value": -6044.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG1IpDRffX7PyaHpJODQByErAO3XEGBVXC8QB692i5dExd3138fNhK2kIPgidkn3lMdzJyGnFGLMqzfJ8p4F2GQ1WrlOT-TQ-XqNX-9fSadNhW7SM8EncQW_zTT3D6t-JHDGfMQnOw-4G9ETPuleSMuHeRPcdIENF9JDWaN",
+         "quote": "Operating income (loss) ... (6,044)"
+        },
+        "profit_measure": "Operating income (loss)"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 104712.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFI5KKJSk6qNsJHfnz_BVTUYG6gUfWGqyNRebW88b_MDB_czOMvL6YiWmx_A_410kJZfkNvSVzOMCh5PxWJS0PiW1FBVuUri2pD0bK5e337RX4Tp9_qrWShWEfeCoX0-q2dcAVz0Ghh8etmPLhqNLRvKydHn9bGR32NZi1X0eyX9hRKqywLqQRiloqkDgBNsixVtRm4mz5-UsBHzwJmPNzK9VFA95EogFo=",
+         "quote": "Revenue ... Baidu General Business ... 104,712"
+        },
+        "profit": {
+         "value": 19478.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG1IpDRffX7PyaHpJODQByErAO3XEGBVXC8QB692i5dExd3138fNhK2kIPgidkn3lMdzJyGnFGLMqzfJ8p4F2GQ1WrlOT-TQ-XqNX-9fSadNhW7SM8EncQW_zTT3D6t-JHDGfMQnOw-4G9ETPuleSMuHeRPcdIENF9JDWaN",
+         "quote": "Operating income (loss) ... 19,478"
+        },
+        "profit_measure": "Operating income (loss)"
+       },
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 103465.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE8eLsCHXBaUa4eu5sev0dbgzWON1003hK-16Qn_YPfcATGjLQL6aXDwcstE90H0a281Icva_nvBjQZRGdPp1rH7Eqt0zutREovCRdHxqzTkx25g6L-2RqFWpP-8TfccVcm2BKna1itMvk2BRDmxsKqd7vAPJiLoRM4nNmwVSHixMhbTxSU2at1lHA=",
+         "quote": "Total revenues ... Baidu Core ... 103,465"
+        },
+        "profit": {
+         "value": 18825.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEVewRgCb9cKliYtaTEBJYXfVvgZSoOYdT1_RTMulJzo-r5jCDrYFynCna7CkYuPXAdqDsCoNORNW1Odfc2NTFBIFvQhD9t-RxtBQzwVbvGy1U6ihbw8Z14qrRt-w5D7YxmZGDyPkCsnoX9M65I1InbvBOJVmkYpRU-zRRn5Z71keQRA0qRLZ-y2Gdw5kpsO5mL3lRv0EPol7nyVvZomjqkqt6nsNJLrvvs",
+         "quote": "Operating income ... 18,825"
+        },
+        "profit_measure": "Operating income"
+       },
+       {
+        "fiscal_year": "FY2022",
+        "period_end": "2022-12-31",
+        "revenue": {
+         "value": 95431.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2022",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE8eLsCHXBaUa4eu5sev0dbgzWON1003hK-16Qn_YPfcATGjLQL6aXDwcstE90H0a281Icva_nvBjQZRGdPp1rH7Eqt0zutREovCRdHxqzTkx25g6L-2RqFWpP-8TfccVcm2BKna1itMvk2BRDmxsKqd7vAPJiLoRM4nNmwVSHixMhbTxSU2at1lHA=",
+         "quote": "Total revenues ... Baidu Core ... 95,431"
+        },
+        "profit": {
+         "value": 14534.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2022",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEb9jjR7sOj01yS5rww6oAqcanSl1e8KH5zG0HMF2A6SzG-Lm1HBnh_LqVa-IC_6N9-gkTdpsRVQwnMOHuAi_lXQjWb1omK1344-YTmDneIarODkJphAjY4ZOtLbnPUIu4OYCDcjsP2r2IqJ8lf_z0OQKl88fgbq05GZvy3-sKN0HIYMA==",
+         "quote": "Operating income (loss) ... Baidu Core ... 14,534"
+        },
+        "profit_measure": "Operating income (loss)"
+       },
+       {
+        "fiscal_year": "FY2021",
+        "period_end": "2021-12-31",
+        "revenue": {
+         "value": 95163.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2021",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFGYyd04rLeieMVBm3YyO2aHrpFKR4S1edW4jSKD6XG09cr-1QfTPmgezl4ao1mzy4jwW61aMU-0jCYtAwLN-njrGvrkdcVIOoEuDcAbT472AwcKeHxKpsswac37hh_l_9lsG5rNJtxntpSYuNQI6ieoNSuvwhkhM1T04F1Y-WdYhigagz2cBE=",
+         "quote": "95,163, 95,431, 0, 103,465"
+        },
+        "profit": {
+         "value": 15142.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2021",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEb9jjR7sOj01yS5rww6oAqcanSl1e8KH5zG0HMF2A6SzG-Lm1HBnh_LqVa-IC_6N9-gkTdpsRVQwnMOHuAi_lXQjWb1omK1344-YTmDneIarODkJphAjY4ZOtLbnPUIu4OYCDcjsP2r2IqJ8lf_z0OQKl88fgbq05GZvy3-sKN0HIYMA==",
+         "quote": "Operating income (loss) ... Baidu Core ... 15,142"
+        },
+        "profit_measure": "Operating income (loss)"
+       }
+      ]
+     },
+     {
+      "name": "iQIYI",
+      "years": [
+       {
+        "fiscal_year": "FY2025",
+        "period_end": "2025-12-31",
+        "revenue": {
+         "value": 27290.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFI5KKJSk6qNsJHfnz_BVTUYG6gUfWGqyNRebW88b_MDB_czOMvL6YiWmx_A_410kJZfkNvSVzOMCh5PxWJS0PiW1FBVuUri2pD0bK5e337RX4Tp9_qrWShWEfeCoX0-q2dcAVz0Ghh8etmPLhqNLRvKydHn9bGR32NZi1X0eyX9hRKqywLqQRiloqkDgBNsixVtRm4mz5-UsBHzwJmPNzK9VFA95EogFo=",
+         "quote": "Revenue ... iQIYI ... 27,290"
+        },
+        "profit": {
+         "value": 229.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2025",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG1IpDRffX7PyaHpJODQByErAO3XEGBVXC8QB692i5dExd3138fNhK2kIPgidkn3lMdzJyGnFGLMqzfJ8p4F2GQ1WrlOT-TQ-XqNX-9fSadNhW7SM8EncQW_zTT3D6t-JHDGfMQnOw-4G9ETPuleSMuHeRPcdIENF9JDWaN",
+         "quote": "Operating income (loss) ... 229"
+        },
+        "profit_measure": "Operating income (loss)"
+       },
+       {
+        "fiscal_year": "FY2024",
+        "period_end": "2024-12-31",
+        "revenue": {
+         "value": 29225.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFI5KKJSk6qNsJHfnz_BVTUYG6gUfWGqyNRebW88b_MDB_czOMvL6YiWmx_A_410kJZfkNvSVzOMCh5PxWJS0PiW1FBVuUri2pD0bK5e337RX4Tp9_qrWShWEfeCoX0-q2dcAVz0Ghh8etmPLhqNLRvKydHn9bGR32NZi1X0eyX9hRKqywLqQRiloqkDgBNsixVtRm4mz5-UsBHzwJmPNzK9VFA95EogFo=",
+         "quote": "Revenue ... iQIYI ... 29,225"
+        },
+        "profit": {
+         "value": 1811.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2024",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQG1IpDRffX7PyaHpJODQByErAO3XEGBVXC8QB692i5dExd3138fNhK2kIPgidkn3lMdzJyGnFGLMqzfJ8p4F2GQ1WrlOT-TQ-XqNX-9fSadNhW7SM8EncQW_zTT3D6t-JHDGfMQnOw-4G9ETPuleSMuHeRPcdIENF9JDWaN",
+         "quote": "Operating income (loss) ... 1,811"
+        },
+        "profit_measure": "Operating income (loss)"
+       },
+       {
+        "fiscal_year": "FY2023",
+        "period_end": "2023-12-31",
+        "revenue": {
+         "value": 31873.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE8eLsCHXBaUa4eu5sev0dbgzWON1003hK-16Qn_YPfcATGjLQL6aXDwcstE90H0a281Icva_nvBjQZRGdPp1rH7Eqt0zutREovCRdHxqzTkx25g6L-2RqFWpP-8TfccVcm2BKna1itMvk2BRDmxsKqd7vAPJiLoRM4nNmwVSHixMhbTxSU2at1lHA=",
+         "quote": "Total revenues ... iQIYI ... 31,873"
+        },
+        "profit": {
+         "value": 2989.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2023",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEVewRgCb9cKliYtaTEBJYXfVvgZSoOYdT1_RTMulJzo-r5jCDrYFynCna7CkYuPXAdqDsCoNORNW1Odfc2NTFBIFvQhD9t-RxtBQzwVbvGy1U6ihbw8Z14qrRt-w5D7YxmZGDyPkCsnoX9M65I1InbvBOJVmkYpRU-zRRn5Z71keQRA0qRLZ-y2Gdw5kpsO5mL3lRv0EPol7nyVvZomjqkqt6nsNJLrvvs",
+         "quote": "Operating income ... 2,989"
+        },
+        "profit_measure": "Operating income"
+       },
+       {
+        "fiscal_year": "FY2022",
+        "period_end": "2022-12-31",
+        "revenue": {
+         "value": 28998.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2022",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE8eLsCHXBaUa4eu5sev0dbgzWON1003hK-16Qn_YPfcATGjLQL6aXDwcstE90H0a281Icva_nvBjQZRGdPp1rH7Eqt0zutREovCRdHxqzTkx25g6L-2RqFWpP-8TfccVcm2BKna1itMvk2BRDmxsKqd7vAPJiLoRM4nNmwVSHixMhbTxSU2at1lHA=",
+         "quote": "Total revenues ... iQIYI ... 28,998"
+        },
+        "profit": {
+         "value": 1312.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2022",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEb9jjR7sOj01yS5rww6oAqcanSl1e8KH5zG0HMF2A6SzG-Lm1HBnh_LqVa-IC_6N9-gkTdpsRVQwnMOHuAi_lXQjWb1omK1344-YTmDneIarODkJphAjY4ZOtLbnPUIu4OYCDcjsP2r2IqJ8lf_z0OQKl88fgbq05GZvy3-sKN0HIYMA==",
+         "quote": "Operating income (loss) ... iQIYI ... 1,312"
+        },
+        "profit_measure": "Operating income (loss)"
+       },
+       {
+        "fiscal_year": "FY2021",
+        "period_end": "2021-12-31",
+        "revenue": {
+         "value": 30554.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2021",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFGYyd04rLeieMVBm3YyO2aHrpFKR4S1edW4jSKD6XG09cr-1QfTPmgezl4ao1mzy4jwW61aMU-0jCYtAwLN-njrGvrkdcVIOoEuDcAbT472AwcKeHxKpsswac37hh_l_9lsG5rNJtxntpSYuNQI6ieoNSuvwhkhM1T04F1Y-WdYhigagz2cBE=",
+         "quote": "30,554, 28,998, (5, ), 31,873"
+        },
+        "profit": {
+         "value": -4479.0,
+         "currency": "CNY",
+         "scale": "mn",
+         "period": "FY2021",
+         "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEb9jjR7sOj01yS5rww6oAqcanSl1e8KH5zG0HMF2A6SzG-Lm1HBnh_LqVa-IC_6N9-gkTdpsRVQwnMOHuAi_lXQjWb1omK1344-YTmDneIarODkJphAjY4ZOtLbnPUIu4OYCDcjsP2r2IqJ8lf_z0OQKl88fgbq05GZvy3-sKN0HIYMA==",
+         "quote": "Operating income (loss) ... iQIYI ... (4,479)"
+        },
+        "profit_measure": "Operating income (loss)"
+       }
+      ]
+     }
+    ],
+    "total_revenue": [
+     {
+      "fiscal_year": "FY2025",
+      "period_end": "2025-12-31",
+      "revenue": {
+       "value": 129079.0,
+       "currency": "CNY",
+       "scale": "mn",
+       "period": "FY2025",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFI5KKJSk6qNsJHfnz_BVTUYG6gUfWGqyNRebW88b_MDB_czOMvL6YiWmx_A_410kJZfkNvSVzOMCh5PxWJS0PiW1FBVuUri2pD0bK5e337RX4Tp9_qrWShWEfeCoX0-q2dcAVz0Ghh8etmPLhqNLRvKydHn9bGR32NZi1X0eyX9hRKqywLqQRiloqkDgBNsixVtRm4mz5-UsBHzwJmPNzK9VFA95EogFo=",
+       "quote": "Revenue ... Baidu, Inc. ... 129,079"
+      },
+      "profit": null,
+      "profit_measure": null
+     },
+     {
+      "fiscal_year": "FY2024",
+      "period_end": "2024-12-31",
+      "revenue": {
+       "value": 133125.0,
+       "currency": "CNY",
+       "scale": "mn",
+       "period": "FY2024",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFI5KKJSk6qNsJHfnz_BVTUYG6gUfWGqyNRebW88b_MDB_czOMvL6YiWmx_A_410kJZfkNvSVzOMCh5PxWJS0PiW1FBVuUri2pD0bK5e337RX4Tp9_qrWShWEfeCoX0-q2dcAVz0Ghh8etmPLhqNLRvKydHn9bGR32NZi1X0eyX9hRKqywLqQRiloqkDgBNsixVtRm4mz5-UsBHzwJmPNzK9VFA95EogFo=",
+       "quote": "Revenue ... Baidu, Inc. ... 133,125"
+      },
+      "profit": null,
+      "profit_measure": null
+     },
+     {
+      "fiscal_year": "FY2023",
+      "period_end": "2023-12-31",
+      "revenue": {
+       "value": 134598.0,
+       "currency": "CNY",
+       "scale": "mn",
+       "period": "FY2023",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE8eLsCHXBaUa4eu5sev0dbgzWON1003hK-16Qn_YPfcATGjLQL6aXDwcstE90H0a281Icva_nvBjQZRGdPp1rH7Eqt0zutREovCRdHxqzTkx25g6L-2RqFWpP-8TfccVcm2BKna1itMvk2BRDmxsKqd7vAPJiLoRM4nNmwVSHixMhbTxSU2at1lHA=",
+       "quote": "Total revenues ... 134,598"
+      },
+      "profit": null,
+      "profit_measure": null
+     },
+     {
+      "fiscal_year": "FY2022",
+      "period_end": "2022-12-31",
+      "revenue": {
+       "value": 123675.0,
+       "currency": "CNY",
+       "scale": "mn",
+       "period": "FY2022",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE8eLsCHXBaUa4eu5sev0dbgzWON1003hK-16Qn_YPfcATGjLQL6aXDwcstE90H0a281Icva_nvBjQZRGdPp1rH7Eqt0zutREovCRdHxqzTkx25g6L-2RqFWpP-8TfccVcm2BKna1itMvk2BRDmxsKqd7vAPJiLoRM4nNmwVSHixMhbTxSU2at1lHA=",
+       "quote": "Total revenues ... 123,675"
+      },
+      "profit": null,
+      "profit_measure": null
+     },
+     {
+      "fiscal_year": "FY2021",
+      "period_end": "2021-12-31",
+      "revenue": {
+       "value": 124493.0,
+       "currency": "CNY",
+       "scale": "mn",
+       "period": "FY2021",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQE04qL1u68w1osyGw4y7xgzpu2NF-NI-HE2q2mhhsCoUTerHsWHj3KS5OWKqNqPm0sHnOHN86T9bBOW6YAqMMQMPkB3jdsg5N4DqqXaAAxCStAtl2jZf0DjUSDepIhV",
+       "quote": "Total revenues ... 124,493"
+      },
+      "profit": null,
+      "profit_measure": null
+     }
+    ],
+    "segment_definition_changes": "Starting from the fourth quarter of 2025, we redefined Baidu Core as Baidu General Business; prior periods presented for comparison were shown under this updated definition/name."
+   }
   }
  }
 }
