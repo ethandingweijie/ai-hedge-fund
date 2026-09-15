@@ -36,6 +36,11 @@ _CACHE: Optional[dict] = None
 FLAG = "FEATURE_RESOURCE_HOLDCO_MAP_V2"
 
 
+#: Bases that produce an EQUITY value (debt already inside it), so they never
+#: call for consolidated net debt to be deducted.
+EQUITY_BASES = frozenset({"market_stake", "pe_range", "fixed_value", "nil"})
+
+
 def enabled() -> bool:
     return os.getenv(FLAG, "").strip().lower() in ("1", "true", "yes", "on")
 
@@ -220,7 +225,7 @@ def residual_ebitda(ticker: str, end_date: str, to_ccy: str) -> Optional[float]:
         return None
     divs = tpl.get("divisions") or []
     _SELF_VALUING = {"market_stake", "transaction_anchor", "cap_rate",
-                     "ev_ebit_range", "nil"}
+                     "ev_ebit_range", "nil", "pe_range", "fixed_value"}
     pending = [d for d in divs if d.get("basis") not in _SELF_VALUING]
     if len(pending) != 1:
         return None
@@ -290,6 +295,33 @@ def _stated_division_value(div: dict, to_ccy: str
 
     if basis == "nil":
         return 0.0, {"rationale": div.get("source") or "explicit zero"}
+
+    if basis == "fixed_value":
+        # A dated, sourced amount: a monetisation pathway after a haircut
+        # (Keppel's legacy rigs), or a claim ahead of ordinary shareholders
+        # (perpetual securities) recorded as a negative with negative_ok.
+        amount_ = div.get("amount")
+        if not isinstance(amount_, (int, float)):
+            return None
+        if amount_ < 0 and not div.get("negative_ok"):
+            return None
+        return float(amount_) * rate, {"amount": float(amount_), "currency": src_ccy}
+
+    if basis == "pe_range":
+        # EQUITY value: segment net profit x P/E. The segment's own project
+        # and operating-company debt is already inside that profit (its
+        # interest is deducted), which is how Keppel's and Sembcorp's brokers
+        # value them -- so group net debt must not be taken off again.
+        profit = div.get("net_profit")
+        lo, hi = (div.get("multiple_range") or [None, None])
+        if not isinstance(profit, (int, float)) or lo is None or hi is None:
+            return None
+        if profit <= 0 and not div.get("negative_ok"):
+            return None
+        return profit * (lo + hi) / 2.0 * rate, {
+            "net_profit": profit, "multiple_range": [lo, hi], "currency": src_ccy,
+            "equity_value": True,
+            "value_low": profit * lo * rate, "value_high": profit * hi * rate}
 
     if basis == "transaction_anchor":
         ev = div.get("enterprise_value")
@@ -400,7 +432,7 @@ def look_through_value(ticker: str, end_date: str, *,
         # fiscal year and currency they were reported in. That makes them
         # STALE-ABLE in a way a parsed figure is not, which is why every such
         # division states its own `fiscal_year` and the result reports it.
-        if basis in ("transaction_anchor", "cap_rate", "ev_ebit_range", "nil"):
+        if basis in ("transaction_anchor", "cap_rate", "ev_ebit_range", "nil", "pe_range", "fixed_value"):
             _r = _stated_division_value(div, ccy)
             if _r is None:
                 skipped.append({"division": name,

@@ -74,6 +74,11 @@ SOTP_UNIVERSE = {
     # SOTP-primary names blocked on segment data
     "00175.HK": ("Geely Automobile", "sotp_blocked_no_segments"),
     "00288.HK": ("WH Group", "sotp_blocked_no_segments"),
+    # Conglomerate SOTP candidates under review (2026-09-15): look-through
+    # templates and broker ground truth being assembled.
+    "BN4.SI": ("Keppel Ltd", "sotp_candidate"),
+    "U96.SI": ("Sembcorp Industries", "sotp_candidate"),
+    "BIDU": ("Baidu Inc", "sotp_candidate"),
 }
 
 
@@ -158,7 +163,8 @@ def fmp_product_entry(ticker: str) -> dict | None:
 
 #: Template divisions valued on their OWN stated figure or at market need no
 #: EBITDA; everything else in a holdco template does.
-_SELF_VALUING = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil"}
+_SELF_VALUING = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil",
+                 "pe_range", "fixed_value"}
 
 
 def ebitda_divisions(ticker: str) -> list[str]:

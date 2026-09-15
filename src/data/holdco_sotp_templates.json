@@ -23,7 +23,7 @@
     "v6a: stated-figure divisions declare units_multiplier = 1e6. The published segment tables are in millions while market caps and net debt are absolute; without the scale the bridge subtracted a 13.8bn net debt from a 12,139 gross asset value and returned negative equity.",
     "v6b: Olam's template currency is SGD, not USD. Divisions stay in their reported USD and convert per-division; the TEMPLATE currency has to be the listing currency because parent net debt reaches the bridge in it. Stated in USD, the bridge subtracted an SGD net debt from a USD gross asset value."
   ],
-  "version": 7,
+  "version": 8,
   "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
   "templates": {
     "00267.HK": {
@@ -420,6 +420,168 @@
         "basis": "reported net cash excluding perpetual securities",
         "source": "SingPost FY2025/26 results: net cash S$184,702k. The Australia business (FMH) was sold on 27 Mar 2025 at A$1.02bn EV; the FMP balance sheet lags the proceeds and the S$202.6m special dividend."
       }
+    },
+    "BN4.SI": {
+      "name": "Keppel Ltd",
+      "currency": "SGD",
+      "holdco_discount": [
+        0.1,
+        0.1
+      ],
+      "discount_source": "10%: the conglomerate discount in Maybank IBG's SOTP (1 Sep 2026, TP S$13.00).",
+      "divisions": [
+        {
+          "name": "Keppel REIT",
+          "basis": "market_stake",
+          "listed": "K71U.SI",
+          "stake_pct": 0.3748,
+          "source": "37.48% direct and deemed (1,857,370,556 units), 27 Feb 2026."
+        },
+        {
+          "name": "Keppel DC REIT",
+          "basis": "market_stake",
+          "listed": "AJBU.SI",
+          "stake_pct": 0.1931,
+          "source": "19.31% deemed (471,983,747 units), 11 Mar 2026."
+        },
+        {
+          "name": "Keppel Infrastructure Trust",
+          "basis": "market_stake",
+          "listed": "A7RU.SI",
+          "stake_pct": 0.182,
+          "source": "18.20% direct via Keppel Infrastructure Holdings (1,107,489,090 units), 9 Mar 2026."
+        },
+        {
+          "name": "KORE US REIT",
+          "basis": "market_stake",
+          "listed": "CMOU.SI",
+          "stake_pct": 0.0708,
+          "source": "7.08% deemed (73,982,246 units), 26 Mar 2025."
+        },
+        {
+          "name": "Prime US REIT",
+          "basis": "market_stake",
+          "listed": "OXMU.SI",
+          "stake_pct": 0.0558,
+          "source": "5.58% deemed (80,172,478 units), 13 Mar 2026."
+        },
+        {
+          "name": "Asset management",
+          "basis": "pe_range",
+          "net_profit": 189,
+          "currency": "SGD",
+          "fiscal_year": 2025,
+          "multiple_range": [
+            18.0,
+            22.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "FY2025 asset management net profit S$189m (fees S$453m; FUM S$95bn at end-2025, S$106bn at end-Jul 2026). 18-22x around listed asset managers (CapitaLand Investment 18.3x, Blackstone 19.8x EV/EBITDA TTM, 15 Sep 2026); Maybank uses 20x FY27E."
+        },
+        {
+          "name": "Infrastructure and Real Estate (operating)",
+          "basis": "pe_range",
+          "net_profit": 1076,
+          "currency": "SGD",
+          "fiscal_year": 2025,
+          "multiple_range": [
+            11.0,
+            13.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "FY2025 segment net profit: Infrastructure S$803m + Real Estate S$273m. 11-13x around Maybank's 12x FY27E; SG infrastructure/utility peers 18-20x P/E TTM (Sembcorp 18.2x, ST Engineering 20.4x) sit above, so the band is conservative."
+        },
+        {
+          "name": "Connectivity",
+          "basis": "pe_range",
+          "net_profit": 175,
+          "currency": "SGD",
+          "fiscal_year": 2025,
+          "multiple_range": [
+            15.0,
+            25.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "FY2025 Connectivity net profit S$175m (1H2026 S$77m). 15-25x spans telco (Singtel 13.1x P/E TTM) to data-centre/fibre peers (NetLink 45x); Maybank uses 25x FY27E on S$106m."
+        },
+        {
+          "name": "Legacy offshore rigs (non-core)",
+          "basis": "fixed_value",
+          "amount": 2590,
+          "currency": "SGD",
+          "fiscal_year": 2026,
+          "units_multiplier": 1000000,
+          "source": "Pathway to monetise up to 10 legacy rigs for ~S$3.7bn through the Keppel Offshore Fund (1H2026). Taken at 70%: the same 30% discount Maybank applies to the non-core portfolio."
+        },
+        {
+          "name": "Perpetual securities (ahead of ordinary shares)",
+          "basis": "fixed_value",
+          "amount": -726,
+          "negative_ok": true,
+          "currency": "SGD",
+          "fiscal_year": 2026,
+          "units_multiplier": 1000000,
+          "source": "Perpetual securities of S$726m recognised in equity at 30 Jun 2026."
+        }
+      ],
+      "net_debt_note": "Every part is an equity value (market stakes, net profit x P/E, stated amounts), so project and operating-company debt is already inside them and group net debt (S$9.33bn at 30 Jun 2026) is not deducted again. Parent-level corporate debt is not separately disclosed. Maybank's S$1.97bn of unlisted fund co-investments is not yet included."
+    },
+    "U96.SI": {
+      "name": "Sembcorp Industries",
+      "currency": "SGD",
+      "holdco_discount": [
+        0.05,
+        0.05
+      ],
+      "discount_source": "5%: the conglomerate discount in Maybank Research's SOTP (17 Aug 2026, TP S$6.40).",
+      "divisions": [
+        {
+          "name": "Gas and Related Services",
+          "basis": "pe_range",
+          "net_profit": 701,
+          "currency": "SGD",
+          "fiscal_year": 2025,
+          "multiple_range": [
+            11.0,
+            13.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "FY2025 net profit before exceptional items S$701m (FY2024 S$728m). 11-13x around Maybank's 12x FY27E P/E."
+        },
+        {
+          "name": "Renewables",
+          "basis": "pe_range",
+          "net_profit": 192,
+          "currency": "SGD",
+          "fiscal_year": 2025,
+          "multiple_range": [
+            11.0,
+            13.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "FY2025 net profit before exceptional items S$192m; 15.0GW operational at end-2025, 21.9GW gross by Aug 2026. 11-13x around Maybank's 12x FY27E (China/HK renewables 4.9-27.7x P/E TTM)."
+        },
+        {
+          "name": "Integrated Urban Solutions",
+          "basis": "pe_range",
+          "net_profit": 178,
+          "currency": "SGD",
+          "fiscal_year": 2025,
+          "multiple_range": [
+            9.0,
+            11.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "FY2025 net profit before exceptional items S$178m. 9-11x: below the energy segments for a lower-growth water, waste and urban-development business."
+        },
+        {
+          "name": "Decarbonisation Solutions",
+          "basis": "nil",
+          "fiscal_year": 2025,
+          "source": "FY2025 net LOSS S$23m (1H2026 loss S$8m). Explicit zero."
+        }
+      ],
+      "net_debt_note": "Every part is net profit x P/E, an equity value: segment profits already bear their project debt interest, so group net debt (S$13.9bn at 30 Jun 2026, after consolidating Alinta) is not deducted again. FY2025 profits exclude Alinta (consolidated June 2026). The 40% stake in Sembcorp Salalah (listed on the Muscat exchange) is not yet marked."
     }
   }
 }

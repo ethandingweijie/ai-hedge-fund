@@ -53,11 +53,48 @@ def _status(value: float, band: list) -> str:
     return "below" if value < lo else "above" if value > hi else "in_range"
 
 
+def check_lookthrough(ticker: str, result: Optional[dict], shares: float) -> Optional[dict]:
+    """Grade a holdco look-through (holdco_sotp.look_through_value) against a
+    broker reference recorded in the listing's own currency per share.
+
+    Parts are matched to reference parts by keyword, first match wins, so a
+    listed-trust keyword placed before "infrastructure" keeps Keppel
+    Infrastructure Trust out of the operating infrastructure bucket."""
+    gt, _ = ground_truth_for(ticker)
+    if not gt or gt.get("kind") != "lookthrough" or not result or not shares or shares <= 0:
+        return None
+    from src.agents.analysis.sotp_multiple_basis import normalize_key
+
+    buckets: dict[str, float] = {p["name"]: 0.0 for p in gt["parts"]}
+    unmatched: list[str] = []
+    for part in result.get("parts") or []:
+        key = normalize_key(str(part.get("division", "")))
+        for ref in gt["parts"]:
+            if any(k in key for k in ref["keywords"]):
+                buckets[ref["name"]] += float(part.get("value") or 0.0)
+                break
+        else:
+            unmatched.append(str(part.get("division", "")))
+    parts = []
+    for ref in gt["parts"]:
+        v = buckets[ref["name"]] / shares
+        parts.append({"name": ref["name"], "value_per_share": round(v, 4), "range": ref["per_share"],
+                      "status": _status(v, ref["per_share"]) if buckets[ref["name"]] else "missing"})
+    total = float(result.get("net_asset_value") or 0.0) / shares
+    lo, hi = gt["total_per_share"]
+    return {"source": gt["source"], "as_of": gt["as_of"], "unit": gt["unit"],
+            "total": {"value_per_share": round(total, 4), "range": gt["total_per_share"],
+                      "status": _status(total, gt["total_per_share"])},
+            "parts": parts, "unmatched_parts": unmatched,
+            "off_range": [p["name"] for p in parts if p["status"] != "in_range"],
+            "plausible": lo * (1 - PLAUSIBILITY_TOLERANCE) <= total <= hi * (1 + PLAUSIBILITY_TOLERANCE)}
+
+
 def check_table(ticker: str, table: Optional[dict]) -> Optional[dict]:
     """Per-segment and total grading of an engine SOTP table, or None when
     there is no reference for this ticker or no usable table."""
     gt, factor = ground_truth_for(ticker)
-    if not gt or not table or not table.get("shares"):
+    if not gt or gt.get("kind") == "lookthrough" or not table or not table.get("shares"):
         return None
     from src.agents.analysis.sotp_multiple_basis import normalize_key
 

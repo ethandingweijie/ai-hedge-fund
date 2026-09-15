@@ -458,7 +458,8 @@ def live_effect(ticker: str, entry: dict, *, fx_to=_default_fx) -> dict:
         # Holdco: accepted division EBITDA completes the look-through. Checked
         # without market data -- only whether every division that needs EBITDA
         # has it -- so the page stays fast.
-        self_valuing = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil"}
+        self_valuing = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil",
+                        "pe_range", "fixed_value"}
         needed = [d["name"] for d in tpl.get("divisions") or [] if d.get("basis") not in self_valuing]
         supplied = division_ebitda_amounts(entry, tpl.get("currency") or "USD", fx_to)
         missing = [n for n in needed if n not in supplied]

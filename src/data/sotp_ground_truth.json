@@ -10,59 +10,351 @@
       "as_of": "2026-09-14",
       "hk_line": "09988.HK",
       "ads_ratio": 8,
-      "consensus_target_per_ads": [160, 205],
-      "consensus_target_per_hk_share_hkd": [155, 200],
-      "total_per_ads": [152, 201],
-      "holdco_discount_range": [0.15, 0.25],
+      "consensus_target_per_ads": [
+        160,
+        205
+      ],
+      "consensus_target_per_hk_share_hkd": [
+        155,
+        200
+      ],
+      "total_per_ads": [
+        152,
+        201
+      ],
+      "holdco_discount_range": [
+        0.15,
+        0.25
+      ],
       "segments": [
         {
           "name": "China E-Commerce",
           "assets": "Taobao, Tmall, Quick Commerce / Freshippo",
           "method": "Forward P/E or EV/EBITA",
           "multiple_range": "8x - 11x P/E",
-          "keywords": ["taobao", "tmall", "chinacommerce", "chinaecommerce", "freshippo"],
-          "per_ads": [60, 75]
+          "keywords": [
+            "taobao",
+            "tmall",
+            "chinacommerce",
+            "chinaecommerce",
+            "freshippo"
+          ],
+          "per_ads": [
+            60,
+            75
+          ]
         },
         {
           "name": "Cloud & AI Infrastructure",
           "assets": "Alibaba Cloud, Model-as-a-Service (Qwen), T-Head",
           "method": "EV/Sales or forward EV/EBITA",
           "multiple_range": "4.0x - 6.0x EV/Sales",
-          "keywords": ["cloud"],
-          "per_ads": [35, 45]
+          "keywords": [
+            "cloud"
+          ],
+          "per_ads": [
+            35,
+            45
+          ]
         },
         {
           "name": "AIDC (International Retail)",
           "assets": "AliExpress, Lazada, Trendyol, Daraz",
           "method": "EV/Sales or DCF",
           "multiple_range": "0.8x - 1.2x EV/Sales",
-          "keywords": ["international", "aidc", "aliexpress", "lazada", "trendyol"],
-          "per_ads": [12, 18]
+          "keywords": [
+            "international",
+            "aidc",
+            "aliexpress",
+            "lazada",
+            "trendyol"
+          ],
+          "per_ads": [
+            12,
+            18
+          ]
         },
         {
           "name": "Cainiao Smart Logistics",
           "assets": "Cross-border logistics, domestic fulfillment",
           "method": "EV/Sales or peer comp",
           "multiple_range": "0.7x - 1.0x EV/Sales",
-          "keywords": ["cainiao", "logistics"],
-          "per_ads": [8, 12]
+          "keywords": [
+            "cainiao",
+            "logistics"
+          ],
+          "per_ads": [
+            8,
+            12
+          ]
         },
         {
           "name": "Digital Media & Other",
           "assets": "Youku, Alibaba Pictures, DingTalk, Amap",
           "method": "Market value / Sales",
           "multiple_range": "0.8x - 1.2x EV/Sales",
-          "keywords": ["other", "digitalmedia", "youku", "dingtalk", "amap"],
-          "per_ads": [4, 7]
+          "keywords": [
+            "other",
+            "digitalmedia",
+            "youku",
+            "dingtalk",
+            "amap"
+          ],
+          "per_ads": [
+            4,
+            7
+          ]
         }
       ],
       "balance_sheet": {
         "name": "Ant Group stake + net cash & strategic investments",
         "components": [
-          {"name": "Ant Group equity stake (33%)", "method": "10x - 12x earnings (~$60-75B valuation)", "per_ads": [8, 12]},
-          {"name": "Net cash & strategic investments", "method": "1.0x cash; 15-20% conglomerate discount on stakes", "per_ads": [25, 32]}
+          {
+            "name": "Ant Group equity stake (33%)",
+            "method": "10x - 12x earnings (~$60-75B valuation)",
+            "per_ads": [
+              8,
+              12
+            ]
+          },
+          {
+            "name": "Net cash & strategic investments",
+            "method": "1.0x cash; 15-20% conglomerate discount on stakes",
+            "per_ads": [
+              25,
+              32
+            ]
+          }
         ],
-        "per_ads": [33, 44]
+        "per_ads": [
+          33,
+          44
+        ]
+      }
+    },
+    "BN4.SI": {
+      "kind": "lookthrough",
+      "source": "Maybank IBG Research, Keppel initiation, 1 Sep 2026 (TP S$13.00, BUY)",
+      "as_of": "2026-09-01",
+      "unit": "SGD per share",
+      "note": "Single broker: each part is the broker's value per share (S$m / 1,821m shares) +/-10%.",
+      "total_per_share": [
+        11.7,
+        14.3
+      ],
+      "parts": [
+        {
+          "name": "Listed REIT and trust stakes",
+          "keywords": [
+            "reit",
+            "trust"
+          ],
+          "per_share": [
+            1.556,
+            1.902
+          ],
+          "method": "market price"
+        },
+        {
+          "name": "Asset management",
+          "keywords": [
+            "assetmanagement"
+          ],
+          "per_share": [
+            2.628,
+            3.212
+          ],
+          "method": "20x FY27E net profit (S$248m) plus SSTEC management at 10x"
+        },
+        {
+          "name": "Infrastructure and Real Estate",
+          "keywords": [
+            "infrastructure",
+            "realestate"
+          ],
+          "per_share": [
+            5.114,
+            6.25
+          ],
+          "method": "12x FY27E operating net profit (S$862m)"
+        },
+        {
+          "name": "Connectivity",
+          "keywords": [
+            "connectivity"
+          ],
+          "per_share": [
+            1.309,
+            1.599
+          ],
+          "method": "25x FY27E operating net profit (S$106m)"
+        },
+        {
+          "name": "Non-core portfolio",
+          "keywords": [
+            "legacy",
+            "noncore",
+            "offshore"
+          ],
+          "per_share": [
+            1.386,
+            1.694
+          ],
+          "method": "30% discount to 1HFY26 NAV"
+        },
+        {
+          "name": "Unlisted fund stakes",
+          "keywords": [
+            "unlistedfund",
+            "coinvest"
+          ],
+          "per_share": [
+            0.973,
+            1.189
+          ],
+          "method": "15% discount to 1HFY26 carrying value"
+        }
+      ],
+      "holdco_discount_range": [
+        0.1,
+        0.1
+      ]
+    },
+    "U96.SI": {
+      "kind": "lookthrough",
+      "source": "Maybank Research, Sembcorp upgrade to BUY, 17 Aug 2026 (TP S$6.40)",
+      "as_of": "2026-08-17",
+      "unit": "SGD per share",
+      "note": "Single broker; only the parts the note quotes per share are graded (+/-10%).",
+      "total_per_share": [
+        5.76,
+        7.04
+      ],
+      "parts": [
+        {
+          "name": "Gas and Related Services",
+          "keywords": [
+            "gas"
+          ],
+          "per_share": [
+            5.004,
+            6.116
+          ],
+          "method": "12x FY27E P/E"
+        },
+        {
+          "name": "Renewables",
+          "keywords": [
+            "renewable"
+          ],
+          "per_share": [
+            0.864,
+            1.056
+          ],
+          "method": "12x FY27E P/E"
+        }
+      ],
+      "holdco_discount_range": [
+        0.05,
+        0.05
+      ]
+    },
+    "BIDU": {
+      "source": "Broker SOTP range: CMB International 2 Mar 2026 (US$161.7/ADS), DBS 19 Aug 2026 (HK$131/share), Nomura 16 Feb 2026 (US$196/ADS)",
+      "as_of": "2026-08-19",
+      "hk_line": "09888.HK",
+      "ads_ratio": 8,
+      "note": "Brokers disagree on method (ads 0-5x P/E; cloud 4.6-5x P/S; Kunlunxin 20x P/S or unvalued), so ranges span the brokers rather than a consensus. DBS HK$ per share converted at 7.8 HKD/USD x 8.",
+      "total_per_ads": [
+        134.4,
+        196.0
+      ],
+      "segments": [
+        {
+          "name": "Ads / general business",
+          "assets": "Search and online marketing",
+          "method": "0-5x P/E",
+          "multiple_range": "0x (DBS) to 5x 2026E non-GAAP P/E (CMBI)",
+          "keywords": [
+            "onlinemarketing",
+            "ads",
+            "advertising",
+            "generalbusiness",
+            "legacy",
+            "baiducore"
+          ],
+          "per_ads": [
+            0.0,
+            35.7
+          ]
+        },
+        {
+          "name": "AI Cloud",
+          "assets": "AI Cloud infrastructure",
+          "method": "4.6-5x forward P/S",
+          "multiple_range": "4.6x (CMBI) - 5x (DBS)",
+          "keywords": [
+            "cloud"
+          ],
+          "per_ads": [
+            56.61,
+            57.4
+          ]
+        },
+        {
+          "name": "Kunlunxin",
+          "assets": "AI chip unit (Baidu 57.67%)",
+          "method": "20x forward P/S (DBS)",
+          "multiple_range": "unvalued (CMBI) to 20x P/S (DBS)",
+          "keywords": [
+            "kunlun",
+            "chip"
+          ],
+          "per_ads": [
+            0.0,
+            58.5
+          ]
+        },
+        {
+          "name": "Apollo / robotaxi",
+          "assets": "Apollo Go",
+          "method": "2x 2030E revenue discounted (CMBI)",
+          "multiple_range": "US$0.3 (CMBI) to HK$10/share (DBS)",
+          "keywords": [
+            "apollo",
+            "robotaxi",
+            "autonomous"
+          ],
+          "per_ads": [
+            0.3,
+            10.3
+          ]
+        }
+      ],
+      "balance_sheet": {
+        "name": "Net cash, iQIYI and other investments",
+        "components": [
+          {
+            "name": "CMBI",
+            "method": "30% holding discount",
+            "per_ads": [
+              62.8,
+              62.8
+            ]
+          },
+          {
+            "name": "DBS",
+            "method": "30% haircut",
+            "per_ads": [
+              42.1,
+              42.1
+            ]
+          }
+        ],
+        "per_ads": [
+          42.1,
+          62.8
+        ]
       }
     }
   }

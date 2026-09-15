@@ -3528,7 +3528,10 @@ def _compute_method_value(
                     # or the SOTP counts debt-financed assets as if they were
                     # equity. Olam and SingPost are valued entirely on
                     # enterprise bases.
-                    _any_ev = any(d.get("basis") != "market_stake" for d in _divs)
+                    # pe_range / fixed_value / nil are EQUITY values like a
+                    # market stake: a template built only from those takes
+                    # no consolidated net debt (Keppel, Sembcorp).
+                    _any_ev = any(d.get("basis") not in holdco_sotp.EQUITY_BASES for d in _divs)
                     # The engine works in the currency the ticker TRADES in,
                     # so the look-through is converted to that, not to the
                     # reporting currency.
@@ -4592,7 +4595,13 @@ _SEGMENT_SOTP_WEIGHT = 0.40
 #: bridge subtracts a reported net debt that includes readily-marketable
 #: inventories, and on that figure the SOTP reads SGD 0.355 against a 1.183
 #: price -- a discount that belongs to the debt definition, not to a view.
-_LOOKTHROUGH_PROMOTE: frozenset[str] = frozenset({"S08.SI"})
+#:
+#: Keppel (BN4.SI) and Sembcorp (U96.SI), added 2026-09-15: they route to the
+#: SG conglomerate and regulated-utility profiles, neither of which carries
+#: SOTP / NAV, yet both are valued by the street as a sum of parts. Their
+#: templates are all-equity (listed stakes at market, segment net profit x
+#: P/E) and previewed at +10% to price, inside Maybank's ranges.
+_LOOKTHROUGH_PROMOTE: frozenset[str] = frozenset({"S08.SI", "BN4.SI", "U96.SI"})
 _LOOKTHROUGH_PROMOTE_WEIGHT = 0.40
 
 
