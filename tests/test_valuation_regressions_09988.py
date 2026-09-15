@@ -64,16 +64,19 @@ class TestSotpLedTwelveMonthTarget:
 
     def test_share_of_the_blend(self):
         assert d._sotp_led_share({"effective_weights": self.RUN_0915_WEIGHTS}) == pytest.approx(0.769231, rel=1e-4)
-        assert d._sotp_led_share({"effective_weights": self.RUN_0915_WEIGHTS}) >= d._SOTP_LED_PT_MIN_WEIGHT
+        assert d._sotp_led_share({"effective_weights": self.RUN_0915_WEIGHTS}) > d._SOTP_LED_PT_MIN_WEIGHT
 
     def test_no_sotp_is_not_sotp_led(self):
         assert d._sotp_led_share({"effective_weights": self.RUN_0915_WEIGHTS[:4]}) == 0.0
-        assert d._sotp_led_share({}) == 0.0
+        assert not d._sotp_led_share({}) > d._SOTP_LED_PT_MIN_WEIGHT
 
-    def test_look_through_names_are_not_swept_in(self):
-        """The ten live holdcos keep their current 12m target path."""
-        w = [{"method": "SOTP / NAV (look-through)", "weight": 0.7}, {"method": "P/B", "weight": 0.3}]
-        assert d._sotp_led_share({"effective_weights": w}) == 0.0
+    @pytest.mark.parametrize("method", ["SOTP / NAV (look-through)", "SOTP / NAV", "SOTP (segments)"])
+    def test_every_sotp_is_preferred_to_a_generic_multiple(self, method):
+        """Owner policy: SOTP always beats a generic multiple across a business
+        group -- holdco look-throughs included, at any positive weight."""
+        w = [{"method": method, "weight": 0.1}, {"method": "P/B", "weight": 0.9}]
+        assert d._sotp_led_share({"effective_weights": w}) == pytest.approx(0.1)
+        assert d._sotp_led_share({"effective_weights": w}) > d._SOTP_LED_PT_MIN_WEIGHT
 
     def test_09988_target_lands_between_spot_and_iv(self):
         """The convergence path at 35% puts the base target at ~HK$125 on the
@@ -86,6 +89,20 @@ class TestSotpLedTwelveMonthTarget:
         src = inspect.getsource(d)
         assert "_sotp_led = _sotp_led_share(" in src
         assert "convergence toward SOTP-led intrinsic value" in src
+
+
+class TestCompositeStillScalesAnalystSotp:
+    """Owner decision 2026-09-15: SOTP (analyst) takes the quality composite like
+    every multi-bucket method. Production re-run d45c3f57 published HK$214.24
+    from these inputs and that figure stands."""
+    METHODS = [{"name": "EV/EBITDA", "weight": 0.40}, {"name": "P/E", "weight": 0.25},
+               {"name": "DCF", "weight": 0.25}, {"name": "SOTP (analyst)", "weight": 3.0}]
+    VALUES = {"EV/EBITDA": 217.08, "P/E": 102.48, "DCF": 70.60, "SOTP (analyst)": 177.86}
+
+    def test_the_published_214_is_reproduced(self):
+        iv, bd = d._blend_methods(self.METHODS, dict(self.VALUES), 0.0, [], 0.0, composite_mult=1.266)
+        assert iv == pytest.approx(214.24, abs=0.05)
+        assert "composite_exempt_weight" not in bd
 
 
 def test_decision_inputs_carry_the_executed_trade_action():

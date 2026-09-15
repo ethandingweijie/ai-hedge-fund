@@ -350,9 +350,16 @@ def _net_debt_net_of_investments(row: dict, sector: str = "") -> float:
     return float(nd) - float(sti)
 
 
-#: Methods that make a valuation SOTP-led, and the blend share that counts.
-_SOTP_LED_METHODS = frozenset({"SOTP (analyst)", "Analyst SOTP"})
-_SOTP_LED_PT_MIN_WEIGHT = 0.25
+#: Methods that make a valuation SOTP-led. Owner policy (2026-09-15): a SOTP
+#: is ALWAYS preferred to a generic multiple across a business group, so any
+#: weighted SOTP -- analyst, segment, or holdco look-through / NAV -- puts the
+#: 12m target on the convergence path toward the SOTP-led IV.
+_SOTP_LED_METHODS = frozenset({
+    "SOTP (analyst)", "Analyst SOTP", "SOTP (segments)",
+    "SOTP / NAV", "SOTP / NAV (look-through)",
+})
+#: Strictly above this share of the blend counts (any positive weight).
+_SOTP_LED_PT_MIN_WEIGHT = 0.0
 
 
 def _sotp_led_share(scenario: dict) -> float:
@@ -5300,6 +5307,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      # REIT-specific
                      "depreciation_and_amortization", "operating_cash_flow",
                      "cash_and_equivalents",
+                     # Counted as cash in net debt (_net_debt_net_of_investments).
+                     # Requested AND copied: the 75aa05b fix copied it into rows
+                     # but never asked for it, so the 09988.HK production re-run
+                     # still carried +HK$100.6bn net debt.
+                     "short_term_investments",
                      # The non-recurring term of the owner-earnings identity,
                      # read by the cash-conversion gate. Same trap the SBC
                      # note below records: _extract_annual_series() reads it,
@@ -7924,7 +7936,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # the tactical rating said SELL while the valuation said BUY. For
             # these names the target IS the convergence path toward the
             # scenario IV, in both directions.
-            _sotp_led = _sotp_led_share(scenario_results.get("base") or {}) >= _SOTP_LED_PT_MIN_WEIGHT
+            _sotp_led = _sotp_led_share(scenario_results.get("base") or {}) > _SOTP_LED_PT_MIN_WEIGHT
             for _sn in ("bear", "base", "bull"):
                 _scen_iv = scenario_results.get(_sn, {}).get("intrinsic_value")
                 _pt = _12m_targets.get(_sn)
