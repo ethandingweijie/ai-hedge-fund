@@ -23,7 +23,7 @@
     "v6a: stated-figure divisions declare units_multiplier = 1e6. The published segment tables are in millions while market caps and net debt are absolute; without the scale the bridge subtracted a 13.8bn net debt from a 12,139 gross asset value and returned negative equity.",
     "v6b: Olam's template currency is SGD, not USD. Divisions stay in their reported USD and convert per-division; the TEMPLATE currency has to be the listing currency because parent net debt reaches the bridge in it. Stated in USD, the bridge subtracted an SGD net debt from a USD gross asset value."
   ],
-  "version": 6,
+  "version": 7,
   "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
   "templates": {
     "00267.HK": {
@@ -172,8 +172,8 @@
       "name": "Pacific Century Regional Developments",
       "currency": "SGD",
       "holdco_discount": [
-        0.4,
-        0.5
+        0.2,
+        0.3
       ],
       "divisions": [
         {
@@ -191,7 +191,7 @@
           "source": "small DIRECT holding, separate from the PCCW look-through"
         }
       ],
-      "discount_source": "40% baseline (market applies 40-50%). ~1.75bn PCCW shares with virtually no independent operating earnings -- a dividend collection box, with no minority control and no near-term privatisation catalyst."
+      "discount_source": "20-30%: the discount the market itself has applied to PCRD's PCCW and HKT stakes net of parent debt over 3 years (Sep 2023-Sep 2026, 722 trading days): median 25.2%, interquartile 20.4-28.6%, 2026 median 20.6%. The earlier 40-50% baseline was double the observed range and put NAV 32% below price. Still a dividend-collection holding with no independent operating earnings and no privatisation catalyst."
     },
     "00148.HK": {
       "name": "Kingboard Holdings",
@@ -308,10 +308,10 @@
           "name": "Life Science, ProBio and Bestzyme",
           "basis": "ev_ebitda_range",
           "multiple_range": [
-            9.0,
-            13.0
+            17.0,
+            23.0
           ],
-          "source": "STUB: group EBITDA, which already excludes Legend. Multiple range is an ASSUMPTION for CRO/CDMO peers, not a sourced figure."
+          "source": "Group EBITDA, which already excludes Legend (an associate since Oct 2024). 17-23x EV/EBITDA brackets the HK-listed CRO/CDMO peer median of 19.9x TTM (WuXi AppTec 12.3x, WuXi Biologics 18.8x, Pharmaron 19.9x, Tigermed 26.9x, Asymchem 31.1x; FMP key-metrics TTM, 15 Sep 2026). The market-implied multiple for GenScript ex-Legend was ~23x. The earlier 9-13x was an unsourced assumption."
         }
       ],
       "discount_source": "20% applied to the LEGEND EQUITY MARK, not to the group: high-beta Nasdaq biotech volatility, Carvykti commercial execution overhang, and parent-level holding frictions. Legend has been an associate since the October 2024 deconsolidation."
@@ -323,38 +323,45 @@
         0.1,
         0.15
       ],
-      "discount_source": "Modest: the post-reorganisation structure IS the SOTP (ofi / Olam Agri / OGH), and Olam Agri carries a completed third-party transaction mark rather than a comp estimate, so less of the total is inferred.",
+      "discount_source": "Unchanged 10-15%: the post-reorganisation structure is itself the SOTP, and Olam Agri now carries a contracted put price rather than an estimate.",
       "divisions": [
         {
-          "name": "Olam Agri",
+          "name": "Olam Agri (19.99% retained, SALIC put)",
           "basis": "transaction_anchor",
-          "enterprise_value": 3500.0,
+          "enterprise_value": 799.6,
           "currency": "USD",
-          "fiscal_year": 2024,
-          "source": "SALIC acquired 35.4% for ~US$1.24bn, marking the whole at ~US$3.5bn enterprise value. A completed transaction outranks a peer median. Segment FY2024 revenue US$22,654.5m, EBIT US$891.2m.",
-          "units_multiplier": 1000000
+          "fiscal_year": 2026,
+          "units_multiplier": 1000000,
+          "source": "Olam retains 19.99% after SALIC's Tranche 1 (44.58%, completed 27 Apr 2026 at US$1.88bn) following the 35.4% sale in 2022. Olam holds a put / SALIC a call on the 19.99% at a base consideration of ~US$799.6m (plus 6% p.a.), implying US$4.00bn for 100% of Olam Agri. Valued at the base put consideration: an equity claim on a deconsolidated associate, so no Olam Agri debt."
         },
         {
           "name": "ofi (Olam Food Ingredients)",
           "basis": "ev_ebit_range",
-          "ebit": 785.4,
-          "currency": "USD",
-          "fiscal_year": 2024,
+          "ebit": 1069.5,
+          "currency": "SGD",
+          "fiscal_year": 2025,
           "multiple_range": [
             10.0,
             12.0
           ],
-          "source": "FY2024 segment EBIT US$785.4m on revenue US$15,920.0m. 10-12x EV/EBIT from the standalone-IPO peer group (Kerry Group, Tate & Lyle, Givaudan).",
-          "units_multiplier": 1000000
+          "units_multiplier": 1000000,
+          "source": "FY2025 ofi EBIT S$1,069.5m on revenue S$28,495.6m (2024: S$1,070.7m). 10-12x EV/EBIT from the standalone-IPO peer group (Kerry Group, Tate & Lyle, Givaudan)."
         },
         {
           "name": "Remaining Olam Group (OGH)",
           "basis": "nil",
-          "fiscal_year": 2024,
-          "source": "FY2024 revenue US$1,482.3m on EBIT of MINUS US$124.6m: de-prioritised assets, gestating investments, Olam Ventures and MindSprint. Valued at an explicit zero rather than skipped -- a loss-making stub under divestment is worth about nothing, and saying so is a judgement, whereas omitting it is a gap. This UNDERSTATES to the extent the assets fetch anything."
+          "fiscal_year": 2025,
+          "source": "De-prioritised and gestating assets under divestment (e.g. remaining 32.4% of ARISE P&L agreed for US$175m; Terrascope sold for US$1m). Explicit zero; understates to the extent disposals fetch more."
         }
       ],
-      "net_debt_note": "UNRESOLVED: the bridge subtracts reported consolidated net debt (SGD 13.83bn), which for a commodity trader includes readily-marketable inventories -- liquid, self-liquidating stock that the street nets off before calling anything net debt. On the reported figure the SOTP reads SGD 0.355 against a 1.183 price, a 70% discount that is an artefact of the debt definition rather than a view. An RMI or adjusted-net-debt figure is needed before this name is anchored on its SOTP."
+      "net_debt_override": {
+        "value": 8880.6,
+        "currency": "SGD",
+        "units_multiplier": 1000000,
+        "as_of": "2026-06-30",
+        "basis": "reported net debt (not RMI-adjusted)",
+        "source": "Olam 1H2026 results: net debt S$8,880.6m after Tranche 1 proceeds. RMI (S$7,344.6m) and secured receivables (S$358.0m) are NOT deducted: that inventory is working capital already inside ofi's EV/EBIT value, so deducting it too would count it twice (adjusted net debt S$1,178.0m would put NAV at S$2.69 against a S$1.02 price). Chosen by the owner on 2026-09-15."
+      }
     },
     "S08.SI": {
       "name": "Singapore Post",
@@ -363,62 +370,56 @@
         0.1,
         0.15
       ],
-      "discount_source": "A breakup candidate, so the conglomerate frictions are smaller than usual -- the property and Australian logistics assets are separable and under active review.",
+      "discount_source": "Unchanged 10-15%: post-divestment the group is a property asset plus loss-making postal operations; separable, with modest conglomerate frictions.",
       "divisions": [
         {
-          "name": "Property (SingPost Centre)",
+          "name": "Property Assets (SingPost Centre)",
           "basis": "cap_rate",
-          "ebit": 42.1,
+          "ebit": 45.222,
           "currency": "SGD",
-          "fiscal_year": 2024,
+          "fiscal_year": 2026,
           "cap_rate_range": [
-            0.04,
-            0.045
+            0.0475,
+            0.0525
           ],
-          "source": "FY23/24 operating profit S$42.1m on revenue S$77.3m. Retail mall plus office tower, capitalised at a 4.0-4.5% Singapore commercial cap rate -> ~S$0.94-1.05bn. Income over a yield, not a multiple of it.",
-          "units_multiplier": 1000000
+          "units_multiplier": 1000000,
+          "source": "FY2025/26 Property Assets operating profit S$45.222m on revenue S$80.707m (year to 31 Mar 2026). 4.75-5.25% brackets the 5.0% implied by the independent fair value of the SingPost Centre commercial and retail building, S$906.907m at 31 Mar 2026 (valuer's range 3.75-6.00%). SingPost has said it will retain the centre."
         },
         {
-          "name": "Logistics (Australia FMH, Famous Holdings)",
-          "basis": "ev_ebit_range",
-          "ebit": 68.3,
-          "currency": "SGD",
-          "fiscal_year": 2024,
-          "multiple_range": [
-            7.0,
-            9.0
-          ],
-          "source": "FY23/24 operating profit S$68.3m on revenue S$1,180.2m. The 7-9x band is quoted for EV/EBITDA and is applied here to EBIT, which UNDERSTATES the division -- EBITDA exceeds EBIT and the segment note discloses no D&A split. Conservative on purpose rather than adjusted by assumption.",
-          "units_multiplier": 1000000
+          "name": "Logistics & Letters",
+          "basis": "nil",
+          "fiscal_year": 2026,
+          "source": "FY2025/26 operating LOSS S$6.103m on revenue S$303.454m. Loss-making domestic postal and logistics under the universal service obligation: an explicit zero, not a multiple of a loss."
         },
         {
-          "name": "Post and Parcel",
-          "basis": "ev_ebit_range",
-          "ebit": 7.5,
-          "currency": "SGD",
-          "fiscal_year": 2024,
-          "multiple_range": [
-            3.0,
-            5.0
-          ],
-          "source": "FY23/24 operating profit S$7.5m on revenue S$514.1m -- near break-even. A zero-to-low multiple stub; 3-5x is an ASSUMPTION for a structurally declining domestic postal network.",
-          "units_multiplier": 1000000
+          "name": "Post Office Network",
+          "basis": "nil",
+          "fiscal_year": 2026,
+          "source": "FY2025/26 operating LOSS S$10.682m on revenue S$11.161m. Explicit zero."
         },
         {
-          "name": "Corporate and inter-segment",
+          "name": "Perpetual securities (ahead of ordinary shares)",
           "basis": "ev_ebit_range",
-          "ebit": -25.1,
+          "ebit": -251.504,
           "currency": "SGD",
-          "fiscal_year": 2024,
+          "fiscal_year": 2026,
           "multiple_range": [
-            7.0,
-            9.0
+            1.0,
+            1.0
           ],
           "negative_ok": true,
-          "source": "Head office costs of S$25.1m capitalised at the group band and SUBTRACTED. Central costs are a real claim on the parts and leaving them out inflates every SOTP that forgets them.",
-          "units_multiplier": 1000000
+          "units_multiplier": 1000000,
+          "source": "Perpetual securities of S$251.504m at 31 Mar 2026 (net cash S$184.702m excluding them, net debt S$66.802m including them). Equity-accounted but senior to ordinary shareholders, so deducted at face value."
         }
-      ]
+      ],
+      "net_debt_override": {
+        "value": -184.702,
+        "currency": "SGD",
+        "units_multiplier": 1000000,
+        "as_of": "2026-03-31",
+        "basis": "reported net cash excluding perpetual securities",
+        "source": "SingPost FY2025/26 results: net cash S$184,702k. The Australia business (FMH) was sold on 27 Mar 2025 at A$1.02bn EV; the FMP balance sheet lags the proceeds and the S$202.6m special dividend."
+      }
     }
   }
 }

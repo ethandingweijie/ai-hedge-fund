@@ -90,6 +90,41 @@ def test_a_net_cash_group_is_left_as_computed(monkeypatch):
     assert h.parent_net_debt("C07.SI", "2026-09-15", -2e9, "SGD") == pytest.approx(-3e9)
 
 
+def test_a_dated_template_figure_replaces_the_lagging_feed(monkeypatch):
+    """Olam: FMP's S$13.83bn predates the Tranche 1 proceeds; the template states S$8,880.6m."""
+    tpl = {"currency": "SGD", "divisions": [{"name": "ofi", "basis": "ev_ebit_range"}],
+           "net_debt_override": {"value": 8880.6, "currency": "SGD", "units_multiplier": 1000000,
+                                 "as_of": "2026-06-30"}}
+    monkeypatch.setattr(h, "template_for", lambda t: tpl)
+    monkeypatch.setattr(h, "_net_debt_of", lambda t, d: pytest.fail("fetched with an override present"))
+    assert h.parent_net_debt("VC2.SI", "2026-09-15", 13.83e9, "SGD") == pytest.approx(8880.6e6)
+    assert h.parent_net_debt("VC2.SI", "2026-09-15", None, "SGD") == pytest.approx(8880.6e6)
+
+
+def test_an_override_in_another_currency_is_converted(monkeypatch):
+    tpl = {"currency": "SGD", "divisions": [],
+           "net_debt_override": {"value": -100.0, "currency": "USD", "units_multiplier": 1000000}}
+    monkeypatch.setattr(h, "template_for", lambda t: tpl)
+    monkeypatch.setattr(h, "_fx", lambda a, b: {("USD", "SGD"): 1.3}.get((a, b)))
+    assert h.parent_net_debt("S08.SI", "2026-09-15", 5e9, "SGD") == pytest.approx(-130e6)
+    monkeypatch.setattr(h, "_fx", lambda a, b: None)
+    assert h.parent_net_debt("S08.SI", "2026-09-15", 5e9, "SGD") is None
+
+
+def test_the_committed_templates_carry_the_approved_calibration():
+    import json
+    from pathlib import Path
+    doc = json.loads((Path(h.__file__).resolve().parents[2] / "data" / "holdco_sotp_templates.json")
+                     .read_text(encoding="utf-8"))
+    t = doc["templates"]
+    assert t["P15.SI"]["holdco_discount"] == [0.2, 0.3]
+    assert t["01548.HK"]["divisions"][1]["multiple_range"] == [17.0, 23.0]
+    assert not any("Australia" in d["name"] for d in t["S08.SI"]["divisions"])
+    assert t["S08.SI"]["net_debt_override"]["as_of"] == "2026-03-31"
+    assert t["VC2.SI"]["net_debt_override"]["value"] == 8880.6
+    assert "RMI" in t["VC2.SI"]["net_debt_override"]["source"]
+
+
 def test_no_consolidated_figure_or_template_gives_none():
     assert h.parent_net_debt("C07.SI", "2026-09-15", None, "SGD") is None
     assert h.parent_net_debt("MSFT", "2026-09-15", 1e9, "USD") is None

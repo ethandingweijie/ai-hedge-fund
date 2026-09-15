@@ -162,10 +162,20 @@ def parent_net_debt(ticker: str, end_date: str, consolidated_net_debt: Optional[
     refused, and the caller declines the look-through rather than guess.
     `consolidated_net_debt` is already in `to_ccy` (the engine's FX block).
     """
-    if not isinstance(consolidated_net_debt, (int, float)):
-        return None
     tpl = template_for(ticker)
     if not tpl:
+        return None
+    # A template may state its own dated parent-level net debt when the feed's
+    # balance sheet lags a transaction that changed it: Olam's FMP figure
+    # (S$13.83bn) predates the US$1.88bn Olam Agri Tranche 1 proceeds (net
+    # debt S$8,880.6m at 30 Jun 2026); SingPost's predates the Australia sale.
+    override = tpl.get("net_debt_override")
+    if isinstance(override, dict) and isinstance(override.get("value"), (int, float)):
+        scale = override.get("units_multiplier")
+        scale = float(scale) if isinstance(scale, (int, float)) and scale > 0 else 1.0
+        rate = _fx((override.get("currency") or tpl.get("currency") or to_ccy).upper(), to_ccy)
+        return None if rate is None else float(override["value"]) * scale * rate
+    if not isinstance(consolidated_net_debt, (int, float)):
         return None
     consolidated = float(consolidated_net_debt)
     removed = 0.0

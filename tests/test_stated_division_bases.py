@@ -95,6 +95,12 @@ class TestTemplatesAreScaledAndAligned:
             if want:
                 assert tpl["currency"] == want, (tk, tpl["currency"])
 
-    def test_olam_is_flagged_pending_an_rmi_adjustment(self):
+    def test_olam_states_its_dated_net_debt_and_why_rmi_is_not_deducted(self):
+        # Resolved 2026-09-15 (owner decision): reported net debt after the
+        # Olam Agri Tranche 1 proceeds, not RMI-adjusted -- the inventory is
+        # working capital already inside ofi's EV/EBIT value.
         tpl = H._load()["templates"]["VC2.SI"]
-        assert "readily-marketable" in tpl["net_debt_note"]
+        assert "net_debt_note" not in tpl
+        override = tpl["net_debt_override"]
+        assert override["value"] == 8880.6 and override["as_of"] == "2026-06-30"
+        assert "RMI" in override["source"] and "not RMI-adjusted" in override["basis"]
