@@ -1425,6 +1425,13 @@ def run_advanced_portfolio_manager(state) -> dict:
         d["decision_inputs"] = {
             "quantitative": {
                 "band_action": _band,
+                # The executed decision and its rating, beside the band. The
+                # card showed only the band, so 09988.HK read "BUY" above a
+                # SELL decision (band on IV, decision on 12m TSR).
+                "trade_action": (research_view or {}).get("trade_action")
+                                if isinstance(research_view, dict) else None,
+                "research_rating": (research_view or {}).get("rating_label")
+                                   if isinstance(research_view, dict) else None,
                 "rating_basis": ("tsr_vs_benchmark" if research_view
                                  else "intrinsic_value_band"),
                 "upside_to_iv_pct": _upside_iv,

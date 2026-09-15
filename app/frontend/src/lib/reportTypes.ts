@@ -680,6 +680,9 @@ export interface DdCardAudit {
 export interface DecisionInputs {
   quantitative?: {
     band_action?: string;
+    /** The executed decision (research_view.trade_action) and its rating label. */
+    trade_action?: string | null;
+    research_rating?: string | null;
     upside_to_iv_pct?: number | null;
     blended_iv?: number | null;
     expected_value?: number | null;

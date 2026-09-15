@@ -313,6 +313,58 @@ def _convergence_bound(scen_iv: float, spot: float, max_capture: float) -> float
     return spot + max_capture * (scen_iv - spot)
 
 
+#: Sectors whose short-term investments ARE the business -- a bank's securities
+#: book, an insurer's float -- and are never spare cash to net against debt.
+#: Healthcare is excluded too: a managed-care plan's investments back medical
+#: claims inside regulated subsidiaries (Molina's were 36% of its market cap in
+#: the 2026-09-15 audit), and biotech simply keeps its prior treatment.
+_NO_INVESTMENT_NETTING_SECTORS = frozenset({"Financials", "Insurance", "Banks",
+                                            "Healthcare", "Health Care"})
+
+
+def _net_debt_net_of_investments(row: dict, sector: str = "") -> float:
+    """Net debt with short-term investments counted as cash.
+
+    FMP's `netDebt` (and the HK line-item path) is total debt minus cash and
+    equivalents ONLY. Alibaba keeps most of its liquidity in short-term
+    investments, so FY2026 read as RMB86.1bn net DEBT (259.1 - 173.0) when,
+    with RMB184.7bn of short-term investments, it holds ~RMB98.6bn net cash --
+    about HK$11 a share off the 12m target, and the opposite sign from the
+    SOTP in the same run.
+
+    Only applied when the feed's figure is visibly debt minus cash alone, so a
+    source that has already netted the investments never has them taken off
+    twice; financials are excluded (see _NO_INVESTMENT_NETTING_SECTORS).
+    """
+    nd = row.get("net_debt")
+    if nd is None:
+        return 0.0
+    sti = row.get("short_term_investments")
+    if not sti or sti <= 0 or (sector or "") in _NO_INVESTMENT_NETTING_SECTORS:
+        return float(nd)
+    td, cash = row.get("total_debt"), row.get("cash_and_equivalents")
+    if td is None or cash is None:
+        return float(nd)
+    if abs(float(nd) - (float(td) - float(cash))) > 0.01 * max(abs(float(td)), 1.0):
+        return float(nd)
+    return float(nd) - float(sti)
+
+
+#: Methods that make a valuation SOTP-led, and the blend share that counts.
+_SOTP_LED_METHODS = frozenset({"SOTP (analyst)", "Analyst SOTP"})
+_SOTP_LED_PT_MIN_WEIGHT = 0.25
+
+
+def _sotp_led_share(scenario: dict) -> float:
+    """Share of the blended IV carried by analyst-SOTP methods (0..1)."""
+    ew = scenario.get("effective_weights") or []
+    total = sum(float(w.get("weight") or 0.0) for w in ew)
+    if total <= 0:
+        return 0.0
+    return sum(float(w.get("weight") or 0.0) for w in ew
+               if w.get("method") in _SOTP_LED_METHODS) / total
+
+
 # ── FX classification for every field _extract_annual_series() puts on a row ──
 # These live HERE, next to the row builder, because they previously sat ~200k
 # characters downstream inside run_dcf_agent(): fields were added to the row
@@ -343,6 +395,7 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     # Balance sheet
     "total_assets", "total_equity", "total_liabilities",
     "net_debt", "total_debt", "invested_capital", "cash_and_equivalents",
+    "short_term_investments",
     "minority_interest",
     "goodwill", "intangible_assets",
     # Bank-specific balance sheet
@@ -411,6 +464,8 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "change_in_working_capital": _safe(
                 getattr(li, "change_in_working_capital", None)),
             "cash_and_equivalents": _safe(getattr(li, "cash_and_equivalents", None)),
+            # Counted as cash in net debt (_net_debt_net_of_investments).
+            "short_term_investments": _safe(getattr(li, "short_term_investments", None)),
             # Bank-specific: NII reconstruction, credit cost, TBV
             "interest_income":           _safe(getattr(li, "interest_income", None)),
             "provision_for_loan_losses": _safe(getattr(li, "provision_for_loan_losses", None)),
@@ -4366,10 +4421,19 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
 #: perpetuity back in. Terminal salvage/reclamation is ZERO absent real data:
 #: for most mines reclamation is a liability, so assuming none is already the
 #: generous end of the range.
+#: Industry routing has its OWN flag, default off. It used to share
+#: FEATURE_RESOURCE_HOLDCO_MAP_V2 with the holdco look-through, so switching the
+#: look-through on for ten holdcos (2026-09-15) silently re-routed every ticker:
+#: 09988.HK went from Hyperscaler / Tech Conglomerate to Traditional Retail on
+#: FMP's "Specialty Retail" label and published Underweight / SELL. The routing
+#: commit's own delta sheet moves 88 of 100 HK and 98 of 100 SG profiles -- a
+#: change that size is switched on deliberately, never as a side effect.
+INDUSTRY_ROUTING_FLAG = "FEATURE_INDUSTRY_ROUTING"
+
+
 def _industry_routing_enabled() -> bool:
-    """Industry-based profile routing, behind the same flag as the holdco map."""
-    from src.agents.analysis.holdco_sotp import FLAG
-    return os.getenv(FLAG, "").strip().lower() in ("1", "true", "yes", "on")
+    """Industry-based profile routing, behind its own flag (default off)."""
+    return os.getenv(INDUSTRY_ROUTING_FLAG, "").strip().lower() in ("1", "true", "yes", "on")
 
 
 #: Anchors whose computability is per-ticker, not a property of the method.
@@ -5301,7 +5365,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         revenue_base = most_recent["revenue"]
         shares       = most_recent["shares_outstanding"]
         leverage     = most_recent["debt_to_equity"] or 0.0
-        net_debt     = most_recent["net_debt"] or 0.0
+        net_debt     = _net_debt_net_of_investments(most_recent, sector)
 
         # ── Spot + 52w + moving averages — FMP /stable/quote (PRIMARY) ────
         # Strict superset of quote-short. One call returns:
@@ -5487,7 +5551,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # Re-derive anchored scalars after conversion
                 most_recent = series[-1]
                 revenue_base = most_recent["revenue"]
-                net_debt     = most_recent["net_debt"] or 0.0
+                net_debt     = _net_debt_net_of_investments(most_recent, sector)
                 # Change 9: store the pre-FX (raw currency) revenue for debugging
                 revenue_base_raw_ccy = revenue_base / fx_rate if fx_rate else revenue_base
                 _ccy_label = f"{reported_currency}→{_target_ccy}"
@@ -7853,9 +7917,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _max_capture = 0.35
             _capped_any = False
             _cap_diagnostics: list[str] = []
+            # SOTP-led valuation: the generic forward multiple (one peer-set
+            # EV/EBITDA on consolidated EBITDA) is not what the IV was built
+            # from, and on 09988.HK it put the 12m target at HK$91.58 -- 15%
+            # BELOW spot -- against a HK$158.53 IV that was 47% above it, so
+            # the tactical rating said SELL while the valuation said BUY. For
+            # these names the target IS the convergence path toward the
+            # scenario IV, in both directions.
+            _sotp_led = _sotp_led_share(scenario_results.get("base") or {}) >= _SOTP_LED_PT_MIN_WEIGHT
             for _sn in ("bear", "base", "bull"):
                 _scen_iv = scenario_results.get(_sn, {}).get("intrinsic_value")
                 _pt = _12m_targets.get(_sn)
+                if _sotp_led and _scen_iv:
+                    _conv = round(_convergence_bound(_scen_iv, _spot_for_cap, _max_capture), 2)
+                    _cap_diagnostics.append(
+                        f"{_sn}: pt {_pt!r}→${_conv:.0f} (SOTP-led: {_max_capture:.0%} of IV-spot gap)")
+                    _12m_targets[_sn] = _conv
+                    _pt = _conv
+                    _12m_pt_method_label = (
+                        f"convergence toward SOTP-led intrinsic value "
+                        f"({_max_capture:.0%} of the IV-spot gap)")
                 if not _scen_iv or not _pt:
                     _cap_diagnostics.append(f"{_sn}: no scen_iv/pt")
                     continue

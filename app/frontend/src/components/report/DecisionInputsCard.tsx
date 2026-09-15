@@ -73,13 +73,18 @@ export function DecisionInputsCard({ decisionInputs, ticker, isRunning = false }
       <div>
         <div className="text-[10px] font-semibold text-muted-foreground/70 mb-1.5">Quantitative</div>
         <div className="flex items-center gap-2 flex-wrap">
-          {q.band_action && (
-            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${actionTone(q.band_action)}`}>
-              {q.band_action}
+          {/* The chip is the DECISION. Runs before the rating layer carry no
+              trade_action and keep the band as before. */}
+          {(q.trade_action ?? q.band_action) && (
+            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${actionTone((q.trade_action ?? q.band_action)!)}`}>
+              {q.trade_action ?? q.band_action}
             </span>
           )}
+          {q.trade_action && q.research_rating && (
+            <span className="text-[11px] font-medium text-foreground">{q.research_rating} · 12m</span>
+          )}
           <span className="text-[11px] text-muted-foreground">
-            valuation band · IV upside <span className="text-foreground font-medium tabular-nums">{pct(q.upside_to_iv_pct, true)}</span>
+            {q.trade_action ? `valuation band ${q.band_action ?? '—'} · ` : 'valuation band · '}IV upside <span className="text-foreground font-medium tabular-nums">{pct(q.upside_to_iv_pct, true)}</span>
           </span>
         </div>
         <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-[11px]">

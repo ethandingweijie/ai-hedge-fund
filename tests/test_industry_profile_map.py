@@ -167,17 +167,25 @@ class TestTickerOverrides:
 
 
 class TestIndustryRoutingWiring:
-    """Routing is behind FEATURE_RESOURCE_HOLDCO_MAP_V2 and defaults OFF."""
+    """Routing is behind its OWN flag, FEATURE_INDUSTRY_ROUTING, default OFF."""
 
     def test_default_off(self, monkeypatch):
         from src.agents.analysis.dcf_agent import _industry_routing_enabled
-        monkeypatch.delenv("FEATURE_RESOURCE_HOLDCO_MAP_V2", raising=False)
+        monkeypatch.delenv("FEATURE_INDUSTRY_ROUTING", raising=False)
         assert _industry_routing_enabled() is False
 
     def test_turns_on(self, monkeypatch):
         from src.agents.analysis.dcf_agent import _industry_routing_enabled
-        monkeypatch.setenv("FEATURE_RESOURCE_HOLDCO_MAP_V2", "true")
+        monkeypatch.setenv("FEATURE_INDUSTRY_ROUTING", "true")
         assert _industry_routing_enabled() is True
+
+    def test_the_holdco_flag_does_not_switch_routing_on(self, monkeypatch):
+        """2026-09-15: the look-through flag also enabled routing, and 09988.HK
+        was re-profiled as Traditional Retail in production."""
+        from src.agents.analysis.dcf_agent import _industry_routing_enabled
+        monkeypatch.delenv("FEATURE_INDUSTRY_ROUTING", raising=False)
+        monkeypatch.setenv("FEATURE_RESOURCE_HOLDCO_MAP_V2", "true")
+        assert _industry_routing_enabled() is False
 
     def test_unmapped_industry_returns_none_not_a_guess(self, monkeypatch):
         """An unknown industry must fall through to the existing classifier
