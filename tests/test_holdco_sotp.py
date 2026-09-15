@@ -76,7 +76,10 @@ class TestTemplates:
             if lo or hi:
                 continue
             on_divisions = [d for d in tpl["divisions"] if d.get("discount_pct")]
-            assert on_divisions, f"{tk}: no discount at group OR division level"
+            # Baidu's brokers haircut net cash and investments, not the group:
+            # the 30% lives in the dated net_debt_override and says so.
+            on_cash = "haircut" in str((tpl.get("net_debt_override") or {}).get("basis", ""))
+            assert on_divisions or on_cash, f"{tk}: no discount at group, division or net-cash level"
             assert tpl.get("discount_source"), f"{tk}: undocumented zero discount"
 
     def test_every_discount_is_documented(self):

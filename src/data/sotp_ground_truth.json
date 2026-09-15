@@ -355,6 +355,79 @@
           42.1,
           62.8
         ]
+      },
+      "lookthrough": {
+        "kind": "lookthrough",
+        "unit": "USD per ADS",
+        "source": "Broker SOTP range: CMB International 2 Mar 2026 (US$161.7/ADS), DBS 19 Aug 2026 (HK$131/share), Nomura 16 Feb 2026 (US$196/ADS)",
+        "as_of": "2026-08-19",
+        "note": "Graded on the BIDU listing (per ADS). Ranges span the brokers, which disagree on method; DBS HK$ per share converted at 7.8433 HKD/USD x 8 shares per ADS. Net cash is a template-level figure, not a part, so the investments bucket holds the listed stakes only.",
+        "total_per_share": [
+          133.6,
+          196.0
+        ],
+        "parts": [
+          {
+            "name": "Ads / general business",
+            "keywords": [
+              "onlinemarketing",
+              "generalbusiness",
+              "ads"
+            ],
+            "per_share": [
+              0.0,
+              35.7
+            ],
+            "method": "0x (DBS) to 5x 2026E non-GAAP P/E (CMBI)"
+          },
+          {
+            "name": "AI Cloud",
+            "keywords": [
+              "cloud"
+            ],
+            "per_share": [
+              57.1,
+              62.9
+            ],
+            "method": "5x forward P/S (DBS) to 4.6x 2026E P/S (CMBI)"
+          },
+          {
+            "name": "Kunlunxin",
+            "keywords": [
+              "kunlun"
+            ],
+            "per_share": [
+              0.0,
+              58.1
+            ],
+            "method": "unvalued (CMBI) to 20x forward P/S (DBS)"
+          },
+          {
+            "name": "Apollo / robotaxi",
+            "keywords": [
+              "apollo",
+              "robotaxi"
+            ],
+            "per_share": [
+              0.3,
+              10.2
+            ],
+            "method": "2x 2030E revenue discounted (CMBI) to HK$10/share (DBS)"
+          },
+          {
+            "name": "Listed investments (iQIYI, Trip.com)",
+            "keywords": [
+              "iqiyi",
+              "tripcom",
+              "trip"
+            ],
+            "per_share": [
+              0.0,
+              62.8
+            ],
+            "method": "inside net cash and investments (CMBI US$62.8 after 30%; DBS HK$41)"
+          }
+        ]
       }
     }
   }

@@ -61,6 +61,10 @@ def check_lookthrough(ticker: str, result: Optional[dict], shares: float) -> Opt
     listed-trust keyword placed before "infrastructure" keeps Keppel
     Infrastructure Trust out of the operating infrastructure bucket."""
     gt, _ = ground_truth_for(ticker)
+    # A name graded both ways (Baidu: analyst segment SOTP and a staging
+    # look-through) nests the look-through reference under "lookthrough".
+    if gt and gt.get("kind") != "lookthrough":
+        gt = gt.get("lookthrough")
     if not gt or gt.get("kind") != "lookthrough" or not result or not shares or shares <= 0:
         return None
     from src.agents.analysis.sotp_multiple_basis import normalize_key

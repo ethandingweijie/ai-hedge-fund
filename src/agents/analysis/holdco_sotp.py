@@ -54,8 +54,12 @@ TICKERS_ENV = "FEATURE_RESOURCE_HOLDCO_TICKERS"
 
 
 def enabled_for(ticker: str) -> bool:
-    """The flag is on AND, when an allowlist is set, this ticker is on it."""
-    if not enabled():
+    """The flag is on AND, when an allowlist is set, this ticker is on it.
+
+    A template marked `"stage": "staging"` is never live, allowlist or not:
+    an unset allowlist means every template, so the hold has to live on the
+    template itself (Baidu, pending the Kunlunxin filing)."""
+    if not enabled() or is_staging(ticker):
         return False
     raw = os.getenv(TICKERS_ENV, "").strip()
     if not raw:
@@ -63,6 +67,11 @@ def enabled_for(ticker: str) -> bool:
     from src.tools.ticker_canonical import canonical_ticker
     allowed = {canonical_ticker(t.strip()) for t in raw.split(",") if t.strip()}
     return canonical_ticker(ticker or "") in allowed
+
+
+def is_staging(ticker: str) -> bool:
+    """True for a template held in staging / internal research only."""
+    return ((template_for(ticker) or {}).get("stage") or "").lower() == "staging"
 
 
 def _load() -> dict:
@@ -76,9 +85,23 @@ def _load() -> dict:
 
 
 def template_for(ticker: str) -> Optional[dict]:
-    """The look-through template for a holdco, or None."""
+    """The look-through template for a holdco, or None.
+
+    A dual-listed company has ONE template under its company key (the ADR):
+    09888.HK resolves to BIDU. The template values the company; each listing
+    then converts to its own currency and divides by its own share count, so
+    the HK line and the ADR evaluate identical SOTP maths (ADS ratio parity
+    falls out of the share counts)."""
     from src.tools.ticker_canonical import canonical_ticker
-    return (_load().get("templates") or {}).get(canonical_ticker(ticker))
+    templates = _load().get("templates") or {}
+    hit = templates.get(canonical_ticker(ticker))
+    if hit is None:
+        try:
+            from src.data.dual_listings import company_key
+            hit = templates.get(company_key(ticker))
+        except Exception:                                  # noqa: BLE001
+            hit = None
+    return hit
 
 
 #: Listing suffix -> the currency that listing's market cap is quoted in.
@@ -225,7 +248,7 @@ def residual_ebitda(ticker: str, end_date: str, to_ccy: str) -> Optional[float]:
         return None
     divs = tpl.get("divisions") or []
     _SELF_VALUING = {"market_stake", "transaction_anchor", "cap_rate",
-                     "ev_ebit_range", "nil", "pe_range", "fixed_value"}
+                     "ev_ebit_range", "nil", "pe_range", "fixed_value", "revenue_multiple"}
     pending = [d for d in divs if d.get("basis") not in _SELF_VALUING]
     if len(pending) != 1:
         return None
@@ -307,6 +330,18 @@ def _stated_division_value(div: dict, to_ccy: str
             return None
         return float(amount_) * rate, {"amount": float(amount_), "currency": src_ccy}
 
+    if basis == "revenue_multiple":
+        # ENTERPRISE value on revenue x EV/Sales band -- for growth units
+        # valued on sales (Baidu AI Cloud at 4.6-5x). Not an equity basis:
+        # a template using it takes a parent-level net debt figure.
+        revenue = div.get("revenue")
+        lo, hi = (div.get("multiple_range") or [None, None])
+        if not isinstance(revenue, (int, float)) or revenue <= 0 or lo is None or hi is None:
+            return None
+        return revenue * (lo + hi) / 2.0 * rate, {
+            "revenue": revenue, "multiple_range": [lo, hi], "currency": src_ccy,
+            "value_low": revenue * lo * rate, "value_high": revenue * hi * rate}
+
     if basis == "pe_range":
         # EQUITY value: segment net profit x P/E. The segment's own project
         # and operating-company debt is already inside that profit (its
@@ -365,10 +400,32 @@ def _stated_division_value(div: dict, to_ccy: str
                         "value_high": earnings * hi * rate}
 
 
+def _apply_toggles(tpl: dict, overrides: Optional[dict]) -> tuple[list[dict], dict]:
+    """Divisions with any switched-on scenario toggle applied, and the toggles.
+
+    A toggle is declared on the template (`scenario_toggles`, all defaulting to
+    False) and a division opts in with `toggle` + `toggle_override`. Only an
+    explicit True from the caller or the template switches it on -- so a
+    speculative case (Kunlunxin at a US$50bn unfiled IPO target, +US$79/ADS
+    on Baidu) can be stress-tested but never becomes the baseline by default."""
+    toggles = {k: bool(v) for k, v in (tpl.get("scenario_toggles") or {}).items()}
+    for k, v in (overrides or {}).items():
+        if k in toggles:
+            toggles[k] = bool(v)
+    divisions = []
+    for div in tpl.get("divisions") or []:
+        name = div.get("toggle")
+        if name and toggles.get(name) and isinstance(div.get("toggle_override"), dict):
+            div = {**div, **div["toggle_override"], "scenario": name}
+        divisions.append(div)
+    return divisions, toggles
+
+
 def look_through_value(ticker: str, end_date: str, *,
                        ebitda_by_division: Optional[dict] = None,
                        discount: Optional[float] = None,
-                       net_debt: Optional[float] = None) -> Optional[dict]:
+                       net_debt: Optional[float] = None,
+                       scenario_toggles: Optional[dict] = None) -> Optional[dict]:
     """Sum the parts and apply the holding-company discount.
 
     Discounts compose in one direction only: a division's own `discount_pct`
@@ -387,9 +444,10 @@ def look_through_value(ticker: str, end_date: str, *,
         return None
     ebitda_by_division = ebitda_by_division or {}
     ccy = tpl.get("currency") or currency_of(ticker)
+    divisions, toggles = _apply_toggles(tpl, scenario_toggles)
 
     parts, skipped = [], []
-    for div in tpl.get("divisions") or []:
+    for div in divisions:
         name, basis = div.get("name"), div.get("basis")
         if basis == "market_stake":
             stake = div.get("stake_pct")
@@ -432,7 +490,8 @@ def look_through_value(ticker: str, end_date: str, *,
         # fiscal year and currency they were reported in. That makes them
         # STALE-ABLE in a way a parsed figure is not, which is why every such
         # division states its own `fiscal_year` and the result reports it.
-        if basis in ("transaction_anchor", "cap_rate", "ev_ebit_range", "nil", "pe_range", "fixed_value"):
+        if basis in ("transaction_anchor", "cap_rate", "ev_ebit_range", "nil", "pe_range", "fixed_value",
+                     "revenue_multiple"):
             _r = _stated_division_value(div, ccy)
             if _r is None:
                 skipped.append({"division": name,
@@ -446,6 +505,7 @@ def look_through_value(ticker: str, end_date: str, *,
                           "gross_value": _val,
                           "value": _val * (1.0 - _d),
                           "fiscal_year": div.get("fiscal_year"),
+                          **({"scenario": div["scenario"]} if div.get("scenario") else {}),
                           **_detail})
             continue
 
@@ -494,6 +554,7 @@ def look_through_value(ticker: str, end_date: str, *,
         "holdco_discount": disc,
         "holdco_discount_range": [d_lo, d_hi],
         "net_asset_value": nav_pre_discount * (1.0 - disc),
+        "scenario_toggles": toggles,
         # A SOTP missing a division is not conservative, it is wrong. The
         # consumer must be able to see that before using the number.
         "complete": not skipped,
@@ -503,7 +564,8 @@ def look_through_value(ticker: str, end_date: str, *,
 def value_per_share(ticker: str, end_date: str, shares: float, *,
                     to_currency: Optional[str] = None,
                     ebitda_by_division: Optional[dict] = None,
-                    net_debt: Optional[float] = None) -> Optional[float]:
+                    net_debt: Optional[float] = None,
+                    scenario_toggles: Optional[dict] = None) -> Optional[float]:
     """Look-through NAV per share, or None when the SOTP does not complete.
 
     A partial look-through is NOT returned. Skipping a division does not make
@@ -515,9 +577,21 @@ def value_per_share(ticker: str, end_date: str, shares: float, *,
     """
     if not shares or shares <= 0:
         return None
+    # `net_debt` comes in `to_currency` (the listing's), but the parts sum in
+    # the TEMPLATE currency. They only differ for a dual-listed company on one
+    # template -- 09888.HK trades in HKD against Baidu's USD template -- where
+    # subtracting HKD from USD overstated the HK line's NAV 3.6x.
+    tpl = template_for(ticker) or {}
+    rep_ccy = (tpl.get("currency") or currency_of(ticker)).upper()
+    if isinstance(net_debt, (int, float)) and to_currency and to_currency.upper() != rep_ccy:
+        _nd_rate = _fx(to_currency.upper(), rep_ccy)
+        if _nd_rate is None:
+            return None
+        net_debt = net_debt * _nd_rate
     res = look_through_value(ticker, end_date,
                              ebitda_by_division=ebitda_by_division,
-                             net_debt=net_debt)
+                             net_debt=net_debt,
+                             scenario_toggles=scenario_toggles)
     if not res or not res.get("complete"):
         return None
     nav = res.get("net_asset_value")

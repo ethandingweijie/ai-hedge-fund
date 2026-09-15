@@ -164,7 +164,7 @@ def fmp_product_entry(ticker: str) -> dict | None:
 #: Template divisions valued on their OWN stated figure or at market need no
 #: EBITDA; everything else in a holdco template does.
 _SELF_VALUING = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil",
-                 "pe_range", "fixed_value"}
+                 "pe_range", "fixed_value", "revenue_multiple"}
 
 
 def ebitda_divisions(ticker: str) -> list[str]:

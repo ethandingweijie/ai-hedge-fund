@@ -454,12 +454,14 @@ def live_effect(ticker: str, entry: dict, *, fx_to=_default_fx) -> dict:
     from src.agents.analysis import holdco_sotp
     from src.agents.analysis.sotp_snapshot import load_sotp_snapshot, lookup_snapshot
     tpl = holdco_sotp.template_for(ticker)
-    if tpl:
+    # A staging template (Baidu) is research only; its memory keeps the
+    # analyst-SOTP mapping path the card showed before the template existed.
+    if tpl and not holdco_sotp.is_staging(ticker):
         # Holdco: accepted division EBITDA completes the look-through. Checked
         # without market data -- only whether every division that needs EBITDA
         # has it -- so the page stays fast.
         self_valuing = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil",
-                        "pe_range", "fixed_value"}
+                        "pe_range", "fixed_value", "revenue_multiple"}
         needed = [d["name"] for d in tpl.get("divisions") or [] if d.get("basis") not in self_valuing]
         supplied = division_ebitda_amounts(entry, tpl.get("currency") or "USD", fx_to)
         missing = [n for n in needed if n not in supplied]

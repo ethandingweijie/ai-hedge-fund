@@ -91,7 +91,9 @@ class TestTemplatesAreScaledAndAligned:
         template must be denominated in it; divisions convert individually."""
         suffix_ccy = {".HK": "HKD", ".SI": "SGD"}
         for tk, tpl in H._load()["templates"].items():
-            want = suffix_ccy.get("." + tk.rsplit(".", 1)[1])
+            # An unsuffixed key is a dual-listed company's ADR template (BIDU,
+            # shared with 09888.HK): USD, the currency its ADS trades in.
+            want = suffix_ccy.get("." + tk.rsplit(".", 1)[1]) if "." in tk else "USD"
             if want:
                 assert tpl["currency"] == want, (tk, tpl["currency"])
 

@@ -23,7 +23,7 @@
     "v6a: stated-figure divisions declare units_multiplier = 1e6. The published segment tables are in millions while market caps and net debt are absolute; without the scale the bridge subtracted a 13.8bn net debt from a 12,139 gross asset value and returned negative equity.",
     "v6b: Olam's template currency is SGD, not USD. Divisions stay in their reported USD and convert per-division; the TEMPLATE currency has to be the listing currency because parent net debt reaches the bridge in it. Stated in USD, the bridge subtracted an SGD net debt from a USD gross asset value."
   ],
-  "version": 8,
+  "version": 9,
   "flag": "FEATURE_RESOURCE_HOLDCO_MAP_V2",
   "templates": {
     "00267.HK": {
@@ -582,6 +582,95 @@
         }
       ],
       "net_debt_note": "Every part is net profit x P/E, an equity value: segment profits already bear their project debt interest, so group net debt (S$13.9bn at 30 Jun 2026, after consolidating Alinta) is not deducted again. FY2025 profits exclude Alinta (consolidated June 2026). The 40% stake in Sembcorp Salalah (listed on the Muscat exchange) is not yet marked."
+    },
+    "BIDU": {
+      "name": "Baidu Inc",
+      "stage": "staging",
+      "currency": "USD",
+      "holdco_discount": [
+        0.0,
+        0.0
+      ],
+      "discount_source": "No group discount: the brokers haircut net cash and investments only (CMBI 30%, DBS 30%), taken in net_debt_override.",
+      "listings": {
+        "BIDU": "ADS (1 ADS = 8 Class A ordinary shares)",
+        "09888.HK": "Class A ordinary shares"
+      },
+      "scenario_toggles": {
+        "enable_kunlunxin_ipo_bull_case": false
+      },
+      "go_live_gate": "HOLD in staging and internal research (owner decision, 2026-09-15). Not in the promotion set or the live allowlist. Promote only after BOTH: (1) Kunlunxin formally submits its listing application (HKEX Form A1 or STAR Market prospectus) confirming structure and equity dilution; (2) the AI Cloud EV/Sales band is reconciled against peer reporting rather than a single-quarter run-rate.",
+      "divisions": [
+        {
+          "name": "Online marketing / general business (ads)",
+          "basis": "pe_range",
+          "net_profit": 12171.15,
+          "currency": "CNY",
+          "fiscal_year": 2025,
+          "multiple_range": [
+            4.0,
+            5.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "FY2025 Baidu General Business non-GAAP operating income RMB14,319m, after a 15% tax charge RMB12,171m. 4-5x P/E: Nomura 4x FY26F, CMBI 5x 2026E non-GAAP; DBS assigns zero. Online marketing revenue RMB13.1bn in 2Q2026 (-19% y/y). The non-GAAP figure also carries AI Cloud profit, so it overlaps the cloud part as the brokers' own split does."
+        },
+        {
+          "name": "AI Cloud Infra",
+          "basis": "revenue_multiple",
+          "revenue": 29200,
+          "currency": "CNY",
+          "fiscal_year": 2026,
+          "multiple_range": [
+            4.6,
+            5.0
+          ],
+          "units_multiplier": 1000000,
+          "source": "2Q2026 AI Cloud Infra revenue RMB7.3bn (+50% y/y) annualised = RMB29.2bn (FY2025 RMB19.8bn). 4.6-5x forward EV/Sales: CMBI 4.6x 2026E, DBS 5x forward. Run-rate basis -- reconcile with peer reporting before go-live (see go_live_gate)."
+        },
+        {
+          "name": "Kunlunxin (57.67%)",
+          "basis": "fixed_value",
+          "amount": 12110.7,
+          "currency": "CNY",
+          "fiscal_year": 2025,
+          "units_multiplier": 1000000,
+          "source": "Baseline: 57.67% of the RMB21bn valuation in Kunlunxin's 2025 funding round (China Mobile among the investors). The last confirmed round only.",
+          "toggle": "enable_kunlunxin_ipo_bull_case",
+          "toggle_override": {
+            "amount": 28835.0,
+            "currency": "USD",
+            "source": "BULL CASE, off by default: 57.67% of the reported US$50bn Hong Kong IPO target -- unfiled, so never a baseline input."
+          }
+        },
+        {
+          "name": "Apollo Go (robotaxi)",
+          "basis": "nil",
+          "fiscal_year": 2026,
+          "source": "No independent external funding round (Jan 2026). CMBI US$0.3/ADS, DBS HK$10/share. Explicit zero pending a mark."
+        },
+        {
+          "name": "iQIYI (45.1% economic)",
+          "basis": "market_stake",
+          "listed": "IQ",
+          "stake_pct": 0.451,
+          "source": "45.1% economic interest, ~90% of voting power (13 Aug 2026). Consolidated by Baidu: its own net debt sits in both its market cap and Baidu's consolidated cash -- a small overlap."
+        },
+        {
+          "name": "Trip.com Group (7.3%)",
+          "basis": "market_stake",
+          "listed": "TCOM",
+          "stake_pct": 0.073,
+          "source": "45,953,524 ordinary shares, 7.3% of outstanding, 28 Apr 2026."
+        }
+      ],
+      "net_debt_override": {
+        "value": -132944.7,
+        "currency": "CNY",
+        "units_multiplier": 1000000,
+        "as_of": "2026-06-30",
+        "basis": "net cash less a 30% haircut",
+        "source": "Baidu-defined total cash and investments RMB283.1bn (cash RMB24,524m, restricted RMB170m, short-term investments RMB141,727m, plus long-term time deposits and held-to-maturity) less short-term loans RMB26,311m, long-term loans RMB20,779m and non-current notes RMB46,089m = net cash RMB189,921m at 30 Jun 2026; 30% haircut as CMBI and DBS apply to net cash and investments (buybacks, access to onshore cash)."
+      }
     }
   }
 }
