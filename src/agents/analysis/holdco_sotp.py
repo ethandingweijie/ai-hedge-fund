@@ -40,6 +40,26 @@ def enabled() -> bool:
     return os.getenv(FLAG, "").strip().lower() in ("1", "true", "yes", "on")
 
 
+#: Comma-separated canonical tickers the look-through may value live. Unset
+#: means every holdco with a template. Set on 2026-09-15 to the four names whose
+#: parent-debt NAV sat within 30% of price (Jardine C&C, Kingboard, ThaiBev,
+#: Wilmar); PCRD, GenScript, SingPost and Olam stay off until their templates
+#: are reviewed, and CITIC / Swire until their division EBITDA completes.
+TICKERS_ENV = "FEATURE_RESOURCE_HOLDCO_TICKERS"
+
+
+def enabled_for(ticker: str) -> bool:
+    """The flag is on AND, when an allowlist is set, this ticker is on it."""
+    if not enabled():
+        return False
+    raw = os.getenv(TICKERS_ENV, "").strip()
+    if not raw:
+        return True
+    from src.tools.ticker_canonical import canonical_ticker
+    allowed = {canonical_ticker(t.strip()) for t in raw.split(",") if t.strip()}
+    return canonical_ticker(ticker or "") in allowed
+
+
 def _load() -> dict:
     global _CACHE
     if _CACHE is None:
@@ -106,6 +126,68 @@ def _ebitda_of(ticker: str, end_date: str) -> Optional[tuple[float, str]]:
         return (float(v), c) if isinstance(v, (int, float)) and v else None
     except Exception:                                      # noqa: BLE001
         return None
+
+
+def _net_debt_of(ticker: str, end_date: str) -> Optional[tuple[float, str]]:
+    """(total debt - cash, currency) for a ticker, or None."""
+    try:
+        from src.tools.api import search_line_items
+        rows = search_line_items(ticker, ["total_debt", "cash_and_equivalents"], end_date, limit=1)
+        if not rows:
+            return None
+        debt = getattr(rows[0], "total_debt", None)
+        cash = getattr(rows[0], "cash_and_equivalents", None)
+        if not isinstance(debt, (int, float)) or not isinstance(cash, (int, float)):
+            return None
+        return float(debt) - float(cash), getattr(rows[0], "currency", None) or "USD"
+    except Exception:                                      # noqa: BLE001
+        return None
+
+
+def parent_net_debt(ticker: str, end_date: str, consolidated_net_debt: Optional[float],
+                    to_ccy: str) -> Optional[float]:
+    """Consolidated net debt less the net debt of majority-owned LISTED stakes.
+
+    Consolidated accounts carry 100% of a majority-owned subsidiary's
+    borrowings, but the look-through marks that stake at MARKET, where its own
+    debt is already netted inside the market cap. Subtracting consolidated net
+    debt therefore counted it twice: Jardine C&C's NAV came out at 49% below
+    price with Astra's borrowings taken off an Astra stake valued at market.
+    The whole subsidiary figure is removed, not the parent's share, because the
+    consolidated number holds all of it (the same rule as residual_ebitda).
+
+    Minority stakes are equity-accounted -- their debt was never consolidated
+    -- so nothing is removed for them. Returns None when any majority stake's
+    net debt cannot be fetched or converted: an unverifiable subtraction is
+    refused, and the caller declines the look-through rather than guess.
+    `consolidated_net_debt` is already in `to_ccy` (the engine's FX block).
+    """
+    if not isinstance(consolidated_net_debt, (int, float)):
+        return None
+    tpl = template_for(ticker)
+    if not tpl:
+        return None
+    consolidated = float(consolidated_net_debt)
+    removed = 0.0
+    for d in tpl.get("divisions") or []:
+        stake = d.get("stake_pct")
+        if d.get("basis") != "market_stake" or stake is None or stake < 0.5:
+            continue
+        sub = _net_debt_of(d.get("listed") or "", end_date)
+        if sub is None:
+            return None
+        rate = _fx(sub[1], to_ccy)
+        if rate is None:
+            return None
+        removed += sub[0] * rate
+    # Removing more than the consolidated figure is not a parent with net
+    # cash, it is a subsidiary whose "debt" is not corporate leverage: CITIC
+    # Bank's borrowings turned CITIC's HKD 1,989bn consolidated net debt into
+    # HKD -1,142bn. A bank's funding is its business, so the subtraction is
+    # refused rather than published.
+    if consolidated > 0 and removed > consolidated:
+        return None
+    return consolidated - removed
 
 
 def residual_ebitda(ticker: str, end_date: str, to_ccy: str) -> Optional[float]:

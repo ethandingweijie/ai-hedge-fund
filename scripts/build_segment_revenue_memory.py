@@ -156,6 +156,58 @@ def fmp_product_entry(ticker: str) -> dict | None:
                         "segments": [{"name": n, "years": ys} for n, ys in by_name.items()]}}
 
 
+#: Template divisions valued on their OWN stated figure or at market need no
+#: EBITDA; everything else in a holdco template does.
+_SELF_VALUING = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil"}
+
+
+def ebitda_divisions(ticker: str) -> list[str]:
+    from src.agents.analysis import holdco_sotp
+    tpl = holdco_sotp.template_for(ticker) or {}
+    return [d["name"] for d in tpl.get("divisions") or [] if d.get("basis") not in _SELF_VALUING]
+
+
+def build_division_ebitda(memory: dict, ticker: str, timeout: float) -> None:
+    """Reported division EBITDA for a holdco's look-through (CITIC, CK Hutchison,
+    Swire). Only divisions named in the template are kept, by exact name."""
+    from src.agents.analysis.sotp_multiple_basis import normalize_key
+    names = ebitda_divisions(ticker)
+    if not names:
+        print(f"{ticker}: no template division needs EBITDA")
+        return
+    company, basis = SOTP_UNIVERSE[ticker]
+    entry = memory["tickers"].setdefault(ticker, {"company": company, "sotp_basis": basis})
+    if entry.get("error"):
+        entry["history_error"] = entry.pop("error")        # the EBITDA call is separate
+    try:
+        out = gp.generate(gp.division_ebitda_prompt(company, ticker, names),
+                          schema=gp.DivisionEbitdaSet, timeout=timeout)
+    except gp.GeminiBillingError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        entry["division_ebitda_error"] = f"{type(exc).__name__}: {str(exc)[:300]}"
+        print(f"{ticker}: division EBITDA ERROR {type(exc).__name__}")
+        return
+    by_key = {normalize_key(n): n for n in names}
+    items, dropped = [], []
+    for d in out["json"]["divisions"]:
+        name = by_key.get(normalize_key(d["division"]))
+        if not name or not gp._cited_ok(d["ebitda"]):
+            dropped.append(d["division"])
+            continue
+        items.append({**d, "division": name})
+    entry.pop("division_ebitda_error", None)
+    entry["division_ebitda"] = {"retrieved": date.today().isoformat(), "model": out["model"],
+                                "latency_s": out["latency_s"], "items": items,
+                                "missing": [n for n in names if n not in {i["division"] for i in items}],
+                                "dropped": dropped, "notes": out["json"]["notes"]}
+    got = ", ".join("{}={:g} {} {}".format(i["division"], i["ebitda"]["value"], i["ebitda"]["currency"],
+                                           i["ebitda"]["scale"]) for i in items)
+    missing = entry["division_ebitda"]["missing"]
+    print(f"{ticker}: division EBITDA {len(items)}/{len(names)} ({got})"
+          + (" missing " + ", ".join(missing) if missing else ""), flush=True)
+
+
 def _load() -> dict:
     if OUT.exists():
         return json.loads(OUT.read_text(encoding="utf-8"))
@@ -172,9 +224,21 @@ def main() -> None:
     ap.add_argument("--gemini-for-us", action="store_true",
                     help="use Gemini for US/ADR names too (default: SEC segment footnote, then FMP)")
     ap.add_argument("--us-only", action="store_true", help="only the US/ADR names (no Gemini calls)")
+    ap.add_argument("--division-ebitda", action="store_true",
+                    help="holdco look-through: reported EBITDA for template divisions that need it")
     args = ap.parse_args()
 
     memory = _load()
+    if args.division_ebitda:
+        for ticker in [t.strip() for t in args.tickers.split(",") if t.strip()]:
+            try:
+                build_division_ebitda(memory, ticker, args.timeout)
+            except gp.GeminiBillingError as exc:
+                print(f"STOPPED: Gemini billing -- {exc}")
+                break
+            memory["_meta"]["updated"] = date.today().isoformat()
+            OUT.write_text(json.dumps(memory, indent=1, ensure_ascii=False), encoding="utf-8")
+        return
     for ticker in [t.strip() for t in args.tickers.split(",") if t.strip()]:
         company, basis = SOTP_UNIVERSE[ticker]
         if args.us_only and is_hk_sg(ticker):

@@ -1,5 +1,7 @@
 """Segment revenue/profit memory: latest reported mix, UI summary, and the
 memory -> engine bridge where only multiples come from Gemini."""
+import json
+
 import pytest
 
 from src.agents.analysis.dcf_agent import _sotp_analyst_style
@@ -268,6 +270,73 @@ def test_acceptance_is_per_company_and_expires_when_the_figures_change():
 
     sm.set_review("BABA", "revoked", "owner@example.com", memory=memory)
     assert sm.accepted_entry("BABA", memory) == (None, None)
+
+
+def _hk(v, scale="mn"):
+    return {"value": v, "currency": "HKD", "scale": scale, "period": "FY2025",
+            "source_url": "https://www.ckh.com.hk/ar", "quote": str(v)}
+
+
+CKH_EBITDA = {"company": "CK Hutchison Holdings", "sotp_basis": "holdco_lookthrough",
+              "history_error": "no segments returned",
+              "division_ebitda": {"items": [
+                  {"division": "Ports & Related Services", "ebitda": _hk(15000), "measure": "EBITDA",
+                   "includes_share_of_associates": True, "fiscal_year": "FY2025"},
+                  {"division": "Retail (A.S. Watson)", "ebitda": _hk(20000), "measure": "EBITDA",
+                   "includes_share_of_associates": True, "fiscal_year": "FY2025"},
+              ], "missing": ["Telecommunications (3 Group Europe)"]}}
+
+
+def test_a_holdco_with_only_division_ebitda_is_reviewable_and_converted():
+    memory = {"_meta": {}, "tickers": {"00001.HK": CKH_EBITDA}}
+    key, entry = sm.resolve("0001.HK", memory)
+    assert key == "00001.HK"
+    assert sm.division_ebitda_amounts(entry, "HKD", lambda a, b: 1.0) == {
+        "Ports & Related Services": 15000e6, "Retail (A.S. Watson)": 20000e6}
+    assert sm.division_ebitda_for("00001.HK", "HKD", memory=memory, fx_to=lambda a, b: 1.0) is None  # not accepted
+    sm.set_review("00001.HK", "accepted", "o", memory=memory)
+    assert sm.division_ebitda_for("00001.HK", "HKD", memory=memory,
+                                  fx_to=lambda a, b: 1.0)["Retail (A.S. Watson)"] == 20000e6
+
+
+def test_adding_division_ebitda_changes_the_hash_but_old_entries_keep_theirs():
+    import hashlib
+    plain = {"history": BABA_SEC["history"]}
+    legacy = hashlib.sha256(json.dumps(plain["history"], sort_keys=True, ensure_ascii=False)
+                            .encode("utf-8")).hexdigest()[:16]
+    assert sm.content_hash(plain) == legacy                                   # acceptances survive
+    assert sm.content_hash({**plain, "division_ebitda": CKH_EBITDA["division_ebitda"]}) != legacy
+
+
+def test_holdco_live_effect_lists_the_division_still_missing(monkeypatch):
+    from src.agents.analysis import holdco_sotp
+    monkeypatch.setattr(holdco_sotp, "enabled", lambda: True)
+    effect = sm.live_effect("00001.HK", CKH_EBITDA, fx_to=lambda a, b: 1.0)
+    assert effect["method"] == "SOTP / NAV (look-through)" and effect["applies"] is False
+    assert effect["missing"] == ["Telecommunications (3 Group Europe)"]
+    complete = {**CKH_EBITDA, "division_ebitda": {"items": CKH_EBITDA["division_ebitda"]["items"] + [
+        {"division": "Telecommunications (3 Group Europe)", "ebitda": _hk(9000), "measure": "EBITDA",
+         "includes_share_of_associates": False, "fiscal_year": "FY2025"}]}}
+    assert sm.live_effect("00001.HK", complete, fx_to=lambda a, b: 1.0)["applies"] is True
+    monkeypatch.setattr(holdco_sotp, "enabled", lambda: False)
+    assert "switched off" in sm.live_effect("00001.HK", complete, fx_to=lambda a, b: 1.0)["reason"]
+
+
+def test_ui_summary_shows_division_ebitda_for_a_name_without_segment_history():
+    memory = {"_meta": {}, "tickers": {"00001.HK": CKH_EBITDA}}
+    row = sm.ui_summary(memory=memory, fx_to=lambda a, b: 1.0,
+                        reviews=lambda t, e: {"status": "pending"})["tickers"][0]
+    assert "error" not in row and row["segments"] == []
+    assert [d["division"] for d in row["division_ebitda"]] == ["Ports & Related Services", "Retail (A.S. Watson)"]
+    assert row["division_ebitda_missing"] == ["Telecommunications (3 Group Europe)"]
+    assert row["history_error"] == "no segments returned"
+
+
+def test_the_engine_passes_accepted_division_ebitda_to_the_look_through(monkeypatch):
+    import src.agents.analysis.dcf_agent as da
+    monkeypatch.setattr(sm, "division_ebitda_for", lambda t, ccy, **k: {"Ports & Related Services": 1.0} if ccy == "HKD" else None)
+    assert da._accepted_division_ebitda("00001.HK") == {"Ports & Related Services": 1.0}
+    assert da._accepted_division_ebitda("MSFT") is None                       # no template
 
 
 def test_reviewing_a_name_without_memory_is_a_key_error():

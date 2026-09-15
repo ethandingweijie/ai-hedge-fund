@@ -384,6 +384,34 @@ def history_prompt(company: str, ticker: str, years: int = 5) -> str:
     )
 
 
+class DivisionEbitda(BaseModel):
+    division: str = Field(description="Exactly one of the division names supplied")
+    ebitda: Cited
+    measure: str = Field(description="The company's own label, e.g. 'EBITDA' or "
+                                     "'EBITDA including share of associates and joint ventures'")
+    includes_share_of_associates: bool
+    fiscal_year: str
+
+
+class DivisionEbitdaSet(BaseModel):
+    """Reported division EBITDA for a holdco's unlisted operating divisions --
+    the input the look-through SOTP values on a peer EV/EBITDA range."""
+    divisions: list[DivisionEbitda]
+    notes: str
+
+
+def division_ebitda_prompt(company: str, ticker: str, division_names: list[str]) -> str:
+    return (
+        f"From {company}'s ({ticker}) latest annual report or annual results announcement, "
+        "give the EBITDA the company itself reports for each of these divisions for the latest "
+        f"completed fiscal year: {'; '.join(division_names)}.\n"
+        "Use the company's own division EBITDA figure. If it reports EBITDA including its share "
+        "of associates and joint ventures, give that figure and set includes_share_of_associates. "
+        "Use exactly the division names supplied. If a division's EBITDA is not disclosed, omit "
+        f"that division -- never derive or estimate it.\n{_AMOUNT_RULE}"
+    )
+
+
 class SegmentMultiple(BaseModel):
     segment: str = Field(description="Exactly one of the segment names supplied")
     metric: Literal["pe", "ev_rev"]

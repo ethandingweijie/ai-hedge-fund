@@ -44,12 +44,45 @@ def _has_segments(entry: dict) -> bool:
     return bool(((entry.get("history") or {}).get("segments")))
 
 
+def _division_items(entry: dict) -> list[dict]:
+    return list(((entry.get("division_ebitda") or {}).get("items")) or [])
+
+
+def _usable(entry: dict) -> bool:
+    """Reviewable: segment history, or division EBITDA for a holdco look-through
+    (CITIC and Swire have the latter without the former)."""
+    return isinstance(entry, dict) and not entry.get("error") and (
+        _has_segments(entry) or bool(_division_items(entry)))
+
+
 def entry_for(ticker: str, memory: Optional[dict] = None) -> Optional[dict]:
     from src.agents.analysis.sotp_snapshot import lookup_snapshot
     doc = memory if memory is not None else load()
     usable = {k: v for k, v in (doc.get("tickers") or {}).items()
               if isinstance(v, dict) and _has_segments(v) and not v.get("error")}
     return lookup_snapshot(usable, ticker)[1]
+
+
+def division_ebitda_amounts(entry: dict, to_ccy: str,
+                            fx_to: Optional[Callable[[str, str], Optional[float]]] = None) -> dict[str, float]:
+    """{template division name: EBITDA in `to_ccy`, absolute} for cited items."""
+    from src.agents.industry.gemini_params import amount
+    fx_to = fx_to or _default_fx
+    out = {}
+    for item in _division_items(entry):
+        value = amount(item.get("ebitda"), lambda src: fx_to(src, to_ccy))
+        if value is not None:
+            out[item["division"]] = value
+    return out
+
+
+def division_ebitda_for(ticker: str, to_ccy: str, *, memory: Optional[dict] = None,
+                        fx_to: Optional[Callable[[str, str], Optional[float]]] = None) -> Optional[dict[str, float]]:
+    """Accepted division EBITDA for the holdco look-through, or None."""
+    _, entry = accepted_entry(ticker, memory)
+    if not entry:
+        return None
+    return division_ebitda_amounts(entry, to_ccy, fx_to) or None
 
 
 def _default_fx(from_ccy: str, to_ccy: str) -> Optional[float]:
@@ -117,9 +150,10 @@ def _years(entry: dict, fx_to) -> dict[str, dict[str, dict]]:
 
 
 def _years_and_notes(entry: dict, fx_to) -> tuple[dict[str, dict[str, dict]], list[str]]:
-    ccy = entry.get("fmp_reporting_currency") or entry["history"].get("reporting_currency") or "USD"
+    history = entry.get("history") or {}
+    ccy = entry.get("fmp_reporting_currency") or history.get("reporting_currency") or "USD"
     out: dict[str, dict[str, dict]] = {}
-    for seg in entry["history"].get("segments") or []:
+    for seg in history.get("segments") or []:
         for y in seg.get("years") or []:
             rev = _in(y.get("revenue"), ccy, fx_to)
             if rev is None:
@@ -356,6 +390,11 @@ def content_hash(entry: dict) -> str:
     matches, so an acceptance never silently carries over to new numbers."""
     import hashlib
     blob = json.dumps(entry.get("history") or {}, sort_keys=True, ensure_ascii=False)
+    items = _division_items(entry)
+    if items:
+        # Appended only when present, so every acceptance made before division
+        # EBITDA existed keeps its hash; adding EBITDA to a name needs a new one.
+        blob += json.dumps(items, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
@@ -363,8 +402,7 @@ def resolve(ticker: str, memory: Optional[dict] = None) -> tuple[Optional[str], 
     """(memory key, entry) for any listing of the company."""
     from src.agents.analysis.sotp_snapshot import lookup_snapshot
     doc = memory if memory is not None else load()
-    usable = {k: v for k, v in (doc.get("tickers") or {}).items()
-              if isinstance(v, dict) and _has_segments(v) and not v.get("error")}
+    usable = {k: v for k, v in (doc.get("tickers") or {}).items() if _usable(v)}
     return lookup_snapshot(usable, ticker)
 
 
@@ -413,7 +451,28 @@ def accepted_entry(ticker: str, memory: Optional[dict] = None) -> tuple[Optional
 
 def live_effect(ticker: str, entry: dict, *, fx_to=_default_fx) -> dict:
     """What acceptance would do to live SOTP inputs, without changing anything."""
+    from src.agents.analysis import holdco_sotp
     from src.agents.analysis.sotp_snapshot import load_sotp_snapshot, lookup_snapshot
+    tpl = holdco_sotp.template_for(ticker)
+    if tpl:
+        # Holdco: accepted division EBITDA completes the look-through. Checked
+        # without market data -- only whether every division that needs EBITDA
+        # has it -- so the page stays fast.
+        self_valuing = {"market_stake", "transaction_anchor", "cap_rate", "ev_ebit_range", "nil"}
+        needed = [d["name"] for d in tpl.get("divisions") or [] if d.get("basis") not in self_valuing]
+        supplied = division_ebitda_amounts(entry, tpl.get("currency") or "USD", fx_to)
+        missing = [n for n in needed if n not in supplied]
+        base = {"method": "SOTP / NAV (look-through)", "needed": needed,
+                "supplied": sorted(supplied), "missing": missing}
+        if not holdco_sotp.enabled_for(ticker):
+            return {**base, "applies": False,
+                    "reason": ("the holdco look-through is switched off" if not holdco_sotp.enabled()
+                               else "the holdco look-through is not switched on for this name yet")}
+        if not needed:
+            return {**base, "applies": True, "reason": "look-through needs no division EBITDA"}
+        if missing:
+            return {**base, "applies": False, "reason": "no EBITDA for " + ", ".join(missing)}
+        return {**base, "applies": True, "reason": "accepted division EBITDA completes the look-through"}
     _, snap = lookup_snapshot(load_sotp_snapshot(), ticker)
     if not snap:
         return {"applies": False, "reason": "no SOTP (analyst) inputs for this name yet -- "
@@ -442,15 +501,24 @@ def ui_summary(*, memory: Optional[dict] = None,
     for ticker, entry in sorted((doc.get("tickers") or {}).items()):
         base = {"ticker": ticker, "company": entry.get("company"), "sotp_basis": entry.get("sotp_basis"),
                 "listings": listings_for(ticker)}
-        if entry.get("error") or not _has_segments(entry):
+        if not _usable(entry):
             rows.append({**base, "error": entry.get("error")
                          or "Gemini returned no segments after retries and the search-then-format fallback"})
             continue
+        base["division_ebitda"] = [{
+            "division": i["division"], "value": i["ebitda"]["value"], "currency": i["ebitda"]["currency"],
+            "scale": i["ebitda"]["scale"], "fiscal_year": i.get("fiscal_year"), "measure": i.get("measure"),
+            "includes_share_of_associates": i.get("includes_share_of_associates"),
+            "source_url": i["ebitda"].get("source_url"), "quote": i["ebitda"].get("quote"),
+        } for i in _division_items(entry)]
+        base["division_ebitda_missing"] = (entry.get("division_ebitda") or {}).get("missing") or []
+        if entry.get("history_error"):
+            base["history_error"] = entry["history_error"]
         years, notes = _years_and_notes(entry, fx_to)
         rec, basis_notes = reconciliation(entry, years)
         names = sorted({n for segs in years.values() for n in segs},
                        key=lambda n: -max((years[y].get(n) or {}).get("revenue") or 0 for y in years))
-        n_years = sum(len(s.get("years") or []) for s in entry["history"].get("segments") or [])
+        n_years = sum(len(s.get("years") or []) for s in (entry.get("history") or {}).get("segments") or [])
         n_profit = sum(1 for segs in years.values() for s in segs.values() if s["profit"] is not None)
         rows.append({
             **base,
@@ -472,7 +540,7 @@ def ui_summary(*, memory: Optional[dict] = None,
             "review": _safe(lambda: reviews(ticker, entry), {"status": "unknown"}),
             "live_effect": _safe(lambda: effects(ticker, entry), {"applies": False, "reason": "not evaluated"}),
             "source": entry.get("source") or "gemini_grounded",
-            "resegmentation": (entry["history"].get("segment_definition_changes") or "").strip(),
+            "resegmentation": ((entry.get("history") or {}).get("segment_definition_changes") or "").strip(),
         })
     return {"status": meta.get("status", "missing"), "updated": meta.get("updated"),
             "model": meta.get("model"), "tickers": rows}

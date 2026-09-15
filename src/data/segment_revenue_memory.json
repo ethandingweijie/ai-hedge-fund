@@ -3081,6 +3081,18 @@
     "segments": [],
     "total_revenue": [],
     "segment_definition_changes": ""
+   },
+   "division_ebitda": {
+    "retrieved": "2026-09-15",
+    "model": "gemini-3.8-flash",
+    "latency_s": 47.78,
+    "items": [],
+    "missing": [
+     "CITIC Mining / Resources",
+     "Advanced Materials & Manufacturing"
+    ],
+    "dropped": [],
+    "notes": "In its annual reports and annual results announcements, CITIC Limited (00267.HK) does not report or disclose EBITDA for its business segments or operating divisions. The five reportable operating segments defined and reported by CITIC Limited under HKFRS 8 are Comprehensive Financial Services, Advanced Intelligent Manufacturing, Advanced Materials, New Consumption, and New-Type Urbanisation, and the measure used for reporting segment profit is 'profit for the year' rather than EBITDA. Furthermore, neither 'CITIC Mining / Resources' nor 'Advanced Materials & Manufacturing' are reported as standalone divisions with disclosed EBITDA. In accordance with the instructions, divisions without disclosed EBITDA are omitted."
    }
   },
   "00001.HK": {
@@ -3855,6 +3867,58 @@
      }
     ],
     "segment_definition_changes": "With effect from 1 January 2024, Hutchison Asia Telecommunications (previously presented under the Telecommunications division / as a separate reportable segment) was reclassified and integrated into the Finance & Investments and Others segment. The comparative figures for FY2023 were restated accordingly in the FY2024 Annual Report and FY2025 results announcement. Prior to this reorganisation, Hutchison Asia Telecommunications was reported as a separate reportable segment in FY2021 and FY2022 (and originally in FY2023). Figures are presented on a Post-IFRS 16 basis and include the Group's proportionate share of associated companies and joint ventures, consistent with the Group's primary segment presentation (Analyses by Core Business Segments)."
+   },
+   "division_ebitda": {
+    "retrieved": "2026-09-15",
+    "model": "gemini-3.8-flash",
+    "latency_s": 54.48,
+    "items": [
+     {
+      "division": "Ports & Related Services",
+      "ebitda": {
+       "value": 17439.0,
+       "currency": "HKD",
+       "scale": "mn",
+       "period": "FY2025",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHk0Y--IamhYwgdLLWQlbTX99ce3Usgkqn5o2iHwl1ehwXRvAq9IdkOcwKgRhutdOVIblilnRsbsHSZdKWM4F1V8A2HXSyUblFQueV7pBCHA6BKMwQdsQxel7HFe-rL7OG2h9gfgUwdUD8VTQ61d9HGLSEckEpQ6_KgU6map3tAsi2W",
+       "quote": "EBITDA(2) of HK$17,439 million and EBIT(2) of HK$12,850 million, both increased by 8%"
+      },
+      "measure": "EBITDA",
+      "includes_share_of_associates": true,
+      "fiscal_year": "2025"
+     },
+     {
+      "division": "Retail (A.S. Watson)",
+      "ebitda": {
+       "value": 18238.0,
+       "currency": "HKD",
+       "scale": "mn",
+       "period": "FY2025",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFW3qDJyjDPTW0sXwDu4Cny81KmuzYXaR_1wQRNUtWKfimjmAwrYiGcyGb7zEBW53r9y67vWoBnbOFKVDhaDYZ516gZtmFB8wJhHXB9JOmR7lTkXEhMcgKd3c6VjfHv6uWldUaubjS2jIiF_3yF9bpbzu1zN5hL-xE0e8bFouNRHTl-",
+       "quote": "while EBITDA(3) and EBIT(3) of HK$18,238 million and HK$14,553 million increased by 11% and 12% respectively."
+      },
+      "measure": "EBITDA",
+      "includes_share_of_associates": true,
+      "fiscal_year": "2025"
+     },
+     {
+      "division": "Telecommunications (3 Group Europe)",
+      "ebitda": {
+       "value": 25877.0,
+       "currency": "HKD",
+       "scale": "mn",
+       "period": "FY2025",
+       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHYkYWtgQHrfXiIcxqtmN_4_nYrz0jRtVTDXIs5Z032SfA2Sc9VuXhhf-2gVOT89JfpvMEo8cdr6JSMeNvs-ijLwzZJDCTOHm4cUYhtRdP3Qh32Tt_NVnWvrHfoi2tmQsIqCHxF9LA8YRHMnLRnj0np2Tn-jgw5L677O32ZEQDRQWw=",
+       "quote": "Underlying EBITDA(6) of HK$25,877 million was 6% or HK$1,500 million higher against last year in local currencies"
+      },
+      "measure": "Underlying EBITDA",
+      "includes_share_of_associates": true,
+      "fiscal_year": "2025"
+     }
+    ],
+    "missing": [],
+    "dropped": [],
+    "notes": "Figures are taken from CK Hutchison Holdings Limited's 2025 Annual Results Announcement for the year ended 31 December 2025. Per the Group's segment reporting policy, reported segment revenue, EBITDA, and EBIT include the Group's proportionate share of associated companies and joint ventures. In Note 6(b)(xiii), segment EBITDA before one-off items is broken down into Company & Subsidiaries and Associates & Joint Ventures: Ports & Related Services total HK$17,439 million (HK$13,320 million from subsidiaries, HK$4,119 million from associates/JVs); Retail total HK$18,238 million (HK$12,414 million from subsidiaries, HK$5,824 million from associates/JVs); and 3 Group Europe total HK$25,877 million (HK$20,425 million from subsidiaries, HK$5,452 million from associates/JVs). Management's discussion is presented on a Pre-IFRS 16 basis; on a Post-IFRS 16 basis, FY2025 EBITDA is HK$20,424 million for Ports & Related Services and HK$27,909 million for Retail."
    }
   },
   "00019.HK": {
@@ -3879,6 +3943,32 @@
     "segments": [],
     "total_revenue": [],
     "segment_definition_changes": ""
+   },
+   "division_ebitda": {
+    "retrieved": "2026-09-15",
+    "model": "gemini-3.8-flash",
+    "latency_s": 87.76,
+    "items": [
+     {
+      "division": "Beverages (Swire Coca-Cola)",
+      "ebitda": {
+       "value": 5425.0,
+       "currency": "HKD",
+       "scale": "mn",
+       "period": "FY2025",
+       "source_url": "https://www.swirepacific.com/storage/fm/PressRelease/pdf/en/swirepacific-annual-2025.pdf",
+       "quote": "EBITDA and EBIT for Swire Coca-Cola (including that of Shanghai Shen-Mei and excluding non-recurring items and central costs and others) were HK$5,425 million (2024: HK$4,751 million) and HK$2,671 million (2024: HK$2,534 million) respectively."
+      },
+      "measure": "EBITDA (including that of Shanghai Shen-Mei and excluding non-recurring items and central costs and others)",
+      "includes_share_of_associates": true,
+      "fiscal_year": "2025"
+     }
+    ],
+    "missing": [
+     "Aviation Services (HAECO)"
+    ],
+    "dropped": [],
+    "notes": "For Beverages (Swire Coca-Cola), Swire Pacific discloses division EBITDA of HK$5,425 million for FY2025 (FY2024: HK$4,751 million) including the Shanghai Shen-Mei joint venture and excluding non-recurring items and central costs. In the Beverages Division segment performance table, Swire Pacific also presents total EBITDA for Swire Coca-Cola of HK$4,746 million for FY2025 (FY2024: HK$5,030 million), or HK$4,933 million from operating activities (FY2024: HK$4,268 million) before non-recurring items of HK$(187) million. Aviation Services (HAECO) is omitted because Swire Pacific discloses revenue, operating profit, and attributable profit for the HAECO group, but does not report an EBITDA figure for HAECO."
    }
   },
   "C07.SI": {

@@ -275,9 +275,19 @@ export interface SegmentMemoryTicker {
   live_effect?: {
     applies: boolean;
     reason?: string;
+    method?: string;
     margin_basis?: string;
     mapping?: { memory: string; row: string; share: number; margin_avg3: number | null }[];
+    needed?: string[];
+    supplied?: string[];
+    missing?: string[];
   };
+  division_ebitda?: {
+    division: string; value: number; currency: string; scale: string; fiscal_year?: string;
+    measure?: string; includes_share_of_associates?: boolean; source_url?: string; quote?: string;
+  }[];
+  division_ebitda_missing?: string[];
+  history_error?: string;
 }
 
 export interface SegmentMemoryReview {

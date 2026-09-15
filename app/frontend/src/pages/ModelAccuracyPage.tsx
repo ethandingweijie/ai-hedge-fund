@@ -380,14 +380,20 @@ function ReviewControls({ t, onChanged }: { t: SegmentMemoryTicker; onChanged: (
           )}
         </span>
       </div>
-      {effect && (effect.applies ? (
+      {effect && effect.method === 'SOTP / NAV (look-through)' ? (
+        <p className="text-xs text-muted-foreground">
+          {effect.applies
+            ? `Live effect: the holdco look-through (SOTP / NAV) uses the accepted division EBITDA${(effect.supplied ?? []).length ? ` for ${effect.supplied!.join(', ')}` : ''}.`
+            : `No live effect: ${effect.reason}`}
+        </p>
+      ) : effect && (effect.applies ? (
         <div className="text-xs text-muted-foreground space-y-1">
           <p>
             Live effect for {(t.listings ?? [t.ticker]).join(' and ')}: SOTP segment revenue = FMP consensus × this mix,
             margin = 3-year average; multiples stay with the current SOTP row.
           </p>
           <ul className="list-none space-y-0.5 tabular-nums">
-            {effect.mapping!.map((m) => (
+            {(effect.mapping ?? []).map((m) => (
               <li key={m.memory}>
                 {m.memory} ({(m.share * 100).toFixed(1)}%{m.margin_avg3 != null ? `, ${(m.margin_avg3 * 100).toFixed(1)}% margin` : ''}) ← multiple of “{m.row}”
               </li>
@@ -468,7 +474,43 @@ function SegmentMemorySection({ allowed }: { allowed: boolean }) {
                 </span>
               </div>
               <ReviewControls t={current} onChanged={reload} />
-              <SegmentTable t={current} />
+              {(current.division_ebitda ?? []).length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs tabular-nums">
+                    <thead>
+                      <tr className="text-muted-foreground">
+                        <th className="text-left font-medium py-2 pr-3">Division EBITDA (look-through)</th>
+                        <th className="text-right font-medium py-2 px-2">Reported</th>
+                        <th className="text-left font-medium py-2 px-2">Measure</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {current.division_ebitda!.map((d) => (
+                        <tr key={d.division} className="border-t border-border/60 align-top">
+                          <td className="py-2 pr-3 text-foreground">{d.division}</td>
+                          <td className="py-2 px-2 text-right">
+                            <a href={d.source_url} target="_blank" rel="noreferrer" title={d.quote}
+                               className="text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground">
+                              {d.currency} {d.value.toLocaleString()} {d.scale}
+                            </a>
+                            {d.fiscal_year && <div className="text-muted-foreground">{d.fiscal_year}</div>}
+                          </td>
+                          <td className="py-2 px-2 text-muted-foreground">
+                            {d.measure}{d.includes_share_of_associates ? ' · incl. share of associates/JVs' : ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {(current.division_ebitda_missing ?? []).length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">Not disclosed: {current.division_ebitda_missing!.join(', ')}</p>
+                  )}
+                </div>
+              )}
+              {(current.segments ?? []).length > 0 && <SegmentTable t={current} />}
+              {current.history_error && (current.segments ?? []).length === 0 && (
+                <p className="text-xs text-muted-foreground">Segment history not retrieved ({current.history_error}).</p>
+              )}
               {(current.notes ?? []).length > 0 && (
                 <ul className="text-xs text-foreground/80 space-y-1 list-none">
                   {current.notes!.map((n) => <li key={n}>• {n}</li>)}

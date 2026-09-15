@@ -3506,7 +3506,7 @@ def _compute_method_value(
         if ticker and end_date and shares and shares > 0:
             try:
                 from src.agents.analysis import holdco_sotp
-                if holdco_sotp.enabled():
+                if holdco_sotp.enabled_for(ticker):
                     # Parent-level net debt only. A listed stake marked at
                     # market has already netted that subsidiary's borrowings
                     # inside its market cap, so consolidated net debt would
@@ -3529,15 +3529,25 @@ def _compute_method_value(
                     # equity. Olam and SingPost are valued entirely on
                     # enterprise bases.
                     _any_ev = any(d.get("basis") != "market_stake" for d in _divs)
-                    _nd = net_debt if (_all_assoc or _any_ev) else None
                     # The engine works in the currency the ticker TRADES in,
                     # so the look-through is converted to that, not to the
                     # reporting currency.
                     from src.tools.api import get_listing_currency
-                    _lt = holdco_sotp.value_per_share(
-                        ticker, end_date, shares,
-                        to_currency=get_listing_currency(ticker),
-                        net_debt=_nd)
+                    _listing_ccy = get_listing_currency(ticker)
+                    _needs_debt = _all_assoc or _any_ev
+                    # Parent-level only: majority-owned listed stakes are
+                    # marked at market with their own debt inside, so their
+                    # borrowings come out of the consolidated figure
+                    # (holdco_sotp.parent_net_debt). If that cannot be
+                    # verified the look-through is declined, not guessed.
+                    _nd = (holdco_sotp.parent_net_debt(ticker, end_date, net_debt, _listing_ccy)
+                           if _needs_debt else None)
+                    if not (_needs_debt and _nd is None):
+                        _lt = holdco_sotp.value_per_share(
+                            ticker, end_date, shares,
+                            to_currency=_listing_ccy,
+                            ebitda_by_division=_accepted_division_ebitda(ticker),
+                            net_debt=_nd)
             except Exception:                              # noqa: BLE001
                 _lt = None
         if _lt is not None and _lt > 0:
@@ -4428,13 +4438,15 @@ def _industry_routed_profile(ticker: str, sector: str, end_date: str = "",
             if anchor.get("name") in _LOOKTHROUGH_ANCHORS:
                 try:
                     from src.agents.analysis import holdco_sotp
-                    if holdco_sotp.enabled() and holdco_sotp.can_value(ticker, end_date):
+                    if holdco_sotp.enabled_for(ticker) and holdco_sotp.can_value(
+                            ticker, end_date, ebitda_by_division=_accepted_division_ebitda(ticker)):
                         _log.info("[dcf] %s: anchor %r computable by "
                                   "look-through -> %s/%s",
                                   ticker, anchor.get("name"), r_sector, r_profile)
                         _t["outcome"] = "routed_via_lookthrough"
                         return (r_sector, r_profile, data)
-                    _why = holdco_sotp.decline_reason(ticker, end_date)
+                    _why = holdco_sotp.decline_reason(
+                        ticker, end_date, ebitda_by_division=_accepted_division_ebitda(ticker))
                 except Exception:                          # noqa: BLE001
                     _why = None
                 if _why:
@@ -4599,7 +4611,8 @@ def _promote_lookthrough_sotp(profile_data, ticker, end_date):
         return profile_data, False
     try:
         from src.agents.analysis import holdco_sotp
-        if not (holdco_sotp.enabled() and holdco_sotp.can_value(ticker, end_date)):
+        if not (holdco_sotp.enabled_for(ticker) and holdco_sotp.can_value(
+                ticker, end_date, ebitda_by_division=_accepted_division_ebitda(ticker))):
             return profile_data, False
     except Exception:                                      # noqa: BLE001
         return profile_data, False
@@ -4721,6 +4734,22 @@ def _gate_live_sotp(ticker: str, assumptions: dict, shares: float,
                 f"{band} reference -- replaced with the validated snapshot ({key})")
     except Exception:
         return assumptions, None
+
+
+def _accepted_division_ebitda(ticker: str) -> Optional[dict]:
+    """Owner-accepted division EBITDA for a holdco look-through, in the template's
+    currency, or None. CITIC, CK Hutchison and Swire value unlisted divisions on
+    EV/EBITDA and no other source supplies division EBITDA, so without this the
+    look-through declines and the Holding Company anchor falls to a P/BV proxy."""
+    try:
+        from src.agents.analysis import holdco_sotp
+        from src.data import segment_memory as sm
+        tpl = holdco_sotp.template_for(ticker)
+        if not tpl:
+            return None
+        return sm.division_ebitda_for(ticker, tpl.get("currency") or holdco_sotp.currency_of(ticker))
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _apply_accepted_segment_memory(ticker: str, assumptions: dict, end_date: str,

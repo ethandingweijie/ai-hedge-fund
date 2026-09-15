@@ -61,6 +61,34 @@ def test_a_sec_footnote_becomes_a_cited_memory_entry(monkeypatch):
     assert seg["Alibaba China E-commerce Group"]["margin"] == pytest.approx(107509 / 554217)
 
 
+def test_only_template_divisions_that_need_ebitda_are_requested():
+    assert b.ebitda_divisions("00001.HK") == [
+        "Ports & Related Services", "Retail (A.S. Watson)", "Telecommunications (3 Group Europe)"]
+    assert b.ebitda_divisions("P15.SI") == []                        # listed stakes only
+    assert b.ebitda_divisions("MSFT") == []                          # no template
+
+
+def test_division_ebitda_keeps_exact_template_names_and_drops_uncited(monkeypatch):
+    def fake_generate(prompt, schema=None, timeout=None, **kw):
+        assert "Ports & Related Services" in prompt and schema is gp.DivisionEbitdaSet
+        cited = {"currency": "HKD", "scale": "mn", "period": "FY2025",
+                 "source_url": "https://www.ckh.com.hk/ar", "quote": "x"}
+        return {"model": "gemini-3.8-flash", "latency_s": 1.0, "json": {"notes": "", "divisions": [
+            {"division": "Ports and Related Services", "ebitda": {**cited, "value": 15000},
+             "measure": "EBITDA", "includes_share_of_associates": True, "fiscal_year": "FY2025"},
+            {"division": "Retail (A.S. Watson)", "ebitda": {**cited, "value": 20000, "source_url": ""},
+             "measure": "EBITDA", "includes_share_of_associates": True, "fiscal_year": "FY2025"},
+        ]}}
+    monkeypatch.setattr(gp, "generate", fake_generate)
+    memory = {"_meta": {}, "tickers": {"00001.HK": {"company": "CK Hutchison Holdings", "error": "503"}}}
+    b.build_division_ebitda(memory, "00001.HK", timeout=10)
+    entry = memory["tickers"]["00001.HK"]
+    assert [i["division"] for i in entry["division_ebitda"]["items"]] == ["Ports & Related Services"]
+    assert entry["division_ebitda"]["dropped"] == ["Retail (A.S. Watson)"]
+    assert "Telecommunications (3 Group Europe)" in entry["division_ebitda"]["missing"]
+    assert "error" not in entry and entry["history_error"] == "503"
+
+
 def test_a_single_segment_filer_has_no_sec_entry(monkeypatch):
     import src.tools.sec_segments as ss
     monkeypatch.setattr(ss, "get_segment_footnote", lambda t, d: None)
