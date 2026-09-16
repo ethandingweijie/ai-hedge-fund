@@ -1021,6 +1021,38 @@ def run_advanced_pipeline(
                         "sotp_extractor", ticker,
                         "[snapshot] validated trialed assumptions attached")
 
+        # ── One KPI vector per COMPANY, before anything scores it ──────────
+        # A company has one income statement; the venue its shares trade on is
+        # not a property of that statement. Alibaba's GAAP operating margin
+        # came back +10.0% for 09988.HK and -0.3% for BABA seven minutes apart
+        # on 2026-09-16, moving the composite 1.266 vs 1.0363 and opening an
+        # 18.7% gap between the two listings' blended IVs on a price that
+        # agreed to 0.6%. A dual-listed ticker now adopts its sibling's
+        # archived vector when one is inside the window; single-listed names
+        # are untouched.
+        with _timed("4_44_company_metrics"):
+            try:
+                from src.data.company_metrics import resolve_company_metrics
+                _cm_bucket = state["data"].get("framework_metrics") or {}
+                for _t in (state["data"].get("tickers", []) or list(_cm_bucket)):
+                    if not isinstance(_cm_bucket.get(_t), dict):
+                        continue
+                    _shared, _cm_flag = resolve_company_metrics(_t, _cm_bucket[_t])
+                    _cm_bucket[_t] = _shared
+                    if _cm_flag:
+                        print(f"  [company-metrics] {_t}: {_cm_flag}")
+                state["data"]["framework_metrics"] = _cm_bucket
+                # framework_metrics_all is the same object today; keep the two
+                # in step even if that ever changes.
+                _cm_all = state["data"].get("framework_metrics_all")
+                if isinstance(_cm_all, dict) and _cm_all is not _cm_bucket:
+                    for _t, _v in _cm_bucket.items():
+                        if _t in _cm_all:
+                            _cm_all[_t] = _v
+            except Exception as _e:
+                print(f"  [company-metrics] failed: {_e!r} — each listing keeps "
+                      f"its own extraction")
+
         # ── Peer z-scores BEFORE the engine (not only before the card) ─────
         # The V4-beta composite is built to prefer a peer-relative z-tier over
         # the static KPI band whenever a cohort exists, and the DCF engine
