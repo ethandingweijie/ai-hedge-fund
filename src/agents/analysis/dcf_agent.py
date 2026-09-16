@@ -1336,6 +1336,47 @@ def _refresh_sotp_net_cash(
     )
 
 
+def _pin_sotp_holdco_discount(
+    ticker: str,
+    assumptions: dict,
+) -> tuple[dict, Optional[str]]:
+    """Pin the SOTP's holdco discount to the company's curated value.
+
+    The discount is the one SOTP input the research LLM re-decides every run,
+    and it is a structural view of the parent, not a fresh judgement: the same
+    company came out at 25% on its ADR line in August and 15% on its HK line
+    in September, worth about HK$21 a share. ``curated_holdco_discount``
+    resolves one value per company across listings; a company neither source
+    covers keeps whatever the run produced.
+
+    Returns ``(assumptions, flag)``; the input is never mutated.
+    """
+    if not isinstance(assumptions, dict):
+        return assumptions, None
+    try:
+        from src.agents.analysis.sotp_snapshot import curated_holdco_discount
+        curated = curated_holdco_discount(ticker)
+    except Exception:
+        curated = None
+    if curated is None:
+        return assumptions, None
+    pct, source = curated
+    stated = _safe(assumptions.get("holdco_discount_pct"))
+    if stated is not None and abs(stated - pct) < 1e-9:
+        return assumptions, None
+    out = dict(assumptions)
+    out["holdco_discount_pct"] = pct
+    out["_holdco_source"] = source
+    if stated is not None:
+        out["_holdco_stated"] = stated
+    return out, (
+        f"SOTP (analyst): holdco discount pinned to {pct:.0%} from "
+        f"{source} (this run's research said "
+        f"{stated:.0%})" if stated is not None else
+        f"SOTP (analyst): holdco discount {pct:.0%} from {source}"
+    )
+
+
 def _sotp_analyst_style(
     assumptions: dict,
     shares: float,
@@ -5864,6 +5905,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _ticker_sotp, net_debt)
             if _net_cash_flag:
                 ticker_forward_flags.append(_net_cash_flag)
+            _ticker_sotp, _holdco_flag = _pin_sotp_holdco_discount(
+                ticker, _ticker_sotp)
+            if _holdco_flag:
+                ticker_forward_flags.append(_holdco_flag)
             _ticker_sotp, _sotp_gate_flag = _gate_live_sotp(
                 ticker, _ticker_sotp, shares, net_debt)
             if _sotp_gate_flag:

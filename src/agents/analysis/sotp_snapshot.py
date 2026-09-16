@@ -101,6 +101,46 @@ def lookup_snapshot(snapshot: dict, ticker: str) -> tuple[str | None, dict | Non
     return None, None
 
 
+def curated_holdco_discount(ticker: str) -> tuple[float, str] | None:
+    """The holdco discount a company carries, from the curated sources, or None.
+
+    One company, one discount, whichever line is being valued. The per-run
+    research LLM picks this number fresh each time (``'holdco':
+    'research_llm'`` in the SOTP sources), so the same company drifted: the
+    BABA ADR run of 2026-08-25 used 25% and the 09988.HK run of 2026-09-15
+    used 15% -- about HK$21 a share on the HK line -- while the validated
+    snapshot said 15% throughout. A conglomerate discount is a structural
+    view of the parent, not a per-run judgement, so a curated value wins.
+
+    Order: the validated snapshot artifact first (produced by and for this
+    engine, sanity-gated against published TPs, and ADR/HK aliased), then a
+    look-through template's group discount (sourced to a named broker, and
+    resolved by company key). Both are company-level, so the two listings of
+    one company resolve to the same number.
+
+    Returns ``(pct, source)`` or None when neither source covers the ticker,
+    in which case the caller keeps whatever the run produced.
+    """
+    try:
+        key, snap = lookup_snapshot(load_sotp_snapshot(), ticker)
+        if snap and isinstance(snap.get("holdco_discount_pct"), (int, float)):
+            return float(snap["holdco_discount_pct"]), f"validated snapshot ({key})"
+    except Exception:
+        pass
+    try:
+        from src.agents.analysis.holdco_sotp import template_for
+        tpl = template_for(ticker) or {}
+        rng = tpl.get("holdco_discount")
+        if (isinstance(rng, (list, tuple)) and len(rng) == 2
+                and all(isinstance(v, (int, float)) for v in rng)):
+            src = (tpl.get("discount_source") or "").strip()
+            return ((float(rng[0]) + float(rng[1])) / 2.0,
+                    f"look-through template: {src}" if src else "look-through template")
+    except Exception:
+        pass
+    return None
+
+
 def attach_snapshot(existing: dict | None, snapshot: dict,
                     tickers: list) -> tuple[dict, list]:
     """Merge snapshot assumptions into the run's ``sotp_assumptions`` dict.

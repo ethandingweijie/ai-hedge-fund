@@ -17,7 +17,10 @@ Maybank ground truth S$11.70-14.30. Five defects, none ticker-specific:
    all sat on the same side of spot;
 6. the EV bridge priced the last fiscal YEAR END, so a March year end carried
    a balance sheet up to four quarters stale -- 09988.HK valued RMB98.6bn of
-   net cash at 31-Mar-2026 when the 30-Jun-2026 quarter showed RMB161.7bn.
+   net cash at 31-Mar-2026 when the 30-Jun-2026 quarter showed RMB161.7bn;
+7. the holdco discount was re-decided by the research LLM every run, so one
+   company carried two: 25% on the BABA ADR line in August, 15% on the
+   09988.HK line in September -- about HK$21 a share.
 """
 import inspect
 
@@ -291,3 +294,59 @@ class TestTheBalanceSheetComesFromTheLatestQuarter:
     def test_the_engine_refreshes_before_it_reads_net_debt(self):
         src = inspect.getsource(d)
         assert src.index("_bs_flag = _refresh_balance_sheet_from_latest_quarter(") <             src.index("net_debt     = _net_debt_net_of_investments(most_recent, sector)")
+
+
+class TestOneHoldcoDiscountPerCompany:
+    def test_both_listings_of_a_company_resolve_to_the_same_value(self):
+        from src.agents.analysis.sotp_snapshot import curated_holdco_discount
+        for adr, hk in (("BABA", "09988.HK"), ("JD", "09618.HK")):
+            a, h = curated_holdco_discount(adr), curated_holdco_discount(hk)
+            assert a is not None and h is not None
+            assert a[0] == pytest.approx(h[0])
+
+    def test_the_hk_line_resolves_through_its_adr_snapshot(self):
+        from src.agents.analysis.sotp_snapshot import curated_holdco_discount
+        pct, source = curated_holdco_discount("09988.HK")
+        assert pct == pytest.approx(0.15) and "BABA" in source
+
+    def test_a_look_through_template_supplies_a_sourced_discount(self):
+        from src.agents.analysis.sotp_snapshot import curated_holdco_discount
+        pct, source = curated_holdco_discount("BN4.SI")
+        assert pct == pytest.approx(0.10) and "Maybank" in source
+
+    def test_a_company_with_no_curated_source_keeps_the_run_value(self):
+        a, flag = d._pin_sotp_holdco_discount(
+            "NVDA", {"holdco_discount_pct": 0.30, "segments": []})
+        assert a["holdco_discount_pct"] == pytest.approx(0.30) and flag is None
+
+    def test_the_august_adr_pick_is_overridden(self):
+        a, flag = d._pin_sotp_holdco_discount(
+            "BABA", {"holdco_discount_pct": 0.25, "segments": []})
+        assert a["holdco_discount_pct"] == pytest.approx(0.15)
+        assert a["_holdco_stated"] == pytest.approx(0.25)
+        assert "pinned to 15%" in flag
+
+    def test_no_flag_and_no_copy_when_the_run_already_agrees(self):
+        src = {"holdco_discount_pct": 0.15, "segments": []}
+        out, flag = d._pin_sotp_holdco_discount("09988.HK", src)
+        assert out is src and flag is None
+
+    def test_the_input_is_never_mutated(self):
+        src = {"holdco_discount_pct": 0.25, "segments": []}
+        d._pin_sotp_holdco_discount("BABA", src)
+        assert src["holdco_discount_pct"] == pytest.approx(0.25)
+
+    def test_the_discount_reaches_the_engine_before_the_table_is_built(self):
+        src = inspect.getsource(d)
+        call = "_ticker_sotp, _holdco_flag = _pin_sotp_holdco_discount("
+        assert call in src          # the call site, not the def
+        assert src.index(call) < src.index(
+            'most_recent["sotp_assumptions"] = _ticker_sotp')
+
+    def test_a_pinned_discount_moves_the_value_by_the_expected_ratio(self):
+        base = {"segments": [{"name": "s", "revenue_fwd": 100.0, "ev_rev_multiple": 1.0}],
+                "holdco_discount_pct": 0.25}
+        at25 = d._sotp_analyst_style(base, shares=1.0)["per_share_reporting"]
+        pinned, _ = d._pin_sotp_holdco_discount("BABA", base)
+        at15 = d._sotp_analyst_style(pinned, shares=1.0)["per_share_reporting"]
+        assert at15 == pytest.approx(at25 * 0.85 / 0.75)
