@@ -140,8 +140,42 @@ _BALANCE_MAP: dict[str, str] = {
     "customerDeposits":                  "total_deposits",             # FMP alt
     "shortTermDeposits":                 "short_term_deposits",
     # Earnings quality additions
-    "accountsPayables":                  "accounts_payable",           # EQ: DPO / cash conversion cycle
-    "accountPayables":                   "accounts_payable",           # FMP alternate spelling
+    #
+    # ONLY `accountPayables` (no 's') — the balance-sheet STOCK. Do not add
+    # `accountsPayables` back. That spelling is the CASH-FLOW statement's
+    # working-capital DELTA, and `search_line_items` merges the four statements
+    # into one flat dict before translating ({**cf, **bal, **rt, **inc}), so a
+    # balance-sheet key can only displace a cash-flow key of the SAME name.
+    # FMP's balance sheet spells the stock `accountPayables` and its cash flow
+    # spells the delta `accountsPayables`; with both spellings mapping to
+    # `accounts_payable` and the translation being first-wins over `_ALL_MAPS`,
+    # the delta won on 36 of 36 names measured (2026-09-17):
+    #     AAPL  0.902bn delta instead of 69.86bn stock  (77x understated)
+    #     COST  0.404bn          "      19.78bn          (49x)
+    #     BABA  0.000bn          "     358.55bn          (total loss)
+    #     HOOD / ICE / CME / BN4.SI / U96.SI / C38U.SI went NEGATIVE, which a
+    #     payable stock never is and a payable delta routinely is.
+    # Consumers were reading a flow as a level: DPO / cash-conversion cycle,
+    # earnings_quality_agent._BALANCE_FIELDS, the financial-statements table and
+    # dcf_agent's Tier-2 customer-balance ratio. Pinned by
+    # tests/test_cashflow_delta_shadowing.py.
+    "accountPayables":                   "accounts_payable",           # FMP balance-sheet spelling
+    # Customer-balance proxy lines for the balance-sheet-financial gate
+    # (_is_balance_sheet_financial, dcf_agent). The feed has NO dedicated
+    # customer-payables or margin-receivables line (checked 2026-09-16), so
+    # customer balances sit in these generic ones: SCHW's bank deposits are in
+    # `otherCurrentLiabilities` (US$255.8bn of US$491.0bn assets), PYPL's
+    # customer funds likewise (US$40.2bn of US$80.2bn), HOOD's in
+    # `otherPayables` (US$12.0bn of US$38.1bn).
+    #
+    # ⚠ FMP reports `otherCurrentLiabilities` as a NEGATIVE balancing plug for
+    # some issuers — CME −0.07bn, S68.SI −1.15bn, 0388.HK −53.29bn against
+    # +53.08bn of real payables. The consumer floors each line at zero before
+    # summing; a negative "customer balance" would subtract genuine payables
+    # out of the ratio and understate the very funding dependence the gate
+    # exists to detect.
+    "otherPayables":                     "other_payables",
+    "otherCurrentLiabilities":           "other_current_liabilities",
     # ── Three-statement view ────────────────────────────────────────
     # NOTE: FMP also returns `totalEquity` (incl. minority interest). It is
     # deliberately NOT mapped — `total_equity` is derived from

@@ -17,14 +17,35 @@ from src.agents.analysis import dcf_agent as d
 #: below except `currency` is None on every FMP row today. Requesting them would
 #: change bank and buyback inputs, so they are recorded -- not silently fixed --
 #: pending an owner decision. A NEW unrequested field still fails this test.
+#:
+#: `loans_receivable`, `loans_held_for_investment` and `total_deposits` were
+#: listed here until 2026-09-17, when the balance-sheet-financial gate (Phase
+#: 1.2A) needed the deposit and loan book to tell a deposit-funded business
+#: from a fee-based one. That was the owner decision the note was waiting for,
+#: so they moved into the request; the customer-balance proxy lines
+#: (`accounts_payable`, `accounts_receivable`, `other_payables`,
+#: `other_current_liabilities`) went in with them.
 _NOT_FROM_THE_REQUEST: dict[str, str] = {
     "currency": "base LineItem field, set on every statement row",
     "operating_income": "KNOWN GAP: unrequested, None on FMP rows (read at the EBIT/operating-margin fallback)",
     "common_stock_repurchased": "KNOWN GAP: unrequested; buyback reads fall back to share_buyback, which is requested",
-    "loans_receivable": "KNOWN GAP: unrequested bank KPI (loan-to-deposit), None on FMP rows",
-    "loans_held_for_investment": "KNOWN GAP: unrequested bank KPI, None on FMP rows",
-    "total_deposits": "KNOWN GAP: unrequested bank KPI, None on FMP rows",
 }
+
+
+def test_the_bank_loan_and_deposit_lines_are_now_requested():
+    """Three lines were KNOWN GAPs for years: read by the row builder, absent
+    from the request, so None on every row. They are inputs to the Tier 2
+    customer-balance ratio now, so a silent regression here would make the
+    ratio understated on every bank it was meant to catch."""
+    requested = _requested_fields()
+    for field in ("total_deposits", "loans_receivable",
+                  "loans_held_for_investment", "accounts_payable",
+                  "accounts_receivable", "other_payables",
+                  "other_current_liabilities"):
+        assert field in requested, f"{field} is no longer requested"
+        assert field not in _NOT_FROM_THE_REQUEST, (
+            f"{field} is both requested and recorded as a KNOWN GAP — the gap "
+            f"list is stale and will hide the next one")
 
 
 def _requested_fields() -> set[str]:

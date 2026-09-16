@@ -79,6 +79,11 @@ from src.data.sector_profiles import (
     compute_c_macro,
     get_valuation_profile,
     get_wacc_profile_for_ticker,
+    # ── Balance-sheet-financial classification (Phase 1.2A) ──
+    BALANCE_SHEET_FINANCIAL_PROFILES,
+    BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES,
+    BALANCE_SHEET_FINANCIAL_UNCLASSIFIED,
+    TIER2_EXEMPT_PROFILES,
     # ── Biopharma rNPV helpers (Tier 2) ──
     phase_pos,
     phase_years_to_launch,
@@ -703,6 +708,14 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     # Bank-specific balance sheet
     "loans_receivable", "loans_held_for_investment", "total_deposits",
     "provision_for_loan_losses",
+    # Customer-balance proxy lines for the balance-sheet-financial gate
+    # (_tier2_customer_balance_ratio). Monetary, and they MUST be converted:
+    # the ratio's denominator is `total_assets`, which is. Leaving these in the
+    # filing currency while converting the denominator scales the ratio by the
+    # FX rate — on 0388.HK that turns a true 0.208 into a spurious 1.62 and
+    # strips an exchange's EV and DCF legs for a reason that does not exist.
+    "accounts_payable", "accounts_receivable",
+    "other_payables", "other_current_liabilities",
     # Per-share (denominated in the reporting currency)
     "dividends_per_share", "book_value_per_share",
     "tangible_book_value_per_share",
@@ -787,6 +800,19 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             "loans_receivable":          _safe(getattr(li, "loans_receivable", None)),
             "loans_held_for_investment": _safe(getattr(li, "loans_held_for_investment", None)),
             "total_deposits":            _safe(getattr(li, "total_deposits", None)),
+            # Customer-balance proxy for the balance-sheet-financial gate. The
+            # feed has no dedicated customer-payables or margin-receivables
+            # line, so the gate reads these generic ones instead — see
+            # _is_balance_sheet_financial for the mapping and the measured
+            # evidence. Requested AND copied: three bank lines above were read
+            # here for years without being in run_dcf_agent's request list, so
+            # they were None on every FMP row and the loan-to-deposit KPI they
+            # fed never computed. tests/test_line_items_requested_are_read.py
+            # is what stops that recurring.
+            "accounts_payable":          _safe(getattr(li, "accounts_payable", None)),
+            "accounts_receivable":       _safe(getattr(li, "accounts_receivable", None)),
+            "other_payables":            _safe(getattr(li, "other_payables", None)),
+            "other_current_liabilities": _safe(getattr(li, "other_current_liabilities", None)),
             # Buybacks for retention_rate (banks return large % of earnings via
             # repurchases alongside dividends — ignoring this inflates retention)
             "share_buyback":             _safe(getattr(li, "share_buyback", None)),
@@ -5077,6 +5103,309 @@ _EV_REVENUE_NAMES = frozenset({"EV/Revenue", "EV/NTM Revenue", "EV/NTM Rev",
                                "EV/Fwd Rev"})
 
 
+# ── Balance-sheet financials: strip the EV, DCF and FCF legs (Phase 1.2A) ────
+#
+# 02888.HK — Standard Chartered, profile "Money Center Bank" — published a
+# forward EV/EBITDA of HK$730 per share. Not a large number for a bank; a
+# meaningless one. Enterprise value is market cap plus debt minus cash, and for
+# a deposit-funded business the "debt" term IS the product. The same defect
+# produced MU's $6,105 (a peak peer multiple on a peak consensus EPS, handled
+# by the cyclical half of this phase) and it survived the whole suite.
+#
+# The strip removes EV/anything, the DCF family and FCF Yield. FCF Yield goes
+# with them rather than staying as an equity-side leg because reported free
+# cash flow on a balance-sheet financial is a deposit- and lending-flow
+# artefact, not cash available to equity: SCHW's FY2025 customer balances are
+# US$397.8bn of payables plus US$107.6bn of receivables against US$491.0bn of
+# total assets, and a swing in either dwarfs the operating cash flow the ratio
+# is built from.
+#
+# What is LEFT is the plan's allowed set for these profiles: P/TBV, P/E (norm),
+# Residual Income, GGM/DDM, Excess Capital. No price band is invented — the
+# engine's answer is the surviving blend, and if that blend is thin the report
+# says so through methods_unavailable rather than padding it.
+
+#: Tier 2 trigger: customer-balance funding at or above this share of total
+#: assets means the balance sheet, not the fee stream, is what the name is.
+_TIER2_CUSTOMER_BALANCE_RATIO = 0.30
+
+#: The feed has NO dedicated customer-payables or margin-receivables line
+#: (checked 2026-09-16), so the proxy sums the generic lines customer balances
+#: actually land in. Measured live 2026-09-17:
+#:
+#:   IBKR   accountPayables  US$156.7bn =  77% of assets   (Tier 1 anyway)
+#:   SCHW   accountPayables  US$142.0bn =  29%, otherCurrentLiabilities
+#:          (bank deposits)  US$255.8bn =  52%             (Tier 1 anyway)
+#:   PYPL   otherCurrentLiabilities (customer funds) US$40.2bn = 50%
+#:   HOOD   accountsReceivables US$18.4bn = 48%, otherPayables US$12.0bn = 31%
+#:
+#: Each line is floored at zero before summing. FMP reports
+#: `otherCurrentLiabilities` as a NEGATIVE balancing plug for some issuers
+#: (CME −US$0.07bn, S68.SI −S$1.15bn, 0388.HK −HK$53.29bn against +HK$53.08bn
+#: of real payables). An unclamped sum would subtract genuine payables out of
+#: the numerator and understate the funding dependence the gate exists to
+#: detect. This is a floor on a RAW FEED LINE, not a bound on an estimate.
+_TIER2_PAYABLE_LINES = ("accounts_payable", "other_payables",
+                        "other_current_liabilities")
+
+#: Deposits, loan book and margin receivables. Read first-non-null, not summed:
+#: `loans_receivable` (netLoans) and `loans_held_for_investment` are two
+#: spellings of the same book in FMP's map, so summing them would double-count.
+_TIER2_DEPOSIT_LINES = ("total_deposits",)
+_TIER2_LOAN_LINES = ("loans_receivable", "loans_held_for_investment")
+_TIER2_RECEIVABLE_LINES = ("accounts_receivable",)
+
+
+def _tier2_customer_balance_ratio(
+        most_recent: Optional[dict]) -> tuple[Optional[float], dict]:
+    """(deposits + customer payables + loans + margin receivables) / assets.
+
+    Returns ``(ratio, breakdown)``. ``ratio`` is None when total assets are
+    missing or non-positive — a ratio with no denominator is not zero, and
+    treating it as zero would quietly pass every name whose balance sheet the
+    feed failed to deliver. ``breakdown`` carries the components and the keys
+    they came from, so a firing can be audited against the filing instead of
+    trusted.
+    """
+    row = most_recent or {}
+    assets = _safe(row.get("total_assets"))
+    if assets is None or assets <= 0:
+        return None, {}
+
+    def _floored_sum(keys: tuple[str, ...]) -> tuple[float, list[str]]:
+        total, parts = 0.0, []
+        for k in keys:
+            v = _safe(row.get(k))
+            if v is None:
+                continue
+            total += max(float(v), 0.0)
+            parts.append(f"{k}={v:,.0f}")
+        return total, parts
+
+    def _first(keys: tuple[str, ...]) -> tuple[float, list[str]]:
+        for k in keys:
+            v = _safe(row.get(k))
+            if v is not None:
+                return max(float(v), 0.0), [f"{k}={v:,.0f}"]
+        return 0.0, []
+
+    pay, pay_parts = _floored_sum(_TIER2_PAYABLE_LINES)
+    dep, dep_parts = _first(_TIER2_DEPOSIT_LINES)
+    loan, loan_parts = _first(_TIER2_LOAN_LINES)
+    recv, recv_parts = _first(_TIER2_RECEIVABLE_LINES)
+
+    numerator = dep + pay + loan + recv
+    return numerator / assets, {
+        "total_assets": float(assets),
+        "deposits": dep, "customer_payables": pay,
+        "loans_receivable": loan, "margin_receivables": recv,
+        "lines": dep_parts + pay_parts + loan_parts + recv_parts,
+    }
+
+
+def _is_balance_sheet_financial(profile_name: Optional[str],
+                                most_recent: Optional[dict]) -> bool:
+    """True when this name's liabilities are its product, so EV/DCF/FCF are out.
+
+    Two tiers:
+
+      * **Tier 1** — the profile is a balance-sheet business by construction
+        (every bank variant, insurance, brokerage, holdco). No measurement
+        needed; the classification is the evidence.
+      * **Tier 2** — the profile is fee-based (asset manager, payment network,
+        exchange, fintech) but a name routed there may still be deposit- or
+        float-funded in fact. Measured against
+        :data:`_TIER2_CUSTOMER_BALANCE_RATIO`.
+
+    :data:`TIER2_EXEMPT_PROFILES` (Market Infrastructure, +SG) is skipped by
+    Tier 2: clearing houses hold pass-through margin and guaranty-fund
+    collateral that is not their funding. The exemption is load-bearing — ICE
+    measures 0.613 and S68.SI 0.474 live (2026-09-17), so without it both
+    would lose 0.65 and 0.55 of their profile weight respectively.
+    """
+    if not profile_name:
+        return False
+    if profile_name in BALANCE_SHEET_FINANCIAL_PROFILES:
+        return True
+    if profile_name not in BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES:
+        return False
+    if profile_name in TIER2_EXEMPT_PROFILES:
+        return False
+    ratio, _ = _tier2_customer_balance_ratio(most_recent)
+    return ratio is not None and ratio >= _TIER2_CUSTOMER_BALANCE_RATIO
+
+
+def _is_enterprise_value_leg(name: str) -> bool:
+    """Any EV/* multiple. Prefix-matched rather than enumerated on purpose:
+    every EV/* name in the taxonomy is an enterprise-value multiple by
+    construction, and a new one added to a financial profile must be caught
+    without anyone remembering to extend a list."""
+    return str(name or "").startswith("EV/")
+
+
+def _is_dcf_leg(name: str) -> bool:
+    """The DCF family. Union of the projection family (which the dispatcher and
+    the OE≤0 gate already share, so it cannot drift) and a substring test that
+    also catches names the dispatcher does not project — e.g.
+    "Depleting Asset DCF (Finite Life, No TV)"."""
+    n = str(name or "")
+    return n in _DCF_PROJECTION_FAMILY or "DCF" in n
+
+
+def _is_stripped_balance_sheet_leg(name: str) -> bool:
+    return (_is_enterprise_value_leg(name) or _is_dcf_leg(name)
+            or str(name or "") == "FCF Yield")
+
+
+def _gate_balance_sheet_financial(
+    profile_data: Optional[dict],
+    profile_name: Optional[str],
+    most_recent: Optional[dict],
+) -> tuple[Optional[dict], Optional[dict], Optional[str], bool]:
+    """Strip EV/DCF/FCF legs from a balance-sheet financial's profile.
+
+    Returns ``(profile, gate_record, exception_reason, is_financial)``, the
+    first three mirroring :func:`_gate_growth_cagr_divergence`:
+
+      * ``profile`` — a COPY with the legs removed and the blend left to
+        renormalise, or the input unchanged.
+      * ``gate_record`` — the ``gate_evaluations`` entry, only when legs were
+        actually removed. Recording a firing that removed nothing would put
+        no-ops in the forward ledger for every bank run, since the bank
+        profiles already carry no EV/DCF leg.
+      * ``exception_reason`` — set when Tier 2 was measured ABOVE the threshold
+        but the profile is exempt. That is the one stand-down worth publishing:
+        it is the audit trail for the clearing-house exemption, and without it
+        "exempt" and "never looked" are indistinguishable in the run row.
+      * ``is_financial`` — the classification alone, returned SEPARATELY from
+        ``gate_record`` because the two come apart on exactly the names this
+        gate was written for. ``Money Center Bank`` and ``Money Center Bank
+        (SG)`` carry no EV/DCF/FCF leg, so there is nothing to strip and no
+        record is emitted — yet 02888.HK still computed a ``Forward EV/EBITDA``
+        shadow row of HK$730 per share. Tying the shadow skip to "did the strip
+        remove something" therefore left the defect in place for every bank.
+        Callers that suppress an EV-based computation must key off THIS, not off
+        the record.
+
+    Renormalisation is free: :func:`_blend_methods` divides by the sum of the
+    weights that survived, so removing legs is all that is required. Nothing is
+    reallocated by hand — unlike :func:`_gate_ev_revenue`, which moves the
+    freed weight onto Forward P/E and EV/EBITDA and would here re-add the very
+    leg being removed.
+
+    **Re-anchoring.** ``_anchor_method`` defaults to ``"DCF"`` and is only
+    overwritten by a method carrying ``anchor: True``. FinTech anchors on
+    EV/EBITDA at 0.35, so stripping it without re-anchoring would leave the
+    published report claiming a DCF anchor on a profile whose DCF leg was just
+    deleted — the same class of defect this gate exists to remove. The
+    highest-weight survivor is promoted instead.
+
+    One consequence is deliberate and worth knowing: :data:`_norm_led` at the
+    12-month-target cap tests ``"(norm)" in _anchor_method``, so a Tier-2-fired
+    FinTech re-anchored onto "P/E (norm)" newly takes the normalised-earnings
+    convergence path. That is consistent — if the anchor really is normalised
+    earnings now, the target should converge on the IV they produce.
+    """
+    # Classified first and unconditionally: the answer drives the shadow skip
+    # even when `profile_data` is missing or carries nothing to strip.
+    is_financial = _is_balance_sheet_financial(profile_name, most_recent)
+
+    if not profile_data:
+        return profile_data, None, None, is_financial
+
+    in_conditional = profile_name in BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES
+    ratio, breakdown = (_tier2_customer_balance_ratio(most_recent)
+                        if in_conditional else (None, {}))
+
+    # Tier 2 measured above the threshold but exempt — publish the stand-down.
+    if (in_conditional and profile_name in TIER2_EXEMPT_PROFILES
+            and ratio is not None and ratio >= _TIER2_CUSTOMER_BALANCE_RATIO):
+        return profile_data, None, (
+            f"customer-balance ratio {ratio:.3f} ≥ "
+            f"{_TIER2_CUSTOMER_BALANCE_RATIO:.2f} but {profile_name} is exempt "
+            f"(pass-through margin / guaranty-fund collateral is not funding: "
+            f"{', '.join(breakdown.get('lines') or []) or 'no lines reported'})"
+        ), False
+
+    if not is_financial:
+        return profile_data, None, None, False
+
+    methods = [m for m in (profile_data.get("methods") or [])
+               if isinstance(m, dict)]
+    removed = [m for m in methods if _is_stripped_balance_sheet_leg(m.get("name"))]
+    if not removed:
+        # Tier 1 matched but the profile carries nothing to strip — true of
+        # every bank, insurance, GSE and holdco profile today. Logged, not
+        # flagged: it fires on every bank run and would drown the flags that
+        # matter. `is_financial` still returns True, which is what stops
+        # 02888.HK's HK$730 forward EV/EBITDA from being computed at all.
+        _log.info("[dcf] balance-sheet-financial profile %r carries no "
+                  "EV/DCF/FCF leg to strip", profile_name)
+        return profile_data, None, None, True
+
+    kept = [dict(m) for m in methods if not _is_stripped_balance_sheet_leg(m.get("name"))]
+
+    total_before = sum(float(m.get("weight") or 0.0) for m in methods)
+    removed_weight = sum(float(m.get("weight") or 0.0) for m in removed)
+    share = (removed_weight / total_before) if total_before > 0 else 0.0
+
+    # Re-anchor: never leave a profile whose anchor was just deleted, because
+    # the fallback is the literal string "DCF".
+    reanchored_from = None
+    if kept and not any(m.get("anchor") for m in kept):
+        top = max(kept, key=lambda m: float(m.get("weight") or 0.0))
+        reanchored_from = next(
+            (m.get("name") for m in removed if m.get("anchor")), None)
+        top["anchor"] = True
+
+    if not kept:
+        # Every leg was an EV/DCF/FCF leg. Returning an empty method list would
+        # make _blend_methods return None and blank dcf_range for the ticker —
+        # the "portfolio manager did not print" symptom. Not reachable for any
+        # profile in the taxonomy today (FinTech, the thinnest, keeps
+        # P/E (norm) at 0.15); guarded because a future profile could.
+        _log.warning("[dcf] balance-sheet-financial strip would remove EVERY "
+                     "leg of profile %r — refusing to strip", profile_name)
+        return profile_data, None, None, True
+
+    tier = "tier 1 (profile)" if not in_conditional else "tier 2 (measured)"
+    legs = ", ".join(f"{m.get('name')} {float(m.get('weight') or 0.0):.2f}"
+                     for m in removed)
+    basis = (
+        f"{profile_name} is a balance-sheet financial by {tier}: enterprise "
+        f"value subtracts the liabilities that ARE the product, and reported "
+        f"FCF is dominated by customer-balance flows. Stripped {legs} "
+        f"({share:.1%} of profile weight); blend renormalised over the "
+        f"survivors."
+    )
+    if in_conditional and ratio is not None:
+        basis += (
+            f" Customer-balance ratio {ratio:.3f} ≥ "
+            f"{_TIER2_CUSTOMER_BALANCE_RATIO:.2f} "
+            f"({', '.join(breakdown.get('lines') or []) or 'no lines reported'}"
+            f" on total assets {breakdown.get('total_assets', 0):,.0f})."
+        )
+    if reanchored_from:
+        new_anchor = next((m.get("name") for m in kept if m.get("anchor")), None)
+        basis += f" Anchor moved {reanchored_from} → {new_anchor}."
+
+    record = {
+        "gate_id": "GATE_BALANCE_SHEET_FINANCIAL",
+        # Weight share, not a counterfactual IV. The gate's decision variable
+        # IS the share; the valuation consequence is in the run's base_iv and
+        # in the golden baseline, and scripts/backtest_valuation_fixes.py
+        # scores it by replaying the fixture through both engines rather than
+        # by reading a stored counterfactual. Computing an IV both ways here
+        # would mean running the blend twice per scenario.
+        "metric": "ev_dcf_weight_share",
+        "raw_input_path_a": round(share, 6),
+        "gated_output_path_b": 0.0,
+        "basis": basis,
+        "applied": True,
+    }
+    return {**profile_data, "methods": kept}, record, None, True
+
+
 #: Pilot set for filing-derived segment SOTP. Deliberately an explicit list
 #: rather than "any ticker whose filing parses": promoting a method changes
 #: the blend for every name it touches, and these four are the ones whose
@@ -5789,6 +6118,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      "tangible_book_value_per_share",     # FMP-direct TBV (fixes JPM over-strip bug)
                      "total_liabilities",
                      "operating_expense",
+                     # Deposit / loan book + the customer-balance proxy lines
+                     # for _is_balance_sheet_financial. The first three were
+                     # already read by _extract_annual_series but never
+                     # requested, so they were None on every FMP row — a KNOWN
+                     # GAP recorded in
+                     # tests/test_line_items_requested_are_read.py rather than
+                     # fixed, pending exactly this decision. Requesting them
+                     # changes bank inputs, which is why the test file logged
+                     # it instead of silently closing it.
+                     "total_deposits", "loans_receivable",
+                     "loans_held_for_investment",
+                     "accounts_payable", "accounts_receivable",
+                     "other_payables", "other_current_liabilities",
                      # Tech/Payment-processor methods
                      "gross_profit", "cost_of_revenue",
                      # Buyback-netted SBC (fcf_owner_earnings) + SBC Dilution
@@ -6890,6 +7232,77 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             progress.update_status(
                 agent_id, ticker,
                 "EV/Revenue gated off: profitable, so priced on earnings")
+
+        # ── Balance-sheet-financial strip (Phase 1.2A) ────────────────────
+        # Runs before the SOTP promotions: those ADD legs (and reset the
+        # anchor), this one REMOVES them, so the reduce-then-promote order
+        # keeps the anchor a promotion sets as the final word.
+        profile_data, _bsf_gate_rec, _bsf_gate_exc, _bsf_is_financial = (
+            _gate_balance_sheet_financial(profile_data, profile_name, most_recent))
+        #: The CLASSIFICATION, not "did the strip remove something". The two
+        #: come apart on banks: Money Center Bank (+SG) carries no EV/DCF/FCF
+        #: leg, so nothing is stripped and no record is emitted — yet 02888.HK
+        #: still computed a Forward EV/EBITDA shadow row of HK$730 per share,
+        #: which is the defect this gate exists to remove. Keying the shadow
+        #: skip off `_bsf_gate_rec` left it in place for every bank; the golden
+        #: baseline caught that (02888_HK and D05_SI kept the row).
+        _bsf_stripped = _bsf_gate_rec is not None
+        if _bsf_stripped:
+            gate_evaluations.append(_bsf_gate_rec)
+            _log.info("[dcf] %s: %s", ticker, _bsf_gate_rec["basis"])
+            progress.update_status(
+                agent_id, ticker,
+                "Balance-sheet financial: EV/DCF/FCF legs removed "
+                f"({_bsf_gate_rec['raw_input_path_a']:.0%} of profile weight)")
+            ticker_forward_flags.append(
+                "Balance-sheet-financial gate: stripped "
+                f"{_bsf_gate_rec['raw_input_path_a']:.1%} of profile weight "
+                f"(EV/DCF/FCF legs) — {_bsf_gate_rec['basis']}"
+            )
+        elif _bsf_gate_exc is not None:
+            # Tier 2 measured above the threshold on an exempt profile. The one
+            # stand-down worth publishing: it is the audit trail that says the
+            # clearing-house exemption was exercised, not that nothing looked.
+            ticker_forward_flags.append(
+                f"Balance-sheet-financial gate stood down: {_bsf_gate_exc}")
+
+        if (_bsf_is_financial and not _bsf_stripped
+                and forward_consensus is not None):
+            # The gate still DID something on this run: it suppressed the
+            # Forward EV/EBITDA shadow row. Recording only the strip would
+            # leave the forward ledger with no firing at all for 02888.HK and
+            # DBS — the two names whose published row was the defect — because
+            # their profiles carry no EV leg to remove. This is the entry that
+            # makes the gate scoreable on banks, and it is emitted once per run
+            # here rather than in the scenario loop where the row is built.
+            #
+            # `forward_consensus is not None` is load-bearing: with no forward
+            # consensus the row would not have been computed anyway, and
+            # recording a suppression that suppressed nothing would inflate the
+            # firing count the acceptance bar is measured on.
+            gate_evaluations.append({
+                "gate_id": "GATE_BALANCE_SHEET_FINANCIAL",
+                "metric": "forward_ev_ebitda_row",
+                # 1.0 = the row was published, 0.0 = it is not computed. A
+                # presence metric, not a value metric: the point is that no
+                # number exists to be wrong. Path A's HK$730 is deliberately
+                # not recorded, because recomputing it to store it would
+                # re-introduce the very EV bridge the gate exists to refuse.
+                "raw_input_path_a": 1.0,
+                "gated_output_path_b": 0.0,
+                "basis": (
+                    f"{profile_name} is a balance-sheet financial (tier 1, "
+                    f"profile): enterprise value subtracts the deposits and "
+                    f"customer balances that ARE the product, so a forward "
+                    f"EV/EBITDA per share has no interpretation. The row is not "
+                    f"computed. The profile carries no EV/DCF/FCF leg, so no "
+                    f"blend weight moved and the intrinsic value is unchanged."
+                ),
+                "applied": True,
+            })
+            ticker_forward_flags.append(
+                "Balance-sheet-financial gate: forward EV/EBITDA row suppressed "
+                f"(no EV/DCF/FCF leg in {profile_name} to strip; IV unchanged)")
 
         profile_data, _lt_sotp_on = _promote_lookthrough_sotp(
             profile_data, ticker, end_date)
@@ -8024,7 +8437,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # IV when the profile explicitly references them.
                 _shadow_methods: list[str] = []
                 if forward_consensus is not None:
-                    _shadow_methods.extend(["Forward P/E", "Forward EV/EBITDA"])
+                    _shadow_methods.append("Forward P/E")
+                    # NOT computed at all on a balance-sheet financial. A
+                    # shadow method is excluded from the blend but still
+                    # surfaced in the per-method table, so "shadow" is not
+                    # harmless: this is the row that published a forward
+                    # EV/EBITDA of HK$730 per share for 02888.HK, a Money
+                    # Center Bank. Keyed off the CLASSIFICATION rather than off
+                    # `_bsf_stripped`, because a bank profile has no EV leg to
+                    # strip and would otherwise keep computing it. Forward P/E
+                    # stays — it is an equity multiple and needs no EV bridge.
+                    if not _bsf_is_financial:
+                        _shadow_methods.append("Forward EV/EBITDA")
                 if most_recent.get("segment_breakdown"):
                     _shadow_methods.append("SOTP (segments)")
                     # Always shadow-compute probabilistic SOTP too; when the

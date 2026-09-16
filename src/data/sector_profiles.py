@@ -212,6 +212,101 @@ _FINANCIALS_LEVERAGE_CAP: dict[str, float] = {
 }
 
 
+# ── Balance-sheet financials: which profiles may carry an EV or DCF leg ──────
+#
+# An enterprise value is (market cap + debt − cash). For a business whose
+# liabilities ARE its product — a deposit book, a customer float, a margin
+# obligation — that subtraction removes the thing being valued and leaves a
+# number with no interpretation. The engine nonetheless computed one:
+# 02888.HK (Standard Chartered, profile "Money Center Bank") published a
+# forward EV/EBITDA of HK$730 per share, and MU's $6,105 came from a peak peer
+# multiple applied to a peak consensus EPS. Neither was caught by any test.
+#
+# Two tiers, because "financial" is not one thing:
+#
+#   Tier 1 — ZERO EV/DCF, unconditionally. The balance sheet is the business.
+#   Tier 1 — ALLOWED unless the Tier 2 ratio fires. Fee-based by profile, but a
+#            name routed here may still be deposit- or float-funded in fact.
+#
+# Tier 2 is the measured test (see _is_balance_sheet_financial in dcf_agent).
+# Classification below is by profile NAME, so a ticker routed to the wrong
+# profile is not protected — which is the routing problem, not this one.
+#
+#: Tier 1, zero EV/DCF. Every bank variant, insurance, and the two profiles
+#: whose liabilities are customer money held against a trading or custody book.
+BALANCE_SHEET_FINANCIAL_PROFILES: frozenset[str] = frozenset({
+    # Banks — all variants. Their profiles already carry no EV/DCF leg (GGM,
+    # Residual Income, P/TBV, P/E (norm), Excess Capital), so the strip is a
+    # no-op for them TODAY; they are listed so that adding an EV leg to a bank
+    # profile later cannot silently reintroduce the defect.
+    "Money Center Bank", "Money Center Bank (EU)", "Money Center Bank (SG)",
+    "Regional Bank", "Super-Regional Bank",
+    "EM Bank", "EM Bank (Premium)",
+    "Bank / Lending Institution",
+    "Investment Bank", "Neo/Challenger", "Mortgage/GSE",
+    # Insurance — float is the funding.
+    "Insurance", "Insurance (P&C)",
+    # Holdco — SOTP/NAV is the instrument; an EV multiple double-counts the
+    # subsidiaries' own debt.
+    "Holding Company",
+    # Brokerage. This is the one that MOVES numbers: SCHW's profile carries
+    # DCF at 0.20 and FCF Yield at 0.20, and its customer balances are 1.03x
+    # total assets (US$397.8bn of payables + US$107.6bn of receivables on
+    # US$491.0bn of assets, FY2025). Reported FCF there is a deposit-flow
+    # artefact, not cash available to equity.
+    "Brokerage",
+    "WealthTech & Specialty Financials (SG)",
+})
+
+#: Tier 1, allowed unless the Tier 2 customer-balance ratio fires. Fee-based by
+#: profile, so the strip is conditional on measurement rather than on the name.
+BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES: frozenset[str] = frozenset({
+    "Asset Manager", "Alt Asset Manager",
+    "Payment Networks",
+    "Market Infrastructure", "Market Infrastructure (SG)",
+    "FinTech", "Fintech/Stablecoin",
+})
+
+#: Exempt from Tier 2 even though they sit in the conditional set.
+#:
+#: Clearing houses and exchanges hold margin and guaranty-fund collateral that
+#: is NOT their funding — it is passed through, and it appears as matching
+#: current assets and current liabilities. Measured live 2026-09-17 against the
+#: four names in this class, the exemption is load-bearing for two of them:
+#:
+#:     ICE     0.613  FIRES   otherCurrentLiabilities US$76.9bn against
+#:                            totalCurrentAssets US$85.8bn ≈
+#:                            totalCurrentLiabilities US$84.1bn — the textbook
+#:                            pass-through match
+#:     S68.SI  0.474  FIRES   but for a DIFFERENT reason than ICE: SGX's
+#:                            current liabilities are only S$0.64bn. It trips on
+#:                            receivables+payables against a small asset base,
+#:                            i.e. ratio SHAPE, not deposit funding
+#:     CME     0.004  quiet   FMP does not break out CME's collateral at all
+#:     0388.HK 0.208  quiet   HK$68.0bn receivables on HK$580.8bn of assets
+#:
+#: So the exemption is right for ICE exactly as reasoned, and right for S68.SI
+#: by a different route. Both are recorded because the distinction decides what
+#: to do if a THIRD exchange trips it later: ICE's case is structural and should
+#: stay exempt, S68.SI's is an artefact of a small denominator and would need
+#: looking at rather than exempting.
+TIER2_EXEMPT_PROFILES: frozenset[str] = frozenset({
+    "Market Infrastructure", "Market Infrastructure (SG)",
+})
+
+#: Financials profiles deliberately in NEITHER tier, with the reason. A new
+#: Financials profile that is not classified anywhere fails
+#: tests/test_balance_sheet_financial_gate.py — the classification is a
+#: decision, not a default.
+BALANCE_SHEET_FINANCIAL_UNCLASSIFIED: dict[str, str] = {
+    # P/E (norm) + SOTP (published) + DDM. No EV, DCF or FCF-Yield leg exists to
+    # strip, so membership would change nothing — and putting it in the zero tier
+    # would assert a fact about CapitaLand Investment's balance sheet that this
+    # file has not checked.
+    "Real Estate Asset Manager (SG)": "no EV/DCF/FCF leg in the profile; strip would be a no-op",
+}
+
+
 def get_wacc(sector: str, leverage: float = 0.0,
              macro_regime: str = "neutral", profile: str = "") -> float:
     """

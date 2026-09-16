@@ -129,6 +129,321 @@ def _series(ticker: str, end_date: str, limit: int = 8) -> list[dict]:
     return rows
 
 
+# ── 1.2A: the balance-sheet-financial classifier ────────────────────────────
+#
+# The plan's backward-test row for this item names the metric as *classifier
+# precision/recall* against a hand-labelled set, not a delta-error against a
+# projected figure — because the gate does not project anything. It decides
+# whether enterprise-value arithmetic is meaningful for a given company, and
+# that decision has a ground truth an analyst can state: is this business
+# funded by money it holds for other people?
+#
+# `delta_error_verdict` cannot score that (there is no `actual` to be wrong
+# about), so this section scores a confusion matrix instead. The acceptance bar
+# is mapped from the plan's, and the mapping is stated rather than assumed:
+#
+#   plan: hit-rate ≥ 0.50        → precision ≥ 0.50  (of the names it fires
+#                                                     on, how many are truly
+#                                                     deposit/float-funded)
+#   plan: MAE no worse than      → n/a; no numeric projection exists
+#   plan: ≥10 scoreable firings  → ≥10 labels actually resolved against live
+#                                  balance-sheet data
+#
+# plus one bar the plan's phrasing does not cover and this defect requires:
+# **recall ≥ 0.90**. The two failure modes are not symmetric. A false positive
+# deletes legitimate valuation legs and produces a worse estimate. A false
+# negative publishes an EV multiple on a bank — 02888.HK's HK$730 forward
+# EV/EBITDA per share — which is not a worse estimate but a meaningless one,
+# and it reaches the user. Precision alone would have passed a gate that never
+# fired at all.
+
+#: Hand-labelled set. `is_financial` is the analyst judgement: True means the
+#: business is funded by balances it holds for others (deposits, customer
+#: cash, margin, insurance float) so enterprise value subtracts the product.
+#:
+#: `sector`/`profile` are what the engine ACTUALLY resolves the ticker to, not
+#: what it should resolve to. That distinction is the point: HOOD is labelled a
+#: balance-sheet financial on its economics but routes to `Crypto` /
+#: `Crypto Exchange`, which is in neither tier, so the gate cannot fire and the
+#: backtest reports a false negative rather than hiding it behind a profile
+#: chosen to make the answer come out right.
+#:
+#: `profile_source` says whether the pair came from the curated
+#: TICKER_SECTOR_LOOKUP (asserted at run time, so a routing change fails the
+#: backtest loudly) or was recorded from a live run because the lookup does not
+#: cover the ticker and the industry-map branch needs the LLM sector
+#: classifier, which is not reproducible offline.
+BSF_LABELS: tuple[dict, ...] = (
+    # ── Positives: deposit / float funded. The gate MUST classify these. ──
+    {"ticker": "JPM", "sector": "Financials", "profile": "Money Center Bank",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "BAC", "sector": "Financials", "profile": "Money Center Bank",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "WFC", "sector": "Financials", "profile": "Money Center Bank",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "C", "sector": "Financials", "profile": "Money Center Bank",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "GS", "sector": "Financials", "profile": "Investment Bank",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "MS", "sector": "Financials", "profile": "Investment Bank",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "D05.SI", "sector": "Financials",
+     "profile": "Money Center Bank (SG)", "is_financial": True,
+     "profile_source": "lookup", "tier": 1},
+    {"ticker": "U11.SI", "sector": "Financials",
+     "profile": "Money Center Bank (SG)", "is_financial": True,
+     "profile_source": "lookup", "tier": 1},
+    {"ticker": "O39.SI", "sector": "Financials",
+     "profile": "Money Center Bank (SG)", "is_financial": True,
+     "profile_source": "lookup", "tier": 1},
+    # The defect itself: HK$730 forward EV/EBITDA per share on a bank.
+    {"ticker": "02888.HK", "sector": "Financials",
+     "profile": "Money Center Bank", "is_financial": True,
+     "profile_source": "lookup", "tier": 1},
+    {"ticker": "SCHW", "sector": "Financials", "profile": "Brokerage",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "MET", "sector": "Financials", "profile": "Insurance",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "PRU", "sector": "Financials", "profile": "Insurance",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "AIG", "sector": "Financials", "profile": "Insurance",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    {"ticker": "BRK.B", "sector": "Financials", "profile": "Holding Company",
+     "is_financial": True, "profile_source": "lookup", "tier": 1},
+    # Not in the curated lookup — profile recorded from a live run.
+    {"ticker": "IBKR", "sector": "Financials", "profile": "Brokerage",
+     "is_financial": True, "profile_source": "recorded", "tier": 1,
+     "note": "accountPayables 77% of assets; margin receivables 45%"},
+    {"ticker": "ALL", "sector": "Financials", "profile": "Insurance (P&C)",
+     "is_financial": True, "profile_source": "recorded", "tier": 1},
+    # Tier 2 measured positive: FinTech with 99.1% of assets in customer
+    # balances and the loan book.
+    {"ticker": "PYPL", "sector": "Financials", "profile": "FinTech",
+     "is_financial": True, "profile_source": "recorded", "tier": 2,
+     "note": "customer funds 50% of assets, receivables 49%"},
+    # Labelled positive on its economics, but the router puts it in Crypto /
+    # Crypto Exchange, which is in NEITHER tier. Expected FALSE NEGATIVE.
+    {"ticker": "HOOD", "sector": "Crypto", "profile": "Crypto Exchange",
+     "is_financial": True, "profile_source": "recorded", "tier": 1,
+     "note": "ROUTING GAP: the plan lists HOOD under Brokerage; live routing "
+             "gives Crypto Exchange. Customer cash and margin receivables are "
+             "87% of assets, so the economics are a brokerage's."},
+
+    # ── Negatives: fee-based. The gate must NOT classify these. ──
+    {"ticker": "V", "sector": "Financials", "profile": "Payment Networks",
+     "is_financial": False, "profile_source": "lookup", "tier": 2,
+     "note": "0.2420 — settlement owed to members is not funding; the closest "
+             "name to the 0.30 cut"},
+    {"ticker": "MA", "sector": "Financials", "profile": "Payment Networks",
+     "is_financial": False, "profile_source": "lookup", "tier": 2,
+     "note": "0.2486"},
+    {"ticker": "CME", "sector": "Financials",
+     "profile": "Market Infrastructure", "is_financial": False,
+     "profile_source": "lookup", "tier": 2,
+     "note": "0.0036 — FMP breaks out no collateral, quiet without help"},
+    {"ticker": "ICE", "sector": "Financials",
+     "profile": "Market Infrastructure", "is_financial": False,
+     "profile_source": "lookup", "tier": 2,
+     "note": "0.6135 — cleared ONLY by the exemption: US$76.9bn pass-through "
+             "margin against US$85.8bn of current assets"},
+    {"ticker": "S68.SI", "sector": "Financials",
+     "profile": "Market Infrastructure (SG)", "is_financial": False,
+     "profile_source": "lookup", "tier": 2,
+     "note": "0.4738 — cleared by the exemption, but for a different reason "
+             "than ICE: ratio shape on a small denominator"},
+    {"ticker": "BLK", "sector": "Financials", "profile": "Asset Manager",
+     "is_financial": False, "profile_source": "lookup", "tier": 2},
+    {"ticker": "BX", "sector": "Financials", "profile": "Alt Asset Manager",
+     "is_financial": False, "profile_source": "lookup", "tier": 2},
+    {"ticker": "TROW", "sector": "Financials", "profile": "Asset Manager",
+     "is_financial": False, "profile_source": "lookup", "tier": 2},
+    {"ticker": "APO", "sector": "Financials", "profile": "Alt Asset Manager",
+     "is_financial": False, "profile_source": "lookup", "tier": 2},
+    {"ticker": "KKR", "sector": "Financials", "profile": "Alt Asset Manager",
+     "is_financial": False, "profile_source": "lookup", "tier": 2},
+    # Non-financial controls: a conglomerate and two industrials whose payables
+    # are ordinary trade credit.
+    {"ticker": "BN4.SI", "sector": "Industrials",
+     "profile": "Conglomerate / Industrial (SG)", "is_financial": False,
+     "profile_source": "lookup", "tier": 0, "note": "0.2026"},
+    {"ticker": "U96.SI", "sector": "Industrials",
+     "profile": "Conglomerate / Industrial (SG)", "is_financial": False,
+     "profile_source": "lookup", "tier": 0, "note": "0.1842"},
+    # 0.4593 — ABOVE the 0.30 Tier-2 threshold, and correctly not stripped.
+    # This is the single most important row in the set. AAPL's payables are
+    # trade credit from a contract-manufacturing base, not customer money, and
+    # the ratio cannot tell the two apart. It is the measured proof that the
+    # ratio is only ever a conditional second tier, keyed off a profile that is
+    # already fee-based, and never a classifier on its own: a ratio-only gate
+    # would strip the DCF out of Apple. Read this row before anyone proposes
+    # promoting Tier 2 to Tier 1.
+    {"ticker": "AAPL", "sector": "Tech",
+     "profile": "Hyperscaler / Tech Conglomerate", "is_financial": False,
+     "profile_source": "lookup", "tier": 0, "note": "0.4593"},
+    {"ticker": "MU", "sector": "Semiconductor", "profile": "Memory / DRAM-NAND",
+     "is_financial": False, "profile_source": "lookup", "tier": 0,
+     "note": "0.2034"},
+)
+
+#: The plan's acceptance bar, mapped onto a confusion matrix. See the comment
+#: above for why recall carries a bar the plan's phrasing does not state.
+BSF_MIN_PRECISION = 0.50
+BSF_MIN_RECALL = 0.90
+BSF_MIN_FIRINGS = 10
+
+_BSF_LINE_ITEMS = [
+    # `revenue` is not an input to the ratio. It is here because
+    # `_extract_annual_series` DROPS every row whose revenue is None or <= 0,
+    # so a balance-sheet-only request yields zero rows and the backtest scores
+    # nothing while looking like a clean pass. Production always requests
+    # revenue, so this only ever affected the test — but silently.
+    "revenue",
+    "total_assets", "total_deposits", "loans_receivable",
+    "loans_held_for_investment", "accounts_payable", "accounts_receivable",
+    "other_payables", "other_current_liabilities",
+]
+
+
+def _bsf_most_recent(ticker: str, as_of: str) -> Optional[dict]:
+    """The latest annual balance sheet through the PRODUCTION path.
+
+    Deliberately not a direct FMP call: `search_line_items` applies the
+    camelCase→snake_case map and the HK/SG routing, and `_extract_annual_series`
+    is the row builder that also performs the FX conversion. Scoring a
+    hand-rolled dict would test the ratio arithmetic and miss the mapping,
+    which is where the 0388.HK false positive lived (a numerator left in HKD
+    against a denominator converted to USD reads 1.62 instead of 0.208).
+    """
+    from src.agents.analysis.dcf_agent import _extract_annual_series
+    from src.tools.api import search_line_items
+
+    li = search_line_items(ticker, _BSF_LINE_ITEMS, as_of,
+                           period="annual", limit=1)
+    rows, _ccy = _extract_annual_series(li or [])
+    return rows[-1] if rows else None
+
+
+def backtest_balance_sheet_financial(
+    as_of: str = "2026-09-17",
+    labels: tuple[dict, ...] = BSF_LABELS,
+) -> dict[str, Any]:
+    """Classifier precision/recall for GATE_BALANCE_SHEET_FINANCIAL.
+
+    Each label is resolved against its live balance sheet and run through the
+    same two functions production uses — `_tier2_customer_balance_ratio` and
+    `_is_balance_sheet_financial` — so the result measures the shipped gate,
+    not a model of it.
+
+    Returns a summary dict with the confusion counts, precision, recall, the
+    per-ticker rows and an `accepted` flag against the bar above. Rows whose
+    balance sheet the feed could not deliver are counted separately as
+    `no_data`, never silently dropped: a name that cannot be measured keeps
+    its EV legs, and for a Tier 2 profile that is a coverage gap the report has
+    to show rather than hide inside a tidy precision figure.
+    """
+    from src.agents.analysis.dcf_agent import (
+        _is_balance_sheet_financial,
+        _tier2_customer_balance_ratio,
+    )
+    from src.data.sector_profiles import get_wacc_profile_for_ticker
+
+    rows: list[dict] = []
+    tp = fp = tn = fn = no_data = 0
+
+    for lab in labels:
+        ticker, profile = lab["ticker"], lab["profile"]
+        truth = bool(lab["is_financial"])
+        row: dict[str, Any] = {
+            "ticker": ticker, "sector": lab["sector"], "profile": profile,
+            "label": truth, "tier": lab.get("tier"),
+            "profile_source": lab.get("profile_source"),
+            "note": lab.get("note", ""),
+        }
+
+        # If the curated lookup resolves this ticker, it is the authority and
+        # the recorded pair must match it. A mismatch means the routing moved
+        # under the label set, and scoring the old profile would quietly test a
+        # gate that production no longer reaches.
+        lk_sector, lk_profile = get_wacc_profile_for_ticker(ticker)
+        if lk_profile:
+            row["lookup_profile"] = lk_profile
+            if (lk_sector, lk_profile) != (lab["sector"], profile):
+                row["routing_drift"] = (
+                    f"curated lookup now gives ({lk_sector}, {lk_profile}); "
+                    f"label set says ({lab['sector']}, {profile})")
+
+        most_recent = _bsf_most_recent(ticker, as_of)
+        if not most_recent:
+            no_data += 1
+            row["fired"] = None
+            row["outcome"] = "NO_DATA"
+            row["skip_reason"] = "feed returned no annual balance sheet"
+            rows.append(row)
+            continue
+
+        row["period"] = most_recent.get("period")
+        ratio, breakdown = _tier2_customer_balance_ratio(most_recent)
+        row["customer_balance_ratio"] = ratio
+        row["ratio_lines"] = breakdown.get("lines")
+        fired = _is_balance_sheet_financial(profile, most_recent)
+        row["fired"] = fired
+
+        if fired and truth:
+            row["outcome"], tp = "TP", tp + 1
+        elif fired and not truth:
+            row["outcome"], fp = "FP", fp + 1
+        elif not fired and truth:
+            row["outcome"], fn = "FN", fn + 1
+        else:
+            row["outcome"], tn = "TN", tn + 1
+        rows.append(row)
+
+    scored = tp + fp + tn + fn
+    firings = tp + fp
+    precision = (tp / firings) if firings else None
+    recall = (tp / (tp + fn)) if (tp + fn) else None
+
+    reasons: list[str] = []
+    if scored == 0:
+        # Nothing could be measured. That is an infrastructure failure — a dead
+        # key, a feed outage, a request list that drops every row — not evidence
+        # about the gate. Reported as `accepted: None` so the summary says
+        # NO DATA instead of REJECT and nobody reads a broken run as a verdict.
+        reasons.append(f"0 of {len(labels)} labels resolved against live data")
+        return {
+            "gate_id": "GATE_BALANCE_SHEET_FINANCIAL",
+            "as_of": as_of, "metric": "classifier_precision_recall",
+            "labels": len(labels), "scored": 0, "no_data": no_data,
+            "tp": 0, "fp": 0, "tn": 0, "fn": 0, "firings": 0,
+            "precision": None, "recall": None,
+            "bar": {"precision": BSF_MIN_PRECISION, "recall": BSF_MIN_RECALL,
+                    "min_firings": BSF_MIN_FIRINGS},
+            "accepted": None,
+            "reject_reasons": reasons,
+            "rows": rows,
+        }
+
+    if precision is None or precision < BSF_MIN_PRECISION:
+        reasons.append(f"precision {precision} < {BSF_MIN_PRECISION}")
+    if recall is None or recall < BSF_MIN_RECALL:
+        reasons.append(f"recall {recall} < {BSF_MIN_RECALL}")
+    if firings < BSF_MIN_FIRINGS:
+        reasons.append(f"{firings} firings < {BSF_MIN_FIRINGS}")
+
+    return {
+        "gate_id": "GATE_BALANCE_SHEET_FINANCIAL",
+        "as_of": as_of, "metric": "classifier_precision_recall",
+        "labels": len(labels), "scored": scored, "no_data": no_data,
+        "tp": tp, "fp": fp, "tn": tn, "fn": fn, "firings": firings,
+        "precision": precision, "recall": recall,
+        "bar": {"precision": BSF_MIN_PRECISION, "recall": BSF_MIN_RECALL,
+                "min_firings": BSF_MIN_FIRINGS},
+        "accepted": not reasons,
+        "reject_reasons": reasons,
+        "rows": rows,
+    }
+
+
 def _next_reported_year(ticker: str, after_period: str,
                         today: str) -> Optional[dict]:
     """The first annual row the company reported AFTER `after_period`.

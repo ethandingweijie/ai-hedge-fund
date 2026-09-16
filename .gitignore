@@ -61,6 +61,11 @@ node_modules
 # Outputs
 outputs/
 
+# Local run artefacts: backtest results, prod re-run payloads, scratch scripts.
+# These embed live-feed figures pulled with an API key, so they stay out of the
+# repo the same way tests/fixtures/golden/ is scrubbed before it goes in.
+scratchpad/
+
 # Database files (users will have their own local databases)
 *.db
 *.db-journal
