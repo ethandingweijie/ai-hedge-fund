@@ -1,0 +1,27 @@
+{
+  "ticker": "COST",
+  "captured_at": "2026-09-16T13:21:02+00:00",
+  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "end_date": "2026-08-25",
+  "state_source": "prod_web_run",
+  "source_run_id": "8e76c599-ce18-4fa6-b17f-8d3bde8c5481",
+  "source_run_at": "2026-08-25T00:56:06.487865",
+  "archive_run_id": "9164808b-c94c-46a4-a5c7-485f5b149457",
+  "targets_hit": {
+    "src.memory.analyst_basis.get_analyst_basis": 1,
+    "src.memory.assumption_steward.steward_enabled": 1,
+    "src.memory.assumption_store.get_analyst_reports": 2,
+    "src.memory.assumption_store.get_latest_earnings_assumptions": 1,
+    "src.memory.assumption_store.get_open_challenges": 1,
+    "src.memory.calibration.active_version": 1,
+    "src.memory.calibration.apply_profile_weights": 1,
+    "src.memory.calibration.iv_multiplier": 1,
+    "src.tools.api._fmp_get": 15
+  },
+  "recorded_calls": 24,
+  "replay": {
+    "base_iv": 1324.57,
+    "profile": "Membership / Subscription Retail",
+    "skip_reason": null
+  }
+}

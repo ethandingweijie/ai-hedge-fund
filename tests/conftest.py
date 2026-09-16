@@ -33,6 +33,43 @@ _SENSITIVE_ENV_KEYS = (
 )
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--update-snapshots", action="store_true", default=False,
+        help="Rewrite tests/golden/snapshots.json from current golden replay "
+             "output. Requires a non-empty GOLDEN_UPDATE_REASON env var.",
+    )
+
+
+def pytest_configure(config):
+    """Gate the golden-baseline rewrite on a written reason.
+
+    ``snapshots.json`` is the only artefact that records "the valuation
+    engine's answer changed". Letting it move without a reason is how a
+    regression becomes the new baseline, so the flag refuses to work unless
+    the caller states why in ``GOLDEN_UPDATE_REASON``.
+    """
+    if not config.getoption("--update-snapshots"):
+        return
+    reason = os.environ.get("GOLDEN_UPDATE_REASON", "").strip()
+    if not reason:
+        raise pytest.UsageError(
+            "--update-snapshots refuses to run without GOLDEN_UPDATE_REASON.\n"
+            "The golden baseline pins end-to-end valuations; moving it is the\n"
+            "one change that needs a written reason. Set it, e.g.:\n\n"
+            "  GOLDEN_UPDATE_REASON=\"Phase 1.1: convergence fade on "
+            "cyclical/conglomerate profiles\" \\\n"
+            "  pytest tests/test_golden_valuations.py --update-snapshots\n"
+        )
+    config._golden_update_reason = reason
+
+
+@pytest.fixture(scope="session")
+def golden_update_reason(request) -> str | None:
+    """The ``GOLDEN_UPDATE_REASON`` when ``--update-snapshots`` was passed."""
+    return getattr(request.config, "_golden_update_reason", None)
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _strip_live_api_keys():
     """Remove real keys leaked into the process env by import-time dotenv

@@ -1,0 +1,29 @@
+{
+  "ticker": "02888.HK",
+  "captured_at": "2026-09-16T13:22:12+00:00",
+  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "end_date": "2026-09-02",
+  "state_source": "prod_web_run",
+  "source_run_id": "53399960-2019-47c2-8d12-7dd330c13e11",
+  "source_run_at": "2026-09-02T00:58:20.595748",
+  "archive_run_id": "161e6cc3-4b90-4efa-b7d7-8eef19117886",
+  "targets_hit": {
+    "src.memory.analyst_basis.get_analyst_basis": 2,
+    "src.memory.assumption_steward.steward_enabled": 1,
+    "src.memory.assumption_store.get_analyst_reports": 3,
+    "src.memory.assumption_store.get_latest_earnings_assumptions": 1,
+    "src.memory.assumption_store.get_open_challenges": 1,
+    "src.memory.calibration.active_version": 1,
+    "src.memory.calibration.apply_profile_weights": 1,
+    "src.memory.calibration.iv_multiplier": 1,
+    "src.tools.api._fmp_get": 13,
+    "src.tools.api.get_listing_currency": 1,
+    "src.tools.fred.get_fred_spread": 1
+  },
+  "recorded_calls": 26,
+  "replay": {
+    "base_iv": 284.38,
+    "profile": "Money Center Bank",
+    "skip_reason": null
+  }
+}

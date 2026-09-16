@@ -1,0 +1,28 @@
+{
+  "ticker": "MELI",
+  "captured_at": "2026-09-16T13:20:14+00:00",
+  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "end_date": "2026-09-16",
+  "state_source": "prod_web_run",
+  "source_run_id": "533ed6a4-bcfb-4758-b585-c8e8e11b38ca",
+  "source_run_at": "2026-09-16T10:50:09.101320",
+  "archive_run_id": "2af3f21d-37f4-431b-ae6c-17a68a373fdd",
+  "targets_hit": {
+    "src.memory.analyst_basis.get_analyst_basis": 1,
+    "src.memory.assumption_steward.steward_enabled": 1,
+    "src.memory.assumption_store.get_analyst_reports": 2,
+    "src.memory.assumption_store.get_latest_earnings_assumptions": 1,
+    "src.memory.assumption_store.get_open_challenges": 1,
+    "src.memory.calibration.active_version": 1,
+    "src.memory.calibration.apply_profile_weights": 1,
+    "src.memory.calibration.iv_multiplier": 1,
+    "src.tools.api._fmp_get": 16,
+    "src.tools.fred.get_fred_spread": 1
+  },
+  "recorded_calls": 26,
+  "replay": {
+    "base_iv": 5578.42,
+    "profile": "Hyper-Growth Platform",
+    "skip_reason": null
+  }
+}

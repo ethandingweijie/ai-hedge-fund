@@ -1,0 +1,29 @@
+{
+  "ticker": "C38U.SI",
+  "captured_at": "2026-09-16T13:24:26+00:00",
+  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "end_date": "2026-09-16",
+  "state_source": "lookup_tables",
+  "source_run_id": null,
+  "source_run_at": null,
+  "archive_run_id": null,
+  "targets_hit": {
+    "src.memory.analyst_basis.get_analyst_basis": 2,
+    "src.memory.assumption_steward.steward_enabled": 1,
+    "src.memory.assumption_store.get_analyst_reports": 3,
+    "src.memory.assumption_store.get_latest_earnings_assumptions": 1,
+    "src.memory.assumption_store.get_open_challenges": 1,
+    "src.memory.calibration.active_version": 1,
+    "src.memory.calibration.apply_profile_weights": 1,
+    "src.memory.calibration.iv_multiplier": 1,
+    "src.tools.api._fmp_get": 12,
+    "src.tools.api.get_listing_currency": 1,
+    "src.tools.fred.get_fred_spread": 1
+  },
+  "recorded_calls": 25,
+  "replay": {
+    "base_iv": 1.81,
+    "profile": "S-REIT",
+    "skip_reason": null
+  }
+}

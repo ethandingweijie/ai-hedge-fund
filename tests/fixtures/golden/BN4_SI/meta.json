@@ -1,0 +1,30 @@
+{
+  "ticker": "BN4.SI",
+  "captured_at": "2026-09-16T13:23:42+00:00",
+  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "end_date": "2026-09-16",
+  "state_source": "prod_web_run",
+  "source_run_id": "a59493af-1075-4220-a787-2e27755ec7f0",
+  "source_run_at": "2026-09-16T07:06:23.579830",
+  "archive_run_id": "14a49410-a23e-4a52-b4c1-9d45e40dc7ff",
+  "targets_hit": {
+    "src.memory.analyst_basis.get_analyst_basis": 1,
+    "src.memory.analyst_basis.method_disagrees": 1,
+    "src.memory.assumption_steward.steward_enabled": 1,
+    "src.memory.assumption_store.get_analyst_reports": 2,
+    "src.memory.assumption_store.get_latest_earnings_assumptions": 1,
+    "src.memory.assumption_store.get_open_challenges": 1,
+    "src.memory.calibration.active_version": 1,
+    "src.memory.calibration.apply_profile_weights": 1,
+    "src.memory.calibration.iv_multiplier": 1,
+    "src.tools.api._fmp_get": 12,
+    "src.tools.api.get_listing_currency": 1,
+    "src.tools.fred.get_fred_spread": 1
+  },
+  "recorded_calls": 24,
+  "replay": {
+    "base_iv": 5.83,
+    "profile": "Conglomerate / Industrial (SG)",
+    "skip_reason": null
+  }
+}

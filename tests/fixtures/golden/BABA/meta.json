@@ -1,0 +1,28 @@
+{
+  "ticker": "BABA",
+  "captured_at": "2026-09-16T13:22:59+00:00",
+  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "end_date": "2026-09-16",
+  "state_source": "prod_web_run",
+  "source_run_id": "bf012128-b79b-4703-a1a4-b0f62b5eb3af",
+  "source_run_at": "2026-09-16T09:31:34.175637",
+  "archive_run_id": "135b5491-3d56-489e-9cac-2fbeb29cb4f2",
+  "targets_hit": {
+    "src.memory.analyst_basis.get_analyst_basis": 1,
+    "src.memory.analyst_basis.method_disagrees": 1,
+    "src.memory.assumption_steward.steward_enabled": 1,
+    "src.memory.assumption_store.get_analyst_reports": 2,
+    "src.memory.assumption_store.get_latest_earnings_assumptions": 1,
+    "src.memory.assumption_store.get_open_challenges": 1,
+    "src.memory.calibration.active_version": 1,
+    "src.memory.calibration.apply_profile_weights": 1,
+    "src.memory.calibration.iv_multiplier": 1,
+    "src.tools.api._fmp_get": 17
+  },
+  "recorded_calls": 27,
+  "replay": {
+    "base_iv": 193.13,
+    "profile": "Hyperscaler / Tech Conglomerate",
+    "skip_reason": null
+  }
+}

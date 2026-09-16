@@ -1,0 +1,27 @@
+{
+  "ticker": "MU",
+  "captured_at": "2026-09-16T13:20:39+00:00",
+  "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
+  "end_date": "2026-09-16",
+  "state_source": "prod_web_run",
+  "source_run_id": "7e5cc753-0cec-4ca3-9adf-364d9460f799",
+  "source_run_at": "2026-09-16T10:52:14.708438",
+  "archive_run_id": "e7b6c6f2-d07f-4010-b82d-7a0d3b3523c9",
+  "targets_hit": {
+    "src.memory.analyst_basis.get_analyst_basis": 1,
+    "src.memory.assumption_steward.steward_enabled": 1,
+    "src.memory.assumption_store.get_analyst_reports": 2,
+    "src.memory.assumption_store.get_latest_earnings_assumptions": 1,
+    "src.memory.assumption_store.get_open_challenges": 1,
+    "src.memory.calibration.active_version": 1,
+    "src.memory.calibration.apply_profile_weights": 1,
+    "src.memory.calibration.iv_multiplier": 1,
+    "src.tools.api._fmp_get": 16
+  },
+  "recorded_calls": 25,
+  "replay": {
+    "base_iv": 297.37,
+    "profile": "Memory / DRAM-NAND",
+    "skip_reason": null
+  }
+}
