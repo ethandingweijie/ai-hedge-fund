@@ -34,7 +34,14 @@ from src.data import db as _db
 
 # Cohort fetch parameters — kept conservative to balance signal vs sample size
 DEFAULT_LOOKBACK_DAYS = 60      # how far back to scan web_runs
-DEFAULT_MIN_COHORT    = 3       # below this, skip z-scoring (band fallback)
+DEFAULT_MIN_COHORT    = 5       # below this, skip z-scoring (band fallback)
+#: A cohort whose members barely differ produces a huge z from a rounding
+#: difference. 09988.HK, 2026-09-16: capex intensity came back z=+0.67 off a
+#: MAD of 0.0003 on a median of 0.1237, and operating margin z=+3.19 off three
+#: names -- enough to drive the quality multiplier to its 1.50x ceiling and the
+#: whole composite to the 1.85x cap. A KPI whose spread is under this fraction
+#: of its own level is treated as having no usable dispersion.
+MIN_RELATIVE_MAD      = 0.02    # MAD must exceed 2% of |median|
 MAD_NORMALIZATION     = 1.4826  # scales MAD to stdev-equivalent (normal dist)
 
 # v3.20 — Cohort eligibility cutoff. Excludes the 47 historical web_runs
@@ -154,16 +161,36 @@ def fetch_peer_cohort(
 
     # Latest-run-wins per ticker — first row encountered (DESC by run_at)
     # is the most recent.
+    def _company(t: str) -> str:
+        try:
+            from src.data.dual_listings import company_key
+            return company_key(t)
+        except Exception:
+            return t
+
+    # One row per COMPANY, and never the company being scored. 09988.HK was
+    # ranked against a cohort holding its own ADR -- the same business, whose
+    # extractor had read the operating margin differently -- and came out 3.2
+    # sigma "top-decile" against itself, taking quality to its 1.50x ceiling
+    # and the composite to the 1.85x cap. Counting a dual-listed peer twice
+    # skews the median the same way, so listings are collapsed on both sides.
     seen_tickers: set[str] = set()
+    seen_companies: set[str] = set()
     if exclude_ticker:
         seen_tickers.add(exclude_ticker.upper())
+        seen_companies.add(_company(exclude_ticker))
 
     cohort: dict[str, list[float]] = {}
     for ticker, _run_at, full_json in rows:
         t_upper = (ticker or "").upper()
         if not t_upper or t_upper in seen_tickers:
             continue
+        company = _company(t_upper)
+        if company in seen_companies:
+            seen_tickers.add(t_upper)
+            continue
         seen_tickers.add(t_upper)
+        seen_companies.add(company)
         try:
             payload = json.loads(full_json)
         except Exception:
@@ -224,6 +251,7 @@ def compute_z_scores(
     KPIs are skipped (omitted from result) when:
       - cohort size < min_cohort
       - MAD == 0 (all peers identical → z is undefined)
+      - MAD <= MIN_RELATIVE_MAD × |median| (spread too small to read)
       - value is non-numeric or NaN
 
     Caller (compositor) treats absent z-score as "use band-based fallback."
@@ -250,6 +278,10 @@ def compute_z_scores(
         med = _median(peer_values)
         mad = _mad(peer_values, med)
         if mad == 0.0:
+            continue
+        # Degenerate spread: peers that agree to within a rounding difference
+        # carry no information about where this company sits among them.
+        if mad <= MIN_RELATIVE_MAD * abs(med):
             continue
         z = (fval - med) / (MAD_NORMALIZATION * mad)
         out[kpi_name] = {
