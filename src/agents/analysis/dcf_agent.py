@@ -253,6 +253,227 @@ def _decayed_growth_schedule(base_growth: float, profile_name: str, years: int =
     return [base_growth * (1 - delta) ** t for t in range(years)]
 
 
+# ── Phase 1.1: convergence fade + CAGR-divergence gate (2026-09-16) ──────────
+#
+# Defect 1 — a ONE-YEAR consensus jump was held flat for ten years. BN4.SI
+# carried +20.3% NTM growth against a −2.5% five-year revenue CAGR and U96.SI
+# +22% against the same, and both were compounded for a decade. Holding a
+# forward-twelve-month figure flat is not a forecast of that year repeated; it
+# is an unstated claim that the inflection is permanent. Neither name was
+# caught by the revenue-scale tier, because at S$5.8–6.0bn of revenue the tier
+# cap is 22% — above both consensus figures.
+#
+# Two corrections, both owner-specified. No other bound is introduced.
+#
+#   1. A convergence FADE on the profiles below: growth closes half the
+#      distance to the engine's long-run nominal rate each year.
+#   2. A divergence GATE on ALL profiles: consensus sitting more than 15pp from
+#      the historical CAGR is capped at CAGR + 5pp before it seeds anything.
+#
+# The fade target is the scenario's TERMINAL GROWTH RATE from tgr_table — the
+# engine's own long-run nominal rate — NOT the historical CAGR. Anchoring the
+# fade on the historical CAGR would pin MELI at its 42% trailing rate forever,
+# which is the opposite failure to the one being fixed.
+
+#: Profiles where a peak margin IS the cycle, not an inflection. Excluded from
+#: the margin exception to the CAGR gate: at a cycle top the latest EBIT margin
+#: sits above its own multi-year mean by construction, so the exception would
+#: fire precisely when it is least warranted. Phase 1.2B gives these same
+#: profiles mid-cycle legs and routes them to P/B-ROE at peak.
+_CYCLICAL_PROFILES: frozenset[str] = frozenset({
+    "Memory / DRAM-NAND",
+    "Mining (Major)",
+    "Upstream Oil & Gas",
+    "Steel / Metals",
+    "Specialty Chemicals",
+    "Airlines",
+    "Automotive (OEM)",
+    "Digital Asset Mining",
+})
+
+#: Profiles whose NTM growth fades toward the long-run rate rather than holding
+#: flat: cyclical AND structurally lumpy earners, where a single consensus year
+#: can be a disposal, a tariff reset or a contract award that does not repeat.
+#: The four tech profiles in _GROWTH_DECAY_DELTA keep their existing
+#: multiplicative decay and are deliberately absent — the two sets are
+#: DISJOINT, pinned by tests/test_growth_convergence.py so a profile added to
+#: both cannot silently pick an arbitrary schedule.
+_CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
+    "Conglomerate / Industrial (SG)",
+    "Capital Goods",
+    "Electronic Materials & Industrial Diversified",
+    "Regulated Utility",
+    "IPP",
+    "Automotive (OEM)",
+    "Automotive & EV",
+    "Airlines",
+    "Steel / Metals",
+    "Specialty Chemicals",
+    "Upstream Oil & Gas",
+    "Mining (Major)",
+    "Memory / DRAM-NAND",
+    "Digital Asset Mining",
+})
+
+#: Fraction of the gap to the long-run rate retained each year. 0.5 halves the
+#: remaining distance annually: from a gated 5.0% with a 2.0% long-run rate the
+#: path is 5.00 / 3.50 / 2.75 / 2.38 / 2.19 ... converging without a cliff.
+_CONVERGENCE_ALPHA = 0.5
+
+#: The gate fires beyond this divergence between NTM consensus and the
+#: historical CAGR, and then caps NTM growth at CAGR + headroom.
+_CAGR_DIVERGENCE_THRESHOLD = 0.15
+_CAGR_DIVERGENCE_HEADROOM = 0.05
+
+#: Margin-inflection proxy for the gate's second exception: the latest EBIT
+#: margin must sit at least this far above its trailing 3-year mean.
+_EBIT_INFLECTION_GAP = 0.05
+_EBIT_INFLECTION_YEARS = 3
+
+
+def _growth_convergence_schedule(
+    g_ntm: float,
+    g_norm: float,
+    alpha: float = _CONVERGENCE_ALPHA,
+    years: int = _PROJECTION_YEARS,
+) -> list[float]:
+    """Per-year growth fading geometrically from ``g_ntm`` toward ``g_norm``.
+
+        g_t = g_ntm · α^(t−1) + g_norm · (1 − α^(t−1))      t = 1 .. years
+
+    written 0-indexed below, since ``_project_dcf`` reads year *t* from index
+    *t−1* of ``growth_schedule``.
+
+    Year 1 is EXACTLY ``g_ntm`` (α^0 = 1), which is the point of the strict
+    gate → seed → fade ordering: a one-year consensus figure is a valid year-1
+    estimate and the fade must not disturb it. ``g_ntm`` equals raw consensus
+    only when the divergence gate did not fire; when it did, year 1 is the
+    gated value. Later years close a fraction α of the remaining gap, so the
+    schedule approaches ``g_norm`` monotonically and never crosses it, whether
+    ``g_ntm`` starts above or below.
+    """
+    return [
+        g_ntm * (alpha ** t) + g_norm * (1.0 - alpha ** t)
+        for t in range(years)
+    ]
+
+
+def _ebit_margin_inflection(series: list[dict]) -> bool:
+    """True when the latest EBIT margin sits ≥5pp above its trailing 3-year mean.
+
+    Deterministic stand-in for "margins and order books justify an inflection"
+    — the gate's only non-guidance exception, so it must not need an LLM or a
+    judgement call to evaluate.
+
+    The mean INCLUDES the latest year. That is the conservative reading: a
+    rising margin lifts its own comparison base, so the gap has to be large
+    (≥15pp of combined movement across the three years) before consensus growth
+    is unlocked. Excluding the latest year would let a single good quarter
+    against two flat ones through.
+
+    Needs 3 usable years; with fewer there is no mean to test against and this
+    returns False. That matters more than it looks — the feed caps history at 5
+    annual rows (defect 8), so the window is usually all the history there is.
+    """
+    margins: list[float] = []
+    for r in series or []:
+        ebit = _safe(r.get("ebit"))
+        rev = _safe(r.get("revenue"))
+        if ebit is not None and rev and rev > 0:
+            margins.append(ebit / rev)
+    if len(margins) < _EBIT_INFLECTION_YEARS:
+        return False
+    window = margins[-_EBIT_INFLECTION_YEARS:]
+    mean = sum(window) / len(window)
+    return (window[-1] - mean) >= _EBIT_INFLECTION_GAP
+
+
+def _gate_growth_cagr_divergence(
+    g_ntm: Optional[float],
+    cagr: Optional[float],
+    *,
+    data_source: str = "",
+    profile_name: str = "",
+    series: Optional[list[dict]] = None,
+) -> tuple[Optional[float], Optional[dict], Optional[str]]:
+    """Cap NTM consensus growth that diverges too far from the historical CAGR.
+
+    Returns ``(gated_growth, gate_record, exception_reason)``:
+
+      * ``gated_growth`` — the capped figure, or ``g_ntm`` unchanged.
+      * ``gate_record`` — the ``gate_evaluations`` entry (path A = raw
+        consensus, path B = gated) when the gate BINDS, else None. Recorded on
+        binding rather than on firing so the forward ledger measures decisions
+        that actually moved a number.
+      * ``exception_reason`` — why the gate was stood down, else None.
+
+    Fires when ``|g_ntm − CAGR| > 15pp``, then sets
+    ``g_ntm := min(g_ntm, max(CAGR, 0) + 5pp)``. One-sided by construction: a
+    consensus far BELOW a high historical CAGR is left alone, because the
+    defect is a one-year jump held flat for a decade, not conservatism.
+
+    ``max(CAGR, 0)`` is what makes the ceiling sane for a shrinking business.
+    BN4.SI's 5-year revenue CAGR is −2.5%; without the floor the ceiling would
+    be −2.5% + 5% = 2.5%, but with it the ceiling is 5.0%. The floor says a
+    company in structural decline may still be allowed modest growth in the
+    forward year — it is the *extrapolation* of the decline that is being
+    refused, not growth itself.
+
+    Two exceptions, both deterministic:
+
+      * **company-guided** (``data_source == "guided"``) — R1 structured
+        guidance is management's own figure for the forward year. That is
+        exactly the information a consensus-vs-history divergence cannot see,
+        so it overrides the gate outright.
+      * **margin inflection** — latest EBIT margin ≥5pp above its 3-year mean,
+        but NOT for :data:`_CYCLICAL_PROFILES`, where a peak margin exceeds its
+        mean by construction and must not unlock the gate.
+
+    The gate is applied to the BASE figure before scenario differentiation, and
+    the analyst band is then SCALED by the same factor rather than clipped per
+    scenario — mirroring :func:`_scale_analyst_bands_to_cap`, so the dispersion
+    14 analysts actually expressed survives instead of collapsing base and bull
+    onto one ceiling.
+    """
+    if g_ntm is None or cagr is None:
+        return g_ntm, None, None
+
+    if abs(g_ntm - cagr) <= _CAGR_DIVERGENCE_THRESHOLD:
+        return g_ntm, None, None
+
+    ceiling = max(cagr, 0.0) + _CAGR_DIVERGENCE_HEADROOM
+
+    if data_source == "guided":
+        return g_ntm, None, "company-guided (R1 structured guidance)"
+    if (profile_name not in _CYCLICAL_PROFILES
+            and _ebit_margin_inflection(series or [])):
+        return g_ntm, None, (
+            f"EBIT margin inflection (latest ≥{_EBIT_INFLECTION_GAP:.0%} "
+            f"above {_EBIT_INFLECTION_YEARS}y mean) on non-cyclical profile"
+        )
+
+    gated = min(g_ntm, ceiling)
+    if gated >= g_ntm:
+        # Divergence was downward (consensus far below a high CAGR). The cap
+        # does not bind and nothing moves; still worth recording as evaluated.
+        return g_ntm, None, None
+
+    record = {
+        "gate_id": "GATE_GROWTH_CAGR_DIVERGENCE",
+        "metric": "revenue_growth",
+        "raw_input_path_a": round(float(g_ntm), 6),
+        "gated_output_path_b": round(float(gated), 6),
+        "basis": (
+            f"NTM consensus {g_ntm:+.1%} diverges from historical CAGR "
+            f"{cagr:+.1%} by {abs(g_ntm - cagr) * 100:.1f}pp, above the "
+            f"{_CAGR_DIVERGENCE_THRESHOLD * 100:.0f}pp threshold; capped at "
+            f"max(CAGR, 0) + {_CAGR_DIVERGENCE_HEADROOM * 100:.0f}pp"
+        ),
+        "applied": True,
+    }
+    return gated, record, None
+
+
 # Guidance-based margin adjustment
 _GUIDANCE_MARGIN_DELTA = {
     "expanding":   0.003,
@@ -7146,6 +7367,71 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             f"Profile: {profile_name} | Anchor: {_anchor_method} | WACC={wacc:.1%} | g={growth_base:.1%} | C_macro={c_macro:+.2f}"
         )
 
+        # ── Phase 1.1: CAGR-divergence gate (all profiles) ────────────────
+        # Applied BEFORE the revenue-scale tier below and BEFORE the scenario
+        # multipliers, for the reason that tier's own comment gives: bind the
+        # BASE and let the multipliers differentiate afterwards, rather than
+        # clipping each scenario to one ceiling and collapsing bear/base/bull
+        # onto it.
+        #
+        # The tier cannot catch defect 1 by itself, because it is keyed to
+        # revenue SCALE while this is a divergence-from-history problem.
+        # BN4.SI (S$5.98bn) and U96.SI (S$5.80bn) both land in the ≥$3bn tier
+        # whose cap is 22% — above BN4's 20.3% consensus and level with U96's
+        # 22.0%. Both passed straight through and were then compounded for ten
+        # years against a −2.5% five-year CAGR.
+        #
+        # `_historical_cagr` is the 5-year figure only for as long as the feed
+        # caps history at 5 annual rows (defect 8); it is whatever history
+        # exists, which is the right input either way.
+        _cagr_for_gate = _historical_cagr(series, revenue_base=revenue_base)
+        # When analyst bands exist the scenario loop reads them and never looks
+        # at growth_base, so the band base is the figure that has to be gated.
+        # The two can differ — they come from different estimators.
+        _gate_ref = ((_analyst_bands or {}).get("base")
+                     if _analyst_bands is not None else growth_base)
+        _g_gated, _cagr_gate_rec, _cagr_gate_exc = _gate_growth_cagr_divergence(
+            _gate_ref, _cagr_for_gate,
+            data_source=data_source, profile_name=profile_name, series=series,
+        )
+        if _cagr_gate_rec is not None:
+            # `_g_gated` IS the ceiling — read it from the return value rather
+            # than back out of the ledger record. (Reaching into the record for
+            # it also trips test_gate_backtest's structural check that every
+            # gate emits both halves of its path A/B pair, which counts key
+            # occurrences in the source and cannot tell a write from a read.)
+            _gate_ceiling = float(_g_gated)
+            # One ceiling, applied to both paths in each path's own idiom.
+            growth_base = min(growth_base, _gate_ceiling)
+            # Scales the WHOLE band, so the spread 14 analysts expressed
+            # survives: BN4.SI's 3.8 / 20.3 / 37.3 becomes 0.9 / 5.0 / 9.2,
+            # not 3.8 / 5.0 / 5.0.
+            _analyst_bands, _gate_band_scale = _scale_analyst_bands_to_cap(
+                _analyst_bands, _gate_ceiling)
+            gate_evaluations.append(_cagr_gate_rec)
+            progress.update_status(
+                agent_id, ticker,
+                f"CAGR-divergence gate: NTM growth {_gate_ref:.1%} → "
+                f"{_gate_ceiling:.1%} (5y CAGR {_cagr_for_gate:.1%})"
+            )
+            ticker_forward_flags.append(
+                f"CAGR-divergence gate: NTM growth {_gate_ref:+.1%} → "
+                f"{_gate_ceiling:+.1%}"
+                + (f"; analyst bands scaled {_gate_band_scale:.2f}x"
+                   if _gate_band_scale is not None else "")
+                + f" ({_cagr_gate_rec['basis']})"
+            )
+        elif _cagr_gate_exc is not None and _cagr_for_gate is not None:
+            # Recorded, not applied — the divergence was real but an
+            # exception stood the gate down. Visible so the forward ledger can
+            # tell "gate never fired here" from "gate fired and was overruled".
+            ticker_forward_flags.append(
+                f"CAGR-divergence gate stood down: NTM growth {_gate_ref:+.1%} "
+                f"vs {_cagr_for_gate:+.1%} CAGR "
+                f"({abs(_gate_ref - _cagr_for_gate) * 100:.1f}pp apart) — "
+                f"{_cagr_gate_exc}"
+            )
+
         # ── Revenue-scaled growth cap (Fix 2) ────────────────────────────
         # Historical CAGRs from a company's high-growth startup phase routinely
         # overstate the sustainable forward growth rate once revenue scale is large.
@@ -7374,6 +7660,40 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
             tgr = tgr_table.get(scenario, _DEFAULT_TGR[scenario])
 
+            # ── Growth schedule: convergence fade, else tech decay ──────────
+            # Built HERE, before Gate B, for two reasons.
+            #
+            # ORDER. The sequence is CAGR gate → seeded g_1 → fade. `g` above
+            # is already the gated value (the gate runs before the scenario
+            # loop), so seeding from it makes year 1 the gated figure: BN4.SI's
+            # schedule starts at 5.0%, never at the raw 20.3%. Year 1 equals
+            # raw consensus only when the gate did not fire.
+            #
+            # g_norm. The fade target is the terminal growth rate from
+            # tgr_table — the engine's long-run nominal rate — read BEFORE Gate
+            # B may zero `tgr`. Those are two separate statements about the
+            # business and must not be conflated: the fade says growth
+            # converges to the long-run rate, Gate B says this particular name
+            # earns no terminal perpetuity growth. Letting Gate B's zero become
+            # the fade target would stack both penalties on the same evidence.
+            #
+            # The two profile sets are disjoint, so the branch order is not
+            # load-bearing; convergence is tested first because it is the
+            # narrower claim (a named long-run target) rather than a decay rate.
+            _growth_schedule: Optional[list[float]] = None
+            _wacc_schedule: Optional[list[float]] = None
+            if profile_name in _CONVERGENCE_ALPHA_PROFILES:
+                _growth_schedule = _growth_convergence_schedule(
+                    g, tgr, alpha=_CONVERGENCE_ALPHA, years=_PROJECTION_YEARS)
+            elif profile_name in _GROWTH_DECAY_DELTA:
+                _growth_schedule = _decayed_growth_schedule(
+                    g, profile_name, years=_PROJECTION_YEARS)
+            if profile_name in _EARLY_STAGE_PROFILES:
+                _wacc_schedule = [
+                    _staged_wacc_for_year(wacc, profile_name, y)
+                    for y in range(1, _PROJECTION_YEARS + 1)
+                ]
+
             # ── Forward Gate B: ROIC compression (Y10 projection) ──────────
             # Previously 'Forward ROIC' used TRAILING ebit/invested_capital
             # from most_recent. For scaling co's (NET: op_income -$203M,
@@ -7401,13 +7721,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             ic_val = most_recent.get("invested_capital")
             rev_base = most_recent.get("revenue")
             if ic_val and ic_val > 0 and rev_base and rev_base > 0:
-                # Y10 revenue estimate (apply decayed growth schedule or
-                # symmetric multiplier × 10 years compound)
-                _decay = _GROWTH_DECAY_DELTA.get(profile_name, 0.0)
-                if _decay > 0.0:
+                # Y10 revenue from the SAME schedule the projection is handed.
+                # This used to inline _GROWTH_DECAY_DELTA and rebuild a second,
+                # independent growth path, which could drift from the one
+                # _project_dcf actually used — and did not know about the
+                # convergence fade at all.
+                #
+                # Worth recording that this is value-neutral for Gate B's
+                # DECISION today: _y10_ic below is scaled by the very same
+                # multiplier as _y10_rev, so the multiplier cancels in
+                # NOPAT/IC and the "Y10 projected" ROIC does not depend on the
+                # growth path it appears to project. Wiring the schedule
+                # through anyway keeps the two paths from diverging silently
+                # the moment that IC scaling changes.
+                if _growth_schedule:
                     _y10_rev_mult = 1.0
-                    for _t in range(10):
-                        _y10_rev_mult *= (1 + g * (1 - _decay) ** _t)
+                    for _gt in _growth_schedule:
+                        _y10_rev_mult *= (1 + _gt)
                 else:
                     _y10_rev_mult = (1 + g) ** 10
                 _y10_rev = rev_base * _y10_rev_mult
@@ -7451,21 +7781,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 tgr = wacc - 0.005
 
             # ── Option III: Tech sub-type schedules ──────────────────────
-            # Growth SaaS / Hyper-Growth / AI / Cybersecurity get:
-            #   - Exponential growth decay (Spec 1)
-            #   - Two-stage WACC fade (+250 bps Y1-3) for early-stage profiles (Spec 3)
-            # Non-Tech (Bank / REIT / Biopharma / default) profiles fall through
-            # with None schedules → legacy constant-growth / constant-WACC behavior
-            # is preserved exactly.
-            _growth_schedule: Optional[list[float]] = None
-            _wacc_schedule:   Optional[list[float]] = None
-            if profile_name in _GROWTH_DECAY_DELTA:
-                _growth_schedule = _decayed_growth_schedule(g, profile_name, years=_PROJECTION_YEARS)
-            if profile_name in _EARLY_STAGE_PROFILES:
-                _wacc_schedule = [
-                    _staged_wacc_for_year(wacc, profile_name, y)
-                    for y in range(1, _PROJECTION_YEARS + 1)
-                ]
+            # MOVED above Gate B. Both schedules are now built immediately
+            # after `tgr` is read from tgr_table, because Gate B's Y10 revenue
+            # path consumes `_growth_schedule` and because the convergence
+            # fade's target must be the pre-Gate-B terminal growth rate.
+            # Non-Tech (Bank / REIT / Biopharma / default) profiles still fall
+            # through with None schedules → legacy constant-growth /
+            # constant-WACC behavior is preserved exactly.
 
             # DEBUG-level log for terminal-multiple diagnostics (Option III Spec 2).
             # Only emitted for Tech sub-types so Bank/REIT paths stay quiet.
