@@ -3879,6 +3879,36 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
     }
 
 
+#: Every spelling the EV/EBITDA branch below answers to. A profile-table
+#: method name that is not a literal here (or in `_DCF_PROJECTION_FAMILY`, or
+#: one of the other branch sets) is dispatched, matches nothing, falls through
+#: to the trailing `return None`, and its weight is silently renormalised onto
+#: the survivors. Two such names existed and neither was caught, because no
+#: ticker in the golden basket routes to their profiles:
+#:
+#:     "EV/EBITDA (Norm)"      Steel / Metals    anchor, weight 0.50
+#:     "EV/EBIT (Pre-bonus)"   Ad / Consulting   anchor, weight 0.40
+#:
+#: Both carried `"implementable": True` and a prose `"note": "proxied by ..."`.
+#: The note was the author's intent; the machine-readable `"proxy"` field — the
+#: one the dispatch at `methods_to_compute` actually reads, and the one 32
+#: other entries use — was never set, and `implementable: True` means the
+#: proxy branch is not taken either. So the anchor of a steel company was
+#: valued on P/BV + FCF Yield + P/E alone, and an ad agency on FCF Yield + P/E
+#: + Rev DCF. `tests/test_profile_method_names_are_dispatched.py` pins the
+#: general invariant over every profile in the table, not just these two.
+_EV_MULTIPLE_METHODS: frozenset[str] = frozenset({
+    "EV/EBITDA", "EV/EBIT", "EV/EBIT (Pre-bonus)", "Utility P/E", "EV/EBITDAR",
+})
+
+#: The subset of the above whose metric is EBIT rather than EBITDA. Named
+#: rather than compared against the single string "EV/EBIT", because the
+#: comparison is what would have routed the pre-bonus spelling to EBITDA: the
+#: branch discriminates on `method_name != "EV/EBIT"`, so any new EBIT
+#: spelling added to the set silently becomes an EBITDA method.
+_EV_EBIT_METHODS: frozenset[str] = frozenset({"EV/EBIT", "EV/EBIT (Pre-bonus)"})
+
+
 def _compute_method_value(
     method_name: str,
     most_recent: dict,
@@ -3985,10 +4015,10 @@ def _compute_method_value(
     # SaaS from using 22x — they're 20x and 30x respectively.
     # SBC extension: tech companies with SBC > 10% of revenue get 10%
     # multiple haircut (SBC is real dilution, not non-cash).
-    if method_name in {"EV/EBITDA", "EV/EBIT", "Utility P/E", "EV/EBITDAR"}:
+    if method_name in _EV_MULTIPLE_METHODS:
         if _is_tech_subtype(sector, profile_name):
             tech_mults = _tech_subtype_multiples(profile_name)
-            base_mult = tech_mults["ev_ebitda"] if method_name != "EV/EBIT" else tech_mults["ev_ebit"]
+            base_mult = tech_mults["ev_ebit"] if method_name in _EV_EBIT_METHODS else tech_mults["ev_ebitda"]
         else:
             base_mult = peer.get("ev_ebitda", 12.0)
         mult = base_mult * sm * growth_premium
@@ -4001,7 +4031,7 @@ def _compute_method_value(
         # Change 7: apply Chinese ADR multiple haircut for CNY-reporting US-listed companies
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
-        metric = ebitda if method_name != "EV/EBIT" else ebit
+        metric = ebit if method_name in _EV_EBIT_METHODS else ebitda
         if metric and metric > 0 and shares > 0:
             ev = metric * mult
             return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
@@ -4012,7 +4042,16 @@ def _compute_method_value(
     # (mean EBITDA margin × current revenue) so peak/trough years don't
     # distort the multiple application. Critical for cyclicals: mining,
     # merchant power, auto, semis, chemicals.
-    if method_name in {"EV/EBITDA (norm)", "EV/EBITDA norm", "Normalized EV/EBITDA"}:
+    # "EV/EBITDA (Norm)" (capital N) is Steel / Metals' 0.50-weight ANCHOR.
+    # Its profile entry used to say `"note": "proxied by EV/EBITDA"` — but the
+    # profile's own rationale is "Normalised mid-cycle EBITDA smooths
+    # commodity price volatility", so the normalised branch is the intent and
+    # the note was a stopgap written when no branch matched the spelling at
+    # all. Routing it to the plain branch instead would satisfy the coverage
+    # test and still hand a steel company its peak-year EBITDA, which is the
+    # defect Phase 1.2B exists to remove. The note now says what the code does.
+    if method_name in {"EV/EBITDA (norm)", "EV/EBITDA (Norm)",
+                       "EV/EBITDA norm", "Normalized EV/EBITDA"}:
         norm_ebitda = most_recent.get("normalized_ebitda")
         if norm_ebitda is None or norm_ebitda <= 0 or shares <= 0:
             return None

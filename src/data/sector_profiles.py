@@ -2626,7 +2626,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "Materials": {
         "Steel / Metals": {
             "methods": [
-                {"name": "EV/EBITDA (Norm)", "weight": 0.50, "anchor": True,  "implementable": True,  "note": "proxied by EV/EBITDA"},
+                {"name": "EV/EBITDA (Norm)", "weight": 0.50, "anchor": True,  "implementable": True,  "note": "dispatched directly to the normalised-EBITDA branch — the capital-N spelling is a branch literal, not a proxy, and mid-cycle EBITDA is what the rationale below asks for"},
                 {"name": "P/BV",             "weight": 0.25, "anchor": False, "implementable": True},
                 {"name": "FCF Yield",        "weight": 0.15, "anchor": False, "implementable": True},
                 {"name": "P/E",              "weight": 0.10, "anchor": False, "implementable": True},
@@ -2704,7 +2704,7 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
     "ProfessionalServices": {
         "Ad / Consulting": {
             "methods": [
-                {"name": "EV/EBIT (Pre-bonus)", "weight": 0.40, "anchor": True,  "implementable": True,  "note": "proxied by EV/EBIT"},
+                {"name": "EV/EBIT (Pre-bonus)", "weight": 0.40, "anchor": True,  "implementable": True,  "note": "dispatched directly to the EV/EBIT branch — no data source here separates partner bonus from staff cost, so reported EBIT is the proxy and the label overstates what was measured"},
                 {"name": "FCF Yield",           "weight": 0.30, "anchor": False, "implementable": True},
                 {"name": "P/E",                 "weight": 0.20, "anchor": False, "implementable": True},
                 {"name": "Rev DCF",             "weight": 0.10, "anchor": False, "implementable": True},
