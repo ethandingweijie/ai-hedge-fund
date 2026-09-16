@@ -426,6 +426,16 @@ _SOTP_LED_METHODS = frozenset({
 _SOTP_LED_PT_MIN_WEIGHT = 0.0
 
 
+#: 12m-target paths that price NTM consensus with a peer multiple. A target
+#: built on one of these is on a different earnings basis from an IV anchored
+#: on normalised (through-cycle) earnings.
+_FORWARD_CONSENSUS_PT_LABELS = frozenset({
+    "EV/EBITDA or EV/Revenue forward multiple",
+    "forward P/E x Year-1 EPS",
+    "forward multiple (profile-specific)",
+})
+
+
 def _sotp_led_share(scenario: dict) -> float:
     """Share of the blended IV carried by analyst-SOTP methods (0..1)."""
     ew = scenario.get("effective_weights") or []
@@ -2449,6 +2459,67 @@ def _terminal_multiple_ev_revenue(profile_name: str, scenario: str = "base") -> 
     return base
 
 
+#: A software terminal EV/Revenue multiple prices revenue that converts at
+#: software gross margins. Below this line the top line is transaction or
+#: inventory revenue and the multiple is not the right one.
+_SAAS_GROSS_MARGIN_FLOOR = 0.65
+#: The gross margin the SaaS terminal multiples are calibrated on; used to
+#: scale the terminal multiple when no peer multiple is available.
+_SAAS_GROSS_MARGIN_REFERENCE = 0.80
+
+
+def _gross_margin(row: Optional[dict]) -> Optional[float]:
+    """Gross margin from a series row: gross profit, else revenue less cost of
+    revenue. None when the row supports neither."""
+    row = row or {}
+    rev = _safe(row.get("revenue"))
+    if not rev or rev <= 0:
+        return None
+    gp = _safe(row.get("gross_profit"))
+    if gp is None:
+        cor = _safe(row.get("cost_of_revenue"))
+        if cor is None:
+            return None
+        gp = rev - cor
+    return gp / rev
+
+
+def _qualified_ev_revenue_multiple(
+    sector: str,
+    profile_name: str,
+    scenario: str,
+    peer: dict,
+    row: Optional[dict],
+) -> tuple[float, str]:
+    """EV/Revenue multiple for the revenue-multiple methods, and its basis.
+
+    Tech sub-type profiles used a mature SaaS terminal multiple (10x for a
+    Hyper-Growth Platform) for any company routed to them. MELI, 2026-09-16:
+    a marketplace and payments business whose peers trade at 2.65x sales was
+    valued at 10x, producing $10,513 a share against a $1,829 price -- a
+    quarter of the blend. A terminal SaaS multiple is only the right multiple
+    for revenue that converts like software, so it is now margin-qualified:
+
+    * not a tech sub-type               -> the peer multiple, as before;
+    * gross margin >= 65% or unknown    -> the terminal multiple, as before;
+    * gross margin below 65%            -> the peer median when there is one,
+      else the terminal multiple scaled by (gross margin / 80%)^2.
+    """
+    if not _is_tech_subtype(sector, profile_name):
+        return float(peer.get("ev_revenue", 4.0)), "peer"
+    terminal = _terminal_multiple_ev_revenue(profile_name, scenario)
+    gm = _gross_margin(row)
+    if gm is None or gm >= _SAAS_GROSS_MARGIN_FLOOR:
+        return terminal, "SaaS terminal"
+    peer_mult = _safe(peer.get("ev_revenue"))
+    if peer_mult is not None and peer_mult > 0:
+        return peer_mult, (f"peer median — gross margin {gm:.0%} is below the "
+                           f"{_SAAS_GROSS_MARGIN_FLOOR:.0%} SaaS floor")
+    scaled = terminal * (max(gm, 0.0) / _SAAS_GROSS_MARGIN_REFERENCE) ** 2
+    return scaled, (f"SaaS terminal scaled by (gross margin {gm:.0%} / "
+                    f"{_SAAS_GROSS_MARGIN_REFERENCE:.0%})^2")
+
+
 def _is_tech_subtype(sector: str, profile_name: str) -> bool:
     """True when the (sector, profile_name) pair warrants tech-specific
     multiples. Excludes Semiconductor (separate sector table).
@@ -3930,10 +4001,8 @@ def _compute_method_value(
         # Option III Spec 2: growth-phase Tech profiles converge to mature
         # equivalent at terminal (Mature SaaS 10x for Growth SaaS, etc.) with
         # bear/bull ±20% band applied inside the helper.
-        if _is_tech_subtype(sector, profile_name):
-            base_mult = _terminal_multiple_ev_revenue(profile_name, scenario)
-        else:
-            base_mult = peer.get("ev_revenue", 4.0)
+        base_mult, _ev_rev_basis = _qualified_ev_revenue_multiple(
+            sector, profile_name, scenario, peer, most_recent)
         mult = base_mult * growth_premium
         # SBC extension (Tier 2 Tech): tech companies with SBC > 10% of
         # revenue get a multiple haircut because SBC is shareholder
@@ -4493,10 +4562,8 @@ def _compute_method_value(
         # Base EV/Revenue IV (tech sub-type aware).
         # Option III Spec 2: use convergence-aware terminal EV/Rev so Growth SaaS
         # anchors to Mature SaaS 10x, not 22x perpetuated to terminal.
-        if _is_tech_subtype(sector, profile_name):
-            base_mult = _terminal_multiple_ev_revenue(profile_name, scenario)
-        else:
-            base_mult = peer.get("ev_revenue", 4.0)
+        base_mult, _ev_rev_basis = _qualified_ev_revenue_multiple(
+            sector, profile_name, scenario, peer, most_recent)
         # Use forward revenue when available, else TTM
         fwd_rev = None
         if forward_consensus is not None:
@@ -8150,6 +8217,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # these names the target IS the convergence path toward the
             # scenario IV, in both directions.
             _sotp_led = _sotp_led_share(scenario_results.get("base") or {}) > _SOTP_LED_PT_MIN_WEIGHT
+            # Normalised-earnings-led valuation: the same mismatch in a
+            # different place. A cyclical anchored on through-cycle earnings
+            # (P/E (norm)) gets an IV from mid-cycle EPS, while the forward
+            # multiple prices NTM consensus -- peak-cycle EPS at a peak-cycle
+            # peer multiple. MU, 2026-09-16: price $927.60, IV $360.24 on
+            # normalised earnings, and a target of $578.91 from the forward
+            # multiple, 61% of the way to IV in one year -- past any capture
+            # the convergence cap allows, because that cap only tightens a
+            # target on the side of spot. The target now takes the
+            # convergence path toward the IV it is meant to be converging on.
+            _norm_led = (
+                not _sotp_led
+                and "(norm)" in (_anchor_method or "")
+                and _12m_pt_method_label in _FORWARD_CONSENSUS_PT_LABELS
+            )
             for _sn in ("bear", "base", "bull"):
                 _scen_iv = scenario_results.get(_sn, {}).get("intrinsic_value")
                 _pt = _12m_targets.get(_sn)
@@ -8161,6 +8243,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _pt = _conv
                     _12m_pt_method_label = (
                         f"convergence toward SOTP-led intrinsic value "
+                        f"({_max_capture:.0%} of the IV-spot gap)")
+                elif _norm_led and _scen_iv:
+                    _conv = round(_convergence_bound(_scen_iv, _spot_for_cap, _max_capture), 2)
+                    _cap_diagnostics.append(
+                        f"{_sn}: pt {_pt!r}→${_conv:.0f} (normalised-earnings-led: "
+                        f"{_max_capture:.0%} of IV-spot gap)")
+                    _12m_targets[_sn] = _conv
+                    _pt = _conv
+                    _12m_pt_method_label = (
+                        f"convergence toward normalised-earnings intrinsic value "
                         f"({_max_capture:.0%} of the IV-spot gap)")
                 if not _scen_iv or not _pt:
                     _cap_diagnostics.append(f"{_sn}: no scen_iv/pt")
