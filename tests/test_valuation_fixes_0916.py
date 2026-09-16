@@ -14,7 +14,10 @@ Maybank ground truth S$11.70-14.30. Five defects, none ticker-specific:
 4. the peer z-score pass ran at phase 10, after the phase-4.5 composite, so
    the valuation was always scored on absolute KPI bands;
 5. the 12m target closed 35% of the gap to IV even when bear, base and bull
-   all sat on the same side of spot.
+   all sat on the same side of spot;
+6. the EV bridge priced the last fiscal YEAR END, so a March year end carried
+   a balance sheet up to four quarters stale -- 09988.HK valued RMB98.6bn of
+   net cash at 31-Mar-2026 when the 30-Jun-2026 quarter showed RMB161.7bn.
 """
 import inspect
 
@@ -200,3 +203,91 @@ def test_peer_z_scores_are_computed_before_the_valuation_composite():
     src = inspect.getsource(pipeline)
     assert src.index('_timed("4_45_zscore_for_valuation")') < \
         src.index('_timed("4_5_dcf_engine")')
+
+
+class TestTheBalanceSheetComesFromTheLatestQuarter:
+    """Flows stay annual; only cash and debt move."""
+    ANNUAL = {"period": "2026-03-31", "revenue": 1_000e9,
+              "cash_and_equivalents": 173.0e9, "short_term_investments": 184.7e9,
+              "total_debt": 259.1e9, "net_debt": 86.1e9}
+
+    class _Row:
+        def __init__(self, **kw):
+            for k, v in kw.items():
+                setattr(self, k, v)
+
+    def _quarter(self, monkeypatch, **kw):
+        row = self._Row(**kw)
+        monkeypatch.setattr(d, "search_line_items", lambda *a, **k: [row])
+
+    def test_a_newer_quarter_replaces_the_year_end_cash_and_debt(self, monkeypatch):
+        self._quarter(monkeypatch, report_period="2026-06-30",
+                      cash_and_equivalents=185.5e9, short_term_investments=242.7e9,
+                      total_debt=266.5e9, net_debt=81.0e9)
+        row = dict(self.ANNUAL)
+        flag = d._refresh_balance_sheet_from_latest_quarter("X", row, "2026-09-16")
+        assert row["_balance_sheet_period"] == "2026-06-30"
+        assert d._net_debt_net_of_investments(row, "Tech") == pytest.approx(-161.7e9)
+        assert row["revenue"] == 1_000e9                      # flows untouched
+        assert "2026-06-30" in flag
+
+    def test_a_stale_or_equal_quarter_is_ignored(self, monkeypatch):
+        for period in ("2026-03-31", "2025-12-31"):
+            self._quarter(monkeypatch, report_period=period,
+                          cash_and_equivalents=1e9, total_debt=2e9, net_debt=1e9)
+            row = dict(self.ANNUAL)
+            assert d._refresh_balance_sheet_from_latest_quarter(
+                "X", row, "2026-09-16") is None
+            assert row == self.ANNUAL
+
+    @pytest.mark.parametrize("missing", ["cash_and_equivalents", "total_debt"])
+    def test_a_partial_quarter_is_ignored(self, monkeypatch, missing):
+        kw = {"report_period": "2026-06-30", "cash_and_equivalents": 185.5e9,
+              "total_debt": 266.5e9, "net_debt": 81.0e9}
+        kw[missing] = None
+        self._quarter(monkeypatch, **kw)
+        row = dict(self.ANNUAL)
+        assert d._refresh_balance_sheet_from_latest_quarter(
+            "X", row, "2026-09-16") is None
+        assert row == self.ANNUAL
+
+    def test_no_quarterly_data_leaves_the_row_alone(self, monkeypatch):
+        monkeypatch.setattr(d, "search_line_items", lambda *a, **k: [])
+        row = dict(self.ANNUAL)
+        assert d._refresh_balance_sheet_from_latest_quarter(
+            "X", row, "2026-09-16") is None
+        assert row == self.ANNUAL
+
+    def test_a_provider_error_is_not_fatal(self, monkeypatch):
+        def boom(*a, **k):
+            raise RuntimeError("provider down")
+        monkeypatch.setattr(d, "search_line_items", boom)
+        row = dict(self.ANNUAL)
+        assert d._refresh_balance_sheet_from_latest_quarter(
+            "X", row, "2026-09-16") is None
+
+    def test_net_debt_is_derived_when_the_quarter_omits_it(self, monkeypatch):
+        self._quarter(monkeypatch, report_period="2026-06-30",
+                      cash_and_equivalents=10e9, short_term_investments=None,
+                      total_debt=25e9, net_debt=None)
+        row = dict(self.ANNUAL)
+        d._refresh_balance_sheet_from_latest_quarter("X", row, "2026-09-16")
+        assert row["net_debt"] == pytest.approx(15e9)
+
+    def test_the_sector_guard_still_applies_to_the_new_quarter(self, monkeypatch):
+        """Molina: investments back medical claims, so they are not spare cash
+        in the fresh quarter either."""
+        self._quarter(monkeypatch, report_period="2026-06-30",
+                      cash_and_equivalents=5.0e9, short_term_investments=3.9e9,
+                      total_debt=4.0e9, net_debt=-1.0e9)
+        row = dict(self.ANNUAL)
+        d._refresh_balance_sheet_from_latest_quarter(
+            "X", row, "2026-09-16", None, "Healthcare")
+        assert d._net_debt_net_of_investments(row, "Healthcare") == pytest.approx(-1.0e9)
+
+    def test_every_refreshed_line_is_fx_converted(self):
+        assert set(d._BALANCE_SHEET_LINES) <= set(d._FX_MONETARY_FIELDS)
+
+    def test_the_engine_refreshes_before_it_reads_net_debt(self):
+        src = inspect.getsource(d)
+        assert src.index("_bs_flag = _refresh_balance_sheet_from_latest_quarter(") <             src.index("net_debt     = _net_debt_net_of_investments(most_recent, sector)")

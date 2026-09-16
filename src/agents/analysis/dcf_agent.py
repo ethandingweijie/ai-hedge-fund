@@ -322,6 +322,63 @@ _NO_INVESTMENT_NETTING_SECTORS = frozenset({"Financials", "Insurance", "Banks",
                                             "Healthcare", "Health Care"})
 
 
+#: Balance-sheet lines the EV bridge reads. Everything else on the row is a
+#: flow (revenue, EBIT, FCF) and must stay on the annual series.
+_BALANCE_SHEET_LINES = ("cash_and_equivalents", "short_term_investments",
+                        "total_debt", "net_debt")
+
+
+def _refresh_balance_sheet_from_latest_quarter(
+    ticker: str,
+    row: dict,
+    end_date: str,
+    api_key=None,
+    sector: str = "",
+) -> Optional[str]:
+    """Overlay ``row``'s cash and debt lines with the latest reported quarter.
+
+    The engine anchors on the last ANNUAL row, so a company whose fiscal year
+    ends in March carries a balance sheet up to four quarters stale into every
+    valuation. 09988.HK: the 31-Mar-2026 year end showed RMB98.6bn net cash,
+    the 30-Jun-2026 quarter RMB161.7bn -- short-term investments alone moved
+    RMB58bn in the gap -- so the SOTP, the EV/EBITDA bridge and every other
+    EV-based method were pricing a seasonal low nobody reports any more.
+
+    Flows (revenue, EBIT, FCF) stay annual; only the four balance-sheet lines
+    move, and only when the quarter is strictly newer and carries both a cash
+    and a debt figure. Mutates in place -- the row IS ``series[-1]``, and the
+    FX loop downstream converts the series -- and returns a flag, or None when
+    nothing was applied (no quarterly data, a stale quarter, a partial row).
+    """
+    try:
+        q = search_line_items(ticker, list(_BALANCE_SHEET_LINES), end_date,
+                              period="quarterly", limit=1, api_key=api_key)
+    except Exception:
+        return None
+    if not q:
+        return None
+    qr = q[0]
+    q_period = str(getattr(qr, "report_period", "") or "")
+    if not q_period or q_period <= str(row.get("period") or ""):
+        return None
+    cash = getattr(qr, "cash_and_equivalents", None)
+    debt = getattr(qr, "total_debt", None)
+    if not isinstance(cash, (int, float)) or not isinstance(debt, (int, float)):
+        return None
+    before = _net_debt_net_of_investments(row, sector)
+    for field in _BALANCE_SHEET_LINES:
+        row[field] = getattr(qr, field, None)
+    if not isinstance(row.get("net_debt"), (int, float)):
+        row["net_debt"] = float(debt) - float(cash)
+    row["_balance_sheet_period"] = q_period
+    after = _net_debt_net_of_investments(row, sector)
+    return (f"Balance sheet from {q_period}, not the {row.get('period')} year "
+            f"end: net debt {before / 1e9:,.1f}bn → {after / 1e9:,.1f}bn "
+            f"(cash {cash / 1e9:,.1f}bn, short-term investments "
+            f"{(getattr(qr, 'short_term_investments', None) or 0) / 1e9:,.1f}bn, "
+            f"debt {debt / 1e9:,.1f}bn)")
+
+
 def _net_debt_net_of_investments(row: dict, sector: str = "") -> float:
     """Net debt with short-term investments counted as cash.
 
@@ -5450,6 +5507,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         revenue_base = most_recent["revenue"]
         shares       = most_recent["shares_outstanding"]
         leverage     = most_recent["debt_to_equity"] or 0.0
+        # The EV bridge prices today's balance sheet, not the one that happened
+        # to sit at the fiscal year end. Flows stay annual.
+        _bs_flag = _refresh_balance_sheet_from_latest_quarter(
+            ticker, most_recent, end_date, api_key, sector)
+        if _bs_flag:
+            print(f"  [balance-sheet] {ticker}: {_bs_flag}")
         net_debt     = _net_debt_net_of_investments(most_recent, sector)
 
         # ── Spot + 52w + moving averages — FMP /stable/quote (PRIMARY) ────
@@ -5680,6 +5743,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
 
         # ── Ticker-level forward flags (seed; all subsequent blocks append) ──
         ticker_forward_flags: list[str] = []
+        if _bs_flag:
+            ticker_forward_flags.append(_bs_flag)
         # Forward-test substrate. A gate holds BOTH values at the moment it
         # fires, but the flag records them only as prose, which cannot be
         # scored. These structured pairs are what the reconciliation worker
