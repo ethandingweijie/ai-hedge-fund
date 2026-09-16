@@ -159,13 +159,34 @@ def tickers_in(doc: dict) -> list[str]:
 
 
 def build_doc(replays: dict[str, dict], *, reason: str,
-              commit: str = "unknown") -> dict:
-    """Assemble a snapshot document from ``{fixture: replay_result}``."""
+              commit: str = "unknown",
+              head_commit: str = "unknown") -> dict:
+    """Assemble a snapshot document from ``{fixture: replay_result}``.
+
+    Two different commits are recorded, and conflating them is a real trap:
+
+    ``commit``
+        The commit the FIXTURES were recorded at. Sourced from the replay
+        results' ``meta.commit``, so it is a property of the recorded inputs
+        and does not advance when the baseline is rewritten.
+    ``head_commit``
+        ``HEAD`` at the moment of regeneration — i.e. the parent of the commit
+        that will carry the new baseline, since the regeneration is normally
+        committed immediately afterwards. This is the one an investigator
+        wants when a golden test fails: it says which engine produced the
+        pinned numbers.
+
+    Only ``commit`` existed originally, and the failure message presented it as
+    "baseline pinned at <sha>". Three consecutive CHANGELOG entries therefore
+    all claimed ``30b2670`` while two of them were actually written at
+    ``c87d38c`` and ``a740f0e`` — a diagnostic that points at the wrong engine.
+    """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     doc: dict[str, Any] = {
         "_meta": {
             "generated_at": now,
             "commit": commit,
+            "regenerated_at_commit": head_commit,
             "reason": reason,
             "tolerance": TOLERANCE,
             "tickers": len(replays),
@@ -206,7 +227,8 @@ def append_changelog(doc: dict, *, reason: str) -> None:
                      "exists because a pinned end-to-end valuation moved, and\n"
                      "says why.\n\n")
         fh.write(f"## {meta.get('generated_at', '?')}\n\n"
-                 f"- commit: `{meta.get('commit', '?')}`\n"
+                 f"- regenerated at HEAD: `{meta.get('regenerated_at_commit', '?')}`\n"
+                 f"- fixtures recorded at: `{meta.get('commit', '?')}`\n"
                  f"- tickers: {meta.get('tickers', '?')}\n"
                  f"- tolerance: ±{TOLERANCE:.0%} on numeric leaves\n"
                  f"- reason: {reason}\n\n")

@@ -108,7 +108,8 @@ def snapshot(replays, golden_update_reason, replay_dir) -> dict:
         commit = next(
             (r.get("meta", {}).get("commit") for r in replays.values()
              if r.get("meta", {}).get("commit")), "unknown")
-        doc = gs.build_doc(replays, reason=golden_update_reason, commit=commit)
+        doc = gs.build_doc(replays, reason=golden_update_reason,
+                           commit=commit, head_commit=_head_commit())
         gs.save(doc, reason=golden_update_reason)
         return doc
     if not gs.exists():
@@ -208,10 +209,20 @@ def test_golden_valuation(name, replays, snapshot):
 
     meta = result.get("meta") or {}
     snap_meta = snapshot.get("_meta") or {}
+    # Baselines written before `regenerated_at_commit` existed carry only the
+    # fixture commit. Say so rather than presenting it as the engine's commit,
+    # which is the misreading this line exists to prevent.
+    _regen = snap_meta.get("regenerated_at_commit")
+    _baseline_line = (
+        f"pinned {snap_meta.get('generated_at', '?')}, regenerated at HEAD "
+        f"{str(_regen)[:10]}" if _regen else
+        f"pinned {snap_meta.get('generated_at', '?')} (baseline predates "
+        f"regenerated_at_commit; engine commit unknown)")
     pytest.fail(
         f"\n\n{name} ({result.get('ticker')}) moved off the golden baseline.\n"
         f"\n"
-        f"  baseline  pinned {snap_meta.get('generated_at', '?')} at "
+        f"  baseline  {_baseline_line}\n"
+        f"            fixtures recorded at "
         f"{str(snap_meta.get('commit', '?'))[:10]}\n"
         f"            reason: {snap_meta.get('reason', '?')}\n"
         f"  fixture   recorded {meta.get('captured_at', '?')} at "
