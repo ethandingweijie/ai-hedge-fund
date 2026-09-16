@@ -386,10 +386,13 @@ def sotp_scenario_tps(assumptions: dict, scenarios: dict,
                 continue
             target.pop("pe_multiple", None)
             target.pop("ev_rev_multiple", None)
+            target.pop("ev_ebit_multiple", None)
             if ov.get("pe_multiple") is not None:
                 target["pe_multiple"] = float(ov["pe_multiple"])
             if ov.get("ev_rev_multiple") is not None:
                 target["ev_rev_multiple"] = float(ov["ev_rev_multiple"])
+            if ov.get("ev_ebit_multiple") is not None:
+                target["ev_ebit_multiple"] = float(ov["ev_ebit_multiple"])
             applied.append(str(target.get("name", "")))
         if not applied:
             continue

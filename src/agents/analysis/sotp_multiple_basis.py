@@ -548,29 +548,38 @@ def apply_multiple_basis(segments: list[dict], rs_segments: list[dict], *,
 
         llm_pe, llm_evrev = entry.get("pe_multiple"), entry.get("ev_rev_multiple")
 
-        if rs is not None and (rs.get("pe_multiple") or rs.get("ev_rev_multiple")):
+        if rs is not None and (rs.get("pe_multiple") or rs.get("ev_rev_multiple")
+                               or rs.get("ev_ebit_multiple")):
             # Research override — enforce the one-metric rule if the block
-            # somehow carried both.
+            # somehow carried more than one. EV/EBIT(DA) is a third basis the
+            # research layer states and the segment engine can apply, so it
+            # overrides on the same footing rather than being dropped and
+            # replaced by a comp multiple on a different metric.
             rs_pe, rs_ev = rs.get("pe_multiple"), rs.get("ev_rev_multiple")
+            rs_eb = rs.get("ev_ebit_multiple")
             if rs_pe and rs_ev:
                 if loss:
                     rs_pe = None
                 else:
                     rs_ev = None
+            if rs_eb and (rs_pe or rs_ev):
+                rs_eb = None
             entry["pe_multiple"] = rs_pe
             entry["ev_rev_multiple"] = rs_ev
+            entry["ev_ebit_multiple"] = rs_eb
             entry["source"] = "deep_research_2a5"
             if rs.get("rationale"):
                 entry["rationale"] = rs["rationale"]
             status = "research_override"
-            applied = rs_pe if rs_pe else rs_ev
-            applied_metric = "pe" if rs_pe else "ev_rev"
+            applied = rs_pe or rs_ev or rs_eb
+            applied_metric = "pe" if rs_pe else "ev_rev" if rs_ev else "ev_ebit"
         elif model_pred is not None:
             derived = round(model_pred["point"], 2)
             if model_metric == "pe":
                 entry["pe_multiple"], entry["ev_rev_multiple"] = derived, None
             else:
                 entry["ev_rev_multiple"], entry["pe_multiple"] = derived, None
+            entry["ev_ebit_multiple"] = None
             entry["source"] = "multiple_model_v1"
             note = (f"model basis: {derived}x "
                     f"{'P/E' if model_metric == 'pe' else 'EV/Rev'} "
@@ -588,6 +597,7 @@ def apply_multiple_basis(segments: list[dict], rs_segments: list[dict], *,
             else:
                 entry["ev_rev_multiple"] = derived
                 entry["pe_multiple"] = None
+            entry["ev_ebit_multiple"] = None
             entry["source"] = "comp_basis"
             entry["rationale"] = _basis_rationale(entry.get("rationale") or "",
                                                   basis)

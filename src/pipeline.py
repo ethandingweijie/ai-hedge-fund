@@ -1021,6 +1021,47 @@ def run_advanced_pipeline(
                         "sotp_extractor", ticker,
                         "[snapshot] validated trialed assumptions attached")
 
+        # ── Peer z-scores BEFORE the engine (not only before the card) ─────
+        # The V4-beta composite is built to prefer a peer-relative z-tier over
+        # the static KPI band whenever a cohort exists, and the DCF engine
+        # applies that composite to the whole multiples bucket at phase 4.5 --
+        # but the z-score pass ran at phase 10, so the valuation never saw a
+        # z-score and every ticker was scored on absolute bands. 09618.HK,
+        # 2026-09-15: a 1.5% GAAP operating margin scored "weak" on a mega-cap
+        # band calibrated for 30-40% hyperscaler margins and took 17.5% off the
+        # multiples bucket, while the cohort put JD 0.4 sigma from the median
+        # -- in-band. Runs the archive cannot cohort (fewer than 3 peers) still
+        # fall back to the bands, and the phase-10 pass below stays for the
+        # buckets the FMP augmentation fills in after this point.
+        with _timed("4_45_zscore_for_valuation"):
+            try:
+                from src.data.zscore_engine import (
+                    augment_metrics_with_z_scores as _z_augment_early,
+                )
+                from src.data.sector_kpi_framework import (
+                    is_legacy_profile as _is_legacy_early,
+                )
+                _pn_early = state["data"].get("profile_names", {})
+                _early_hits: list[str] = []
+                for _t in (state["data"].get("tickers", []) or list(_pn_early)):
+                    _profile = (_pn_early.get(_t)
+                                or state["data"].get("profile_name") or "")
+                    if not _profile or _is_legacy_early(_profile):
+                        continue
+                    for _state_key in ("framework_metrics", "framework_metrics_all",
+                                       "insurance_metrics_all", "bank_metrics_all"):
+                        _bucket = state["data"].get(_state_key) or {}
+                        if isinstance(_bucket.get(_t), dict):
+                            _bucket[_t] = _z_augment_early(_profile, _t, _bucket[_t])
+                            state["data"][_state_key] = _bucket
+                            if _bucket[_t].get("_z_scores"):
+                                _early_hits.append(f"{_t}:{len(_bucket[_t]['_z_scores'])}")
+                print(f"  [zscore_engine/pre-valuation] "
+                      f"{', '.join(_early_hits) if _early_hits else 'no peer cohorts yet'}")
+            except Exception as _e:
+                print(f"  [zscore_engine/pre-valuation] failed: {_e!r} — "
+                      f"composite falls back to band-based tiers")
+
         # ----------------------------------------------------------------
         # PHASE 4.5 — DCF Engine (deterministic, no LLM)
         # Cache: reuse dcf_range if all tickers have a <3-day cached run.

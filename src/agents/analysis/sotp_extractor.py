@@ -372,18 +372,51 @@ def _fmp_estimates_anchor(ticker: str, end_date: str, api_key) -> dict | None:
     }
 
 
-def _classify_multiple_ref(ref: str) -> tuple[float | None, float | None]:
-    """Classify a ``multiple_ref`` string ("12x P/E …", "1.25x EV/Sales …")
-    into ``(pe_multiple, ev_rev_multiple)`` — one-metric classification,
-    shared by SEGMENT and SCENARIO parsing."""
+# Bases the research layer writes that the segment engine cannot value from
+# revenue and a margin. A segment has no book value or NAV of its own here, so
+# coercing "0.7x P/B" into a P/E is not a conservative reading of the note --
+# it valued Keppel's entire property arm at S$23m, 0.19% of NAV (BN4.SI,
+# 2026-09-15). The number is dropped and the tiered fallback multiple applies.
+_RE_EARNINGS_BASIS = re.compile(r"p\s*/\s*e\b|price\s*/\s*earnings|\bnopat\b", re.I)
+_RE_EBIT_BASIS = re.compile(r"\bev\s*/\s*ebitda?\b|\bebitda\b|\bebit\b", re.I)
+_RE_BOOK_BASIS = re.compile(
+    r"p\s*/\s*b\b|p\s*/\s*bv\b|p\s*/\s*nav\b|price\s*/\s*book"
+    r"|price\s+to\s+book|discount\s+to\s+book|book\s+value"
+    r"|\bnav\b|\brnav\b|net\s+asset\s+value", re.I)
+_RE_REVENUE_BASIS = re.compile(r"\bev\s*[/-]|\bsales\b|\brevenue\b", re.I)
+
+
+def _classify_multiple_ref(
+    ref: str,
+) -> tuple[float | None, float | None, float | None]:
+    """Classify a ``multiple_ref`` string ("12x P/E …", "1.25x EV/Sales …",
+    "8x EV/EBITDA …") into ``(pe_multiple, ev_rev_multiple, ev_ebit_multiple)``
+    — one-metric classification, shared by SEGMENT and SCENARIO parsing.
+
+    The stated basis decides which slot the number lands in. Before this,
+    every ref that merely contained "ev/" became an EV/**Revenue** multiple:
+    "8x EV/EBITDA" on M1 (BN4.SI, 2026-09-15) multiplied revenue instead of
+    earnings and made a telco 40% of Keppel's NAV. Bases the engine cannot
+    apply return all-None so the caller falls back to the tiered multiple.
+
+    An EV/EBITDA multiple lands in the EV/EBIT slot and is applied to segment
+    EBIT: no segment D&A is reported anywhere in the run, and understating a
+    segment beats inventing its depreciation.
+    """
     m = re.search(r"(\d+(?:\.\d+)?)\s*x", ref or "")
     if not m:
-        return None, None
+        return None, None, None
     mult_val = float(m.group(1))
-    ref_lower = ref.lower()
-    if "ev/" in ref_lower or "ev-" in ref_lower or "sales" in ref_lower:
-        return None, mult_val
-    return mult_val, None
+    text = ref or ""
+    if _RE_EARNINGS_BASIS.search(text):
+        return mult_val, None, None
+    if _RE_EBIT_BASIS.search(text):
+        return None, None, mult_val
+    if _RE_BOOK_BASIS.search(text):
+        return None, None, None
+    if _RE_REVENUE_BASIS.search(text):
+        return None, mult_val, None
+    return mult_val, None, None
 
 
 def _parse_research_sotp_block(text: str) -> dict | None:
@@ -429,6 +462,7 @@ def _parse_research_sotp_block(text: str) -> dict | None:
                 "name": kv.get("name", "").split("(Source")[0].strip(),
                 "revenue_fwd": None, "ebit_margin": None,
                 "pe_multiple": None, "ev_rev_multiple": None,
+                "ev_ebit_multiple": None,
                 "rationale": kv.get("multiple_ref", ""),
                 "evidence": kv.get("unit_economics", ""),
                 "source": "deep_research_2a5",
@@ -439,9 +473,16 @@ def _parse_research_sotp_block(text: str) -> dict | None:
             margin = _num(kv, "ebit_margin_pct")
             if margin is not None:
                 seg["ebit_margin"] = margin / 100.0
-            pe_m, evrev_m = _classify_multiple_ref(kv.get("multiple_ref", ""))
+            _ref = kv.get("multiple_ref", "")
+            pe_m, evrev_m, evebit_m = _classify_multiple_ref(_ref)
             seg["pe_multiple"] = pe_m
             seg["ev_rev_multiple"] = evrev_m
+            seg["ev_ebit_multiple"] = evebit_m
+            if _ref and pe_m is None and evrev_m is None and evebit_m is None:
+                seg["rationale"] = (
+                    f"{_ref} — basis not applicable to a revenue/margin "
+                    f"segment; tiered EV/Rev multiple applied"
+                )
             if seg["name"] and seg["revenue_fwd"]:
                 out["segments"].append(seg)
         elif head == "ASSOCIATES":
@@ -473,19 +514,23 @@ def _parse_research_sotp_block(text: str) -> dict | None:
                             continue
                         sname, sref = pair.split(":", 1)
                         sname = sname.split("(Source")[0].strip()
-                        pe_m, evrev_m = _classify_multiple_ref(sref)
-                        if not sname or (pe_m is None and evrev_m is None):
+                        pe_m, evrev_m, evebit_m = _classify_multiple_ref(sref)
+                        if not sname or (pe_m is None and evrev_m is None
+                                         and evebit_m is None):
                             continue
                         scen.append({"name": sname, "pe_multiple": pe_m,
                                      "ev_rev_multiple": evrev_m,
+                                     "ev_ebit_multiple": evebit_m,
                                      "rationale": sref.strip()})
                 elif kv.get("segment"):
                     sname = kv["segment"].split("(Source")[0].strip()
-                    pe_m, evrev_m = _classify_multiple_ref(
+                    pe_m, evrev_m, evebit_m = _classify_multiple_ref(
                         kv.get("multiple_ref", ""))
-                    if sname and (pe_m is not None or evrev_m is not None):
+                    if sname and (pe_m is not None or evrev_m is not None
+                                  or evebit_m is not None):
                         scen.append({"name": sname, "pe_multiple": pe_m,
                                      "ev_rev_multiple": evrev_m,
+                                     "ev_ebit_multiple": evebit_m,
                                      "rationale": kv.get("multiple_ref", "")})
     if not any([out["segments"], out["associates_fair"], out["net_cash"],
                 out["holdco_pct"], out["tax_rate"], out.get("scenarios")]):
@@ -704,6 +749,8 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
             if m:
                 entry["pe_multiple"] = m.pe_multiple if m.pe_multiple is not None else entry.get("pe_multiple")
                 entry["ev_rev_multiple"] = m.ev_rev_multiple if m.ev_rev_multiple is not None else entry.get("ev_rev_multiple")
+                if m.pe_multiple is not None or m.ev_rev_multiple is not None:
+                    entry["ev_ebit_multiple"] = None      # one metric per segment
                 entry["rationale"] = m.rationale or entry.get("rationale", "")
                 entry["source"] = "fmp_anchor+research_llm" if anchors else "research_llm"
             else:
@@ -720,6 +767,8 @@ def run_sotp_extractor(state: AgentState) -> AgentState:
                     entry = merged_segments[_idx]
                     entry["pe_multiple"] = m.pe_multiple if m.pe_multiple is not None else entry.get("pe_multiple")
                     entry["ev_rev_multiple"] = m.ev_rev_multiple if m.ev_rev_multiple is not None else entry.get("ev_rev_multiple")
+                    if m.pe_multiple is not None or m.ev_rev_multiple is not None:
+                        entry["ev_ebit_multiple"] = None  # one metric per segment
                     entry["rationale"] = m.rationale or entry.get("rationale", "")
                     entry["source"] = "fmp_anchor+research_llm" if anchors else "research_llm"
 

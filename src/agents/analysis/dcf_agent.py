@@ -357,6 +357,7 @@ def _net_debt_net_of_investments(row: dict, sector: str = "") -> float:
 _SOTP_LED_METHODS = frozenset({
     "SOTP (analyst)", "Analyst SOTP", "SOTP (segments)",
     "SOTP / NAV", "SOTP / NAV (look-through)",
+    "SOTP (published)", "Published SOTP",
 })
 #: Strictly above this share of the blend counts (any positive weight).
 _SOTP_LED_PT_MIN_WEIGHT = 0.0
@@ -1230,6 +1231,54 @@ def _compute_published_sotp(ticker: str, shares: float):
 # NAV. Pure function of the assumptions dict — deterministic by construction
 # (no sampling, no time-dependent inputs).
 
+def _refresh_sotp_net_cash(
+    assumptions: dict,
+    net_debt: Optional[float],
+) -> tuple[dict, Optional[str]]:
+    """Restate a SOTP assumptions dict's ``net_cash`` from this run's balance
+    sheet. Returns ``(assumptions, flag)``; the input is never mutated.
+
+    ``net_cash`` on an assumptions dict is a captured fact, and both sources
+    of it go stale or disagree with the rest of the run:
+
+    * the snapshot artifact freezes it -- 09618.HK carried an August capture
+      of cash-minus-debt, RMB75.8bn of short-term investments short of the
+      live figure, and re-anchored its segment revenue every run while the
+      cash line never moved;
+    * the live extractor nets short-term investments for every sector,
+      where the engine's own net debt applies the sector guard (an insurer's
+      investment book is not spare cash).
+
+    The engine already holds this run's net debt, sector-guarded and FX
+    converted into the reporting currency, so the SOTP uses that and its cash
+    line agrees with every EV-based method in the same run.
+
+    FX-safe by construction: the engine divides by ``fx_usd_to_reporting``
+    here and ``_sotp_analyst_style`` multiplies the result by the same rate,
+    so the round trip cancels and net cash contributes exactly
+    ``-net_debt / shares`` in the reporting currency at any rate.
+    """
+    if not isinstance(assumptions, dict) or not isinstance(net_debt, (int, float)):
+        return assumptions, None
+    fx = _safe(assumptions.get("fx_usd_to_reporting")) or 1.0
+    if fx <= 0:
+        return assumptions, None
+    live = -float(net_debt) / fx
+    stated = _safe(assumptions.get("net_cash"))
+    out = dict(assumptions)
+    out["net_cash"] = live
+    out["_net_cash_source"] = "engine_net_debt"
+    if stated is not None:
+        out["_net_cash_stated"] = stated
+    if stated is None or abs(live - stated) <= 0.01 * max(abs(stated), 1.0):
+        return out, None
+    return out, (
+        f"SOTP (analyst): net cash restated to this run's balance sheet, "
+        f"${live / 1e9:.1f}bn vs ${stated / 1e9:.1f}bn on the stored "
+        f"assumptions ({(live - stated) / 1e9:+.1f}bn)"
+    )
+
+
 def _sotp_analyst_style(
     assumptions: dict,
     shares: float,
@@ -1242,7 +1291,7 @@ def _sotp_analyst_style(
     ``assumptions`` schema (mirrors SOTPAssumptionsOutput):
         segments: [{name, revenue_fwd, ebit?, unit_economics?{volume_annual,
                     profit_per_unit, fx_to_usd?}, tax_rate?, pe_multiple?,
-                    ev_rev_multiple?, rationale?}]
+                    ev_rev_multiple?, ev_ebit_multiple?, rationale?}]
         default_tax_rate?, holdco_discount_pct?, associates_investments?,
         net_cash?, fx_usd_to_reporting?
 
@@ -1282,6 +1331,7 @@ def _sotp_analyst_style(
                 ebit = rev * margin
         pe = _safe(seg.get("pe_multiple"))
         evrev = _safe(seg.get("ev_rev_multiple"))
+        evebit = _safe(seg.get("ev_ebit_multiple"))
 
         # Sell-side convention: anchor on the higher of the P/E-on-NOPAT and
         # EV/Rev paths (GS tables show both columns and effectively adopt the
@@ -1291,6 +1341,13 @@ def _sotp_analyst_style(
             anchors.append(("P/E", pe, ebit * (1.0 - tax) * pe))
         if evrev and evrev > 0:
             anchors.append(("EV/Rev", evrev, rev * evrev))
+        # EV/EBIT — the basis the research layer states as "8x EV/EBITDA" or
+        # "6x EV/EBIT". Applied to pre-tax segment EBIT, unlevered like the
+        # EV/Rev path (the docstring's GS AMZN replication uses tax_rate 0 for
+        # exactly this). Only ever set when the stated basis was one of those,
+        # so it never competes with a P/E or EV/Rev the research layer gave.
+        if evebit and evebit > 0 and ebit is not None and ebit > 0:
+            anchors.append(("EV/EBIT", evebit, ebit * evebit))
         if not anchors:
             _, mult = _classify_segment(str(seg.get("name", "")), tier=tier)
             anchors.append(("EV/Rev (fallback)", mult, rev * mult))
@@ -4753,11 +4810,27 @@ def _promote_sotp_analyst_profile(profile_data: Optional[dict],
     methods = profile_data["methods"]
     if any(m.get("name") in _SOTP_ANALYST_METHOD_NAMES for m in methods):
         return profile_data
+    # The promoted weight belongs to the SOTP FAMILY, not to the machine-built
+    # member of it. A profile that already carries a curated SOTP -- a
+    # look-through NAV template with sourced stakes, or a broker's own
+    # published table -- splits the weight evenly with it, on top of whatever
+    # the profile already gave it. BN4.SI, 2026-09-15: the look-through said
+    # S$12.25 and the broker table S$11.16, both inside the S$11.70-14.30
+    # ground-truth range, and the extractor's S$7.12 outvoted them 75% to 15%
+    # and published a SELL. With no curated SOTP present the analyst takes the
+    # whole weight and blends are bit-identical to before.
+    peers = [m for m in methods if m.get("name") in _SOTP_LED_METHODS]
+    share = _SOTP_ANALYST_BLEND_WEIGHT / float(len(peers) + 1)
+    kept = [
+        {**m, "weight": float(m.get("weight") or 0.0) + share}
+        if m.get("name") in _SOTP_LED_METHODS else m
+        for m in methods
+    ]
     return {
         **profile_data,
-        "methods": list(methods) + [{
+        "methods": kept + [{
             "name": "SOTP (analyst)",
-            "weight": _SOTP_ANALYST_BLEND_WEIGHT,
+            "weight": share,
             "anchor": False,
             "implementable": True,
         }],
@@ -5722,6 +5795,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _ticker_sotp = dict(_ticker_sotp)
                 _usd_fx = get_fx_rate("USD", _target_ccy, api_key)
                 _ticker_sotp["fx_usd_to_reporting"] = _usd_fx if _usd_fx and _usd_fx > 0 else 1.0
+            _ticker_sotp, _net_cash_flag = _refresh_sotp_net_cash(
+                _ticker_sotp, net_debt)
+            if _net_cash_flag:
+                ticker_forward_flags.append(_net_cash_flag)
             _ticker_sotp, _sotp_gate_flag = _gate_live_sotp(
                 ticker, _ticker_sotp, shares, net_debt)
             if _sotp_gate_flag:
@@ -7927,6 +8004,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _max_capture = 0.20
             else:
                 _max_capture = 0.35
+            # Unanimous scenarios: when bear, base AND bull all land on the
+            # same side of spot, the model is not arguing about direction,
+            # only about distance, and the cap is the only thing holding the
+            # target back. 09618.HK, 2026-09-15: a bear IV of HK$134 against a
+            # HK$106 spot still published a HK$120 target -- 18% below the
+            # run's own IV and well under the Street (GS HK$169, JPM HK$148),
+            # because a third of the gap is all a 35% cap can close. A split
+            # scenario set keeps the base capture: there the cap is carrying
+            # genuine disagreement.
+            _scen_ivs = [
+                v for v in (
+                    (scenario_results.get(_s) or {}).get("intrinsic_value")
+                    for _s in ("bear", "base", "bull")
+                ) if isinstance(v, (int, float)) and v > 0
+            ]
+            _unanimous = len(_scen_ivs) == 3 and (
+                all(v > _spot_for_cap for v in _scen_ivs)
+                or all(v < _spot_for_cap for v in _scen_ivs))
+            if _unanimous:
+                _max_capture = min(0.50, _max_capture + 0.15)
             _capped_any = False
             _cap_diagnostics: list[str] = []
             # SOTP-led valuation: the generic forward multiple (one peer-set
