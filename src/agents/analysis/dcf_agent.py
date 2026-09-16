@@ -365,6 +365,12 @@ def _refresh_balance_sheet_from_latest_quarter(
     debt = getattr(qr, "total_debt", None)
     if not isinstance(cash, (int, float)) or not isinstance(debt, (int, float)):
         return None
+    # An all-zero row is an unreported period, not a debt-free quarter: the
+    # provider returns one for D05.SI at 2026-03-31, cash and debt both 0.0
+    # against RMB150bn of cash either side of it. Taking it would wipe the
+    # balance sheet out of the EV bridge.
+    if float(cash) == 0.0 and float(debt) == 0.0:
+        return None
     before = _net_debt_net_of_investments(row, sector)
     for field in _BALANCE_SHEET_LINES:
         row[field] = getattr(qr, field, None)

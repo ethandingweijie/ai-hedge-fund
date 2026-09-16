@@ -254,6 +254,26 @@ class TestTheBalanceSheetComesFromTheLatestQuarter:
             "X", row, "2026-09-16") is None
         assert row == self.ANNUAL
 
+    def test_an_all_zero_quarter_is_an_unreported_period(self, monkeypatch):
+        """D05.SI at 2026-03-31 comes back with cash and debt both 0.0, with
+        S$150bn of cash in the quarters either side."""
+        self._quarter(monkeypatch, report_period="2026-06-30",
+                      cash_and_equivalents=0.0, short_term_investments=0.0,
+                      total_debt=0.0, net_debt=0.0)
+        row = dict(self.ANNUAL)
+        assert d._refresh_balance_sheet_from_latest_quarter(
+            "X", row, "2026-09-16") is None
+        assert row == self.ANNUAL
+
+    def test_a_genuinely_debt_free_quarter_still_applies(self, monkeypatch):
+        self._quarter(monkeypatch, report_period="2026-06-30",
+                      cash_and_equivalents=40e9, short_term_investments=None,
+                      total_debt=0.0, net_debt=-40e9)
+        row = dict(self.ANNUAL)
+        assert d._refresh_balance_sheet_from_latest_quarter(
+            "X", row, "2026-09-16") is not None
+        assert d._net_debt_net_of_investments(row, "Tech") == pytest.approx(-40e9)
+
     def test_no_quarterly_data_leaves_the_row_alone(self, monkeypatch):
         monkeypatch.setattr(d, "search_line_items", lambda *a, **k: [])
         row = dict(self.ANNUAL)
