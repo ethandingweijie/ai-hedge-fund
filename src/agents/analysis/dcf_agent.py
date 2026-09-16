@@ -296,6 +296,50 @@ _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     "Digital Asset Mining",
 })
 
+#: Phase 1.2B — peak-consensus trigger. Forward consensus EPS above EITHER
+#: bound means the number being capitalised has not happened in any year of the
+#: available history and, on a cyclical, will not hold: MU's FY27 consensus of
+#: $156.08 measured 20.0x its best year ($7.81) and 26.0x its own mean plus two
+#: standard deviations. Both bounds are owner-specified; the two-arm form
+#: matters because neither alone is sufficient. A multiple-of-max test misses a
+#: name whose history is uniformly depressed (2x a trough is still a trough); a
+#: mean-plus-sigma test misses one whose history is a single spike. Measured on
+#: the golden basket MU fires both arms and FCX fires neither — FCX's forward
+#: $2.95 against a sigma line of $3.19 is within 8%, close enough that a small
+#: feed revision flips it, which is recorded rather than tuned away.
+_PEAK_EPS_MAX_MULTIPLE: float = 2.0
+_PEAK_EPS_SIGMA_MULTIPLE: float = 2.0
+
+#: Owner floors on the mid-cycle P/B-ROE leg, both recording a flag when they
+#: bind. ``CoE - g`` at or below zero divides by nothing and publishes an
+#: arbitrary multiple; a justified P/B below 0.20x on a going concern is a
+#: liquidation statement the Gordon form is not equipped to make. These are the
+#: only bounds Phase 1.2B adds — there is deliberately no upper cap on P/B,
+#: because the owner specified floors and a cap would be an unauthorised clamp
+#: on an estimate.
+_PB_ROE_MIN_SPREAD: float = 0.025
+_PB_ROE_MIN_PB: float = 0.20
+
+#: Minimum observations before the sigma arm of the trigger is allowed to fire.
+#: With two points a standard deviation is a description of the two points, not
+#: of a cycle, and mean + 2σ is then below the maximum by construction — the arm
+#: would fire on any name with a short history and a single good year. The
+#: multiple-of-max arm is unaffected and still applies.
+_PEAK_MIN_OBSERVATIONS_FOR_SIGMA: int = 4
+
+#: The trailing legs a cyclical profile should be carrying mid-cycle rather than
+#: at whatever point in the cycle the last filing happened to land. Three of the
+#: eight _CYCLICAL_PROFILES already use the normalised spelling — Mining (Major)
+#: and Digital Asset Mining on EV/EBITDA, Memory / DRAM-NAND on P/E — which is
+#: the evidence that the table's intent is normalisation and the plain legs are
+#: oversights rather than a deliberate choice. Keys are matched exactly, so
+#: "EV/EBITDAR" (Airlines, whose lease normalisation is separately unimplemented)
+#: and "EV/EBITDA (Norm)" (Steel / Metals) are correctly left alone.
+_MID_CYCLE_LEG_SWAPS: dict[str, str] = {
+    "EV/EBITDA": "EV/EBITDA (norm)",
+    "P/E":       "P/E (norm)",
+}
+
 #: Profiles whose NTM growth fades toward the long-run rate rather than holding
 #: flat: cyclical AND structurally lumpy earners, where a single consensus year
 #: can be a disposal, a tariff reset or a contract award that does not repeat.
@@ -4804,6 +4848,52 @@ def _compute_method_value(
             return bv * pb_implied
         return None
 
+    # ── P/B-ROE (mid-cycle) — Phase 1.2B peak routing ────────────────────
+    # The justified P/B for a cyclical at a cycle top is the one its MID-CYCLE
+    # ROE supports, not the one its peak ROE does. This leg stands in for the
+    # forward legs the peak trigger suppresses: a forward P/E capitalises a
+    # consensus EPS that has not occurred in any year of the available history
+    # and, on a cyclical, will not hold. Gordon form, P/B = (ROE - g)/(CoE - g).
+    #
+    # CoE is the run's WACC. `_compute_ggm_pb` is not reusable here: it resolves
+    # CoE and g from `_bank_profile_calibration`, `_BANK_GGM_OVERRIDES` and the
+    # broker tables, none of which has an entry for a cyclical profile, so it
+    # would fall through to a bank default. WACC-as-CoE is the engine's own
+    # precedent — "ROE vs CoE" immediately above does exactly this — and it is
+    # the conservative direction for a cyclical, whose equity beta sits above
+    # the blended WACC it is charged, so the spread is understated and the
+    # justified P/B overstated. The gate records the substitution in its basis
+    # rather than leaving it implicit.
+    if method_name == "P/B-ROE (mid-cycle)":
+        norm_ni = most_recent.get("normalized_net_income")
+        if norm_ni is None or not total_equity or total_equity <= 0 or shares <= 0:
+            return None
+        _bv = bvps if bvps and bvps > 0 else total_equity / shares
+        if not _bv or _bv <= 0:
+            return None
+        roe_norm = norm_ni / total_equity
+        g = tgr
+        spread = wacc - g
+        _bound: list[str] = []
+        if spread < _PB_ROE_MIN_SPREAD:
+            # Reachable in practice: the projection loop already forces
+            # tgr = wacc - 0.005 when wacc <= tgr, so a 0.5% spread arrives here
+            # and dividing by it publishes a multiple with no meaning.
+            _bound.append(f"CoE-g {spread:.4f} clamped to the "
+                          f"{_PB_ROE_MIN_SPREAD:.3f} floor")
+            spread = _PB_ROE_MIN_SPREAD
+        pb = (roe_norm - g) / spread
+        if pb < _PB_ROE_MIN_PB:
+            _bound.append(f"justified P/B {pb:.3f} clamped to the "
+                          f"{_PB_ROE_MIN_PB:.2f} floor")
+            pb = _PB_ROE_MIN_PB
+        pb *= sm
+        if _bound:
+            # Same channel the SOTP branches use to hand state back to the
+            # caller; `most_recent` is the live dict, not a copy.
+            most_recent.setdefault("_pb_roe_floors", []).extend(_bound)
+        return _bv * pb
+
     # ── ROIC vs WACC (also matches bare "ROIC" from Consumer profiles) ───
     if method_name in {"ROIC vs WACC", "ROIC"}:
         # Use invested_capital if available, else approximate as total_assets - cash
@@ -5443,6 +5533,133 @@ def _gate_balance_sheet_financial(
         "applied": True,
     }
     return {**profile_data, "methods": kept}, record, None, True
+
+
+# ── Phase 1.2B: cyclical peak-consensus routing ─────────────────────────────
+#
+# Split into three pure functions plus caller-side assembly, unlike Phase 1.2A's
+# single gate. The reason is that 1.2B has to report VALUES under both paths —
+# the swapped mid-cycle leg against the trailing leg it would replace, and the
+# P/B-ROE leg against the forward legs it would suppress — and computing a value
+# needs the full `_compute_method_value` argument list, which lives in the
+# caller. Passing twenty arguments into a gate to avoid one call site is worse
+# than deciding here and measuring there. It also keeps the trigger testable on
+# a bare series, which is the part worth testing: the arithmetic that decides
+# whether MU is at a cycle top.
+#
+# Ships OBSERVATION-ONLY (`applied: False`). See `_gate_cyclical_peak_record`.
+
+def _historical_eps_series(series: Optional[list]) -> list[float]:
+    """Per-share earnings for every annual row that can produce one.
+
+    Computed as net_income / shares_outstanding rather than read from an `eps`
+    field, because `_extract_annual_series` does not carry one — FMP's per-share
+    EPS is not among the mapped fields, and the two inputs that produce it are.
+    Rows are dropped, not zero-filled: a missing share count makes the quotient
+    meaningless, and a zero would drag the mean down and widen sigma in the
+    direction that makes the trigger fire.
+    """
+    out: list[float] = []
+    for row in series or []:
+        if not isinstance(row, dict):
+            continue
+        ni = row.get("net_income")
+        sh = row.get("shares_outstanding")
+        if ni is None or sh is None or sh <= 0:
+            continue
+        out.append(float(ni) / float(sh))
+    return out
+
+
+def _peak_consensus_trigger(
+    series: Optional[list],
+    forward_consensus: Optional[dict],
+    scenario: str = "base",
+) -> Optional[dict]:
+    """Measure whether forward consensus EPS sits at a cyclical peak.
+
+    Returns None when the question cannot be answered — no consensus, or no
+    usable historical EPS — which is distinct from returning ``fired: False``.
+    The distinction matters for the acceptance bar: a name with no history is
+    not a quiet firing, it is an unscoreable one, and counting it as quiet would
+    inflate the denominator of a hit-rate measured against "at least 10 scoreable
+    firings".
+
+    Evaluated on the BASE scenario only, once per ticker rather than per
+    scenario. Whether a business is at a cycle top is a fact about the cycle,
+    not about the bear/base/bull spread drawn around it; re-evaluating per
+    scenario would let the bull case route itself to P/B-ROE and the bear case
+    keep its forward legs, on the same history, in the same run.
+    """
+    if not forward_consensus:
+        return None
+    eps_fwd = ((forward_consensus.get("eps") or {}).get(scenario))
+    if eps_fwd is None or eps_fwd <= 0:
+        return None
+    hist = _historical_eps_series(series)
+    if not hist:
+        return None
+
+    eps_max = max(hist)
+    n = len(hist)
+    mean = sum(hist) / n
+    # Sample stdev, and only when there is enough of a cycle for it to describe
+    # one. See _PEAK_MIN_OBSERVATIONS_FOR_SIGMA.
+    sigma = statistics.stdev(hist) if n >= 2 else 0.0
+    sigma_usable = n >= _PEAK_MIN_OBSERVATIONS_FOR_SIGMA
+    sigma_line = mean + _PEAK_EPS_SIGMA_MULTIPLE * sigma if sigma_usable else None
+    max_line = _PEAK_EPS_MAX_MULTIPLE * eps_max if eps_max > 0 else None
+
+    arms = []
+    if max_line is not None and eps_fwd > max_line:
+        arms.append("multiple-of-max")
+    if sigma_line is not None and eps_fwd > sigma_line:
+        arms.append("mean-plus-sigma")
+
+    return {
+        "fired": bool(arms),
+        "arms": arms,
+        "eps_forward": float(eps_fwd),
+        "eps_max": eps_max,
+        "eps_mean": mean,
+        "eps_sigma": sigma if sigma_usable else None,
+        "max_line": max_line,
+        "sigma_line": sigma_line,
+        "n_years": n,
+        "multiple_of_max": (eps_fwd / eps_max) if eps_max > 0 else None,
+    }
+
+
+def _mid_cycle_leg_swaps(
+    profile_data: Optional[dict],
+    profile_name: Optional[str],
+) -> list[dict]:
+    """Which legs of a cyclical profile would move onto mid-cycle earnings.
+
+    Exact-name matching only, so `EV/EBITDAR` (Airlines — whose lease
+    normalisation is separately unimplemented) and `EV/EBITDA (Norm)` (Steel /
+    Metals) are left alone rather than double-swapped. A leg whose normalised
+    counterpart the profile ALREADY carries is skipped: Digital Asset Mining and
+    Mining (Major) both list `EV/EBITDA (norm)`, and adding a second copy would
+    double its weight in the blend.
+    """
+    if not profile_data or profile_name not in _CYCLICAL_PROFILES:
+        return []
+    methods = [m for m in (profile_data.get("methods") or [])
+               if isinstance(m, dict)]
+    present = {m.get("name") for m in methods}
+    swaps = []
+    for m in methods:
+        target = _MID_CYCLE_LEG_SWAPS.get(str(m.get("name") or ""))
+        if not target or target in present:
+            continue
+        swaps.append({
+            "from": m.get("name"),
+            "to": target,
+            "weight": float(m.get("weight") or 0.0),
+            "anchor": bool(m.get("anchor")),
+        })
+    return swaps
 
 
 #: Pilot set for filing-derived segment SOTP. Deliberately an explicit list
@@ -8284,6 +8501,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             method_values: dict[str, Optional[float]] = {
                 "DCF": None if _dcf_family_disabled else iv_dcf
             }
+            # Phase 1.2B observation state, reset per scenario. Declared here
+            # rather than inside `if profile_data:` so the path-B blend below
+            # can test it unconditionally — a name with no resolved profile
+            # never sets it, and reading an unbound local there would take the
+            # whole ticker down.
+            _cyc_rec: Optional[dict] = None
+            _cyc_profile_b: Optional[dict] = None
+            _cyc_values_b: Optional[dict] = None
             if profile_data:
                 methods_to_compute = set()
                 for m in profile_data.get("methods", []):
@@ -8539,6 +8764,239 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     for _mn in _structurally_unavailable:
                         method_values.pop(_mn, None)
 
+                # ── Phase 1.2B: cyclical peak-consensus routing ───────────
+                # OBSERVATION-ONLY (`applied: False`). Both paths are measured
+                # and recorded; the published IV is path A, unchanged.
+                #
+                # Why not applied. The plan's shipping rule sends an item live
+                # only when its backward test clears acceptance — hit-rate
+                # ≥ 0.50, MAE no worse than legacy, and at least 10 scoreable
+                # firings. Row 1.2B scores peak episodes (MU FY2018 and FY2022,
+                # FCX 2021, NUE 2021) and cannot be run until Phase 3 back-fills
+                # US history, because historical consensus is not archived and
+                # the feed caps at five annual rows. Today it has zero scoreable
+                # firings. Applying a ~20% move to MU's IV on an untested change
+                # is precisely what the rule exists to prevent, and it would
+                # also entangle MU with Phase 2.1's composite squash in a single
+                # golden regeneration — the CHANGELOG-names-the-moves rule stops
+                # working once two mechanisms move the same number at once.
+                #
+                # Base scenario only, matching the trigger: whether a business
+                # is at a cycle top does not vary with the bear/base/bull spread
+                # drawn around it, and emitting per scenario would triple-count
+                # one firing in the ledger the acceptance bar is measured on.
+                _cyc_rec = None
+                _cyc_profile_b = None
+                _cyc_values_b = None
+                if scenario == "base" and profile_name in _CYCLICAL_PROFILES:
+                    _peak = _peak_consensus_trigger(series, forward_consensus)
+                    _swaps = [s for s in _mid_cycle_leg_swaps(profile_data, profile_name)
+                              if s["to"] not in excluded]
+                    _peak_fired = bool(_peak and _peak["fired"])
+                    if _peak is not None or _swaps:
+                        def _mv(_name: str) -> Optional[float]:
+                            return _compute_method_value(
+                                method_name=_name,
+                                most_recent=most_recent,
+                                revenue_base=revenue_base,
+                                shares=shares,
+                                net_debt=net_debt,
+                                market_cap=(_market_cap or revenue_base * 10),
+                                wacc=wacc,
+                                growth_base=g,
+                                fcf_margin_base=fcf_margin_base,
+                                tgr=tgr,
+                                fcf_floor=fcf_floor,
+                                sector=sector,
+                                scenario=scenario,
+                                reported_currency=reported_currency,
+                                is_hk=_is_hk,
+                                growth_premium=growth_premium,
+                                sbc_pe_discount=_sbc_discount,
+                                profile_name=profile_name,
+                                forward_consensus=forward_consensus,
+                                ticker=ticker,
+                                end_date=end_date,
+                            )
+
+                        _swapped_weight = 0.0
+                        for _s in _swaps:
+                            # Path A is free: the trailing leg is already in
+                            # method_values because the profile asked for it.
+                            _s["path_a_value"] = method_values.get(_s["from"])
+                            _s["path_b_value"] = _mv(_s["to"])
+                            _swapped_weight += _s["weight"]
+                        _total_weight = sum(
+                            float(m.get("weight") or 0.0)
+                            for m in (profile_data.get("methods") or [])
+                            if isinstance(m, dict))
+                        _swap_share = (_swapped_weight / _total_weight
+                                       if _total_weight > 0 else 0.0)
+
+                        _pb_roe = _mv("P/B-ROE (mid-cycle)") if _peak_fired else None
+                        _pb_floors = list(most_recent.pop("_pb_roe_floors", []) or [])
+                        if _pb_roe is not None:
+                            # Surfaced in the per-method table, inert in the
+                            # blend: _blend_methods iterates the PROFILE's
+                            # methods, so a key it does not name is never
+                            # weighted. That is what makes an observation-only
+                            # leg observable at all.
+                            method_values.setdefault("P/B-ROE (mid-cycle)", _pb_roe)
+
+                        _basis_parts = []
+                        if _swaps:
+                            _legs = ", ".join(
+                                f"{_s['from']}→{_s['to']} w={_s['weight']:.2f}"
+                                + (" (anchor)" if _s["anchor"] else "")
+                                for _s in _swaps)
+                            _basis_parts.append(
+                                f"mid-cycle legs would replace {_legs} "
+                                f"({_swap_share:.1%} of profile weight). "
+                                f"Normalised earnings are a 5-year IQR-filtered "
+                                f"MEAN margin times current revenue, not the "
+                                f"median over all available years the plan "
+                                f"specifies — reusing _normalized_earnings "
+                                f"rather than adding a second normaliser that "
+                                f"disagrees with P/E (norm) and EV/EBITDA (norm).")
+                        if _peak is not None:
+                            _sigma_txt = (
+                                f" and mean+{_PEAK_EPS_SIGMA_MULTIPLE:.0f}σ = "
+                                f"{_peak['sigma_line']:.2f}"
+                                if _peak["sigma_line"] is not None else "")
+                            _lines_txt = (
+                                f"forward EPS {_peak['eps_forward']:.2f} against "
+                                f"{_PEAK_EPS_MAX_MULTIPLE:.1f}x the "
+                                f"{_peak['n_years']}-year max "
+                                f"{_peak['eps_max']:.2f} = "
+                                f"{_peak['max_line']:.2f}{_sigma_txt}")
+                            if _peak_fired:
+                                if _pb_roe is not None:
+                                    _action_txt = (
+                                        f" Forward legs would be suppressed and "
+                                        f"P/B-ROE (mid-cycle) = "
+                                        f"{_pb_roe:.2f} substituted.")
+                                else:
+                                    _action_txt = (
+                                        " P/B-ROE (mid-cycle) is unavailable "
+                                        "(no normalised net income or no positive "
+                                        "equity), so the substitution has no "
+                                        "replacement leg and the forward legs "
+                                        "would simply be dropped.")
+                                _basis_parts.append(
+                                    f"peak trigger FIRED on "
+                                    f"{'+'.join(_peak['arms'])}: {_lines_txt}."
+                                    f"{_action_txt}")
+                            else:
+                                _basis_parts.append(
+                                    f"peak trigger did not fire: {_lines_txt}.")
+                        if _pb_floors:
+                            _basis_parts.append(
+                                "Owner floors bound: " + "; ".join(_pb_floors) + ".")
+                        _basis_parts.append(
+                            "CoE is proxied by the run's WACC: _compute_ggm_pb "
+                            "resolves CoE and g from bank calibration and broker "
+                            "tables that no cyclical profile has an entry in, and "
+                            "WACC-as-CoE is the engine's own precedent in ROE vs "
+                            "CoE. Conservative for a cyclical, whose equity beta "
+                            "sits above the blended WACC it is charged.")
+                        _basis_parts.append(
+                            "OBSERVATION-ONLY: recorded, not applied. Backward "
+                            "test row 1.2B needs Phase 3 history and has zero "
+                            "scoreable firings today, so the shipping rule holds "
+                            "it at applied=False pending the forward test.")
+
+                        _cyc_rec = {
+                            "gate_id": "GATE_CYCLICAL_PEAK_CONSENSUS",
+                            "metric": ("midcycle_leg_weight_share" if _swaps
+                                       else "peak_trigger"),
+                            # The swap's decision variable is the weight share it
+                            # would move, mirroring 1.2A's ev_dcf_weight_share.
+                            # A pure peak firing with no swappable leg reports the
+                            # trigger as a presence metric instead.
+                            "raw_input_path_a": (round(_swap_share, 6) if _swaps
+                                                 else (1.0 if _peak_fired else 0.0)),
+                            "gated_output_path_b": 0.0,
+                            "peak_trigger": _peak,
+                            "legs": _swaps,
+                            "path_b_leg": (
+                                {"name": "P/B-ROE (mid-cycle)", "value": _pb_roe,
+                                 "floors_bound": _pb_floors}
+                                if _peak_fired else None),
+                            "path_a_forward_legs": (
+                                {k: method_values.get(k)
+                                 for k in ("Forward P/E", "Forward EV/EBITDA")
+                                 if method_values.get(k) is not None}
+                                if _peak_fired else None),
+                            "basis": " ".join(_basis_parts),
+                            "applied": False,
+                        }
+                        gate_evaluations.append(_cyc_rec)
+
+                        # Path B's profile and value map, for the second blend
+                        # below. Built here, evaluated after the real one so
+                        # base_iv_path_a is the number actually published.
+                        if _swaps or (_peak_fired and _pb_roe is not None):
+                            _methods_b = []
+                            for m in (profile_data.get("methods") or []):
+                                if not isinstance(m, dict):
+                                    continue
+                                m2 = dict(m)
+                                _to = _MID_CYCLE_LEG_SWAPS.get(str(m2.get("name") or ""))
+                                if (_to and _to not in excluded
+                                        and any(s["from"] == m2.get("name")
+                                                for s in _swaps)):
+                                    m2["name"] = _to
+                                _methods_b.append(m2)
+                            if _peak_fired and _pb_roe is not None:
+                                # Substituted, not merely added: the forward legs
+                                # are shadow rows in path A and carry no weight,
+                                # so P/B-ROE takes the weight the trigger freed.
+                                # With no forward leg in any cyclical profile
+                                # today, that weight is zero and the leg is
+                                # recorded for the forward test rather than
+                                # blended — stated here because it is the one
+                                # place the plan's "replace forward P/E and
+                                # EV/EBITDA" reads as a reweighting and is not.
+                                _methods_b = [m for m in _methods_b
+                                              if m.get("name") not in
+                                              ("Forward P/E", "Forward EV/EBITDA")]
+                            _cyc_profile_b = {**profile_data, "methods": _methods_b}
+                            _cyc_values_b = {
+                                **method_values,
+                                **{s["to"]: s["path_b_value"] for s in _swaps},
+                            }
+                            if _peak_fired and _pb_roe is not None:
+                                _cyc_values_b["P/B-ROE (mid-cycle)"] = _pb_roe
+                                for _fk in ("Forward P/E", "Forward EV/EBITDA"):
+                                    _cyc_values_b.pop(_fk, None)
+
+                        _flag_bits = []
+                        if _swaps:
+                            _flag_bits.append(
+                                "mid-cycle legs " + ", ".join(
+                                    f"{_s['from']}→{_s['to']}" for _s in _swaps))
+                        if _peak is not None and _peak_fired:
+                            _flag_bits.append(
+                                f"peak trigger fired ({'+'.join(_peak['arms'])}, "
+                                f"fwd EPS {_peak['eps_forward']:.2f} vs "
+                                f"{_peak['max_line']:.2f})")
+                        if _flag_bits:
+                            # `forward_flags`, NOT `ticker_forward_flags`. The
+                            # ticker-level list is snapshotted per scenario at
+                            # `forward_flags = list(ticker_forward_flags)` ABOVE
+                            # this point, so appending there lands the flag on
+                            # the NEXT scenario's published output: base — the
+                            # one the trigger was actually evaluated on — would
+                            # not carry it, and bear and bull would carry an
+                            # observation about a scenario they never ran. The
+                            # golden diff showed exactly that, which is the only
+                            # reason it was caught.
+                            forward_flags.append(
+                                "Cyclical peak-consensus gate (observation-only, "
+                                "not applied): " + "; ".join(_flag_bits)
+                                + ". IV unchanged; both paths recorded for the "
+                                  "forward test.")
+
             # ── Blended IV with C_macro, Forward Gate A, and v3.19 Composite ─
             blend_breakdown: dict = {}
             if profile_data and profile_data.get("methods"):
@@ -8550,6 +9008,43 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     dcf_tv_fraction=tv_fraction,
                     composite_mult=_composite_mult,  # v3.19: biases multi only
                 )
+                # ── Phase 1.2B path-B blend (observation-only) ────────────
+                # The plan asks that an item changing a method or target carry
+                # "the method value and the base IV under BOTH paths". Phase
+                # 1.2A declined to compute a second IV — "that would mean
+                # running the blend twice per scenario" — and is scored instead
+                # by replaying fixtures through both engines. 1.2B can afford
+                # it: base scenario only, cyclical profiles only, and only when
+                # the gate actually fired, so it is a handful of runs out of the
+                # basket rather than every scenario of every ticker. Storing
+                # both IVs is what makes the row scoreable from the ledger
+                # alone, and the ledger is the only record that survives to the
+                # forward test — a fixture replay cannot be reconstructed for a
+                # run whose inputs were live.
+                #
+                # A scratch flag list, because _blend_methods appends to the one
+                # it is given and passing the real list would publish path B's
+                # Gate A / asset-floor flags as though path B had been applied.
+                if (scenario == "base" and _cyc_rec is not None
+                        and _cyc_profile_b is not None and _cyc_values_b is not None):
+                    _scratch_flags: list[str] = []
+                    _iv_b, _bd_b = _blend_methods(
+                        profile_methods=_cyc_profile_b["methods"],
+                        method_values=_cyc_values_b,
+                        c_macro=c_macro,
+                        forward_flags=_scratch_flags,
+                        dcf_tv_fraction=tv_fraction,
+                        composite_mult=_composite_mult,
+                    )
+                    _cyc_rec["base_iv_path_a"] = blended_iv
+                    _cyc_rec["base_iv_path_b"] = _iv_b
+                    _cyc_rec["path_b_breakdown"] = _bd_b
+                    _cyc_rec["path_b_flags_suppressed"] = _scratch_flags
+                    # Both are the BLEND output, before _iv_calibration_k and
+                    # the 12-month target cap. Deliberate: calibration applies
+                    # equally to both paths, so recording it would put a
+                    # constant factor into a difference that is meant to be
+                    # attributable to the leg swap alone.
                 # (If the OE≤0 cascade disabled the DCF family AND every
                 # multiples method also failed, blended_iv is None and this
                 # falls back to the floored projection — the degradation is

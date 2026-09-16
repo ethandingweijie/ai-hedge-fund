@@ -70,12 +70,81 @@ def _run_1_1(as_of: str, **_kw) -> dict[str, Any]:
         "as_of": as_of, "metric": "realised_revenue_cagr",
         "status": "pending",
         "accepted": None,
+        "shipped_applied": True,
         "pending_reason": (
             "needs Phase 3 (scripts/ingest_edgar_history.py): the live feed "
             "caps history at 5 annual rows, giving 1-2 as-of dates per ticker "
             "against the 8+ the plan's sample column asks for. The gate is "
             "LIVE with applied=True on the owner's specification of the bound; "
             "this row is the outstanding obligation."),
+    }
+
+
+def _run_1_2b(as_of: str, **_kw) -> dict[str, Any]:
+    """Cyclical peak-consensus routing to mid-cycle legs and P/B-ROE.
+
+    PENDING, and shipped observation-only (`applied: False`) *because* it is
+    pending — unlike 1.1, which shipped live on the owner's specification of the
+    bound and carries its backward test as an outstanding obligation.
+
+    Two things block scoring. The plan's row is MU FY2018 and FY2022, FCX 2021,
+    NUE 2021, scored against realised price twelve months on; the live feed caps
+    at five annual rows so none of those dates exist yet, and Phase 3's EDGAR
+    back-fill is the prerequisite. Separately, historical CONSENSUS is not
+    archived anywhere, so even with the history the trigger's input has to be
+    proxied by realised next-year EPS — a perfect-foresight stand-in that
+    *favours* path A, which is what makes the eventual test conservative rather
+    than merely approximate.
+
+    What could be measured now is recorded, because "the trigger discriminates"
+    is a different claim from "the trigger is right" and only the first is
+    available: on the golden fixtures MU fires both arms and FCX fires neither,
+    separated by a factor of twenty on the same line rather than by a threshold
+    tuned to land between them. MU's forward EPS of $156.08 is 10.1x its
+    2x-max line ($15.48, from a five-year diluted max of $7.74) and 11.0x its
+    mean-plus-two-sigma line ($14.25); FCX's $2.95 is 0.51x and 0.88x of the
+    equivalent lines ($5.80 and $3.33). One name at a cycle top and one that is
+    not.
+
+    The figures are DILUTED EPS, because that is what the engine computes:
+    `shares_outstanding` on a LineItem maps to FMP's `weightedAverageShsOutDil`.
+    That is the consistent side to compare against - analyst consensus EPS is
+    diluted too - but it means the basic-share numbers (MU's FY22 $7.81, FY25
+    $7.65) give a 2x-max line of $15.62, not the $15.48 the run publishes.
+    `tests/test_cyclical_peak_consensus.py` pins the published lines so the two
+    cannot drift apart unnoticed.
+
+    None of this says whether the substitution improves the estimate, which is
+    what scoring is for.
+    """
+    return {
+        "gate_id": "GATE_CYCLICAL_PEAK_CONSENSUS",
+        "as_of": as_of, "metric": "realised_price_12m",
+        "status": "pending",
+        "accepted": None,
+        "shipped_applied": False,
+        "pending_reason": (
+            "needs Phase 3 (scripts/ingest_edgar_history.py) for the as-of dates "
+            "the plan names - MU FY2018/FY2022, FCX 2021, NUE 2021 - and needs a "
+            "proxy for historical consensus, which is not archived at all. "
+            "Shipped OBSERVATION-ONLY (applied=False) rather than live: the "
+            "shipping rule requires >=10 scoreable firings and this row has zero. "
+            "Both paths are recorded per run so the forward test can score it "
+            "without a replay."),
+        "discrimination_observed": {
+            "MU": {"fired": True, "arms": ["multiple-of-max", "mean-plus-sigma"],
+                   "eps_forward": 156.08, "max_line": 15.48, "sigma_line": 14.25,
+                   "eps_max_5y": 7.74},
+            "FCX": {"fired": False, "arms": [],
+                    "eps_forward": 2.95, "max_line": 5.80, "sigma_line": 3.33,
+                    "eps_max_5y": 2.90},
+            "note": ("golden-fixture inputs, not live feed; DILUTED EPS, matching "
+                     "what the engine computes and what consensus EPS is quoted "
+                     "on. Shows the two arms separate a cycle top from an "
+                     "ordinary year by a wide margin; says nothing about whether "
+                     "the substitution improves the estimate, which is what "
+                     "scoring is for."),
+        },
     }
 
 
@@ -92,6 +161,13 @@ ITEMS: dict[str, tuple[str, Callable[..., dict], str]] = {
         _run_1_2a,
         "classifier precision/recall on a hand-labelled set (~20 "
         "deposit/float-funded vs ~20 not)",
+    ),
+    "1.2B": (
+        "Cyclicals: peak consensus -> mid-cycle legs / P/B-ROE",
+        _run_1_2b,
+        "realised price 12m later; MU FY2018 and FY2022, FCX 2021, NUE 2021; "
+        "needs Phase 3, and realised next-year EPS stands in for consensus "
+        "(a perfect-foresight proxy that favours path A)",
     ),
 }
 
@@ -115,7 +191,9 @@ def print_summary(results: dict[str, dict], show_rows: bool) -> int:
         metric = res.get("metric", "?")
         if res.get("status") == "pending":
             verdict = "PENDING"
-            detail = ""
+            detail = {True: "LIVE - backward test owed",
+                      False: "observation-only"}.get(
+                          res.get("shipped_applied"), "ship state not recorded")
             exit_code = 1
         elif res.get("accepted"):
             verdict = "ACCEPT"
@@ -133,7 +211,27 @@ def print_summary(results: dict[str, dict], show_rows: bool) -> int:
 
     for item, res in results.items():
         if res.get("status") == "pending":
-            print(f"\n[{item}] PENDING: {res.get('pending_reason')}")
+            # `shipped_applied` distinguishes the two kinds of pending, and the
+            # distinction is the whole point of the row: an item that shipped
+            # LIVE with its test owed is an open risk in production, while an
+            # item that shipped observation-only is inert until someone promotes
+            # it. Reading both as "not done yet" hides which one needs chasing.
+            shipped = res.get("shipped_applied")
+            state = {True: "shipped LIVE (applied=True)",
+                     False: "shipped OBSERVATION-ONLY (applied=False)"}.get(
+                         shipped, "ship state not recorded")
+            print(f"\n[{item}] PENDING — {state}")
+            print(f"    {res.get('pending_reason')}")
+            if res.get("discrimination_observed"):
+                print("    measured while pending (not a score):")
+                for t, d in res["discrimination_observed"].items():
+                    if not isinstance(d, dict):
+                        print(f"      note: {d}")
+                        continue
+                    print(f"      {t:<6} fired={str(d['fired']):<5} "
+                          f"arms={'+'.join(d['arms']) or '-':<32} "
+                          f"fwd EPS {d['eps_forward']:.2f} vs 2x-max "
+                          f"{d['max_line']:.2f} / mean+2sig {d['sigma_line']:.2f}")
             continue
         if res.get("metric") != "classifier_precision_recall":
             continue
