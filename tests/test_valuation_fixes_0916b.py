@@ -87,9 +87,32 @@ class TestSaasTerminalMultipleNeedsSoftwareMargins:
 
 
 class TestNormalisedEarningsTargetConverges:
+    """The normalised-earnings convergence path and which PT labels reach it.
+
+    Reinforced by owner decision 2, 2026-09-17 — golden re-baseline reason:
+    "Deprecate GGM book target dispatch for non-bank financials; eliminate
+    synthetic positive tangible book fallback."
+
+    The exclusion asserted below is unchanged by that decision (the label set is
+    not edited), but the decision makes it load-bearing in a second way. The
+    GGM book target used to be reachable by any Financials-sector name, because
+    the 12m dispatch tested the sector. A fee-driven franchise routed onto it
+    had no positive tangible book, ``_compute_bank_metrics`` synthesized one,
+    and Visa published a 12m target of $12.84 against a base IV of $428.47 —
+    3.0% of its own valuation. The dispatch now reads
+    ``_is_balance_sheet_financial``, and a non-positive tangible book fails the
+    method outright rather than being floored to 70% of equity. So a name that
+    still lands on this label is a balance-sheet business, which is the only
+    case where a book-value target is a forward-consensus target at all.
+    ``tests/test_valuation_fixes_0917.py`` pins both halves.
+    """
+
     def test_forward_consensus_paths_are_recognised(self):
         assert "EV/EBITDA or EV/Revenue forward multiple" in d._FORWARD_CONSENSUS_PT_LABELS
         assert "forward P/E x Year-1 EPS" in d._FORWARD_CONSENSUS_PT_LABELS
+        # Not a forward-consensus path: it is a book-value target, correct only
+        # for a balance-sheet business. See the class docstring — the dispatch
+        # narrowing is what keeps a non-bank from reaching it.
         assert "GGM target P/B x book value per share" not in d._FORWARD_CONSENSUS_PT_LABELS
 
     def test_the_engine_carries_the_rule(self):

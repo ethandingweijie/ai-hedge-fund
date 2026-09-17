@@ -3159,7 +3159,14 @@ def _bank_ggm_assumptions(ticker: str, profile_name: str,
         _eq = _safe(most_recent.get("total_equity"))
         _gw = _safe(most_recent.get("goodwill")) or 0.0
         _in = _safe(most_recent.get("intangible_assets")) or 0.0
-        _teq = max(_eq - _gw - _in, _eq * 0.70) if _eq else None
+        # Unfloored. This used to read `max(_eq - _gw - _in, _eq * 0.70)`, which
+        # synthesized a positive tangible book for any name whose real one was
+        # negative or merely small. The `if _teq > 0` guard below already does the
+        # right thing with a negative — it declines the midpoint and falls back to
+        # the profile's target ROE — so the floor only ever served to defeat that
+        # guard, turning "cannot measure realised RoTE" into "measured a RoTE on
+        # an invented book".
+        _teq = (_eq - _gw - _in) if _eq else None
         if _ni and _teq and _teq > 0:
             _realised = _ni / _teq
         if _realised and 0.0 < _realised < 0.60:
@@ -3242,7 +3249,11 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
 
     Returns (value_per_share, target_pb, assumptions) or None when the
     inputs can't support it — notably when CoE <= g, where the formula
-    diverges to infinity.
+    diverges to infinity, and when tangible book per share is not positive,
+    where there is no book for a P/B multiple to be applied to (see the hard
+    stop below; a name that reaches this method with a negative tangible book
+    is an asset-light franchise that was routed here by mistake, and the
+    honest answer is no value rather than one computed off a synthesized book).
     """
     a = _bank_ggm_assumptions(ticker, profile_name, most_recent)
     roe, coe, g = a["roe"], a["coe"], a["g"]
@@ -3255,6 +3266,44 @@ def _compute_ggm_pb(ticker: str, profile_name: str, most_recent: dict,
         eq = _safe(most_recent.get("total_equity"))
         bvps = (eq / shares) if eq else None
     if bvps is None or bvps <= 0:
+        return None
+    # ── Negative / zero tangible book: hard stop ────────────────────────────
+    # Computed independently of `_compute_bank_metrics`, whose `tbv_per_share`
+    # is floored at 70% of equity. That floor is load-bearing THERE — JPM's
+    # blind-strip derivation over-strips by ~$15B against the issuer's own
+    # convention, which retains MSRs as tangible, so the floor keeps a real bank
+    # from being marked down for a derivation artifact. It is fatal HERE, because
+    # it converts "this franchise has no tangible book" into a positive number
+    # that the GGM then multiplies.
+    #
+    # Visa is the case. An asset-light network whose goodwill and intangibles
+    # from acquiring its processing franchise exceed total equity, so real
+    # tangible book is negative. FMP reports the negative directly;
+    # `_compute_bank_metrics` accepts a reported TBVPS only when it is `> 0`, so
+    # it discarded the negative and substituted the floor. The method then
+    # published a 12m target of $12.84 against a base IV of $428.47 — 3.0% of its
+    # own valuation. ICE took the same path for the same reason.
+    #
+    # Do not synthesize positive equity for an asset-light franchise. Fail the
+    # method outright: `_compute_method_value` returns None for it, and
+    # `_blend_methods` skips None values and renormalises over the survivors, so
+    # the weight is dropped rather than reallocated by hand.
+    _reported_tbvps = _safe(most_recent.get("tangible_book_value_per_share"))
+    if _reported_tbvps is not None:
+        _true_tbvps = _reported_tbvps
+    else:
+        _eq_t = _safe(most_recent.get("total_equity"))
+        _true_tbvps = (
+            (_eq_t - (_safe(most_recent.get("goodwill")) or 0.0)
+             - (_safe(most_recent.get("intangible_assets")) or 0.0)) / shares
+            if (_eq_t and shares and shares > 0) else None
+        )
+    if _true_tbvps is not None and _true_tbvps <= 0:
+        print(
+            f"  [ggm-pb] {ticker}: tangible book per share {_true_tbvps:,.2f} "
+            f"<= 0 ({'reported' if _reported_tbvps is not None else 'derived'}) "
+            f"— GGM (P/B) declined rather than valued on a synthesized book"
+        )
         return None
     # The triplet's ROE is a RoTE (a["roe_basis"] == "tangible"); this method
     # applies its multiple to TOTAL book, so it needs the book-basis return.
@@ -9527,24 +9576,45 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                          market_cap=(_market_cap or 0.0))
         _12m_targets: dict[str, Optional[float]] = {}
         _12m_pt_method_label = "forward multiple (profile-specific)"
-        # Bank/GSE/financial profiles: EV-based multiples are meaningless because
-        # massive balance-sheet liabilities make (EV - net_debt) negative.
-        # Use P/E directly for any bank, GSE, or insurance sub-profile.
-        # The membership set is the module-level _BANK_PROFILES (see its
-        # definition beside _bank_profile_calibration) — it used to be assigned
-        # here, which made the name function-local and unusable from the
-        # composite's bank clamp ~1000 lines above.
         _is_reit = sector in {"REIT", "RealEstate"} or profile_name == "REIT"
         # Banks/GSEs: EV-based methods produce nonsense because massive deposit
-        # liabilities make (EV − net_debt) negative. Use P/E directly.
+        # liabilities make (EV − net_debt) negative, so the 12m target takes the
+        # GGM target P/B × book value path instead — that is how bank targets are
+        # actually published (both the DBS and OCBC reports set TP = target P/B ×
+        # FY26e BVPS) and it keeps the PT anchored to the same ROE / CoE / g
+        # triplet as the GGM valuation method.
         # REITs: drop through to a dedicated P/FFO + P/AFFO branch (below) —
         # EPS × P/E is conceptually wrong because REIT GAAP earnings are
         # heavily depressed by non-cash real-estate D&A, while institutional
         # REIT PTs price on FFO / AFFO per share × sub-type multiples.
-        _use_pe_only = (
-            profile_name in _BANK_PROFILES
-            or sector == "Financials"
-        )
+        #
+        # Everything else takes the standard forward waterfall, and "everything
+        # else" is decided by `_is_balance_sheet_financial` — NOT by the sector.
+        # This used to read
+        #     profile_name in _BANK_PROFILES or sector == "Financials"
+        # which routed every Financials name onto the book-value path, including
+        # fee-driven franchises with no deposit base and no meaningful tangible
+        # book. Visa published a 12m target of $12.84 against a base IV of
+        # $428.47 — 3.0% of its own valuation — because the GGM path needed a
+        # tangible book per share, and an asset-light network's tangible book is
+        # NEGATIVE (goodwill and intangibles from the acquisition of its
+        # processing franchise exceed total equity), so `_compute_bank_metrics`
+        # fabricated one. ICE took the same path for the same reason.
+        #
+        # Reusing `_bsf_is_financial` rather than re-deriving it is the point:
+        # Phase 1.2A already classified this name when it stripped the EV/DCF/
+        # FCF legs, so the legs the IV was built from and the method the 12m
+        # target is built from now come from one answer. A name whose DCF leg was
+        # stripped as a balance-sheet business is priced off book; a name that
+        # kept its EV legs is priced off EV. Before this they could disagree.
+        #
+        # Released: Market Infrastructure, Market Infrastructure (SG), Payment
+        # Networks, Real Estate Asset Manager (SG), and any Tier-2 profile that
+        # measures below the customer-balance ratio (Asset Manager, Alt Asset
+        # Manager, FinTech, Fintech/Stablecoin). All 16 Tier-1 profiles are
+        # unchanged, including Brokerage — owner decision 4 keeps SCHW on the
+        # book path and its DCF weight at 0.
+        _use_pe_only = _bsf_is_financial
         # Sector growth average — used per-scenario in the loop below.
         # Pre-fix this block also computed _gp_pt and _gp_pt_reit ONCE from
         # base growth and applied uniformly to bear/base/bull. That caused
