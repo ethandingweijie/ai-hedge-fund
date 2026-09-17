@@ -238,6 +238,7 @@ def test_the_briefs_own_module_never_touches_the_engine():
 # brief. Where the brief's invariant is not implemented, the test says so with
 # `xfail(strict=True)` rather than passing quietly.
 # ══════════════════════════════════════════════════════════════════════════════
+import ast                                                    # noqa: E402
 import inspect                                                # noqa: E402
 from pathlib import Path                                      # noqa: E402
 
@@ -308,12 +309,21 @@ def test_the_engine_never_turns_inventory_into_days():
     assert shapes == ["assignment", "request", "request"], shapes
 
 
-def test_gate_vocabulary_is_closed_and_has_seven_members():
+def test_gate_vocabulary_is_closed_and_has_eight_members():
     """The set of gate ids the engine can emit, extracted from its own source.
 
-    Seven. This is what makes "there is no inventory gate" a fact about the
+    Eight. This is what makes "there is no inventory gate" a fact about the
     engine rather than a fact about the brief's prose — and it means adding one
     is a deliberate act that turns this test red until the list is updated.
+
+    It was seven when this module was written, and the eighth is the reason the
+    count is pinned rather than asserted as "at least". `GATE_GROWTH_REINVESTMENT`
+    is the brief's Gate 2 built, measured and then shipped OBSERVATION-ONLY:
+    `applied` is False on every run and no call site passes a ratio to the
+    projector, so it records a counterfactual beside the cash-conversion cap it
+    was written to replace. A gate that fires in the payload while moving no
+    number is exactly the shape this test would otherwise let slip in silently,
+    so it is named here with its status rather than just counted.
     """
     emitted = sorted(set(re.findall(r'"gate_id":\s*"(GATE_[A-Z_]+)"', _engine_src())))
     assert emitted == [
@@ -322,10 +332,112 @@ def test_gate_vocabulary_is_closed_and_has_seven_members():
         "GATE_CYCLICAL_PEAK_CONSENSUS",
         "GATE_DETERMINISTIC_KPI_PRECEDENCE",
         "GATE_GROWTH_CAGR_DIVERGENCE",
+        "GATE_GROWTH_REINVESTMENT",
         "GATE_PT_IV_BAND",
         "GATE_REVENUE_SCALE_CAP",
     ], emitted
-    assert not any("INVENT" in g for g in emitted)
+    assert not any("INVENT" in g for g in emitted), (
+        "an inventory gate landed — update the count, the list and the "
+        "test_an_inventory_buildup_caps_the_terminal_margin xfail in the same "
+        "commit, or the three will disagree about whether DSI is computed")
+    # `"REINVESTMENT"` does not contain `"INVENT"`, so the assert above is not
+    # quietly satisfied by the eighth gate. Pinned as a fact rather than left to
+    # the reader to check: a substring guard that stops guarding is worse than
+    # no guard, because it reads as though it still does.
+    assert "INVENT" not in "GATE_GROWTH_REINVESTMENT"
+
+
+def test_the_reinvestment_gate_is_observation_only_and_says_so():
+    """The eighth gate records a counterfactual. Pin that it does not apply one.
+
+    Three separate facts, all of which have to hold for `applied: False` to mean
+    anything:
+
+      * the record is appended with `applied` hard-False, not derived from
+        whether the ratio was measurable. Deriving it would conflate "we could
+        not compute this" with "we chose not to act on it", which is the exact
+        distinction the Phase 1.2B cash-conversion gate exists to make, and
+        would report `applied: True` on the 13 of 14 fixtures where S/C measures
+        cleanly while nothing moves.
+      * no call site passes `sales_to_capital=` as a keyword argument. Checked
+        on the AST rather than by grepping lines, because five occurrences of
+        that exact text exist in the engine and four of them are prose — a
+        docstring explaining why the parameter is unused and three comments
+        recording the wiring to restore. A `not in src` assertion fails on the
+        documentation; a line-based filter that strips `#` comments fails on the
+        docstring, which is what the first version of this test did. Walking
+        `ast.Call` keywords cannot be fooled by either.
+      * `_y10_fcf_margin` does not deduct. Parity between the projection and the
+        terminal estimate Gate B judges is an obligation the moment the charge
+        goes live, and it is written down at both sites; while observation-only
+        it must NOT hold, because a charged terminal estimate against an
+        uncharged projection would fire Gate B on a margin the DCF never used.
+    """
+    src = _engine_src()
+
+    # (1) hard-False, and adjacent to the gate id rather than somewhere else
+    rec = src[src.index('"gate_id": "GATE_GROWTH_REINVESTMENT"'):]
+    rec = rec[:rec.index("})", 2)]
+    assert '"applied": False,' in rec, rec
+    assert '"applied": _s_to_c is not None' not in src
+
+    # (2) no live keyword argument at any call site, anywhere in the module
+    charged = []
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Call):
+            charged += [(node.lineno, kw.arg) for kw in node.keywords
+                        if kw.arg == "sales_to_capital"]
+    assert charged == [], charged
+    # ... while the parameter itself still exists, so this is "unused" and not
+    # "deleted". A revert that dropped the mechanism would satisfy (2) alone.
+    assert "sales_to_capital" in inspect.signature(
+        dcf_agent._project_dcf).parameters
+
+    # (3) the terminal estimate is uncharged
+    y10 = src[src.index("_y10_fcf_margin = min("):]
+    y10 = y10[:y10.index("_FCF_MARGIN_CAP)") + len("_FCF_MARGIN_CAP)")]
+    assert "_reinvestment_margin_deduction" not in y10, y10
+
+
+def test_the_projector_still_reproduces_the_flat_margin_projection():
+    """`sales_to_capital=None` is not "a small charge", it is byte-identical.
+
+    The parameter exists and no call site uses it, so the only thing standing
+    between this change and a 14-fixture baseline rewrite is that the default
+    path is the legacy path. Pinned directly on the projector's output rather
+    than inferred from the golden tests passing, because the golden tolerance is
+    ±5% and a deduction small enough to hide inside it would still be a change
+    nobody named.
+
+    Compared against the algebraic legacy form `min(max(base + delta, floor),
+    cap)` computed inline here, so the assertion does not depend on the engine
+    agreeing with itself — that is the failure mode the `md_abs * 10` defect had.
+    """
+    revenue, fmb, floor = 10_000.0, 0.19, 0.02
+    g, wacc, tgr = 0.28, 0.09, 0.025
+    sched = [g * (0.9 ** t) for t in range(10)]
+
+    def rows(sc):
+        return dcf_agent._project_dcf(
+            revenue, fmb, g, 0.0, wacc, tgr, floor, 500.0, 100.0,
+            growth_schedule=sched, margin_delta_absolute=-0.03,
+            sales_to_capital=sc)[3]
+
+    none_rows, explicit_zero = rows(None), rows(0.0)
+    for r in none_rows:
+        g_t = r["growth_pct"]
+        expected = min(max(fmb - 0.03, floor), 0.60)
+        assert r["fcf_margin"] == pytest.approx(expected, abs=1e-12)
+        assert r["reinvest_margin_deduction"] == 0.0
+    assert [r["fcf_margin"] for r in explicit_zero] == \
+           [r["fcf_margin"] for r in none_rows]
+    # And the charge does fire when handed a ratio — the mechanism is built, not
+    # stubbed out. 1.85 is the post-mortem's own worked example.
+    charged = rows(1.85)
+    assert charged[0]["reinvest_margin_deduction"] == pytest.approx(
+        0.28 / (1.28 * 1.85), abs=1e-12)
+    assert charged[0]["fcf_margin"] == pytest.approx(
+        max(fmb - 0.03 - 0.28 / (1.28 * 1.85), floor), abs=1e-12)
 
 
 def test_the_briefs_nike_arithmetic_is_right_about_a_gate_that_is_not_there():
@@ -368,9 +480,11 @@ def test_the_briefs_nike_arithmetic_is_right_about_a_gate_that_is_not_there():
     "FCF margin clamped to [FCF_MARGIN_FLOOR[sector], 0.60], and for Consumer "
     "the floor is +0.02, which pushes the margin UP where this gate pushes it "
     "DOWN. Closing it needs a DSI series over the recorded rows (inventory and "
-    "cost of revenue are both already requested) plus an eighth gate id, which "
-    "will turn test_gate_vocabulary_is_closed_and_has_seven_members red until "
-    "the list is updated."))
+    "cost of revenue are both already requested) plus a ninth gate id, which "
+    "will turn test_gate_vocabulary_is_closed_and_has_eight_members red until "
+    "the list is updated — the eighth, GATE_GROWTH_REINVESTMENT, is the "
+    "reinvestment charge shipped observation-only, and its INVENT-free name "
+    "is why that test's substring assert still guards what it says it guards."))
 def test_an_inventory_buildup_caps_the_terminal_margin():
     hist = [
         {"revenue": 51_000, "cost_of_revenue": 28_000, "inventory": 8_400, "ebit": 5_800},
@@ -401,6 +515,18 @@ def test_project_dcf_charges_no_capital_for_growth():
     compounds into the terminal value: for these inputs the terminal value is
     86.0% of the total (measured 0.8595), so an un-charged increment is not a
     year-one rounding difference, it is most of the answer.
+
+    STILL TRUE IN PRODUCTION, but the reason changed and the difference matters.
+    The mechanism now exists — `_project_dcf` takes `sales_to_capital` and
+    `_reinvestment_margin_deduction` implements the identity above — and every
+    call site passes None, because wiring it live moved base IV on 9 of the 14
+    golden fixtures over a range of −9.45% to +17.40%, with the sign inverted on
+    the two hyper-growth names it exists for. So this test no longer proves "the
+    engine cannot charge"; it proves the default path is still the flat-margin
+    path, which is the only thing keeping the published numbers where they were.
+    `test_the_projector_still_reproduces_the_flat_margin_projection` pins that
+    directly, and `test_the_reinvestment_gate_is_observation_only_and_says_so`
+    pins that no call site hands it a ratio.
     """
     equity_ps, pv_fcf, pv_tv, rows = dcf_agent._project_dcf(
         2000.0,      # revenue_base
@@ -417,13 +543,14 @@ def test_project_dcf_charges_no_capital_for_growth():
         assert r["fcf"] == pytest.approx(r["revenue"] * r["fcf_margin"], rel=1e-12)
         assert r["fcf_margin"] == pytest.approx(0.19, rel=1e-12), \
             "the margin moved, so something other than a flat margin is in play"
+        assert r["reinvest_margin_deduction"] == 0.0
         assert r["revenue"] == pytest.approx(prev * 1.28, rel=1e-12)
         prev = r["revenue"]
     assert pv_tv / (pv_fcf + pv_tv) == pytest.approx(0.8595, abs=1e-4)
 
 
 def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
-    """The integration sketch cannot be inserted as written.
+    """The integration sketch STILL cannot be inserted as written.
 
     It says to compute, inside the loop:
 
@@ -433,36 +560,83 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
     gated on `overrides["apply_reinvestment_deduction"]`. The real signature has
     no `overrides`, no tax rate and no per-year EBIT, D&A or capex. It takes a
     revenue base and an FCF MARGIN and never builds a cash flow up from
-    components, so the change is a rewrite of the projection engine and of
-    everything calibrated against it — not a loop insertion.
+    components, so the change as sketched is a rewrite of the projection engine
+    and of everything calibrated against it — not a loop insertion.
 
     Worth naming what that costs: the projector's margin-only shape is what lets
     a single `fcf_margin_base` plus a scenario multiplier drive all ten years.
     A component build-up needs capex, D&A and working-capital series per year,
     which are requested for the historical rows but never projected forward.
+
+    WHAT DID LAND INSTEAD, and why this test is still worth keeping rather than
+    deleting as obsolete: the post-mortem's second attempt at the same fix
+    expressed it as a MARGIN deduction, `g/((1+g)·(S/C))`, which the margin-only
+    shape does accept — no EBIT, no tax rate, no component series. That is a
+    single new parameter, and it is present. So the assertion below is not
+    "`sales_to_capital` is absent" any more; it is that the component build-up
+    the sketch needed is still absent, and that the margin-only shape which made
+    the sketch uninsertable is what made the post-mortem's form insertable. The
+    two are the same fact read from opposite sides.
     """
     params = list(inspect.signature(dcf_agent._project_dcf).parameters)
     assert params == [
         "revenue_base", "fcf_margin_base", "growth_rate", "margin_delta_per_year",
         "wacc", "tgr", "fcf_floor", "net_debt", "shares", "years",
         "growth_schedule", "wacc_schedule", "margin_delta_absolute",
-        "include_terminal",
+        "include_terminal", "sales_to_capital",
     ], params
     for absent in ("overrides", "effective_tax_rate", "capex", "da",
-                   "depreciation", "sales_to_capital", "ebit"):
+                   "depreciation", "ebit", "margin_schedule",
+                   "reinvestment_deduction"):
         assert absent not in params, f"{absent!r} is now a parameter"
     src = _engine_src()
-    assert "sales_to_capital" not in src
+    # The sketch's own identifier, and the cash-line variable name. Neither is a
+    # substring of anything that shipped: the mechanism is a margin deduction
+    # named `reinvest_margin_deduction`, deliberately, so that grepping for the
+    # sketch's vocabulary finds nothing and nobody mistakes one for the other.
     assert "reinvestment_deduction" not in src
+    assert 'overrides["apply_reinvestment_deduction"]' not in src
+    # And the parameter that did land is unused at every call site — pinned
+    # separately, because "present in the signature" says nothing about whether
+    # the engine charges anything.
+    assert src.count("sales_to_capital=") == 4, (
+        "expected four PROSE mentions documenting the wiring to restore and no "
+        "live keyword arguments; test_the_reinvestment_gate_is_observation_only_"
+        "and_says_so is what pins the latter")
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "NOT IMPLEMENTED, and not implementable as sketched — the projector has no "
-    "EBIT, D&A, capex or overrides parameter, so there is nothing to deduct "
-    "from. The two existing mechanisms that bound hyper-growth bound the RATE, "
-    "not the capital: GATE_REVENUE_SCALE_CAP caps the growth rate at scale, and "
-    "GATE_GROWTH_CAGR_DIVERGENCE caps it against history. Neither charges the "
-    "cash flow, so a name that clears both still projects a free lunch."))
+    "IMPLEMENTED BUT NOT WIRED. The margin form of this charge exists — "
+    "`_reinvestment_margin_deduction` computes g/((1+g)·(S/C)) and "
+    "`_project_dcf` accepts `sales_to_capital` — and this test still fails "
+    "because it passes no ratio and no call site does either, so the engine "
+    "levies nothing. It is observation-only behind GATE_GROWTH_REINVESTMENT "
+    "because wiring it live moved base IV on 9 of the 14 golden fixtures over "
+    "−9.45% to +17.40%, each replayed in its own subprocess, with the sign "
+    "INVERTED on 09988_HK (+17.40%) and BABA (+15.60%). The payload names the "
+    "mechanism on both: `iv_dcf` 88.09 → None and 114.81 → None, `weight_dcf` "
+    "0.2778 → 0.0, `weight_multi` 0.7222 → 1.0, `methods_count` 5 → 4, "
+    "`methods_used` loses DCF, and BABA's 12-month base target rose 151.25 → "
+    "166.31. On every low-S/C name the deduction exceeded the base margin "
+    "(09988_HK 9.51% − 10.72pp, BABA 9.51% − 10.96pp, SCHW 11.53% − 16.19pp), "
+    "the floor absorbed the rest, `forward_roic` went negative, and Gate B "
+    "zeroed terminal growth on BABA, FCX and SCHW. A dropped leg renormalises "
+    "onto the survivors, so where the DCF is the LOW leg — which is where it is "
+    "doing its job — charging more values the company HIGHER. The blocker is "
+    "not the algebra: it is that `revenue/invested_capital` is not "
+    "sales-to-capital for balance-sheet-funded profiles (measured S/C 0.063 for "
+    "an S-REIT, 0.806 for a broker, 10.912 for a retailer — a 173x span) and "
+    "that nothing decides what happens when a deduction exceeds the margin it "
+    "is taken from. Also note this test's own form is the CASH-LINE variant, "
+    "`revenue*margin - charge`, which the post-mortem showed is algebraically "
+    "identical per year but does NOT reach the terminal value, and the TV is "
+    "86.0% of the total for these inputs; a green version of this test would "
+    "have to be rewritten to the margin form before it proved anything about "
+    "the published number. The two mechanisms that bound hyper-growth still "
+    "bound the RATE, not the capital: GATE_REVENUE_SCALE_CAP caps the growth "
+    "rate at scale, and GATE_GROWTH_CAGR_DIVERGENCE caps it against history. "
+    "Neither charges the cash flow, so a name that clears both still projects a "
+    "free lunch."))
 def test_a_twenty_eight_percent_grower_pays_delta_rev_over_sales_to_capital():
     _, _, _, rows = dcf_agent._project_dcf(
         2000.0, 0.19, 0.28, 0.0, 0.09, 0.025, -0.05, 0.0, 100.0, years=3)

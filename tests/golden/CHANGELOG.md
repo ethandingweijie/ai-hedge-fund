@@ -847,3 +847,124 @@ this change:
   the ratio going with it.
 
 
+## 2026-09-17T20:36:40+00:00
+
+- regenerated at HEAD: `d0c2c84`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: GATE_GROWTH_REINVESTMENT added OBSERVATION-ONLY (applied: False on every run; no call site passes sales_to_capital, so _project_dcf is byte-identical to the previous baseline). Expected moves are exactly two field kinds and NO numeric leaf: (1) gate_metrics gains "reinvestment_margin_deduction" on all 14; (2) scenarios.{base,bear,bull}.forward_flags gains the disclosure line on 13 of 14 — D05_SI is excluded because its invested capital is unmeasurable, so S/C is None and the flag is correctly absent rather than silent. Every intrinsic_value, iv_dcf, forward_roic, tgr, method_iv_table, weight and target is unchanged; verified by grepping the update run for out_of_tolerance and finding zero. The mechanism was built, wired live and measured first, and the measurement is recorded at the gate's site: base IV moved on 9 of 14 over -9.45% to +17.40% with the sign INVERTED on 09988_HK (+17.40%) and BABA (+15.60%), because the deduction exceeded the base margin, the floor absorbed it, iv_dcf went to None, and the blend renormalised that leg's weight onto higher multiples (weight_dcf 0.2778 -> 0.0, weight_multi -> 1.0, methods_used loses DCF). Those live numbers are NOT in this baseline; they are recorded so the charge is not re-wired on the strength of its algebra alone.
+
+
+### What moved, and how it was checked
+
+Two field kinds and nothing else, confirmed by a snapshot-to-snapshot diff of
+every leaf rather than by counting test failures — a ±5% tolerance is a
+reporting threshold, and a move small enough to hide inside it is still a move
+nobody named.
+
+- `projection.gate_metrics` on **14 of 14**: gains
+  `reinvestment_margin_deduction`.
+- `projection.scenarios.{base,bear,bull}.forward_flags` on **13 of 14**: gains
+  the disclosure line. D05_SI is absent because its invested capital is
+  unmeasurable, so `_sales_to_capital` returns None and there is no ratio to
+  disclose. That asymmetry is expected and is the one place where "no flag"
+  means "no data" rather than "no charge" — the gate record still fires on
+  D05_SI, with its `basis` naming the absence.
+- **Numeric leaf moves: 0.** Verified twice, by the diff above and by grepping
+  the pre-regeneration run for `out_of_tolerance` and finding none.
+
+### Why this is observation-only, and what the live run measured
+
+The charge was built, wired live at all four `_project_dcf` call sites plus the
+`_y10_fcf_margin` parity site, and measured before anything was regenerated. The
+measurement is the reason it ships observed. Per fixture, each replayed in its
+own subprocess: base IV moved on **9 of 14** over a range of **−9.45% to
++17.40%**, and the sign **inverted** on the two hyper-growth names the charge
+exists for.
+
+| fixture | base IV | the mechanism, from the payload |
+|---|---|---|
+| 09988_HK | 160.84 → 188.82 **+17.40%** | `iv_dcf` 88.09 → None, `weight_dcf` 0.2778 → 0.0, `weight_multi` → 1.0, `methods_count` 5 → 4, `methods_used` loses `DCF`, `tv_pct` 0.3714 → 0.0 |
+| BABA | 193.13 → 223.25 **+15.60%** | same, and `12m_targets` base 151.25 → 166.31 (+9.96%), bear +10.37%, bull +8.50%; `tgr` 0.03 → 0.0 |
+| SCHW | 75.41 → 68.28 −9.45% | `forward_roic` 0.0734 → 0.0, `tgr` 0.02 → 0.0, bull −21.09% |
+| MELI | 5578.42 → 5098.45 −8.60% | `iv_dcf` −22.23%; the leg survives, so the charge does what it says |
+| V | 428.47 → 399.20 −6.83% | `iv_dcf` −24.41% |
+| AAPL | 219.80 → 208.15 −5.30% | `iv_dcf` −18.40% |
+| MU | 293.14 → 287.44 −1.94% | `iv_dcf` **−65.43%** (34.81 → 12.03) and base IV barely moves — that leg carries almost no weight |
+| COST | 1324.57 → 1302.82 −1.64% | `iv_dcf` −13.30% |
+| 02888_HK | 284.38 → 285.68 +0.46% | `forward_roic` −16.38%; `bear.tgr` 0.01 → 0.0 |
+| BN4_SI, C38U_SI, FCX, U96_SI, D05_SI | unchanged | `iv_dcf` was **already** None on four of these, so there was no leg to break; D05_SI was never charged |
+
+Three findings, none of them about the formula.
+
+**A dropped leg renormalises onto the survivors.** Where the DCF is the LOW leg
+— which is exactly where it is doing its job — removing it RAISES the blended
+IV. So "a more conservative input" produced "a less conservative output" on two
+names, and the price target followed on one. This is a property of the blend,
+not of this charge: anything that can drive a DCF leg non-positive has it.
+
+**`revenue / invested_capital` is not sales-to-capital for every profile.** The
+measured ratio spans 0.063 (C38U_SI, an S-REIT whose invested capital is ~16×
+its revenue) to 10.912 (COST), a factor of 173. On the REIT it levies +98.04pp
+against a 55.83pp margin. On the four fixtures where the ratio is least
+meaningful the IV did not move at all, because their DCF leg was already gone —
+"the ratio is meaningless" and "the ratio is harmless" are different claims and
+only a clean measurement separates them.
+
+**The deduction exceeded the base margin on seven names.** 09988_HK 9.51% −
+10.72pp, BABA 9.51% − 10.96pp, SCHW 11.53% − 16.19pp, FCX 5.39% − 12.94pp,
+C38U_SI 55.83% − 98.04pp, BN4_SI 9.79% − 16.00pp, U96_SI 7.16% − 11.61pp.
+Nothing in the engine decides what should happen then; the sector floor absorbs
+it, and the floor is a solvency guard, not a capital-rationing rule.
+
+The post-mortem's own worked example is right for its own population: ONON at
+g = 28% and S/C = 1.85 deducts 11.8pp, and an apparel grower's
+revenue/invested-capital ratio IS capital turnover. What is missing is a scope —
+which profiles may be charged at all — and a rule for a deduction larger than
+the margin it comes out of. Neither is a calibration constant, so neither is
+chosen here, and no bound is added: a bound would be a clamp nobody asked for,
+and no single bound is simultaneously tight on a retailer and loose on a REIT.
+
+### A measurement error, found and corrected
+
+The first blast-radius table reported 09988_HK at **+44.49%** and BN4_SI at
+**+26.54%**, and base IV moving on 14 of 14. Both were wrong, and the numbers
+were quoted into source comments and an xfail reason before the error was
+caught. The cause: that probe replayed all 14 fixtures in **one process**.
+`tests/test_golden_valuations.py::test_golden_replay_is_deterministic` exists
+precisely because the valuation path has ~ten process-lifetime caches and a leak
+between tickers once moved BN4.SI's baseline 15% depending on test order. Here
+it moved BN4_SI 26% **with the change under test switched off**, which is the
+only reason the artifact was visible at all.
+
+Every figure above was re-measured one subprocess per fixture and then
+re-confirmed against the golden harness, which isolates the same way. The
+contaminated probe was rewritten to shell out rather than deleted, so the trap
+is harder to fall into a second time.
+
+### What is kept and what is switched off
+
+Kept, because deleting a built and tested mechanism is how the next attempt
+reimplements it slightly differently:
+
+- `_sales_to_capital(row)` and `_reinvestment_margin_deduction(g, s_to_c)`, the
+  latter split out so the loop, `_y10_fcf_margin` and the `pdf_report.py`
+  sensitivity grid cannot each grow their own copy of the identity;
+- `_project_dcf`'s 15th parameter, defaulting to None, which reproduces the
+  legacy flat-margin projection byte-for-byte (pinned at 1e-12 against the
+  algebraic form computed inline in the test, not against the engine agreeing
+  with itself);
+- `reinvest_margin_deduction` on each annual row, PRE-floor — the live run
+  floored five fixtures and the pre-floor figure is the only thing that shows it;
+- `GATE_GROWTH_REINVESTMENT`, `applied: False`, with `basis` distinguishing
+  "unmeasurable" from "not acted on".
+
+Switched off: all four call sites pass no ratio; `_y10_fcf_margin` does not
+deduct; the `_DEPLETING_DCF` path is out of scope permanently, on two grounds
+recorded at the call site.
+
+The gate count in `tests/test_consumer_discretionary_gates.py` moves seven →
+eight, and its `not any("INVENT" in g ...)` assert still guards what it says it
+guards — `"REINVESTMENT"` does not contain `"INVENT"` — which is now pinned as a
+fact rather than left for the reader to check.

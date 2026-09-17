@@ -557,21 +557,56 @@ def test_the_y10_estimate_and_the_engine_read_the_same_clamp():
     the name an audit is run on. MSTR is not in the fixture set at all. So the
     guard is on the shape — both sites must name the same floor variable and the
     same module constant.
+
+    The engine side is asserted as an ORDERED sequence rather than one literal,
+    because it is no longer one expression. The reinvestment work split
+    `min(max(base + delta, floor), cap)` into a subtraction and then the two
+    clamps, so the previous single-string assert went red on a change that
+    preserved the parity it exists to protect. Ordering is the stronger form
+    anyway: it pins floor-then-cap, which is what makes the pair idempotent on a
+    margin outside both, and it pins that the deduction lands BEFORE the floor —
+    after it, a charge larger than the margin would be silently absorbed and the
+    gate record would describe a deduction the projection never took.
     """
     assert dcf_agent._FCF_MARGIN_CAP == 0.60
     eng = inspect.getsource(dcf_agent._project_dcf)
-    assert "max(fcf_margin_base + margin_delta_absolute, fcf_floor)" in eng
-    assert "min(margin_t, _FCF_MARGIN_CAP)" in eng
+    seq = [
+        "margin_t = fcf_margin_base + margin_delta_absolute",
+        "margin_t = fcf_margin_base + margin_delta_per_year * t",
+        "reinvest_t = _reinvestment_margin_deduction(g_t, _s_to_c)",
+        "margin_t -= reinvest_t",
+        "margin_t = max(margin_t, fcf_floor)",
+        "margin_t = min(margin_t, _FCF_MARGIN_CAP)",
+    ]
+    at = [eng.index(s) for s in seq]        # ValueError names the missing one
+    assert at == sorted(at), list(zip(seq, at))
+    # Both branches of the delta resolve to the same variable, so the clamps
+    # below cannot be reached by one and missed by the other.
+    assert "fcf_margin_base + margin_delta_absolute" in eng
     run = inspect.getsource(dcf_agent.run_dcf_agent)
     assert "_y10_fcf_margin = min(" in run
     assert "max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)" in run
     # The pre-fix form, so a revert is a named failure rather than a delta.
     assert "_y10_fcf_margin = fcf_margin_base + md_abs" not in run
+    # The parity this test is named for, stated as the thing that would break
+    # it: the Y10 estimate must NOT deduct while the projection does not either.
+    # The charge ships observation-only, so parity currently means "neither
+    # charges". Whoever wires it live has to move BOTH, and this assert turns
+    # that from a note in a comment into a red test.
+    y10 = run[run.index("_y10_fcf_margin = min("):]
+    y10 = y10[:y10.index("_FCF_MARGIN_CAP)") + len("_FCF_MARGIN_CAP)")]
+    assert "_reinvestment_margin_deduction" not in y10, y10
+    assert not [ln for ln in inspect.getsource(dcf_agent).splitlines()
+                if "sales_to_capital=" in ln and not ln.lstrip().startswith("#")
+                and "`" not in ln], "a call site charges the projection"
     # And the third copy: the PDF sensitivity grid recomputes the DCF, and it
     # once did so with a per-year margin drift the engine does not have. Read as
     # text rather than imported — this module's job is to check a shape, and
     # pulling in the report builder to do it would make the guard fail for
-    # reasons that have nothing to do with the clamp.
+    # reasons that have nothing to do with the clamp. This literal is also the
+    # reason the grid stayed in parity through the reinvestment work: with no
+    # call site charging, the engine's expression reduces to exactly this one,
+    # so the grid's centre cell still reproduces the published base IV.
     with open(os.path.join(_REPO, "src", "utils", "pdf_report.py"),
               encoding="utf-8") as fh:
         pdf = fh.read()

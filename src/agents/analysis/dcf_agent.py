@@ -2487,6 +2487,100 @@ def _r1_structured_guidance(ticker: str,
 _FCF_MARGIN_CAP = 0.60
 
 
+def _sales_to_capital(row: Optional[dict]) -> Optional[float]:
+    """Revenue ÷ invested capital — the S/C the reinvestment charge divides by.
+
+    Measured off the company's own balance sheet rather than defaulted per
+    profile, for a reason the engine already commits to elsewhere: the Y10
+    forward-ROIC path scales invested capital by the same multiplier it scales
+    revenue by (`_y10_ic = ic_val * _y10_rev_mult`), which is only coherent if
+    S/C is CONSTANT across the projection. That is the same assumption the
+    charge makes, so reading the ratio from the same two numbers keeps the
+    deduction consistent with the ROIC Gate B judges off them. A hardcoded
+    per-sector figure — the 1.85 the post-mortem's worked example uses — would
+    be consistent with neither and would silently override a measured capital
+    base with a guess.
+
+    Returns None when either leg is missing, zero or negative. None means "no
+    charge", and that is an honest absence rather than a fabricated ratio: an
+    invented S/C would levy a real cash deduction derived from a number nobody
+    measured. It is also the failure mode that shows up most often, because
+    `invested_capital` is an optional line item — see the gate record, which
+    reports which of the two happened.
+
+    No bound is placed on the ratio itself. A genuinely asset-light business
+    has a genuinely large S/C and therefore a genuinely near-zero deduction;
+    bounding it would turn a correct small charge into an incorrect large one.
+
+    MEASURED, AND THIS IS WHY THE CHARGE IS OBSERVATION-ONLY. Across the 13
+    chargeable golden fixtures the ratio spans 0.063 to 10.912 — a factor of
+    173 — and the two ends are not "asset-light vs asset-heavy" so much as
+    "ratio means capital turnover" vs "ratio means nothing":
+
+        C38U_SI (S-REIT)     S/C 0.063   deduction +98.04pp   base margin 0.5583
+        SCHW    (Brokerage)  S/C 0.806   deduction +16.19pp   base margin 0.1153
+        BN4_SI  (Conglomerate) S/C 0.298 deduction +16.00pp   base margin 0.0979
+        COST    (Retail)     S/C 10.912  deduction  +0.82pp   base margin 0.0232
+
+    A REIT's invested capital is its property base and a broker's is its balance
+    sheet; neither is working capital supporting incremental sales, which is the
+    quantity the identity `ΔRev/(S/C)` assumes the ratio converts. Revenue over
+    that capital is still a true number about the company, it is just not
+    sales-to-capital, and dividing a revenue delta by it does not give a capital
+    requirement. The post-mortem's worked example used S/C = 1.85 for an apparel
+    grower, where the ratio IS capital turnover and 11.8pp is the right answer.
+
+    So the open question is scope, not calibration: which profiles may be
+    charged at all. No bound is added here because a bound would be a clamp
+    nobody chose, and because no single bound is simultaneously tight on a
+    retailer and loose on a REIT — the span is 173x.
+    """
+    rev = _safe((row or {}).get("revenue"))
+    ic = _safe((row or {}).get("invested_capital"))
+    if rev is None or ic is None or rev <= 0.0 or ic <= 0.0:
+        return None
+    return rev / ic
+
+
+def _reinvestment_margin_deduction(g: float, sales_to_capital: Optional[float]
+                                   ) -> float:
+    """The margin deduction one year of growth `g` requires, at ratio S/C.
+
+        ΔRev/(S/C) ÷ Rev_t  =  g / ((1 + g) · (S/C))
+
+    Split out from `_project_dcf`'s loop because three places have to agree on
+    it and only one of them is a projection: the loop itself, `_y10_fcf_margin`
+    (the terminal-state estimate Gate B judges, which the `_FCF_MARGIN_CAP`
+    comment above already names as a parity obligation), and the sensitivity
+    grid in `src/utils/pdf_report.py`. Computing it once is what makes "the DCF
+    charged reinvestment and Gate B judged a margin that did not" unreachable
+    rather than merely tested for — that is the `md_abs * 10` defect, which was
+    exactly a parity obligation between these two that nobody had wired.
+
+    Today the only live caller is the observation record at
+    GATE_GROWTH_REINVESTMENT, which is the reason the helper exists separately
+    rather than being inlined in the loop: the counterfactual has to be computed
+    by the same code the live charge would use, or the record would describe a
+    different mechanism than the one waiting to be switched on. The other two
+    parity sites are obligations for whoever switches it on, and both are
+    recorded at their own sites — `_y10_fcf_margin` above and the sensitivity
+    grid's `_iv` / `_iv_gm`, whose comments already state that the grid's centre
+    cell must reproduce the published base IV.
+
+    Two-sided on purpose: a negative `g` returns a negative deduction, because
+    a shrinking business releases working capital it was holding. Zero when S/C
+    is unmeasurable or when revenue would not survive the year (`1 + g <= 0`),
+    so the caller never has to guard the division. Note that the two-sidedness
+    was NOT the source of the sign inversion the live run found — that came from
+    the floor and the blend dropping a None leg, and it fired on growth years.
+    """
+    if sales_to_capital is None or sales_to_capital <= 0.0:
+        return 0.0
+    if (1.0 + g) <= 0.0:
+        return 0.0
+    return g / ((1.0 + g) * sales_to_capital)
+
+
 def _project_dcf(
     revenue_base: float,
     fcf_margin_base: float,
@@ -2502,6 +2596,7 @@ def _project_dcf(
     wacc_schedule: Optional[list[float]] = None,
     margin_delta_absolute: Optional[float] = None,
     include_terminal: bool = True,
+    sales_to_capital: Optional[float] = None,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -2520,6 +2615,70 @@ def _project_dcf(
         (not scaled by t). Used by the multiplicative margin-variance form
         (_MARGIN_DELTA_MULT). When None, falls back to legacy
         margin_delta_per_year drift.
+      sales_to_capital: the company's revenue ÷ invested capital, S/C. When
+        given, every projected year's margin is reduced by the capital its own
+        growth requires — see the reinvestment block below. None (the default)
+        reproduces the legacy flat-margin projection exactly, and None is what
+        all four call sites pass today.
+
+    ── The reinvestment charge ──────────────────────────────────────────────
+    A flat FCF margin over compounding revenue charges nothing for the working
+    capital and capacity the growth requires, so a 28%-a-year grower projects
+    the same cash margin as a no-growth one. This module said so itself, at the
+    cash-conversion cap: "It is also likely a compensating error. `_project_dcf`
+    holds the margin flat while revenue compounds, charging nothing for the
+    investment that growth requires, so capping the margin makes the OUTPUT look
+    sane by breaking an INPUT... The reinvestment charge is the real fix; until
+    it lands this records what it would have done and moves nothing."
+
+    This is that fix — BUILT, wired live at all four call sites, and measured
+    against the 14 golden fixtures, and it is now OBSERVATION-ONLY: every call
+    site passes `sales_to_capital=None`, so this projector is byte-identical to
+    the shipped baseline and GATE_GROWTH_REINVESTMENT records the counterfactual
+    beside the cash-conversion cap it was written to replace. The measurement
+    that decided this is at the gate's site in `run_dcf_agent`; in one line, base
+    IV moved on 9 of 14 over −9.45% to +17.40% and the sign INVERTED on the two
+    hyper-growth names the charge exists for (09988_HK +17.40%, BABA +15.60%),
+    because the deduction exceeded the base margin, the floor absorbed the rest,
+    `iv_dcf` went to None and the blend renormalised that leg's weight onto
+    higher multiples — `weight_dcf` 0.2778 → 0.0, `weight_multi` → 1.0.
+
+    The mechanism below is kept in full rather than reverted, because the defect
+    is in the RATIO's scope and the floor interaction, not in the algebra — and
+    because deleting a built-and-tested mechanism is how the next attempt ends up
+    reimplementing it slightly differently. What follows is what was measured.
+
+    The charge is expressed as a MARGIN deduction rather than a cash line, which
+    is what makes it fit this projector's margin-only shape without the EBIT /
+    D&A / capex build-up a cash-line form would need:
+
+        Reinvestment_t   = ΔRev_t / (S/C) = Rev_{t-1} · g_t / (S/C)
+        Deduction_t      = Reinvestment_t / Rev_t = g_t / ((1 + g_t) · (S/C))
+        Effective margin = max(margin_base − Deduction_t, fcf_floor)
+
+    The middle step is an identity, not an approximation: Rev_t = Rev_{t-1}(1+g_t),
+    so dividing the charge by current revenue gives exactly the expression above.
+    `revenue × (margin − deduction)` and `revenue × margin − charge` are the same
+    number. Expressed per unit of revenue it needs no new cash-flow line, and it
+    flows into the terminal value through `fcf_T = rev_T * margin_t` — a cash-line
+    form that touched only the projected years would leave the TV built on the
+    un-charged margin, and the TV is 86.0% of the total for the ONON-shaped
+    inputs this was measured against.
+
+    The deduction is derived from `g_t` INSIDE the loop, from the same per-year
+    growth the projector already resolved, rather than handed in as a
+    precomputed `margin_schedule`. A list built at the call site would have to
+    duplicate this function's `_g_by_year` fallback for the no-schedule case,
+    and this module already carries a comment about the last time two growth
+    paths were built independently and drifted.
+
+    TWO-SIDED, deliberately. A negative `g_t` gives a negative deduction and
+    RAISES the margin, because a shrinking business releases the working capital
+    it was holding. That is the correct economics and it is what the formula
+    says; restricting the charge to growth years would be an asymmetry nobody
+    chose, and it would make bear scenarios more conservative than the model
+    they are stressing. It does mean the bear case can carry a margin uplift,
+    which is worth knowing before reading a bear IV as strictly worse.
     """
     if shares is None or shares <= 0:
         return 0.0, 0.0, 0.0, []
@@ -2536,6 +2695,20 @@ def _project_dcf(
     else:
         _w_by_year = [wacc] * years
 
+    #: Normalised once, outside the loop, so the per-year branch is a None test
+    #: and not a coercion. A non-positive ratio is rejected rather than clamped:
+    #: S/C <= 0 means invested capital was zero, negative or missing, and there
+    #: is no honest charge to compute from it — returning None reproduces the
+    #: legacy projection instead of inventing a number. An asset-light name with
+    #: a genuinely small capital base gets a genuinely large S/C and therefore a
+    #: genuinely near-zero deduction, which is the right answer and needs no
+    #: bound of its own.
+    _s_to_c: Optional[float] = (
+        float(sales_to_capital)
+        if (sales_to_capital is not None and sales_to_capital > 0)
+        else None
+    )
+
     annual_rows = []
     pv_sum = 0.0
     rev_t = revenue_base
@@ -2545,9 +2718,25 @@ def _project_dcf(
         w_t   = _w_by_year[t - 1]
         rev_t = rev_t * (1 + g_t)
         if margin_delta_absolute is not None:
-            margin_t = max(fcf_margin_base + margin_delta_absolute, fcf_floor)
+            margin_t = fcf_margin_base + margin_delta_absolute
         else:
-            margin_t = max(fcf_margin_base + margin_delta_per_year * t, fcf_floor)
+            margin_t = fcf_margin_base + margin_delta_per_year * t
+        # ── Reinvestment charge ── see the docstring for the derivation and
+        # for why this is a margin deduction and not a cash line. Delegated to
+        # `_reinvestment_margin_deduction` so the two other places that have to
+        # agree on this quantity cannot drift from it. `reinvest_t` is recorded
+        # PRE-floor: when the floor binds, the charge the model wanted to levy
+        # and the charge it actually levied differ, and an audit that showed
+        # only the post-floor margin would hide the difference. That is not a
+        # hypothetical — the live run floored the deduction on five fixtures,
+        # and the pre-floor figure is the only thing in the payload that shows
+        # it happened. All four call sites pass `sales_to_capital=None` today,
+        # so in production `reinvest_t` is 0.0 and the subtraction is inert.
+        reinvest_t = _reinvestment_margin_deduction(g_t, _s_to_c)
+        margin_t -= reinvest_t
+        # Floor then cap, in the legacy order: with `_s_to_c` None this is
+        # byte-identical to `min(max(base + delta, floor), cap)`.
+        margin_t = max(margin_t, fcf_floor)
         margin_t = min(margin_t, _FCF_MARGIN_CAP)
         fcf_t    = rev_t * margin_t
         # Compound discount factor using per-year WACC (staged fade).
@@ -2563,6 +2752,10 @@ def _project_dcf(
             "fcf":             fcf_t,
             "discount_factor": disc_cum,
             "pv_fcf":          pv_fcf_t,
+            # Not projected into the golden snapshot — `projection_rows` is in
+            # neither `_SCALAR_KEYS` nor `_DICT_KEYS` — so this is a payload
+            # audit field, not a baseline field.
+            "reinvest_margin_deduction": reinvest_t,
         })
 
     # Terminal value — use the last year's revenue/margin/WACC so growth-decay
@@ -4549,6 +4742,24 @@ def _compute_method_value(
     dividends_ps = most_recent.get("dividends_per_share")
     capex = most_recent.get("capital_expenditure")
     invested_capital = most_recent.get("invested_capital")
+    # NOT charged for reinvestment, and that is a live decision rather than an
+    # omission — see GATE_GROWTH_REINVESTMENT in `run_dcf_agent`, which computes
+    # the deduction and records it with `applied: False`. The blast radius
+    # measured on the 14 golden fixtures — each replayed in its OWN subprocess,
+    # because a shared process leaks ~ten process-lifetime caches and that leak
+    # alone moved BN4.SI's base IV 26% with the charge switched off — was a
+    # base-IV move on 9 of 14, over a range of −9.45% to +17.40%, and the sign
+    # was INVERTED on two: 09988_HK +17.40% and BABA +15.60%. The charge made
+    # the hyper-growth names it exists for dramatically MORE expensive. Passing
+    # `sales_to_capital=None` here keeps this projection byte-identical to the
+    # shipped baseline while the mechanism stays built and tested.
+    #
+    # `_sales_to_capital` would have been computed here rather than handed in, so
+    # every projection this function dispatches charged on the same ratio —
+    # including when the caller is `_run_backward_gate`, which passes its T-1 row
+    # as `most_recent` and so would get the T-1 capital base without either side
+    # having to remember. That is the wiring to restore when the charge is turned
+    # on, and the reason it is written down rather than reinvented.
 
     # Scenario multipliers for relative value methods
     scenario_mult = {"bear": 0.75, "base": 1.00, "bull": 1.25}
@@ -4571,6 +4782,33 @@ def _compute_method_value(
     # reserves, recovery rates and a commodity price deck, and none of that
     # telemetry exists here. Calling a corporate DCF "NAV (LoM)" told the
     # reader a reserve model had been run when it had not.
+    #
+    # SCOPE: the reinvestment charge does not model this path, and would not
+    # even if it went live on the family above. The charge assumes "revenue
+    # growth requires incremental capital at a constant S/C", and a depleting
+    # asset's revenue path is a depletion schedule, not growth — the going
+    # concern ends with the reserve, which is why this call already passes
+    # `include_terminal=False`. Two consequences make applying it here a
+    # category error rather than a conservatism:
+    #
+    #   * a miner's invested capital is the reserve base, not working capital
+    #     supporting incremental sales, so its measured S/C is small and the
+    #     deduction large. On FCX's shape — revenue and invested capital of the
+    #     same order, so S/C near 1 — a 5% "growth" year would deduct ~5pp
+    #     against a `fcf_margin_base` of 0.0539 and drive the margin through
+    #     the Resources floor of 0.00, zeroing the leg. Measured while this was
+    #     wired live: FCX S/C = 0.952, deduction +12.94pp at g = 14.0%, year-1
+    #     margin 0.0%, and terminal growth 0.015 → 0.0 — Gate B fired on a name
+    #     whose base IV did not move at all, so the payload would have carried a
+    #     gate decision with no valuation story behind it;
+    #   * a mine's revenue moves with the commodity price at a roughly FIXED
+    #     capital base, so the proportionality the identity rests on does not
+    #     hold in the direction that matters.
+    #
+    # Recorded rather than left implicit because it is a scope decision about
+    # which projections the charge models, and it survives the charge's removal:
+    # whoever turns the charge on for `_DCF_PROJECTION_FAMILY` must not reach
+    # for this call at the same time.
     if method_name == _DEPLETING_DCF:
         iv, _, _, _ = _project_dcf(
             revenue_base, fcf_margin_base, growth_base, 0.0,
@@ -6969,6 +7207,21 @@ def _run_backward_gate(
             return False, "Skipped — missing T-1 shares or revenue"
 
         # ── Core DCF for T-1 (always needed as DCF method input) ──────────
+        # NOT charged for reinvestment, because the projection this one is
+        # compared against is not either — GATE_GROWTH_REINVESTMENT ships
+        # observation-only. That parity is the whole point of the scorer: a T-1
+        # blend and a T blend differ in ONE input, so the difference is
+        # attributable. Charging one side would measure the charge, not the
+        # company, and would do it on the one path that produces a direction
+        # call rather than a number.
+        #
+        # When the charge goes live this call must gain
+        # `sales_to_capital=_sales_to_capital(t1_row)` in the same commit, read
+        # off `t1_row` rather than from `revenue_t1` because the helper pairs
+        # revenue with invested capital from ONE row — the same misalignment the
+        # `fcf_margin_pairs` comprehension above guards against. The
+        # `_compute_method_value` calls below would get it for free if the ratio
+        # were computed inside that function, which is where it belongs.
         iv_dcf_t1, pv_fcf_t1, pv_tv_t1, _ = _project_dcf(
             revenue_t1, fcf_margin_t1, growth_t1, 0.0,
             wacc, tgr, fcf_floor, net_debt_t1, shares_t1,
@@ -9416,6 +9669,98 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                   f"despite the similar names, so this is a change of earnings "
                   f"source, not a relabel.")
 
+        # ── Growth reinvestment: the charge the flat margin omits, OBSERVED ──
+        #
+        # The cash-conversion gate above records a cap it does not apply, and
+        # says why: "`_project_dcf` holds the margin flat while revenue
+        # compounds, charging nothing for the investment that growth requires,
+        # so capping the margin makes the OUTPUT look sane by breaking an INPUT.
+        # That is why it improves plausibility while degrading forecast
+        # accuracy. The reinvestment charge is the real fix; until it lands this
+        # records what it would have done and moves nothing."
+        #
+        # This is that fix. It was built, wired live, and MEASURED — and the
+        # measurement says it cannot ship live as specified, so it now records
+        # what it would have done and moves nothing, exactly like the gate it
+        # replaces. `_project_dcf` still takes the ratio and still applies the
+        # deduction when handed one; the four call sites hand it `None`.
+        #
+        # What the live run measured on the 14 golden fixtures. Each was
+        # replayed in its OWN subprocess. That is not pedantry: a shared process
+        # leaks ~ten process-lifetime caches, and a first measurement taken that
+        # way reported BN4_SI at +26.54% and 09988_HK at +44.49% when the true
+        # figures are +0.00% and +17.40%. `test_golden_replay_is_deterministic`
+        # exists because this already happened once to BN4.SI's baseline.
+        #
+        # Base IV moved on 9 of 14, over a range of −9.45% to +17.40%. Unmoved:
+        # BN4_SI, C38U_SI, D05_SI, FCX, U96_SI — four of the five because their
+        # `iv_dcf` was ALREADY None, so there was no leg for the charge to break.
+        #
+        #   * the sign INVERTED on two names. 09988_HK +17.40%, BABA +15.60%.
+        #     The charge exists to stop a hyper-growth name projecting a free
+        #     lunch, and on the two hyper-growth names in the baseline it made
+        #     them dramatically MORE expensive. BABA's 12-month targets followed:
+        #     base 151.25 → 166.31 (+9.96%), bear +10.37%, bull +8.50%.
+        #   * the mechanism is visible in the payload, and it is the blend, not
+        #     the formula. On 09988_HK and BABA: `iv_dcf` 88.09 → None and
+        #     114.81 → None, `weight_dcf` 0.2778 → 0.0, `weight_multi` 0.7222 →
+        #     1.0, `methods_count` 5 → 4, `tv_pct` 0.3714 → 0.0, and
+        #     `methods_used` `["DCF","EV/EBITDA","P/E"]` → `["EV/EBITDA","P/E"]`.
+        #     A leg that resolves non-positive is DROPPED and its weight
+        #     renormalises onto the survivors. Where the DCF is the LOW leg —
+        #     which is precisely where it is doing its job — removing it RAISES
+        #     the blended IV. Any change that can zero a DCF leg makes a
+        #     valuation less conservative, whatever its intent.
+        #   * the route there is the floor, not the algebra. On every low-S/C
+        #     name the deduction exceeded the base margin: 09988_HK 9.51% −
+        #     10.72pp = −1.2%, BABA 9.51% − 10.96pp = −1.5%, SCHW 11.53% −
+        #     16.19pp = −4.7%, FCX 5.39% − 12.94pp = −7.6%, C38U_SI 55.83% −
+        #     98.04pp = −42.2%.
+        #   * `forward_roic` moved on 13 of 14, going NEGATIVE on 09988_HK
+        #     (−112.80%), BABA (−115.30%) and to 0.0 on SCHW (−100.0%). That is
+        #     the `_y10_fcf_margin` parity edit doing its job — Gate B must judge
+        #     the company the DCF models — and it fired Gate B: terminal growth
+        #     zeroed on BABA base (0.03 → 0.0), FCX base (0.015 → 0.0), SCHW base
+        #     (0.02 → 0.0) and 02888_HK bear (0.01 → 0.0).
+        #   * MU shows the same mechanism in miniature and is the clearest
+        #     argument that the DCF leg's WEIGHT is what protects a number: its
+        #     `iv_dcf` fell −65.43% (34.81 → 12.03) and base IV moved only
+        #     −1.94%, because that leg carries almost no weight there.
+        #   * `revenue / invested_capital` is not a capital-intensity ratio for
+        #     balance-sheet-heavy profiles at all. C38U_SI measures S/C = 0.063 —
+        #     an S-REIT's invested capital is ~16x its revenue — and takes a
+        #     +98.04pp deduction against a 0.5583 base margin. SCHW measures
+        #     0.806 and takes +16.19pp. Measured across the 13 chargeable names
+        #     the ratio spans 0.063 to 10.912, a factor of 173, so no single
+        #     deduction bound would be tight on a retailer and loose on a REIT.
+        #     On the four fixtures where it is most absurd the IV did not move,
+        #     because their DCF leg was already gone — the ratio being
+        #     meaningless and the ratio being harmless are not the same thing,
+        #     and only the isolation of the measurement separates them.
+        #   * D05_SI was not charged at all — its invested capital is
+        #     unmeasurable — so coverage is 13 of 14 and the gap is silent.
+        #
+        # The formula is right for the population it was derived from. ONON at
+        # g = 28% and S/C = 1.85 deducts 11.8pp, which is what the brief asked
+        # for. What is missing is a scope: a ratio that is meaningful for
+        # working-capital-funded operating businesses and meaningless for
+        # balance-sheet-funded ones, and a rule for what happens when the
+        # deduction exceeds the margin it is deducted from. Neither is a
+        # calibration constant, so neither is chosen here.
+        #
+        # The RATIO is scenario-invariant and comes off the balance sheet, so it
+        # is resolved once here beside the P/E promotion. The DEDUCTION is not:
+        # it is a function of `g_t`, so it is computed per year inside the
+        # projector from the growth schedule that projector resolved. Nothing
+        # here duplicates a growth path — which is why the observation records
+        # the year-1 deduction the projector WOULD have levied rather than a
+        # parallel estimate of it.
+        #
+        # `None` means the company's invested capital was not measurable, and
+        # the observation is then absent rather than estimated from a default
+        # ratio.
+        _s_to_c = _sales_to_capital(most_recent)
+
         # Base runs first so its method availability gates bear/bull.
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
@@ -9590,6 +9935,30 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # `fcf_floor` is reused rather than re-derived so the two cannot
                 # drift; `_FCF_MARGIN_CAP` binds the other way, on a bull margin
                 # above 0.60, for the same parity reason.
+                #
+                # NOT charged for reinvestment, because `_project_dcf` is not
+                # either — the charge ships observation-only, see
+                # GATE_GROWTH_REINVESTMENT. This is the parity obligation the
+                # `_FCF_MARGIN_CAP` comment above describes, and it binds the
+                # moment the charge goes live: `_project_dcf` would deduct
+                # `_reinvestment_margin_deduction(_y10_g, _s_to_c)` from year 10,
+                # so an estimate that did not would describe a terminal company
+                # more profitable than the one being valued and Gate B would
+                # judge THAT one. That is the `md_abs * 10` defect again. Measured
+                # while this was wired live, it is not a small correction — it
+                # drove `forward_roic` negative on 09988_HK (−112.8%), BABA
+                # (−115.3%) and SCHW (−100.0%) and fired Gate B on three
+                # fixtures, zeroing terminal growth on BABA, FCX and SCHW.
+                # Whoever turns the charge on must add, in this order:
+                #     _y10_g = (_growth_schedule[_PROJECTION_YEARS - 1]
+                #               if (_growth_schedule and len(_growth_schedule)
+                #                   >= _PROJECTION_YEARS) else g)
+                #     ... max(fcf_margin_base + md_abs
+                #             - _reinvestment_margin_deduction(_y10_g, _s_to_c),
+                #         fcf_floor) ...
+                # with `_y10_g` read off the same resolved schedule
+                # `_y10_rev_mult` uses, under the same length condition
+                # `_project_dcf` applies, so the two cannot pick different years.
                 _y10_fcf_margin = min(
                     max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)
                 _y10_fcf = _y10_rev * _y10_fcf_margin
@@ -9664,6 +10033,76 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 wacc_schedule=_wacc_schedule,
                 margin_delta_absolute=md_abs,
             )
+
+            # ── Reinvestment disclosure, OBSERVATION-ONLY ─────────────────
+            # Computed from the SAME helper the projector would have used, on
+            # the SAME `g` the projector resolved for year 1, so the recorded
+            # number is what the live run levied — not a parallel estimate of
+            # it. When the charge is wired back on this expression should be
+            # replaced by `_proj_rows[0]["reinvest_margin_deduction"]`, the
+            # projector's own row, for the reason the `methods_used` defect
+            # gives: a disclosure derived independently of the thing it
+            # describes is free to describe something else. Today the projector
+            # is not the thing being described.
+            #
+            # This is the PRE-floor figure. The live run showed why that
+            # distinction is the whole story: on 09988_HK it is +10.72pp against
+            # a 9.51pp base margin, so the post-floor margin was −1.2% → the
+            # floor, `iv_dcf` resolved to None, the leg dropped out of the blend
+            # (`weight_dcf` 0.2778 → 0.0) and base IV ROSE 17.40%, 160.84 →
+            # 188.82. Reporting the pre-floor deduction without saying it
+            # exceeded the margin would have made that unreadable.
+            #
+            # That figure is from the clean measurement, one subprocess per
+            # fixture. A first probe that replayed all 14 in a single process
+            # reported 44.49% here, and that number was quoted into this comment
+            # before anyone noticed it was a cache-leak artifact — see the
+            # measurement-error section at the top of this function's gate
+            # block, and `test_golden_replay_is_deterministic`.
+            _reinvest_ded = _reinvestment_margin_deduction(g, _s_to_c)
+            if scenario == "base":
+                gate_evaluations.append({
+                    "gate_id": "GATE_GROWTH_REINVESTMENT",
+                    "metric": "reinvestment_margin_deduction",
+                    "raw_input_path_a": round(float(fcf_margin_base), 6),
+                    "gated_output_path_b": round(
+                        float(fcf_margin_base) - _reinvest_ded, 6),
+                    "basis": (f"S/C={_s_to_c:.4f}, g_yr1={g:.4f}"
+                              if _s_to_c is not None
+                              else "S/C unmeasurable — invested capital absent "
+                                   "or non-positive on the row"),
+                    # NEVER True while the charge is observation-only. Not
+                    # `_s_to_c is not None`, which is what this field said when
+                    # the charge was live and which conflated "measurable" with
+                    # "applied" — the distinction the Phase 1.2B gate exists to
+                    # make. A reader must be able to tell from this record alone
+                    # that path B is a counterfactual.
+                    "applied": False,
+                })
+            # 5bp is a REPORTING threshold on the prose, not a change detector:
+            # below it the sentence would name a charge too small to read. The
+            # gate record above carries the unrounded value either way, so
+            # nothing is hidden by the flag staying quiet.
+            if _s_to_c is not None and abs(_reinvest_ded) >= 0.0005:
+                forward_flags.append(
+                    f"Growth reinvestment NOT charged (observation only): at "
+                    f"S/C {_s_to_c:.2f} (revenue ÷ invested capital) and "
+                    f"g={g:.1%}, a reinvestment charge would take "
+                    f"{_reinvest_ded:+.2%} off the Yr-1 FCF margin, "
+                    f"{fcf_margin_base:.2%} → "
+                    f"{float(fcf_margin_base) - _reinvest_ded:.2%}. The "
+                    f"published margin is {fcf_margin_base:.2%} before the "
+                    f"scenario delta, with no reinvestment deduction. "
+                    f"Two-sided by construction — a shrinking year releases "
+                    f"capital and raises the margin."
+                    + (" The deduction EXCEEDS the base margin, so a live "
+                       "charge would floor the projection, and a floored DCF "
+                       "leg that resolves non-positive is DROPPED from the "
+                       "blend — its weight renormalises onto the surviving "
+                       "legs, which is how charging more can value the company "
+                       "higher."
+                       if abs(_reinvest_ded) > abs(fcf_margin_base) else "")
+                )
             if scenario == "base":
                 _base_proj_rows = _proj_rows
                 _base_pv_fcf_per_share = pv_fcf

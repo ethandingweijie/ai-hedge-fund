@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-09-17T17:54:37+00:00",
+  "generated_at": "2026-09-17T20:36:40+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "6a76492",
-  "reason": "_normalized_earnings outlier floor made relative: max(iqr*2, abs(med)*0.30) replaces max(iqr*2, 0.05). Expected moves, all investigated: 09988_HK+BABA normalized_net_income -9.47% (FY2025 excluded; iqr*2 now binds at 0.0348 because the 0.05 floor is gone, relative term loses) and a new Normalized NI audit flag crossing its 15% threshold in all three scenarios, base IV unchanged because methods_used is plain P/E; FCX normalized_ebitda +4.66% / normalized_ebit +6.02% (FY2021 re-admitted, relative term 0.1135 beats iqr*2 0.0528) moving EV/EBITDA (norm) and base IV 25.58->26.69.",
+  "regenerated_at_commit": "d0c2c84",
+  "reason": "GATE_GROWTH_REINVESTMENT added OBSERVATION-ONLY (applied: False on every run; no call site passes sales_to_capital, so _project_dcf is byte-identical to the previous baseline). Expected moves are exactly two field kinds and NO numeric leaf: (1) gate_metrics gains \"reinvestment_margin_deduction\" on all 14; (2) scenarios.{base,bear,bull}.forward_flags gains the disclosure line on 13 of 14 \u2014 D05_SI is excluded because its invested capital is unmeasurable, so S/C is None and the flag is correctly absent rather than silent. Every intrinsic_value, iv_dcf, forward_roic, tgr, method_iv_table, weight and target is unchanged; verified by grepping the update run for out_of_tolerance and finding zero. The mechanism was built, wired live and measured first, and the measurement is recorded at the gate's site: base IV moved on 9 of 14 over -9.45% to +17.40% with the sign INVERTED on 09988_HK (+17.40%) and BABA (+15.60%), because the deduction exceeded the base margin, the floor absorbed it, iv_dcf went to None, and the blend renormalised that leg's weight onto higher multiples (weight_dcf 0.2778 -> 0.0, weight_multi -> 1.0, methods_used loses DCF). Those live numbers are NOT in this baseline; they are recorded so the charge is not re-wired on the strength of its algebra alone.",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -58,7 +58,8 @@
    "fx_rate": 7.84469,
    "gate_metrics": [
     "fcf_margin",
-    "forward_ev_ebitda_row"
+    "forward_ev_ebitda_row",
+    "reinvestment_margin_deduction"
    ],
    "leverage": 1.95,
    "methods_unavailable": [],
@@ -138,6 +139,7 @@
     "Cash-conversion (observed, not applied): FCF margin 26.4% vs 16.1% \u2014 reported FCF is 1.2x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Money Center Bank, completeness=0.75): cet1_ratio=0.142 (Common Equity Tier 1 ratio (regulatory capital)) | efficiency_ratio=0.546 (op_exp / total income (lower is better)) | management_target_roe=0.18 (Through-cycle ROE/ROTCE target from earnings call) | cost_of_equity=0.105 (Cost of equity used in the GGM/DDM valuation (risk-free + beta x ERP)) | terminal_growth_rate=0.04 (Terminal growth rate g in the Gordon Growth Model) | credit_cost_bps=32.5 (Guided credit cost / specific provisions in basis points of loans) | net_charge_offs_pct=0.0026 (Annualized NCO / avg loans) | loan_to_deposit_ratio=0.58 (Loans / deposits) | loan_growth_yoy=0.057 (YoY loan growth (decimal)) | deposit_growth_yoy=0.02 (YoY deposit growth (decimal))",
     "GGM (P/B): target P/B 1.84x \u2192 $337.31/sh [ROE 18.0% (research), CoE 10.5% (research), g 4.0% (research)]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.50 (revenue \u00f7 invested capital) and g=2.2%, a reinvestment charge would take +4.33% off the Yr-1 FCF margin, 26.39% \u2192 22.06%. The published margin is 26.39% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Insider activity: net_12m=$0 (+0.00% mkt cap), gross $0 buy / $0 sell, cluster_buy -> WACC -10bp (tightening)",
     "SBC drag: FCF margin 26.7% \u2192 26.4% (\u221231 bps, 5/5 yr SBC data)",
     "WACC 7.40% = base 7.50% + credit overlay -10bps (rd_live 7.16% vs baseline 7.64% for B \u00d7 D/V 28.7% \u00d7 0.75) [fred:BAMLH0A2HYB]"
@@ -210,6 +212,7 @@
     "Cash-conversion (observed, not applied): FCF margin 26.4% vs 16.1% \u2014 reported FCF is 1.2x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Money Center Bank, completeness=0.75): cet1_ratio=0.142 (Common Equity Tier 1 ratio (regulatory capital)) | efficiency_ratio=0.546 (op_exp / total income (lower is better)) | management_target_roe=0.18 (Through-cycle ROE/ROTCE target from earnings call) | cost_of_equity=0.105 (Cost of equity used in the GGM/DDM valuation (risk-free + beta x ERP)) | terminal_growth_rate=0.04 (Terminal growth rate g in the Gordon Growth Model) | credit_cost_bps=32.5 (Guided credit cost / specific provisions in basis points of loans) | net_charge_offs_pct=0.0026 (Annualized NCO / avg loans) | loan_to_deposit_ratio=0.58 (Loans / deposits) | loan_growth_yoy=0.057 (YoY loan growth (decimal)) | deposit_growth_yoy=0.02 (YoY deposit growth (decimal))",
     "GGM (P/B): target P/B 1.84x \u2192 $337.31/sh [ROE 18.0% (research), CoE 10.5% (research), g 4.0% (research)]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.50 (revenue \u00f7 invested capital) and g=1.4%, a reinvestment charge would take +2.79% off the Yr-1 FCF margin, 26.39% \u2192 23.60%. The published margin is 26.39% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Insider activity: net_12m=$0 (+0.00% mkt cap), gross $0 buy / $0 sell, cluster_buy -> WACC -10bp (tightening)",
     "SBC drag: FCF margin 26.7% \u2192 26.4% (\u221231 bps, 5/5 yr SBC data)",
     "WACC 7.40% = base 7.50% + credit overlay -10bps (rd_live 7.16% vs baseline 7.64% for B \u00d7 D/V 28.7% \u00d7 0.75) [fred:BAMLH0A2HYB]"
@@ -282,6 +285,7 @@
     "Cash-conversion (observed, not applied): FCF margin 26.4% vs 16.1% \u2014 reported FCF is 1.2x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Money Center Bank, completeness=0.75): cet1_ratio=0.142 (Common Equity Tier 1 ratio (regulatory capital)) | efficiency_ratio=0.546 (op_exp / total income (lower is better)) | management_target_roe=0.18 (Through-cycle ROE/ROTCE target from earnings call) | cost_of_equity=0.105 (Cost of equity used in the GGM/DDM valuation (risk-free + beta x ERP)) | terminal_growth_rate=0.04 (Terminal growth rate g in the Gordon Growth Model) | credit_cost_bps=32.5 (Guided credit cost / specific provisions in basis points of loans) | net_charge_offs_pct=0.0026 (Annualized NCO / avg loans) | loan_to_deposit_ratio=0.58 (Loans / deposits) | loan_growth_yoy=0.057 (YoY loan growth (decimal)) | deposit_growth_yoy=0.02 (YoY deposit growth (decimal))",
     "GGM (P/B): target P/B 1.84x \u2192 $337.31/sh [ROE 18.0% (research), CoE 10.5% (research), g 4.0% (research)]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.50 (revenue \u00f7 invested capital) and g=2.9%, a reinvestment charge would take +5.65% off the Yr-1 FCF margin, 26.39% \u2192 20.74%. The published margin is 26.39% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Insider activity: net_12m=$0 (+0.00% mkt cap), gross $0 buy / $0 sell, cluster_buy -> WACC -10bp (tightening)",
     "SBC drag: FCF margin 26.7% \u2192 26.4% (\u221231 bps, 5/5 yr SBC data)",
     "WACC 7.40% = base 7.50% + credit overlay -10bps (rd_live 7.16% vs baseline 7.64% for B \u00d7 D/V 28.7% \u00d7 0.75) [fred:BAMLH0A2HYB]"
@@ -374,7 +378,8 @@
    "fx_note": "Financials reported in CNY; converted to HKD at 1.167700 CNY\u2192HKD | CRP +1.8% added for CNY jurisdiction risk (Damodaran 2026 country risk premium). | Per-share IV & PT in HKD (HKEX prices quoted in HKD)",
    "fx_rate": 1.1677,
    "gate_metrics": [
-    "composite_multiplier"
+    "composite_multiplier",
+    "reinvestment_margin_deduction"
    ],
    "leverage": 0.25,
    "methods_unavailable": [
@@ -444,6 +449,7 @@
     "Balance sheet from 2026-06-30, not the 2026-03-31 year end: net debt -98.6bn \u2192 -161.7bn (cash 185.5bn, short-term investments 242.7bn, debt 266.5bn)",
     "Framework metrics (Hyperscaler / Tech Conglomerate, completeness=1.0): revenue_growth_pct=0.027423176865088106 (Consolidated revenue growth YoY (decimal \u2014 0.13 = 13%)) | operating_margin_pct=-0.003 (GAAP operating income / total revenue (decimal)) | capex_intensity_pct=0.12400187560444284 (Capex / TTM revenue (FMP-derivable + earnings-call cross-check)) | cloud_revenue_growth_pct=0.45 (Cloud / hyperscale segment revenue growth YoY (decimal)) | fcf_margin_pct=-0.04955112487422705 (TTM FCF / TTM revenue (decimal \u2014 FMP-derivable)) | net_debt_to_ebitda=0.6618224339253932 ((total_debt - cash) / TTM EBITDA \u2014 augmented from FMP) [research-sourced \u2014 no filed value]",
     "Gate B (base): Forward ROIC (6.7% [Y10 projected]) < threshold (7.2%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.90 (revenue \u00f7 invested capital) and g=10.6%, a reinvestment charge would take +10.72% off the Yr-1 FCF margin, 9.51% \u2192 -1.21%. The published margin is 9.51% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$0 (+0.00% mkt cap), gross $0 buy / $0 sell, cluster_buy -> WACC -10bp (tightening)",
     "Normalized NI: TTM RMB120.96B \u2192 5y-cycle RMB102.49B (-15%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Goldman Sachs 21 August 2026 vs FMP) \u2014 not compared",
@@ -505,6 +511,7 @@
     "Balance sheet from 2026-06-30, not the 2026-03-31 year end: net debt -98.6bn \u2192 -161.7bn (cash 185.5bn, short-term investments 242.7bn, debt 266.5bn)",
     "Framework metrics (Hyperscaler / Tech Conglomerate, completeness=1.0): revenue_growth_pct=0.027423176865088106 (Consolidated revenue growth YoY (decimal \u2014 0.13 = 13%)) | operating_margin_pct=-0.003 (GAAP operating income / total revenue (decimal)) | capex_intensity_pct=0.12400187560444284 (Capex / TTM revenue (FMP-derivable + earnings-call cross-check)) | cloud_revenue_growth_pct=0.45 (Cloud / hyperscale segment revenue growth YoY (decimal)) | fcf_margin_pct=-0.04955112487422705 (TTM FCF / TTM revenue (decimal \u2014 FMP-derivable)) | net_debt_to_ebitda=0.6618224339253932 ((total_debt - cash) / TTM EBITDA \u2014 augmented from FMP) [research-sourced \u2014 no filed value]",
     "Gate B (bear): Forward ROIC (5.4% [Y10 projected]) < threshold (14.4%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.90 (revenue \u00f7 invested capital) and g=-0.9%, a reinvestment charge would take -0.97% off the Yr-1 FCF margin, 9.51% \u2192 10.48%. The published margin is 9.51% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Insider activity: net_12m=$0 (+0.00% mkt cap), gross $0 buy / $0 sell, cluster_buy -> WACC -10bp (tightening)",
     "Normalized NI: TTM RMB120.96B \u2192 5y-cycle RMB102.49B (-15%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Goldman Sachs 21 August 2026 vs FMP) \u2014 not compared",
@@ -565,6 +572,7 @@
     "Analyst dispersion (43 analysts): bear -0.9% / base +10.6% / bull +15.0%",
     "Balance sheet from 2026-06-30, not the 2026-03-31 year end: net debt -98.6bn \u2192 -161.7bn (cash 185.5bn, short-term investments 242.7bn, debt 266.5bn)",
     "Framework metrics (Hyperscaler / Tech Conglomerate, completeness=1.0): revenue_growth_pct=0.027423176865088106 (Consolidated revenue growth YoY (decimal \u2014 0.13 = 13%)) | operating_margin_pct=-0.003 (GAAP operating income / total revenue (decimal)) | capex_intensity_pct=0.12400187560444284 (Capex / TTM revenue (FMP-derivable + earnings-call cross-check)) | cloud_revenue_growth_pct=0.45 (Cloud / hyperscale segment revenue growth YoY (decimal)) | fcf_margin_pct=-0.04955112487422705 (TTM FCF / TTM revenue (decimal \u2014 FMP-derivable)) | net_debt_to_ebitda=0.6618224339253932 ((total_debt - cash) / TTM EBITDA \u2014 augmented from FMP) [research-sourced \u2014 no filed value]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.90 (revenue \u00f7 invested capital) and g=15.0%, a reinvestment charge would take +14.61% off the Yr-1 FCF margin, 9.51% \u2192 -5.10%. The published margin is 9.51% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$0 (+0.00% mkt cap), gross $0 buy / $0 sell, cluster_buy -> WACC -10bp (tightening)",
     "Normalized NI: TTM RMB120.96B \u2192 5y-cycle RMB102.49B (-15%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Goldman Sachs 21 August 2026 vs FMP) \u2014 not compared",
@@ -661,7 +669,9 @@
    "fcf_margin_base": 0.2525,
    "fx_note": "",
    "fx_rate": 1.0,
-   "gate_metrics": [],
+   "gate_metrics": [
+    "reinvestment_margin_deduction"
+   ],
    "leverage": 1.52,
    "methods_unavailable": [],
    "multiples_used.all_static": true,
@@ -730,6 +740,7 @@
     "Analyst basis (PHILLIP SECURITIES RESEARCH (SINGAPORE) 3 Aug 2026): method=dcf | WACC 6.30% | g 3.50% | TP 290.0 | REDUCE",
     "Analyst dispersion (30 analysts): bear +13.5% / base +14.7% / bull +16.0%",
     "Balance sheet from 2026-06-27, not the 2025-09-27 year end: net debt 57.7bn \u2192 21.9bn (cash 39.5bn, short-term investments 22.9bn, debt 84.3bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 2.77 (revenue \u00f7 invested capital) and g=14.7%, a reinvestment charge would take +4.62% off the Yr-1 FCF margin, 25.25% \u2192 20.63%. The published margin is 25.25% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-09-27): iPhone 50%, Service 26%, Wearables, Home and Accessories 9%, Mac 8%, iPad 7%",
     "R1 house vs street FY+1 revenue: currency basis differs (PHILLIP SECURITIES RESEARCH (SINGAPORE) 3 Aug 2026 vs FMP) \u2014 not compared",
     "SBC drag: FCF margin 26.2% \u2192 25.3% (\u221299 bps, 5/5 yr SBC data)",
@@ -795,6 +806,7 @@
     "Analyst basis (PHILLIP SECURITIES RESEARCH (SINGAPORE) 3 Aug 2026): method=dcf | WACC 6.30% | g 3.50% | TP 290.0 | REDUCE",
     "Analyst dispersion (30 analysts): bear +13.5% / base +14.7% / bull +16.0%",
     "Balance sheet from 2026-06-27, not the 2025-09-27 year end: net debt 57.7bn \u2192 21.9bn (cash 39.5bn, short-term investments 22.9bn, debt 84.3bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 2.77 (revenue \u00f7 invested capital) and g=13.5%, a reinvestment charge would take +4.29% off the Yr-1 FCF margin, 25.25% \u2192 20.96%. The published margin is 25.25% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-09-27): iPhone 50%, Service 26%, Wearables, Home and Accessories 9%, Mac 8%, iPad 7%",
     "R1 house vs street FY+1 revenue: currency basis differs (PHILLIP SECURITIES RESEARCH (SINGAPORE) 3 Aug 2026 vs FMP) \u2014 not compared",
     "SBC drag: FCF margin 26.2% \u2192 25.3% (\u221299 bps, 5/5 yr SBC data)",
@@ -860,6 +872,7 @@
     "Analyst basis (PHILLIP SECURITIES RESEARCH (SINGAPORE) 3 Aug 2026): method=dcf | WACC 6.30% | g 3.50% | TP 290.0 | REDUCE",
     "Analyst dispersion (30 analysts): bear +13.5% / base +14.7% / bull +16.0%",
     "Balance sheet from 2026-06-27, not the 2025-09-27 year end: net debt 57.7bn \u2192 21.9bn (cash 39.5bn, short-term investments 22.9bn, debt 84.3bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 2.77 (revenue \u00f7 invested capital) and g=16.0%, a reinvestment charge would take +4.99% off the Yr-1 FCF margin, 25.25% \u2192 20.27%. The published margin is 25.25% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-09-27): iPhone 50%, Service 26%, Wearables, Home and Accessories 9%, Mac 8%, iPad 7%",
     "R1 house vs street FY+1 revenue: currency basis differs (PHILLIP SECURITIES RESEARCH (SINGAPORE) 3 Aug 2026 vs FMP) \u2014 not compared",
     "SBC drag: FCF margin 26.2% \u2192 25.3% (\u221299 bps, 5/5 yr SBC data)",
@@ -959,7 +972,8 @@
    "fx_note": "Financials reported in CNY; converted to USD at 0.149360 CNY\u2192USD | CRP +1.8% added for CNY jurisdiction risk (Damodaran 2026 country risk premium).",
    "fx_rate": 0.14936,
    "gate_metrics": [
-    "composite_multiplier"
+    "composite_multiplier",
+    "reinvestment_margin_deduction"
    ],
    "leverage": 0.25,
    "methods_unavailable": [
@@ -1028,6 +1042,7 @@
     "Analyst dispersion (31 analysts): bear +8.8% / base +10.9% / bull +13.4%",
     "Balance sheet from 2026-06-30, not the 2026-03-31 year end: net debt -98.6bn \u2192 -161.8bn (cash 185.6bn, short-term investments 242.9bn, debt 266.6bn)",
     "Framework metrics (Hyperscaler / Tech Conglomerate, completeness=1.0): revenue_growth_pct=0.027423176865088106 (Consolidated revenue growth YoY (decimal \u2014 0.13 = 13%)) | operating_margin_pct=-0.003 (GAAP operating income / total revenue (decimal)) | capex_intensity_pct=0.12400187560444284 (Capex / TTM revenue (FMP-derivable + earnings-call cross-check)) | cloud_revenue_growth_pct=0.45 (Cloud / hyperscale segment revenue growth YoY (decimal)) | fcf_margin_pct=-0.04955112487422705 (TTM FCF / TTM revenue (decimal \u2014 FMP-derivable)) | net_debt_to_ebitda=0.6618224339253932 ((total_debt - cash) / TTM EBITDA \u2014 augmented from FMP) [research-sourced \u2014 no filed value]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.90 (revenue \u00f7 invested capital) and g=10.9%, a reinvestment charge would take +10.96% off the Yr-1 FCF margin, 9.51% \u2192 -1.45%. The published margin is 9.51% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$-46.6M (-0.02% mkt cap), gross $25.7M buy / $72.3M sell, cluster_buy, conviction_sell -> WACC +6bp (widening)",
     "Normalized NI: TTM RMB15.47B \u2192 5y-cycle RMB13.11B (-15%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2026-03-31): Customer Management Services 45%, Sales Of Goods 22%, Logistics Services 14%, Cloud Services 11%, Membership Fees and Value Added Services 5%",
@@ -1094,6 +1109,7 @@
     "Balance sheet from 2026-06-30, not the 2026-03-31 year end: net debt -98.6bn \u2192 -161.8bn (cash 185.6bn, short-term investments 242.9bn, debt 266.6bn)",
     "Framework metrics (Hyperscaler / Tech Conglomerate, completeness=1.0): revenue_growth_pct=0.027423176865088106 (Consolidated revenue growth YoY (decimal \u2014 0.13 = 13%)) | operating_margin_pct=-0.003 (GAAP operating income / total revenue (decimal)) | capex_intensity_pct=0.12400187560444284 (Capex / TTM revenue (FMP-derivable + earnings-call cross-check)) | cloud_revenue_growth_pct=0.45 (Cloud / hyperscale segment revenue growth YoY (decimal)) | fcf_margin_pct=-0.04955112487422705 (TTM FCF / TTM revenue (decimal \u2014 FMP-derivable)) | net_debt_to_ebitda=0.6618224339253932 ((total_debt - cash) / TTM EBITDA \u2014 augmented from FMP) [research-sourced \u2014 no filed value]",
     "Gate B (bear): Forward ROIC (5.4% [Y10 projected]) < threshold (13.1%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.90 (revenue \u00f7 invested capital) and g=8.8%, a reinvestment charge would take +9.03% off the Yr-1 FCF margin, 9.51% \u2192 0.48%. The published margin is 9.51% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Insider activity: net_12m=$-46.6M (-0.02% mkt cap), gross $25.7M buy / $72.3M sell, cluster_buy, conviction_sell -> WACC +6bp (widening)",
     "Normalized NI: TTM RMB15.47B \u2192 5y-cycle RMB13.11B (-15%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2026-03-31): Customer Management Services 45%, Sales Of Goods 22%, Logistics Services 14%, Cloud Services 11%, Membership Fees and Value Added Services 5%",
@@ -1160,6 +1176,7 @@
     "Balance sheet from 2026-06-30, not the 2026-03-31 year end: net debt -98.6bn \u2192 -161.8bn (cash 185.6bn, short-term investments 242.9bn, debt 266.6bn)",
     "Deep Value Recovery: Current P/E 2.5x < Peer 28x while growth 13.4% > sector avg 12.0%",
     "Framework metrics (Hyperscaler / Tech Conglomerate, completeness=1.0): revenue_growth_pct=0.027423176865088106 (Consolidated revenue growth YoY (decimal \u2014 0.13 = 13%)) | operating_margin_pct=-0.003 (GAAP operating income / total revenue (decimal)) | capex_intensity_pct=0.12400187560444284 (Capex / TTM revenue (FMP-derivable + earnings-call cross-check)) | cloud_revenue_growth_pct=0.45 (Cloud / hyperscale segment revenue growth YoY (decimal)) | fcf_margin_pct=-0.04955112487422705 (TTM FCF / TTM revenue (decimal \u2014 FMP-derivable)) | net_debt_to_ebitda=0.6618224339253932 ((total_debt - cash) / TTM EBITDA \u2014 augmented from FMP) [research-sourced \u2014 no filed value]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.90 (revenue \u00f7 invested capital) and g=13.4%, a reinvestment charge would take +13.22% off the Yr-1 FCF margin, 9.51% \u2192 -3.71%. The published margin is 9.51% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$-46.6M (-0.02% mkt cap), gross $25.7M buy / $72.3M sell, cluster_buy, conviction_sell -> WACC +6bp (widening)",
     "Normalized NI: TTM RMB15.47B \u2192 5y-cycle RMB13.11B (-15%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2026-03-31): Customer Management Services 45%, Sales Of Goods 22%, Logistics Services 14%, Cloud Services 11%, Membership Fees and Value Added Services 5%",
@@ -1259,6 +1276,7 @@
    "fx_rate": 1.0,
    "gate_metrics": [
     "composite_multiplier",
+    "reinvestment_margin_deduction",
     "revenue_growth"
    ],
    "leverage": 1.14,
@@ -1324,6 +1342,7 @@
     "CAGR-divergence gate: NTM growth +20.3% \u2192 +5.0%; analyst bands scaled 0.25x (NTM consensus +20.3% diverges from historical CAGR -2.5% by 22.7pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Framework metrics (Conglomerate / Industrial (SG), completeness=1.0): roic_pct=0.05061769004842151 (Return on invested capital (decimal)) | holdco_net_debt_to_ebitda=1.4 (Holding-company net debt / EBITDA (x)) | fcf_conversion_pct=-0.134 (Free cash flow / net profit (decimal)) | divestment_proceeds=2500000000.0 (Announced divestment / recycling proceeds, reporting currency) | contracted_power_capacity_gw=1.9 (Contracted or installed power capacity in GW) | infra_fum=106000000000.0 (Infrastructure FUM, reporting currency)",
     "Gate B (base): Forward ROIC (2.3% [Y10 projected]) < threshold (5.1%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.30 (revenue \u00f7 invested capital) and g=5.0%, a reinvestment charge would take +16.00% off the Yr-1 FCF margin, 9.79% \u2192 -6.21%. The published margin is 9.79% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "OE\u22640 cascade: trailing owner-earnings margin -10.0% \u2264 0 \u2192 DCF basis = median of positive years 9.8%",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 2025-08-12 vs FMP) \u2014 not compared",
     "SBC drag: FCF margin -9.4% \u2192 -10.0% (\u221267 bps, 5/5 yr SBC data)",
@@ -1375,6 +1394,7 @@
     "CAGR-divergence gate: NTM growth +20.3% \u2192 +5.0%; analyst bands scaled 0.25x (NTM consensus +20.3% diverges from historical CAGR -2.5% by 22.7pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Framework metrics (Conglomerate / Industrial (SG), completeness=1.0): roic_pct=0.05061769004842151 (Return on invested capital (decimal)) | holdco_net_debt_to_ebitda=1.4 (Holding-company net debt / EBITDA (x)) | fcf_conversion_pct=-0.134 (Free cash flow / net profit (decimal)) | divestment_proceeds=2500000000.0 (Announced divestment / recycling proceeds, reporting currency) | contracted_power_capacity_gw=1.9 (Contracted or installed power capacity in GW) | infra_fum=106000000000.0 (Infrastructure FUM, reporting currency)",
     "Gate B (bear): Forward ROIC (1.8% [Y10 projected]) < threshold (10.2%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.30 (revenue \u00f7 invested capital) and g=0.9%, a reinvestment charge would take +3.14% off the Yr-1 FCF margin, 9.79% \u2192 6.65%. The published margin is 9.79% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "OE\u22640 cascade: trailing owner-earnings margin -10.0% \u2264 0 \u2192 DCF basis = median of positive years 9.8%",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 2025-08-12 vs FMP) \u2014 not compared",
     "SBC drag: FCF margin -9.4% \u2192 -10.0% (\u221267 bps, 5/5 yr SBC data)",
@@ -1427,6 +1447,7 @@
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 9.5bn \u2192 9.3bn (cash 2.2bn, short-term investments 0.0bn, debt 11.5bn)",
     "CAGR-divergence gate: NTM growth +20.3% \u2192 +5.0%; analyst bands scaled 0.25x (NTM consensus +20.3% diverges from historical CAGR -2.5% by 22.7pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Framework metrics (Conglomerate / Industrial (SG), completeness=1.0): roic_pct=0.05061769004842151 (Return on invested capital (decimal)) | holdco_net_debt_to_ebitda=1.4 (Holding-company net debt / EBITDA (x)) | fcf_conversion_pct=-0.134 (Free cash flow / net profit (decimal)) | divestment_proceeds=2500000000.0 (Announced divestment / recycling proceeds, reporting currency) | contracted_power_capacity_gw=1.9 (Contracted or installed power capacity in GW) | infra_fum=106000000000.0 (Infrastructure FUM, reporting currency)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.30 (revenue \u00f7 invested capital) and g=9.2%, a reinvestment charge would take +28.34% off the Yr-1 FCF margin, 9.79% \u2192 -18.55%. The published margin is 9.79% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "OE\u22640 cascade: trailing owner-earnings margin -10.0% \u2264 0 \u2192 DCF basis = median of positive years 9.8%",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 2025-08-12 vs FMP) \u2014 not compared",
     "SBC drag: FCF margin -9.4% \u2192 -10.0% (\u221267 bps, 5/5 yr SBC data)",
@@ -1515,7 +1536,9 @@
    "fcf_margin_base": 0.5583,
    "fx_note": "",
    "fx_rate": 1.0,
-   "gate_metrics": [],
+   "gate_metrics": [
+    "reinvestment_margin_deduction"
+   ],
    "leverage": 0.61,
    "methods_unavailable": [],
    "multiples_used.all_static": false,
@@ -1580,6 +1603,7 @@
     "Analyst dispersion (14 analysts): bear +3.9% / base +6.5% / bull +12.2%",
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 9.9bn \u2192 9.8bn (cash 0.1bn, short-term investments 0.0bn, debt 9.9bn)",
     "Gate B (base): Forward ROIC (2.8% [Y10 projected]) < threshold (2.9%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.06 (revenue \u00f7 invested capital) and g=6.5%, a reinvestment charge would take +98.04% off the Yr-1 FCF margin, 55.83% \u2192 -42.21%. The published margin is 55.83% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "REIT sub-type: retail | cap_rate 6.20% | P/FFO 14x | P/AFFO 15x | maint_capex 5.5% rev | FFO=$938M AFFO=$937M NOI=$1.07B",
     "S-REIT DDM (retail): DPU fwd 10.76 cents -> S$2.24/unit [CoE 6.38% (sub-sector (retail)), g 1.50% (sub-sector (retail)), calibration: published]",
     "SBC drag: FCF margin 57.5% \u2192 55.8% (\u2212170 bps, 5/5 yr SBC data)",
@@ -1636,6 +1660,7 @@
     "Analyst dispersion (14 analysts): bear +3.9% / base +6.5% / bull +12.2%",
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 9.9bn \u2192 9.8bn (cash 0.1bn, short-term investments 0.0bn, debt 9.9bn)",
     "Gate B (bear): Forward ROIC (2.2% [Y10 projected]) < threshold (5.7%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.06 (revenue \u00f7 invested capital) and g=3.9%, a reinvestment charge would take +59.53% off the Yr-1 FCF margin, 55.83% \u2192 -3.70%. The published margin is 55.83% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "REIT sub-type: retail | cap_rate 6.20% | P/FFO 14x | P/AFFO 15x | maint_capex 5.5% rev | FFO=$938M AFFO=$937M NOI=$1.07B",
     "S-REIT DDM (retail): DPU fwd 10.76 cents -> S$2.24/unit [CoE 6.38% (sub-sector (retail)), g 1.50% (sub-sector (retail)), calibration: published]",
     "SBC drag: FCF margin 57.5% \u2192 55.8% (\u2212170 bps, 5/5 yr SBC data)",
@@ -1691,6 +1716,7 @@
    "scenarios.bull.forward_flags": [
     "Analyst dispersion (14 analysts): bear +3.9% / base +6.5% / bull +12.2%",
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 9.9bn \u2192 9.8bn (cash 0.1bn, short-term investments 0.0bn, debt 9.9bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.06 (revenue \u00f7 invested capital) and g=12.2%, a reinvestment charge would take +173.48% off the Yr-1 FCF margin, 55.83% \u2192 -117.66%. The published margin is 55.83% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "REIT sub-type: retail | cap_rate 6.20% | P/FFO 14x | P/AFFO 15x | maint_capex 5.5% rev | FFO=$938M AFFO=$937M NOI=$1.07B",
     "S-REIT DDM (retail): DPU fwd 10.76 cents -> S$2.24/unit [CoE 6.38% (sub-sector (retail)), g 1.50% (sub-sector (retail)), calibration: published]",
     "SBC drag: FCF margin 57.5% \u2192 55.8% (\u2212170 bps, 5/5 yr SBC data)",
@@ -1784,7 +1810,9 @@
    "fcf_margin_base": 0.0232,
    "fx_note": "",
    "fx_rate": 1.0,
-   "gate_metrics": [],
+   "gate_metrics": [
+    "reinvestment_margin_deduction"
+   ],
    "leverage": 0.35,
    "methods_unavailable": [],
    "multiples_used.all_static": true,
@@ -1853,6 +1881,7 @@
     "Analyst dispersion (26 analysts): bear +8.8% / base +9.8% / bull +10.3%",
     "Balance sheet from 2026-05-10, not the 2025-08-31 year end: net debt -5.1bn \u2192 -11.8bn (cash 18.9bn, short-term investments 1.1bn, debt 8.2bn)",
     "Framework metrics (Membership / Subscription Retail, completeness=1.0): renewal_rate_pct=0.897 (renewed_members / total_base) | fee_revenue_pct_ebitda=0.417 (total_membership_fees / adjusted_EBITDA) | membership_fee_growth_yoy=0.136 (YoY growth in membership fee revenue (decimal \u2014 Saturation Risk drag if <5%)) | net_debt_to_ebitda=-0.31 (FMP-augmented (negative = net cash, COST standard)) [research-sourced \u2014 no filed value]",
+    "Growth reinvestment NOT charged (observation only): at S/C 10.91 (revenue \u00f7 invested capital) and g=9.8%, a reinvestment charge would take +0.82% off the Yr-1 FCF margin, 2.32% \u2192 1.51%. The published margin is 2.32% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-08-31): Food and Sundries 40%, Non-Foods 26%, Other 19%, Fresh Food 14%, Membership 2%",
     "SBC drag: FCF margin 2.5% \u2192 2.3% (\u221218 bps, 5/5 yr SBC data)",
     "Segment scenarios (3 segments, conf=medium): Membership Fees [+7%\u2192+14%], Merchandise [+3%\u2192+10%], Digitally-Enabled Sales [+11%\u2192+25%]",
@@ -1917,6 +1946,7 @@
     "Analyst dispersion (26 analysts): bear +8.8% / base +9.8% / bull +10.3%",
     "Balance sheet from 2026-05-10, not the 2025-08-31 year end: net debt -5.1bn \u2192 -11.8bn (cash 18.9bn, short-term investments 1.1bn, debt 8.2bn)",
     "Framework metrics (Membership / Subscription Retail, completeness=1.0): renewal_rate_pct=0.897 (renewed_members / total_base) | fee_revenue_pct_ebitda=0.417 (total_membership_fees / adjusted_EBITDA) | membership_fee_growth_yoy=0.136 (YoY growth in membership fee revenue (decimal \u2014 Saturation Risk drag if <5%)) | net_debt_to_ebitda=-0.31 (FMP-augmented (negative = net cash, COST standard)) [research-sourced \u2014 no filed value]",
+    "Growth reinvestment NOT charged (observation only): at S/C 10.91 (revenue \u00f7 invested capital) and g=8.8%, a reinvestment charge would take +0.74% off the Yr-1 FCF margin, 2.32% \u2192 1.59%. The published margin is 2.32% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-08-31): Food and Sundries 40%, Non-Foods 26%, Other 19%, Fresh Food 14%, Membership 2%",
     "SBC drag: FCF margin 2.5% \u2192 2.3% (\u221218 bps, 5/5 yr SBC data)",
     "Segment scenarios (3 segments, conf=medium): Membership Fees [+7%\u2192+14%], Merchandise [+3%\u2192+10%], Digitally-Enabled Sales [+11%\u2192+25%]",
@@ -1981,6 +2011,7 @@
     "Analyst dispersion (26 analysts): bear +8.8% / base +9.8% / bull +10.3%",
     "Balance sheet from 2026-05-10, not the 2025-08-31 year end: net debt -5.1bn \u2192 -11.8bn (cash 18.9bn, short-term investments 1.1bn, debt 8.2bn)",
     "Framework metrics (Membership / Subscription Retail, completeness=1.0): renewal_rate_pct=0.897 (renewed_members / total_base) | fee_revenue_pct_ebitda=0.417 (total_membership_fees / adjusted_EBITDA) | membership_fee_growth_yoy=0.136 (YoY growth in membership fee revenue (decimal \u2014 Saturation Risk drag if <5%)) | net_debt_to_ebitda=-0.31 (FMP-augmented (negative = net cash, COST standard)) [research-sourced \u2014 no filed value]",
+    "Growth reinvestment NOT charged (observation only): at S/C 10.91 (revenue \u00f7 invested capital) and g=10.3%, a reinvestment charge would take +0.86% off the Yr-1 FCF margin, 2.32% \u2192 1.47%. The published margin is 2.32% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-08-31): Food and Sundries 40%, Non-Foods 26%, Other 19%, Fresh Food 14%, Membership 2%",
     "SBC drag: FCF margin 2.5% \u2192 2.3% (\u221218 bps, 5/5 yr SBC data)",
     "Segment scenarios (3 segments, conf=medium): Membership Fees [+7%\u2192+14%], Merchandise [+3%\u2192+10%], Digitally-Enabled Sales [+11%\u2192+25%]",
@@ -2076,7 +2107,8 @@
    "fx_note": "",
    "fx_rate": 1.0,
    "gate_metrics": [
-    "forward_ev_ebitda_row"
+    "forward_ev_ebitda_row",
+    "reinvestment_margin_deduction"
    ],
    "leverage": 1.16,
    "methods_unavailable": [],
@@ -2381,7 +2413,8 @@
    "fx_rate": 1.0,
    "gate_metrics": [
     "peak_trigger",
-    "pt_over_scenario_iv"
+    "pt_over_scenario_iv",
+    "reinvestment_margin_deduction"
    ],
    "leverage": 0.61,
    "methods_unavailable": [],
@@ -2446,6 +2479,7 @@
    "scenarios.base.forward_flags": [
     "Analyst dispersion (14 analysts): bear +8.0% / base +14.0% / bull +26.4%",
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 7.4bn \u2192 6.3bn (cash 4.1bn, short-term investments 0.0bn, debt 10.4bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.95 (revenue \u00f7 invested capital) and g=14.0%, a reinvestment charge would take +12.94% off the Yr-1 FCF margin, 5.39% \u2192 -7.55%. The published margin is 5.39% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Normalized NI: TTM $2.20B \u2192 5y-cycle $2.99B (+36%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2025-12-31): Copper Cathode 31%, Copper In Concentrates 24%, Refined Copper Products 17%, Gold 15%, Molybdenum 8%",
     "SBC drag: FCF margin 5.7% \u2192 5.4% (\u221229 bps, 5/5 yr SBC data)",
@@ -2506,6 +2540,7 @@
     "Analyst dispersion (14 analysts): bear +8.0% / base +14.0% / bull +26.4%",
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 7.4bn \u2192 6.3bn (cash 4.1bn, short-term investments 0.0bn, debt 10.4bn)",
     "Gate B (bear): Forward ROIC (3.2% [Y10 projected]) < threshold (7.3%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.95 (revenue \u00f7 invested capital) and g=8.0%, a reinvestment charge would take +7.81% off the Yr-1 FCF margin, 5.39% \u2192 -2.42%. The published margin is 5.39% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Normalized NI: TTM $2.20B \u2192 5y-cycle $2.99B (+36%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2025-12-31): Copper Cathode 31%, Copper In Concentrates 24%, Refined Copper Products 17%, Gold 15%, Molybdenum 8%",
     "SBC drag: FCF margin 5.7% \u2192 5.4% (\u221229 bps, 5/5 yr SBC data)",
@@ -2565,6 +2600,7 @@
    "scenarios.bull.forward_flags": [
     "Analyst dispersion (14 analysts): bear +8.0% / base +14.0% / bull +26.4%",
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 7.4bn \u2192 6.3bn (cash 4.1bn, short-term investments 0.0bn, debt 10.4bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.95 (revenue \u00f7 invested capital) and g=26.4%, a reinvestment charge would take +21.95% off the Yr-1 FCF margin, 5.39% \u2192 -16.56%. The published margin is 5.39% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Normalized NI: TTM $2.20B \u2192 5y-cycle $2.99B (+36%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2025-12-31): Copper Cathode 31%, Copper In Concentrates 24%, Refined Copper Products 17%, Gold 15%, Molybdenum 8%",
     "SBC drag: FCF margin 5.7% \u2192 5.4% (\u221229 bps, 5/5 yr SBC data)",
@@ -2665,6 +2701,7 @@
    "gate_metrics": [
     "fcf_margin",
     "pt_over_scenario_iv",
+    "reinvestment_margin_deduction",
     "revenue_growth"
    ],
    "leverage": 1.69,
@@ -2736,6 +2773,7 @@
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 5.1bn \u2192 7.4bn (cash 3.6bn, short-term investments 2.1bn, debt 13.2bn)",
     "Cash-conversion (observed, not applied): FCF margin 30.3% vs 15.7% \u2014 reported FCF is 2.0x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Hyper-Growth Platform, completeness=1.0): take_rate_expansion_bps=150.0 (current_take_rate_bps - prior_take_rate_bps (positive = expansion, negative = compression)) | rule_of_40_score=83.4 (revenue_growth_pct (in %) + fcf_margin_pct (in %) \u2014 e.g. 30% growth + 15% FCF margin = 45) | contribution_margin_pct=0.275 ((Revenue per unit - variable cost per unit) / Revenue per unit (decimal))",
+    "Growth reinvestment NOT charged (observation only): at S/C 2.00 (revenue \u00f7 invested capital) and g=15.0%, a reinvestment charge would take +6.53% off the Yr-1 FCF margin, 30.28% \u2192 23.75%. The published margin is 30.28% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-12-31): Service 88%, Product 12%",
     "Revenue-scale cap on analyst bands: base growth capped to 15.0% ($28.9B revenue)",
     "SBC drag: FCF margin 31.2% \u2192 30.3% (\u221296 bps, 5/5 yr SBC data)",
@@ -2805,6 +2843,7 @@
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 5.1bn \u2192 7.4bn (cash 3.6bn, short-term investments 2.1bn, debt 13.2bn)",
     "Cash-conversion (observed, not applied): FCF margin 30.3% vs 15.7% \u2014 reported FCF is 2.0x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Hyper-Growth Platform, completeness=1.0): take_rate_expansion_bps=150.0 (current_take_rate_bps - prior_take_rate_bps (positive = expansion, negative = compression)) | rule_of_40_score=83.4 (revenue_growth_pct (in %) + fcf_margin_pct (in %) \u2014 e.g. 30% growth + 15% FCF margin = 45) | contribution_margin_pct=0.275 ((Revenue per unit - variable cost per unit) / Revenue per unit (decimal))",
+    "Growth reinvestment NOT charged (observation only): at S/C 2.00 (revenue \u00f7 invested capital) and g=14.0%, a reinvestment charge would take +6.16% off the Yr-1 FCF margin, 30.28% \u2192 24.12%. The published margin is 30.28% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-12-31): Service 88%, Product 12%",
     "Revenue-scale cap on analyst bands: base growth capped to 15.0% ($28.9B revenue)",
     "SBC drag: FCF margin 31.2% \u2192 30.3% (\u221296 bps, 5/5 yr SBC data)",
@@ -2874,6 +2913,7 @@
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 5.1bn \u2192 7.4bn (cash 3.6bn, short-term investments 2.1bn, debt 13.2bn)",
     "Cash-conversion (observed, not applied): FCF margin 30.3% vs 15.7% \u2014 reported FCF is 2.0x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Hyper-Growth Platform, completeness=1.0): take_rate_expansion_bps=150.0 (current_take_rate_bps - prior_take_rate_bps (positive = expansion, negative = compression)) | rule_of_40_score=83.4 (revenue_growth_pct (in %) + fcf_margin_pct (in %) \u2014 e.g. 30% growth + 15% FCF margin = 45) | contribution_margin_pct=0.275 ((Revenue per unit - variable cost per unit) / Revenue per unit (decimal))",
+    "Growth reinvestment NOT charged (observation only): at S/C 2.00 (revenue \u00f7 invested capital) and g=15.4%, a reinvestment charge would take +6.69% off the Yr-1 FCF margin, 30.28% \u2192 23.59%. The published margin is 30.28% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-12-31): Service 88%, Product 12%",
     "Revenue-scale cap on analyst bands: base growth capped to 15.0% ($28.9B revenue)",
     "SBC drag: FCF margin 31.2% \u2192 30.3% (\u221296 bps, 5/5 yr SBC data)",
@@ -2980,6 +3020,7 @@
    "gate_metrics": [
     "fcf_margin",
     "midcycle_leg_weight_share",
+    "reinvestment_margin_deduction",
     "revenue_growth"
    ],
    "leverage": 0.28,
@@ -3050,6 +3091,7 @@
     "Cyclical peak-consensus gate (observation-only, not applied): mid-cycle legs EV/EBITDA\u2192EV/EBITDA (norm); peak trigger fired (multiple-of-max+mean-plus-sigma, fwd EPS 156.08 vs 15.48). IV unchanged; both paths recorded for the forward test.",
     "Framework metrics (Memory / DRAM-NAND, completeness=0.75): gross_margin_pct=0.7257 (Blended memory gross margin (decimal) \u2014 the cycle's clearest single read) | hbm_revenue_share=0.175 (HBM as a share of DRAM revenue (decimal) \u2014 the AI-cycle growth driver) | bit_supply_demand_gap=-0.015 (Industry bit supply growth less demand growth (decimal; positive = oversupply)) | memory_capex=27000000000.0 (Capex guidance for the year, reporting currency)",
     "Gate B (base): Forward ROIC (2.0% [Y10 projected]) < threshold (5.4%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.63 (revenue \u00f7 invested capital) and g=12.8%, a reinvestment charge would take +18.12% off the Yr-1 FCF margin, 3.96% \u2192 -14.16%. The published margin is 3.96% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$-234.4M (-0.02% mkt cap), gross $0 buy / $234.4M sell, conviction_sell -> WACC +16bp (widening)",
     "Normalized NI: TTM $8.54B \u2192 5y-cycle $7.04B (-18%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2025-08-28): DRAM Products 77%, NAND Products 23%",
@@ -3114,6 +3156,7 @@
     "Cash-conversion (observed, not applied): FCF margin 4.0% vs 2.9% \u2014 reported FCF is 0.3x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Memory / DRAM-NAND, completeness=0.75): gross_margin_pct=0.7257 (Blended memory gross margin (decimal) \u2014 the cycle's clearest single read) | hbm_revenue_share=0.175 (HBM as a share of DRAM revenue (decimal) \u2014 the AI-cycle growth driver) | bit_supply_demand_gap=-0.015 (Industry bit supply growth less demand growth (decimal; positive = oversupply)) | memory_capex=27000000000.0 (Capex guidance for the year, reporting currency)",
     "Gate B (bear): Forward ROIC (1.6% [Y10 projected]) < threshold (10.7%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.63 (revenue \u00f7 invested capital) and g=7.0%, a reinvestment charge would take +10.50% off the Yr-1 FCF margin, 3.96% \u2192 -6.54%. The published margin is 3.96% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$-234.4M (-0.02% mkt cap), gross $0 buy / $234.4M sell, conviction_sell -> WACC +16bp (widening)",
     "Normalized NI: TTM $8.54B \u2192 5y-cycle $7.04B (-18%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2025-08-28): DRAM Products 77%, NAND Products 23%",
@@ -3176,6 +3219,7 @@
     "CAGR-divergence gate: NTM growth +100.0% \u2192 +12.8%; analyst bands scaled 0.13x (NTM consensus +100.0% diverges from historical CAGR +7.8% by 92.2pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Cash-conversion (observed, not applied): FCF margin 4.0% vs 2.9% \u2014 reported FCF is 0.3x what a repeatable basis supports (ex-working-capital), so the excess is not projected",
     "Framework metrics (Memory / DRAM-NAND, completeness=0.75): gross_margin_pct=0.7257 (Blended memory gross margin (decimal) \u2014 the cycle's clearest single read) | hbm_revenue_share=0.175 (HBM as a share of DRAM revenue (decimal) \u2014 the AI-cycle growth driver) | bit_supply_demand_gap=-0.015 (Industry bit supply growth less demand growth (decimal; positive = oversupply)) | memory_capex=27000000000.0 (Capex guidance for the year, reporting currency)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.63 (revenue \u00f7 invested capital) and g=19.2%, a reinvestment charge would take +25.73% off the Yr-1 FCF margin, 3.96% \u2192 -21.77%. The published margin is 3.96% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$-234.4M (-0.02% mkt cap), gross $0 buy / $234.4M sell, conviction_sell -> WACC +16bp (widening)",
     "Normalized NI: TTM $8.54B \u2192 5y-cycle $7.04B (-18%) \u2014 P/E (norm) will use normalized figure",
     "Product segments (2025-08-28): DRAM Products 77%, NAND Products 23%",
@@ -3275,6 +3319,7 @@
    "fx_rate": 1.0,
    "gate_metrics": [
     "ev_dcf_weight_share",
+    "reinvestment_margin_deduction",
     "revenue_growth"
    ],
    "leverage": 0.63,
@@ -3340,6 +3385,7 @@
     "Bank growth base: consensus measured against total income 23.92B (NII + non-II), not gross revenue 27.68B",
     "Bank metrics (Brokerage, target ROE 16.0% / CoE 10.0% / fade 5y / target CET1 10.0%): ROE 17.91% | NIM 2.82% | eff 52.10% | credit_cost n/a | TBV/sh $17.07 | CET1 implied 28.76%",
     "GGM (P/B): target P/B 1.59x \u2192 $44.41/sh [ROE 22.6% (realised+target midpoint), CoE 10.0% (profile), g 3.5% (profile)]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.81 (revenue \u00f7 invested capital) and g=15.0%, a reinvestment charge would take +16.19% off the Yr-1 FCF margin, 11.53% \u2192 -4.66%. The published margin is 11.53% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Product segments (2025-12-31): Investor Services 79%, Advisor Services 21%",
     "Revenue-scale cap on analyst bands: base growth capped to 15.0% ($27.7B revenue)",
     "SBC drag: FCF margin 12.7% \u2192 11.5% (\u2212116 bps, 5/5 yr SBC data)",
@@ -3396,6 +3442,7 @@
     "Bank metrics (Brokerage, target ROE 16.0% / CoE 10.0% / fade 5y / target CET1 10.0%): ROE 17.91% | NIM 2.82% | eff 52.10% | credit_cost n/a | TBV/sh $17.07 | CET1 implied 28.76%",
     "GGM (P/B): target P/B 1.59x \u2192 $44.41/sh [ROE 22.6% (realised+target midpoint), CoE 10.0% (profile), g 3.5% (profile)]",
     "Gate B (bear): Forward ROIC (5.9% [Y10 projected]) < threshold (6.2%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.81 (revenue \u00f7 invested capital) and g=14.4%, a reinvestment charge would take +15.60% off the Yr-1 FCF margin, 11.53% \u2192 -4.07%. The published margin is 11.53% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Product segments (2025-12-31): Investor Services 79%, Advisor Services 21%",
     "Revenue-scale cap on analyst bands: base growth capped to 15.0% ($27.7B revenue)",
     "SBC drag: FCF margin 12.7% \u2192 11.5% (\u2212116 bps, 5/5 yr SBC data)",
@@ -3451,6 +3498,7 @@
     "Bank growth base: consensus measured against total income 23.92B (NII + non-II), not gross revenue 27.68B",
     "Bank metrics (Brokerage, target ROE 16.0% / CoE 10.0% / fade 5y / target CET1 10.0%): ROE 17.91% | NIM 2.82% | eff 52.10% | credit_cost n/a | TBV/sh $17.07 | CET1 implied 28.76%",
     "GGM (P/B): target P/B 1.59x \u2192 $44.41/sh [ROE 22.6% (realised+target midpoint), CoE 10.0% (profile), g 3.5% (profile)]",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.81 (revenue \u00f7 invested capital) and g=15.9%, a reinvestment charge would take +17.03% off the Yr-1 FCF margin, 11.53% \u2192 -5.50%. The published margin is 11.53% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Product segments (2025-12-31): Investor Services 79%, Advisor Services 21%",
     "Revenue-scale cap on analyst bands: base growth capped to 15.0% ($27.7B revenue)",
     "SBC drag: FCF margin 12.7% \u2192 11.5% (\u2212116 bps, 5/5 yr SBC data)",
@@ -3544,6 +3592,7 @@
    "fx_rate": 1.0,
    "gate_metrics": [
     "composite_multiplier",
+    "reinvestment_margin_deduction",
     "revenue_growth"
    ],
    "leverage": 1.75,
@@ -3586,6 +3635,7 @@
     "CAGR-divergence gate: NTM growth +39.3% \u2192 +5.0%; analyst bands scaled 0.13x (NTM consensus +39.3% diverges from historical CAGR -2.5% by 41.7pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Framework metrics (Conglomerate / Industrial (SG), completeness=0.67): roic_pct=0.0879905875641757 (Return on invested capital (decimal)) | fcf_conversion_pct=-0.2224 (Free cash flow / net profit (decimal))",
     "Gate B (base): Forward ROIC (2.3% [Y10 projected]) < threshold (5.2%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.41 (revenue \u00f7 invested capital) and g=5.0%, a reinvestment charge would take +11.61% off the Yr-1 FCF margin, 7.16% \u2192 -4.45%. The published margin is 7.16% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$7.8M (+0.07% mkt cap), gross $7.8M buy / $0 sell -> WACC -4bp (tightening)",
     "Normalized NI: TTM S$0.98B \u2192 5y-cycle S$0.71B (-28%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 11 August 2025 vs FMP) \u2014 not compared",
@@ -3633,6 +3683,7 @@
     "CAGR-divergence gate: NTM growth +39.3% \u2192 +5.0%; analyst bands scaled 0.13x (NTM consensus +39.3% diverges from historical CAGR -2.5% by 41.7pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Framework metrics (Conglomerate / Industrial (SG), completeness=0.67): roic_pct=0.0879905875641757 (Return on invested capital (decimal)) | fcf_conversion_pct=-0.2224 (Free cash flow / net profit (decimal))",
     "Gate B (bear): Forward ROIC (1.9% [Y10 projected]) < threshold (10.4%) \u2192 TGR set to 0",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.41 (revenue \u00f7 invested capital) and g=1.0%, a reinvestment charge would take +2.30% off the Yr-1 FCF margin, 7.16% \u2192 4.87%. The published margin is 7.16% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Insider activity: net_12m=$7.8M (+0.07% mkt cap), gross $7.8M buy / $0 sell -> WACC -4bp (tightening)",
     "Normalized NI: TTM S$0.98B \u2192 5y-cycle S$0.71B (-28%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 11 August 2025 vs FMP) \u2014 not compared",
@@ -3678,6 +3729,7 @@
     "Balance sheet from 2026-06-30, not the 2025-12-31 year end: net debt 8.5bn \u2192 13.8bn (cash 1.3bn, short-term investments 0.3bn, debt 15.5bn)",
     "CAGR-divergence gate: NTM growth +39.3% \u2192 +5.0%; analyst bands scaled 0.13x (NTM consensus +39.3% diverges from historical CAGR -2.5% by 41.7pp, above the 15pp threshold; capped at max(CAGR, 0) + 5pp)",
     "Framework metrics (Conglomerate / Industrial (SG), completeness=0.67): roic_pct=0.0879905875641757 (Return on invested capital (decimal)) | fcf_conversion_pct=-0.2224 (Free cash flow / net profit (decimal))",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.41 (revenue \u00f7 invested capital) and g=6.7%, a reinvestment charge would take +15.39% off the Yr-1 FCF margin, 7.16% \u2192 -8.23%. The published margin is 7.16% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin. The deduction EXCEEDS the base margin, so a live charge would floor the projection, and a floored DCF leg that resolves non-positive is DROPPED from the blend \u2014 its weight renormalises onto the surviving legs, which is how charging more can value the company higher.",
     "Insider activity: net_12m=$7.8M (+0.07% mkt cap), gross $7.8M buy / $0 sell -> WACC -4bp (tightening)",
     "Normalized NI: TTM S$0.98B \u2192 5y-cycle S$0.71B (-28%) \u2014 P/E (norm) will use normalized figure",
     "R1 house vs street FY+1 revenue: currency basis differs (Phillip Securities Research 11 August 2025 vs FMP) \u2014 not compared",
@@ -3766,7 +3818,9 @@
    "fcf_margin_base": 0.5667,
    "fx_note": "",
    "fx_rate": 1.0,
-   "gate_metrics": [],
+   "gate_metrics": [
+    "reinvestment_margin_deduction"
+   ],
    "leverage": 0.66,
    "methods_unavailable": [],
    "multiples_used.all_static": true,
@@ -3834,6 +3888,7 @@
    "scenarios.base.forward_flags": [
     "Analyst dispersion (28 analysts): bear +14.3% / base +14.6% / bull +14.8%",
     "Balance sheet from 2026-06-30, not the 2025-09-30 year end: net debt 5.0bn \u2192 11.5bn (cash 12.4bn, short-term investments 1.4bn, debt 23.9bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.93 (revenue \u00f7 invested capital) and g=14.6%, a reinvestment charge would take +13.70% off the Yr-1 FCF margin, 56.67% \u2192 42.97%. The published margin is 56.67% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-09-30): Data Processing Revenues 36%, Service 31%, International Transaction Revenues 25%, Service, Other 7%",
     "SBC drag: FCF margin 57.5% \u2192 56.7% (\u221283 bps, 5/5 yr SBC data)",
     "WACC 7.00% = base 7.00% + credit overlay +0bps (rd_live 4.44% vs baseline 4.41% for AAA \u00d7 D/V 1.6% \u00d7 0.75) [fred:BAMLC0A1CAAA]"
@@ -3896,6 +3951,7 @@
    "scenarios.bear.forward_flags": [
     "Analyst dispersion (28 analysts): bear +14.3% / base +14.6% / bull +14.8%",
     "Balance sheet from 2026-06-30, not the 2025-09-30 year end: net debt 5.0bn \u2192 11.5bn (cash 12.4bn, short-term investments 1.4bn, debt 23.9bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.93 (revenue \u00f7 invested capital) and g=14.3%, a reinvestment charge would take +13.43% off the Yr-1 FCF margin, 56.67% \u2192 43.24%. The published margin is 56.67% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-09-30): Data Processing Revenues 36%, Service 31%, International Transaction Revenues 25%, Service, Other 7%",
     "SBC drag: FCF margin 57.5% \u2192 56.7% (\u221283 bps, 5/5 yr SBC data)",
     "WACC 7.00% = base 7.00% + credit overlay +0bps (rd_live 4.44% vs baseline 4.41% for AAA \u00d7 D/V 1.6% \u00d7 0.75) [fred:BAMLC0A1CAAA]"
@@ -3958,6 +4014,7 @@
    "scenarios.bull.forward_flags": [
     "Analyst dispersion (28 analysts): bear +14.3% / base +14.6% / bull +14.8%",
     "Balance sheet from 2026-06-30, not the 2025-09-30 year end: net debt 5.0bn \u2192 11.5bn (cash 12.4bn, short-term investments 1.4bn, debt 23.9bn)",
+    "Growth reinvestment NOT charged (observation only): at S/C 0.93 (revenue \u00f7 invested capital) and g=14.8%, a reinvestment charge would take +13.84% off the Yr-1 FCF margin, 56.67% \u2192 42.83%. The published margin is 56.67% before the scenario delta, with no reinvestment deduction. Two-sided by construction \u2014 a shrinking year releases capital and raises the margin.",
     "Product segments (2025-09-30): Data Processing Revenues 36%, Service 31%, International Transaction Revenues 25%, Service, Other 7%",
     "SBC drag: FCF margin 57.5% \u2192 56.7% (\u221283 bps, 5/5 yr SBC data)",
     "WACC 7.00% = base 7.00% + credit overlay +0bps (rd_live 4.44% vs baseline 4.41% for AAA \u00d7 D/V 1.6% \u00d7 0.75) [fred:BAMLC0A1CAAA]"
