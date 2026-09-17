@@ -2927,6 +2927,82 @@ def _bank_profile_calibration(profile_name: str) -> dict:
     return _BANK_PROFILE_CALIBRATION.get(profile_name, _BANK_PROFILE_CALIBRATION["default"])
 
 
+#: Profiles whose liabilities ARE the product, so enterprise value has no
+#: meaning and the EV-based multiples are dropped from the 12m target. This is
+#: a DISPATCH set, not a taxonomy claim: ``FinTech`` and ``Asset Manager`` are
+#: here because a name routed to them may be float-funded in fact (that is the
+#: same judgement Phase 1.2A's Tier 2 makes by measurement), and
+#: ``Bank / Lending Institution`` is here because it is the label FMP's own
+#: routing returns.
+#:
+#: Hoisted to module level from inside :func:`run_dcf_agent`, where it was a
+#: local at the 12m-target block. Two readers need it and they are ~1000 lines
+#: apart — the composite's bank clamp and the 12m dispatch — and a name assigned
+#: anywhere in a function body is local to the WHOLE body, so referencing it
+#: from the earlier site would have raised ``UnboundLocalError`` rather than
+#: falling back to a module-level default. There is no such default: the local
+#: assignment is deleted, not shadowed.
+#:
+#: Note that a separate and unrelated ``_BANK_PROFILES`` exists in
+#: ``src/pipeline.py``. They are not the same set and are not kept in step.
+_BANK_PROFILES: frozenset[str] = frozenset({
+    "Money Center Bank", "Regional Bank", "Mortgage/GSE",
+    "Investment Bank", "Insurance", "FinTech", "Asset Manager",
+    "Bank / Lending Institution",   # FMP routing label
+})
+
+
+def _is_bank_for_composite(profile_name: Optional[str]) -> bool:
+    """Whether the composite quality/risk tilt is clamped to [0.90, 1.10].
+
+    The clamp exists for one reason: the composite scores a bank on ROE, CET1,
+    NPL and cost-income, and the GGM / 2-stage Residual Income models already
+    consume those same inputs to set the book multiple, so applying the tilt on
+    top double-counts the evidence. The question this answers is therefore
+    narrow — "does this entity have a book-value engine that already prices its
+    quality?" — and not "is this company in the Financials sector?".
+
+    ``sector`` is deliberately NOT a parameter. The predicate used to lead with
+    ``is_bank_sector(sector)``, which swept in every Financials name including
+    fee-driven franchises with no book-value engine to double-count against.
+    Measured cost (owner decision, 2026-09-17): ICE earned a raw composite of
+    1.2224 and was clamped to 1.10, worth +11.0% of IV (132.47 → 147.06, gap
+    −13.6% → −4.0%); V earned 1.1703, clamped to 1.10, worth +4.3% (281.05 →
+    293.19). Neither is a bank — ``Market Infrastructure`` and ``Payment
+    Networks`` are in neither table, and their quality comes from margin and
+    volume rather than from ROE-on-book. A signature that accepted ``sector``
+    and ignored it would invite the test back in; the enumeration of what is
+    and is not clamped lives in ``tests/test_composite_bank_clamp.py`` instead.
+
+    Three arms, any of which suffices:
+
+    * ``_BANK_PROFILE_CALIBRATION`` — has a GGM / Residual-Income row to
+      double-count against, which is the actual reason the clamp exists.
+      Includes ``Brokerage`` (SCHW, IBKR), kept per owner decision 4: the DCF
+      weight stays 0 there and the clamp is not binding anyway (SCHW's raw
+      composite measures 1.0918, already inside the band).
+    * ``_BANK_PROFILES`` — the 12m-target dispatch set, which carries
+      ``FinTech`` and ``Asset Manager`` on the same float-funding judgement
+      Phase 1.2A's Tier 2 makes by measurement.
+    * ``"Bank" in profile_name`` — the substring test, now scoped to the
+      profile rather than to the sector.
+
+    Returns False for a falsy profile: an unknown profile is not a bank, and
+    the clamp restricts a valuation rather than defaulting one. The
+    ``"default"`` sentinel key in ``_BANK_PROFILE_CALIBRATION`` is excluded for
+    the same reason — it is a fallback row, not a profile, and no framework
+    profile is named ``default`` (verified over the union of
+    ``SECTOR_KPI_FRAMEWORK`` and ``INDUSTRY_VALUATION_PROFILES``, 109 names).
+    """
+    if not profile_name or profile_name == "default":
+        return False
+    return (
+        profile_name in _BANK_PROFILE_CALIBRATION
+        or profile_name in _BANK_PROFILES
+        or "Bank" in profile_name
+    )
+
+
 # ── Per-ticker GGM assumptions extracted from analyst research ───────────
 #
 # Source-of-truth assumptions lifted from published broker Gordon Growth
@@ -8438,12 +8514,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # ROE-driven model. Kept as a small tilt rather than
                 # removed, so genuinely stressed banks still get marked
                 # down for factors the ROE input doesn't capture.
-                _is_bank_for_composite = (
-                    is_bank_sector(sector)
-                    or "Bank" in (profile_name or "")
-                    or profile_name in _BANK_PROFILE_CALIBRATION
-                )
-                if _is_bank_for_composite and _composite_mult:
+                #
+                # WHO gets clamped is decided by `_is_bank_for_composite`,
+                # which tests the PROFILE by name and not the sector. It used
+                # to lead with `is_bank_sector(sector)`, which swept in every
+                # Financials name — including fee-driven franchises with no
+                # book-value engine to double-count against, costing ICE 11.0%
+                # of IV and V 4.3% (owner decision, 2026-09-17). The docstring
+                # carries the arms, the measurements and the list of released
+                # profiles; `tests/test_composite_bank_clamp.py` enumerates
+                # every framework profile and pins the answer, so adding a
+                # profile to either table is a visible act.
+                if _is_bank_for_composite(profile_name) and _composite_mult:
                     _pre_clamp = _composite_mult
                     _composite_mult = max(0.90, min(1.10, _composite_mult))
                     if abs(_pre_clamp - _composite_mult) > 1e-9:
@@ -9448,11 +9530,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Bank/GSE/financial profiles: EV-based multiples are meaningless because
         # massive balance-sheet liabilities make (EV - net_debt) negative.
         # Use P/E directly for any bank, GSE, or insurance sub-profile.
-        _BANK_PROFILES = {
-            "Money Center Bank", "Regional Bank", "Mortgage/GSE",
-            "Investment Bank", "Insurance", "FinTech", "Asset Manager",
-            "Bank / Lending Institution",   # FMP routing label
-        }
+        # The membership set is the module-level _BANK_PROFILES (see its
+        # definition beside _bank_profile_calibration) — it used to be assigned
+        # here, which made the name function-local and unusable from the
+        # composite's bank clamp ~1000 lines above.
         _is_reit = sector in {"REIT", "RealEstate"} or profile_name == "REIT"
         # Banks/GSEs: EV-based methods produce nonsense because massive deposit
         # liabilities make (EV − net_debt) negative. Use P/E directly.
