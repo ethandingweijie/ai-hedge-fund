@@ -173,3 +173,11 @@ A NAMING DISCREPANCY IN THE INSTRUCTION, and how it was resolved. The instructio
 
 ALSO IN THIS COMMIT. `tests/test_valuation_fixes_0917.py` (30 tests: the dispatch classification over all released and Tier-1 profiles, Brokerage kept per decision 4, the hard stop, the midpoint, and source pins on both floors). `tests/test_valuation_fixes_0916b.py` gains a class docstring on `TestNormalisedEarningsTargetConverges` carrying this reason string verbatim, as instructed; its assertion is unchanged, because `_FORWARD_CONSENSUS_PT_LABELS` is not edited - the GGM label was never a forward-consensus path, and 2a is what now keeps a non-bank from reaching it.
 
+## 2026-09-17T05:32:25+00:00
+
+- regenerated at HEAD: `d609c65`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Two-sided 12m PT band [0.33x, 2.50x] of each scenario IV - owner decision 2c, 2026-09-17. EXPECTED MOVER, INVESTIGATED BEFORE REGENERATING: MELI ONLY, 8 leaves - 12m_targets bear/base/bull 1241.83 / 1763.50 / 2273.31 -> 1554.60 / 3141.26 / 3334.71 (+25.19% / +78.13% / +46.69%); 12m_pt_method "EV/EBITDA or EV/Revenue forward multiple" -> "validation fallback: base IV / (1 + CoE 11.44%) x 0.75/1.00/1.25, bounded to [0.33x, 2.50x] of each scenario IV"; gate_metrics gains pt_over_scenario_iv; and all three scenarios.<s>.forward_flags gain one "VALIDATION ERROR: 12m PT band violated" line. BASE IV UNCHANGED at 5578.42 and NO scenario IV, iv_multi, method_iv_table value, effective weight, wacc or growth leaf moves anywhere. Thirteen fixtures byte-identical (02888_HK, 09988_HK, AAPL, BABA, BN4_SI, C38U_SI, COST, D05_SI, FCX, MU, SCHW, U96_SI, V) - V measures 0.886x / 0.920x / 0.802x of its own scenario IVs post-2a and does not fire, which is why 2c is a backstop for Visa rather than the fix.
+

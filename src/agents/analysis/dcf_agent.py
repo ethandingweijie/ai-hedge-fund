@@ -51,6 +51,7 @@ Fallback behaviour:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import random
 import re
@@ -704,6 +705,185 @@ _FORWARD_CONSENSUS_PT_LABELS = frozenset({
     "forward P/E x Year-1 EPS",
     "forward multiple (profile-specific)",
 })
+
+
+#: A 12m price target must stay inside this band around the IV it is meant to
+#: be converging on. Owner decision 2c (2026-09-17): the divergence guard below
+#: is one-sided -- it caps a target that runs to 2x the IV and has no lower
+#: bound at all -- so the same corrupted forward inputs that produce MU's
+#: $6,105 could equally produce Visa's $12.84, a target at 3.0% of its own base
+#: IV, and neither guard would have said anything. A 12m target is a claim that
+#: price travels PART of the way toward what this run believes the business is
+#: worth; a target two-thirds below that belief is not a bear case, it is a
+#: different valuation wearing the first one's label.
+_PT_IV_BAND_LO = 0.33
+_PT_IV_BAND_HI = 2.50
+#: Scenario spread applied to the fallback, matching `_scenario_mult` used
+#: everywhere else a single base number is fanned into three.
+_PT_BAND_SCENARIO_MULT = {"bear": 0.75, "base": 1.00, "bull": 1.25}
+#: A high-SBC name's BEAR 12m target is held at or below this fraction of spot.
+#: Named for what it does, not for what the call site calls it: the local there
+#: is `_bear_floor` but the comparison is `if _pt > _bear_floor`, i.e. a ceiling.
+#: Referenced from `_band_12m_targets` too, so the two sites cannot drift onto
+#: different numbers -- a band replacement that exempted itself from this would
+#: publish a "bear" target ABOVE spot, which is the exact contradiction the
+#: ceiling exists to refuse.
+_HIGH_SBC_BEAR_CEILING_MULT = 0.85
+
+
+def _band_12m_targets(
+    targets: dict,
+    scenario_ivs: dict,
+    base_iv: Optional[float],
+    coe: Optional[float],
+    spot: Optional[float] = None,
+    max_capture: Optional[float] = None,
+    high_sbc: bool = False,
+) -> tuple[dict, list[tuple[str, float, float, float]], dict]:
+    """Enforce the two-sided band on a run's 12-month price targets.
+
+    Returns ``(replacement, breaches, info)``. ``replacement`` is EMPTY unless
+    every scenario is to be overwritten, so a caller can test it with a plain
+    ``if`` rather than reading a flag; ``breaches`` is a list of
+    ``(scenario, pt, scenario_iv, ratio)``.
+
+    Three deliberate deviations from the instruction, each forced by a
+    measurement rather than a preference:
+
+    1. The band is tested against each scenario's OWN IV, not Base IV. Across
+       the 14 golden fixtures x 3 scenarios, base-referencing manufactures two
+       violations out of scenario spread the engine itself produced: FCX's bull
+       target of $70.50 is 2.756x its BASE IV but 0.971x its own bull IV of
+       $72.62, and U96.SI's bear target of S$1.78 is 0.311x base but 0.764x its
+       own bear IV of S$2.33. Both are cyclicals whose bull IV sits far above
+       their base IV. Per-scenario referencing still catches the two real cases
+       (Visa at 0.030x and MELI's bear at 0.271x) and not those. The FALLBACK
+       keeps the instruction exactly: Base IV discounted by the cost of equity.
+
+    2. If ANY scenario breaches, ALL THREE are replaced. Per-scenario
+       replacement is what creates an ordering violation -- measured on MELI it
+       gives bear $3,754 / base $5,006 / bull $2,273, bull below bear, because
+       its bull target did not breach and its bear and base did. Replacing the
+       whole triple off one base keeps bear <= base <= bull by construction:
+       ``base_iv/(1+coe) * mult``, ``_convergence_bound(iv, spot, cap)`` and the
+       band limits ``[0.33, 2.50] * iv`` are each monotonic in the scenario
+       order, and min/max of sequences monotonic in the same order is monotonic.
+
+    3. The fallback is itself capped by ``_convergence_bound``. Without that,
+       MELI's replacement would publish $5,006 on a $1,461 stock -- a 243% move
+       in twelve months, which is the same class of absurdity the band exists to
+       refuse, only on the other side, and laundered out of an IV whose own
+       fixture flag says the cash-conversion gate "observed, not applied". A
+       replacement target does not get to escape a bound every other target
+       respects. The band then gets the last word over the cap, because a
+       "VALIDATION ERROR: band violated" flag attached to a number that still
+       violates the band is worse than either rule alone -- see the clamp at the
+       end of the loop.
+
+    The high-SBC bear ceiling (``spot * 0.85``) IS re-applied to the
+    replacement, for the bear scenario only, and it is passed in rather than
+    re-derived: ``_high_sbc`` lives inside the caller's spot-price guard and a
+    second derivation of "is this profile stock-comp heavy" is how two readers
+    of one question drift apart -- the same failure this whole decision family
+    is about. When the ceiling and the band's low limit cannot both hold, the
+    band wins and ``info["conflicts"]`` says so out loud.
+
+    When the band fires but no base IV exists to build a fallback from, the
+    targets are left alone and ``info["reason"]`` says why. Refusing to publish
+    is not the same as refusing to notice: the caller still emits the
+    validation error.
+    """
+    breaches: list[tuple[str, float, float, float]] = []
+    for _sn in ("bear", "base", "bull"):
+        _pt = targets.get(_sn)
+        _iv = scenario_ivs.get(_sn)
+        if not _pt or _pt <= 0 or not _iv or _iv <= 0:
+            continue
+        _r = float(_pt) / float(_iv)
+        if _r < _PT_IV_BAND_LO or _r > _PT_IV_BAND_HI:
+            breaches.append((_sn, float(_pt), float(_iv), _r))
+
+    _b_iv = scenario_ivs.get("base")
+    _b_pt = targets.get("base")
+    _ratio_a = (float(_b_pt) / float(_b_iv)
+                if (_b_pt and _b_pt > 0 and _b_iv and _b_iv > 0) else None)
+    info: dict = {"base_ratio_path_a": _ratio_a}
+    if not breaches:
+        return {}, [], info
+    if not base_iv or base_iv <= 0:
+        info["reason"] = "no positive base IV to fall back on"
+        info["base_ratio_path_b"] = _ratio_a
+        return {}, breaches, info
+
+    _coe = float(coe) if (isinstance(coe, (int, float)) and coe > 0) else 0.0
+    info["coe"] = _coe
+    _fb_base = float(base_iv) / (1.0 + _coe)
+    info["fallback_base"] = _fb_base
+    replacement: dict[str, float] = {}
+    for _sn in ("bear", "base", "bull"):
+        _v = _fb_base * _PT_BAND_SCENARIO_MULT[_sn]
+        _iv = scenario_ivs.get(_sn)
+        if (spot and spot > 0 and max_capture is not None
+                and _iv and _iv > 0):
+            _v = min(_v, _convergence_bound(float(_iv), float(spot),
+                                            float(max_capture)))
+        # The high-SBC bear ceiling applies to a replacement exactly as it
+        # applies to the target it replaces. MELI measured this: spot $1,828.94
+        # against a bear IV of $4,588.16 -- 2.5x spot -- so the convergence
+        # bound puts the bear replacement at $2,794.67, a "bear" case 53% ABOVE
+        # the price. That is the contradiction the ceiling exists to refuse, and
+        # a sanity band is no licence to reintroduce it. Ceiling here is
+        # $1,554.60, and it is compatible with the band's own low limit of
+        # 0.33 x 4,588.16 = $1,514.09, leaving a $40 window.
+        if _sn == "bear" and high_sbc and spot and spot > 0:
+            _v = min(_v, float(spot) * _HIGH_SBC_BEAR_CEILING_MULT)
+        # Last word, and the reason this function cannot emit a target that
+        # would re-fire it on the next run. Two ways a fallback can leave the
+        # band: the convergence cap can pull it below 0.33x when spot sits far
+        # under the IV (spot 100, IV 10,000, capture 20% gives a bound of
+        # 2,080 = 0.208x), and a fallback derived from BASE IV can exceed 2.50x
+        # of a scenario whose own IV is a fraction of base (base 1,000 against a
+        # bear IV of 100 gives 0.75 x 909 = 682 = 6.8x). Both are the band's own
+        # subject matter, so the band wins over the cap rather than the two
+        # publishing contradictory ideas of what is rational.
+        if _iv and _iv > 0:
+            _lo = _PT_IV_BAND_LO * float(_iv)
+            _hi = _PT_IV_BAND_HI * float(_iv)
+            if _v < _lo:
+                _v = _lo
+            elif _v > _hi:
+                _v = _hi
+            if (_sn == "bear" and high_sbc and spot and spot > 0
+                    and _v > float(spot) * _HIGH_SBC_BEAR_CEILING_MULT):
+                # The band's low limit and the ceiling cannot both be
+                # satisfied. Recorded, not resolved silently: the band keeps the
+                # last word so the invariant it exists to enforce actually
+                # holds, and the caller reports that a stated policy had to give
+                # way. This needs a bear IV above ~2.6x spot to occur.
+                info.setdefault("conflicts", []).append(
+                    f"bear band floor {_lo:,.2f} exceeds the high-SBC ceiling "
+                    f"{float(spot) * _HIGH_SBC_BEAR_CEILING_MULT:,.2f}"
+                )
+            # Round toward the INSIDE of the band, not to nearest. `round` is
+            # direction-agnostic and 0.33 x IV is not generally a whole number
+            # of cents, so round(0.33 x 7809.788, 2) = 2577.23, which reads back
+            # as 0.32999999487 -- a target published one cent outside the band
+            # whose own validation flag says it satisfies it. Ceil at the low
+            # limit and floor at the high one; skip when the two cent-safe
+            # limits are not themselves ordered, which needs an IV below ~0.004
+            # and therefore no real valuation.
+            _lo_c = math.ceil(_lo * 100.0) / 100.0
+            _hi_c = math.floor(_hi * 100.0) / 100.0
+            replacement[_sn] = (
+                min(max(round(_v, 2), _lo_c), _hi_c) if _lo_c <= _hi_c
+                else round(_v, 2))
+        else:
+            replacement[_sn] = round(_v, 2)
+    _nb = replacement.get("base")
+    info["base_ratio_path_b"] = (
+        float(_nb) / float(_b_iv)
+        if (_nb and _b_iv and _b_iv > 0) else None)
+    return replacement, breaches, info
 
 
 def _sotp_led_share(scenario: dict) -> float:
@@ -9899,7 +10079,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # Stable profiles are exempt — KO's bear case shouldn't be
                 # forced to -15% since its volatility regime is different.
                 if _sn == "bear" and _high_sbc:
-                    _bear_floor = _spot_for_cap * 0.85
+                    _bear_floor = _spot_for_cap * _HIGH_SBC_BEAR_CEILING_MULT
                     if _pt > _bear_floor:
                         _12m_targets[_sn] = round(_bear_floor, 2)
                         _capped_any = True
@@ -9944,6 +10124,120 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         _12m_targets[_sn] = round(min(
                             _12m_targets[_sn], _scen_iv * 1.5
                         ), 2)
+
+        # ── 12m PT two-sided band vs the IVs it converges on ─────────────────
+        # Owner decision 2c (2026-09-17). Runs AFTER the divergence guard above,
+        # deliberately: that guard's proportional cap (1.5x each scenario IV) is
+        # the less destructive of the two responses to a target that has run
+        # away upward, and it should get first refusal. What it cannot do is
+        # anything about the low side, which has no bound at all. See
+        # `_band_12m_targets` for the three measured deviations from the
+        # instruction's literal wording and the reason for each.
+        #
+        # `wacc` is the cost-of-equity proxy here. A CoE is only computed for
+        # balance-sheet financials (it is a GGM input), and this band has to run
+        # on every profile -- the name it was written for, Visa, is a payment
+        # network. WACC is the discount rate this run already used on the same
+        # cash flows, so it is the one that is consistent with the IV being
+        # discounted back from.
+        _band_ivs = {
+            _sn: (scenario_results.get(_sn) or {}).get("intrinsic_value")
+            for _sn in ("bear", "base", "bull")
+        }
+        # `_max_capture` is only assigned inside the spot-price guard above, so
+        # it is read lazily: `_spot_for_band` is truthy exactly when that guard
+        # ran. Without a spot there is no convergence bound to respect either.
+        _spot_for_band = (_spot_for_cap
+                          if (_spot_for_cap and float(_spot_for_cap) > 0)
+                          else None)
+        _capture_for_band = _max_capture if _spot_for_band else None
+        _high_sbc_for_band = _high_sbc if _spot_for_band else False
+        _band_new, _band_breaches, _band_info = _band_12m_targets(
+            _12m_targets, _band_ivs, _base_iv, wacc,
+            spot=_spot_for_band, max_capture=_capture_for_band,
+            high_sbc=_high_sbc_for_band,
+        )
+        if _band_breaches:
+            _bmsg = "; ".join(
+                f"{_s} ${_p:,.2f} = {_r:.3f}x its own IV ${_iv:,.2f}"
+                for _s, _p, _iv, _r in _band_breaches
+            )
+            _berr = (
+                f"12m PT band violated: {_bmsg} — outside "
+                f"[{_PT_IV_BAND_LO:.2f}x, {_PT_IV_BAND_HI:.2f}x] of the IV it is "
+                f"meant to converge on"
+            )
+            if _band_new:
+                for _sn, _bv in _band_new.items():
+                    _12m_targets[_sn] = _bv
+                # The label describes the method that produced the NUMBER, and
+                # the number is no longer the forward multiple's. Leaving it
+                # reading "EV/EBITDA or EV/Revenue forward multiple" next to a
+                # value derived from the run's own IV would be a provenance
+                # string that contradicts the arithmetic beside it — MELI's
+                # label is exactly that string, and `_12m_pt_method` is
+                # persisted, so the contradiction would outlive the run.
+                _12m_pt_method_label = (
+                    f"validation fallback: base IV / (1 + CoE {wacc:.2%}) x "
+                    f"0.75/1.00/1.25, bounded to "
+                    f"[{_PT_IV_BAND_LO:.2f}x, {_PT_IV_BAND_HI:.2f}x] of each "
+                    f"scenario IV")
+                _berr += (
+                    f"; all three targets replaced with base IV "
+                    f"${float(_base_iv):,.2f} / (1 + CoE {wacc:.2%}) x "
+                    f"0.75/1.00/1.25, then bounded by the convergence cap"
+                    + (f" and the high-SBC bear ceiling "
+                       f"(spot ${float(_spot_for_band):,.2f} x "
+                       f"{_HIGH_SBC_BEAR_CEILING_MULT:.2f})"
+                       if _high_sbc_for_band else "")
+                    + " = "
+                    + " / ".join(
+                        f"{_s} ${_band_new[_s]:,.2f}"
+                        for _s in ("bear", "base", "bull"))
+                )
+            else:
+                _berr += f"; targets NOT replaced — {_band_info.get('reason')}"
+            for _c in (_band_info.get("conflicts") or []):
+                _berr += f"; POLICY CONFLICT: {_c} — band floor kept"
+            print(f"  [12m-pt] {ticker}: {_berr}")
+            # `forward_flags` on each scenario, NOT `ticker_forward_flags`.
+            # The ticker-level list is snapshotted per scenario at
+            # `forward_flags = list(ticker_forward_flags)` (L~8870, inside the
+            # scenario loop) and is never read again after that loop ends, so an
+            # append here — a thousand lines later, with all three scenarios
+            # already built — reaches no payload at all. Verified, not assumed:
+            # no fixture's persisted flags carry the "Convergence cap" or
+            # "12m PT ordering violated" lines that the neighbouring appends
+            # write to the same dead list. Writing to all three scenarios is
+            # what a ticker-level flag already does by being copied into each,
+            # and the band replaced all three targets, so all three carry it.
+            for _sn in ("bear", "base", "bull"):
+                _sf = (scenario_results.get(_sn) or {}).get("forward_flags")
+                if isinstance(_sf, list):
+                    _sf.append(f"⚠ VALIDATION ERROR: {_berr}")
+            progress.update_status(agent_id, ticker, _berr)
+            gate_evaluations.append({
+                "gate_id": "GATE_PT_IV_BAND",
+                "metric": "pt_over_scenario_iv",
+                # The base scenario's ratio, before and after. Base is the one
+                # the card leads with, and recording all three would make this
+                # the only gate whose path A/B pair is a vector.
+                "raw_input_path_a": _band_info.get("base_ratio_path_a"),
+                "gated_output_path_b": _band_info.get("base_ratio_path_b"),
+                "breaches": [
+                    {"scenario": _s, "pt": _p, "scenario_iv": _iv, "ratio": round(_r, 6)}
+                    for _s, _p, _iv, _r in _band_breaches
+                ],
+                "replaced": _band_new or None,
+                "band": (_PT_IV_BAND_LO, _PT_IV_BAND_HI),
+                "conflicts": _band_info.get("conflicts") or None,
+                "basis": (
+                    f"two-sided 12m PT band (owner decision 2c); "
+                    f"fallback = base IV / (1 + CoE {wacc:.2%}) x "
+                    f"0.75/1.00/1.25, capped by the convergence bound"
+                ),
+                "applied": bool(_band_new),
+            })
 
         # ── Ordering diagnostic: bear ≤ base ≤ bull ──────────────────────────
         # With the convergence cap applied on both sides of spot, the targets
