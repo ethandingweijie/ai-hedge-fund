@@ -590,7 +590,16 @@ def test_pe_premium_and_pe_share_the_trailing_branch():
     it says the two spellings "differ only in documentation intent, not earnings
     source". The normalized path is a separate branch keyed on
     `{"P/E (norm)", "P/E norm", "Normalized P/E"}`, which no Consumer profile
-    other than `Apparel / Athletic Wear` names.
+    other than `Apparel / Athletic Wear` NAMES.
+
+    "Names" is the operative word and it is now doing work it did not used to.
+    Since the Failure-2 swap, a profile whose trailing net income deviates more
+    than 40% from its five-year norm has its `P/E` / `P/E (Premium)` legs
+    rewritten to `P/E (norm)` on a copy of the row before the blend, so at
+    runtime three more Consumer profiles can reach the normalized branch. The
+    profile TABLES are unchanged, which is what this test reads; the dispatch is
+    what the swap changes. See
+    `test_the_pe_norm_swap_promotes_a_trailing_leg_to_normalized_earnings`.
 
     Consequence for the brief's Gate 3, which describes only the over-valuation
     direction: the exposure is two-sided. At a peak, trailing NI × a "stable and
@@ -616,7 +625,7 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     """The quantity Gate 3 wants already exists, on every run, unused.
 
     `run_dcf_agent` computes all three normalized figures for every ticker and
-    stores them on the most-recent row. `normalized_net_income` has three
+    stores them on the most-recent row. `normalized_net_income` has four
     readers; `normalized_ebitda` has one; **`normalized_ebit` has none** — the
     string appears exactly once in the engine, and that occurrence is the write.
 
@@ -626,11 +635,21 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     reads it. Compare `normalized_ebitda`, which is read at exactly one place —
     inside the `EV/EBITDA (norm)` method branch — and is therefore reachable
     only from the four profiles that name that method, none of them Consumer.
+
+    The string count is six and not four because the valuation-ledger row names
+    the key twice on one line, once as the dict key and once inside its own
+    `_ledger_num(most_recent.get(...))`. The four readers are the `P/E (norm)`
+    branch, the `P/B-ROE (mid-cycle)` branch, `_pe_normalization_deviation` —
+    the Failure-2 swap, which added the sixth occurrence and is the reason this
+    count moved from five — and the ledger. A count that disagrees with this
+    list means a reader arrived or left without the list being updated, which is
+    the only thing this assertion is for: it cannot tell a good reader from a
+    bad one.
     """
     src = _engine_src()
     assert src.count('"normalized_ebit"') == 1, "normalized_ebit gained a reader"
     assert src.count('"normalized_ebitda"') == 2
-    assert src.count('"normalized_net_income"') == 5
+    assert src.count('"normalized_net_income"') == 6
     assert src.count("_normalized_earnings(") == 4   # def + three call sites
     assert '_norm_ebit   = _normalized_earnings(series, "ebit",       window=5)' in src
     assert 'most_recent["normalized_ebit"]       = _norm_ebit' in src
@@ -913,6 +932,26 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     now appears on those runs promising a normalized leg that is not in the
     method set, and base IV does not move (160.84 and 193.13, bit-identical),
     which is the observable proof that nothing consumed the number.
+
+    PARTLY ADDRESSED, and the residual is narrower than it was. The Failure-2
+    swap now rewrites `P/E` and `P/E (Premium)` to `P/E (norm)` when trailing
+    net income deviates more than 40% from its five-year norm, so above 40% the
+    promise is kept for the 31 profiles that carry one of those two spellings
+    and no normalized P/E leg. (37 carry a trailing P/E of ANY spelling; the
+    other 6 use `P/E (ops)` / `P/E (Ops)`, which the swap deliberately does not
+    touch — see `test_the_swap_leaves_the_ops_spellings_on_the_trailing_branch`.)
+    Two gaps remain and both are load-bearing:
+
+      * the thresholds differ — the flag fires at 15%, the swap at 40%, so the
+        band between them still emits the promise and still does not perform
+        the substitution. Both Alibaba fixtures sit in that band at −15.3%.
+      * the swap reads `normalized_net_income` and only reaches P/E legs, so
+        the other 62 profiles — the ones with no trailing P/E leg at all —
+        are untouched by it.
+    The flag's own gate is deliberately NOT made profile-aware: it would then
+    report the leg it happened to have rather than the deviation it measured,
+    and the deviation is the number an auditor wants. Making the disclosure
+    honest means aligning the thresholds, not silencing the flag.
     """
     src = _engine_src()
     i = src.index("Normalized NI: TTM")
@@ -964,33 +1003,882 @@ def test_the_normalized_leg_names_are_not_case_consistent():
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "NOT IMPLEMENTED as a routing rule, though 90% of the machinery is present. "
-    "`normalized_ebit` is computed for every name on every run and has zero "
-    "readers; the deviation test would need a reader, not a new computation. "
-    "Two real obstacles remain, one of which was halved by the relative-floor "
-    "fix: (1) the deviation must be measured against a MEDIAN while "
+    "NOT IMPLEMENTED as a routing rule, though the machinery is now most of the "
+    "way there. `normalized_ebit` is computed for every name on every run and "
+    "still has zero readers. Two obstacles were named when this was written; "
+    "each has since been halved by a shipped fix, and neither is closed: "
+    "(1) the deviation must be measured against a MEDIAN while "
     "`_normalized_earnings` averages — the filter is now relative rather than a "
     "fixed 5pp, so that half of the obstacle is gone (see "
     "test_the_normalizers_outlier_floor_is_relative_and_the_absolute_floor_is_gone), "
     "but median-vs-mean is still a real mismatch; (2) routing means swapping a "
-    "method branch, and `Luxury Goods` names no normalized method at all, so "
-    "there is nothing to route TO without adding one to the profile. The brief "
-    "also describes only the over-valuation direction; the exposure is "
-    "two-sided. "
+    "method branch, and `Luxury Goods` names no normalized method at all. The "
+    "Failure-2 swap now supplies exactly that branch swap — `P/E (Premium)` "
+    "becomes `P/E (norm)` above a 40% deviation, and on EL's own published "
+    "series the deviation is about +1.71, so it fires on the 50%-weighted "
+    "anchor. What it does NOT do is route to `normalized_ebit`: `P/E (norm)` "
+    "reads `normalized_net_income`, which is the correct input for a P/E and "
+    "the reason this test still fails. The brief's Gate 3 asks for the EBIT "
+    "figure and nothing reads it. The brief also describes only the "
+    "over-valuation direction; the exposure is two-sided. "
     "NEW EVIDENCE THAT THIS IS NOT COSMETIC: the audit flag emitted next to "
     "`normalized_net_income` states in terms that `P/E (norm) will use "
     "normalized figure`, yet on 09988_HK and BABA `methods_used` is "
     "['DCF', 'EV/EBITDA', 'P/E'] — plain TRAILING P/E, no normalized leg. The "
     "flag fires on both (normalized NI now −15% against TTM, past its 15% "
-    "audit threshold) and promises a substitution the engine never performs, so "
-    "base IV does not move at all. The disclosure is wrong today and only "
-    "becomes true once this routing exists."))
+    "audit threshold) and promises a substitution the engine does not perform "
+    "at that deviation: 15% clears the flag but not the swap's 40%. Both names "
+    "sit in the band between the two thresholds, so the disclosure is still "
+    "wrong on them specifically."))
 def test_a_trough_margin_routes_the_forward_leg_to_normalized_ebit():
     series = [{"revenue": 15_600.0, "ebit": 15_600.0 * m}
               for m in (0.052, 0.138, 0.152, 0.145, 0.141)]
     fn = getattr(dcf_agent, "_margin_deviation_routes_to_normalized", None)
     assert fn is not None, "no deviation-routing helper exists"
     assert fn(series) is True
+
+
+# ── C2. Failure 2, shipped — the trailing-P/E to normalized-earnings swap ────
+#
+# The post-mortem named this "The `P/E (Premium)` Fraud: Documented as differing
+# only in label, not earnings source", and prescribed: "replace `P/E` and
+# `P/E (Premium)` with `P/E (norm)` whenever `margin_deviation > 0.40`".
+#
+# Two things in that prescription did not exist and had to be built rather than
+# wired up. `margin_deviation` is not a symbol anywhere in src/ — the only
+# quantity the engine already computes that matches the description is the
+# `_delta_pct` the `Normalized NI` audit flag prints, so the helper below is
+# that quantity given a name. And the post-mortem said to reconnect
+# `normalized_ebit`; the `P/E (norm)` branch reads `normalized_net_income`
+# (dcf_agent.py, `norm_ni = most_recent.get("normalized_net_income")`), and a
+# price-to-EARNINGS multiple that divided by EBIT would be wrong by the tax
+# rate and the interest line. The net-income figure is used and the discrepancy
+# is recorded rather than followed.
+
+
+def _lux() -> dict:
+    """EL's pinned profile: `Luxury Goods`, anchored 50% on trailing P/E."""
+    return INDUSTRY_VALUATION_PROFILES["Consumer"]["Luxury Goods"]
+
+
+def _el_trough() -> dict:
+    """EL's own published five-year net-margin series, most recent first.
+
+    The 5.2% year is the current one — that is what makes it the trough-margin
+    trap the brief describes, and it is the row `run_dcf_agent` would hold in
+    `most_recent`. Returns the row with `normalized_net_income` attached exactly
+    the way the engine attaches it: `_normalized_earnings(series, "net_income",
+    window=5)` written onto the most-recent row.
+
+    The normalizer excludes the 5.2% year and averages the surviving four to a
+    14.4% margin, because |0.052 − 0.141| = 0.089 clears both the dispersion
+    term (2 × 0.007 = 0.014) and the relative floor (0.141 × 0.30 = 0.0423).
+    That exclusion is what creates the deviation, so this test exercises the
+    relative floor and the swap together — which is how they run.
+    """
+    rev = 15_600.0
+    series = [{"revenue": rev, "net_income": rev * m}
+              for m in (0.052, 0.138, 0.152, 0.145, 0.141)]
+    row = dict(series[0])
+    row["normalized_net_income"] = dcf_agent._normalized_earnings(
+        series, "net_income", window=5)
+    return row
+
+
+def test_the_pe_norm_swap_promotes_a_trailing_leg_to_normalized_earnings():
+    """The shipped behaviour, on the profile the post-mortem named.
+
+    `Luxury Goods` anchors 50% of its blend on `P/E (Premium)`, which the
+    engine's own comment says differs from plain `P/E` "only in documentation
+    intent, not earnings source". At EL's trough that anchor multiplies a 5.2%
+    margin year by a multiple the profile's rationale assumes is "stable and
+    high" because of pricing power. The swap replaces the leg name, and because
+    `_blend_methods` resolves a row BY NAME — `method_values.get(raw_name)`,
+    then the proxy, then the weight from the same row — rewriting the name on a
+    copy moves both the value the leg reads and nothing else. No new method
+    branch, no new parameter, no change to any profile table.
+    """
+    mr = _el_trough()
+    dev = dcf_agent._pe_normalization_deviation(mr)
+    swaps = dcf_agent._pe_norm_leg_swaps(_lux(), dev)
+
+    assert swaps == [{"from": "P/E (Premium)", "to": "P/E (norm)",
+                      "weight": 0.5, "anchor": True}], swaps
+
+    eff = dcf_agent._apply_pe_norm_swaps(_lux()["methods"], swaps)
+    assert [m["name"] for m in eff] == [
+        "P/E (norm)", "EV/EBIT", "DCF (LTG)", "Brand Val"]
+    # The weight and the anchor bit travel with the row, so the promoted leg
+    # still carries the 50% the profile assigned it. A rename that dropped the
+    # anchor would silently re-weight the whole blend.
+    assert eff[0]["weight"] == 0.5 and eff[0]["anchor"] is True
+    # The two middle rows are untouched. `Brand Val` is excluded from this
+    # comparison because it moves too — its proxy is promoted, which is the
+    # subject of test_apply_rewrites_the_proxy_even_when_no_leg_of_that_name_exists.
+    assert eff[1:3] == _lux()["methods"][1:3]
+
+
+def test_the_deviation_helper_guards_every_input_that_would_lie():
+    """Four ways to get a number out of a ratio that has no meaning.
+
+    `norm <= 0` is the one that matters and it is not defensive padding. A
+    normalized LOSS divided by a positive trailing income yields a deviation
+    below −1, which clears `abs(dev) > 0.40` and would promote the anchor to a
+    `P/E (norm)` leg that immediately returns None — `_blend_methods` skips a
+    non-positive value, so the profile would lose its 50% anchor and blend on
+    the remaining legs alone. That is a larger change than the swap is
+    authorised to make, and it would happen silently, because a dropped leg
+    reads as a data gap rather than as a decision. Returning None instead makes
+    a trough-to-loss year a no-op.
+
+    `cur <= 0` is the same argument from the other side: dividing by a trailing
+    loss gives a sign that depends on which of two negative numbers is larger.
+    """
+    fn = dcf_agent._pe_normalization_deviation
+    assert fn(None) is None
+    assert fn("not a dict") is None
+    assert fn({}) is None
+    assert fn({"net_income": 100.0}) is None
+    assert fn({"normalized_net_income": 100.0}) is None
+    assert fn({"normalized_net_income": -1.0, "net_income": 100.0}) is None
+    assert fn({"normalized_net_income": 0.0, "net_income": 100.0}) is None
+    assert fn({"normalized_net_income": 100.0, "net_income": 0.0}) is None
+    assert fn({"normalized_net_income": 100.0, "net_income": -50.0}) is None
+    # The sign convention: positive means the normalized figure is ABOVE the
+    # trailing one, i.e. the current year is the trough. That is EL's case, and
+    # it is the direction the post-mortem's trap runs in.
+    assert fn({"normalized_net_income": 150.0, "net_income": 100.0}) == pytest.approx(0.50)
+    assert fn({"normalized_net_income": 50.0, "net_income": 100.0}) == pytest.approx(-0.50)
+
+
+def test_the_deviation_is_the_same_quantity_the_audit_flag_prints():
+    """Pinned to the flag rather than defined beside it.
+
+    The post-mortem prescribed a threshold on `margin_deviation`, a symbol that
+    does not exist in this codebase. The quantity that does exist is `_delta_pct`
+    inside the `Normalized NI` audit flag, `(norm - cur) / cur`. If the helper
+    and the flag ever diverge — a different denominator, an absolute value, a
+    margin instead of an income — then a run would print one deviation and act
+    on another, and the printed disclosure would stop describing the valuation.
+    So the flag's own expression is asserted to be present in source and the
+    helper is asserted to reproduce it on the same inputs.
+    """
+    src = _engine_src()
+    assert "_delta_pct = (_norm_ni - _cur_ni) / _cur_ni" in src
+
+    i = src.index("Normalized NI: TTM")
+    assert "abs(_delta_pct) > 0.15" in src[max(0, i - 900): i + 600]
+
+    fn = dcf_agent._pe_normalization_deviation
+    for norm, cur in ((2246.4, 811.2), (102489397491.25916, 120964378400.0),
+                      (7467226412.859303, 8099000000.0)):
+        assert fn({"normalized_net_income": norm, "net_income": cur}) == \
+            pytest.approx((norm - cur) / cur, rel=1e-12)
+
+    # And the two thresholds are different numbers with different jobs: 15%
+    # discloses, 40% acts. Pinned so the gap cannot be closed by accident in
+    # either direction — raising the flag's threshold would hide deviations,
+    # lowering the swap's would move valuations on noise.
+    assert dcf_agent._PE_NORM_SWAP_DEVIATION == 0.40
+    assert dcf_agent._PE_NORM_SWAP_DEVIATION > 0.15
+
+
+def test_the_swap_threshold_is_strict_so_exactly_forty_percent_does_not_fire():
+    """The guard is `<=`, so 0.40 exactly is inside the band and does nothing.
+
+    A boundary that fires at exactly its own threshold is a boundary that moves
+    when the number is re-derived at a different float precision. Both sides
+    are pinned, and the sign is pinned too: the post-mortem wrote
+    `margin_deviation > 0.40`, which reads one-sided, but the trap it describes
+    is a trough — a NEGATIVE deviation — and EL's own case is positive only
+    because the trough is the current year. A one-sided test would have exempted
+    every peak-earnings name, which is the direction the brief's Gate 3 was
+    written about. `abs()` covers both and that is deliberate.
+    """
+    fn = dcf_agent._pe_norm_leg_swaps
+    prof = {"methods": [{"name": "P/E", "weight": 0.4, "anchor": True}]}
+
+    assert fn(prof, 0.40) == []
+    assert fn(prof, -0.40) == []
+    assert fn(prof, 0.4000001) != []
+    assert fn(prof, -0.4000001) != []
+    # Both directions reach the same leg.
+    up = fn(prof, 0.50)[0]
+    dn = fn(prof, -0.50)[0]
+    assert up["to"] == dn["to"] == "P/E (norm)"
+    assert up["from"] == dn["from"] == "P/E"
+
+    # Absent signal, absent action.
+    assert fn(prof, None) == []
+    assert fn(None, 0.90) == []
+    assert fn({}, 0.90) == []
+    assert fn({"methods": None}, 0.90) == []
+
+
+def test_a_profile_that_already_carries_a_normalized_pe_leg_is_skipped():
+    """The double-weight guard, which is the one that would be silent.
+
+    A profile with both `P/E` and `P/E (norm)` rows that got its trailing leg
+    renamed would end up with two rows named `P/E (norm)`. `_blend_methods`
+    resolves each row by name, so both would read the same value and the
+    profile's weight on normalized earnings would double — from, say, 0.2 + 0.3
+    to 0.5, with nothing in the output to show that a leg had been counted
+    twice. The guard skips the whole profile instead.
+
+    Vacuous on today's taxonomy: zero of the 31 swap-eligible profiles also
+    name a normalized P/E leg, so the guard has never engaged in production. It
+    is kept because it is three lines and the alternative failure is invisible.
+
+    "Already carries" is tested against all three spellings the dispatch branch
+    accepts, not just the `P/E (norm)` the swap writes. That widening is also
+    vacuous today — `test_the_normalized_leg_names_are_not_case_consistent`
+    pins `P/E (norm)` as the only normalized P/E spelling present in any profile
+    — but a guard keyed on the output string alone would start double-weighting
+    the moment a profile used one of the other two, and would do it silently.
+    """
+    # The constant must track the dispatch branch. If a fourth spelling is added
+    # to the `if method_name in {...}` set and not here, the guard narrows
+    # without anything failing.
+    src = _engine_src()
+    i = src.index('if method_name in {"P/E (norm)"')
+    branch = set(re.findall(r'"([^"]+)"', src[i:src.index(":", i)]))
+    assert branch == set(dcf_agent._PE_NORM_BRANCH_SPELLINGS), branch
+    assert branch == {"P/E (norm)", "P/E norm", "Normalized P/E"}
+
+    fn = dcf_agent._pe_norm_leg_swaps
+    both = {"methods": [{"name": "P/E", "weight": 0.3},
+                        {"name": "P/E (norm)", "weight": 0.2}]}
+    assert fn(both, 0.90) == []
+    for spelling in ("P/E norm", "Normalized P/E"):
+        assert fn({"methods": [{"name": "P/E", "weight": 0.3},
+                               {"name": spelling, "weight": 0.2}]}, 0.90) == []
+    # A normalized EBITDA leg does NOT suppress the swap. It is a different
+    # earnings basis and it does not collide in the value map.
+    assert fn({"methods": [{"name": "P/E", "weight": 0.3},
+                           {"name": "EV/EBITDA (norm)", "weight": 0.2}]}, 0.90) != []
+
+
+def test_the_swap_is_not_gated_on_the_cyclical_profiles():
+    """A deliberate divergence from the leg-swap machinery it was modelled on.
+
+    `_mid_cycle_leg_swaps` — the Phase 1.2B machinery this one copies its
+    applied-path shape from — returns `[]` unless the profile is in
+    `_CYCLICAL_PROFILES`. Reusing that gate here would have been the obvious
+    mistake, because the eight cyclicals and the consumer-discretionary archetypes
+    have nothing in common: `Luxury Goods` is not in the set, so EL would never
+    fire. The exposure this swap addresses is a distorted trailing year, which
+    is a property of the SERIES and not of the sector — a beauty company at a
+    channel-reset trough and a copper miner at a commodity trough have the same
+    problem, and only one of them is cyclical by label.
+
+    Pinned so a future refactor that "unifies the two swap helpers" cannot
+    inherit the gate without failing here. Asserted off the compiled code
+    object's `co_names` rather than off `inspect.getsource`, because the
+    helper's own docstring names `_CYCLICAL_PROFILES` while explaining why it
+    is not used — a source-text match cannot tell those apart, and the version
+    of this test that tried reported the gate as present on a function that
+    provably does not read it.
+    """
+    prof = {"methods": [{"name": "P/E (Premium)", "weight": 0.5, "anchor": True}]}
+    assert "Luxury Goods" not in dcf_agent._CYCLICAL_PROFILES
+    assert dcf_agent._pe_norm_leg_swaps(prof, 0.90) != []
+    assert "_CYCLICAL_PROFILES" not in dcf_agent._pe_norm_leg_swaps.__code__.co_names
+    # The sibling helper DOES read it, so the assertion above is not vacuous.
+    assert "_CYCLICAL_PROFILES" in dcf_agent._mid_cycle_leg_swaps.__code__.co_names
+
+
+def test_the_swap_population_is_thirty_one_of_ninety_nine():
+    """The measured size of the change, off the real profile table.
+
+    99 profiles. 37 carry a trailing P/E leg of some spelling. 31 carry one of
+    the two spellings the swap names. 10 of those 31 anchor on it, so for those
+    ten the swap changes the earnings source of the single most-weighted leg in
+    the profile. None of the 31 also carries a normalized P/E leg, which is what
+    makes the double-weight guard above vacuous today.
+
+    Four of the ten anchors are Consumer: `Food & Beverage` (P/E 0.50),
+    `Luxury Goods` (P/E (Premium) 0.50), `Household / Personal` (P/E 0.40) and
+    `Membership / Subscription Retail` (P/E 0.40). The brief's archetypes are
+    disproportionately represented in the population this change reaches, which
+    is the argument that it was worth building rather than documenting.
+    """
+    tot = trail = elig = anchored = 0
+    consumer_anchors = []
+    for sec, profs in INDUSTRY_VALUATION_PROFILES.items():
+        for pn, cfg in profs.items():
+            tot += 1
+            ms = [m for m in cfg.get("methods", []) if isinstance(m, dict)]
+            names = {m.get("name") for m in ms}
+            if names & {"P/E", "P/E (ops)", "P/E (Ops)", "P/E (Premium)"}:
+                trail += 1
+            if names & dcf_agent._PE_NORM_SWAP_LEGS.keys():
+                elig += 1
+            for m in ms:
+                if m.get("name") in dcf_agent._PE_NORM_SWAP_LEGS and m.get("anchor"):
+                    anchored += 1
+                    if sec == "Consumer":
+                        consumer_anchors.append((pn, m["name"], m["weight"]))
+    assert (tot, trail, elig, anchored) == (99, 37, 31, 10)
+    assert sorted(consumer_anchors) == [
+        ("Food & Beverage", "P/E", 0.5),
+        ("Household / Personal", "P/E", 0.4),
+        ("Luxury Goods", "P/E (Premium)", 0.5),
+        ("Membership / Subscription Retail", "P/E", 0.4),
+    ], consumer_anchors
+    assert dcf_agent._PE_NORM_SWAP_LEGS == {
+        "P/E": "P/E (norm)", "P/E (Premium)": "P/E (norm)"}
+
+    # No profile names both swappable spellings, and no profile names any method
+    # twice. Both matter because the mapping has two keys and one value: a
+    # profile carrying `P/E` and `P/E (Premium)` would produce two rows named
+    # `P/E (norm)`, and `_blend_methods` resolves rows by name, so the branch's
+    # weight would double with nothing in the output to show it.
+    both = dups = 0
+    for _sec, profs in INDUSTRY_VALUATION_PROFILES.items():
+        for _pn, cfg in profs.items():
+            names = [m.get("name") for m in cfg.get("methods", [])
+                     if isinstance(m, dict)]
+            both += int("P/E" in names and "P/E (Premium)" in names)
+            dups += int(len(names) != len(set(names)))
+    assert (both, dups) == (0, 0)
+
+
+def test_the_promotion_is_first_wins_when_two_legs_would_collapse():
+    """The collision above is closed structurally, and the policy is a choice.
+
+    With two keys mapping to one target, a hypothetical profile carrying both
+    `P/E` (0.30) and `P/E (Premium)` (0.20) has three defensible outcomes and
+    none of them is derivable: promote both and double the normalized weight to
+    0.50; promote neither and leave the profile reading trailing earnings
+    through two labels; or promote one and leave the other trailing, which
+    reproduces the exact two-earnings-sources-at-once inconsistency this swap
+    exists to remove.
+
+    `emitted` picks the third and takes the first in row order, which is at
+    least deterministic and at least does not invent weight. Recorded as a
+    choice rather than a fix because no profile in the taxonomy reaches it — the
+    assertion above is what makes that a measurement and not an assumption — and
+    if one ever does, the correct answer depends on why a profile would carry
+    two spellings of the same branch, which nothing today explains.
+    """
+    prof = {"methods": [
+        {"name": "P/E", "weight": 0.30, "anchor": True},
+        {"name": "EV/EBITDA", "weight": 0.20},
+        {"name": "P/E (Premium)", "weight": 0.20},
+    ]}
+    swaps = dcf_agent._pe_norm_leg_swaps(prof, 0.90)
+    assert swaps == [{"from": "P/E", "to": "P/E (norm)",
+                      "weight": 0.30, "anchor": True}], swaps
+    eff = dcf_agent._apply_pe_norm_swaps(prof["methods"], swaps)
+    assert [m["name"] for m in eff] == ["P/E (norm)", "EV/EBITDA", "P/E (Premium)"]
+    # Order determines the winner, so reversing the rows reverses the outcome.
+    rev = {"methods": list(reversed(prof["methods"]))}
+    assert dcf_agent._pe_norm_leg_swaps(rev, 0.90)[0]["from"] == "P/E (Premium)"
+
+
+def test_the_swap_leaves_the_ops_spellings_on_the_trailing_branch():
+    """Six profiles dispatch to the identical trailing branch under two other
+    spellings and are deliberately NOT in the swap. Three of them anchor.
+
+    `P/E (ops)` and `P/E (Ops)` sit in the same `if method_name in {...}` set as
+    `P/E`, so they read the same TTM net income and carry the same exposure.
+    They are excluded because the post-mortem named `P/E` and `P/E (Premium)`
+    and only those two, and widening an authorised change to cover a spelling
+    it did not mention is not the same as completing it.
+
+    Recorded rather than fixed, because the cost of the omission is concrete:
+    `Biopharma / Managed Care`, `HealthcareServices / Managed Care` and
+    `HealthcareServices / Pharma Distribution` each anchor 40% of their blend on
+    `P/E (Ops)`, so a trough-earnings healthcare name keeps its trailing anchor
+    while an identical deviation on a beauty name gets promoted. That is an
+    inconsistency between two profiles that read the same number, and it is
+    exactly the kind this swap exists to remove.
+    """
+    ops = {"P/E (ops)", "P/E (Ops)"}
+    assert ops & set(dcf_agent._PE_NORM_SWAP_LEGS) == set()
+
+    src = _engine_src()
+    assert 'if method_name in {"P/E", "P/E (ops)", "P/E (Premium)", "P/E (Ops)"}:' in src
+
+    carriers = []
+    for sec, profs in INDUSTRY_VALUATION_PROFILES.items():
+        for pn, cfg in profs.items():
+            for m in cfg.get("methods", []):
+                if isinstance(m, dict) and m.get("name") in ops:
+                    carriers.append((sec, pn, m["name"], m["weight"],
+                                     bool(m.get("anchor"))))
+    assert sorted(carriers) == [
+        ("Biopharma", "Managed Care", "P/E (Ops)", 0.4, True),
+        ("Financials", "Insurance", "P/E (ops)", 0.15, False),
+        ("Financials", "Insurance (P&C)", "P/E (ops)", 0.2, False),
+        ("HealthcareServices", "Healthcare Providers / Services", "P/E (Ops)", 0.3, False),
+        ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4, True),
+        ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4, True),
+    ], carriers
+    # 37 − 31 = 6, and the six are exactly these. So the omission is the whole
+    # of the gap between the two counts and nothing else is being left behind.
+    assert len(carriers) == 37 - 31
+
+
+def test_apply_rewrites_the_proxy_even_when_no_leg_of_that_name_exists():
+    """The bug this test was written to catch, and it was live.
+
+    Exactly two rows in the taxonomy carry a proxy naming a swappable trailing
+    spelling, both Consumer, both at weight 0.05: `Food & Beverage`'s
+    "Brand Valuation" and `Luxury Goods`' "Brand Val", each `implementable:
+    False` with `proxy: "P/E"`. `_blend_methods` resolves a non-implementable
+    row through its proxy, so the proxy IS an earnings source with weight on it.
+
+    The first implementation keyed the proxy rewrite on the legs that actually
+    swapped: `by_from = {s["from"]: s["to"] for s in swaps}`. For Luxury Goods
+    that map is `{"P/E (Premium)": "P/E (norm)"}`, which does not contain
+    `"P/E"`, so `Brand Val` came back out with `proxy: "P/E"` beside an anchor
+    that had become `P/E (norm)`. The docstring claimed both routes were
+    rewritten and they were not, and the profile that broke was EL's — the one
+    name in the entire taxonomy the change was written for. Found by running the
+    swap on EL's series and reading the output, not by reading the code.
+
+    The rewrite now keys on `_PE_NORM_SWAP_LEGS`, so ANY reference to a trailing
+    spelling is promoted once at least one leg has swapped. Still gated on
+    `swaps` being non-empty, so a profile whose only trailing exposure is a
+    proxy is left alone.
+    """
+    mr = _el_trough()
+    dev = dcf_agent._pe_normalization_deviation(mr)
+    swaps = dcf_agent._pe_norm_leg_swaps(_lux(), dev)
+    eff = dcf_agent._apply_pe_norm_swaps(_lux()["methods"], swaps)
+
+    brand = [m for m in eff if m["name"] == "Brand Val"][0]
+    assert brand["proxy"] == "P/E (norm)", (
+        "the proxy route to trailing earnings is open again")
+    assert brand["implementable"] is False and brand["weight"] == 0.05
+    # After the swap the profile reaches trailing P/E by no route at all, which
+    # is the property that was wanted and could not be asserted while the proxy
+    # still pointed at `P/E`.
+    trail = {"P/E", "P/E (ops)", "P/E (Ops)", "P/E (Premium)"}
+    assert not {m.get("name") for m in eff} & trail
+    assert not {m.get("proxy") for m in eff} & trail
+
+    # Food & Beverage has a real `P/E` leg, so its proxy was already promoted by
+    # the buggy version too. Asserted to show the fix did not change the case
+    # that worked.
+    fb = INDUSTRY_VALUATION_PROFILES["Consumer"]["Food & Beverage"]
+    fb_eff = dcf_agent._apply_pe_norm_swaps(
+        fb["methods"], dcf_agent._pe_norm_leg_swaps(fb, dev))
+    fb_rows = {m["name"]: m.get("proxy") for m in fb_eff}
+    assert "P/E (norm)" in fb_rows and fb_rows["Brand Valuation"] == "P/E (norm)"
+
+    # Only two such rows exist, so the widened rewrite has no reach beyond these
+    # two Consumer profiles. A third appearing is a change worth a test.
+    found = []
+    for sec, profs in INDUSTRY_VALUATION_PROFILES.items():
+        for pn, cfg in profs.items():
+            for m in cfg.get("methods", []):
+                if (isinstance(m, dict)
+                        and m.get("proxy") in dcf_agent._PE_NORM_SWAP_LEGS):
+                    found.append((pn, m["name"], m["proxy"], m["weight"]))
+    assert sorted(found) == [
+        ("Food & Beverage", "Brand Valuation", "P/E", 0.05),
+        ("Luxury Goods", "Brand Val", "P/E", 0.05),
+    ], found
+
+
+def test_apply_is_copy_on_write_a_no_op_and_idempotent():
+    """Three properties the call sites depend on and none of which is visible
+    in the output.
+
+    Copy-on-write: the rows are the very dict objects held in
+    `INDUSTRY_VALUATION_PROFILES`. Mutating one rewrites the profile for every
+    subsequent ticker in the same process, so the second luxury name analysed
+    would inherit the first one's swap. This is the failure mode the SOTP
+    overlay's copy-on-write discipline exists to prevent, and a long-running
+    worker is exactly where it would show up.
+
+    No-op identity: an empty swap list returns the SAME object, so the common
+    case allocates nothing and an `is` comparison downstream stays meaningful.
+
+    Idempotence: a second pass over already-promoted rows changes nothing,
+    because `P/E (norm)` is not a key in the mapping. Without it, a retry or a
+    re-entrant scenario loop would be a different valuation from the first.
+    """
+    rows = _lux()["methods"]
+    before = [dict(m) for m in rows]
+
+    assert dcf_agent._apply_pe_norm_swaps(rows, []) is rows
+
+    swaps = dcf_agent._pe_norm_leg_swaps(
+        _lux(), dcf_agent._pe_normalization_deviation(_el_trough()))
+    eff = dcf_agent._apply_pe_norm_swaps(rows, swaps)
+    assert eff is not rows
+    assert all(eff[i] is not rows[i] for i in range(len(rows)))
+    assert [dict(m) for m in rows] == before, "the profile table was mutated"
+    assert _lux()["methods"][0]["name"] == "P/E (Premium)"
+    assert _lux()["methods"][3]["proxy"] == "P/E"
+
+    again = dcf_agent._apply_pe_norm_swaps(eff, swaps)
+    assert again == eff
+
+
+def test_els_own_series_clears_the_threshold_by_more_than_four_times():
+    """The swap fires on the name it was written for, on EL's own numbers.
+
+    Deviation +176.9%: a 5.2% trailing margin year against a 14.4% normalized
+    one. The threshold is 40%, so this is not a marginal case and it does not
+    depend on where inside the band the trigger sits. EL is pinned to
+    `Luxury Goods` in `TICKER_SECTOR_LOOKUP`, and the leg promoted is the
+    50%-weighted anchor — the largest single move this change can make.
+
+    What this does NOT establish: EL is not a golden fixture, so no recorded
+    baseline exercises the swap, and the numbers here come from the brief's
+    five-margin series rather than from a captured EL run. The end-to-end path
+    is unit-tested; the production path is not yet observed.
+    """
+    mr = _el_trough()
+    dev = dcf_agent._pe_normalization_deviation(mr)
+
+    assert mr["net_income"] == pytest.approx(811.2, abs=1e-6)
+    assert mr["normalized_net_income"] == pytest.approx(2246.4, abs=1e-6)
+    assert dev == pytest.approx(1.7692, abs=1e-4)
+    assert dev > 4 * dcf_agent._PE_NORM_SWAP_DEVIATION
+
+    assert dcf_agent._pe_norm_leg_swaps(_lux(), dev) != []
+    assert TICKER_SECTOR_LOOKUP["EL"][1] == "Luxury Goods"
+
+
+#: Replay measurements, one process per fixture, off the engine's own
+#: `most_recent` dict — the same two numbers the `Normalized NI` flag prints.
+#: NOT recomputed live: `tests/test_golden_valuations.py` pins
+#: `normalized_net_income` in the snapshot projection, so these can only move if
+#: the normalizer moves, and that would fail there first.
+_GOLDEN_DEVIATIONS = {
+    "02888_HK": ("Money Center Bank",               -0.1012),
+    "09988_HK": ("Hyperscaler / Tech Conglomerate", -0.1527),
+    "AAPL":     ("Hyperscaler / Tech Conglomerate", -0.0534),
+    "BABA":     ("Hyperscaler / Tech Conglomerate", -0.1527),
+    "BN4_SI":   ("Conglomerate / Industrial (SG)",  +0.0867),
+    "C38U_SI":  ("S-REIT",                          -0.0333),
+    "COST":     ("Membership / Subscription Retail", -0.0780),
+    "D05_SI":   ("Money Center Bank (SG)",          +0.1659),
+    "FCX":      ("Mining (Major)",                  +0.3579),
+    "MELI":     ("Hyper-Growth Platform",           -0.0193),
+    "MU":       ("Memory / DRAM-NAND",              -0.1755),
+    "SCHW":     ("Brokerage",                       -0.1389),
+    "U96_SI":   ("Conglomerate / Industrial (SG)",  -0.2776),
+    "V":        ("Payment Networks",                +0.0374),
+}
+
+
+def test_no_golden_fixture_can_reach_the_swap_and_four_could_if_they_moved():
+    """The named move set for this change is EMPTY, and that was measured.
+
+    The verification contract says any move outside the named set is investigated
+    before the baseline is regenerated. For this item the set is empty, so the
+    claim to defend is that nothing moves. Two independent reasons, both pinned:
+
+      * the largest deviation anywhere in the fourteen is FCX at +0.3579, which
+        does not clear 0.40 — and `Mining (Major)` has no trailing P/E leg, so
+        FCX could not swap even at +4.0;
+      * of the four fixtures whose profile IS swap-eligible, the largest is
+        09988_HK and BABA at −0.1527, less than two fifths of the threshold.
+
+    The second number is the one that carries the argument, and it is worth being
+    explicit about why the first does not. A headroom figure computed across all
+    fourteen is dominated by fixtures that could never fire, so it overstates the
+    safety margin: FCX sitting at 0.3579 tells you nothing about whether COST's
+    anchor can move. Restricted to the four that can, the margin is 0.1527
+    against 0.40 — real headroom, but 2.6x rather than 1.1x, and a future change
+    to the normalizer could close it.
+
+    Four eligible, not none: `Hyperscaler / Tech Conglomerate` (09988_HK, AAPL,
+    BABA) and `Membership / Subscription Retail` (COST) both anchor or weight a
+    plain `P/E` leg. COST's is the anchor at 0.40. So the baseline contains live
+    exposure to this swap and does not fire only because the deviations are
+    small — which is the difference between "no blast radius" and "nothing to
+    blast". Pinned so that a threshold lowered below 0.1527 is a deliberate act
+    that fails here first, with the four names already identified.
+    """
+    thr = dcf_agent._PE_NORM_SWAP_DEVIATION
+    eligible, ineligible_reasons = [], {"no trailing P/E leg": 0,
+                                        "already normalized": 0}
+    for fx, (pname, dev) in _GOLDEN_DEVIATIONS.items():
+        cfg = None
+        for _sec, profs in INDUSTRY_VALUATION_PROFILES.items():
+            cfg = profs.get(pname)
+            if cfg is not None:
+                break
+        assert cfg is not None, pname
+        swaps = dcf_agent._pe_norm_leg_swaps(cfg, dev)
+        assert swaps == [], f"{fx} on {pname} would swap at dev={dev:+.4f}"
+        names = {m.get("name") for m in cfg.get("methods", [])}
+        if names & dcf_agent._PE_NORM_SWAP_LEGS.keys():
+            eligible.append((fx, abs(dev)))
+        elif names & {"P/E (norm)", "P/E norm", "Normalized P/E"}:
+            ineligible_reasons["already normalized"] += 1
+        else:
+            ineligible_reasons["no trailing P/E leg"] += 1
+
+    assert len(_GOLDEN_DEVIATIONS) == 14
+    assert sorted(f for f, _ in eligible) == ["09988_HK", "AAPL", "BABA", "COST"]
+    assert max(d for _, d in eligible) == pytest.approx(0.1527, abs=1e-4)
+    assert max(d for _, d in eligible) < thr
+    assert max(abs(d) for _, (_, d) in _GOLDEN_DEVIATIONS.items()) == \
+        pytest.approx(0.3579, abs=1e-4)
+    assert ineligible_reasons == {"no trailing P/E leg": 5, "already normalized": 5}
+    assert len(eligible) + sum(ineligible_reasons.values()) == 14
+
+
+def test_cost_is_a_live_fixture_whose_anchor_is_in_the_swap_population():
+    """The one golden fixture where this swap could move the valuation, and the
+    distance it sits from doing so.
+
+    COST is `Membership / Subscription Retail`, whose anchor is a plain `P/E` at
+    weight 0.40 — the single most-weighted leg in the profile, on trailing
+    earnings. Its measured deviation is −0.0780, so it does not fire, and base
+    IV 1324.57 is unchanged by this commit.
+
+    Stated because it is the sharpest version of the caveat above: the empty
+    move set is a property of today's numbers and not of the mechanism. COST
+    would need its normalized net income to fall to 60% of trailing — a
+    deviation of −0.40 — for its anchor to be promoted, and its
+    `fcf_margin_base` of 0.0232 means the Consumer floor already binds on the
+    DCF leg beside it. A test that asserted "no fixture is exposed" would be
+    green and wrong.
+    """
+    cfg = INDUSTRY_VALUATION_PROFILES["Consumer"]["Membership / Subscription Retail"]
+    ms = [m for m in cfg["methods"] if isinstance(m, dict)]
+    anchor = [m for m in ms if m.get("anchor")]
+    assert len(anchor) == 1 and anchor[0]["name"] == "P/E"
+    assert anchor[0]["weight"] == 0.40
+
+    dev = _GOLDEN_DEVIATIONS["COST"][1]
+    assert dev == pytest.approx(-0.0780, abs=1e-4)
+    assert dcf_agent._pe_norm_leg_swaps(cfg, dev) == []
+    assert dcf_agent._pe_norm_leg_swaps(cfg, -0.41)[0]["anchor"] is True
+    # 0.40 / 0.0780 — how many times larger COST's deviation would have to be.
+    assert dcf_agent._PE_NORM_SWAP_DEVIATION / abs(dev) == pytest.approx(5.13, abs=0.01)
+
+
+def _run_body() -> str:
+    """`run_dcf_agent`'s source, from its `def` to the next top-level `def`/EOF.
+
+    Scoped to the function because what is being pinned here is control flow —
+    where a declaration sits relative to the scenario loop — and the file is
+    11,649 lines of other functions that reuse these identifiers in prose.
+
+    `run_dcf_agent` is the LAST top-level `def` in the module (measured: the only
+    one after line 7000, at 7065), so the slice normally runs to EOF and the
+    fallback is the common path, not the exception. Two traps, both hit while
+    writing this:
+
+      * `body.index("\\ndef ", 10)` finds the first NESTED `def` a few hundred
+        characters in, so every later assertion silently examines a stub. The
+        regex anchors on column 0 instead.
+      * `re.M` plus `^def ` matches nothing here, so the slice must tolerate a
+        `None` match rather than assert one.
+    """
+    src = _engine_src()
+    start = src.index("def run_dcf_agent(")
+    m = re.search(r"^def ", src[start + 10:], re.M)
+    return src[start:start + 10 + m.start()] if m else src[start:]
+
+
+def test_every_blend_that_values_the_profile_reads_the_promoted_rows():
+    """The wiring, pinned at every site that turns method rows into a number.
+
+    Two distinct failures live here, and the second is the one that was actually
+    found:
+
+      * a swap applied at the build site and not at the blend computes
+        `P/E (norm)` and then looks up `P/E` in the value map, finds nothing, and
+        drops the leg — the silent-weight-loss failure the copy-on-write comment
+        warns about;
+      * a swap applied at the blend and not at the DISCLOSURE produces the right
+        number and the wrong attribution. Forced on COST: the blend received
+        `P/E (norm)` at weight 0.40 with a live value of 860.99 and used it,
+        while `methods_used` came back `['DCF', 'EV/EBITDAR', 'FCF Yield']` — a
+        report naming three legs for a valuation computed from four, the missing
+        one being the anchor. Base IV moved 1324.57 → 1272.79 with nothing in
+        the payload explaining why.
+
+    So six consumers are asserted, not one. Three turn rows into a value and read
+    the in-loop alias `_eff_profile_methods`:
+
+      * the `methods_to_compute` build, which decides what gets valued at all;
+      * the Phase 1.2B path-B builder, so the recorded A/B comparison measures
+        one change rather than two — path B inheriting the raw rows while path A
+        used the promoted ones would attribute the swap's effect to the
+        mid-cycle leg swap instead;
+      * the primary `_blend_methods` call.
+
+    Three name rows in the payload. `methods_used` reads the alias; the other two
+    sit OUTSIDE the scenario loop and so read `_pe_norm_methods` directly:
+
+      * `_methods_unavailable`, which would otherwise have reported `P/E` as an
+        unavailable degradation on a leg that was valued, and would not have
+        reported `P/E (norm)` as used — the same wrong attribution twice over;
+      * `bank_breakdown`'s `primary_anchor`.
+
+    Two of those three sit outside the loop, which is what forced the whole
+    promotion above it. That is asserted as structure and not left to the reader:
+    the deviation helper is called EXACTLY ONCE in 271k characters of function
+    body, so "three identical lists and three separate chances for the flag
+    prose, the value build and the blend to disagree" is closed by construction
+    rather than by a test that happens to pass today.
+
+    `_run_backward_gate` is the seventh consumer and deliberately still reads
+    `profile_data["methods"]`. Its T-1 row is `series[-2]`, a raw annual row
+    carrying no `normalized_net_income` — confirmed empirically, not assumed: on
+    the forced-COST run its `most_recent` had `normalized_net_income = None` and
+    `net_income = 7367000000.0`, so the deviation cannot be computed there and a
+    promoted leg would resolve to None. For the 31-profile population that makes
+    a T-1 comparison not like-for-like with production. Left alone because the
+    backward scorer is already blocked on Phase 3 and fires on nothing, and
+    stacking an unverifiable change onto an unmeasurable one is how a scorer
+    stops meaning anything. Documented in source at the site; asserted here so
+    the divergence cannot be closed by accident either.
+    """
+    body = _run_body()
+
+    # ── (1) computed once, above the loop ─────────────────────────────────
+    assert body.count("_pe_normalization_deviation(") == 1
+    assert body.count("_pe_norm_leg_swaps(") == 1
+    assert body.count("_apply_pe_norm_swaps(") == 1
+    assert body.count('for scenario in ("base", "bear", "bull"):') == 1
+
+    # On comment-stripped lines, and that is not stylistic. The `_cyc_rec`
+    # comment block inside the loop quotes `if profile_data:` in prose to
+    # explain its own placement, so a raw `rindex` over the source finds the
+    # MENTION and reports a declaration as nested inside a guard it is
+    # deliberately outside. The first version of this assertion did exactly that
+    # and failed against correct code.
+    code = [ln.split("#", 1)[0].rstrip() for ln in body.splitlines()]
+
+    def _at(text: str) -> int:
+        hits = [n for n, ln in enumerate(code) if ln.strip() == text]
+        assert len(hits) == 1, (text, [n + 1 for n in hits])
+        return hits[0]
+
+    def _ind(n: int) -> int:
+        return len(code[n]) - len(code[n].lstrip())
+
+    struct = _at("_structurally_unavailable: set = set()")
+    pnm = _at('_pe_norm_methods: list = '
+              '(profile_data or {}).get("methods") or []')
+    dev = _at("_pe_norm_dev = _pe_normalization_deviation(most_recent)")
+    excl = _at('_pe_norm_excluded = set('
+               '(profile_data or {}).get("excluded") or [])')
+    loop = _at('for scenario in ("base", "bear", "bull"):')
+    cyc = _at("_cyc_rec: Optional[dict] = None")
+    alias = _at("_eff_profile_methods: list = _pe_norm_methods")
+
+    # The whole promotion — rows, flag, deviation, swaps, exclusion filter —
+    # sits between the loop-external availability set and the loop itself.
+    assert struct < pnm < dev < excl < loop < cyc < alias, (
+        struct, pnm, dev, excl, loop, cyc, alias)
+
+    # Same indent as `_structurally_unavailable` and as the loop header, which
+    # is what makes "above the loop" true rather than merely unrefuted by the
+    # ordering above.
+    assert _ind(struct) == _ind(pnm) == _ind(dev) == _ind(excl) == _ind(loop)
+
+    # The in-loop alias is exactly one level inside the loop — beside `_cyc_rec`,
+    # which is the precedent for binding unconditionally so the path-B blend can
+    # read it without a profile guard.
+    assert _ind(cyc) == _ind(alias) == _ind(loop) + 4
+    guard_after = min(n for n, ln in enumerate(code)
+                      if ln.strip() == "if profile_data:" and n > alias)
+    assert _ind(guard_after) == _ind(alias), (
+        "the alias is nested inside `if profile_data:` — a ticker with no "
+        "resolved profile would reach the blend with it unbound")
+
+    # ── (2) the three sites that turn rows into a value ───────────────────
+    # Two `for m in _eff_profile_methods:` loops — the `methods_to_compute`
+    # build and the path-B builder.
+    assert body.count("for m in _eff_profile_methods:") == 2
+    assert "profile_methods=_eff_profile_methods," in body
+
+    # ── (3) the three sites that name rows in the payload ─────────────────
+    assert 'methods_used = [m["name"] for m in _eff_profile_methods' in body
+    assert '_m["name"] for _m in _pe_norm_methods' in body          # unavailable
+    assert '(m["name"] for m in _pe_norm_methods' in body           # primary_anchor
+
+    # ── (4) the raw rows survive at exactly two live sites, both by need ──
+    # The proxy clause of the flag reads the PROFILE's rows because
+    # `_pe_norm_methods` has already been rewritten, so its proxies no longer
+    # match the mapping's keys and the clause would come out empty. Pinned by
+    # test_the_flag_discloses_the_proxy_promotion_as_well_as_the_leg.
+    assert body.count('for m in ((profile_data or {}).get("methods") or [])') == 1
+    # `_total_weight`, the denominator of the Phase 1.2B swap-share diagnostic.
+    # A rename is weight-preserving and row-count-preserving — `_apply_pe_norm_
+    # swaps` copies each row and touches only `name` and `proxy` — so any SUM
+    # over the rows is invariant under it and reading the raw list is correct.
+    # It stops being correct the moment a swap adds or removes a row.
+    assert body.count('for m in (profile_data.get("methods") or [])') == 1
+    assert 'for m in profile_data["methods"]' not in body
+    # The remaining two `profile_data.get("methods")` mentions are existence
+    # guards, not row iterations.
+    assert body.count('if profile_data and profile_data.get("methods"):') == 2
+
+    # ── (5) the exclusion filter, which a rename would otherwise bypass ───
+    assert 'if s["to"] not in _pe_norm_excluded' in body
+
+    # ── (6) the backward gate still diverges, deliberately ────────────────
+    bw = _engine_src()[_engine_src().index("def _run_backward_gate("):]
+    bw = bw[:bw.index("\ndef ", 10)]
+    assert "_eff_profile_methods" not in bw and "_pe_norm_methods" not in bw, (
+        "the backward gate now inherits the promotion — its T-1 row carries no "
+        "normalized_net_income, so a promoted leg would resolve to None")
+    assert 'profile_methods=profile_data["methods"]' in bw
+
+
+def test_the_flag_discloses_the_proxy_promotion_as_well_as_the_leg():
+    """A weight-bearing change that the disclosure did not mention.
+
+    The flag lists the legs it swaps. Promoting `Brand Val`'s proxy moves 5% of
+    the blend onto a different earnings source without moving any leg name, so
+    the first version of the prose described a change that was smaller than the
+    change made. On Luxury Goods it read `P/E (Premium)→P/E (norm) w=0.50
+    (anchor)` while 0.05 of trailing P/E kept running unannounced.
+
+    The prose is assembled inline at the call site rather than returned from the
+    helper, so this test reproduces the comprehension and pins both halves of the
+    string. It reads the PROFILE's rows for the proxy clause and not
+    `_eff_profile_methods`: that list has already been rewritten, so its proxies
+    no longer match the mapping's keys and the clause comes out empty. Getting
+    that backwards produces a flag that silently omits the proxy, which is the
+    defect being guarded against and the reason it is asserted here.
+    """
+    mr = _el_trough()
+    dev = dcf_agent._pe_normalization_deviation(mr)
+    prof = _lux()
+    swaps = dcf_agent._pe_norm_leg_swaps(prof, dev)
+
+    legs = ", ".join(
+        f"{s['from']}→{s['to']} w={s['weight']:.2f}"
+        + (" (anchor)" if s["anchor"] else "") for s in swaps)
+    proxy = ", ".join(
+        f"{m.get('name')} proxy {m.get('proxy')}→"
+        f"{dcf_agent._PE_NORM_SWAP_LEGS[m.get('proxy')]} "
+        f"w={float(m.get('weight') or 0.0):.2f}"
+        for m in prof["methods"]
+        if isinstance(m, dict)
+        and m.get("proxy") in dcf_agent._PE_NORM_SWAP_LEGS
+        and not m.get("implementable", True))
+
+    assert legs == "P/E (Premium)→P/E (norm) w=0.50 (anchor)"
+    assert proxy == "Brand Val proxy P/E→P/E (norm) w=0.05"
+
+    # And the same comprehension over the POST-swap list is empty, which is the
+    # trap. Asserted so the ordering cannot be swapped without failing.
+    eff = dcf_agent._apply_pe_norm_swaps(prof["methods"], swaps)
+    assert [m.get("name") for m in eff
+            if m.get("proxy") in dcf_agent._PE_NORM_SWAP_LEGS] == []
+
+    src = _engine_src()
+    assert 'f"{s[\'from\']}→{s[\'to\']} w={s[\'weight\']:.2f}"' in src
+    assert "proxy {m.get('proxy')}→" in src
+    assert "P/E normalization: trailing net income deviates" in src
+    assert "The trailing leg and `P/E (norm)` read DIFFERENT earnings" in src
 
 
 # ── D. 2020.HK — associate equity and FX parity ──────────────────────────────
