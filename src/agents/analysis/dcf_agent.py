@@ -2121,6 +2121,13 @@ def _sotp_analyst_style(
     }
 
 
+#: Relative outlier allowance for `_normalized_earnings`, as a fraction of the
+#: median margin over the window. Replaces a hardcoded absolute `0.05`, which
+#: was 500bp regardless of how thin the business ran. See the comment at the
+#: assignment site for the measured effect.
+_NORMALIZED_OUTLIER_REL = 0.30
+
+
 def _normalized_earnings(
     series: list[dict],
     field: str,
@@ -2161,7 +2168,87 @@ def _normalized_earnings(
         q3 = sorted_m[3 * len(sorted_m) // 4]
         iqr = q3 - q1
         med = statistics.median(margins)
-        threshold = max(iqr * 2, 0.05)
+        #: Outlier threshold, RELATIVE to the margin level.
+        #:
+        #: This used to be `max(iqr * 2, 0.05)` — an absolute 500bp floor. That
+        #: floor is a fixed fraction of nothing, so its strictness depends
+        #: entirely on how thin the business runs: at EL's 14.1% median a 5pp
+        #: allowance is a 35% relative move, but at a 5% median it is a 100%
+        #: relative move, so a 90% collapse is averaged straight in. Measured on
+        #: [0.005, 0.05, 0.05, 0.05, 0.05] the old rule returned 0.0410 — the
+        #: outlier survived and dragged the "normalized" figure 18% below the
+        #: median it was supposed to be robust to. The rule was loosest exactly
+        #: where consumer margins are thinnest, which is what a trough looks
+        #: like, i.e. precisely when normalization is load-bearing.
+        #:
+        #: `abs(med)`, not `med`: the signed product is negative for a
+        #: loss-maker, so `max()` would collapse onto `iqr * 2` and the relative
+        #: term would be inert for every company with a negative median — the
+        #: names whose margins are most distorted. Measured divergence on
+        #: [-0.13, -0.10, -0.095, -0.105, -0.10]: abs keeps all five
+        #: (-0.1060), signed filters one (-0.1000).
+        #:
+        #: Deliberately no absolute minimum behind the relative term. Adding one
+        #: would reintroduce the defect this removes for thin-margin names.
+        #:
+        #: An earlier draft of this note justified that omission by pointing at the
+        #: `len(filtered) >= 2 else med` fallback below as the safety net for a
+        #: degenerate near-breakeven series. It is not a safety net, because that
+        #: fallback is UNREACHABLE. `q1` is index `len // 4` and `q3` is
+        #: `3 * len // 4`, so at n=5 they are s[1] and s[3], and each sits within
+        #: one IQR of the median s[2] by construction: `s[2] - s[1] <=
+        #: s[3] - s[1] = iqr`, and `s[3] - s[2] <= iqr` the same way. Since
+        #: `threshold >= 2 * iqr >= iqr`, both are always kept and at least three
+        #: survivors are guaranteed for every input reaching the branch. A single
+        #: extreme value cannot break it: at n=5 an outlier lands on s[4], which is
+        #: not a quartile index, so it inflates no threshold. Measured,
+        #: `[0.10]*4 + [1e6]` and `[0.10]*4 + [-1e6]` each keep four.
+        #:
+        #: The decision not to add an absolute minimum therefore rests on the
+        #: relative term being the right rule on its own merits, not on dead code
+        #: catching the edge case. Stated explicitly because a justification that
+        #: leans on an unreachable branch reads as much stronger than it is.
+        #:
+        #: TWO mechanisms, in opposite directions, and both are intended. An
+        #: earlier draft of this comment claimed the change only ever loosens
+        #: the filter for thin-margin names; the golden diff falsified that and
+        #: the correction is recorded here so the next reader is not misled.
+        #:
+        #:   (a) REMOVING the 0.05 floor lets `iqr * 2` bind wherever
+        #:       `iqr * 2 < 0.05` — a TIGHTENING, and it happens regardless of
+        #:       where the relative term lands. Measured on the 09988_HK /
+        #:       BABA net-income series [0.0730, 0.0838, 0.0850, 0.1306,
+        #:       0.1012]: median 0.0850, `iqr * 2` = 0.0348, relative term
+        #:       0.0255 — the relative term LOSES, the threshold falls 0.0500
+        #:       -> 0.0348 on the floor's removal alone, and FY2025 (+53.6%
+        #:       above the median) is excluded. Normalized NI -9.47%.
+        #:   (b) The relative term GOVERNS wherever `abs(med) * 0.30` exceeds
+        #:       `iqr * 2` — a LOOSENING, and it bites on rich-margin names,
+        #:       not thin ones. Measured on FCX EBITDA [0.4589, 0.3983, 0.3783,
+        #:       0.3719, 0.3402]: median 0.3783, `iqr * 2` = 0.0528, relative
+        #:       term 0.1135 — the relative term WINS, FY2021 is read back in,
+        #:       normalized EBITDA +4.66% and normalized EBIT +6.02%.
+        #:
+        #: (b) is a valuation-bearing judgement call, so the reasoning is stated
+        #: rather than left implicit. FCX's five years are a MONOTONE decline,
+        #: not a spike around a central value: there is no outlier here in any
+        #: statistical sense, only the first point of a trend. The docstring's
+        #: own method is "the mean of (field / revenue) over the window", with
+        #: exclusion reserved for one-offs — goodwill write-downs, COVID, a
+        #: special dividend — and a commodity peak is not one, it is the cycle
+        #: the average exists to span. The old rule also trimmed ASYMMETRICALLY
+        #: (dropped 2021 at dev +0.0806 while keeping 2025 at dev -0.0381),
+        #: which biases a "mid-cycle" margin low on any trending series. A
+        #: genuine peak-strip would have to drop 2022 and 2023 too; dropping
+        #: only the single highest point was an artefact of where the fixed
+        #: threshold happened to fall.
+        #:
+        #: The available alternative — capping the relative term at the 0.05 it
+        #: replaces, `max(iqr * 2, min(abs(med) * REL, 0.05))` — is provably
+        #: monotone-tightening against the old rule, so it would fix (a) and
+        #: leave FCX untouched. It is NOT taken here because it is a clamp, and
+        #: clamps on estimates are the owner's choice, not the engine's.
+        threshold = max(iqr * 2, abs(med) * _NORMALIZED_OUTLIER_REL)
         filtered = [m for m in margins if abs(m - med) <= threshold]
         avg_margin = statistics.mean(filtered) if len(filtered) >= 2 else med
 

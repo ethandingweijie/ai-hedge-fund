@@ -239,6 +239,7 @@ def test_the_briefs_own_module_never_touches_the_engine():
 # `xfail(strict=True)` rather than passing quietly.
 # ══════════════════════════════════════════════════════════════════════════════
 import inspect                                                # noqa: E402
+from pathlib import Path                                      # noqa: E402
 
 from src.agents.analysis import dcf_agent                     # noqa: E402
 from src.data.sector_profiles import (                        # noqa: E402
@@ -666,29 +667,138 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
     assert len(_consumer_profiles()) == 13
 
 
-def test_the_normalizers_outlier_floor_is_absolute_where_the_briefs_is_relative():
-    """They agree on EL by coincidence, and diverge everywhere else.
+def test_the_normalizers_outlier_floor_is_relative_and_the_absolute_floor_is_gone():
+    """FIXED. This test previously asserted the defect and its thesis was that
+    the engine's filter is loosest exactly where consumer margins are thinnest.
+    That thesis is now false, so the assertions are inverted into a guard and
+    the old numbers are kept as the record of what the defect cost.
 
-    `_normalized_earnings` drops a year when `|margin − median| > max(2·IQR,
-    0.05)` — an ABSOLUTE floor of five percentage points of margin. The brief's
-    Gate 3 triggers on a RELATIVE deviation of 40%. For EL's own series
-    (median 14.1%) the two nearly coincide: 40% relative is 5.64pp against a
-    5pp absolute floor, so the trough year is excluded either way and the engine
-    returns 2246.4 against the brief's 2199.6 — a 2.1% difference, and the
-    engine's figure is the higher one because it averages the four survivors
-    rather than taking their median.
+    `_normalized_earnings` drops a year when `|margin − median| > threshold`.
+    The threshold was `max(2·IQR, 0.05)` — an ABSOLUTE five-point floor — and is
+    now `max(2·IQR, |median| · 0.30)`, the relative form the brief's Gate 3
+    asks for. Every number below is produced by calling the real function.
 
-    Run the same probe at other margin levels and the coincidence disappears.
-    At a 5% median, a 60% relative collapse (5.0% → 2.0%, a 3pp absolute move)
-    is INSIDE the 5pp floor, so the trough year is averaged straight in and the
-    "normalized" margin comes out at 4.4%. At a 90% relative collapse it comes
-    out at 4.1%. Meanwhile at a 30% median a 43% relative drop is a 13pp
-    absolute move and IS filtered.
+    The two rules differ in BOTH directions, which is the part that is easy to
+    get wrong:
 
-    The asymmetry matters more than the numbers: the engine's filter is loosest
-    exactly where consumer margins are thinnest, and thin-margin is what a trough
-    looks like. So the one mechanism that could have served as Gate 3 is
-    weakest on the names Gate 3 is for.
+      * REMOVING the floor tightens any series whose own dispersion is under
+        5pp, because `2·IQR` is then free to bind. That is mechanism (a).
+      * The relative term LOOSENS any rich-margin series, because 30% of a 38%
+        median is 11.3pp, well past both the old floor and the dispersion.
+        That is mechanism (b).
+
+    Both are exercised against the fixture series that actually moved.
+    """
+    import statistics
+
+    from src.agents.analysis.dcf_agent import _NORMALIZED_OUTLIER_REL
+
+    rev = 10_000.0
+
+    def norm(margins):
+        s = [{"revenue": rev, "ebit": rev * m} for m in margins]
+        return dcf_agent._normalized_earnings(s, "ebit", window=5) / rev
+
+    assert _NORMALIZED_OUTLIER_REL == 0.30
+
+    # ── EL is UNCHANGED, so the fix costs the name it was designed for nothing.
+    # 2·IQR = 0.014, relative term 0.0423: the relative term wins over the
+    # dispersion, but the trough's deviation (0.089) exceeds BOTH rules, so the
+    # same four years survive and the answer is the same 0.144.
+    el = [0.052, 0.138, 0.152, 0.145, 0.141]
+    assert norm(el) == pytest.approx(0.144, abs=1e-9)
+    el_rev = 15_600.0
+    assert el_rev * norm(el) == pytest.approx(2246.4, abs=0.05)
+    assert el_rev * statistics.median(el) == pytest.approx(2199.6, abs=0.05)
+    assert norm(el) / statistics.median(el) == pytest.approx(1.02128, abs=1e-4)
+    assert 0.40 * statistics.median(el) == pytest.approx(0.0564, abs=1e-9)
+
+    # ── THIN margins: the defect, and its fix. ────────────────────────────
+    # A flat 5% business with one collapsed year has IQR = 0, so the old
+    # threshold was the bare 0.05 floor and NOTHING at a 5% median could ever
+    # be excluded — the allowance was 100% of the margin itself. A 60% relative
+    # collapse was averaged straight in.
+    thin = [0.020, 0.050, 0.050, 0.050, 0.050]
+    assert norm(thin) == pytest.approx(0.050, abs=1e-9)
+    assert norm(thin) == pytest.approx(statistics.median(thin), abs=1e-9)
+    assert statistics.mean(thin) == pytest.approx(0.044, abs=1e-9), (
+        "the OLD rule returned this: the trough survived and dragged the "
+        "normalized figure 12% below the median")
+    deeper = [0.005, 0.050, 0.050, 0.050, 0.050]      # a 90% relative collapse
+    assert norm(deeper) == pytest.approx(0.050, abs=1e-9)
+    assert statistics.mean(deeper) == pytest.approx(0.041, abs=1e-9), (
+        "the OLD rule returned this: 18% below the median it was robust to")
+
+    # ── RICH margins: unchanged here, and only by luck. ───────────────────
+    # The relative term is 0.090, LOOSER than the old 0.05, yet the answer is
+    # identical because the trough's deviation (0.130) exceeds both. A smaller
+    # deviation at this margin level WOULD now survive where it did not before.
+    rich = [0.170, 0.300, 0.300, 0.300, 0.300]
+    assert norm(rich) == pytest.approx(0.300, abs=1e-9)
+    assert 0.300 * _NORMALIZED_OUTLIER_REL == pytest.approx(0.090, abs=1e-9)
+    assert abs(0.170 - 0.300) > 0.090 > 0.05
+
+    # ── Mechanism (a), measured on the fixtures that moved. ───────────────
+    # 09988_HK and BABA share this exact net-income margin series (same
+    # company; margins are currency-invariant). 2·IQR = 0.0348 beats the
+    # relative term 0.0255, so the RELATIVE TERM LOSES and the whole move
+    # comes from the floor's removal: FY2025 (+53.6% above the median) is
+    # excluded and normalized NI falls 9.47%.
+    baba_ni = [0.07297, 0.08379, 0.08501, 0.13059, 0.10120]
+    med_ni = statistics.median(baba_ni)
+    s = sorted(baba_ni)
+    assert max((s[3] - s[1]) * 2, med_ni * 0.30) == pytest.approx(0.03482,
+                                                                 abs=1e-5)
+    assert (s[3] - s[1]) * 2 > med_ni * _NORMALIZED_OUTLIER_REL, (
+        "the relative term must LOSE here or this is not mechanism (a)")
+    assert norm(baba_ni) / statistics.mean(baba_ni) == pytest.approx(
+        1 - 0.0947, abs=1e-3)
+
+    # ── Mechanism (b), measured on FCX. ───────────────────────────────────
+    # A monotone five-year decline, so there is no statistical outlier at all.
+    # 2·IQR = 0.0528, relative term 0.1135: the RELATIVE TERM WINS, FY2021 is
+    # read back in, and normalized EBITDA rises 4.66%. This is the leg FCX's
+    # anchor consumes, so it is the only fixture whose IV moved.
+    fcx_ebitda = [0.45887, 0.39830, 0.37825, 0.37191, 0.34020]
+    med_fcx = statistics.median(fcx_ebitda)
+    sf = sorted(fcx_ebitda)
+    assert med_fcx * 0.30 > (sf[3] - sf[1]) * 2, (
+        "the relative term must WIN here or this is not mechanism (b)")
+    assert norm(fcx_ebitda) == pytest.approx(statistics.mean(fcx_ebitda),
+                                             abs=1e-9), (
+        "all five years must survive: the mean over the window IS the method")
+    assert norm(fcx_ebitda) / 0.372166 == pytest.approx(1.0466, abs=1e-3)
+
+    # ── Mechanism (b) on a knife-edge: C38U_SI. ───────────────────────────
+    # A high-margin S-REIT whose net margin swings on property fair-value
+    # gains. 2·IQR = 0.07126 and the FY2022 deviation is 0.07151, so the OLD
+    # rule excluded it by 0.00025 — a near-tie settled in the fourth decimal,
+    # which is an artefact rather than a judgement. The relative term is
+    # 0.17197 here, so FY2022 comes back in and the average falls 3.06%.
+    #
+    # The old rule trimmed BOTH tails (the 0.83 revaluation peak and the 0.50
+    # trough) and kept three middle years. For a series that swings on
+    # revaluation that is the wrong sample: a mid-cycle average should span the
+    # swing, not delete both ends of it. The new rule keeps the peak excluded
+    # and the trough included, which is the symmetric answer.
+    c38u_ni = [0.82992, 0.50173, 0.55295, 0.58858, 0.57324]
+    med_c = statistics.median(c38u_ni)
+    sc = sorted(c38u_ni)
+    iqr2_c = (sc[3] - sc[1]) * 2
+    assert iqr2_c == pytest.approx(0.07126, abs=1e-5)
+    assert abs(0.50173 - med_c) - iqr2_c == pytest.approx(0.00025, abs=1e-5), (
+        "the old rule's exclusion of FY2022 was a knife-edge")
+    assert med_c * 0.30 > iqr2_c
+    assert norm(c38u_ni) == pytest.approx(0.554127, abs=1e-5)
+    assert norm(c38u_ni) / 0.571592 == pytest.approx(1 - 0.0306, abs=1e-3)
+
+
+def test_the_relative_term_uses_abs_median_so_loss_makers_are_not_exempt():
+    """`abs(med)`, not `med`. The signed product is negative for a loss-maker,
+    so `max()` would collapse onto `2·IQR` and the relative term would be inert
+    for exactly the names whose margins are most distorted. Measured divergence
+    on a tight loss series: abs keeps all five and returns -0.1060, signed
+    filters one and returns -0.1000.
     """
     import statistics
 
@@ -698,39 +808,183 @@ def test_the_normalizers_outlier_floor_is_absolute_where_the_briefs_is_relative(
         s = [{"revenue": rev, "ebit": rev * m} for m in margins]
         return dcf_agent._normalized_earnings(s, "ebit", window=5) / rev
 
-    el = [0.052, 0.138, 0.152, 0.145, 0.141]
-    assert norm(el) == pytest.approx(0.144, abs=1e-9)
-    # The brief's own EL revenue, so the dollar figures are comparable to its
-    # 2199.6 rather than to this helper's 10bn probe revenue.
-    el_rev = 15_600.0
-    assert el_rev * norm(el) == pytest.approx(2246.4, abs=0.05)
-    brief_median = el_rev * statistics.median(el)
-    assert brief_median == pytest.approx(2199.6, abs=0.05)
-    assert norm(el) / statistics.median(el) == pytest.approx(1.02128, abs=1e-4)
-    # 40% of EL's median is 5.64pp — just past the 5pp absolute floor.
-    assert 0.40 * statistics.median(el) == pytest.approx(0.0564, abs=1e-9)
+    losses = [-0.130, -0.100, -0.095, -0.105, -0.100]
+    med = statistics.median(losses)
+    assert med < 0
+    s = sorted(losses)
+    assert abs(med) * 0.30 > (s[3] - s[1]) * 2, "the guard needs the abs term"
+    assert norm(losses) == pytest.approx(-0.106, abs=1e-9)
+    # A deep loss-maker, where both readings agree — recorded so the choice is
+    # not mistaken for one that only matters on shallow series.
+    deep = [-0.500, -0.520, -0.480, -0.510, -0.490]
+    assert norm(deep) == pytest.approx(statistics.median(deep), abs=1e-9)
 
-    thin = [0.020, 0.050, 0.050, 0.050, 0.050]      # 60% relative collapse
-    assert norm(thin) == pytest.approx(0.044, abs=1e-9), "the trough was filtered"
-    assert norm(thin) == pytest.approx(statistics.mean(thin), abs=1e-9)
-    deeper = [0.005, 0.050, 0.050, 0.050, 0.050]    # 90% relative collapse
-    assert norm(deeper) == pytest.approx(0.041, abs=1e-9)
-    rich = [0.170, 0.300, 0.300, 0.300, 0.300]      # 43% relative collapse
-    assert norm(rich) == pytest.approx(0.300, abs=1e-9), "the trough survived"
+
+def test_the_short_paths_are_unchanged_and_the_median_fallback_is_unreachable():
+    """The floor only applies on the `len(margins) > 2` branch. Two observations
+    average unconditionally, one or zero returns None.
+
+    The third path — `avg_margin = ... if len(filtered) >= 2 else med` — is
+    PROBABLY DEAD, and that is worth pinning because it is the safety net the
+    relative-floor change was leaning on. `q1` is taken at index `n // 4` and
+    `q3` at `3 * n // 4`, so for n = 5 those are s[1] and s[3]. Both sit within
+    one IQR of the median s[2] by construction (s[2] − s[1] ≤ s[3] − s[1] = iqr,
+    and s[3] − s[2] ≤ iqr likewise), and `threshold ≥ 2 · iqr ≥ iqr`, so s[1],
+    s[2] and s[3] ALWAYS survive. Three survivors minimum, never below two.
+
+    A single extreme value cannot break that either: at n = 5 the outlier lands
+    on s[4], which is not a quartile index, so it inflates no threshold and is
+    simply excluded. The fallback would need n ≤ 2, and that case returns
+    earlier. So the median branch cannot be reached from any input.
+    """
+    rev = 10_000.0
+
+    def norm(margins):
+        s = [{"revenue": rev, "ebit": rev * m} for m in margins]
+        return dcf_agent._normalized_earnings(s, "ebit", window=5)
+
+    assert norm([0.10, 0.30]) == pytest.approx(0.20 * rev, abs=1e-6)
+    assert norm([0.10]) is None
+    assert norm([]) is None
+
+    # The most extreme series that still has five observations: four normal
+    # years and one absurd. iqr collapses to 0, the relative term governs, the
+    # absurd year is dropped and the four survivors average — the fallback is
+    # still not reached, exactly as the index arithmetic above predicts.
+    spiked = [0.10, 0.10, 0.10, 0.10, 1e6]
+    assert norm(spiked) == pytest.approx(0.10 * rev, abs=1e-6)
+
+    # And the mirror image: an absurd year at the LOW end, on a thin-margin
+    # business where the relative term is small. Still three-plus survivors.
+    collapsed = [0.10, 0.10, 0.10, 0.10, -1e6]
+    assert norm(collapsed) == pytest.approx(0.10 * rev, abs=1e-6)
+
+
+def test_the_sibling_fcf_normalizer_still_carries_the_absolute_floor():
+    """NOT FIXED, and deliberately not fixed here: `_mean_fcf_margin` has the
+    identical `max(iqr * 2, 0.05)` line, and it produces `fcf_margin_base` —
+    the most load-bearing number in the DCF, since it feeds the margin schedule,
+    the ROIC projection and every scenario multiplier. The same thin-margin
+    blindness therefore applies with far greater consequence than it did in
+    `_normalized_earnings`.
+
+    This pins the asymmetry so it can neither be silently "fixed" by a future
+    edit to the shared idiom nor silently forgotten. Changing one without the
+    other should fail here first.
+
+    Comments are stripped before matching. `_normalized_earnings` carries a long
+    historical note quoting the OLD expression verbatim, so a naive substring
+    search over `inspect.getsource` matches the prose describing the fix and
+    reports the defect as still present — this test failed that way on its first
+    run.
+    """
+    def live_code(fn) -> str:
+        out = []
+        for line in inspect.getsource(fn).splitlines():
+            code = line.split("#", 1)[0]
+            if code.strip():
+                out.append(code)
+        return "\n".join(out)
+
+    assert "max(iqr * 2, 0.05)" in live_code(dcf_agent._mean_fcf_margin), (
+        "_mean_fcf_margin no longer carries the absolute floor — either it was "
+        "fixed (update this test and the golden baseline) or its shape changed")
+
+    fixed = live_code(dcf_agent._normalized_earnings)
+    assert "_NORMALIZED_OUTLIER_REL" in fixed
+    assert "max(iqr * 2, 0.05)" not in fixed
+
+
+def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
+    """FOUND WHILE INVESTIGATING THE RELATIVE-FLOOR GOLDEN DIFF, not from the
+    brief. The audit flag appended next to `normalized_net_income` says, in
+    terms, that `P/E (norm) will use normalized figure`. It is gated on the
+    normalized value existing and the delta exceeding 15% — and on NOTHING else.
+    It never checks whether the profile has a `P/E (norm)` leg to use it.
+
+    75 of the 99 profiles have no such leg, so for three quarters of the
+    universe the flag asserts a substitution the engine will not perform.
+
+    This stopped being theoretical when the relative floor landed. It moved
+    `normalized_net_income` −9.47% on 09988_HK and BABA, which pushed the TTM
+    delta past 15% and made the flag FIRE on both names for the first time — in
+    all three scenarios. Both are `Hyperscaler / Tech Conglomerate`, whose
+    `methods_used` is ['DCF', 'EV/EBITDA', 'P/E']: plain trailing P/E. The flag
+    now appears on those runs promising a normalized leg that is not in the
+    method set, and base IV does not move (160.84 and 193.13, bit-identical),
+    which is the observable proof that nothing consumed the number.
+    """
+    src = _engine_src()
+    i = src.index("Normalized NI: TTM")
+    block = src[max(0, i - 900): i + 600]
+
+    # The threshold, read from source rather than recalled.
+    assert "abs(_delta_pct) > 0.15" in block
+    # The promise, verbatim.
+    assert "P/E (norm) will use normalized figure" in block
+    # And the gate has no profile or method-set condition in it: the only
+    # conditions between the value and the append are existence and magnitude.
+    guard = src[src.rindex("if _norm_ni is not None", 0, i): i]
+    assert "profile" not in guard and "methods" not in guard, (
+        "the flag is now profile-aware — update this test")
+
+    # The scale of the false promise, counted off the real profile table.
+    total = with_norm = 0
+    for _sec, profiles in INDUSTRY_VALUATION_PROFILES.items():
+        for _pname, cfg in profiles.items():
+            total += 1
+            names = [m.get("name", "") for m in cfg.get("methods", [])]
+            if any("norm" in n.lower() for n in names):
+                with_norm += 1
+    assert (total, with_norm) == (99, 28), (total, with_norm)
+    assert with_norm / total < 0.30, "most profiles have no normalized leg"
+
+
+def test_the_normalized_leg_names_are_not_case_consistent():
+    """A latent dispatch hazard, surfaced by counting legs for the test above.
+    Four profiles anchor on a normalized EBITDA leg and they spell it two ways:
+    `EV/EBITDA (norm)` three times and `EV/EBITDA (Norm)` once. Any exact-string
+    lookup on the method name silently misses one of them.
+
+    Not fixed here — it is a rename with a golden blast radius of its own, and
+    nothing in this change set needed it. Pinned so the inconsistency cannot
+    grow, and so a future exact-match dispatch fails here first.
+    """
+    spellings: dict[str, int] = {}
+    for _sec, profiles in INDUSTRY_VALUATION_PROFILES.items():
+        for _pname, cfg in profiles.items():
+            for m in cfg.get("methods", []):
+                n = m.get("name", "")
+                if "norm" in n.lower():
+                    spellings[n] = spellings.get(n, 0) + 1
+    assert spellings.get("EV/EBITDA (norm)") == 3, spellings
+    assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
+    assert spellings.get("P/E (norm)") == 24, spellings
+    assert len(spellings) == 3, spellings
 
 
 @pytest.mark.xfail(strict=True, reason=(
     "NOT IMPLEMENTED as a routing rule, though 90% of the machinery is present. "
     "`normalized_ebit` is computed for every name on every run and has zero "
     "readers; the deviation test would need a reader, not a new computation. "
-    "Two real obstacles: (1) the deviation must be measured against a median "
-    "while `_normalized_earnings` averages, and its outlier filter is absolute "
-    "(5pp) where the rule is relative (40%) — see "
-    "test_the_normalizers_outlier_floor_is_absolute_where_the_briefs_is_relative; "
-    "(2) routing means swapping a method branch, and `Luxury Goods` names no "
-    "normalized method at all, so there is nothing to route TO without adding "
-    "one to the profile. The brief also describes only the over-valuation "
-    "direction; the exposure is two-sided."))
+    "Two real obstacles remain, one of which was halved by the relative-floor "
+    "fix: (1) the deviation must be measured against a MEDIAN while "
+    "`_normalized_earnings` averages — the filter is now relative rather than a "
+    "fixed 5pp, so that half of the obstacle is gone (see "
+    "test_the_normalizers_outlier_floor_is_relative_and_the_absolute_floor_is_gone), "
+    "but median-vs-mean is still a real mismatch; (2) routing means swapping a "
+    "method branch, and `Luxury Goods` names no normalized method at all, so "
+    "there is nothing to route TO without adding one to the profile. The brief "
+    "also describes only the over-valuation direction; the exposure is "
+    "two-sided. "
+    "NEW EVIDENCE THAT THIS IS NOT COSMETIC: the audit flag emitted next to "
+    "`normalized_net_income` states in terms that `P/E (norm) will use "
+    "normalized figure`, yet on 09988_HK and BABA `methods_used` is "
+    "['DCF', 'EV/EBITDA', 'P/E'] — plain TRAILING P/E, no normalized leg. The "
+    "flag fires on both (normalized NI now −15% against TTM, past its 15% "
+    "audit threshold) and promises a substitution the engine never performs, so "
+    "base IV does not move at all. The disclosure is wrong today and only "
+    "becomes true once this routing exists."))
 def test_a_trough_margin_routes_the_forward_leg_to_normalized_ebit():
     series = [{"revenue": 15_600.0, "ebit": 15_600.0 * m}
               for m in (0.052, 0.138, 0.152, 0.145, 0.141)]
@@ -853,47 +1107,125 @@ def test_the_hk_reporting_currency_table_covers_a_quarter_of_the_names_it_serves
     assert proj["fx_rate"] == pytest.approx(7.84469, abs=1e-5)
 
 
-def test_the_four_archetypes_are_the_unpinned_ones():
-    """NKE, ONON and Anta are classified from metrics; LULU and BIRK are not.
+def test_the_four_archetypes_are_pinned_and_every_pin_resolves():
+    """Guard on the four anchor pins, and on the silent failure mode they have.
 
-    `TICKER_SECTOR_LOOKUP`'s second slot is an optional profile override. Of
-    83 Consumer rows, 39 fill it and 44 leave it empty — and the three of the
-    brief's four archetypes that are present at all are in the empty set, while
-    their two closest listed competitors are pinned:
-
-        LULU -> ('Consumer', 'Apparel / Athletic Wear', 'Athletic Apparel', ...)
-        BIRK -> ('Consumer', 'Apparel / Athletic Wear', 'Footwear', ...)
-        NKE  -> ('Consumer', '',                        'Apparel',     'Nike')
-        ONON -> ('Consumer', '',                        'Apparel',     'On Holding AG ADR')
-        02020.HK -> ('Consumer', '', 'Sportswear', 'Anta Sports — ... P/E ~25x ...')
-
-    So two names in the same industry as LULU are routed by whatever their
-    latest FCF margin and revenue CAGR happen to be, which is the knife-edge in
+    BEFORE the pins this test asserted the opposite — that NKE, ONON and Anta
+    were the *unpinned* Consumer rows and that EL was absent from the table
+    entirely. That was the finding: of 83 Consumer rows, 39 filled the profile
+    override and 44 left it empty, the brief's four archetypes were in the empty
+    set, and their two closest listed competitors (LULU, BIRK) were pinned. So
+    the anchor names were routed by whatever their latest FCF margin and revenue
+    CAGR happened to be, through the band-pass measured in
     `test_the_consumer_ladder_is_a_knife_edge_on_two_thresholds`. Anta's note
-    even records the intended answer — "P/E ~25x near US level" — in a field
+    even recorded the intended answer — "P/E ~25x near US level" — in a field
     that is documentation, not routing.
 
-    EL is absent from the lookup entirely: no key, and no row mentioning Estée
-    Lauder. Every one of the four is therefore classified from metrics.
+    They are pinned now, and the counts moved 83->84 rows, 39->43 filled,
+    44->41 empty. Three of the four pins CHANGE routing rather than freeze it:
+
+        NKE      Apparel / Athletic Wear  (same as it classified at ~10% FCF;
+                                           the pin protects it past 18%)
+        ONON     Apparel -> Consumer Growth
+        EL       trough Household / Personal -> Luxury Goods   (was absent)
+        02020.HK Luxury Goods -> Apparel / Athletic Wear
+
+    THE FAILURE MODE THIS GUARD EXISTS FOR. An override that does not resolve is
+    not an error. The D3 guard in `dcf_agent` logs a warning, sets
+    `_profile_fallback_used`, records `override_unresolved` in the routing trace
+    and KEEPS the classified profile — so a misspelled pin degrades silently to
+    exactly the unpinned behaviour the pin was added to prevent, and no
+    valuation-level test would notice. Asserting the name resolves in
+    `INDUSTRY_VALUATION_PROFILES[sector]` is what makes the pin load-bearing.
+    The brief's own suggested name for EL, "Prestige Beauty & Personal Care",
+    does not exist in any sector and would have failed this way.
     """
     lk = TICKER_SECTOR_LOOKUP
-    assert lk["NKE"] == ("Consumer", "", "Apparel", "Nike")
-    assert lk["ONON"][1] == ""
-    assert lk["02020.HK"][1] == "" and lk["02020.HK"][2] == "Sportswear"
-    assert "EL" not in lk
-    # Searched by name, not by an "Est" prefix — that matches every Real Estate
-    # note in the table and proves nothing.
-    lauder = [k for k, v in lk.items()
-              if "lauder" in str(v).lower() or "estée" in str(v).lower()
-              or "estee" in str(v).lower()]
-    assert lauder == [], lauder
+    pins = {
+        "NKE":      ("Consumer", "Apparel / Athletic Wear"),
+        "ONON":     ("Consumer", "Consumer Growth"),
+        "EL":       ("Consumer", "Luxury Goods"),
+        "02020.HK": ("Consumer", "Apparel / Athletic Wear"),
+    }
+    for ticker, (sector, profile) in pins.items():
+        assert ticker in lk, f"{ticker} lost its row entirely"
+        row = lk[ticker]
+        assert (row[0], row[1]) == (sector, profile), f"{ticker}: {row[:2]}"
+        # The silent-failure guard. Not redundant with the assertion above: a
+        # rename or removal inside INDUSTRY_VALUATION_PROFILES would leave the
+        # lookup string intact and route the ticker back onto the band-pass.
+        assert profile in INDUSTRY_VALUATION_PROFILES.get(sector, {}), (
+            f"{ticker} is pinned to {profile!r}, which does not resolve under "
+            f"sector {sector!r} — the D3 guard would silently keep the "
+            f"classified profile instead")
+
+    # Nothing else in the table may be left pointing at a profile that no longer
+    # exists. Cheap to check, and it is the same silent failure at larger scale.
+    unresolved = sorted(t for t, v in lk.items()
+                        if v[1] and v[1] not in INDUSTRY_VALUATION_PROFILES.get(v[0], {}))
+    assert unresolved == [], unresolved
+
+    # The two pre-existing pins the finding was measured against.
     assert lk["LULU"][1] == "Apparel / Athletic Wear"
     assert lk["BIRK"][1] == "Apparel / Athletic Wear"
 
     consumer = [v for v in lk.values() if v[0] == "Consumer"]
-    assert len(consumer) == 83
-    assert sum(1 for v in consumer if v[1]) == 39
-    assert sum(1 for v in consumer if not v[1]) == 44
+    assert len(consumer) == 84
+    assert sum(1 for v in consumer if v[1]) == 43
+    assert sum(1 for v in consumer if not v[1]) == 41
+
+
+def test_the_pins_override_a_classification_that_would_otherwise_move():
+    """What each pin is actually holding back, measured off the live classifier.
+
+    A pin that agrees with the classifier is documentation; a pin that disagrees
+    is a policy override. Naming which is which is what stops the pins being
+    "cleaned up" as redundant later. EL is the important row: the classifier
+    gives a DIFFERENT answer at each end of the cycle, so without the pin the
+    profile itself flips with the cycle, and no fixed remedy can be attached to
+    it. This is the precondition for routing its earnings leg to `P/E (norm)`
+    on a margin-deviation test rather than on a profile name.
+
+    Also pins the zero-golden-blast-radius claim: none of the four is a fixture,
+    so these overrides cannot move `tests/golden/snapshots.json`. That is why
+    this change ships without a golden re-baseline.
+    """
+    from src.data.sector_profiles import classify_valuation_profile as _c
+
+    would_classify = {
+        "NKE":      _c("Consumer", 0.03, 0.10, 0.6),
+        "ONON":     _c("Consumer", 0.30, 0.12, 0.3),
+        "EL":       _c("Consumer", -0.02, 0.10, 0.5),   # trough
+        "02020.HK": _c("Consumer", 0.12, 0.18, 0.4),
+    }
+    assert would_classify == {
+        "NKE":      "Apparel / Athletic Wear",
+        "ONON":     "Apparel / Athletic Wear",
+        "EL":       "Household / Personal",
+        "02020.HK": "Luxury Goods",
+    }, would_classify
+
+    pinned = {t: TICKER_SECTOR_LOOKUP[t][1]
+              for t in ("NKE", "ONON", "EL", "02020.HK")}
+    # NKE is the one pin that currently agrees with the classifier. It is not
+    # redundant: the classifier only returns Apparel while NKE's FCF margin
+    # stays inside [0.05, 0.18), and the pin is what survives a margin
+    # improvement past 0.18.
+    assert pinned["NKE"] == would_classify["NKE"]
+    overridden = {t for t in pinned if pinned[t] != would_classify[t]}
+    assert overridden == {"ONON", "EL", "02020.HK"}, overridden
+
+    # EL at a PEAK classifies as Luxury Goods, which is now also its pin — so
+    # the pin's effect is to make the profile cycle-invariant, not to pick a
+    # side. Both ends of the cycle resolve to the same profile.
+    assert _c("Consumer", 0.08, 0.20, 0.5) == "Luxury Goods" == pinned["EL"]
+
+    import json as _json
+    snap = _json.loads(
+        (Path(__file__).resolve().parent / "golden" / "snapshots.json")
+        .read_text(encoding="utf-8"))
+    fixtures = {k for k in snap if k != "_meta"}
+    assert not ({*pinned} & fixtures), "a pinned archetype became a fixture"
 
 
 def test_sportswear_is_not_a_damodaran_key_and_the_fall_through_is_harmless():

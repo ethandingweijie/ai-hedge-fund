@@ -4190,15 +4190,57 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "ABNB":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Airbnb — asset-light travel platform"),
     "BKNG":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Booking Holdings — OTA platform"),
     # ── Apparel & Footwear ────────────────────────────────────────────────
-    "NKE":   ("Consumer", "",          "Apparel",                         "Nike"),
+    # NKE and ONON are pinned rather than classified because the Consumer
+    # financial-metric ladder is a BAND-PASS below 5% CAGR, not a monotonic
+    # ladder: `0.05 <= fcf_margin < 0.18` returns Apparel / Athletic Wear, and
+    # anything at or above 0.18 falls through to Household / Personal. Measured
+    # at NKE's ~3% CAGR, 0.179 -> Apparel (DCF 0.30, and the only Consumer
+    # profile carrying a `P/E (norm)` leg at 0.20) while 0.180 -> Household
+    # (DCF 0.20, anchor plain trailing `P/E` at 0.40). So a name whose margin
+    # IMPROVES past 18% is DEMOTED: DCF weight is cut by a third, the sole
+    # normalized leg is lost, and 40% of the blend moves onto unadjusted
+    # trailing earnings. The two profiles share exactly one method
+    # (`EV/EBITDA`), so this is not a cosmetic relabelling.
+    #
+    # The `< 0.18` bound cannot simply be deleted: its own comment says it
+    # exists "to separate from luxury (Hermès, LVMH: FCF 20-35%)", and removing
+    # it reclassifies Hermès-, LVMH- and Richemont-like names from Luxury Goods
+    # to Apparel / Athletic Wear. Fixing the ladder properly needs a
+    # gross-margin test ahead of the FCF test, and `classify_valuation_profile`
+    # takes no gross margin. Pinning the anchor names is the safe move while
+    # that signature change is outstanding — a pin is also what LULU and BIRK
+    # already do.
+    "NKE":   ("Consumer", "Apparel / Athletic Wear", "Apparel", "Nike — pinned; the sub-5%-CAGR ladder is a band-pass that demotes it past an 18% FCF margin"),
     "LULU":  ("Consumer", "Apparel / Athletic Wear", "Athletic Apparel", "Lululemon — 4.50x Q5-Q8 EV/EBITDA"),
     "BIRK":  ("Consumer", "Apparel / Athletic Wear", "Footwear", "Birkenstock — DCF, 9.5pc WACC / 2.5pc terminal growth"),
     "FLUT":  ("Consumer", "Online Gaming / Sports Betting", "Sports Betting", "Flutter Entertainment — 11.75x NTM+4 EBITDA (US)"),
     "DKNG":  ("Consumer", "Online Gaming / Sports Betting", "Sports Betting", "DraftKings — EV/Sales (NTM+1) blended with an EV/EBITDA-exit DCF"),
-    "ONON":  ("Consumer", "",          "Apparel",                         "On Holding AG ADR"),
+    "ONON":  ("Consumer", "Consumer Growth", "Apparel", "On Holding AG ADR — pinned to Consumer Growth: ~30% CAGR is past the 15% fast-grower branch's intent, and at a 50% CAGR the ladder returns Traditional Retail, whose method set has an EMPTY intersection with Luxury Goods. Trade accepted deliberately: Consumer Growth carries no normalized leg, so this swaps Apparel's `P/E (norm)` 0.20 for DCF weight 0.30 -> 0.50"),
     "DECK":  ("Consumer", "",          "Apparel",                         "Deckers Outdoor — UGG/HOKA"),
     "VFC":   ("Consumer", "",          "Apparel",                         "VF Corp — North Face/Vans/Timberland"),
     "GPS":   ("Consumer", "",          "Apparel",                         "Gap Inc"),
+    # ── Luxury & Beauty (profile override) ────────────────────────────────
+    # EL is pinned to Luxury Goods because it is the clearest case of the
+    # two-sided trailing-earnings exposure the Consumer ladder creates, and it
+    # was absent from this table entirely. At a TROUGH (~-2% CAGR) it
+    # classifies as Household / Personal, anchored 40% on plain trailing `P/E`;
+    # at a PEAK (~8% CAGR, 18-20% FCF) as Luxury Goods, anchored 50% on
+    # `P/E (Premium)` — which dispatches to the SAME trailing-12m branch. The
+    # engine's own comment: "they differ only in documentation intent, not
+    # earnings source." So EL sits on unadjusted trailing earnings at both ends
+    # of the cycle: depressed earnings at the trough, peak earnings at the top.
+    # Pinning does not fix that — it stops the profile itself from flipping with
+    # the cycle, which is the precondition for routing the leg to `P/E (norm)`
+    # on a margin-deviation test.
+    #
+    # The intended name was "Prestige Beauty & Personal Care". No such profile
+    # exists in INDUSTRY_VALUATION_PROFILES for any sector, and an unresolved
+    # override is not an error: the D3 guard logs a warning, sets
+    # `_profile_fallback_used`, records `override_unresolved` in the routing
+    # trace and KEEPS the classified profile — so a bad pin would silently
+    # defeat itself rather than fail loudly in a test. Luxury Goods is the
+    # existing profile that matches.
+    "EL":    ("Consumer", "Luxury Goods", "Beauty & Personal Care", "Estée Lauder — pinned; first ticker on this profile. Trough classifies as Household / Personal and peak as Luxury Goods, both anchored on trailing TTM earnings"),
     # ── Consumer Durables (profile override) ──────────────────────────────
     "WHR":   ("Consumer", "Consumer Durables", "Furn/Home Furnishings",  "Whirlpool — major appliances"),
     "GRMN":  ("Consumer", "Consumer Durables", "Electronics (Consumer & Office)", "Garmin — GPS/fitness wearables"),
@@ -4553,7 +4595,18 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "02601.HK": ("Financials", "Insurance", "Insurance - Life", "CPIC"),
 
     # Consumer — Apparel & Footwear
-    "02020.HK": ("Consumer",    "",  "Sportswear",               "Anta Sports — premium domestic brand; P/E ~25x near US level"),
+    # 02020.HK pinned for the same band-pass reason as NKE. Measured at its
+    # ~12% CAGR / ~18% FCF margin it classifies as Luxury Goods TODAY, which
+    # anchors 50% on `P/E (Premium)` — the trailing-12m branch. Pinning it to
+    # Apparel / Athletic Wear moves it to DCF 0.30 plus the Consumer sector's
+    # only `P/E (norm)` leg at 0.20, so for Anta the pin ADDS a normalized leg
+    # rather than trading one away (the opposite of the ONON trade).
+    #
+    # 02331.HK (Li Ning) and 01368.HK (Xtep) are the same domestic-sportswear
+    # archetype and are deliberately left unpinned here: only the four anchor
+    # names in the consumer-discretionary brief were authorised. They remain on
+    # the band-pass and are the obvious next rows if this pin holds up.
+    "02020.HK": ("Consumer", "Apparel / Athletic Wear", "Sportswear", "Anta Sports — pinned; premium domestic brand, P/E ~25x near US level. Classified as Luxury Goods (50% trailing `P/E (Premium)`) before the pin"),
     "02331.HK": ("Consumer",    "",  "Sportswear",               "Li Ning"),
     "02313.HK": ("Consumer",    "",  "Apparel/Mfg",              "Shenzhou International — OEM apparel manufacturing"),
     "01368.HK": ("Consumer",    "",  "Sportswear",               "Xtep International"),

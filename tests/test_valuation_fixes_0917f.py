@@ -55,16 +55,26 @@ Four things are now persisted, and each immediately paid for itself:
 
 `normalized_net_income` (top level)
     Read by several legs, recorded by none. Equals the value in the
-    "Normalized NI: TTM … → 5y-cycle …" prose on all four fixtures that carry that
+    "Normalized NI: TTM … → 5y-cycle …" prose on all six fixtures that carry that
     flag, and is in the same currency as `revenue_base` — which the two Alibaba
     lines prove, since their scale differs 7.8× while their net margin is identical
-    to four decimals (0.0947).
+    to four decimals (0.0857).
+
+    Both figures in that sentence were 4 and 0.0947 when this module was written.
+    They moved on the LATER relative-floor re-baseline, not on the additive change
+    described below: excluding FY2025 took both Alibaba margins down 9.47% and
+    pushed both past the flag's 15% delta threshold, so the flag fires on two more
+    fixtures. See `_NORM_NI_RE`, which could not match an RMB prefix and had been
+    reporting a green pass on a list of four while six fired.
 
 The change is ADDITIVE, verified before the baseline was regenerated: all 14
 fixtures replayed with zero removed leaves, zero changed leaves and bit-identical
 `base_iv` (`scratchpad/drive_delta_additive.py`). Nothing here moves a valuation.
-The `market_cap` alignment that WILL is item 3a, deliberately left for its own
-named golden update — bundling it would make the resulting delta unattributable.
+That is a statement about THIS change and about the baseline as it stood then; it
+is not a claim about the current baseline, which the relative-floor edit did move
+on one fixture. The `market_cap` alignment that WILL is item 3a, deliberately left
+for its own named golden update — bundling it would make the resulting delta
+unattributable.
 """
 from __future__ import annotations
 
@@ -148,7 +158,13 @@ _ZERO_KPI = ("AAPL", "C38U_SI", "FCX", "SCHW", "V")
 
 _GATE_B_RE = re.compile(
     r"^Gate B \(bear\): Forward ROIC \((-?[\d.]+)%(?:\s*\[([^\]]+)\])?\)")
-_NORM_NI_RE = re.compile(r"Normalized NI: TTM .*? 5y-cycle [S$]*\$?([\d.]+)B")
+#: Currency-agnostic on purpose. The earlier form was
+#: `5y-cycle [S$]*\$?([\d.]+)B`, which handled `S$` and `$` and NOTHING else — so
+#: it silently failed to match the two RMB-denominated fixtures. The test that
+#: uses this then passed while under-counting by two, which is the worst shape a
+#: guard can have: green, and wrong. `[^\d]*` skips whatever currency token the
+#: engine printed and captures the number after it.
+_NORM_NI_RE = re.compile(r"Normalized NI: TTM .*? 5y-cycle[^\d]*([\d.]+)B")
 
 
 def _bridge(name: str) -> dict:
@@ -644,9 +660,24 @@ def test_the_quality_gate_saturates_in_bear_for_the_four_names_above_twice_wacc(
 
 
 def test_the_persisted_net_income_is_the_one_the_flag_announced():
-    """Four fixtures carry "Normalized NI: TTM … → 5y-cycle $X.XXB — P/E (norm)
+    """Six fixtures carry "Normalized NI: TTM … → 5y-cycle $X.XXB — P/E (norm)
     will use normalized figure". The persisted field is that figure, which is the
-    same field-vs-prose check that makes `forward_roic` trustworthy."""
+    same field-vs-prose check that makes `forward_roic` trustworthy.
+
+    It was four. The two additions, 09988_HK and BABA, are RMB-denominated and
+    were made to fire by the relative-floor re-baseline, which dropped both
+    normalized figures 9.47% and so pushed both past the flag's 15% delta
+    threshold. The old `_NORM_NI_RE` could not match an `RMB` prefix, so this
+    test kept passing on a list of four while six fixtures fired — a guard that
+    was green and wrong. The count below is now the thing that catches a
+    re-narrowed regex: drop either name and the assertion fails.
+
+    Note what this test does NOT establish. The flag promises "P/E (norm) will use
+    normalized figure" and on both new fixtures `methods_used` is plain trailing
+    `P/E` — 75 of the 99 profiles have no normalized leg at all, and neither
+    Alibaba profile is one of the 28 that do. The disclosure is false today.
+    Pinned as a defect in test_consumer_discretionary_gates.py, not fixed here.
+    """
     seen = []
     for name in _ALL:
         p = _proj(name)
@@ -658,7 +689,7 @@ def test_the_persisted_net_income_is_the_one_the_flag_announced():
             billions = float(m.group(1))
             assert abs(p["normalized_net_income"] / 1e9 - billions) < 0.005, (
                 name, billions, p["normalized_net_income"])
-    assert sorted(seen) == ["D05_SI", "FCX", "MU", "U96_SI"], seen
+    assert sorted(seen) == ["09988_HK", "BABA", "D05_SI", "FCX", "MU", "U96_SI"], seen
 
 
 def test_the_two_alibaba_lines_agree_on_the_currency_invariant_margin():
@@ -666,7 +697,15 @@ def test_the_two_alibaba_lines_agree_on_the_currency_invariant_margin():
     net income both differ by exactly 7.818× — yet their net margins are identical
     to four decimals. That is the proof the new leaf is the same quantity in both
     fixtures rather than a mis-scaled one, and it needs no FX assumption because a
-    ratio of two same-currency figures is currency-free."""
+    ratio of two same-currency figures is currency-free.
+
+    The absolute constant moved, 0.0947 → 0.0857, and nothing else in this test
+    did. That is the strongest possible evidence the change was a legitimate
+    re-baseline and not a scaling error: the relative-floor edit excluded FY2025
+    from both series, and because the two fixtures share one net-income margin
+    series the exclusion hit both by the identical −9.47%. Had it hit one and not
+    the other, `ma == mb` — the actual thesis — would have failed instead.
+    """
     a, b = _proj("09988_HK"), _proj("BABA")
     scale = a["revenue_base"] / b["revenue_base"]
     assert scale == pytest.approx(
@@ -675,7 +714,10 @@ def test_the_two_alibaba_lines_agree_on_the_currency_invariant_margin():
     ma = a["normalized_net_income"] / a["revenue_base"]
     mb = b["normalized_net_income"] / b["revenue_base"]
     assert ma == pytest.approx(mb, abs=1e-4)
-    assert ma == pytest.approx(0.0947, abs=5e-5)
+    assert ma == pytest.approx(0.0857, abs=5e-5)
+    assert ma / 0.094710 == pytest.approx(1 - 0.0947, abs=1e-4), (
+        "the move from the × 10-era value is exactly the −9.47% the "
+        "FY2025 exclusion implies; 0.094710 was the all-five-years mean")
 
 
 def test_the_persisted_net_income_is_in_revenue_bases_currency():

@@ -574,3 +574,276 @@ set, so the snapshot was regenerated without investigating anything.
 
 
 
+## 2026-09-17T17:54:37+00:00
+
+- regenerated at HEAD: `6a76492`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: _normalized_earnings outlier floor made relative: max(iqr*2, abs(med)*0.30) replaces max(iqr*2, 0.05). Expected moves, all investigated: 09988_HK+BABA normalized_net_income -9.47% (FY2025 excluded; iqr*2 now binds at 0.0348 because the 0.05 floor is gone, relative term loses) and a new Normalized NI audit flag crossing its 15% threshold in all three scenarios, base IV unchanged because methods_used is plain P/E; FCX normalized_ebitda +4.66% / normalized_ebit +6.02% (FY2021 re-admitted, relative term 0.1135 beats iqr*2 0.0528) moving EV/EBITDA (norm) and base IV 25.58->26.69.
+
+### What changed, and why two mechanisms run in opposite directions
+
+`_normalized_earnings` drops a window year when `|margin − median|` exceeds a
+threshold. That threshold was `max(iqr * 2, 0.05)` — an absolute five-point
+floor — and is now `max(iqr * 2, abs(med) * 0.30)`, with the 0.30 named
+`_NORMALIZED_OUTLIER_REL`. The defect being removed: a fixed 5pp is a fixed
+fraction of nothing, so its strictness depends entirely on how thin the business
+runs. At EL's 14.1% median a 5pp allowance is a 35% relative move; at a 5%
+median it is a 100% relative move, so a 90% collapse is averaged straight in.
+The rule was loosest exactly where consumer margins are thinnest, which is what a
+trough looks like — precisely when normalization is load-bearing.
+
+Removing the floor has **two** effects, in opposite directions, and only the
+first was intended. Both are exercised by the moved fixtures:
+
+- **(a) Tightening.** Wherever `iqr * 2 < 0.05`, the floor was propping the
+  threshold up and its removal lets the dispersion bind — regardless of where the
+  relative term lands. This is what moved 09988_HK and BABA.
+- **(b) Loosening.** Wherever `abs(med) * 0.30 > iqr * 2`, the relative term
+  overrides the series' own dispersion. On a rich-margin name 30% of the median
+  is a large absolute allowance: at FCX's 37.8% median it is 11.3pp against a
+  dispersion of 5.3pp. This is what moved FCX.
+
+An earlier draft of the source comment claimed the change only ever loosens the
+filter for thin-margin names. The diff below falsified that and the comment was
+corrected before commit.
+
+### The four moved fixtures, exactly
+
+**09988_HK and BABA — `normalized_net_income` −9.47% on both, base IV unmoved.**
+They share the identical net-income margin series (same company; the ratio is
+currency-invariant, so the FX step cannot be what moved it):
+`[0.07297, 0.08379, 0.08501, 0.13059, 0.10120]`, median 0.08501. `iqr * 2` =
+0.03482, relative term 0.02550 — **the relative term loses**, and the threshold
+falls 0.0500 → 0.03482 on the floor's removal alone. FY2025, at +53.6% above
+the median, is newly excluded and the average drops from 0.094710 to 0.085741.
+
+Base IV is bit-identical (160.84 and 193.13) because **nothing consumes the
+number**: `methods_used` is `['DCF', 'EV/EBITDA', 'P/E']` — plain trailing P/E,
+no normalized leg. `normalized_ebitda` is untouched in both (09988_HK's
+dispersion is 0.05288, above the old floor, so `iqr * 2` bound before and after).
+09988_HK's `normalized_ebit` also moved −7.11% and BABA's did not, because their
+FY2025 EBITDA margins differ (0.20827 vs 0.18334) across fixture vintages.
+
+**FCX — `normalized_ebitda` +4.66%, `normalized_ebit` +6.02%, base IV
+25.58 → 26.69 (+4.34%), bear IV 16.06 → 16.90 (+5.23%).** EBITDA margins
+`[0.45887, 0.39830, 0.37825, 0.37191, 0.34020]`, median 0.37825. `iqr * 2` =
+0.05278, relative term 0.11348 — **the relative term wins**, FY2021 is read back
+in, and the average rises from 0.372166 to 0.389507. FCX's anchor IS
+`EV/EBITDA (norm)`, so unlike the two names above this reaches the valuation:
+the leg moves +6.79% base / +8.03% bear / +6.23% bull. `normalized_net_income`
+is unchanged (dispersion 0.13441 dominates both rules), and FCX's
+`Normalized NI` flag was already firing before at +36% — its gate set is
+unchanged and only the 12m-PT-band prose moved with the numbers.
+
+The bear leg at **+5.23% is outside the harness's stated ±5% tolerance on
+numeric leaves**, and is accepted deliberately; the reasoning is below.
+
+**C38U_SI — `normalized_net_income` −3.06% (934589280.552267 →
+906032487.846545), and nothing else.** Net-income margins
+`[0.82992, 0.50173, 0.55295, 0.58858, 0.57324]`, median 0.57324. `iqr * 2` =
+0.07126, relative term 0.17197 — mechanism **(b)** again, on a very
+high-margin S-REIT where 30% of the median is 17.2pp. FY2022 is re-admitted and
+the average falls 0.571592 → 0.554127.
+
+The old rule excluded FY2022 by **0.00025**: its deviation is 0.07151 against a
+threshold of 0.07126. That is a near-tie decided by the fourth decimal place, so
+the pre-change behaviour was an artefact rather than a judgement. The old rule
+also trimmed BOTH tails — 2021 at 0.82992 (a property-revaluation peak) and 2022
+at 0.50173 (the trough) — leaving three middle years, which for a REIT whose net
+margin swings on fair-value gains is exactly the wrong sample: a mid-cycle
+average should span the swing, not delete both ends of it. The new rule excludes
+the revaluation peak and keeps the trough, which is the symmetric answer.
+
+Base IV does not move and no flag changes state, because — as with 09988_HK and
+BABA — nothing in this profile's method set consumes `normalized_net_income`.
+
+### Why this move was invisible until the snapshot was regenerated
+
+The focused golden run before regeneration reported **3 failed**, and the
+per-fixture diff built from those failures named three fixtures. C38U_SI moved
+−3.06%, which is **inside the ±5% tolerance**, so its test passed and it never
+appeared. The move was only found by comparing the regenerated
+`snapshots.json` against `HEAD` field by field across all 14 fixtures — which
+then showed exactly four changed and ten byte-identical.
+
+That is a general trap, not a one-off: **a tolerance is a reporting threshold,
+not a change detector.** Counting failures under-reports the blast radius of any
+change whose effects are small but real, and a CHANGELOG written from the failure
+list would have under-named this baseline's own moves. The snapshot-to-snapshot
+comparison is the only complete method, and it is what the named set below was
+built from.
+
+
+### The FCX judgement call, stated rather than left implicit
+
+FCX's five years are a **monotone decline**, not a spike around a central value.
+There is no outlier here in any statistical sense, only the first point of a
+trend. The function's own docstring prescribes Damodaran — "the mean of
+(field / revenue) over the window" — with exclusion reserved for one-offs:
+goodwill write-downs, COVID, a special dividend. A commodity peak is not a
+one-off; it is the cycle the average exists to span.
+
+The old rule also trimmed **asymmetrically**: it dropped 2021 at deviation
++0.0806 while keeping 2025 at deviation −0.0381, which biases a "mid-cycle"
+margin low on any trending series. A genuine peak-strip would have to drop 2022
+and 2023 as well; dropping only the single highest point was an artefact of
+where a fixed threshold happened to fall. Under the new rule FCX's normalized
+EBITDA margin equals its plain five-year mean, which is the documented method.
+
+The available alternative — capping the relative term at the 0.05 it replaces,
+`max(iqr * 2, min(abs(med) * REL, 0.05))` — is provably monotone-tightening
+against the old rule, so it would fix (a) and leave FCX untouched entirely. **It
+was not taken because it is a clamp, and clamps on estimates are the owner's
+choice, not the engine's.** Recorded here so it can be chosen later with the
+numbers in front of it.
+
+### Two predictions that were falsified, and the lessons
+
+**The substring pre-count.** Counting `'P/E (norm)'`, `'EV/EBITDA (norm)'` and
+`'Normalized P/E'` occurrences per fixture blob predicted **7** moved fixtures
+(02888_HK, D05_SI, FCX, MU, SCHW, U96_SI, V) and reported 09988_HK and BABA as
+having no normalized leg at all. The actual delta is **4** fixtures
+(09988_HK, BABA, C38U_SI, FCX): the count got FCX right, wrongly named six, and
+missed three. It missed both mechanisms because it looked for the presence of a
+leg rather than for where the threshold changed — and the leg's presence is not
+what determines the move. 09988_HK and BABA moved a field no leg reads at all,
+while MU, SCHW, V, D05_SI and U96_SI have legs whose dispersion already
+dominated the threshold under both rules. **A substring count over a JSON blob is
+not a predictor of golden blast radius.**
+
+**The failure-count diff.** The focused run reported `3 failed`, and the
+per-fixture diff built from those three named three fixtures. C38U_SI's −3.06% is
+inside the ±5% tolerance so its test passed and it never appeared; only the
+field-by-field snapshot-to-snapshot comparison across all 14 found it. **A
+tolerance is a reporting threshold, not a change detector**, and a named set
+written from a failure list under-names the baseline it is meant to describe.
+
+The set below is built from the snapshot comparison, which is complete: 4
+fixtures changed, 10 byte-identical.
+
+### The named move set
+
+| Fixture | Fields | Cause | Base IV |
+| --- | --- | --- | --- |
+| 09988_HK | `normalized_net_income` −9.47%; `forward_flags` ×3 | (a) FY2025 excluded | 160.84 unchanged |
+| BABA | `normalized_net_income` −9.47%; `forward_flags` ×3 | (a) FY2025 excluded | 193.13 unchanged |
+| C38U_SI | `normalized_net_income` −3.06% | (b) FY2022 re-admitted | unchanged |
+| FCX | `normalized_ebitda` +4.66%, `normalized_ebit` +6.02%; `EV/EBITDA (norm)` ×3; bear `intrinsic_value`/`_pre_composite`/`iv_multi`/`iv_multi_post`; `forward_flags` ×3 | (b) FY2021 re-admitted | 25.58 → 26.69 (+4.34%) |
+
+The `forward_flags` changes are the new `Normalized NI` audit flag on 09988_HK
+and BABA (crossing 15% for the first time) and, on FCX, prose-only movement of
+the existing 12m-PT-band violation (2.659x → 2.552x, still outside [0.33, 2.50],
+so no behavioural flip). **No gate changed state on any fixture**: the gate-set
+comparison was run separately from the prose comparison precisely so that a
+cosmetic rewording could not be mistaken for a new firing, and vice versa.
+
+
+### Two findings this investigation surfaced that were not in the brief
+
+1. **The `Normalized NI` audit flag makes a promise the engine does not keep.**
+   Its prose ends "— `P/E (norm)` will use normalized figure", and it is gated
+   only on the value existing and `abs(delta) > 0.15`. It never checks whether
+   the profile has such a leg, and **75 of the 99 profiles do not**. This became
+   observable because the −9.47% move pushed 09988_HK and BABA past 15%
+   (TTM RMB120.96B → 5y-cycle RMB102.49B, −15%) and the flag fired on both for
+   the first time, in all three scenarios, while `methods_used` stayed plain
+   `P/E` and base IV did not move. The disclosure is wrong today and becomes
+   true only once margin-deviation routing exists. Pinned by
+   `test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have`.
+2. **The `else med` fallback in `_normalized_earnings` is unreachable.** `q1` is
+   taken at index `n // 4` and `q3` at `3 * n // 4`, so for n = 5 the points at
+   s[1] and s[3] each sit within one IQR of the median s[2] by construction, and
+   `threshold ≥ 2 · iqr ≥ iqr`. At least three survivors are guaranteed for every
+   input that reaches the branch, so `len(filtered) >= 2` can never be false.
+   This matters because the relative-floor change was partly justified by that
+   fallback handling degenerate near-breakeven series; it does not, and cannot.
+   Pinned by `test_the_short_paths_are_unchanged_and_the_median_fallback_is_unreachable`.
+
+Also counted while writing those tests: normalized leg names are **not
+case-consistent** — `EV/EBITDA (norm)` on three profiles and `EV/EBITDA (Norm)`
+on one. Any exact-string dispatch silently misses one. Not fixed (a rename with
+its own blast radius), pinned by `test_the_normalized_leg_names_are_not_case_consistent`.
+
+### Still open, deliberately
+
+`_mean_fcf_margin` carries the **identical** `max(iqr * 2, 0.05)` line and
+produces `fcf_margin_base` — the most load-bearing number in the DCF, feeding the
+margin schedule, the ROIC projection and every scenario multiplier. The same
+thin-margin blindness therefore applies with far greater consequence than it did
+here. It was not changed: this edit was authorised for `_normalized_earnings`
+only. The asymmetry is pinned by
+`test_the_sibling_fcf_normalizer_still_carries_the_absolute_floor`, which strips
+comments before matching — a naive substring search matches the historical note
+inside `_normalized_earnings` that quotes the old expression verbatim, and
+reported the defect as still present on its first run.
+
+### Also in this commit: the four consumer archetype pins
+
+`NKE`, `ONON`, `EL` and `02020.HK` are pinned in `TICKER_SECTOR_LOOKUP`. **None
+of the four is a golden fixture**, so the pins have zero blast radius on this
+baseline — asserted by
+`test_the_pins_override_a_classification_that_would_otherwise_move`. Three of the
+four are genuine policy overrides of what the ladder returns (ONON → Consumer
+Growth, EL → Luxury Goods, 02020.HK → Apparel / Athletic Wear); NKE's pin agrees
+with the classifier and is documentation. The brief's suggested
+`Prestige Beauty & Personal Care` **does not exist in any sector**, and because
+the D3 override guard falls back silently to the classified profile, pinning it
+would have defeated itself with no error.
+
+### Also in this commit: the prior re-baseline's guards had to be re-pinned
+
+This is the same shape of failure the entry above documents for the `× 10` fix —
+a guard written for one fix silently became a guard against the next one — and it
+recurred within two re-baselines, which is worth recording as a rate rather than
+as an accident. Five tests failed against the regenerated snapshot and every one
+of them was in `0917e`/`0917f`, the modules whose declared purpose is to pin the
+named move set. Each failure was legitimate, and each new value had been derived
+independently during the investigation before the snapshot was regenerated:
+
+| Test | Old | New |
+| --- | --- | --- |
+| `test_base_iv_is_unchanged_in_all_fourteen` | FCX 25.58 | **26.69** |
+| `test_the_sign_flips_changed_only_their_flag_text` | FCX bear 16.06 | **16.90** |
+| `test_fcx_bull_premium_came_off_its_clamp_ceiling` | 45.52 | **46.92** |
+| `test_fcx_12m_band_fires_for_the_first_time` | (17.89, 23.85, 29.81) | **(18.66, 24.89, 31.11)** |
+| `…alibaba_lines_agree_on_the_currency_invariant_margin` | 0.0947 | **0.0857** |
+
+They were re-pinned rather than re-valued, because four of the five had a name or
+a docstring that stopped being true and a constant swap would have hidden that:
+
+- The first is now `test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception`.
+  Its old name asserted a fact about all fourteen that is no longer a fact, and a
+  test whose name overclaims is worse than one that fails, because it keeps being
+  read as evidence for the stronger claim.
+- `_BEAR_IV_UNMOVED["FCX"]` was **left at 16.06**. That table records the state
+  the `× 10` fix left behind, and that fix genuinely did not move FCX's bear leg;
+  overwriting the entry would have made the table claim otherwise. The test now
+  asserts both halves — the historical 16.06 and the live 16.90 — so neither can
+  be silently replaced by the other. `_FLOOR_MOVED` carries this re-baseline's
+  values separately.
+- The bull-premium test keeps `45.52` in its prose as the value the `× 10` fix
+  produced, and adds the cumulative 35.4% cut from the pre-fix 72.62 as an
+  explicit assertion so the two figures cannot drift apart unnoticed.
+
+Two of the re-pins turned up defects in the guards themselves, independent of
+this change:
+
+- `_NORM_NI_RE` was `5y-cycle [S$]*\$?([\d.]+)B` — it handled `S$` and `$` and
+  nothing else, so it could not match the RMB prefix on 09988_HK and BABA. When
+  the −9.47% move made both fixtures fire the flag for the first time,
+  `test_the_persisted_net_income_is_the_one_the_flag_announced` **kept passing on
+  a list of four while six fired**. A guard that is green and wrong is worse than
+  no guard, and this is the exact trap `0917f` warns about one section earlier
+  ("String-matching a log is not counting a payload") — the file contained the
+  warning and the instance of the thing it warned about. The regex is now
+  currency-agnostic and the expected list is the thing that catches a re-narrowing.
+- `gate_metrics` is a **list of gate ids with no values attached**. The ratio the
+  PT band computed exists only in the flag prose, so there is no payload to assert
+  on. The new assertion reads it out of the text and says so, then cross-checks
+  the prose against the two numbers it was computed from (the PT and the bear IV,
+  both pinned independently) so the string cannot drift from the payload without
+  the ratio going with it.
+
+

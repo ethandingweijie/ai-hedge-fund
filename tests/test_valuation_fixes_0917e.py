@@ -194,6 +194,41 @@ _BULL_MOVED = {
 
 _GATE_B_RE = re.compile(r"^Gate B \(bear\): Forward ROIC \((-?[\d.]+)%")
 
+#: (pt, ratio, iv) out of the PT-band flag. The ratio is printed only in prose;
+#: see the note at the one call site for why reading it is defensible here.
+_PT_BAND_RE = re.compile(
+    r"12m PT band violated: bear \$([\d.]+) = ([\d.]+)x its own IV \$([\d.]+)")
+
+#: ── THE SECOND RE-BASELINE: the relative outlier floor in `_normalized_earnings`
+#:
+#: `max(iqr * 2, 0.05)` became `max(iqr * 2, abs(med) * 0.30)`. Four fixtures
+#: moved a normalized field; THREE of them (09988_HK, BABA, C38U_SI) moved a
+#: number no valuation leg reads, so their IVs are bit-identical. FCX is the only
+#: fixture whose anchor is a normalized leg -- `EV/EBITDA (norm)` -- so it is the
+#: only one whose valuation moved.
+#:
+#: FCX's EBITDA margins are [0.45887, 0.39830, 0.37825, 0.37191, 0.34020],
+#: median 0.37825. `iqr * 2` = 0.05278 and the relative term is 0.11348, so the
+#: relative term wins and FY2021 is read back in: normalized EBITDA +4.66%,
+#: normalized EBIT +6.02%. The series is a MONOTONE five-year decline, so FY2021
+#: is not an outlier in any statistical sense -- only the first point of a trend
+#: -- and the old rule had trimmed asymmetrically, dropping 2021 at deviation
+#: +0.0806 while keeping 2025 at -0.0381.
+#:
+#: Every value here was derived from the margin series BEFORE the baseline was
+#: regenerated, and the regenerated snapshot matched to the cent. The full
+#: reasoning is in tests/golden/CHANGELOG.md under the relative-floor entry.
+_FLOOR_MOVED = {
+    "FCX": {
+        "base_iv": 26.69,          # was 25.58, +4.34%
+        "bear_iv": 16.90,          # was 16.06, +5.23%
+        "bull_iv": 46.92,          # was 45.52, +3.08%
+        "targets": (18.66, 24.89, 31.11),   # was (17.89, 23.85, 29.81)
+        "band_ratio": 2.552,       # was 2.659; still outside [0.33, 2.50]
+        "norm_ebitda_delta": 1.0466,
+    },
+}
+
 
 def _bear_gate_b_roic(projection: dict) -> float | None:
     """The ROIC Gate B printed into the bear flag, or None if it did not fire."""
@@ -653,9 +688,28 @@ def test_the_old_per_year_reading_would_have_diverged(md, expected_div, sign):
 # E. The named moves in the re-baselined golden set
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_base_iv_is_unchanged_in_all_fourteen():
-    """The headline number did not move, and that is the point, not a miss."""
+def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
+    """The headline number did not move on thirteen, and that is the point.
+
+    Renamed from `test_base_iv_is_unchanged_in_all_fourteen`. As written for the
+    × 10 fix the name was true: all fourteen held, and "nothing moved" was the
+    evidence that removing an inflation touches no valuation leg it should not.
+
+    It stopped being true with the LATER relative-floor re-baseline, and FCX is
+    the named exception: it is the only fixture whose anchor is a normalized leg
+    (`EV/EBITDA (norm)`), so re-admitting FY2021 to that series moves the
+    valuation. 09988_HK, BABA and C38U_SI moved a normalized field too and their
+    base IVs are bit-identical, because their anchors read trailing figures.
+
+    `_PREFIX["FCX"][0]` keeps the 25.58 it always held. That table records the
+    state before the × 10 fix; overwriting it to make a test pass would erase the
+    baseline the section exists to compare against.
+    """
     for name, fx in _fixtures().items():
+        if name == "FCX":
+            assert fx["base_iv"] == _FLOOR_MOVED["FCX"]["base_iv"]
+            assert _PREFIX["FCX"][0] == 25.58, "the pre-×-10 pin stays as history"
+            continue
         assert fx["base_iv"] == _PREFIX[name][0], name
 
 
@@ -690,6 +744,12 @@ def test_no_bear_terminal_value_was_the_pre_fix_state():
 #: leaves long (the flag text, which prints the ROIC, and the new alias key).
 #: Pinned as literals so that "did not move" is an assertion rather than an
 #: absence.
+#:
+#: FCX's 16.06 is now a HISTORICAL value. It is still true of the × 10 fix — that
+#: fix did not move FCX's bear IV — but the later relative-floor re-baseline did,
+#: to 16.90. It is left here unchanged on purpose: re-valuing it would make this
+#: table claim the × 10 fix moved FCX's bear leg, which it did not.
+#: `test_the_sign_flips_changed_only_their_flag_text` asserts both halves.
 _BEAR_IV_UNMOVED = {
     "09988_HK": 114.32,
     "BABA":     142.27,
@@ -724,11 +784,25 @@ def test_the_sign_flips_changed_only_their_flag_text():
     `tgr` stays 0.0 and the premium stays at the forced 1.0, which leaves the
     bear IV exactly where it was — a bear IV moving here would mean the fix
     reached something it was not supposed to.
+
+    Eight of the nine still qualify outright. FCX is the exception, and it is
+    worth being precise about WHICH claim fails for it: its `tgr` is still 0.0 and
+    its premium is still the forced 1.0, so the gate's consequences are unchanged.
+    What moved is the feed the gate sits on — re-admitting FY2021 to the
+    normalized EBITDA series raised the anchor, and with no terminal value the
+    bear leg scales straight with it. The gate did not reach anything new.
     """
     for name in _STILL_FIRES:
         p = _proj(name)
         assert p["scenarios.bear.tgr"] == 0.0, name
         assert p["scenarios.bear.growth_premium"] == 1.0, name
+        if name == "FCX":
+            # Both halves asserted, so neither history is silently overwritten:
+            # the × 10 fix left it at 16.06, the later floor re-baseline took it
+            # to 16.90.
+            assert _BEAR_IV_UNMOVED["FCX"] == 16.06
+            assert p["scenarios.bear.intrinsic_value"] == _FLOOR_MOVED["FCX"]["bear_iv"]
+            continue
         assert p["scenarios.bear.intrinsic_value"] == _BEAR_IV_UNMOVED[name], name
 
 
@@ -764,11 +838,19 @@ def test_fcx_bull_premium_came_off_its_clamp_ceiling():
     With the ROIC no longer inflated 2.5×, `_quality` stops saturating and the
     premium collapses to neutral — a 37.3% cut to FCX's bull IV (72.62 → 45.52),
     the largest single move in the re-baseline.
+
+    The premium half of this is unchanged and is the actual thesis: `1.0`, off a
+    ceiling of `1.8`. The IV it produced has since moved once more, to 46.92, on
+    the later relative-floor re-baseline — FCX's anchor is `EV/EBITDA (norm)`, and
+    re-admitting FY2021 raises that series 4.66%. So 45.52 is pinned here as the
+    value the × 10 fix produced, and the live value is asserted separately.
     """
     p = _proj("FCX")
     assert p["scenarios.bull.growth_premium"] == 1.0
-    assert p["scenarios.bull.intrinsic_value"] == 45.52
     assert _PREFIX["FCX"][3] == 1.8
+    assert 46.92 / 72.62 == pytest.approx(1 - 0.354, abs=5e-4), (
+        "the cumulative cut from the pre-fix 72.62, × 10 fix and floor re-baseline")
+    assert p["scenarios.bull.intrinsic_value"] == _FLOOR_MOVED["FCX"]["bull_iv"]
 
 
 def test_02888_is_the_one_bull_premium_that_rose():
@@ -787,18 +869,41 @@ def test_02888_is_the_one_bull_premium_that_rose():
 def test_fcx_12m_band_fires_for_the_first_time():
     """Its own bear IV moved enough to put the analyst PT outside [0.33×, 2.50×].
 
-    bear $42.71 = 2.659× a bear IV of $16.06 — so all three targets are replaced
+    bear $43.13 = 2.552× a bear IV of $16.90 — so all three targets are replaced
     with the validation fallback and then bounded by the convergence cap. The
     band is decision 2c's; this fix is what first gave it something to catch.
+
+    Both sides of that ratio are one re-baseline newer than this test was written
+    for: the PT moved 42.71 → 43.13 and the bear IV moved 16.06 → 16.90, which
+    took the ratio from 2.659× to 2.552×. The gate's decision did not change, and
+    that is the point worth pinning — a +5.23% move to the bear IV was large
+    enough to leave the ±5% reporting tolerance and still not large enough to
+    bring FCX back inside the band. It has to fall another 2.1% to do that.
     """
     p = _proj("FCX")
     assert p["12m_pt_method"].startswith("validation fallback")
     assert (p["12m_targets.bear"], p["12m_targets.base"], p["12m_targets.bull"]) == \
-           (17.89, 23.85, 29.81)
+           _FLOOR_MOVED["FCX"]["targets"]
     assert "pt_over_scenario_iv" in p["gate_metrics"]
     for scen in _SCENARIOS:
         flags = p[f"scenarios.{scen}.forward_flags"]
         assert any("VALIDATION ERROR: 12m PT band violated" in f for f in flags), scen
+
+    # The ratio itself is printed ONLY into the flag prose — `gate_metrics` is a
+    # list of gate ids with no values attached. So this reads it out of the text,
+    # which this module warns elsewhere is not the same as reading a payload. It
+    # is made safe by cross-checking the prose against the payload it describes:
+    # the PT and the IV the ratio is computed from are both pinned separately, so
+    # the string cannot drift from the numbers without the ratio going with it.
+    text = next(f for f in p["scenarios.bear.forward_flags"] if "PT band violated" in f)
+    pt, ratio, iv = _PT_BAND_RE.search(text).groups()
+    assert float(pt) == pytest.approx(43.13, abs=5e-3)
+    assert float(iv) == _FLOOR_MOVED["FCX"]["bear_iv"] == pytest.approx(
+        p["scenarios.bear.intrinsic_value"], abs=5e-3)
+    assert float(ratio) == pytest.approx(_FLOOR_MOVED["FCX"]["band_ratio"], abs=5e-4)
+    assert float(ratio) > 2.50, "the ceiling it breaches; 2.1% further and it would not"
+    assert float(pt) / float(iv) == pytest.approx(float(ratio), abs=5e-3), (
+        "the ratio the prose prints is the ratio its own two numbers imply")
 
 
 def test_meli_bear_floor_mechanics_and_its_policy_conflict():
