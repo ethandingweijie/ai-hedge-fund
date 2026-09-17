@@ -2375,7 +2375,15 @@ SECTOR_KPI_FRAMEWORK: dict[str, dict] = {
                 "search_phrases":  ["return on invested capital", "ROIC"],
                 "compute_hint":    "Return on invested capital (decimal)",
                 "clamp":           (0.0, 0.60),
-                "extractor_only":  True,
+                # Computed, not extracted: NOPAT / invested capital with an
+                # operating denominator floor, from the same annual series the
+                # DCF engine projects from (src/data/deterministic_kpis.py).
+                # The extractor still gets asked and still serves as the
+                # fallback when the filed inputs are missing — a KPI with no
+                # EBIT or no equity is reported unavailable rather than
+                # invented. `search_phrases` stays so the model keeps supplying
+                # the cross-check.
+                "extractor_only":  False,
                 "decimal_format":  True,
             },
             {
@@ -8644,7 +8652,19 @@ SECTOR_KPI_FRAMEWORK.update({
                 "search_phrases":  ['ROIC', 'return on invested capital', 'ROIC by division'],
                 "compute_hint":    "Return on invested capital (decimal)",
                 "clamp":           (-0.2, 0.6),
-                "extractor_only":  True,
+                # This is the defect that made ROIC deterministic. Keppel
+                # (BN4.SI) is single-listed, so `resolve_company_metrics` has no
+                # sibling vector to adopt and every run re-extracted from
+                # scratch: one run read 1.09% off a research sentence. That is
+                # not a rounding difference, it is a band difference — 0.0109
+                # lands in this profile's "weak" quality tier (min 0.0 → 0.9)
+                # where the filed accounts put it in "strong" (min 0.12 → 1.1),
+                # and the quality multiplier feeds the composite that scales the
+                # whole multiples bucket. A mandatory scoring input was being
+                # sampled from a distribution over sentences. It is now computed
+                # from the series; the extractor still supplies the fallback
+                # when the filed inputs are missing.
+                "extractor_only":  False,
                 "decimal_format":  True,
             },
             {

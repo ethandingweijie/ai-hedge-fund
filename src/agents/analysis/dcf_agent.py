@@ -749,6 +749,14 @@ _FX_MONETARY_FIELDS: frozenset[str] = frozenset({
     "short_term_investments",
     "minority_interest",
     "goodwill", "intangible_assets",
+    # The two operating-capital lines the deterministic ROIC denominator floor
+    # needs (operating working capital + net PP&E). Both were already fetched
+    # by data_router for the three-statement view and mapped in api.py, but
+    # never requested here, so they were None on every row this engine builds.
+    # Monetary and converted: the floor is compared against a financing-side
+    # capital that IS converted, so leaving these in the filing currency would
+    # decide the max() by FX rate rather than by balance sheet.
+    "inventory", "property_plant_equipment",
     # Bank-specific balance sheet
     "loans_receivable", "loans_held_for_investment", "total_deposits",
     "provision_for_loan_losses",
@@ -864,6 +872,12 @@ def _extract_annual_series(line_items: list) -> tuple[list[dict], str]:
             # Tech/Payment-processor methods: EV/Gross Profit
             "gross_profit":              _safe(getattr(li, "gross_profit", None)),
             "cost_of_revenue":           _safe(getattr(li, "cost_of_revenue", None)),
+            # Operating side of the deterministic ROIC denominator floor
+            # (src/data/deterministic_kpis.py). Requested AND copied — see the
+            # matching entry in _FX_MONETARY_FIELDS and in run_dcf_agent's
+            # search_line_items list.
+            "inventory":                 _safe(getattr(li, "inventory", None)),
+            "property_plant_equipment":  _safe(getattr(li, "property_plant_equipment", None)),
         })
 
     # SBC-adjusted (owner-earnings) FCF: reported FCF treats SBC as non-cash and
@@ -6389,6 +6403,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                      "other_payables", "other_current_liabilities",
                      # Tech/Payment-processor methods
                      "gross_profit", "cost_of_revenue",
+                     # The operating side of the deterministic ROIC denominator
+                     # floor (src/data/deterministic_kpis.py): operating working
+                     # capital = receivables + inventory − payables, plus net
+                     # PP&E. The receivables and payables are already requested
+                     # above for the balance-sheet-financial gate; these two were
+                     # not requested anywhere in this call, so a row built here
+                     # had no operating floor to fall back on and every
+                     # buyback-heavy name with capital ≤ 0 produced a negative or
+                     # astronomical ROIC. Both are copied into rows by
+                     # _extract_annual_series and classified in
+                     # _FX_MONETARY_FIELDS — all three acts, or the field is
+                     # silently None.
+                     "inventory", "property_plant_equipment",
                      # Buyback-netted SBC (fcf_owner_earnings) + SBC Dilution
                      # Override — was previously requested nowhere in this
                      # call despite _extract_annual_series() already trying
@@ -6434,6 +6461,29 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             )
             dcf_range[ticker] = {}
             continue
+
+        # ── Deterministic KPIs: computed here, applied once the profile is known ──
+        # Computed from the annual row AS FILED, before the quarterly balance-
+        # sheet refresh below. That refresh moves cash, short-term investments,
+        # total debt and net debt to the latest quarter but leaves equity,
+        # receivables, inventory, payables and PP&E at the year end — and ROIC's
+        # denominator is assembled from both halves, so a post-refresh capital
+        # base would be two filing periods stitched together. Flows are annual
+        # either way.
+        #
+        # Application is deferred to just before `attach_overrides` because
+        # `profile_name` is not bound until ~L7330, and which KPIs may be
+        # overridden is a property of the profile (its `extractor_only: False`
+        # set), not of the arithmetic.
+        _det_kpis: dict = {}
+        _det_basis: dict = {}
+        try:
+            from src.data.deterministic_kpis import (
+                compute_from_series as _compute_det_kpis,
+            )
+            _det_kpis, _det_basis = _compute_det_kpis(series)
+        except Exception as _det_exc:  # never let a KPI cross-check break a valuation
+            _det_basis = {"error": f"{type(_det_exc).__name__}: {_det_exc}"}
 
         # ── Anchor values from most recent year ──────────────────────────
         most_recent = series[-1]
@@ -7794,6 +7844,68 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 if _saas_parts:
                     ticker_forward_flags.append("SaaS research metrics: " + " | ".join(_saas_parts))
 
+        # ── Deterministic KPIs override the extracted ones (item 4) ────────
+        # Alibaba's GAAP operating margin came back +10.0% for 09988.HK and
+        # −0.3% for BABA seven minutes apart; Keppel's ROIC came back 1.09% on
+        # accounts that do not support it, and BN4.SI is single-listed so the
+        # entity cache has no sibling vector to adopt. Both were extracted, not
+        # computed. For a KPI that is arithmetic on a filed statement the
+        # arithmetic wins — but only for keys the profile itself marks
+        # `extractor_only: False`, and only where the filed inputs exist, so a
+        # missing input leaves the extractor's value standing rather than being
+        # replaced by an invention.
+        #
+        # Runs BEFORE attach_overrides below and before the V3 composite, so the
+        # row, the card and the multiplier that scales the multiples bucket all
+        # read one number. Applying it at phase 10 instead — where
+        # _augment_metrics_with_fmp_risk gap-fills today — would fix the card
+        # and leave the valuation scoring the sentence.
+        _det_overrides: list[dict] = []
+        _det_pre_override: dict = {}
+        if _det_kpis and profile_name:
+            try:
+                from src.data.deterministic_kpis import (
+                    apply_overrides as _apply_det_kpis,
+                )
+                _det_pre_override = dict(
+                    (framework_metrics_all or {}).get(ticker) or {})
+                _buckets_seen: list[dict] = []
+                for _bucket in ([framework_metrics_all]
+                                + [state["data"].get(_k) for _k in
+                                   ("framework_metrics", "framework_metrics_all",
+                                    "insurance_metrics_all", "bank_metrics_all")]):
+                    if not isinstance(_bucket, dict):
+                        continue
+                    if any(_bucket is _seen for _seen in _buckets_seen):
+                        continue
+                    _existing = _bucket.get(ticker)
+                    if not isinstance(_existing, dict):
+                        # No extraction to override. Phase 10's create-if-missing
+                        # branch still gives this ticker a FMP-only vector for
+                        # the card; creating one here would widen this change
+                        # from a precedence flip into a new population path.
+                        continue
+                    _buckets_seen.append(_bucket)
+                    _bucket[ticker], _ovr = _apply_det_kpis(
+                        _existing, _det_kpis, profile_name, basis=_det_basis)
+                    if _ovr and _bucket is framework_metrics_all:
+                        _det_overrides = _ovr
+                if _det_overrides:
+                    _det_summary = ", ".join(
+                        f"{o['kpi']} "
+                        f"{('gap' if o['llm'] is None else format(o['llm'], '.4g'))}"
+                        f"→{o['deterministic']:.4g}"
+                        for o in _det_overrides[:4])
+                    print(f"  [deterministic-kpis] {ticker} ({profile_name}, "
+                          f"FY{str(_det_basis.get('period') or '?')[:4]}): "
+                          f"{len(_det_overrides)} KPI(s) computed from filed "
+                          f"statements override the extraction — {_det_summary}")
+            except Exception as _det_exc:
+                ticker_forward_flags.append(
+                    f"Deterministic KPI override skipped: "
+                    f"{type(_det_exc).__name__}: {str(_det_exc)[:120]}"
+                )
+
         # ── Framework metrics attach (PR #6 — generic for new sub-profiles) ─
         # Handles Regulated Utility, Upstream O&G, Semi Fabless / IDM/Foundry,
         # Telco, Mining (Major), Automotive & EV, Managed Care — any ticker
@@ -8251,6 +8363,70 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _composite_mult, _composite_bridge = _composite_adjustment(
                     profile_name, sector, _ticker_metrics
                 )
+                # ── GATE_DETERMINISTIC_KPI_PRECEDENCE (item 4) ─────────────
+                # Recorded only when a computed value actually displaced an
+                # extracted one, so a run where the two agreed — the common
+                # case, and the point of having a cross-check — does not emit a
+                # row that would inflate the firing count the shipping rule is
+                # scored on.
+                #
+                # Path A is re-derived rather than captured earlier because the
+                # composite input at this point is the framework vector with the
+                # legacy buckets overlaid on top; reverting the overridden keys
+                # on THAT dict is the only apples-to-apples counterfactual. Both
+                # sides are the pre-clamp multiplier: the bank clamp below is a
+                # property of the profile, not of this gate, and applies to
+                # either path identically.
+                if _det_overrides:
+                    try:
+                        _path_a_metrics = dict(_ticker_metrics)
+                        for _o in _det_overrides:
+                            if _o.get("llm") is None:
+                                _path_a_metrics.pop(_o["kpi"], None)
+                            else:
+                                _path_a_metrics[_o["kpi"]] = _o["llm"]
+                        _composite_path_a, _ = _composite_adjustment(
+                            profile_name, sector, _path_a_metrics)
+                        gate_evaluations.append({
+                            "gate_id": "GATE_DETERMINISTIC_KPI_PRECEDENCE",
+                            # The multiplier, not a counterfactual IV — same
+                            # reasoning as GATE_BALANCE_SHEET_FINANCIAL: the
+                            # composite IS this gate's decision variable, and
+                            # the valuation consequence lands in base_iv and in
+                            # the golden baseline.
+                            "metric": "composite_multiplier",
+                            "raw_input_path_a": round(float(_composite_path_a or 0.0), 6),
+                            "gated_output_path_b": round(float(_composite_mult or 0.0), 6),
+                            "overrides": [
+                                {"kpi": o["kpi"], "llm": o["llm"],
+                                 "deterministic": round(float(o["deterministic"]), 6)}
+                                for o in _det_overrides
+                            ],
+                            "period": _det_basis.get("period"),
+                            "roic_basis": (_det_basis.get("roic") or {}),
+                            "basis": (
+                                f"{len(_det_overrides)} framework KPI(s) on "
+                                f"{profile_name} are arithmetic on filed "
+                                f"statements and were extracted from research "
+                                f"narrative instead: "
+                                + ", ".join(
+                                    f"{o['kpi']} "
+                                    f"{('gap' if o.get('llm') is None else format(o['llm'], '.4g'))}"
+                                    f"→{o['deterministic']:.4g}"
+                                    for o in _det_overrides)
+                                + f". Computed on the FY{str(_det_basis.get('period') or '?')[:4]} "
+                                f"annual row as filed, before the quarterly "
+                                f"balance-sheet refresh, so ROIC's denominator "
+                                f"is one filing period end to end. Composite "
+                                f"{float(_composite_path_a or 0.0):.4f}x → "
+                                f"{float(_composite_mult or 0.0):.4f}x."
+                            ),
+                            "applied": True,
+                        })
+                    except Exception:
+                        # The override already happened; losing the ledger row
+                        # must not lose the valuation.
+                        pass
                 # Banks: clamp the quality/risk composite to a narrow band.
                 # The composite scores a bank on ROE, CET1, NPL and cost-
                 # income — but those are the very inputs the GGM and the
