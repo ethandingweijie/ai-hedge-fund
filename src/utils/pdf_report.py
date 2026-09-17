@@ -1282,6 +1282,53 @@ def _fmt_hex(colour) -> str:
         return "#888888"
 
 
+def _margin_delta_abs(scenario: dict) -> float:
+    """The ONE-SHOT absolute FCF-margin delta the engine applied to every year.
+
+    Published as ``margin_delta_absolute`` since 2026-09-17. Archived runs carry
+    only the earlier misnomer ``margin_delta_per_year`` — but that key always
+    held this same one-shot value: dcf_agent called ``_project_dcf`` with
+    ``margin_delta_per_year=0.0`` (commented "superseded by md_abs") and
+    ``margin_delta_absolute=md_abs``, then published ``md_abs`` under the
+    per-year name. So both keys are read with identical semantics, and neither
+    is ever scaled by ``t``.
+
+    That scaling was the bug this helper exists to prevent. Both sensitivity
+    grids below rebuilt the projection as ``margin + delta * t``, drifting the
+    margin over ten years when the engine holds it flat after one step.
+
+    How far that reached is worth stating precisely, because it is narrower than
+    it looks and wider than nothing. Both grids read ``dcf_ticker["base"]``, so
+    the delta they mis-scaled is the BASE scenario's — which is
+    ``guidance_margin_adj``, and is 0 for every one of the 14 golden fixtures and
+    for any run where management guidance does not move the margin. ``0 * t`` is
+    still 0, so for those runs the two formulas agree exactly and the misreading
+    produced identical output. It was latent, not inert.
+
+    For a guided name whose base delta is non-zero it was very much live. On a
+    synthetic base with ``md = -0.04`` the old grid's centre cell read -$0.75
+    against the engine's +$4.14 (a 118% divergence); at ``md = +0.04``, +$13.93
+    against +$6.26 (123%). And the divergence the grid's own ``_sens_warn`` check
+    exists to report would have fired with a diagnosis blaming "revenue_base or
+    shares_outstanding unit mismatch (check FX conversion)" — sending the reader
+    to two fields that were perfectly fine. ``tests/test_valuation_fixes_0917e.py``
+    pins the corrected identity and transcribes the old closure as the control.
+
+    The third consumer, ``_section_2f``'s traceability table, had the arithmetic
+    right all along (``base + delta``, one step) and the LABEL wrong: it printed
+    ``±X.XX%/yr`` under a row headed "Margin delta / year", telling the reader
+    the margin kept moving every year when the engine moves it once. That one was
+    unconditional — it misdescribed every PDF ever produced.
+    """
+    v = scenario.get("margin_delta_absolute")
+    if v is None:
+        v = scenario.get("margin_delta_per_year", 0.0)
+    try:
+        return float(v or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 # ── Sensitivity Table (WACC × TGR — item G) ────────────────────────────────────
 def _sensitivity_table(
     dcf_ticker: dict,
@@ -1297,9 +1344,14 @@ def _sensitivity_table(
     CHECK 3 FIX (2026-03-23):
     - net_debt now reads the actual dollar net debt stored by dcf_agent,
       not the D/E ratio ("leverage") — those are two different fields.
-    - _iv() now applies margin_delta_per_year so Year 1–10 margins evolve
-      exactly as in the main DCF, making the sensitivity centre-point
-      identical to the base case intrinsic value.
+    - _iv() now applies the absolute margin delta so the Year 1–10 margins match
+      the main DCF, making the sensitivity centre-point identical to the base
+      case intrinsic value. (2026-09-17: that claim was only true while the
+      delta was zero. The delta had been applied per-year, `margin + delta * t`,
+      which is NOT what the engine does — it steps once and holds flat — so the
+      centre-point identity held for every run whose base delta was 0 and broke
+      for any guided name with a non-zero one. See _margin_delta_abs for the
+      measured divergence.)
 
     current_price / pt_12m: optional reference anchors shown in the sub-header
     so readers can immediately see where the market price and 12m PT land
@@ -1314,7 +1366,7 @@ def _sensitivity_table(
     tgr_base      = base.get("tgr")
     gr            = base.get("growth_rate")
     margin        = base.get("fcf_margin_start")        # base-year FCF margin (pre-delta)
-    margin_delta  = base.get("margin_delta_per_year", 0.0)  # per-year margin change
+    margin_delta  = _margin_delta_abs(base)             # ONE-SHOT absolute delta, not per-year
     # Change 9: prefer revenue_base_usd (explicit post-FX value) over revenue_base.
     # For live pipeline runs these are identical. For reconstructed/partial dicts,
     # revenue_base_usd guarantees we use the USD-converted value.
@@ -1336,15 +1388,16 @@ def _sensitivity_table(
 
     def _iv(wacc, tgr):
         _tgr = min(tgr, wacc - 0.005)  # guard against TGR ≥ WACC
+        # One-shot delta: the engine steps the margin ONCE and holds it flat for
+        # all ten years (_project_dcf's `margin_delta_absolute` branch), so the
+        # projected margin is a single value, not a drift. Hoisted out of the
+        # loop because it no longer depends on t — which is the point.
+        margin_proj = min(max(margin + margin_delta, fcf_floor), 0.60)
         pv = 0.0
         for t in range(1, YEARS + 1):
-            # CHECK 3 FIX (b): apply margin delta per year, matching main DCF
-            margin_t = max(margin + margin_delta * t, fcf_floor)
-            margin_t = min(margin_t, 0.60)
-            pv += (rev * (1 + gr) ** t * margin_t) / (1 + wacc) ** t
-        # Terminal year uses the Year-10 evolved margin
-        margin_T = max(margin + margin_delta * YEARS, fcf_floor)
-        margin_T = min(margin_T, 0.60)
+            pv += (rev * (1 + gr) ** t * margin_proj) / (1 + wacc) ** t
+        # Terminal year uses the same held margin
+        margin_T = margin_proj
         fcf_T = rev * (1 + gr) ** YEARS * margin_T
         tv    = fcf_T * (1 + _tgr) / (wacc - _tgr)
         pv_tv = tv / (1 + wacc) ** YEARS
@@ -1546,7 +1599,7 @@ def _sensitivity_table_growth_margin(
     tgr_base     = base.get("tgr")
     gr_base      = base.get("growth_rate")
     margin_base  = base.get("fcf_margin_start")
-    margin_delta = base.get("margin_delta_per_year", 0.0)
+    margin_delta = _margin_delta_abs(base)   # ONE-SHOT absolute delta, not per-year
     # Change 9: prefer revenue_base_usd for FX consistency (same as WACC×TGR grid)
     rev          = dcf_ticker.get("revenue_base_usd") or dcf_ticker.get("revenue_base")
     shares       = dcf_ticker.get("shares_outstanding")
@@ -1565,13 +1618,15 @@ def _sensitivity_table_growth_margin(
 
     def _iv_gm(gr_val, margin_val):
         """DCF IV with fixed WACC/TGR; varying revenue growth and FCF margin."""
+        # Same one-shot step as _iv above and as _project_dcf: the cell's margin
+        # is stepped once by the scenario delta and then held flat, so the
+        # centre cell (grid margin == stored base margin) reproduces the stored
+        # base IV. Drifting it by `margin_delta * t` broke that identity.
+        margin_proj = min(max(margin_val + margin_delta, fcf_floor), 0.60)
         pv = 0.0
         for t in range(1, YEARS + 1):
-            margin_t = max(margin_val + margin_delta * t, fcf_floor)
-            margin_t = min(margin_t, 0.60)
-            pv += (rev * (1 + gr_val) ** t * margin_t) / (1 + wacc_base) ** t
-        margin_T = max(margin_val + margin_delta * YEARS, fcf_floor)
-        margin_T = min(margin_T, 0.60)
+            pv += (rev * (1 + gr_val) ** t * margin_proj) / (1 + wacc_base) ** t
+        margin_T = margin_proj
         fcf_T = rev * (1 + gr_val) ** YEARS * margin_T
         tv    = fcf_T * (1 + _tgr_safe) / (wacc_base - _tgr_safe)
         pv_tv = tv / (1 + wacc_base) ** YEARS
@@ -2498,20 +2553,26 @@ def _section_2f(
         Paragraph(_wh("Base"),      styles["RptLabel"]),
         Paragraph(_wh("Bull"),      styles["RptLabel"]),
     ]
-    # CHECK 2 traceability: pull margin_delta_per_year for each scenario
-    bear_md = bear.get("margin_delta_per_year", 0.0)
-    base_md = base.get("margin_delta_per_year", 0.0)
-    bull_md = bull.get("margin_delta_per_year", 0.0)
+    # CHECK 2 traceability: pull the scenario margin delta for each scenario.
+    # It is a ONE-SHOT absolute shift applied from Year 1 and held flat to
+    # Year 10 — not a per-year drift. It was published under the name
+    # `margin_delta_per_year` and this table labelled it "%/yr" accordingly,
+    # which told the reader the margin kept moving every year when the engine
+    # moves it once.
+    bear_md = _margin_delta_abs(bear)
+    base_md = _margin_delta_abs(base)
+    bull_md = _margin_delta_abs(bull)
 
     def _pct_delta(v):
-        """Format margin delta as ±X.XX%/yr for traceability."""
+        """Format the one-shot margin delta as ±X.XXpp for traceability."""
         try:
             f = float(v) * 100
-            return f"{f:+.2f}%/yr"
+            return f"{f:+.2f}pp"
         except Exception:
             return "—"
 
-    # Year-1 projected FCF margins = fcf_margin_start + margin_delta × 1
+    # Year-1 projected FCF margins = fcf_margin_start + the one-shot delta,
+    # which is also the Year-2..10 margin — the engine holds it flat.
     bear_yr1_fcf = (float(bear_fcf or 0) + float(bear_md or 0)) * 100
     base_yr1_fcf = (float(base_fcf or 0) + float(base_md or 0)) * 100
     bull_yr1_fcf = (float(bull_fcf or 0) + float(bull_md or 0)) * 100
@@ -2532,12 +2593,12 @@ def _section_2f(
          Paragraph(_pct(bear_gr), styles["RptValue"]),
          Paragraph(_pct(base_gr), styles["RptValue"]),
          Paragraph(_pct(bull_gr), styles["RptValue"])],
-        # CHECK 2 FIX: split margin into base-year anchor + per-year delta + Year-1 projected
+        # CHECK 2 FIX: split margin into base-year anchor + one-shot delta + Year-1 projected
         [Paragraph("FCF Margin (base year, pre-delta)", styles["RptBody"]),
          Paragraph(_pct(bear_fcf), styles["RptValue"]),
          Paragraph(_pct(base_fcf), styles["RptValue"]),
          Paragraph(_pct(bull_fcf), styles["RptValue"])],
-        [Paragraph("Margin delta / year", styles["RptBody"]),
+        [Paragraph("Margin delta (one-shot, Y1–Y10)", styles["RptBody"]),
          Paragraph(_pct_delta(bear_md), styles["RptValue"]),
          Paragraph(_pct_delta(base_md), styles["RptValue"]),
          Paragraph(_pct_delta(bull_md), styles["RptValue"])],

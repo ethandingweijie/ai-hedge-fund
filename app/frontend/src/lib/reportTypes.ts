@@ -131,7 +131,11 @@ export interface DcfCase {
   // untyped/unused by the frontend.
   tgr?: number;                    // terminal growth rate used for this scenario
   fcf_margin_start?: number;       // Year-1 FCF margin assumption
-  margin_delta_per_year?: number;  // annual FCF-margin drift assumed over the projection
+  margin_delta_absolute?: number;  // ONE-SHOT FCF-margin shift applied Yr 1 and held to Yr 10
+  /** @deprecated Misnomer for `margin_delta_absolute`; it never was an annual
+   *  drift. Still emitted by the backend and the only key archived runs carry,
+   *  so read it as a fallback. Do not scale by year. */
+  margin_delta_per_year?: number;
   tv_pct?: number;                 // terminal value as a fraction of total intrinsic value
 }
 

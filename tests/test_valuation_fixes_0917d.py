@@ -581,14 +581,37 @@ def test_the_three_fixtures_target_yields_all_clear_the_new_floor():
                 assert peer_y / (sm * gp) > MIN_VALID_FCF_YIELD, (fx, scen, gp)
 
 
-def test_the_published_fcf_yield_values_are_unchanged():
-    """Base-case leg values, to 6dp, as persisted.
+def test_the_published_fcf_yield_values_match_the_current_baseline():
+    """Leg values as persisted, and the one reason the bear column moved.
 
-    A change here would mean the fix moved a number it was not supposed to
-    move. These are the values the probe read out of a live replay of the
-    fixtures before and after the edit.
+    Written for decision 5 as ``..._are_unchanged``, pinning nine values that
+    the FCF-Yield fix demonstrably did not move — the point being that the
+    deleted ``max(target_yield, 0.01)`` never bound on this baseline, so the
+    fix was untestable by it. That claim was true then and is not what this
+    test asserts now.
+
+    THE THREE BEAR VALUES HAVE SINCE MOVED, and the mover is not decision 5.
+    The leg is ``(fcf / shares) / target_yield`` with
+    ``target_yield = peer_fcf_yield / (sm * growth_premium)``, so the published
+    value is LINEAR IN ``growth_premium``. The Gate B ``md_abs * 10`` fix
+    (2026-09-17, ``tests/test_valuation_fixes_0917e.py``) deactivated Gate B on
+    AAPL, COST and V in the bear scenario, which moved their bear premium off
+    the forced 1.0 — and every multiple leg in those three scenarios moved
+    with it, this one included. Base and bull are untouched here because AAPL,
+    COST and V are not among the six fixtures whose BULL premium changed.
+
+    So the pin is re-struck rather than deleted, and re-struck as a
+    RELATIONSHIP instead of nine bare literals: bear must equal its pre-Gate-B
+    value scaled by the premium the same fixture now publishes, and base/bull
+    must be bit-identical to what decision 5 recorded. A future move that is
+    not a premium move still fails. The ``rel=1e-3`` on the ratio is the
+    persisted premium's own 3dp rounding — the leg uses the unrounded value, so
+    1.03762 is stored as 1.038 — and is an order of magnitude tighter than the
+    5e-3 the literal check uses.
     """
     snap = _snapshot()
+    # decision 5's recorded values. `bear` entries are PRE-Gate-B, when the
+    # premium was forced to exactly 1.0 and so scaled the leg by nothing.
     expected = {
         "AAPL": {"bear": 134.25, "base": 191.01, "bull": 246.30},
         "COST": {"bear": 633.89, "base": 903.06, "bull": 1149.12},
@@ -598,7 +621,13 @@ def test_the_published_fcf_yield_values_are_unchanged():
         proj = snap[fx]["projection"]
         for scen, val in per.items():
             key = f"scenarios.{scen}.method_iv_table.FCF Yield"
-            assert proj[key] == pytest.approx(val, rel=5e-3), (fx, scen, proj[key])
+            if scen == "bear":
+                gp = proj["scenarios.bear.growth_premium"]
+                assert gp > 1.0, (fx, "Gate B should have deactivated", gp)
+                assert proj[key] == pytest.approx(val * gp, rel=1e-3), (
+                    fx, scen, proj[key], val * gp)
+            else:
+                assert proj[key] == pytest.approx(val, rel=5e-3), (fx, scen, proj[key])
 
 
 def test_schw_never_dispatches_the_leg_in_the_baseline():

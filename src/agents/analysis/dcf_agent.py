@@ -9055,13 +9055,38 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # SNOW with compute) appear to destroy value by GAAP while
             # actually growing into operating leverage.
             #
-            # Tier 2a fix (2026-04-25):
-            #   Compute PROJECTED Y10 ROIC using terminal fcf_margin_base
-            #   × (1 + margin_delta_per_year × 10) × yr_10_revenue /
-            #   scaled invested capital — captures the "forward" aspect
-            #   instead of trailing. Falls back to trailing if projection
-            #   data missing. Scenario-gated thresholds (bear full gate,
-            #   base half-WACC, bull never triggers) preserved from Tier 1.
+            # Tier 2a fix (2026-04-25), margin form corrected 2026-09-17:
+            #   Compute PROJECTED Y10 ROIC using the terminal FCF margin
+            #   (fcf_margin_base + md_abs, a ONE-SHOT absolute delta — the same
+            #   value handed to _project_dcf below as `margin_delta_absolute`)
+            #   × yr_10_revenue / scaled invested capital — captures the
+            #   "forward" aspect instead of trailing. Falls back to trailing if
+            #   projection data missing. Scenario-gated thresholds (bear full
+            #   gate, base half-WACC, bull never triggers) preserved from Tier 1.
+            #
+            #   This comment originally described the margin as
+            #   `fcf_margin_base × (1 + margin_delta_per_year × 10)`, and the
+            #   code below it multiplied the delta by 10 to match. The delta
+            #   became a one-shot absolute applied to every year when
+            #   _MARGIN_DELTA_MULT landed, but the `× 10` stayed — so Y10
+            #   carried it ten times. Since md_abs = fmb·(m − 1), the buggy
+            #   margin was fmb·(10m − 9) against a correct fmb·m, so the
+            #   projected ROIC — linear in that margin, because _y10_ic is
+            #   scaled by the same revenue multiplier as _y10_fcf — came out at
+            #   (10m − 9)/m times the right answer:
+            #     bear,  m = 0.80 (standard):   −1.25×  → margin −fmb, ROIC negative
+            #     bear,  m = 0.65 (high SBC):   −3.85×  → margin −2.5·fmb
+            #     bull,  m = 1.20 (standard):   +2.50×  → margin 3·fmb
+            #     bull,  m = 1.15 (high SBC):   +2.17×  → margin 2.5·fmb
+            #   Every bear case is negative, which (a) fired Gate B in the bear
+            #   scenario of 13 of the 14 golden fixtures and (b) fed the
+            #   growth-premium quality gate below, which reads this same
+            #   `forward_roic` — forcing `_quality` to 0 (gate fully shut) in
+            #   bear and pinning it at its 1.0 ceiling in bull, where the
+            #   inflated margin cleared 2× WACC everywhere. Base was untouched
+            #   only because md_abs is 0 there, so 10 × 0 = 0 — which is why
+            #   the defect hid behind an unmoved headline IV for as long as it
+            #   did.
             forward_flags: list[str] = list(ticker_forward_flags)
 
             # Projected Y10 ROIC — scales current invested capital with
@@ -9092,8 +9117,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 else:
                     _y10_rev_mult = (1 + g) ** 10
                 _y10_rev = rev_base * _y10_rev_mult
-                # Y10 FCF margin: base + md_abs × 10 years
-                _y10_fcf_margin = fcf_margin_base + md_abs * 10
+                # Y10 FCF margin. `md_abs` is a ONE-SHOT absolute delta applied
+                # to EVERY year — it is handed to _project_dcf below as
+                # `margin_delta_absolute`, with `margin_delta_per_year=0.0`
+                # explicitly "superseded by md_abs". So year 10 carries it once,
+                # not ten times. The `* 10` this replaces was left behind when
+                # the per-year drift became a one-shot delta: the Tier 2a
+                # comment above still describes the old
+                # `fcf_margin_base × (1 + margin_delta_per_year × 10)` form, and
+                # the multiplier survived the rename of the thing it multiplied.
+                # In bear, md_abs is negative (m < 1), so the `* 10` drove the
+                # Y10 margin negative for every profile family — exactly −fmb at
+                # m = 0.80, −2.5·fmb at the high-SBC m = 0.65 — which forced a
+                # negative projected ROIC and fired Gate B, zeroing terminal
+                # growth, in the bear scenario of 13 of the 14 golden fixtures.
+                _y10_fcf_margin = fcf_margin_base + md_abs
                 _y10_fcf = _y10_rev * _y10_fcf_margin
                 # Scale invested capital proportionally with revenue
                 _y10_ic = ic_val * _y10_rev_mult
@@ -9846,7 +9884,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "intrinsic_value":   round(final_iv, 2),
                 "growth_rate":       round(g, 4),
                 "fcf_margin_start":  round(fcf_margin_base, 4),
-                "margin_delta_per_year": round(md_abs, 4),
+                # `md_abs` is a ONE-SHOT absolute margin delta applied to every
+                # projected year (see _project_dcf's `margin_delta_absolute`),
+                # not a per-year drift. It was published under the name
+                # `margin_delta_per_year` from the day _MARGIN_DELTA_MULT
+                # landed, and two consumers read the name rather than the
+                # contract and multiplied it by t: Gate B's Y10 margin above,
+                # and pdf_report's sensitivity grids. The accurate key is now
+                # authoritative. The old key is still written, carrying the
+                # identical value, because every archived run in web_runs and
+                # every deployed frontend/PDF build reads it — it is a
+                # read-compatibility alias, not a second quantity, and a test
+                # pins the two as equal so it can never drift into meaning
+                # something else.
+                "margin_delta_absolute": round(md_abs, 4),
+                "margin_delta_per_year": round(md_abs, 4),   # deprecated alias
                 "tgr":               round(tgr, 4),
                 "tv_pct":            round(tv_fraction, 4),
                 "methods_used":      methods_used,

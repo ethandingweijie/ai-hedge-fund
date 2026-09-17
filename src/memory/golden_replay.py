@@ -315,7 +315,12 @@ _DICT_KEYS = ("multiples_used", "routing_trace", "12m_targets", "consensus_pt")
 _SCENARIO_KEYS = (
     "intrinsic_value", "intrinsic_value_pre_composite", "composite_applied",
     "growth_rate", "tgr", "fcf_margin_start", "tv_pct", "methods_count",
-    "weight_dcf", "weight_multi", "growth_premium", "margin_delta_per_year",
+    "weight_dcf", "weight_multi", "growth_premium",
+    # Both spellings of the same one-shot absolute margin delta are pinned:
+    # `margin_delta_absolute` is authoritative, `margin_delta_per_year` is the
+    # deprecated read-compatibility alias. Carrying both means a replay that
+    # ever lets them diverge fails the baseline instead of shipping it.
+    "margin_delta_absolute", "margin_delta_per_year",
     "iv_dcf", "iv_multi", "iv_multi_post",
     "yr1_revenue", "yr1_ebitda_est", "yr1_eps_est",
     "method_iv_table", "methods_used", "forward_flags", "effective_weights",

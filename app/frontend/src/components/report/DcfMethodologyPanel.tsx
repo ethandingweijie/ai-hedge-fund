@@ -157,7 +157,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
                 <th className="text-left font-medium py-1 pr-3">Scenario</th>
                 <th className="text-right font-medium py-1 px-3">Growth</th>
                 <th className="text-right font-medium py-1 px-3">FCF Margin (Yr 1)</th>
-                <th className="text-right font-medium py-1 px-3">Margin Δ/yr</th>
+                <th className="text-right font-medium py-1 px-3">Margin Δ (Y1–10)</th>
                 <th className="text-right font-medium py-1 px-3">Terminal Growth</th>
                 <th className="text-right font-medium py-1 pl-3">TV % of IV</th>
               </tr>
@@ -166,14 +166,19 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
               {SCENARIOS.map(({ key, label }) => {
                 const c = dcfRange[key];
                 if (!c) return null;
+                // One-shot absolute margin shift applied from Yr 1 and held to
+                // Yr 10 — not an annual drift. `margin_delta_absolute` is the
+                // accurate key; `margin_delta_per_year` is the earlier misnomer
+                // and is the only one archived runs carry, so both are read.
+                const md = c.margin_delta_absolute ?? c.margin_delta_per_year;
                 return (
                   <tr key={key} className="border-b border-border/50 last:border-0">
                     <td className="py-1.5 pr-3 font-medium">{label}</td>
                     <td className="text-right py-1.5 px-3 tabular-nums">{pct(c.growth_rate)}</td>
                     <td className="text-right py-1.5 px-3 tabular-nums">{pct(c.fcf_margin_start)}</td>
                     <td className="text-right py-1.5 px-3 tabular-nums">
-                      {c.margin_delta_per_year != null
-                        ? `${c.margin_delta_per_year >= 0 ? '+' : ''}${(c.margin_delta_per_year * 100).toFixed(2)}pp`
+                      {md != null
+                        ? `${md >= 0 ? '+' : ''}${(md * 100).toFixed(2)}pp`
                         : '—'}
                     </td>
                     <td className="text-right py-1.5 px-3 tabular-nums">{pct(c.tgr)}</td>
