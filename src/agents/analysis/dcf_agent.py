@@ -371,7 +371,14 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
 _CONVERGENCE_ALPHA = 0.5
 
 #: The gate fires beyond this divergence between NTM consensus and the
-#: historical CAGR, and then caps NTM growth at CAGR + headroom.
+#: historical CAGR, and then rewrites NTM growth back toward the CAGR. Both
+#: halves of the rewrite are built from these two numbers and no others,
+#: deliberately: the ceiling is ``max(CAGR, 0) + HEADROOM`` and the floor is
+#: ``min(CAGR, 0) - HEADROOM``, with rewrites ``min(g, ceiling)`` and
+#: ``max(g, CAGR - THRESHOLD)``. One slack value and one divergence value,
+#: applied symmetrically, so the two halves cannot drift onto different
+#: tolerances — the same one-reader discipline the ceiling's ``max(CAGR, 0)``
+#: and the floor's ``min(CAGR, 0)`` already share.
 _CAGR_DIVERGENCE_THRESHOLD = 0.15
 _CAGR_DIVERGENCE_HEADROOM = 0.05
 
@@ -446,30 +453,62 @@ def _gate_growth_cagr_divergence(
     profile_name: str = "",
     series: Optional[list[dict]] = None,
 ) -> tuple[Optional[float], Optional[dict], Optional[str]]:
-    """Cap NTM consensus growth that diverges too far from the historical CAGR.
+    """Bound NTM consensus growth that diverges too far from the historical CAGR.
 
     Returns ``(gated_growth, gate_record, exception_reason)``:
 
-      * ``gated_growth`` — the capped figure, or ``g_ntm`` unchanged.
+      * ``gated_growth`` — the rewritten figure, or ``g_ntm`` unchanged.
       * ``gate_record`` — the ``gate_evaluations`` entry (path A = raw
-        consensus, path B = gated) when the gate BINDS, else None. Recorded on
-        binding rather than on firing so the forward ledger measures decisions
-        that actually moved a number.
+        consensus, path B = gated, plus ``direction`` naming which half bound)
+        when the gate BINDS, else None. Recorded on binding rather than on
+        firing so the forward ledger measures decisions that actually moved a
+        number.
       * ``exception_reason`` — why the gate was stood down, else None.
 
-    Fires when ``|g_ntm − CAGR| > 15pp``, then sets
-    ``g_ntm := min(g_ntm, max(CAGR, 0) + 5pp)``. One-sided by construction: a
-    consensus far BELOW a high historical CAGR is left alone, because the
-    defect is a one-year jump held flat for a decade, not conservatism.
+    Fires when ``|g_ntm − CAGR| > 15pp``, then rewrites toward the CAGR in
+    whichever direction diverged:
+
+      * **upward** — ``g_ntm := min(g_ntm, max(CAGR, 0) + 5pp)``. The defect is
+        a one-year consensus jump held flat for a decade.
+      * **downward** (owner decision 3, 2026-09-17) —
+        ``g_ntm := max(g_ntm, CAGR − 15pp)``, but ONLY when ``g_ntm`` sits below
+        ``min(CAGR, 0) − 5pp``, ``CAGR > 0``, and the profile is not in
+        :data:`_CYCLICAL_PROFILES`. The defect here is the mirror image: one
+        corrupted estimate in a thin consensus collapsing an explicit ten-year
+        cash flow model. ICE measured it — a −12.71% NTM consensus against a
+        +8.3% five-year CAGR, 21.0pp apart, which the one-sided gate waved
+        through because it only tested for positive blowouts.
+
+    The two halves are mutually exclusive, not merely independent: the ceiling
+    binds only above ``max(CAGR, 0) + 5pp`` and the floor only below
+    ``min(CAGR, 0) − 5pp``, and those two bounds cannot both contain the same
+    number. Whichever binds is named in ``record["direction"]``, which is what
+    lets the caller apply it in the right idiom — ``min()`` on ``growth_base``
+    and a proportional band scale upward, ``max()`` and an additive band shift
+    downward.
 
     ``max(CAGR, 0)`` is what makes the ceiling sane for a shrinking business.
     BN4.SI's 5-year revenue CAGR is −2.5%; without the floor the ceiling would
     be −2.5% + 5% = 2.5%, but with it the ceiling is 5.0%. The floor says a
     company in structural decline may still be allowed modest growth in the
     forward year — it is the *extrapolation* of the decline that is being
-    refused, not growth itself.
+    refused, not growth itself. ``min(CAGR, 0) − 5pp`` is the same argument
+    read from the other end: a company with a positive secular history is still
+    allowed a bad forward year, down to −5%, and only below that is the figure
+    treated as an estimate error rather than a forecast.
 
-    Two exceptions, both deterministic:
+    The ``CAGR > 0`` conjunct is what keeps this off a genuine down-cycle that
+    has already shown up in the history. A business whose five-year CAGR is
+    itself negative gets no downside floor at all — there is nothing secular to
+    defend. Combined with the :data:`_CYCLICAL_PROFILES` exemption, the floor
+    only ever fires on a name with positive measured history, a non-cyclical
+    profile, and a consensus below −5%: DRAM at −35% in a down-cycle is
+    exempt on the profile, and shipping at −20% against a −8% CAGR is exempt on
+    the sign.
+
+    Two exceptions, both deterministic and both GATE-WIDE — they stand down the
+    floor exactly as they stand down the ceiling, because a reason to distrust
+    the divergence test is a reason to distrust it in both directions:
 
       * **company-guided** (``data_source == "guided"``) — R1 structured
         guidance is management's own figure for the forward year. That is
@@ -480,10 +519,11 @@ def _gate_growth_cagr_divergence(
         mean by construction and must not unlock the gate.
 
     The gate is applied to the BASE figure before scenario differentiation, and
-    the analyst band is then SCALED by the same factor rather than clipped per
-    scenario — mirroring :func:`_scale_analyst_bands_to_cap`, so the dispersion
+    the analyst band is then adjusted by the same amount in each path's own
+    idiom rather than clipped per scenario — :func:`_scale_analyst_bands_to_cap`
+    upward, :func:`_shift_analyst_bands_to_floor` downward — so the dispersion
     14 analysts actually expressed survives instead of collapsing base and bull
-    onto one ceiling.
+    onto one bound.
     """
     if g_ntm is None or cagr is None:
         return g_ntm, None, None
@@ -492,6 +532,15 @@ def _gate_growth_cagr_divergence(
         return g_ntm, None, None
 
     ceiling = max(cagr, 0.0) + _CAGR_DIVERGENCE_HEADROOM
+    # Owner decision 3 (2026-09-17). `min(cagr, 0.0)` is inert while the
+    # `cagr > 0.0` conjunct below holds — it always evaluates to 0.0, so the
+    # floor is always −5pp — but it is written out rather than hardcoded
+    # because it is the mirror of the ceiling's `max(cagr, 0.0)`, and a reader
+    # comparing the two bounds should see the symmetry instead of having to
+    # derive it. If the positive-CAGR conjunct is ever relaxed to let a
+    # shrinking history defend its own decline, this expression is already the
+    # right one.
+    floor = min(cagr, 0.0) - _CAGR_DIVERGENCE_HEADROOM
 
     if data_source == "guided":
         return g_ntm, None, "company-guided (R1 structured guidance)"
@@ -503,22 +552,51 @@ def _gate_growth_cagr_divergence(
         )
 
     gated = min(g_ntm, ceiling)
-    if gated >= g_ntm:
-        # Divergence was downward (consensus far below a high CAGR). The cap
-        # does not bind and nothing moves; still worth recording as evaluated.
-        return g_ntm, None, None
+    if gated < g_ntm:
+        direction = "cap"
+    else:
+        # The upward cap does not bind. Try the downside floor: a consensus
+        # this far BELOW a positive secular CAGR is a corrupted estimate
+        # collapsing a ten-year model, not a forecast. Cyclicals are exempt
+        # because a −20% to −40% down-cycle in DRAM or shipping is genuine;
+        # a non-positive CAGR is exempt because there is then no secular
+        # history for the consensus to contradict.
+        if (g_ntm < floor and cagr > 0.0
+                and profile_name not in _CYCLICAL_PROFILES):
+            gated = max(g_ntm, cagr - _CAGR_DIVERGENCE_THRESHOLD)
+            direction = "floor"
+        else:
+            direction = None
+        if direction is None or gated <= g_ntm:
+            # Divergence was real but inside the floor's slack, or the profile
+            # is exempt. Neither half binds; nothing moves and nothing is
+            # recorded, matching the ceiling path's behaviour on a non-binding
+            # cap.
+            return g_ntm, None, None
+
+    if direction == "cap":
+        basis = (
+            f"NTM consensus {g_ntm:+.1%} diverges from historical CAGR "
+            f"{cagr:+.1%} by {abs(g_ntm - cagr) * 100:.1f}pp, above the "
+            f"{_CAGR_DIVERGENCE_THRESHOLD * 100:.0f}pp threshold; capped at "
+            f"max(CAGR, 0) + {_CAGR_DIVERGENCE_HEADROOM * 100:.0f}pp"
+        )
+    else:
+        basis = (
+            f"NTM consensus {g_ntm:+.1%} sits {abs(g_ntm - cagr) * 100:.1f}pp "
+            f"below historical CAGR {cagr:+.1%} and below the "
+            f"{floor:+.1%} downside floor on a non-cyclical profile with "
+            f"positive secular history; raised to CAGR − "
+            f"{_CAGR_DIVERGENCE_THRESHOLD * 100:.0f}pp"
+        )
 
     record = {
         "gate_id": "GATE_GROWTH_CAGR_DIVERGENCE",
         "metric": "revenue_growth",
         "raw_input_path_a": round(float(g_ntm), 6),
         "gated_output_path_b": round(float(gated), 6),
-        "basis": (
-            f"NTM consensus {g_ntm:+.1%} diverges from historical CAGR "
-            f"{cagr:+.1%} by {abs(g_ntm - cagr) * 100:.1f}pp, above the "
-            f"{_CAGR_DIVERGENCE_THRESHOLD * 100:.0f}pp threshold; capped at "
-            f"max(CAGR, 0) + {_CAGR_DIVERGENCE_HEADROOM * 100:.0f}pp"
-        ),
+        "direction": direction,
+        "basis": basis,
         "applied": True,
     }
     return gated, record, None
@@ -1263,6 +1341,53 @@ def _scale_analyst_bands_to_cap(
         for k, v in bands.items()
     }
     return scaled, scale
+
+
+def _shift_analyst_bands_to_floor(
+    bands: Optional[dict], floor: float
+) -> tuple[Optional[dict], Optional[float]]:
+    """Raise an analyst growth band onto the CAGR gate's downside floor.
+
+    Returns ``(bands, shift)`` with ``shift`` None when the floor does not bind.
+
+    Named *shift*, not *scale*, because the operation is additive and the
+    difference is load-bearing rather than cosmetic.
+    :func:`_scale_analyst_bands_to_cap` multiplies, and multiplying is safe
+    there because a cap only ever binds on a POSITIVE base. A floor only ever
+    binds on a NEGATIVE one — it sits at ``min(CAGR, 0) − 5pp`` — and a
+    proportional rewrite of a negative band is wrong in two ways an additive one
+    is not:
+
+      * the factor is ``floor / base``, and whenever the floor is itself
+        positive (reachable for any ``CAGR > 15pp``, since the rewrite is
+        ``max(g_ntm, CAGR − 15pp)``) that factor is NEGATIVE and flips the sign
+        of every member. A −40% bear would publish as +30% and the ordering
+        bear ≤ base ≤ bull would invert outright.
+      * when both are negative the factor is positive, but a band that diverged
+        this far usually straddles zero, and multiplying then compresses the
+        positive bull toward zero while raising the negative bear. Dispersion
+        survives only for the half of the band sharing the base's sign.
+
+    Adding ``floor − base`` to every member moves the whole band by exactly the
+    amount the base moved. Spread and ordering are preserved in both sign
+    regimes, which is the property the ceiling path buys by scaling and cannot
+    buy here. This is also why the two functions are separate rather than one
+    function with a sign parameter: they are not two directions of one
+    operation, they are two operations.
+    """
+    if not bands:
+        return bands, None
+    base = bands.get("base")
+    if not isinstance(base, (int, float)) or base >= floor:
+        return bands, None
+    shift = floor - base
+    shifted = {
+        k: (v + shift
+            if k in ("bear", "base", "bull") and isinstance(v, (int, float))
+            else v)
+        for k, v in bands.items()
+    }
+    return shifted, shift
 
 
 def _projectable_fcf_margin_cap(
@@ -8481,30 +8606,55 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             data_source=data_source, profile_name=profile_name, series=series,
         )
         if _cagr_gate_rec is not None:
-            # `_g_gated` IS the ceiling — read it from the return value rather
+            # `_g_gated` IS the bound — read it from the return value rather
             # than back out of the ledger record. (Reaching into the record for
             # it also trips test_gate_backtest's structural check that every
             # gate emits both halves of its path A/B pair, which counts key
             # occurrences in the source and cannot tell a write from a read.)
-            _gate_ceiling = float(_g_gated)
-            # One ceiling, applied to both paths in each path's own idiom.
-            growth_base = min(growth_base, _gate_ceiling)
-            # Scales the WHOLE band, so the spread 14 analysts expressed
-            # survives: BN4.SI's 3.8 / 20.3 / 37.3 becomes 0.9 / 5.0 / 9.2,
-            # not 3.8 / 5.0 / 5.0.
-            _analyst_bands, _gate_band_scale = _scale_analyst_bands_to_cap(
-                _analyst_bands, _gate_ceiling)
+            _gate_value = float(_g_gated)
+            # `direction` IS read out of the record, and that is safe: the key
+            # the structural check counts is the path A/B pair, not this one.
+            # It has to be read, because the two halves are not two directions
+            # of a single operation. A cap is `min()` on the base and a
+            # PROPORTIONAL band scale; a floor is `max()` and an ADDITIVE band
+            # shift. Applying the ceiling's idiom to a floor would multiply a
+            # negative band by `floor / base`, which is NEGATIVE whenever
+            # CAGR > 15pp, flipping the sign of every scenario. See
+            # `_shift_analyst_bands_to_floor`.
+            if _cagr_gate_rec.get("direction") == "floor":
+                growth_base = max(growth_base, _gate_value)
+                # Shifts the WHOLE band by the amount the base moved, so the
+                # spread and the bear ≤ base ≤ bull ordering survive exactly.
+                _analyst_bands, _gate_band_adj = _shift_analyst_bands_to_floor(
+                    _analyst_bands, _gate_value)
+                _gate_band_note = (
+                    f"; analyst bands shifted {_gate_band_adj:+.1%}"
+                    if _gate_band_adj is not None else "")
+            else:
+                growth_base = min(growth_base, _gate_value)
+                # Scales the WHOLE band, so the spread 14 analysts expressed
+                # survives: BN4.SI's 3.8 / 20.3 / 37.3 becomes 0.9 / 5.0 / 9.2,
+                # not 3.8 / 5.0 / 5.0.
+                _analyst_bands, _gate_band_adj = _scale_analyst_bands_to_cap(
+                    _analyst_bands, _gate_value)
+                _gate_band_note = (
+                    f"; analyst bands scaled {_gate_band_adj:.2f}x"
+                    if _gate_band_adj is not None else "")
             gate_evaluations.append(_cagr_gate_rec)
             progress.update_status(
                 agent_id, ticker,
                 f"CAGR-divergence gate: NTM growth {_gate_ref:.1%} → "
-                f"{_gate_ceiling:.1%} (5y CAGR {_cagr_for_gate:.1%})"
+                f"{_gate_value:.1%} (5y CAGR {_cagr_for_gate:.1%})"
             )
+            # The arrow format is deliberately NOT made direction-aware. The
+            # basis string in the parenthetical already says which half bound
+            # ("capped at max(CAGR, 0) + 5pp" vs "raised to CAGR − 15pp"), and
+            # rewording the prefix would churn the published flag on every
+            # fixture the cap fires on — BN4.SI and U96.SI — for no information.
             ticker_forward_flags.append(
                 f"CAGR-divergence gate: NTM growth {_gate_ref:+.1%} → "
-                f"{_gate_ceiling:+.1%}"
-                + (f"; analyst bands scaled {_gate_band_scale:.2f}x"
-                   if _gate_band_scale is not None else "")
+                f"{_gate_value:+.1%}"
+                + _gate_band_note
                 + f" ({_cagr_gate_rec['basis']})"
             )
         elif _cagr_gate_exc is not None and _cagr_for_gate is not None:
