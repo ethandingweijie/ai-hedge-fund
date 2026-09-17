@@ -406,3 +406,171 @@ VERIFIED BY MUTATION. `scratchpad/mutation_check_0917f.py` now carries twenty-si
 
 VERIFICATION. **102 value tests** in `tests/test_valuation_fixes_0917f.py` (48 test functions, parametrised across the 14 fixtures) and **13 structural tests** in `tests/test_valuation_fixes_0917f_struct.py` — 115 collected in total, all passing; 32 golden tests passed in 42.58s during the regeneration. Snapshot 227,403 → 227,943 bytes. Regenerated at HEAD `9654f82`, `_meta.generated_at` 2026-09-17T13:42:40+00:00, fixtures recorded at `30b26702d3c786e1835dd8e5cc629191e3d75c95` — unchanged, since no fixture was re-captured and no recorded call was touched. The four structural tests added here — net three, since `test_the_divergence_is_documented_at_the_call_site` was replaced by the two that pin the aligned state — are source-shape guards rather than value guards, and that is deliberate: a divergence reintroduced at one of the five call sites would move production and leave this baseline almost entirely unchanged, so counting the identical expressions is the only check that survives the store-size gap above.
 
+## 2026-09-17T15:00:48+00:00
+
+- regenerated at HEAD: `c690850`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Items 2+3 of the owner's queued mechanical fixes. Item 2 binds the peer market_cap ONCE as resolved_mcap and passes it to all five call sites, with a falsy-revenue_base guard; expected to move nothing. Item 3 puts _y10_fcf_margin through the same clamp _project_dcf applies to every projected year. Named golden delta, measured before regenerating: exactly 3 leaves, all forward_roic, no base_iv move on any of the 14 -- COST bear 0.1603->0.1724 (Consumer floor +0.02 binds, raw bear margin 0.0186), V bull 0.5007->0.4417 and C38U_SI bull 0.0331->0.0296 (0.60 cap, raw 0.680 and 0.670).
+
+### Item 2 — one market cap, five call sites
+
+`c690850` aligned the five peer call sites by writing the legs' expression,
+`(_market_cap or revenue_base * 10)`, at each of them. Five identical expressions
+is still five chances to edit one, and nothing but a source-shape test would
+notice. This binds it once as `resolved_mcap` and passes it by name, so the
+divergence is structurally impossible rather than merely asserted-against.
+
+Two things changed beyond the hoist, both deliberate:
+
+- **The standardised fallback is the owner's, not the legs'.** It reads
+  `_market_cap or (revenue_base * 10.0 if revenue_base else None)`. The guard is
+  the part that was missing at all five sites: `revenue_base` is
+  `most_recent["revenue"]` and can be `None`, so the bare expression raised
+  `TypeError: unsupported operand type(s) for *: 'NoneType' and 'int'` on any
+  name with no revenue line and no quote market cap. `None` is the honest answer
+  there — with no size information the caller gets whole-grouping medians and
+  `_comp_basis` says so, instead of a fabricated cap inventing a `large` rung
+  that was never earned.
+- **Placement is asserted, not assumed.** `revenue_base` is assigned TWICE inside
+  `run_dcf_agent` — the anchor, and again inside the FX block after the whole
+  series is multiplied by the rate. A binding hoisted above either would capture
+  a stale value and produce a size in the wrong currency, silently, because the
+  result is still a float. `test_resolved_mcap_is_bound_after_both_of_its_inputs_are_final`
+  pins the line-index ordering: two `revenue_base` assignments, one `_market_cap`,
+  one binding, below all three, above all five uses.
+
+**Measured move: zero.** All 14 fixtures, all leaves, bit-identical. That is the
+expected result and not a vacuous one — the fallback only fires when the quote
+carries no market cap, which no fixture does, so this commit is bought entirely
+by the structural guarantee and the `None`-revenue crash it closes.
+
+**The blind spot this exposes, measured in production.** The golden replay
+resolves comps from the LOCAL store (`load_comps` reads `_db.query`, not
+`_fmp_get`, so the Replayer never intercepts it), and that store has **no US rows
+at all**. Live SCHW resolves `industry/large n=10` at +28.22% with a growth
+premium of 0.962/0.933, while its fixture records `static/US` at 0.05 with a
+premium of 1.104. So `c690850` re-priced a US name in production and this
+baseline reported "no valuation moved" — a true statement about the baseline and
+a misleading one about the change. The comment at `_peer_for_gp` claimed "US names
+are unaffected"; that claim is now corrected in the source, and
+`test_the_alignment_comment_still_carries_the_measured_size` asserts the
+correction is present, because a comment carrying a checkable number beside an
+unchecked false scope reads as though both were checked. **No US fixture can ever
+exercise a live cohort here.** Filed as a chip.
+
+### Item 3 — the Y10 estimate clamps like the cash-flow engine
+
+`_project_dcf` has always run `min(max(fcf_margin_base + margin_delta_absolute,
+fcf_floor), 0.60)` on every projected year. `_y10_fcf_margin` — the terminal
+state Gate B judges, and the input to the persisted `forward_roic` — ran the bare
+sum. Gate B therefore decided whether terminal growth survives by comparing a
+ROIC computed off a margin the valuation never uses against the WACC.
+
+MSTR is the case that surfaced it and is **not in the fixture set**:
+`fcf_margin_base = -21.0605`, so `md_abs` is POSITIVE at +4.2121 and the unfloored
+Y10 margin is -16.85% against the -5.0% Tech floor the engine actually runs at — a
+projected ROIC of -11.1% where the DCF is sitting on its floor. The guard for the
+eleven fixtures where no clamp binds is therefore source-shape, not value-shape:
+`test_the_y10_estimate_and_the_engine_read_the_same_clamp` reads `_project_dcf`,
+`run_dcf_agent` and `pdf_report.py` and requires all three to carry the same
+expression. `fcf_floor` is reused from its single binding in `run_dcf_agent`
+rather than re-derived, and `0.60` is now `_FCF_MARGIN_CAP`, so the two cannot
+drift.
+
+**There is a THIRD copy of the clamp.** `src/utils/pdf_report.py:1394` already had
+the right shape — written by `7ba9aa8` — and reads `fcf_floor` off the payload,
+but hardcodes the 0.60 cap it cannot read. Before this commit the published
+sensitivity grid clamped and the Gate B estimate beside it did not: the table and
+the prose described different companies. The cap being a literal in one place and
+a constant in another is filed as a chip.
+
+**The floor is not uniformly negative, and my reasoning that it was inert was
+wrong.** I had carried "all fixture `fcf_margin_base` are positive, so a bear
+margin at 0.80 × fmb stays above a floor of −0.05." That is true of the DEFAULT
+and false of the TABLE at `src/data/sector_profiles.py:656`: Consumer +0.02,
+Industrials +0.02, Materials +0.01, Telco +0.05, REIT +0.05,
+ProfessionalServices +0.05. COST is Consumer, its bear raw margin is
+0.0232 − 0.0046 = 0.0186, and +0.02 binds. The cap half was predicted correctly;
+the floor half was found by measuring before regenerating, which is what the
+verification contract exists to force.
+
+### The three leaves, and why no valuation moved
+
+| fixture | leaf | before → after | half | arithmetic |
+|---|---|---|---|---|
+| V | `scenarios.bull.forward_roic` | 0.5007 → 0.4417 | cap | fmb 0.5667 × 1.20 = 0.680; 0.4417/0.5007 = 0.8822 ≈ 0.60/0.680 |
+| C38U_SI | `scenarios.bull.forward_roic` | 0.0331 → 0.0296 | cap | fmb 0.5583 × 1.20 = 0.670; 0.0296/0.0331 = 0.894 ≈ 0.60/0.670 |
+| COST | `scenarios.bear.forward_roic` | 0.1603 → 0.1724 | floor | Consumer +0.02 against a raw bear margin of 0.0186; 0.1603 × (0.02/0.0186) = 0.17237 |
+
+`base_iv` is bit-identical on all 14 and no Gate B firing changed, for two
+separate reasons:
+
+- **The quality gate is saturated on both cap cases.** COST bear 0.1724 against
+  WACC 0.0725 is 2.38×, V bull 0.4417 against 0.0725 is 6.09×, and
+  `_quality = min(1.0, (forward_roic − wacc)/wacc)` is already at 1.0 either side
+  of the move. C38U_SI bull 0.0296 against WACC 0.0573 is still below, so `_gp_raw`
+  is forced to 1.0 as before.
+- **Bull's Gate B threshold is `float("-inf")`**, so no bull ROIC can trip it, and
+  COST's bear ROIC clears WACC on both sides of the floor.
+
+### The invariant this bought, and the hole it opened
+
+`test_the_three_scenario_roics_are_the_base_one_scaled_by_the_margin_delta` is now
+stated against the CLAMPED margin on both sides:
+
+    roic[s] / roic[base] == clamp(fmb + md[s]) / clamp(fmb + md[base])
+
+Before this commit the identity divided bare sums and still passed on a payload
+where the gate and the engine disagreed — it was comparing the estimate against
+itself, not against the cash flows the valuation is built from. Stating it
+against the clamp makes it a test of the parity.
+
+**Clamping makes that map non-injective, and the first 32-mutation sweep found
+the consequence.** Reverting COST's bear `margin_delta_absolute` to the
+pre-`7ba9aa8` per-year form (−0.0046 → −0.046) SURVIVED all 51 tests: −0.0228 and
++0.0186 both clamp to the Consumer floor of +0.02, so `forward_roic` is
+bit-identical under the mutation. It is not an equivalent mutation —
+`margin_delta_absolute` drives all ten projected years inside `_project_dcf`, so
+the IV moves — but no ROIC can see it. Closed by asserting the identity on the
+INPUT for exactly the three pairs where a clamp binds
+(`md = fmb × (m − 1)`, which the clamp cannot flatten), with
+`assert clamped == 3` so a fourth binding forces the coverage question rather
+than silently inheriting a skipped branch. Second sweep: **32 of 32 caught, 0
+missed, 0 unresolvable names, 0 wrong predictions.**
+
+The clamped set is DERIVED, not tabulated: `test_the_clamp_binds_on_exactly_three_scenario_margins`
+recomputes `_binds(name, s)` across all 14 fixtures and compares to the named
+three, so a future comps or profile change that pushes another fixture into the
+clamp fails with a name on it.
+
+### One pre-existing guard collided, and which side moved
+
+The full suite came back **1 failed, 4927 passed**:
+`tests/test_valuation_fixes_0917e.py::test_the_multiplier_is_gone_from_the_assignment`,
+which asserted the literal string `_y10_fcf_margin = fcf_margin_base + md_abs` —
+the exact post-`7ba9aa8` line that item 3 wrapped in the clamp. Two source-shape
+guards, one line, and they contradicted each other directly: item 3's
+`test_the_y10_estimate_and_the_engine_read_the_same_clamp` asserts that string is
+ABSENT.
+
+0917e is the stale side and it moved. Its purpose is that the `× 10` multiplier is
+gone, and the bare-sum form was incidental to that purpose; the fossil sweep over
+all six spacings is unchanged and still runs against the whole engine source. The
+shape assertion is now the clamped pair, `_y10_fcf_margin = min(` plus
+`max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)`, and is deliberately
+NOT loosened to a substring that both forms satisfy — such a substring would also
+satisfy `md_abs * 10` reappearing inside the clamp.
+
+This is recorded here rather than only in the commit message because it is the
+shape of failure the golden suite exists to make attributable: a guard written for
+one fix silently became a guard against the next one, and only running the whole
+suite — not the four modules the change touched — surfaced it.
+
+Re-run after the 0917e fix: **4933 passed, 0 failed, 1 deselected**. The three
+leaves above are the whole of the golden delta and all three are in the named
+set, so the snapshot was regenerated without investigating anything.
+
+
+

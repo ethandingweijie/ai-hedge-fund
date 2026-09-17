@@ -276,28 +276,63 @@ def test_terminal_growth_survives_bear_exactly_where_the_roic_clears_wacc():
 _QUANT = 5e-5   # every one of these leaves is published rounded to 4 decimals
 
 
-def _ratio_tol(ro_s: float, ro_base: float, fmb: float, md_s: float,
-               md_base: float) -> float:
-    """How far `ro_s / ro_base` may sit from `(fmb + md_s) / (fmb + md_base)`.
+def _clamp(x: float, floor: float) -> float:
+    """The margin clamp BOTH `_project_dcf` and the Y10 Gate B estimate apply.
+
+    `min(max(margin, fcf_floor), _FCF_MARGIN_CAP)`. The floor is per-sector and
+    read off the payload (`fcf_floor` is projected), the cap is the module
+    constant — neither is restated here, because a test that hardcodes the number
+    it is checking cannot see the number change.
+
+    This is what the item-3 synchronisation bought. Before it, `_y10_fcf_margin`
+    was the bare sum and `_project_dcf` clamped, so Gate B judged a terminal
+    margin the cash-flow engine never used. The identity below is stated against
+    the CLAMPED margin on both sides, which makes it a test of the parity rather
+    than of the raw proportionality: if either side stops clamping, or clamps to
+    a different number, the ratio breaks.
+    """
+    return min(max(x, floor), dcf_agent._FCF_MARGIN_CAP)
+
+
+def _binds(name: str, s: str) -> str | None:
+    """Which half of the clamp binds for one (fixture, scenario), or None.
+
+    Derived, not tabulated: a future comps or profile change that pushes another
+    fixture into the clamp shows up here as a new name, and
+    `test_the_clamp_binds_on_exactly_three_scenario_margins` fails with it.
+    """
+    p = _proj(name)
+    fmb, floor = p["fcf_margin_base"], p["fcf_floor"]
+    raw = fmb + p[f"scenarios.{s}.margin_delta_absolute"]
+    if raw < floor:
+        return "floor"
+    if raw > dcf_agent._FCF_MARGIN_CAP:
+        return "cap"
+    return None
+
+
+def _ratio_tol(ro_s: float, ro_base: float, n: float, d: float) -> float:
+    """How far `ro_s / ro_base` may sit from the clamped-margin ratio.
 
     Both sides are built from 4dp-rounded leaves, so neither is exact and a flat
     tolerance would either fail on rounding or be too loose to mean anything. This
-    is the first-order propagation of ±5e-5 through all five inputs:
+    is the first-order propagation of ±5e-5 through all four inputs, `n` and
+    `d` being the CLAMPED margins:
 
         ratio side   q * (1/|ro_base| + |ro_s| / ro_base**2)
-        margin side  q * (1/|D| + |N| / D**2 + |D - N| / D**2),  N = fmb+md_s,
-                                                               D = fmb+md_base
+        margin side  q * (1/|d| + |n| / d**2 + |d - n| / d**2)
 
-    The margin side dominates wherever `fmb` is small, because the ratio is then a
-    quotient of two small numbers: COST has `fcf_margin_base` 0.0232 and
+    The margin side dominates wherever the margins are small, because the ratio is
+    then a quotient of two small numbers: COST has `fcf_margin_base` 0.0232 and
     `margin_delta_absolute` -0.0046, where -0.0046 is itself -0.00464 rounded —
     that single rounding moves the expected ratio by 1.8e-3, which is the whole of
-    the observed gap.
+    the observed gap. COST is also the fixture where the FLOOR binds — the
+    Consumer +0.02 against a bear margin of 0.0186 — so its clamped `n` is a
+    clean 0.02 and its tolerance is set by `d` alone.
 
     The headroom is the point: the `× 10` defect moved the bear ratio from 0.80 to
     -1.00, a 225% error, against a tolerance under 1%.
     """
-    n, d = fmb + md_s, fmb + md_base
     left = _QUANT * (1.0 / abs(ro_base) + abs(ro_s) / (ro_base * ro_base))
     right = _QUANT * (1.0 / abs(d) + abs(n) / (d * d)
                       + abs(d - n) / (d * d))
@@ -310,10 +345,18 @@ def test_the_three_scenario_roics_are_the_base_one_scaled_by_the_margin_delta():
 
     The Y10 ROIC is linear in the Y10 FCF margin (`_y10_ic` and `_y10_fcf` carry
     the same revenue multiplier, so it cancels), and the Y10 margin is
-    `fcf_margin_base + margin_delta_absolute`. Both terms are now persisted, so the
-    three scenarios must satisfy
+    `fcf_margin_base + margin_delta_absolute` put through the same floor and cap
+    `_project_dcf` puts every projected year through. All three terms are
+    persisted, so the three scenarios must satisfy
 
-        roic[s] / roic[base] == (fmb + md[s]) / (fmb + md[base])
+        roic[s] / roic[base] == clamp(fmb + md[s]) / clamp(fmb + md[base])
+
+    Stated against the CLAMPED margin deliberately. Before the item-3
+    synchronisation the Gate B estimate was the bare sum while the cash-flow
+    engine clamped, and this identity still passed — it was comparing the
+    estimate against itself, not against the cash flows the valuation is built
+    from. Now a one-sided clamp breaks it, which is the property that was
+    missing.
 
     Under the defect the bear margin was `fmb * (10m - 9)` instead of `fmb * m`,
     which makes the left side -1.00 where the right side says 0.80 — a
@@ -330,20 +373,21 @@ def test_the_three_scenario_roics_are_the_base_one_scaled_by_the_margin_delta():
     checked = 0
     for name in _ALL:
         p = _proj(name)
-        fmb = p["fcf_margin_base"]
+        fmb, floor = p["fcf_margin_base"], p["fcf_floor"]
         ro = {s: p[f"scenarios.{s}.forward_roic"] for s in _SCENARIOS}
         md = {s: p[f"scenarios.{s}.margin_delta_absolute"] for s in _SCENARIOS}
         if any(v is None for v in ro.values()):
             continue                      # D05_SI: no ROIC in any scenario
-        assert fmb + md["base"] != 0.0, (name, fmb, md)
+        m = {s: _clamp(fmb + md[s], floor) for s in _SCENARIOS}
+        assert m["base"] != 0.0, (name, fmb, md, floor)
         for s in ("bear", "bull"):
             checked += 1
             ratio = ro[s] / ro["base"]
-            expected = (fmb + md[s]) / (fmb + md["base"])
+            expected = m[s] / m["base"]
             assert ratio == pytest.approx(
                 expected,
-                abs=_ratio_tol(ro[s], ro["base"], fmb, md[s], md["base"])), \
-                (name, s, ro, md, fmb, ratio, expected)
+                abs=_ratio_tol(ro[s], ro["base"], m[s], m["base"])), \
+                (name, s, ro, md, fmb, floor, ratio, expected)
     assert checked == 2 * (len(_ALL) - 1), checked
 
 
@@ -353,10 +397,25 @@ def test_that_ratio_reduces_to_the_scenario_margin_multipliers():
     `md = fmb * (m - 1)` makes `fmb` cancel, so this compares two ROICs against a
     constant and inherits rounding from the ROICs only. Bear/base is 0.80 and
     bull/base is 1.20 for standard profiles, 0.65 and 1.15 for the high-SBC one —
-    and MELI is the only fixture in the second group."""
+    and MELI is the only fixture in the second group.
+
+    The cancellation needs an unclamped margin, so the three (fixture, scenario)
+    pairs where a clamp binds cannot be checked through the OUTPUT ratio — and
+    named, by `test_the_clamp_binds_on_exactly_three_scenario_margins`, so a
+    fourth cannot appear quietly. Those three are checked through the INPUT
+    instead, which the clamp cannot blind, and the reason that matters is
+    measured rather than theoretical: a mutation reverting COST's bear
+    `margin_delta_absolute` to the pre-7ba9aa8 per-year form (-0.0046 -> -0.046)
+    survives every output test in this module, because -0.0228 and +0.0186 both
+    clamp to the Consumer floor of +0.02 and so produce the SAME `forward_roic`.
+    The clamp makes the output map non-injective below the floor. It is not an
+    equivalent mutation — `margin_delta_absolute` also drives all ten projected
+    years inside `_project_dcf`, so the IV moves — but no ROIC can see it. Pinning
+    `md = fmb * (m - 1)` directly closes the hole at the input. Between the two
+    forms all 26 pairs are covered."""
     from src.agents.analysis.dcf_agent import _MARGIN_DELTA_MULT, \
         _MARGIN_DELTA_MULT_HIGH_SBC
-    checked = 0
+    checked = clamped = 0
     for name in _ALL:
         p = _proj(name)
         base = p["scenarios.base.forward_roic"]
@@ -364,7 +423,23 @@ def test_that_ratio_reduces_to_the_scenario_margin_multipliers():
             continue
         mults = (_MARGIN_DELTA_MULT_HIGH_SBC if name == "MELI"
                  else _MARGIN_DELTA_MULT)
+        fmb = p["fcf_margin_base"]
         for s in ("bear", "bull"):
+            if _binds(name, s):
+                # The output ratio is the clamped pair, which the identity above
+                # already pins; asserting the multiplier through it would assert
+                # a number the engine does not use. Assert it on the input,
+                # where a clamp cannot flatten a 10x error onto a 1x one.
+                # `guidance_margin_adj` rides on base and bull and not on bear,
+                # and is ~0 on all fourteen fixtures, so the tolerance is the
+                # persisted quantisation plus room for a small adjustment.
+                clamped += 1
+                md_s = p[f"scenarios.{s}.margin_delta_absolute"]
+                want = fmb * (mults[s] - 1.0)
+                assert md_s == pytest.approx(want, abs=5e-4 + 0.01 * abs(want)), \
+                    (name, s, md_s, want, fmb, mults[s],
+                     "a clamped scenario's margin delta is only pinned here")
+                continue
             checked += 1
             ro_s = p[f"scenarios.{s}.forward_roic"]
             ratio = ro_s / base
@@ -372,7 +447,10 @@ def test_that_ratio_reduces_to_the_scenario_margin_multipliers():
                 mults[s], abs=_QUANT * (1.0 / abs(base)
                                         + abs(ratio) / abs(base)) + 1e-4), \
                 (name, s, ratio, mults[s])
-    assert checked == 2 * (len(_ALL) - 1), checked
+    assert checked + clamped == 2 * (len(_ALL) - 1), (checked, clamped)
+    assert clamped == 3, (
+        "the input-side branch is load-bearing only while exactly three pairs "
+        "clamp; if that set changed, recheck what covers the rest", clamped)
     assert _MARGIN_DELTA_MULT["bear"] == 0.80
     assert _MARGIN_DELTA_MULT["bull"] == 1.20
     assert _MARGIN_DELTA_MULT_HIGH_SBC["bear"] == 0.65
@@ -381,6 +459,107 @@ def test_that_ratio_reduces_to_the_scenario_margin_multipliers():
     for name in _ALL:
         assert (_proj(name)["profile"] in dcf_agent._HIGH_SBC_PROFILES) \
             == (name == "MELI"), name
+
+
+# ── Item 3: the Y10 estimate and the cash-flow engine clamp identically ──────
+#
+# `_project_dcf` has always run `min(max(fcf_margin_base + margin_delta_absolute,
+# fcf_floor), 0.60)` on every projected year. `_y10_fcf_margin` — the terminal
+# state Gate B judges, and the input to the persisted `forward_roic` — ran the
+# bare sum. So the gate decided whether terminal growth survives by comparing a
+# ROIC computed off a margin the valuation never uses against the WACC. MSTR is
+# the case that surfaced it: `fcf_margin_base = -21.0605` makes `md_abs` POSITIVE,
+# the unfloored Y10 margin is -16.85% and the projected ROIC -11.1%, while the
+# engine runs at the -5.0% Tech floor.
+
+#: The three (fixture, scenario) pairs where a clamp binds, the half that binds,
+#: the ROIC before the synchronisation and after. Measured across all 14 fixtures
+#: one subprocess each BEFORE the baseline was regenerated
+#: (`scratchpad/delta_items23.log`): these three leaves and nothing else moved,
+#: and `base_iv` is bit-identical on all 14 — each of the three stays on the same
+#: side of its gate, so no valuation could move.
+_CLAMP_BINDS = {
+    #                    half     before    after
+    ("COST", "bear"):    ("floor", 0.1603, 0.1724),
+    ("C38U_SI", "bull"): ("cap",   0.0331, 0.0296),
+    ("V", "bull"):       ("cap",   0.5007, 0.4417),
+}
+
+
+def test_the_clamp_binds_on_exactly_three_scenario_margins():
+    """Derived by `_binds`, not read off the table, so a fourth pair appearing is
+    a failure with a name attached rather than a silent skip in the multiplier
+    test above.
+
+    COST is the one that falsified the expectation. The reasoning that predicted
+    an inert floor was "every fixture `fmb` is positive, so a bear margin at
+    0.80 × `fmb` stays above a floor of -0.05" — which is true of the DEFAULT and
+    false of the table. `FCF_MARGIN_FLOOR` is positive for most sectors:
+    Consumer +0.02, Industrials +0.02, Materials +0.01, Telco/REIT/
+    ProfessionalServices +0.05. COST's bear margin is 0.0232 - 0.0046 = 0.0186,
+    under its Consumer floor of +0.02, so the engine has been projecting 0.02
+    while Gate B judged 0.0186. The move is 0.1603 × (0.02 / 0.0186) = 0.17237,
+    which is the published 0.1724 — the floor, to four decimals.
+    """
+    found = {}
+    for name in _ALL:
+        for s in _SCENARIOS:
+            b = _binds(name, s)
+            if b:
+                found[(name, s)] = b
+    assert found == {k: v[0] for k, v in _CLAMP_BINDS.items()}, found
+    # No BASE margin is clamped on any fixture, which is what makes the base the
+    # denominator both ratio tests divide by.
+    assert not any(s == "base" for _, s in found), found
+
+
+def test_the_three_clamped_margins_moved_to_the_numbers_measured():
+    """The named golden move, pinned to the four decimals the payload publishes.
+
+    All three are `forward_roic` and nothing else moved — no `growth_premium`,
+    no leg multiple, no IV, no `tgr`, no 12m target. That is not luck: each stays
+    on the same side of the gate that reads it. COST's bear ROIC rises to 0.1724
+    against a 0.0725 WACC, still ≥ 2× so `_quality` stays saturated at 1.0; V's
+    bull ROIC falls to 0.4417 against the same WACC, still 6.1× and saturated;
+    C38U_SI's bull ROIC falls to 0.0296 against 0.0573, still below, so `_gp_raw`
+    stays forced to 1.0. The leaf moves and the valuation cannot.
+    """
+    for (name, s), (_half, before, after) in _CLAMP_BINDS.items():
+        got = _proj(name)[f"scenarios.{s}.forward_roic"]
+        assert got == pytest.approx(after, abs=_QUANT), (name, s, got, after)
+        assert abs(got - before) > 10 * _QUANT, (
+            f"{name}/{s}: the clamp no longer moves this leaf, so the golden "
+            f"delta it was named for has gone quiet — {got} against {before}")
+
+
+def test_the_y10_estimate_and_the_engine_read_the_same_clamp():
+    """Source-shape parity between the two places that build a projected margin.
+
+    A value guard cannot carry this one alone: on 11 of the 14 fixtures neither
+    clamp binds, so deleting the clamp from `_y10_fcf_margin` again moves three
+    leaves and no valuation, and a name whose margin sits outside both is exactly
+    the name an audit is run on. MSTR is not in the fixture set at all. So the
+    guard is on the shape — both sites must name the same floor variable and the
+    same module constant.
+    """
+    assert dcf_agent._FCF_MARGIN_CAP == 0.60
+    eng = inspect.getsource(dcf_agent._project_dcf)
+    assert "max(fcf_margin_base + margin_delta_absolute, fcf_floor)" in eng
+    assert "min(margin_t, _FCF_MARGIN_CAP)" in eng
+    run = inspect.getsource(dcf_agent.run_dcf_agent)
+    assert "_y10_fcf_margin = min(" in run
+    assert "max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)" in run
+    # The pre-fix form, so a revert is a named failure rather than a delta.
+    assert "_y10_fcf_margin = fcf_margin_base + md_abs" not in run
+    # And the third copy: the PDF sensitivity grid recomputes the DCF, and it
+    # once did so with a per-year margin drift the engine does not have. Read as
+    # text rather than imported — this module's job is to check a shape, and
+    # pulling in the report builder to do it would make the guard fail for
+    # reasons that have nothing to do with the clamp.
+    with open(os.path.join(_REPO, "src", "utils", "pdf_report.py"),
+              encoding="utf-8") as fh:
+        pdf = fh.read()
+    assert "min(max(margin + margin_delta, fcf_floor), 0.60)" in pdf
 
 
 @pytest.mark.parametrize("name", _DEACTIVATED)

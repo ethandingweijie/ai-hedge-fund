@@ -2389,6 +2389,17 @@ def _r1_structured_guidance(ticker: str,
 
 # ── Core DCF Engine ───────────────────────────────────────────────────────────
 
+# The ceiling `_project_dcf` puts on a projected FCF margin, paired with the
+# per-sector `FCF_MARGIN_FLOOR` that puts a floor under it. Named rather than
+# left as a literal because there is a THIRD place that has to reproduce the
+# same clamp: `_y10_fcf_margin`, which estimates the terminal state Gate B
+# judges. When that estimate and the cash-flow engine disagree about the
+# margin, Gate B is judging a company the DCF is not modelling — see the
+# binding site for what that cost. `src/utils/pdf_report.py` carries its own
+# copy of the same expression for its sensitivity grid.
+_FCF_MARGIN_CAP = 0.60
+
+
 def _project_dcf(
     revenue_base: float,
     fcf_margin_base: float,
@@ -2450,7 +2461,7 @@ def _project_dcf(
             margin_t = max(fcf_margin_base + margin_delta_absolute, fcf_floor)
         else:
             margin_t = max(fcf_margin_base + margin_delta_per_year * t, fcf_floor)
-        margin_t = min(margin_t, 0.60)
+        margin_t = min(margin_t, _FCF_MARGIN_CAP)
         fcf_t    = rev_t * margin_t
         # Compound discount factor using per-year WACC (staged fade).
         disc_cum = disc_cum / (1 + w_t)
@@ -7180,6 +7191,36 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"FX rate unavailable for {reported_currency}→{_target_ccy} — values unscaled"
                 )
 
+        # ── The one size every peer lookup is allowed to use ───────────────
+        #
+        # `market_cap` is what unlocks the size-matched "large" cohort rungs in
+        # `get_regional_multiples`, and five call sites need it: the three
+        # `_compute_method_value` legs, the growth-premium benchmark they are
+        # scaled by, and the 12m-target peer set whose resolution is published
+        # in `multiples_used`. Five copies of one expression is five chances to
+        # edit one of them, and that is exactly what happened — the benchmark
+        # passed nothing and the 12m call passed `or 0.0`, so both silently
+        # resolved whole-grouping medians while the legs resolved a size-matched
+        # set. Binding it ONCE makes the divergence structurally impossible
+        # rather than merely tested for.
+        #
+        # Bound here, after the FX block re-derives `revenue_base` at the
+        # conversion above and after `_market_cap` is finalised from the quote,
+        # so it is downstream of the last assignment to both of its inputs.
+        #
+        # The `revenue_base * 10` proxy is the legs' own: when the quote carries
+        # no market cap they still resolved a size, and a different fallback
+        # anywhere would reopen the gap. The guard is the part that was missing
+        # — `revenue_base` is `most_recent["revenue"]` and can be None, so the
+        # bare expression raised `TypeError: unsupported operand type(s) for *:
+        # 'NoneType' and 'int'` on any name with no revenue line and no quote
+        # cap. None is the honest answer there: with no size information the
+        # caller gets whole-grouping medians and `_comp_basis` says so, instead
+        # of a fabricated cap inventing a `large` rung that was never earned.
+        resolved_mcap: float | None = (
+            _market_cap or (revenue_base * 10.0 if revenue_base else None)
+        )
+
         # Task #25 — HK blends run in HKD but the analyst SOTP assumptions
         # are USD-based. Tell the SOTP dispatcher which currency the blend
         # actually carries so its per-share leg is converted to match:
@@ -9140,7 +9181,27 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # m = 0.80, −2.5·fmb at the high-SBC m = 0.65 — which forced a
                 # negative projected ROIC and fired Gate B, zeroing terminal
                 # growth, in the bear scenario of 13 of the 14 golden fixtures.
-                _y10_fcf_margin = fcf_margin_base + md_abs
+                #
+                # The floor and the cap are NOT a new clamp. `_project_dcf` —
+                # called 20 lines below with this same `md_abs` — already runs
+                # `margin_t = min(max(fcf_margin_base + margin_delta_absolute,
+                # fcf_floor), _FCF_MARGIN_CAP)` on every projected year, off
+                # this same `fcf_floor` binding. This estimate is the terminal
+                # state Gate B judges, so the invariant is that it describes
+                # the company the DCF actually models. Without the clamp it did
+                # not: for a deeply FCF-negative name the unfloored margin
+                # fabricated a terminal ROIC the cash-flow engine never
+                # produces, and Gate B zeroed terminal growth on the strength of
+                # a number nothing downstream ever used. MSTR is the case —
+                # `fcf_margin_base = -21.0605`, so `md_abs` is POSITIVE at
+                # +4.2121 and the unfloored Y10 margin is -16.85% against the
+                # -5.0% Tech floor the engine runs at: a projected ROIC of
+                # -11.1% where the DCF itself is running at the floor.
+                # `fcf_floor` is reused rather than re-derived so the two cannot
+                # drift; `_FCF_MARGIN_CAP` binds the other way, on a bull margin
+                # above 0.60, for the same parity reason.
+                _y10_fcf_margin = min(
+                    max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)
                 _y10_fcf = _y10_rev * _y10_fcf_margin
                 # Scale invested capital proportionally with revenue
                 _y10_ic = ic_val * _y10_rev_mult
@@ -9316,15 +9377,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # systematically penalises exactly the large names it is being
                 # asked about.
                 #
-                # The `or revenue_base * 10` fallback is the legs' own, copied
-                # rather than reinvented: when the quote carries no market cap
-                # the legs still resolve a size, and a different fallback here
-                # would reintroduce the divergence this call exists to close.
-                # US names are unaffected — `_regional_peer_multiples` returns
-                # {} for them and the static table has no cohort rungs.
+                # It now reads `resolved_mcap`, bound once upstream of every
+                # peer call in this function — see the comment at its binding.
+                #
+                # SCOPE, measured in production rather than assumed. The first
+                # version of this comment claimed US names were unaffected
+                # because `_regional_peer_multiples` returns {} for them. That
+                # is true of the GOLDEN FIXTURES and false of production: the
+                # fixtures replay against the local comps store, which holds no
+                # US rows at all, while the weekly refresh covers seven markets
+                # including the US. Live SCHW resolves `industry/large n=10` at
+                # +28.22% with a growth premium of 0.962/0.933, where its
+                # fixture records `static/US` at 0.05 with a premium of 1.104.
+                # So the alignment re-priced a US name in production and the
+                # baseline reported "no valuation moved" — which was a true
+                # statement about the baseline and a misleading one about the
+                # change. Read the cohort off `sector_g_avg_basis` in a live
+                # payload, never off a fixture, when the question is US.
                 _peer_for_gp = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
                                                          ticker=ticker,
-                                                         market_cap=(_market_cap or revenue_base * 10))
+                                                         market_cap=resolved_mcap)
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
                 _sector_g_avg_basis = (_peer_for_gp.get("_comp_basis") or {}).get("growth_avg")
                 _gp_raw_growth = (
@@ -9431,7 +9503,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 # and it decided which comp basket a large cap
                                 # was measured against. Use the real one where
                                 # the price resolved.
-                                market_cap=(_market_cap or revenue_base * 10),
+                                market_cap=resolved_mcap,
                                 wacc=wacc,
                                 growth_base=g,
                                 fcf_margin_base=fcf_margin_base,
@@ -9484,7 +9556,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             revenue_base=revenue_base,
                             shares=shares,
                             net_debt=net_debt,
-                            market_cap=(_market_cap or revenue_base * 10),
+                            market_cap=resolved_mcap,
                             wacc=wacc,
                             growth_base=g,
                             fcf_margin_base=fcf_margin_base,
@@ -9555,7 +9627,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 revenue_base=revenue_base,
                                 shares=shares,
                                 net_debt=net_debt,
-                                market_cap=(_market_cap or revenue_base * 10),
+                                market_cap=resolved_mcap,
                                 wacc=wacc,
                                 growth_base=g,
                                 fcf_margin_base=fcf_margin_base,
@@ -10052,11 +10124,11 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # It did not match: this read `or 0.0` where the legs read
         # `or revenue_base * 10`, so for any HK/SG name whose quote carries no
         # market cap the 12m target was priced off whole-grouping multiples
-        # while the trace beside it claimed a size-matched set. Same fallback
-        # as the legs, for the same reason.
+        # while the trace beside it claimed a size-matched set. Both now read
+        # `resolved_mcap`, bound once upstream of every peer call here.
         peer = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
                                          ticker=ticker,
-                                         market_cap=(_market_cap or revenue_base * 10))
+                                         market_cap=resolved_mcap)
         _12m_targets: dict[str, Optional[float]] = {}
         _12m_pt_method_label = "forward multiple (profile-specific)"
         _is_reit = sector in {"REIT", "RealEstate"} or profile_name == "REIT"

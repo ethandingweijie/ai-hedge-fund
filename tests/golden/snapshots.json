@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-09-17T13:42:40+00:00",
+  "generated_at": "2026-09-17T15:00:48+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "9654f82",
-  "reason": "Item 3a: align the market_cap resolution at _peer_for_gp and the 12m-target peer call with the three _compute_method_value legs, so the growth-premium benchmark comes from the same size-matched cohort as the multiples it scales. Measured across all 14 fixtures BEFORE regenerating: exactly 18 leaves move, on 2 fixtures only - 09988_HK sector_g_avg 0.0625 -> 0.1359 (industry/all n=18 -> industry/large n=9) and BN4_SI 0.0643 -> 0.0793 (sector/all n=22 -> sector/large n=11), each x3 scenarios, plus their basis cohort and peer_count. 0 added, 0 removed, base_iv identical on all 14, and not one growth_premium, leg multiple or 12m target moved: both names have forward_roic below WACC in every scenario, so the quality gate forces _gp_raw to 1.0 and the average never reaches the premium. The other four HK/SG fixtures cannot move - HKSE Banks - Diversified, SES REIT/Real Estate and SES Financial Services store no large rung at all.",
+  "regenerated_at_commit": "c690850",
+  "reason": "Items 2+3 of the owner's queued mechanical fixes. Item 2 binds the peer market_cap ONCE as resolved_mcap and passes it to all five call sites, with a falsy-revenue_base guard; expected to move nothing. Item 3 puts _y10_fcf_margin through the same clamp _project_dcf applies to every projected year. Named golden delta, measured before regenerating: exactly 3 leaves, all forward_roic, no base_iv move on any of the 14 -- COST bear 0.1603->0.1724 (Consumer floor +0.02 binds, raw bear margin 0.0186), V bull 0.5007->0.4417 and C38U_SI bull 0.0331->0.0296 (0.60 cap, raw 0.680 and 0.670).",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -1690,7 +1690,7 @@
     "SBC drag: FCF margin 57.5% \u2192 55.8% (\u2212170 bps, 5/5 yr SBC data)",
     "WACC 5.48% = base 5.50% + credit overlay -2bps (rd_live 4.49% vs baseline 4.57% for A \u00d7 D/V 36.9% \u00d7 0.75) [fred:BAMLC0A3CA]"
    ],
-   "scenarios.bull.forward_roic": 0.0331,
+   "scenarios.bull.forward_roic": 0.0296,
    "scenarios.bull.growth_premium": 1.0,
    "scenarios.bull.growth_rate": 0.1216,
    "scenarios.bull.intrinsic_value": 2.27,
@@ -1916,7 +1916,7 @@
     "Segment scenarios (3 segments, conf=medium): Membership Fees [+7%\u2192+14%], Merchandise [+3%\u2192+10%], Digitally-Enabled Sales [+11%\u2192+25%]",
     "WACC 7.00% (sector base; net-cash position, no debt weight to overlay)"
    ],
-   "scenarios.bear.forward_roic": 0.1603,
+   "scenarios.bear.forward_roic": 0.1724,
    "scenarios.bear.growth_premium": 1.028,
    "scenarios.bear.growth_rate": 0.0875,
    "scenarios.bear.intrinsic_value": 956.33,
@@ -3956,7 +3956,7 @@
     "SBC drag: FCF margin 57.5% \u2192 56.7% (\u221283 bps, 5/5 yr SBC data)",
     "WACC 7.00% = base 7.00% + credit overlay +0bps (rd_live 4.44% vs baseline 4.41% for AAA \u00d7 D/V 1.6% \u00d7 0.75) [fred:BAMLC0A1CAAA]"
    ],
-   "scenarios.bull.forward_roic": 0.5007,
+   "scenarios.bull.forward_roic": 0.4417,
    "scenarios.bull.growth_premium": 1.144,
    "scenarios.bull.growth_rate": 0.1481,
    "scenarios.bull.intrinsic_value": 539.81,

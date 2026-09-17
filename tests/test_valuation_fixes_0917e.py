@@ -209,8 +209,28 @@ def _bear_gate_b_roic(projection: dict) -> float | None:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_the_multiplier_is_gone_from_the_assignment():
+    """The `× 10` is gone, and the shape it is gone FROM is the clamped one.
+
+    This assertion used to read `_y10_fcf_margin = fcf_margin_base + md_abs`,
+    which was the exact post-7ba9aa8 line. Item 3 then wrapped that sum in the
+    floor-and-cap `_project_dcf` applies to every projected year, so the bare
+    string stopped existing and this test failed on a change that is strictly
+    closer to its own intent: the multiplier is still absent, and the estimate
+    now agrees with the cash-flow engine as well.
+
+    The shape is pinned as the clamped form rather than loosened to a substring,
+    because a substring loose enough to survive both forms would also survive
+    `md_abs * 10` reappearing inside the clamp. `_y10_fcf_margin = min(` plus
+    `max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)` is the pair;
+    the fossil sweep below then checks every spacing of the multiplier against
+    the whole engine source, which is where it would actually hide.
+    """
     src = _engine_src()
-    assert "_y10_fcf_margin = fcf_margin_base + md_abs" in src
+    assert "_y10_fcf_margin = min(" in src
+    assert "max(fcf_margin_base + md_abs, fcf_floor), _FCF_MARGIN_CAP)" in src
+    assert "_y10_fcf_margin = fcf_margin_base + md_abs" not in src, (
+        "the estimate has lost its clamp, so Gate B is judging a terminal "
+        "margin the DCF never runs — see item 3 in tests/golden/CHANGELOG.md")
     # The fossil, in every spacing anyone would write it in.
     for form in ("md_abs * 10", "md_abs*10", "md_abs * 10.0",
                  "10 * md_abs", "10*md_abs", "md_abs * _PROJECTION_YEARS"):

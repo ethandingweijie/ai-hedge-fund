@@ -93,39 +93,118 @@ def test_the_basis_leaf_is_read_off_the_peer_provenance_not_guessed():
 
 
 def test_every_peer_call_site_resolves_market_cap_the_same_way():
-    """Item 3a: the three `_compute_method_value` legs, the `_peer_for_gp` call
-    that resolves the benchmark those legs are scaled by, and the 12m-target peer
-    call must all pass the SAME `market_cap` expression.
+    """Item 3a aligned the five peer call sites; item 2 removed the copies.
 
-    They did not. `_peer_for_gp` omitted the argument entirely (defaulting to
-    0.0 → None) and the 12m call read `or 0.0` where the legs read
-    `or revenue_base * 10`, so for any HK/SG name whose quote carries no market
-    cap the growth premium was computed against the whole-grouping cohort while
-    the peer multiples it scaled came off the size-matched one — and the 12m
-    target was priced off whole-grouping multiples while the provenance recorded
-    beside it claimed a size-matched set.
+    They must all pass the SAME `market_cap`. They did not: `_peer_for_gp`
+    omitted the argument entirely (defaulting to 0.0 → None) and the 12m call
+    read `or 0.0` where the three legs read `or revenue_base * 10`, so for any
+    HK/SG name whose quote carries no market cap the growth premium was computed
+    against the whole-grouping cohort while the peer multiples it scaled came off
+    the size-matched one — and the 12m target was priced off whole-grouping
+    multiples while the provenance recorded beside it claimed a size-matched set.
 
-    This is a source-shape guard rather than a value guard because the value
-    guard cannot exist: the golden baseline resolves comps from the LOCAL store,
-    which holds 190 `growth_avg` rows against production's 1057, and three of the
-    five HK/SG groupings in the fixture set store no `large` rung at all. A
-    divergence reintroduced here would move production and leave the baseline
-    almost entirely unchanged. Counting the identical expressions is the only
-    check that survives that."""
+    3a fixed that by writing the legs' expression at all five sites. Five
+    identical expressions is still five chances to edit one of them, and nothing
+    but this test would notice, so it is now bound ONCE as `resolved_mcap` and
+    passed by name. That makes the divergence structurally impossible rather than
+    merely asserted-against — which is the whole reason the guard exists in this
+    shape: the golden baseline resolves comps from the LOCAL store, which holds
+    190 `growth_avg` rows against production's 1057, and three of the five HK/SG
+    groupings in the fixture set store no `large` rung at all. A divergence
+    reintroduced here would move production and leave the baseline almost
+    entirely unchanged. Production SCHW is the proof that "almost" is not
+    "entirely": it resolves `industry/large n=10` at +28.22% live while its
+    fixture says `static/US`, because the local store has no US comps rows and
+    production's weekly refresh does.
+    """
     src = _run_src()
-    expr = "market_cap=(_market_cap or revenue_base * 10)"
-    assert src.count(expr) == 5, (
-        f"expected the five aligned call sites to share {expr!r}, found "
-        f"{src.count(expr)}")
+    # One binding, and the guard that goes with it — `revenue_base` is
+    # `most_recent["revenue"]` and can be None, so the bare `or revenue_base * 10`
+    # raised TypeError on a name with neither a quote cap nor a revenue line.
+    assert src.count("resolved_mcap: float | None = (") == 1, (
+        "resolved_mcap must be bound exactly once")
+    assert "revenue_base * 10.0 if revenue_base else None" in src, (
+        "the falsy-revenue_base guard is gone, so a name with no revenue and no "
+        "quote cap raises TypeError instead of resolving no size")
+    # Five uses of that one binding, and no surviving copy of either expression.
+    assert src.count("market_cap=resolved_mcap") == 5, (
+        f"expected the five aligned call sites to pass resolved_mcap, found "
+        f"{src.count('market_cap=resolved_mcap')}")
+    assert "_market_cap or revenue_base" not in src, (
+        "a call site has gone back to inlining the fallback expression")
+    assert "_market_cap or 0.0" not in src
+    assert "market_cap=0.0" not in src
     # `_compute_method_value` — which lives outside `run_dcf_agent` — receives
     # the size as a parameter and forwards it verbatim. A call site that passed
     # a literal instead would silently un-align the leg.
     assert ("ticker=ticker, market_cap=market_cap)"
             in inspect.getsource(dcf_agent._compute_method_value))
-    # And no site may regress to the 0.0 fallback, which is what disables the
-    # size-matched rungs in `get_regional_multiples`.
-    assert "_market_cap or 0.0" not in src
-    assert "market_cap=0.0" not in src
+
+
+def test_resolved_mcap_is_bound_after_both_of_its_inputs_are_final():
+    """The one hazard hoisting introduces, guarded directly.
+
+    `revenue_base` is assigned TWICE — once from the most recent annual row and
+    again inside the FX block, which multiplies the whole series by the rate and
+    re-derives the anchored scalars. `_market_cap` is assigned once, from the
+    quote, and only when the quote carried no cap of its own. A binding placed
+    above either would capture a stale value and produce a size in the wrong
+    currency or no size at all — silently, because the result is still a float.
+
+    So the ordering is the assertion: one binding, below all three assignments,
+    above all five uses. Line indices rather than values, because the values are
+    what the ordering exists to get right.
+    """
+    lines = _run_src().splitlines()
+
+    def _idx(pred):
+        return [i for i, ln in enumerate(lines) if pred(ln)]
+
+    rev = _idx(lambda ln: ln.strip() == 'revenue_base = most_recent["revenue"]')
+    cap = _idx(lambda ln: "_market_cap = _close * shares" in ln)
+    bind = _idx(lambda ln: ln.strip().startswith("resolved_mcap: float | None"))
+    uses = _idx(lambda ln: "market_cap=resolved_mcap" in ln)
+    assert len(rev) == 2, rev        # the anchor, and the post-FX re-derivation
+    assert len(cap) == 1, cap
+    assert len(bind) == 1, bind
+    assert len(uses) == 5, uses
+    assert max(rev + cap) < bind[0], (
+        "resolved_mcap is bound above an assignment to one of its inputs")
+    assert bind[0] < min(uses), "resolved_mcap is used before it is bound"
+
+
+def _comment_above(src: str, needle: str) -> str:
+    """The contiguous `#` block immediately above the first line containing
+    `needle`.
+
+    Every "the comment still says X" test in this module used to slice a fixed
+    character budget backwards from the call site. That budget is a proxy for
+    "the block above", and it degrades silently: lengthen the comment and the
+    window starts partway down it, so the test fails on text that is present and
+    merely out of reach. Reading the block by its own shape means the test asks
+    the question it is written to ask, at any length.
+    """
+    i = src.index(needle)
+    # `index` lands mid-line, on the needle itself; the remainder of that line
+    # would be a whitespace-only "blank" and end the walk before it started.
+    # Cut at the line boundary instead.
+    i = src.rfind("\n", 0, i) + 1
+    block: list[str] = []
+    for ln in reversed(src[:i].splitlines()):
+        stripped = ln.strip()
+        if stripped.startswith("#"):
+            block.append(ln)
+        elif not stripped:
+            # A blank line inside a comment block is still part of it; a blank
+            # line directly above code is the boundary, which the `if block`
+            # distinguishes from one above nothing.
+            if block:
+                block.append(ln)
+            else:
+                break
+        else:
+            break
+    return "\n".join(reversed(block))
 
 
 def test_the_alignment_comment_still_carries_the_measured_size():
@@ -134,10 +213,17 @@ def test_the_alignment_comment_still_carries_the_measured_size():
     stops the next reader from deleting it as a redundant fallback — the
     fallback only fires when the quote carries no cap, which no fixture does."""
     src = _run_src()
-    i = src.index("_peer_for_gp = get_sector_peer_multiples(")
-    comment = src[max(0, i - 2200):i]
+    comment = _comment_above(src, "_peer_for_gp = get_sector_peer_multiples(")
+    assert comment, "no comment block above the _peer_for_gp call"
     assert "market_cap" in comment
     assert "401 of the 436" in comment
+    assert "resolved_mcap" in comment
+    # The scope correction: the claim that US names were unaffected was measured
+    # in production and is false there. A comment that carries the measurement
+    # and not the correction is worse than either alone, because the number is
+    # checkable and the false scope reads as checked.
+    assert "US names are unaffected" not in comment
+    assert "industry/large n=10" in comment
     assert "+45.92%" not in comment, (
         "02888_HK's average is NOT an item-3a result; HKSE Banks - Diversified "
         "stores no `large` rung, so the alignment cannot reach it")
@@ -225,7 +311,7 @@ def test_the_12m_call_site_says_why_its_trace_has_to_match():
     worse than no trace, because nobody looks again. The comment is the reason
     the argument is there; deleting it deletes the reason."""
     src = _run_src()
-    i = src.index("        peer = get_sector_peer_multiples(")
-    comment = src[max(0, i - 1200):i]
+    comment = _comment_above(src, "        peer = get_sector_peer_multiples(")
     assert "multiples_used" in comment
     assert "or revenue_base * 10" in comment
+    assert "resolved_mcap" in comment
