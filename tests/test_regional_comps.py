@@ -128,9 +128,42 @@ class TestClean:
         assert rc._clean("pe", [10.0, 5000.0]) == [10.0]
         assert rc._clean("ev_ebitda", [8.0, 900.0]) == [8.0]
 
-    def test_negative_fcf_yield_is_kept(self):
-        """Unlike P/E, a negative FCF yield is meaningful and in-band."""
-        assert rc._clean("fcf_yield", [-0.03, 0.05]) == [-0.03, 0.05]
+    def test_negative_fcf_yield_is_dropped(self):
+        """INVERTED 2026-09-17 by owner decision 5.
+
+        This test used to be `test_negative_fcf_yield_is_kept` with the
+        docstring "Unlike P/E, a negative FCF yield is meaningful and in-band",
+        asserting `_clean("fcf_yield", [-0.03, 0.05]) == [-0.03, 0.05]`. So the
+        defect was not merely uncaught — it was pinned, with an argument. The
+        inversion is recorded rather than quietly rewritten because the old
+        reasoning is not silly and someone will think of it again.
+
+        The distinction it drew is the wrong one. A P/E is a MULTIPLE: a
+        negative one is a loss-maker, and dropping it is a data-quality call
+        about which companies belong in a comp set. An FCF yield is a
+        DENOMINATOR — the valuation leg computes `FCF / yield` — so a negative
+        yield yields a negative value and a near-zero one yields an enormous
+        value. Signedness is not a property of the metric here, it is a
+        property of a divisor, and a divisor at or below zero does not mean
+        "cheap", it means the arithmetic has no answer.
+
+        SCHW's US peer median measured -0.003152 in BOTH the `all` (18 peers)
+        and `large` (10 peers) cohorts, and the leg floored the quotient to
+        0.01, publishing 100x free cash flow. 297 of 1040 production
+        `fcf_yield` medians are non-positive today. The leg half of the fix,
+        and the measurements behind both halves, are in
+        tests/test_valuation_fixes_0917d.py.
+
+        The high side narrows in the same edit, from 0.50 to 0.25: above a 25%
+        yield the reading is distress or a one-off cash flow (an asset sale, a
+        working-capital release), not a comparable. That is 4 rows of 1040 on
+        production, and it changes which peers reach the median rather than
+        only whether the median is usable, so it is asserted separately.
+        """
+        assert rc._clean("fcf_yield", [-0.03, 0.05]) == [0.05]
+        assert rc._clean("fcf_yield", [-0.03, -0.003152, 0.0]) == []
+        assert rc._clean("fcf_yield", [0.30, 0.40, 0.50]) == []
+        assert rc._clean("fcf_yield", [0.005, 0.25]) == [0.005, 0.25]
 
     def test_every_field_has_a_band(self):
         assert set(rc.FIELDS) == set(rc._BANDS)

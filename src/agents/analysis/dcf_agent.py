@@ -5025,7 +5025,52 @@ def _compute_method_value(
     # ── FCF Yield ─────────────────────────────────────────────────────────
     if method_name in {"FCF Yield", "P/CF", "Price/CF"}:
         target_yield = peer.get("fcf_yield", 0.05) / (sm * growth_premium)  # higher growth → lower yield req → higher price
-        target_yield = max(target_yield, 0.01)
+        # Owner decision 5 (2026-09-17). This line used to read
+        # `target_yield = max(target_yield, 0.01)`, which turned an invalid
+        # benchmark into a 100x capitalisation rather than refusing it. An FCF
+        # yield is a DENOMINATOR — value = FCF / yield — so a peer median at or
+        # below zero produces a negative value, or an enormous one as the
+        # divisor approaches zero, and the `max()` published the enormous one
+        # at exactly 100x FCF with nothing on the card to say the input had
+        # been thrown away. SCHW's US peer median measured -0.003152 in BOTH
+        # cohorts, a 3.2x error manufactured inside a silent clamp.
+        #
+        # The floor was also invisible to every test, which is worth recording
+        # because it explains how it survived: measured across all 12 FCF-leg
+        # calls the golden fixtures make (AAPL 0.0254–0.0467, COST
+        # 0.0147–0.0267, V 0.0210–0.0400) it never bound once, and SCHW makes
+        # no FCF-leg call at all. The defect lived entirely in production
+        # cohorts the baseline does not reach.
+        #
+        # Returning None drops the leg and the blend renormalises over the
+        # survivors — the same answer decision 2b gives a non-positive tangible
+        # book, because unavailable is not invented. The threshold is shared
+        # with the comps band that filters peer readings before their median is
+        # taken, so the two readers of one concept cannot drift apart.
+        #
+        # The 0.05 default in the `.get()` above deliberately survives this
+        # check: it is a missing-key fallback, not a reading, and a peer table
+        # that does not disclose an FCF yield should still value the leg rather
+        # than silently lose it. That is a different situation from a peer
+        # table that HAS one and the one it has is not a benchmark.
+        #
+        # This import is LAZY and the laziness is load-bearing, not stylistic —
+        # hoisting it to module scope breaks golden replay. `regional_comps`
+        # binds `_fmp_get` by value (`from src.tools.api import _fmp_get`), and
+        # the replay `Replayer` patches that name ON `src.tools.api`, so which
+        # function `regional_comps` holds depends on when it is first imported:
+        # inside the patch window it gets the recorder, outside it gets the real
+        # one. `replay_fixture` imports THIS module outside its
+        # `with Replayer(...)` block, so a module-level import here loads
+        # regional_comps too early and its `/stable/profile` fetches escape the
+        # recording. Measured: hoisting it failed 14 of 17 golden tests with
+        # "1 recorded call(s) never used — the fixture is stale", a message
+        # that misdiagnoses the cause and would have prompted a regeneration
+        # baking in a replay that reaches for the network. `sector_profiles`
+        # imports regional_comps from inside functions and this follows suit.
+        from src.data.regional_comps import MIN_VALID_FCF_YIELD
+        if target_yield <= MIN_VALID_FCF_YIELD:
+            return None
         # Prefer SBC-adjusted (owner-earnings) FCF; falls back to reported FCF
         # when SBC isn't disclosed (fcf_owner_earnings is seeded to reported
         # FCF in _extract_annual_series when SBC is missing).

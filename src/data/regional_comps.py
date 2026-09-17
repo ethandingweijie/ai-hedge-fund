@@ -150,6 +150,36 @@ COHORTS = ("large", "all")
 # missed run before callers fall back to static.
 MAX_AGE_DAYS = 14
 
+# ── FCF yield validity band (owner decision 5, 2026-09-17) ─────────────────
+#
+# An FCF yield is the denominator of a capitalisation: value = FCF / yield.
+# That makes it the one band in this table whose low end is not a data-quality
+# question but an arithmetic one, and the two ends fail in opposite directions.
+#
+# At or below zero the reading is not a cheap stock, it is a company whose free
+# cash flow is negative — and dividing by it does not produce a low value, it
+# produces a NEGATIVE one, or an enormous one as the divisor approaches zero.
+# SCHW's US peer median measured -0.003152 in BOTH cohorts, and the valuation
+# leg that consumed it silently floored the quotient to 0.01: a 3.2x error
+# manufactured inside a `max()`, invisible on the card, worth 100x FCF.
+#
+# The high end is tightened for a different reason. Above a 25% yield the
+# reading is a distressed name or a one-off cash flow (an asset sale, a
+# working-capital release), not a comparable. The band was ±50% before, so
+# readings in (0.25, 0.50] — a 2x-to-4x capitalisation — were admitted into the
+# median and dragged it up. Narrowing this side changes which peers reach the
+# median, so it is a second effect of the same decision and is named as such in
+# the changelog.
+#
+# These two numbers are PUBLIC and single-sourced on purpose. `_clean` below is
+# one reader; `dcf_agent._compute_method_value`'s FCF-Yield leg is the other,
+# and it refuses to publish a value from a target yield at or below the floor
+# rather than flooring it. Two readers of one threshold must not be able to
+# drift onto different numbers, which is the same discipline the CAGR gate's
+# `_CAGR_DIVERGENCE_THRESHOLD` / `_CAGR_DIVERGENCE_HEADROOM` pair follows.
+MIN_VALID_FCF_YIELD = 0.005
+MAX_VALID_FCF_YIELD = 0.25
+
 # Field -> (min, max) plausibility band. Values outside are dropped before
 # the median, not clipped into it: a negative P/E is not a cheap stock, it
 # is a loss-maker that does not belong in a P/E comp set at all.
@@ -158,7 +188,7 @@ _BANDS: dict[str, tuple[float, float]] = {
     "pe":         (1.0, 200.0),
     "ev_revenue": (0.05, 60.0),
     "pb":         (0.05, 30.0),
-    "fcf_yield":  (-0.50, 0.50),
+    "fcf_yield":  (MIN_VALID_FCF_YIELD, MAX_VALID_FCF_YIELD),
     "growth_avg": (-0.60, 2.00),
 }
 
