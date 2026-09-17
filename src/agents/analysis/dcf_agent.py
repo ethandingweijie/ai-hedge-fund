@@ -9093,6 +9093,15 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # projected revenue growth × asset turnover ratio, computes
             # NOPAT from terminal margin × terminal revenue.
             _forward_roic_proj = None
+            # Audit fields persisted below. Initialised here because the
+            # growth-premium block that assigns them is conditional, and an
+            # unbound local at the payload assembly would turn "this scenario
+            # never computed a sector growth average" into a NameError. `None`
+            # is the honest value: it means the path did not run, which is
+            # different from 0.08 (the default the block falls back to) and
+            # different from a measured average.
+            _sector_g_avg: Optional[float] = None
+            _sector_g_avg_basis: Optional[dict] = None
             ebit_val = most_recent.get("ebit")
             ic_val = most_recent.get("invested_capital")
             rev_base = most_recent.get("revenue")
@@ -9290,9 +9299,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # only when forward_roic isn't computable (missing EBIT/
                 # invested-capital data).
                 _GROWTH_SENSITIVITY = 0.30
+                # NOTE: this call does NOT pass `market_cap`, while the three
+                # `_compute_method_value` legs pass `(_market_cap or
+                # revenue_base * 10)`. `market_cap` is what unlocks the
+                # size-matched "large" cohort rungs in `get_regional_multiples`,
+                # so for an HK/SG name with live comps this reads `growth_avg`
+                # off the whole-industry median while every leg multiple is read
+                # off a size-matched peer set. Measured on production comps:
+                # 401 of the 436 groupings that have both cohorts disagree, and
+                # HKSE Banks - Regional is +17.11% (all) against +4.88% (large).
+                # Since `_gp_raw_growth` is inversely proportional to this
+                # average, the choice moves `growth_premium`, which scales 14 of
+                # the 16 leg multiples. Left as-is deliberately: aligning it is a
+                # valuation change that needs its own measured golden update, and
+                # silently bundling it into an audit-field commit would make the
+                # resulting delta unattributable. The basis recorded below is
+                # what makes the divergence visible instead of inferable.
                 _peer_for_gp = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
                                                          ticker=ticker)
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
+                _sector_g_avg_basis = (_peer_for_gp.get("_comp_basis") or {}).get("growth_avg")
                 _gp_raw_growth = (
                     1.0 + _GROWTH_SENSITIVITY * (g - _sector_g_avg) / _sector_g_avg
                     if _sector_g_avg > 0.005 else 1.0
@@ -9921,6 +9947,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "weight_multi":      blend_breakdown.get("weight_multi"),
                 "effective_weights": blend_breakdown.get("effective_weights"),
                 "composite_applied": blend_breakdown.get("composite", _composite_mult),
+                # ── Audit fields (item 3b) ─────────────────────────────────
+                # These three drove two gates and were recoverable only by
+                # regex-ing them back out of `forward_flags` prose, which is how
+                # the Gate B `md_abs * 10` defect was finally measured: a
+                # production census parsing "Forward ROIC (-7.3% [Y10
+                # projected])" out of a sentence. Confirmed absent from live
+                # production payloads (null on four fresh post-fix rows for
+                # SCHW/V/MELI/MSTR). A value that decides whether terminal
+                # growth is zeroed has to be a field, not a substring.
+                #
+                # `sector_g_avg_basis` carries the cohort the average came from,
+                # so the divergence documented at the `_peer_for_gp` call is
+                # checkable from the payload rather than inferable from source.
+                "forward_roic":      round(forward_roic, 4) if forward_roic is not None else None,
+                "roic_source":       roic_source,
+                "sector_g_avg":      round(_sector_g_avg, 4) if _sector_g_avg is not None else None,
+                "sector_g_avg_basis": _sector_g_avg_basis,
             }
 
         # ── D3: profile methods the base scenario could not produce ──────
@@ -11039,6 +11082,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "calibration":           ({"version_id": _active_cal["version_id"],
                                        "iv_multiplier": _iv_calibration_k}
                                       if _active_cal else None),
+            # ── Audit fields (item 3b), scenario-invariant ─────────────────
+            # `_composite_bridge` is computed once before the scenario loop, so
+            # it lives here rather than being triplicated into each scenario.
+            # `composite_applied` (per scenario) already published the resulting
+            # MULTIPLE while the Q/R/C decomposition and `bank_clamp` behind it
+            # were never persisted at all — the one field an audit most needs
+            # when a composite looks wrong is the one that says which of the
+            # three sub-scores moved it, and whether a bank clamp was applied to
+            # a name that is not a bank. That clamp was the subject of Decision
+            # 1 and the golden baseline still cannot see it change.
+            #
+            # `normalized_net_income` is the earnings figure the normalisation
+            # path substituted for a distorted reported one. Several legs read
+            # it off `most_recent`; none of them recorded which value they used.
+            "composite_bridge":      dict(_composite_bridge) if _composite_bridge else None,
+            "normalized_net_income": _ledger_num(most_recent.get("normalized_net_income")),
             "is_cache_copy":         False,
             "ledger_schema":         1,
         }

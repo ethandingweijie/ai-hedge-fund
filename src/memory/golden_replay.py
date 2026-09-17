@@ -300,6 +300,9 @@ _SCALAR_KEYS = (
     "revenue_base", "revenue_base_usd", "fcf_margin_base", "fcf_floor",
     "reported_currency", "source_currency", "fx_note",
     "12m_pt_method", "profile_fallback_used",
+    # Item 3b audit field. Scenario-invariant, so it lives at the top level
+    # rather than being triplicated into each scenario.
+    "normalized_net_income",
 )
 
 #: Nested blocks carried whole (then flattened). ``12m_targets`` and
@@ -307,7 +310,14 @@ _SCALAR_KEYS = (
 #: forward-multiple-driven and decoupled from intrinsic value — it can move
 #: without IV moving, and ``_convergence_bound`` exists precisely because it
 #: once implied a full re-rating inside a year.
-_DICT_KEYS = ("multiples_used", "routing_trace", "12m_targets", "consensus_pt")
+#:
+#: ``composite_bridge`` is item 3b: the Q/R/C decomposition and ``bank_clamp``
+#: behind ``composite_applied``. Pinning it means a change to the composite's
+#: sub-scores moves the baseline even in the cases where the resulting multiple
+#: is unchanged by rounding — and Decision 1 narrowed ``bank_clamp`` to a real
+#: bank test, a change the baseline could not previously see at all.
+_DICT_KEYS = ("multiples_used", "routing_trace", "12m_targets", "consensus_pt",
+              "composite_bridge")
 
 #: Per-scenario fields. ``method_iv_table`` is the load-bearing one: it is
 #: what shows WHICH valuation leg moved, and defects 1, 2 and 3 all change a
@@ -324,6 +334,14 @@ _SCENARIO_KEYS = (
     "iv_dcf", "iv_multi", "iv_multi_post",
     "yr1_revenue", "yr1_ebitda_est", "yr1_eps_est",
     "method_iv_table", "methods_used", "forward_flags", "effective_weights",
+    # Item 3b audit fields. These drove Gate B and the growth-premium quality
+    # gate while being recoverable only by regex-ing them out of
+    # `forward_flags` prose — which is literally how the `md_abs * 10` defect
+    # was measured. `sector_g_avg_basis` carries the COHORT the average was
+    # read from, so the `_peer_for_gp` market_cap divergence (it passes none,
+    # the three legs pass a real one) is checkable from the baseline instead of
+    # inferable from source.
+    "forward_roic", "roic_source", "sector_g_avg", "sector_g_avg_basis",
 )
 
 _SCENARIOS = ("bear", "base", "bull")
