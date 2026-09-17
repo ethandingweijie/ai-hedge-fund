@@ -275,3 +275,194 @@ def test_the_floors_are_gone_from_the_two_sites_named_by_the_owner():
     assert "_teq = (_eq - _gw - _in) if _eq else None" in src
     # `_compute_bank_metrics` keeps its own floor, with its JPM justification.
     assert "tbv = max(equity - (goodwill or 0) - (intang or 0), equity * 0.70)" in src
+
+
+# ── Decision 4 (2026-09-17): verify the Brokerage taxonomy ───────────────────
+#
+# The owner declined to re-admit the FCFF DCF on brokerages and asked instead
+# that the profile taxonomy be verified. No code changed for this decision;
+# these tests are the verification, and one of them records a gap in the
+# remedy the decision names.
+
+
+def _schw_projection() -> dict:
+    import json
+    import os
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "golden", "snapshots.json")
+    with open(p, encoding="utf-8") as fh:
+        return json.load(fh)["SCHW"]["projection"]
+
+
+def test_the_brokerage_profile_declares_exactly_four_legs():
+    """The input to the strip, read from the profile table rather than recalled.
+
+    Brokerage declares P/E (norm) 0.35 (anchor), P/BV 0.25, DCF 0.20 and FCF
+    Yield 0.20, summing to 1.00. What survives the strip — and the 0.35/0.25
+    renormalisation that follows — is pinned by the next test against SCHW's
+    published output; this one exists so a future edit to the declared weights
+    fails here, at the source, instead of only as a moved snapshot.
+    """
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    legs = {m["name"]: m["weight"] for prof in P.values()
+            for name, cfg in prof.items() if name == "Brokerage"
+            for m in cfg["methods"]}
+    assert legs == {"P/E (norm)": 0.35, "P/BV": 0.25,
+                    "DCF": 0.20, "FCF Yield": 0.20}
+    assert sum(legs.values()) == pytest.approx(1.0)
+    # The two Tier 1 removes are both present to be removed.
+    assert {"DCF", "FCF Yield"} <= set(legs)
+
+
+def test_schws_published_weights_are_the_survivors_renormalised():
+    """0.35/0.60 and 0.25/0.60, in all three scenarios, with no DCF bucket.
+
+    This is the pinned output of decision 4's "keep 1.2A intact for
+    Brokerages": SCHW's IV comes from two book-and-earnings legs and nothing
+    that touches its operating cash flow.
+    """
+    proj = _schw_projection()
+    assert proj["profile"] == "Brokerage"
+    assert proj["profile_fallback_used"] is False
+    for scen in ("bear", "base", "bull"):
+        assert proj[f"scenarios.{scen}.weight_dcf"] == 0.0
+        assert proj[f"scenarios.{scen}.weight_multi"] == 1.0
+        w = {proj[f"scenarios.{scen}.effective_weights.{i}.method"]:
+             proj[f"scenarios.{scen}.effective_weights.{i}.weight"]
+             for i in (0, 1)}
+        assert w == {"P/E (norm)": pytest.approx(0.35 / 0.60, abs=1e-6),
+                     "P/BV": pytest.approx(0.25 / 0.60, abs=1e-6)}
+        assert sum(w.values()) == pytest.approx(1.0, abs=1e-6)
+        assert proj[f"scenarios.{scen}.methods_used"] == ["P/BV", "P/E (norm)"]
+
+
+def test_brokerage_is_tier_1_and_tier_2_never_runs_for_it():
+    """The classification rests on the name, and that is worth saying plainly.
+
+    `_is_balance_sheet_financial` checks Tier 1 (profile is a balance-sheet
+    business by construction) and returns True before Tier 2 is reached. Tier 2
+    only consults the measured customer-balance ratio for profiles in the
+    CONDITIONAL set — asset managers, payment networks, fintech, market
+    infrastructure — and Brokerage is not in it. So there is no second live
+    route here: SCHW's DCF weight of 0.0 follows from its profile name alone.
+
+    The measurement still matters as a robustness check. The figures below are
+    the ones the Brokerage evidence comment records for SCHW's FY2025 —
+    US$397.8bn of customer payables plus US$107.6bn of receivables on
+    US$491.0bn of assets — mapped onto the line keys the ratio actually reads,
+    so the row is constructed from recorded evidence rather than fetched. The
+    ratio is 1.03, which is 3.4x the 0.30 threshold. If someone later moved
+    Brokerage to conditional to make the classification "evidence-based", the
+    evidence agrees and nothing would change. What would change is a demotion to
+    the UNCLASSIFIED set, which no measurement rescues; the membership
+    assertions below exist so that move trips a test instead of silently
+    re-admitting an FCFF DCF on customer-deposit cash flow.
+    """
+    from src.data.sector_profiles import (
+        BALANCE_SHEET_FINANCIAL_PROFILES,
+        BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES,
+        BALANCE_SHEET_FINANCIAL_UNCLASSIFIED,
+    )
+    from src.agents.analysis.dcf_agent import (
+        _TIER2_CUSTOMER_BALANCE_RATIO, _is_balance_sheet_financial,
+        _tier2_customer_balance_ratio,
+    )
+    assert "Brokerage" in BALANCE_SHEET_FINANCIAL_PROFILES
+    assert "Brokerage" not in BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES
+    assert "Brokerage" not in BALANCE_SHEET_FINANCIAL_UNCLASSIFIED
+
+    schw_row = {"total_assets": 491.0e9, "accounts_payable": 397.8e9,
+                "accounts_receivable": 107.6e9}
+    ratio, breakdown = _tier2_customer_balance_ratio(schw_row)
+    assert ratio == pytest.approx(1.029, abs=0.005)
+    assert ratio >= _TIER2_CUSTOMER_BALANCE_RATIO * 3.0
+    assert breakdown["customer_payables"] == pytest.approx(397.8e9)
+    # The live classification path, on both the real row and a row the feed
+    # stripped: Tier 1 answers from the name, so a missing balance sheet still
+    # classifies correctly and does not silently pass as non-financial.
+    assert _is_balance_sheet_financial("Brokerage", schw_row) is True
+    assert _is_balance_sheet_financial("Brokerage", {}) is True
+    assert _is_balance_sheet_financial("Brokerage", None) is True
+
+
+def test_the_owners_brokerage_remedy_names_legs_the_profile_does_not_declare():
+    """THE FINDING. Decision 4 defers brokerage undervaluation to "ensuring
+    Forward P/E and Residual Income / Excess Capital legs use normalized
+    earnings and through-cycle NIM rather than depressed trough provisions".
+
+    Brokerage declares no Residual Income leg and no Excess Capital leg, and
+    neither does any non-bank profile: every profile in the taxonomy carrying
+    those two legs is a bank. So implementing the deferred direction is not a
+    normalisation of existing legs — it is ADDING two legs to the Brokerage
+    profile, with weights, and taking them from somewhere. That is a taxonomy
+    change with its own golden diff, and it should not be described as a
+    tuning exercise when it is picked up.
+
+    "Forward P/E" likewise maps to `P/E (norm)` here; there is no leg by that
+    name in this profile.
+    """
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    brokerage = None
+    ri, ec, fwd = [], [], []
+    for prof in P.values():
+        for name, cfg in prof.items():
+            names = [m["name"] for m in cfg.get("methods", [])]
+            if name == "Brokerage":
+                brokerage = names
+            if "Residual Income" in names:
+                ri.append(name)
+            if "Excess Capital" in names:
+                ec.append(name)
+            if "Forward P/E" in names:
+                fwd.append(name)
+    assert brokerage is not None
+    assert "Residual Income" not in brokerage
+    assert "Excess Capital" not in brokerage
+    assert "Forward P/E" not in brokerage
+    assert "P/E (norm)" in brokerage
+
+    # Measured, not recalled: both legs are declared by exactly the same ten
+    # bank profiles, so the owner's phrase names one bank-only mechanism twice.
+    assert sorted(ri) == sorted(ec) == [
+        "Bank / Lending Institution", "EM Bank", "EM Bank (Premium)",
+        "Investment Bank", "Money Center Bank", "Money Center Bank (EU)",
+        "Money Center Bank (SG)", "Neo/Challenger", "Regional Bank",
+        "Super-Regional Bank",
+    ]
+    # "Forward P/E" DOES exist in the taxonomy — on other profiles — so this is
+    # a naming mismatch on Brokerage, not a missing concept. Recorded so nobody
+    # adds a duplicate leg under a second name.
+    assert fwd and "Brokerage" not in fwd
+
+    # Asserted on the shared marker rather than a hand-list, so a future profile
+    # that genuinely should carry these legs fails here and gets thought about.
+    from src.data.sector_profiles import BALANCE_SHEET_FINANCIAL_PROFILES
+    non_bank = [c for c in ri if c not in BALANCE_SHEET_FINANCIAL_PROFILES]
+    assert non_bank == [], non_bank
+
+
+def test_schws_industry_key_is_the_cohort_whose_fcf_median_was_corrupt():
+    """Cross-link to decision 5, and the reason SCHW is the exposure case.
+
+    SCHW maps to the industry key `Financial - Capital Markets`, which is
+    exactly the cohort whose live `fcf_yield` median measured -0.003152 in both
+    the `all` (18 peers) and `large` (10 peers) cohorts on production. The
+    profile-level static table for Brokerage carries a valid 0.055, so the
+    corrupt figure only reaches the engine when the lookup falls through from
+    profile to industry — which is why the golden baseline never saw it and why
+    this was a production-only defect.
+
+    V is the contrast that proves the cohort is the variable: same sector,
+    industry key `Financial - Credit Services`, whose medians measured +0.0602
+    (all) and +0.0372 (large).
+    """
+    from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as T
+    assert T["SCHW"][2] == "Financial - Capital Markets"
+    assert T["SCHW"][1] == "Brokerage"
+    assert T["V"][2] == "Financial - Credit Services"
+    from src.data.regional_comps import MIN_VALID_FCF_YIELD
+    # The static profile table stays valid under the new band, so the fallback
+    # path is unaffected by decision 5 and only the live cohort path was broken.
+    from src.data.sector_profiles import SECTOR_PEER_MULTIPLES as S
+    assert S["Brokerage"]["fcf_yield"] == 0.055
+    assert S["Brokerage"]["fcf_yield"] > MIN_VALID_FCF_YIELD
