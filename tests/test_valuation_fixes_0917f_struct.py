@@ -1,4 +1,4 @@
-"""Item 3b: the audit fields that drove two gates are now persisted.
+"""Item 3b/3a: the audit fields are persisted, and the peer call sites agree.
 
 `forward_roic`, `roic_source`, `_sector_g_avg` and its cohort, the composite
 bridge (including `bank_clamp`) and `normalized_net_income` all existed as
@@ -13,6 +13,15 @@ and it is what `scratchpad/verify_gateB_prod.py` had to do to confirm the fix
 live. A value that decides whether terminal growth is zeroed should be a field,
 not a substring. Confirmed absent from production before this change: null on
 four fresh post-fix rows for SCHW, V, MELI and MSTR.
+
+Persisting `_sector_g_avg_basis` is also what made item 3a measurable. The cohort
+a name resolves is not otherwise in the payload, so the `market_cap` divergence
+between `_peer_for_gp` and the three legs could only be re-derived from source;
+once the basis was a field, the 3b baseline showed every HK/SG fixture resolving
+`all` and never `large` — the divergence, read off data instead of read off code.
+Section A2 pins the alignment itself as a source-shape guard, for the reason
+given there: the golden baseline resolves comps from a local store that is a
+fifth the size of production's, so a value guard would not see a regression.
 
 These tests are the baseline-independent half. The half that pins actual values
 lives in `test_valuation_fixes_0917f.py`, which reads the regenerated snapshot.
@@ -80,17 +89,58 @@ def test_the_basis_leaf_is_read_off_the_peer_provenance_not_guessed():
     assert '.get("growth_avg")' in src
 
 
-def test_the_divergence_is_documented_at_the_call_site():
-    """`_peer_for_gp` passes no `market_cap` while the three legs pass a real
-    one. That is a live divergence with a measured size, deliberately left in
-    place for its own commit. A comment that says so is what stops the next
-    reader from "fixing" it as drive-by cleanup and shipping an unattributable
-    400-grouping golden move."""
+# ── A2. Item 3a: every peer call site resolves the same size cohort ──────────
+
+
+def test_every_peer_call_site_resolves_market_cap_the_same_way():
+    """Item 3a: the three `_compute_method_value` legs, the `_peer_for_gp` call
+    that resolves the benchmark those legs are scaled by, and the 12m-target peer
+    call must all pass the SAME `market_cap` expression.
+
+    They did not. `_peer_for_gp` omitted the argument entirely (defaulting to
+    0.0 → None) and the 12m call read `or 0.0` where the legs read
+    `or revenue_base * 10`, so for any HK/SG name whose quote carries no market
+    cap the growth premium was computed against the whole-grouping cohort while
+    the peer multiples it scaled came off the size-matched one — and the 12m
+    target was priced off whole-grouping multiples while the provenance recorded
+    beside it claimed a size-matched set.
+
+    This is a source-shape guard rather than a value guard because the value
+    guard cannot exist: the golden baseline resolves comps from the LOCAL store,
+    which holds 190 `growth_avg` rows against production's 1057, and three of the
+    five HK/SG groupings in the fixture set store no `large` rung at all. A
+    divergence reintroduced here would move production and leave the baseline
+    almost entirely unchanged. Counting the identical expressions is the only
+    check that survives that."""
+    src = _run_src()
+    expr = "market_cap=(_market_cap or revenue_base * 10)"
+    assert src.count(expr) == 5, (
+        f"expected the five aligned call sites to share {expr!r}, found "
+        f"{src.count(expr)}")
+    # `_compute_method_value` — which lives outside `run_dcf_agent` — receives
+    # the size as a parameter and forwards it verbatim. A call site that passed
+    # a literal instead would silently un-align the leg.
+    assert ("ticker=ticker, market_cap=market_cap)"
+            in inspect.getsource(dcf_agent._compute_method_value))
+    # And no site may regress to the 0.0 fallback, which is what disables the
+    # size-matched rungs in `get_regional_multiples`.
+    assert "_market_cap or 0.0" not in src
+    assert "market_cap=0.0" not in src
+
+
+def test_the_alignment_comment_still_carries_the_measured_size():
+    """The comment at `_peer_for_gp` is the record of why the argument is there
+    and what the divergence cost. Keeping the measurement in the source is what
+    stops the next reader from deleting it as a redundant fallback — the
+    fallback only fires when the quote carries no cap, which no fixture does."""
     src = _run_src()
     i = src.index("_peer_for_gp = get_sector_peer_multiples(")
-    comment = src[max(0, i - 2000):i]
+    comment = src[max(0, i - 2200):i]
     assert "market_cap" in comment
     assert "401 of the 436" in comment
+    assert "+45.92%" not in comment, (
+        "02888_HK's average is NOT an item-3a result; HKSE Banks - Diversified "
+        "stores no `large` rung, so the alignment cannot reach it")
 
 
 # ── B. golden_replay pins them, so removing one fails the baseline ───────────
@@ -139,3 +189,43 @@ def test_bank_clamp_is_written_only_under_a_bank_test():
     i = src.index('_composite_bridge["bank_clamp"]')
     preceding = src[max(0, i - 1200):i]
     assert "if " in preceding, "bank_clamp appears to be assigned unconditionally"
+
+
+# ── D. The 12m-target peer call is the one whose provenance is published ─────
+
+
+def test_the_12m_peer_call_sits_outside_the_scenario_loop():
+    """The growth-premium peer call is inside `for scenario in (...)`, so it runs
+    three times and resolves the same rung each time — which is why `sector_g_avg`
+    is scenario-invariant across the baseline. The 12m-target call is not: it runs
+    once and its resolution is what `multiples_used` records. Aligning the two
+    matters for different reasons, and a reader who moves one across the loop
+    boundary changes how many live comp lookups a single valuation performs."""
+    lines = _run_src().splitlines()
+    loop = [i for i, ln in enumerate(lines)
+            if ln.strip() == 'for scenario in ("base", "bear", "bull"):']
+    gp = [i for i, ln in enumerate(lines)
+          if "_peer_for_gp = get_sector_peer_multiples(" in ln]
+    pt = [i for i, ln in enumerate(lines)
+          if ln.strip().startswith("peer = get_sector_peer_multiples(")]
+    assert len(loop) == 1 and len(gp) == 1 and len(pt) == 1
+    assert loop[0] < gp[0], "_peer_for_gp must stay inside the scenario loop"
+    assert len(lines[loop[0]]) - len(lines[loop[0]].lstrip()) < \
+        len(lines[gp[0]]) - len(lines[gp[0]].lstrip())
+    # The 12m call is at the loop's own indent level, i.e. outside it.
+    assert (len(lines[pt[0]]) - len(lines[pt[0]].lstrip())) <= \
+        (len(lines[loop[0]]) - len(lines[loop[0]].lstrip()))
+
+
+def test_the_12m_call_site_says_why_its_trace_has_to_match():
+    """`multiples_used` publishes the resolution the 12m target was priced off.
+    When this site read `or 0.0` while the legs read `or revenue_base * 10`, an
+    HK/SG name whose quote carried no cap published a size-matched cohort beside
+    whole-grouping multiples — a trace that reads as checkable and is not is
+    worse than no trace, because nobody looks again. The comment is the reason
+    the argument is there; deleting it deletes the reason."""
+    src = _run_src()
+    i = src.index("        peer = get_sector_peer_multiples(")
+    comment = src[max(0, i - 1200):i]
+    assert "multiples_used" in comment
+    assert "or revenue_base * 10" in comment

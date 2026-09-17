@@ -9299,24 +9299,32 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # only when forward_roic isn't computable (missing EBIT/
                 # invested-capital data).
                 _GROWTH_SENSITIVITY = 0.30
-                # NOTE: this call does NOT pass `market_cap`, while the three
-                # `_compute_method_value` legs pass `(_market_cap or
-                # revenue_base * 10)`. `market_cap` is what unlocks the
-                # size-matched "large" cohort rungs in `get_regional_multiples`,
-                # so for an HK/SG name with live comps this reads `growth_avg`
-                # off the whole-industry median while every leg multiple is read
-                # off a size-matched peer set. Measured on production comps:
-                # 401 of the 436 groupings that have both cohorts disagree, and
-                # HKSE Banks - Regional is +17.11% (all) against +4.88% (large).
-                # Since `_gp_raw_growth` is inversely proportional to this
-                # average, the choice moves `growth_premium`, which scales 14 of
-                # the 16 leg multiples. Left as-is deliberately: aligning it is a
-                # valuation change that needs its own measured golden update, and
-                # silently bundling it into an audit-field commit would make the
-                # resulting delta unattributable. The basis recorded below is
-                # what makes the divergence visible instead of inferable.
+                # `market_cap` MUST match what the three `_compute_method_value`
+                # legs pass, because this call resolves the benchmark those legs
+                # are scaled by. It unlocks the size-matched "large" cohort rungs
+                # in `get_regional_multiples`; without it an HK/SG name reads
+                # `growth_avg` off the whole-grouping median while every leg
+                # multiple is read off a size-matched peer set — the growth
+                # premium compares the target against companies that are not its
+                # peers, then multiplies the peers' multiples by the result.
+                # Measured on production comps: 401 of the 436 groupings that
+                # have both cohorts disagree, and HKSE Banks - Regional is
+                # +17.11% (all) against +4.88% (large), a -12.24pp spread that
+                # moves `_gp_raw_growth` from 0.788 to 1.007 — roughly +28% —
+                # for a bank growing at 5%. `_gp_raw_growth` is INVERSELY
+                # proportional to this average, so the whole-grouping rung
+                # systematically penalises exactly the large names it is being
+                # asked about.
+                #
+                # The `or revenue_base * 10` fallback is the legs' own, copied
+                # rather than reinvented: when the quote carries no market cap
+                # the legs still resolve a size, and a different fallback here
+                # would reintroduce the divergence this call exists to close.
+                # US names are unaffected — `_regional_peer_multiples` returns
+                # {} for them and the static table has no cohort rungs.
                 _peer_for_gp = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
-                                                         ticker=ticker)
+                                                         ticker=ticker,
+                                                         market_cap=(_market_cap or revenue_base * 10))
                 _sector_g_avg = _peer_for_gp.get("growth_avg", 0.08)
                 _sector_g_avg_basis = (_peer_for_gp.get("_comp_basis") or {}).get("growth_avg")
                 _gp_raw_growth = (
@@ -10041,9 +10049,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # provenance recorded in "multiples_used" describes a different
         # resolution from the one the methods actually used -- a trace that
         # cannot be trusted is worse than none, because it looks checkable.
+        # It did not match: this read `or 0.0` where the legs read
+        # `or revenue_base * 10`, so for any HK/SG name whose quote carries no
+        # market cap the 12m target was priced off whole-grouping multiples
+        # while the trace beside it claimed a size-matched set. Same fallback
+        # as the legs, for the same reason.
         peer = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
                                          ticker=ticker,
-                                         market_cap=(_market_cap or 0.0))
+                                         market_cap=(_market_cap or revenue_base * 10))
         _12m_targets: dict[str, Optional[float]] = {}
         _12m_pt_method_label = "forward multiple (profile-specific)"
         _is_reit = sector in {"REIT", "RealEstate"} or profile_name == "REIT"

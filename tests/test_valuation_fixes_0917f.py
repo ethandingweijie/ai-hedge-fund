@@ -102,15 +102,29 @@ _ALL = sorted(_fixtures())
 #: site cannot reach them.
 _US = ("AAPL", "BABA", "COST", "FCX", "MELI", "MU", "SCHW", "V")
 
-#: The HK/SG fixtures that DO resolve a live cohort. Every one of them lands on
-#: the whole-grouping `all` cohort, never the size-matched `large` one.
+#: The HK/SG fixtures that DO resolve a live cohort. Two are size-matched and
+#: three are not, and the split is not arbitrary: `get_regional_multiples` only
+#: accepts a "large" rung the store actually has, with enough peers in it.
+#: HKSE Banks - Diversified (02888_HK), the SES REIT/Real Estate industry
+#: (C38U_SI) and SES Financial Services (D05_SI) store no large rung at all, so
+#: no `market_cap` can ever reach one — measured by
+#: `scratchpad/probe_3a_rungs.py` against the local comps store.
 _LIVE_COHORT = {
-    #            basis      level     cohort  peers
-    "02888_HK": ("industry", "all", 7),
-    "09988_HK": ("industry", "all", 18),
-    "BN4_SI":   ("sector",   "all", 22),
-    "C38U_SI":  ("industry", "all", 5),
-    "D05_SI":   ("sector",   "all", 9),
+    #            basis      level     cohort   peers
+    "02888_HK": ("industry", "all",   7),
+    "09988_HK": ("industry", "large", 9),
+    "BN4_SI":   ("sector",   "large", 11),
+    "C38U_SI":  ("industry", "all",   5),
+    "D05_SI":   ("sector",   "all",   9),
+}
+
+#: The two whose cohort the item-3a alignment actually changed, with the average
+#: it changed from and to. Pinned so a future comps refresh that moves either
+#: number is a named golden move rather than a quiet one.
+_SIZE_MATCHED_BY_3A = {
+    #            from     to      peers before -> after
+    "09988_HK": (0.0625, 0.1359, 18),
+    "BN4_SI":   (0.0643, 0.0793, 22),
 }
 
 #: The one fixture with no peer set at all, so `_sector_g_avg` is the default.
@@ -523,17 +537,12 @@ def test_every_us_fixture_resolves_its_sector_growth_from_the_static_table(name)
 
 
 @pytest.mark.parametrize("name,expected", sorted(_LIVE_COHORT.items()))
-def test_every_hk_and_sg_fixture_resolves_a_live_cohort_and_all_are_the_all_one(
-        name, expected):
-    """The measured shape of item 3a's divergence, read off the baseline instead of
-    re-derived. Level, cohort and peer count for all five. **Not one is `large`**,
-    while the three legs inside `_compute_method_value` pass
-    `(_market_cap or revenue_base * 10)` and get the size-matched cohort. A census
-    of the production `regional_comps` table found 436 groupings carrying both
-    cohorts and 401 of them disagreeing — for 02888_HK's own grouping the whole
-    industry average is +17.11% against +4.88% for the large-cap cohort, and
-    `_gp_raw_growth` is INVERSELY proportional to that average, so the choice moves
-    the growth premium by roughly 28% on a bank growing at 5%."""
+def test_every_hk_and_sg_fixture_resolves_a_live_cohort(name, expected):
+    """Level, cohort and peer count for all five, read off the baseline. Two are
+    the size-matched `large` rung and three are the whole-grouping `all` one, and
+    the split is a property of the comps store rather than of the call site: the
+    three that stay on `all` have no `large` row stored for their grouping, so
+    `_peer_for_gp` passing a real `market_cap` cannot reach one."""
     level, cohort, peers = expected
     b = _basis(name, "bear")
     assert b is not None, f"{name}: expected a live cohort"
@@ -542,9 +551,37 @@ def test_every_hk_and_sg_fixture_resolves_a_live_cohort_and_all_are_the_all_one(
     assert b["basis"] != "static", (name, b)
 
 
-def test_the_five_live_cohorts_are_all_whole_grouping_never_size_matched():
-    for name in _LIVE_COHORT:
-        assert _basis(name, "bear")["cohort"] == "all", name
+def test_the_cohort_is_size_matched_exactly_where_a_large_rung_is_stored():
+    """Item 3a aligned `_peer_for_gp` with the three `_compute_method_value` legs,
+    which have always passed `(_market_cap or revenue_base * 10)`. The alignment
+    moved two of the five live cohorts to `large` and left three on `all`.
+
+    That the three did not move is the more interesting half. The rung ladder in
+    `get_regional_multiples` is industry/large, industry/all, sector/large,
+    sector/all, resolved per field and first-come — so a thin WHOLE-INDUSTRY
+    median pre-empts a size-matched SECTOR one. 02888_HK is the case in point:
+    HKSE Banks - Diversified stores 7 peers at `all` and no `large` row, while
+    HKSE Financial Services stores 20 at `large`. The ladder takes the 7."""
+    size_matched = sorted(n for n in _LIVE_COHORT
+                          if _basis(n, "bear")["cohort"] == "large")
+    assert size_matched == sorted(_SIZE_MATCHED_BY_3A)
+    assert sorted(n for n in _LIVE_COHORT
+                  if _basis(n, "bear")["cohort"] == "all") \
+        == ["02888_HK", "C38U_SI", "D05_SI"]
+
+
+@pytest.mark.parametrize("name,expected", sorted(_SIZE_MATCHED_BY_3A.items()))
+def test_the_two_cohorts_item_3a_moved_moved_to_the_numbers_measured(name, expected):
+    """The complete valuation effect of item 3a on the golden baseline: eighteen
+    leaves, these two fixtures, `sector_g_avg` and its basis, nothing else. No
+    `growth_premium`, no leg multiple, no IV and no 12m target moved, and
+    `base_iv` is bit-identical on all fourteen fixtures."""
+    _, to, peers_before = expected
+    p = _proj(name)
+    for s in _SCENARIOS:
+        assert p[f"scenarios.{s}.sector_g_avg"] == pytest.approx(to, abs=5e-5), s
+        assert _basis(name, s)["cohort"] == "large", s
+        assert _basis(name, s)["peer_count"] < peers_before, s
 
 
 def test_c38u_sits_exactly_on_the_minimum_industry_peer_count():
@@ -567,14 +604,47 @@ def test_u96_is_the_one_fixture_with_no_peer_set_so_it_takes_the_default():
 
 def test_u96_and_bn4_share_a_profile_but_not_a_sector_growth_average():
     """The same-profile A/B that proves 0.08 is a default and not a property of
-    `Conglomerate / Industrial (SG)`: BN4_SI measures 0.0643 from 22 peers. A
-    28% difference in the denominator of `_gp_raw_growth` for two companies the
-    taxonomy treats identically."""
+    `Conglomerate / Industrial (SG)`: BN4_SI measures its average from live peers
+    and U96_SI fabricates one.
+
+    Item 3a moved BN4_SI from 0.0643 (sector/all, 22 peers) to 0.0793
+    (sector/large, 11 peers), which collapsed the gap to U96_SI's hardcoded 0.08
+    from 28% to under 1%. That agreement is a COINCIDENCE and this test is written
+    so it cannot be read as corroboration: the two numbers arrive by unrelated
+    routes, one measured from a size-matched peer set and one a constant that no
+    input can move, and the assertion is that they still differ."""
     u, b = _proj("U96_SI"), _proj("BN4_SI")
     assert u["profile"] == b["profile"] == "Conglomerate / Industrial (SG)"
-    assert b["scenarios.bear.sector_g_avg"] == pytest.approx(0.0643, abs=5e-5)
+    assert b["scenarios.bear.sector_g_avg"] == pytest.approx(0.0793, abs=5e-5)
     assert u["scenarios.bear.sector_g_avg"] == _DEFAULT_G_AVG
+    assert b["scenarios.bear.sector_g_avg"] != _DEFAULT_G_AVG
     assert _basis("BN4_SI", "bear") is not None
+    assert _basis("U96_SI", "bear") is None
+
+
+def test_the_alignment_changed_no_valuation_because_both_movers_are_gated():
+    """Why eighteen leaves moved and not one number anyone would notice.
+
+    `_gp_raw` is forced to exactly 1.0 whenever `forward_roic <= wacc`, and both
+    fixtures the alignment reached are below WACC in all three scenarios —
+    09988_HK at 5.4/6.7/8.1% against a 14.4% WACC, BN4_SI at 1.8/2.3/2.8% against
+    10.2%. So their `sector_g_avg` is an input to a term that is never used, and
+    their `growth_premium` is 1.0 on both sides of the change.
+
+    The corollary is the reason this is still worth shipping: the average DOES
+    reach the premium for any name whose ROIC clears WACC, and 02888_HK is that
+    name in this set — its premium of 0.891 is computed, not forced. It is also
+    the one fixture the alignment cannot touch, because its industry stores no
+    `large` rung."""
+    for name in _SIZE_MATCHED_BY_3A:
+        p = _proj(name)
+        for s in _SCENARIOS:
+            roic, wacc = p[f"scenarios.{s}.forward_roic"], p["wacc"]
+            assert roic is not None and roic <= wacc, (name, s, roic, wacc)
+            assert p[f"scenarios.{s}.growth_premium"] == pytest.approx(1.0), (name, s)
+    gated = _proj("02888_HK")
+    assert gated["scenarios.base.forward_roic"] > gated["wacc"]
+    assert gated["scenarios.base.growth_premium"] < 1.0
 
 
 def test_the_basis_is_scenario_invariant():
@@ -595,13 +665,24 @@ def test_the_sector_growth_average_is_scenario_invariant_too():
 
 
 def test_02888_carries_a_forty_six_percent_bank_sector_growth_average():
-    """The single largest exposure in item 3a, now in the baseline. A whole-industry
-    HKSE Banks average of +45.9% from 7 peers is not a growth rate a bank can be
-    measured against; it is what `all` returns when the grouping is thin. Feeding
-    it to `_gp_raw_growth = 1 + 0.30*(g - avg)/avg` is what pulls 02888_HK's base
-    premium down to 0.891."""
+    """A whole-industry HKSE Banks - Diversified average of +45.9% from 7 peers is
+    not a growth rate a bank can be measured against; it is what `all` returns
+    when the grouping is thin. Feeding it to
+    `_gp_raw_growth = 1 + 0.30*(g - avg)/avg` is what pulls 02888_HK's base
+    premium down to 0.891 — and it is the only fixture in the set whose premium is
+    computed rather than gated, so it is the only one where this average is
+    load-bearing.
+
+    Item 3a was expected to reach it and does not. HKSE Banks - Diversified stores
+    no `large` row, so the ladder resolves industry/all at 7 peers and stops; the
+    size-matched HKSE Financial Services rung, which does store 20 large peers,
+    sits behind it and is never consulted for `growth_avg`. The exposure this test
+    pins is therefore untouched by the alignment, and closing it means changing the
+    rung precedence — a valuation policy decision, not a `market_cap` argument."""
     p = _proj("02888_HK")
     assert p["scenarios.bear.sector_g_avg"] == pytest.approx(0.4592, abs=5e-5)
+    assert _basis("02888_HK", "bear")["basis"] == "industry"
+    assert _basis("02888_HK", "bear")["cohort"] == "all"
     assert p["scenarios.base.growth_premium"] == pytest.approx(0.891, abs=5e-4)
 
 
