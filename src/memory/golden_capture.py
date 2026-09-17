@@ -101,6 +101,25 @@ SECRET_ENV_VARS: tuple[str, ...] = (
 #: Stand-in written in place of a redacted secret.
 REDACTED = "<redacted>"
 
+#: Repo root. ``golden_capture`` lives at ``src/memory/``, so parents[2].
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+#: Dotenv files this project keeps secrets in.
+#:
+#: ``.env.local`` is the LIVE one (20 keys). ``.env`` is older and holds a
+#: 3-key subset — crucially it has NO ``FMP_API_KEY``, which is the key that
+#: actually leaked into ``BN4_SI/raw/calls.json`` once. So a caller that does a
+#: bare ``load_dotenv()`` finds ``.env`` first, arms 3 of the 9 names above,
+#: and the sweep goes blind to exactly the credential with a history.
+#: ``app/frontend/.env.local`` carries no name from the list, but is read so
+#: that adding one there later does not silently reopen the hole.
+SECRET_DOTENV_FILES: tuple[str, ...] = (
+    ".env", ".env.local", "app/frontend/.env.local",
+)
+
+#: Shortest value treated as a real secret rather than a placeholder.
+MIN_SECRET_LEN = 8
+
 
 # ── Target resolution ────────────────────────────────────────────────────────
 
@@ -150,19 +169,76 @@ def make_key(target: str, args: tuple, kwargs: dict) -> str:
     return json.dumps(payload, sort_keys=True, default=repr)
 
 
-def known_secrets() -> set[str]:
+def _dotenv_secrets(root: Path | None = None) -> dict[str, set[str]]:
+    """Every :data:`SECRET_ENV_VARS` value written in the project's dotenv files.
+
+    PARSED, not loaded: reading the files directly means the sweep is armed
+    even in a process that never imported dotenv, and it never mutates
+    ``os.environ`` as a side effect of a security check. Returns names mapped
+    to every value seen for them, because more than one file can name the same
+    var with a different value and both must be scrubbed.
+    """
+    root = root or PROJECT_ROOT
+    found: dict[str, set[str]] = {}
+    for rel in SECRET_DOTENV_FILES:
+        try:
+            text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, _, val = line.partition("=")
+            name = name.strip()
+            if name not in SECRET_ENV_VARS:
+                continue
+            val = val.strip().strip('"').strip("'")
+            if len(val) >= MIN_SECRET_LEN:
+                found.setdefault(name, set()).add(val)
+    return found
+
+
+def unarmed_secret_vars(root: Path | None = None) -> list[str]:
+    """Names of secrets that exist on disk but are absent from ``os.environ``.
+
+    Diagnostics only, and names only — never a value. A record pass that
+    reports a non-empty list is running with an environment that does not match
+    the files, which is how a caller ends up scrubbing against a smaller set of
+    credentials than the project actually holds.
+    """
+    on_disk = _dotenv_secrets(root)
+    out: list[str] = []
+    for name, vals in on_disk.items():
+        env_val = os.environ.get(name) or ""
+        if env_val not in vals:
+            out.append(name)
+    return sorted(out)
+
+
+def known_secrets(root: Path | None = None) -> set[str]:
     """Live secret values that must never be written into a fixture.
 
-    Collected from the environment at record time. A fixture is committed
-    test data, so a leaked key is a credential in git history — positional
-    redaction stops the known argument slots, and this sweep catches anything
-    that arrived inside a response body or an echoed request URL.
+    The union of the environment and the project's dotenv files. A fixture is
+    committed test data, so a leaked key is a credential in git history —
+    positional redaction stops the known argument slots, and this sweep catches
+    anything that arrived inside a response body or an echoed request URL.
+
+    Reading the files as well as the environment is the point. An env-only
+    version of this function is armed by whatever the caller happened to load,
+    and ``assert_no_secrets`` returns ``[]`` when it is handed an empty set — so
+    an under-armed gate reports CLEAN, which is indistinguishable from a
+    genuinely clean fixture. ``scripts/record_golden_fixtures.py`` does load
+    ``.env.local`` explicitly (L47-48), so the record pass was never blind; but
+    the gate should not depend on a caller 140 lines away remembering to.
     """
     out: set[str] = set()
     for var in SECRET_ENV_VARS:
         val = os.environ.get(var)
-        if val and len(val) >= 8:
+        if val and len(val) >= MIN_SECRET_LEN:
             out.add(val)
+    for vals in _dotenv_secrets(root).values():
+        out |= vals
     return out
 
 
@@ -379,16 +455,35 @@ def write_web_run(ticker: str, doc: dict) -> Path:
     return path
 
 
-def assert_no_secrets(paths: list[Path]) -> list[str]:
+def assert_no_secrets(paths: list[Path], *,
+                      allow_unarmed: bool = False) -> list[str]:
     """Return every path that still contains a known secret value.
 
     Run after a record pass. A fixture directory is committed test data and is
     NOT gitignored, so this is the last gate before a credential reaches git
     history.
+
+    Raises rather than returning ``[]`` when it has no secret to compare
+    against. An empty comparison set used to short-circuit to a clean report,
+    which is exactly wrong for a gate: "I checked nothing" and "I found
+    nothing" are different statements, and only the second one is a pass. The
+    caller that really is running on a keyless box passes
+    ``allow_unarmed=True`` and says so out loud.
     """
     secrets = known_secrets()
     if not secrets:
-        return []
+        if allow_unarmed:
+            return []
+        on_disk = sorted(_dotenv_secrets())
+        raise RuntimeError(
+            "assert_no_secrets() has no secret value to compare against, so it "
+            "cannot certify these fixtures as clean.\n"
+            f"  env vars armed  : 0 of {len(SECRET_ENV_VARS)}\n"
+            f"  dotenv files  : {', '.join(SECRET_DOTENV_FILES)}\n"
+            f"  names on disk : {on_disk or 'none'}\n"
+            "Load the project's dotenv files before recording, or pass "
+            "allow_unarmed=True if this environment genuinely holds no keys."
+        )
     leaked: list[str] = []
     for p in paths:
         if not p.exists():

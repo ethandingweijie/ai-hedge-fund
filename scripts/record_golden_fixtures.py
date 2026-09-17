@@ -274,6 +274,14 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Recording {len(tickers)} golden fixture(s) at {_commit()[:8]} "
           f"— one subprocess each")
+    # Report the sweep's arming BEFORE recording anything. A secret gate that
+    # is blind reports clean, and clean is indistinguishable from blind unless
+    # the count is printed. Names only — never a value.
+    _armed = gc.known_secrets()
+    _missing = gc.unarmed_secret_vars()
+    print(f"  secret sweep armed with {len(_armed)} value(s) across "
+          f"{len(gc.SECRET_ENV_VARS)} names"
+          + (f"; env missing {_missing}" if _missing else ""))
     failures: list[tuple[str, str]] = []
     for t in tickers:
         cmd = [sys.executable, str(Path(__file__).resolve()), t, "--_child"]
