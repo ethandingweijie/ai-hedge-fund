@@ -282,48 +282,86 @@ def _methods(profile: str) -> dict[str, dict]:
 # ── A. NKE — inventory bullwhip ──────────────────────────────────────────────
 
 
-def test_the_engine_never_turns_inventory_into_days():
-    """`inventory` reaches the engine at exactly three sites, none of them a ratio.
+def test_the_engine_turns_inventory_into_days_at_exactly_one_site():
+    """The inverse of what this test asserted when the brief was measured.
 
-    Measured, not assumed. The three are: two identical line-item request lists
-    (the annual-series request and the ROIC input request) and one row-builder
-    assignment. After that the value is only ever added to receivables and
-    subtracted-from-payables inside ROIC's operating-working-capital term. It is
-    never divided by cost of revenue, never compared against its own history, and
-    never converted into a margin. So the input the brief's Gate 1 needs is
-    present in the data and unconsumed by the logic — the cheapest of the five
-    gaps to close, because nothing has to be fetched.
+    It used to pin that `inventory` reaches the engine at three sites and none
+    of them is a ratio — the evidence that the brief's Gate 1 was the cheapest
+    of the five gaps to close, because the input was present and unconsumed. It
+    is now consumed, so the assertion is inverted rather than deleted: four
+    sites, and exactly one of them divides.
+
+    "Exactly one" is the load-bearing part. A second ratio site would mean two
+    definitions of inventory stress that can disagree, which is the shape the
+    `md_abs * 10` defect had — the same quantity computed twice, in two places,
+    with one of them wrong. The shape check is by line prefix rather than by
+    substring because a substring short enough to survive a re-indent is also
+    short enough to match a comment.
     """
     src = _engine_src()
-    for absent in ("days_sales_inventory", "inventory_days", "bullwhip",
-                   "markdown", "GATE_INVENTORY_STRESS", "inventory_stress"):
-        assert absent not in src, f"{absent!r} exists now; this test is stale"
     lines = [ln for ln in src.splitlines() if '"inventory"' in ln]
-    assert len(lines) == 3, [ln.strip() for ln in lines]
-    # Classified by shape, not by a character prefix — a prefix short enough to
-    # survive a re-indent is also short enough to match the wrong line.
     shapes = sorted(
         "assignment" if ln.strip().startswith('"inventory":') else
         "request" if ln.strip().startswith('"inventory",') else "other"
         for ln in lines)
-    assert shapes == ["assignment", "request", "request"], shapes
+    assert shapes == ["assignment", "other", "request", "request"], [
+        ln.strip() for ln in lines]
+    # The one "other" is the read that feeds the ratio, and it goes through
+    # `_safe` like every other line-item read in the row builder.
+    assert [ln.strip() for ln in lines
+            if not ln.strip().startswith(('"inventory":', '"inventory",'))] == \
+        ['inv = _safe(row.get("inventory"))']
+    # And it is the only place inventory is divided by anything. Asserted on the
+    # AST rather than by filtering lines, because a line filter has to exclude
+    # comments AND docstrings to be right, and this helper's own docstring
+    # contains the expression in prose — a first version of this assert matched
+    # that line and failed on its own documentation. A second version looked for
+    # `inv / cogs` and found nothing, because the real expression is
+    # `float(inv) / float(cogs)` — so the operands are unwrapped rather than
+    # matched, and an assert that has to be corrected twice is an assert whose
+    # target should be named once, here.
+    def _operand(node):
+        while isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == "float" and len(node.args) == 1:
+            node = node.args[0]
+        return node.id if isinstance(node, ast.Name) else None
+
+    divs = [( _operand(n.left), _operand(n.right))
+            for n in ast.walk(ast.parse(src))
+            if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
+            and _operand(n.left) == "inv"]
+    assert divs == [("inv", "cogs")], divs
+
+    # The gate exists and is spelled the way the post-mortem spelled it.
+    assert '"gate_id": "GATE_INVENTORY_STRESS",' in src
+    assert src.count("GATE_INVENTORY_STRESS") == 2, (
+        "one at the `#:` constant comment and one at the record — a third "
+        "means something else grew a reference to this gate")
+    assert dcf_agent._INVENTORY_STRESS_TRIGGER_DAYS == 25.0
+    assert dcf_agent._INVENTORY_MARKDOWN_HAIRCUT == 0.15
 
 
-def test_gate_vocabulary_is_closed_and_has_eight_members():
+def test_gate_vocabulary_is_closed_and_has_nine_members():
     """The set of gate ids the engine can emit, extracted from its own source.
 
-    Eight. This is what makes "there is no inventory gate" a fact about the
-    engine rather than a fact about the brief's prose — and it means adding one
-    is a deliberate act that turns this test red until the list is updated.
+    Nine. This is what makes a claim about which gates exist a fact about the
+    engine rather than a fact about a brief's prose — and it means adding one is
+    a deliberate act that turns this test red until the list is updated.
 
-    It was seven when this module was written, and the eighth is the reason the
-    count is pinned rather than asserted as "at least". `GATE_GROWTH_REINVESTMENT`
-    is the brief's Gate 2 built, measured and then shipped OBSERVATION-ONLY:
-    `applied` is False on every run and no call site passes a ratio to the
-    projector, so it records a counterfactual beside the cash-conversion cap it
-    was written to replace. A gate that fires in the payload while moving no
-    number is exactly the shape this test would otherwise let slip in silently,
-    so it is named here with its status rather than just counted.
+    It was seven when this module was written. The eighth,
+    `GATE_GROWTH_REINVESTMENT`, is the brief's Gate 2 built, measured and then
+    shipped OBSERVATION-ONLY: `applied` is False on every run and no call site
+    passes a ratio to the projector, so it records a counterfactual beside the
+    cash-conversion cap it was written to replace. The ninth,
+    `GATE_INVENTORY_STRESS`, is the brief's Gate 1 and is the opposite: it is the
+    only gate in the engine whose record says `applied: True`. Measured before it
+    was wired, it fires on none of the 14 golden fixtures — the largest positive
+    DSI expansion is FCX at +7.1 days against a 25-day trigger — so it ships
+    live with a nil blast radius on the recorded baseline.
+
+    Both of those facts are pinned below by name rather than left to the count,
+    because a count alone cannot tell "nine gates" from "nine gates, two of
+    which moved a number nobody named".
     """
     emitted = sorted(set(re.findall(r'"gate_id":\s*"(GATE_[A-Z_]+)"', _engine_src())))
     assert emitted == [
@@ -333,18 +371,28 @@ def test_gate_vocabulary_is_closed_and_has_eight_members():
         "GATE_DETERMINISTIC_KPI_PRECEDENCE",
         "GATE_GROWTH_CAGR_DIVERGENCE",
         "GATE_GROWTH_REINVESTMENT",
+        "GATE_INVENTORY_STRESS",
         "GATE_PT_IV_BAND",
         "GATE_REVENUE_SCALE_CAP",
     ], emitted
-    assert not any("INVENT" in g for g in emitted), (
-        "an inventory gate landed — update the count, the list and the "
-        "test_an_inventory_buildup_caps_the_terminal_margin xfail in the same "
-        "commit, or the three will disagree about whether DSI is computed")
-    # `"REINVESTMENT"` does not contain `"INVENT"`, so the assert above is not
-    # quietly satisfied by the eighth gate. Pinned as a fact rather than left to
-    # the reader to check: a substring guard that stops guarding is worse than
-    # no guard, because it reads as though it still does.
+    # The two substring facts that used to be one assert. `"REINVESTMENT"` does
+    # not contain `"INVENT"`, which is why the old guard could assert
+    # `not any("INVENT" in g ...)` and still be satisfied by the eighth gate —
+    # and why it had to become two asserts the moment a ninth one landed.
     assert "INVENT" not in "GATE_GROWTH_REINVESTMENT"
+    assert sum("INVENT" in g for g in emitted) == 1, emitted
+    # `applied` is a literal on every record, never derived, and the split is
+    # the fact worth pinning: five records say True and three say False. A first
+    # version of this assert claimed the inventory gate was the ONLY True in the
+    # file, which is wrong — CAGR divergence, balance-sheet-financial (twice)
+    # and deterministic-KPI precedence all applied what they measured long
+    # before it existed. Counted from source, so the numbers here cannot be a
+    # recollection.
+    src = _engine_src()
+    assert src.count('"applied": True,') == 5, src.count('"applied": True,')
+    assert src.count('"applied": False,') == 3, src.count('"applied": False,')
+    assert '"applied": _s_to_c is not None' not in src
+
 
 
 def test_the_reinvestment_gate_is_observation_only_and_says_so():
@@ -440,18 +488,29 @@ def test_the_projector_still_reproduces_the_flat_margin_projection():
         max(fmb - 0.03 - 0.28 / (1.28 * 1.85), floor), abs=1e-12)
 
 
-def test_the_briefs_nike_arithmetic_is_right_about_a_gate_that_is_not_there():
-    """The DSI expansion in the brief's own scenario is 36.5 days — and inert.
+def test_the_briefs_nike_arithmetic_is_right_about_a_cap_the_engine_does_not_use():
+    """The DSI expansion in the brief's own scenario is 36.5 days. It is read now.
 
     Recomputed here so the number is checked rather than quoted: current DSI is
     8400/28000 × 365 = 109.5d against a trailing median of 73.0d, an expansion
-    of 36.5d, well past the brief's 25-day trigger. Nothing in the engine reads
-    it. The margin that reaches the terminal value is
-    `fcf_margin_base + margin_delta`, clamped to `[fcf_floor, _FCF_MARGIN_CAP]`
-    — an FCF margin with a Consumer floor of **+0.02**, not an EBIT margin
-    capped at a trailing-3y low. For NKE's archetype inputs the floor is above
-    the brief's 11.4% cap in the wrong direction entirely: it prevents the
-    margin from falling, where the gate is meant to prevent it from staying high.
+    of 36.5d, well past the 25-day trigger. When this test was written nothing in
+    the engine read it and the name said so; `GATE_INVENTORY_STRESS` does now,
+    and the post-mortem's Failure 4 is what landed.
+
+    What is STILL true, and why the test is kept rather than deleted: the brief's
+    proposed remedy was to cap the terminal margin at the lowest trailing-3y EBIT
+    margin, 11.373% here. That is not what shipped, and the reason survives the
+    implementation. The margin that reaches the terminal value is
+    `fcf_margin_base + margin_delta`, clamped to `[fcf_floor, _FCF_MARGIN_CAP]` —
+    an FCF margin with a Consumer floor of **+0.02**, not an EBIT margin. Capping
+    an FCF margin at an EBIT-margin floor is a category error in whichever
+    direction it binds: EBIT excludes interest and tax that FCF has already paid,
+    and includes D&A that FCF has replaced with capex. For NKE's archetype inputs
+    the floor sits above the brief's cap in the wrong direction entirely — it
+    prevents the margin from FALLING, where the brief's cap was meant to prevent
+    it from STAYING HIGH. So the shipped gate marks the base margin down
+    proportionally instead, which needs no second margin definition to be
+    coherent.
     """
     from src.data.sector_profiles import FCF_MARGIN_FLOOR
 
@@ -461,7 +520,7 @@ def test_the_briefs_nike_arithmetic_is_right_about_a_gate_that_is_not_there():
     past = sorted(dsi[1:])
     expansion = dsi[0] - past[len(past) // 2]
     assert expansion == pytest.approx(36.5, abs=0.05), expansion
-    assert expansion > 25.0
+    assert expansion > dcf_agent._INVENTORY_STRESS_TRIGGER_DAYS
 
     cap = min(ebit / rev for rev, _, _, ebit in hist[:3])
     assert cap == pytest.approx(0.11373, abs=1e-5), cap
@@ -473,19 +532,15 @@ def test_the_briefs_nike_arithmetic_is_right_about_a_gate_that_is_not_there():
         "mechanisms would start to interact and this note would be wrong")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "NOT IMPLEMENTED. No inventory-days computation exists anywhere in the "
-    "engine, so no DSI expansion can cap a terminal margin — see "
-    "test_the_engine_never_turns_inventory_into_days. The terminal margin is an "
-    "FCF margin clamped to [FCF_MARGIN_FLOOR[sector], 0.60], and for Consumer "
-    "the floor is +0.02, which pushes the margin UP where this gate pushes it "
-    "DOWN. Closing it needs a DSI series over the recorded rows (inventory and "
-    "cost of revenue are both already requested) plus a ninth gate id, which "
-    "will turn test_gate_vocabulary_is_closed_and_has_eight_members red until "
-    "the list is updated — the eighth, GATE_GROWTH_REINVESTMENT, is the "
-    "reinvestment charge shipped observation-only, and its INVENT-free name "
-    "is why that test's substring assert still guards what it says it guards."))
 def test_an_inventory_buildup_caps_the_terminal_margin():
+    """The brief's Gate 1, passing. Was `xfail(strict=True)`; the strictness is
+    the reason this is a green test rather than a silently-skipped one — an
+    xfail that starts passing fails the suite, so implementing the gate forced
+    this to be updated in the same commit rather than left to rot.
+
+    Kept as the brief wrote it, on the brief's own inputs, so the number it
+    asserts (36.5 > 25) is the brief's and not one chosen to fit.
+    """
     hist = [
         {"revenue": 51_000, "cost_of_revenue": 28_000, "inventory": 8_400, "ebit": 5_800},
         {"revenue": 50_000, "cost_of_revenue": 27_000, "inventory": 5_400, "ebit": 6_200},
@@ -495,6 +550,211 @@ def test_an_inventory_buildup_caps_the_terminal_margin():
     fn = getattr(dcf_agent, "_inventory_stress_days", None)
     assert fn is not None, "no inventory-stress helper exists"
     assert fn(hist) > 25.0
+    assert fn(hist) == pytest.approx(36.5, abs=0.05), fn(hist)
+
+
+def test_the_inventory_helper_reads_newest_first_and_says_none_when_it_cannot():
+    """The order convention is the whole risk in this helper, so it is pinned.
+
+    `run_dcf_agent`'s `series` is ASCENDING — `most_recent = series[-1]` — and
+    this helper takes newest-FIRST, because that is the order the brief's own
+    test fixture is written in and the order the post-mortem's
+    `dsi - dsi_3y_median` reads in. The call site therefore reverses, and the
+    parameter is named `rows_newest_first` so that a call site passing `series`
+    looks wrong on its face rather than merely computing the wrong thing.
+
+    It is worth being precise about how wrong. On the brief's NKE inputs the
+    reversed order returns −1.5 days instead of +36.5, which is a small number
+    and would not obviously look like a bug in a log line. On a series whose
+    inventory has genuinely been draining it would return a large POSITIVE
+    number and fire the gate on exactly the names it should clear.
+    """
+    nke = [
+        {"inventory": 8_400, "cost_of_revenue": 28_000},
+        {"inventory": 5_400, "cost_of_revenue": 27_000},
+        {"inventory": 5_100, "cost_of_revenue": 25_000},
+        {"inventory": 4_800, "cost_of_revenue": 24_000},
+    ]
+    fn = dcf_agent._inventory_stress_days
+    assert fn(nke) == pytest.approx(36.5, abs=0.05)
+    # The same rows in the engine's own order — not a mirror image, and small
+    # enough to pass for a rounding difference if nobody checked.
+    assert fn(nke[::-1]) == pytest.approx(-1.46, abs=0.01)
+
+    # None, not 0.0, whenever the comparison cannot be made. Zero would mean
+    # "measured no stress", which is a different claim from "could not measure".
+    assert fn([]) is None
+    assert fn([{"inventory": 8_400}]) is None                      # no cogs
+    assert fn([{"cost_of_revenue": 28_000}]) is None               # no inventory
+    assert fn([{"inventory": 8_400, "cost_of_revenue": 0}]) is None
+    assert fn([{"inventory": -1.0, "cost_of_revenue": 28_000},
+               {"inventory": 5_400, "cost_of_revenue": 27_000},
+               {"inventory": 5_100, "cost_of_revenue": 25_000}]) is None
+    # One prior year is not a median.
+    assert fn(nke[:2]) is None
+    # Two is — and an even count averages the middle pair, which is
+    # `statistics.median` and not `sorted(x)[len(x) // 2]`.
+    two = fn(nke[:3])
+    assert two == pytest.approx(109.5 - (73.0 + 74.5) / 2, abs=0.05), two
+
+
+def test_the_inventory_helper_looks_at_three_prior_years_and_no_further():
+    """`dsi_3y_median` means three years, and the fourth is excluded.
+
+    Pinned because a slice that quietly widens to `rows[1:]` is invisible in
+    every other test here. It is also NOT detectable by dropping in an extreme
+    outlier, which is what a first version of this test tried: a median over
+    four values is the mean of the middle two, so adding a 1460-day year to
+    {73.0, 73.0, 74.5} moves the median from 73.0 to 73.7 — 0.8 days, well
+    inside any tolerance, because robustness to outliers is the entire reason
+    the post-mortem asked for a median. Robustness to an outlier and blindness
+    to a widening window are the same property, so the window has to be tested
+    with a fourth year that is merely DIFFERENT rather than absurd: prior DSIs of
+    10, 20, 30 and 40 give a three-year median of 20 and a four-year median of
+    25, which is a five-day difference in the expansion and cannot be hidden by
+    a tolerance.
+    """
+    fn = dcf_agent._inventory_stress_days
+    cogs = 1000.0
+
+    def row(days: float) -> dict:
+        return {"inventory": days * cogs / 365.0, "cost_of_revenue": cogs}
+
+    rows = [row(60.0), row(10.0), row(20.0), row(30.0), row(40.0)]
+    three = fn(rows)
+    assert three == pytest.approx(60.0 - 20.0, abs=1e-9), three
+    assert three != pytest.approx(60.0 - 25.0, abs=1e-9), (
+        "the fourth prior year leaked into the median — the window is `rows[1:4]`")
+    # Dropping the fourth year entirely changes nothing, which is the same fact
+    # read from the other side.
+    assert fn(rows[:4]) == pytest.approx(three, abs=1e-9)
+    # And the brief's NKE series, whose prior three are 73.0 / 74.46 / 73.0:
+    nke = [
+        {"inventory": 8_400, "cost_of_revenue": 28_000},
+        {"inventory": 5_400, "cost_of_revenue": 27_000},
+        {"inventory": 5_100, "cost_of_revenue": 25_000},
+        {"inventory": 4_800, "cost_of_revenue": 24_000},
+    ]
+    assert fn(nke) == pytest.approx(36.5, abs=0.05)
+
+
+def test_the_markdown_is_proportional_and_never_touches_a_non_positive_margin():
+    """The 15% is of the margin, not 15 percentage points, and it needs a sign.
+
+    Two separate decisions, both worth a test because both are the kind of thing
+    that reads as obviously right in a diff and is wrong on the population that
+    matters.
+
+    PROPORTIONAL. On NKE's own archetype inputs the base margin is ~11.4%, so a
+    proportional haircut takes it to ~9.7% — a real markdown — while an absolute
+    15pp deduction takes it to −3.6%, through the Consumer floor of +0.02, and
+    hands the projector a number describing the floor. Measured across the 14
+    golden fixtures an absolute 15pp deduction would drive 8 of 14 base margins
+    negative outright. A proportional haircut cannot exceed the base margin,
+    cannot flip its sign and cannot reach the floor from above. That is the
+    failure the reinvestment charge was measured to have — its deduction
+    exceeded the base margin on seven of fourteen names, and the blend's
+    leg-dropping turned the more conservative input into a HIGHER valuation.
+
+    SIGN-GUARDED. `−21.06 × 0.85 = −17.90`. On MSTR's shape a "haircut" would
+    improve the margin by 3.2pp, which is the same error with the opposite sign
+    and no message to say so. The gate therefore requires
+    `fcf_margin_base > 0`, and this test pins the arithmetic that makes the
+    guard necessary rather than only asserting the guard is in the source.
+    """
+    src = _run_body()
+    at = src.index("if not _dcf_family_disabled and fcf_margin_base > 0:")
+    block = src[at:src.index("# ── Analyst estimates", at)]
+    assert "_INVENTORY_MARKDOWN_HAIRCUT" in block
+    assert "fcf_margin_base * _INVENTORY_MARKDOWN_HAIRCUT" in block
+    assert "- _inv_haircut" in block
+    # An absolute deduction would read as a subtraction of the constant itself.
+    assert "- _INVENTORY_MARKDOWN_HAIRCUT" not in block
+    assert "0.15" not in block.replace("_INVENTORY_MARKDOWN_HAIRCUT", "")
+
+    for fmb, expected in ((0.1137, 0.1137 * 0.85), (0.0232, 0.0232 * 0.85),
+                          (0.5667, 0.5667 * 0.85)):
+        assert fmb - fmb * 0.15 == pytest.approx(expected, abs=1e-12)
+        # A proportional haircut is bounded by the base and keeps its sign.
+        assert 0 < fmb - fmb * 0.15 < fmb
+    mstr = -21.0605
+    assert mstr * 0.85 > mstr, "the unguarded form improves a loss-making margin"
+    assert mstr - 0.15 < mstr, "the absolute form does not — it is only wrong " \
+        "on the positive side, which is why the sign guard is about the " \
+        "multiplicative reading specifically"
+
+
+def test_the_inventory_gate_sits_between_the_classify_capture_and_the_projector():
+    """Position is semantics here, and three boundaries all matter.
+
+    AFTER `_fcf_margin_for_classify` is captured, because that capture exists
+    precisely so the profile choice reflects demonstrated economics rather than
+    a repaired DCF basis — a haircut is a repair, and letting it reach the
+    classifier would let an inventory quarter re-route a company to a different
+    valuation profile.
+
+    AFTER the cash-conversion gate, so that gate's `raw_input_path_a` records
+    the margin it actually saw rather than a post-haircut one. Each gate should
+    describe its own input.
+
+    BEFORE the first `_project_dcf` call, which is the whole point of the gate.
+
+    Asserted on offsets in `run_dcf_agent`'s body rather than by reading the
+    file, so a refactor that moves the block fails here instead of silently
+    changing what the gate does.
+    """
+    src = _run_body()
+    at = {
+        "classify_capture": src.index("_fcf_margin_for_classify = fcf_margin_base"),
+        "cash_conversion": src.index('"gate_id": "GATE_CASH_CONVERSION"'),
+        "inventory": src.index('"gate_id": "GATE_INVENTORY_STRESS"'),
+        "projector": src.index("_project_dcf("),
+    }
+    assert at["classify_capture"] < at["cash_conversion"] < at["inventory"] \
+        < at["projector"], at
+    # The haircut mutates the variable the projector reads, not a copy of it.
+    gate_at = src.index("if not _dcf_family_disabled and fcf_margin_base > 0:")
+    assert "fcf_margin_base = _inv_pre - _inv_haircut" in src[gate_at:]
+    assert "_inventory_stress_days(series[::-1])" in src[gate_at:]
+
+
+def test_the_gate_is_inert_on_the_zero_inventory_population():
+    """Five of the fourteen golden fixtures hold exactly zero inventory.
+
+    Measured before this was wired, with `scratchpad/probe_inventory_dsi.py`,
+    one subprocess per fixture: 02888_HK, C38U_SI, D05_SI, SCHW and V all report
+    inventory of 0.0 against a positive cost of revenue, so their DSI is 0.0 in
+    every year and the expansion is exactly 0.0. Banks, a REIT and a payment
+    network — there is nothing on a shelf to mark down, and the gate should say
+    nothing about them rather than reporting a stress of zero days.
+
+    Pinned here because "the trigger fires on none of the 14" is the entire
+    reason this gate ships live instead of observation-only, and that claim is
+    only as good as the population it was measured on. Zero is a legitimate
+    measurement and not a missing one, so the helper returns 0.0 rather than
+    None — and the gate's `> 25` keeps it silent, which is the behaviour under
+    test.
+
+    The rest of the inert population splits six and three. Six COMPRESS:
+    BN4_SI −74.3, MU −30.6, BABA −15.9, 09988_HK −15.8, COST −3.0, AAPL −1.3.
+    Negative cannot clear a `> 25` trigger, which is why the helper is signed
+    rather than clamped at zero. Three are positive and under it: FCX +7.1,
+    MELI +3.0, U96_SI +1.5, the largest at 28% of the trigger and therefore the
+    one a fixture refresh is most likely to push over.
+    """
+    fn = dcf_agent._inventory_stress_days
+    bank = [{"inventory": 0.0, "cost_of_revenue": c} for c in
+            (9_000.0, 8_500.0, 8_200.0, 8_000.0)]
+    assert fn(bank) == 0.0
+    assert not (fn(bank) > dcf_agent._INVENTORY_STRESS_TRIGGER_DAYS)
+    # A missing inventory is a different claim from a zero one: None, not 0.0.
+    assert fn([{"cost_of_revenue": 9_000.0}] * 4) is None
+    # And compressing inventory cannot fire the gate no matter how far it moves.
+    draining = [{"inventory": inv, "cost_of_revenue": 28_000.0} for inv in
+                (1_000.0, 4_000.0, 6_000.0, 9_000.0)]
+    assert fn(draining) < 0
+    assert not (fn(draining) > dcf_agent._INVENTORY_STRESS_TRIGGER_DAYS)
+
 
 
 # ── B. ONON — hyper-growth capital drain ─────────────────────────────────────
@@ -2572,15 +2832,25 @@ def test_none_of_the_briefs_three_integration_steps_is_present():
     implementation plan as not-started, which is a different claim and should
     stay green until someone begins it — at which point it will fail on the
     first name that appears, and the xfail above it can be retired.
+
+    TWO NAMES HAVE SINCE LEFT THIS LIST. `GATE_INVENTORY_STRESS` and
+    `_inventory_stress_days` appeared when the post-mortem's Failure 4 landed,
+    and this test did exactly what it says it would: it went red on the first
+    name that appeared. They are asserted PRESENT below rather than deleted from
+    the record, so the list keeps meaning "here is every name the brief and the
+    post-mortem asked for, and where each one stands". The brief's three
+    integration steps are still not started — the inventory gate is Failure 4 of
+    the post-mortem, which is a different deliverable and does not need a
+    pre-flight hook, an `overrides` key or a capex-shaped cash-flow identity.
     """
     src = _engine_src()
     for name in ("evaluate_consumer_discretionary_guards",
                  "apply_reinvestment_deduction",
-                 "GATE_INVENTORY_STRESS",
                  "LUXURY_GROSS_MARGIN_FLOOR",
-                 "_inventory_stress_days",
                  "_margin_deviation_routes_to_normalized"):
         assert name not in src, f"{name!r} has appeared; update this record"
+    for landed in ("GATE_INVENTORY_STRESS", "_inventory_stress_days"):
+        assert landed in src, f"{landed!r} was removed; update this record"
     # Whitespace-insensitive: the real line is column-aligned as
     # `fcf_t    = rev_t * margin_t`, and pinning the padding would make this
     # fail on a reformat that changes nothing.

@@ -1312,6 +1312,76 @@ def _median_positive_fcf_margin(
     return statistics.median(margins)
 
 
+#: Days of DSI expansion over the prior three years that trips
+#: GATE_INVENTORY_STRESS. Owner-specified in the operational post-mortem's
+#: Failure 4 ("When `dsi - dsi_3y_median > 25`").
+_INVENTORY_STRESS_TRIGGER_DAYS = 25.0
+
+#: Proportional markdown applied to `fcf_margin_base` when the trigger trips.
+#: Owner-specified in the same place ("apply an immediate 15% markdown haircut
+#: to `fcf_margin_base` before passing it to `_project_dcf`").
+_INVENTORY_MARKDOWN_HAIRCUT = 0.15
+
+
+def _inventory_stress_days(rows_newest_first: list[dict]) -> Optional[float]:
+    """DSI expansion over the prior three years, in days, SIGNED.
+
+    ``inventory / cost_of_revenue * 365`` for the most recent year, minus the
+    median of the same ratio over the three years before it. Positive means
+    inventory is taking longer to sell than it used to — the bullwhip shape the
+    brief's Gate 1 exists for, where a retailer has shipped product into a
+    channel that has stopped taking it and the reported margin still reflects
+    the sales that were booked, not the markdowns that are coming.
+
+    ORDER IS PART OF THE CONTRACT. `rows_newest_first[0]` is the CURRENT year
+    and `[1:4]` are the three prior ones. The engine's own `series` is
+    ASCENDING — `most_recent = series[-1]` — so the call site passes
+    `series[::-1]`, and the parameter is named for the order rather than taking
+    `rows` so that a call site reading `_inventory_stress_days(series)` looks
+    wrong on its face. Getting this backwards is not a small error: it turns
+    "inventory is building" into "inventory is draining" and fires the gate on
+    exactly the names it should clear.
+
+    Returns None when the current year's DSI is unmeasurable, or when fewer than
+    two prior years measure. Two rather than one is deliberate: a median over a
+    single prior year is a point comparison, and one restated inventory line —
+    which is what a lease or a consolidation restatement does to a balance
+    sheet — would then move the gate by the whole restatement.
+
+    A NEGATIVE inventory is also unmeasurable, not merely small. It is not a
+    quantity a warehouse can hold; it is what a contra account, a LIFO reserve
+    or a mis-signed consolidation adjustment looks like once it reaches a row
+    dict, and dividing it by cost of revenue produces a negative DSI that would
+    subtract from the median and manufacture stress in a later year rather than
+    this one. Guarding the numerator the same way the denominator is guarded
+    costs one comparison and removes a way for the gate to fire on the wrong
+    year.
+
+    The result is signed and NOT clamped at zero, for the reason the
+    reinvestment deduction gives: a number that can only ever be positive
+    cannot distinguish "not stressed" from "stressed in the other direction",
+    and the gate record is more useful saying that inventory days COMPRESSED by
+    12 than saying nothing. The trigger is `> 25`, so the negative side can
+    never fire it.
+    """
+    def _dsi(row: dict) -> Optional[float]:
+        inv = _safe(row.get("inventory"))
+        cogs = _safe(row.get("cost_of_revenue"))
+        if inv is None or cogs is None or inv < 0 or cogs <= 0:
+            return None
+        return float(inv) / float(cogs) * 365.0
+
+    if not rows_newest_first:
+        return None
+    current = _dsi(rows_newest_first[0])
+    if current is None:
+        return None
+    past = [d for d in (_dsi(r) for r in rows_newest_first[1:4]) if d is not None]
+    if len(past) < 2:
+        return None
+    return current - statistics.median(past)
+
+
 def _scale_analyst_bands_to_cap(
     bands: Optional[dict], cap: float
 ) -> tuple[Optional[dict], Optional[float]]:
@@ -8118,6 +8188,119 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # it improves plausibility while degrading forecast accuracy.
                 # The reinvestment charge is the real fix; until it lands this
                 # records what it would have done and moves nothing.
+
+        # ── Inventory stress: DSI expansion → markdown haircut (LIVE) ──────
+        # Failure 4 of the operational post-mortem, and the one gate in this
+        # file that APPLIES what it measures. A retailer whose Days Sales of
+        # Inventory has expanded well past its own recent median has shipped
+        # product into a channel that has stopped taking it. The margin still
+        # on the books was earned on the units that sold at full price; the
+        # units sitting in the channel get marked down, and that markdown is a
+        # cost the trailing margin has not yet absorbed. Projecting the trailing
+        # margin forward then projects a price the company will not get.
+        #
+        # Trigger and size are both owner-specified: expansion > 25 days over
+        # the prior three years' median, 15% off the base margin.
+        #
+        # MULTIPLICATIVE, NOT 15 PERCENTAGE POINTS, and that reading is a
+        # judgement worth flagging rather than burying. "A 15% markdown
+        # haircut" admits both. On NKE's own archetype inputs — the case this
+        # gate exists for — the base margin is ~11.4%, so a proportional
+        # haircut takes it to ~9.7% while an absolute 15pp deduction takes it
+        # to −3.6%, through the Consumer sector floor of +0.02, and hands the
+        # projection a number that describes the floor rather than the company.
+        # Measured across the 14 golden fixtures, an absolute 15pp deduction
+        # would drive 8 of the 14 base margins negative outright (COST 0.0232,
+        # MU 0.0396, FCX 0.0539, U96_SI 0.0716, 09988_HK and BABA 0.0951,
+        # BN4_SI 0.0979, SCHW 0.1153). A proportional haircut cannot exceed the
+        # base margin, cannot flip its sign and cannot reach the floor from
+        # above — which is precisely the failure the reinvestment charge was
+        # measured to have, where the deduction exceeded the base margin on
+        # seven of fourteen names and the blend's leg-dropping turned the more
+        # conservative input into a HIGHER valuation.
+        #
+        # Only a POSITIVE base margin is marked down. A negative one multiplied
+        # by 0.85 moves TOWARD zero, so on MSTR's shape (−21.06) a "haircut"
+        # would improve the margin by 3.2pp — the sign error is quiet and the
+        # result is exactly backwards. There is also nothing to mark down: a
+        # business that does not convert revenue to cash already has its
+        # inventory problem dominated by a larger one.
+        #
+        # MEASURED, NOT ASSUMED, before this was wired. `_inventory_stress_days`
+        # is computable on all 14 golden fixtures — 4 of the 5 recorded rows
+        # carry a usable inventory/cost-of-revenue pair on every one — and the
+        # trigger fires on NONE of them. Split 5 / 6 / 3:
+        #
+        #   five flat at exactly 0.0, inventory reported as zero in every year
+        #        (02888_HK, C38U_SI, D05_SI, SCHW, V) — banks, a REIT and a
+        #        payment network, where there is nothing on a shelf to mark down;
+        #   six NEGATIVE, inventory days COMPRESSING (BN4_SI −74.3, MU −30.6,
+        #        BABA −15.9, 09988_HK −15.8, COST −3.0, AAPL −1.3), which is the
+        #        good direction and which a one-sided helper would have been
+        #        unable to report;
+        #   three positive and under the trigger (FCX +7.1, MELI +3.0,
+        #        U96_SI +1.5), the largest at 28% of it.
+        #
+        # So the live blast radius on the recorded baseline is nil, and this
+        # ships live rather than observation-only on the strength of that
+        # measurement: the gate exists for an NKE-shaped name and costs nothing
+        # on anything currently pinned. Re-measure with
+        # `scratchpad/probe_inventory_dsi.py` (one subprocess per fixture) before
+        # believing that again after a comps or fixture refresh.
+        #
+        # One thing the measurement surfaced that is NOT fixed here: 09988_HK
+        # and BABA both report inventory of exactly 0.0 in the most recent year
+        # against ~15.8 days in each of the three before it. That may be real —
+        # a marketplace with a cloud business can genuinely hold almost no
+        # stock — but a hard discontinuity to exactly zero is also what a
+        # missing line item looks like when the provider fills it with 0 rather
+        # than null, and `_safe(0.0)` and `_safe(None)` are indistinguishable
+        # downstream. Either way the gate reads it as "inventory drained to
+        # nothing" and stays silent, which is the safe direction. It is a data
+        # question and not a gate question, so it is recorded rather than
+        # patched around with a heuristic nobody chose.
+        if not _dcf_family_disabled and fcf_margin_base > 0:
+            _inv_days = _inventory_stress_days(series[::-1])
+            if _inv_days is not None and _inv_days > _INVENTORY_STRESS_TRIGGER_DAYS:
+                _inv_haircut = fcf_margin_base * _INVENTORY_MARKDOWN_HAIRCUT
+                _inv_pre = fcf_margin_base
+                fcf_margin_base = _inv_pre - _inv_haircut
+                ticker_forward_flags.append(
+                    f"Inventory stress: DSI {_inv_days:+.1f} days over the "
+                    f"prior 3y median (> {_INVENTORY_STRESS_TRIGGER_DAYS:.0f}), "
+                    f"so a {_INVENTORY_MARKDOWN_HAIRCUT:.0%} markdown haircut "
+                    f"takes the projected FCF margin {_inv_pre:.1%} → "
+                    f"{fcf_margin_base:.1%}. The trailing margin was earned on "
+                    f"units that sold at full price; the units in the channel "
+                    f"are the cost it has not absorbed yet."
+                )
+                gate_evaluations.append({
+                    "gate_id": "GATE_INVENTORY_STRESS",
+                    "metric": "inventory_stress_days",
+                    "raw_input_path_a": round(float(_inv_days), 4),
+                    "gated_output_path_b": round(float(fcf_margin_base), 6),
+                    "basis": (
+                        f"DSI expansion {_inv_days:+.2f}d over the prior 3y "
+                        f"median, trigger "
+                        f"{_INVENTORY_STRESS_TRIGGER_DAYS:.0f}d; markdown "
+                        f"{_INVENTORY_MARKDOWN_HAIRCUT:.0%} of the base margin "
+                        f"{_inv_pre:.4f}"
+                    ),
+                    # A literal, not a derived value. Deriving `applied` from
+                    # whether the inputs measured is what would conflate "could
+                    # not compute this" with "chose not to act on it" — the
+                    # distinction GATE_GROWTH_REINVESTMENT exists to make, and
+                    # the one its own record got wrong while the reinvestment
+                    # charge was wired live. Counted rather than assumed: five
+                    # records in this file say True (CAGR divergence, balance
+                    # sheet ×2, deterministic KPI precedence, this one) and
+                    # three say False (cash conversion, growth reinvestment,
+                    # cyclical peak consensus), and the two groups are the whole
+                    # point — a reader can tell from the payload alone whether
+                    # path B describes the number that was used or one that was
+                    # not.
+                    "applied": True,
+                })
 
         # ── Analyst estimates (fetched eagerly — cached) ──────────────────
         # Pulled BEFORE the growth waterfall so dispersion bands are available
