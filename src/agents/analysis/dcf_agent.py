@@ -7109,8 +7109,44 @@ _SEGMENT_SOTP_WEIGHT = 0.40
 #: SOTP / NAV, yet both are valued by the street as a sum of parts. Their
 #: templates are all-equity (listed stakes at market, segment net profit x
 #: P/E) and previewed at +10% to price, inside Maybank's ranges.
-_LOOKTHROUGH_PROMOTE: frozenset[str] = frozenset({"S08.SI", "BN4.SI", "U96.SI"})
+#:
+#: Anta Sports (02020.HK), added 2026-09-18: it routes to Apparel / Athletic
+#: Wear, whose anchor is EV/EBITDA at 0.40 and which carries no SOTP method at
+#: all, so 100% of the valuation was blind to a listed 42.5% associate worth
+#: HKD 51.0bn gross against a HKD 199.5bn market cap. Unlike the two SG names
+#: its template is NOT all-equity -- the core is an EV/EBITDA band -- so the
+#: bridge takes parent net debt, measured at HKD 24.166bn. Previewed at +12.8%
+#: to price at the 9.0x band midpoint against a HKD 72.00 close, with the band
+#: ends at -10.2% and +35.8%: inside the +10% convention at the midpoint and
+#: straddling the price rather than asserting upside.
+_LOOKTHROUGH_PROMOTE: frozenset[str] = frozenset(
+    {"S08.SI", "BN4.SI", "U96.SI", "02020.HK"})
 _LOOKTHROUGH_PROMOTE_WEIGHT = 0.40
+
+
+def _in_lookthrough_promote(ticker) -> bool:
+    """Membership test on the CANONICAL ticker, not the raw one.
+
+    `enabled_for` and `can_value` both canonicalise -- `holdco_sotp` imports
+    `canonical_ticker` locally for exactly that -- but a raw `in` test does
+    not, so `2020.HK` and `02020.HK` would reach the same template through one
+    gate and miss the promote through the other. The two normalisations move a
+    HK ticker in OPPOSITE directions: `to_fmp_symbol('02020.HK')` strips the
+    leading zero to `'2020.HK'` and `canonical_ticker('2020.HK')` restores it.
+    The `ticker` at the call site is the raw loop variable off
+    `state["data"]["tickers"]`, i.e. whatever the caller typed.
+
+    Measured idempotent on S08.SI, BN4.SI, U96.SI, 02020.HK, 00700.HK and AS,
+    so this changes nothing for the three names already promoted.
+    """
+    if not ticker:
+        return False
+    try:
+        from src.tools.ticker_canonical import canonical_ticker
+        key = canonical_ticker(ticker)
+    except Exception:                                      # noqa: BLE001
+        key = ticker                                       # fail closed to raw
+    return key in _LOOKTHROUGH_PROMOTE
 
 
 def _promote_lookthrough_sotp(profile_data, ticker, end_date):
@@ -7120,7 +7156,7 @@ def _promote_lookthrough_sotp(profile_data, ticker, end_date):
     4.0-4.5% cap rate) exceeds the company's SGD 788m market capitalisation.
     Rail / Logistics prices it on EV/EBITDA and cannot see that at all.
     """
-    if (ticker not in _LOOKTHROUGH_PROMOTE or not profile_data
+    if (not _in_lookthrough_promote(ticker) or not profile_data
             or not profile_data.get("methods")):
         return profile_data, False
     methods = profile_data["methods"]
