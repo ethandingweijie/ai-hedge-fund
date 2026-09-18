@@ -213,6 +213,44 @@ class TestPythonUnbuffered:
             txt = (ROOT / rel).read_text(encoding="utf-8")
             assert "ENV PYTHONUNBUFFERED=1" in txt
 
+    @pytest.mark.parametrize("rel", DOCKERFILES)
+    def test_the_env_line_does_not_bust_the_dependency_cache(self, rel):
+        """POSITION, not presence. The three tests above all passed on the
+        revision that broke the production build, because they only ask whether
+        the line exists -- and it did, above `RUN poetry install`, where a
+        layer's cache key is computed from every instruction before it. Editing
+        that comment invalidated the dependency layer, all three services
+        reinstalled from scratch at once, and web died inside pip with
+        `AttributeError: module 'attr.setters' has no attribute 'pipe'` ->
+        `Cannot install cffi`. Worker and gleaming ran the same reinstall and
+        passed, so it is a flake in the package environment; the exposure was
+        the layer position.
+
+        This is the fourth time in this module's subject area that a test
+        asserting "the thing is present" passed while the thing was wrong --
+        `str.index()` returning the first match, a dead assertion, a
+        non-discriminating pair. Presence is the weak claim. Order it.
+        """
+        txt = (ROOT / rel).read_text(encoding="utf-8")
+        env_at = txt.index("ENV PYTHONUNBUFFERED=1")
+        for anchor in ("RUN pip install poetry", "RUN poetry config"):
+            assert anchor in txt, f"{rel} no longer has a `{anchor}` layer"
+            assert txt.index(anchor) < env_at, (
+                f"{rel}: ENV PYTHONUNBUFFERED=1 sits ABOVE `{anchor}`, so any "
+                f"edit to it invalidates the dependency layer and forces a full "
+                f"reinstall on the next build")
+
+    def test_the_position_pin_covers_the_file_railway_actually_builds(self):
+        """The order pin above is parametrized over DOCKERFILES, which is a list
+        this test file maintains. If railway.toml is ever repointed at a
+        Dockerfile that is not in that list, the pin silently stops covering
+        production. Assert the built file is one of the pinned ones."""
+        toml = (ROOT / "railway.toml").read_text(encoding="utf-8")
+        built = re.search(r'dockerfilePath\s*=\s*"([^"]+)"', toml).group(1)
+        assert built.replace("\\", "/") in {d.replace("\\", "/")
+                                           for d in DOCKERFILES}, (
+            f"railway.toml builds {built}, which the position pin does not cover")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FIX 2a — phase 4.5 has a deadline
