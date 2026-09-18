@@ -205,6 +205,7 @@ THE HIGH SIDE IS A SECOND EFFECT AND IS NAMED AS SUCH. Tightening to `(0.005, 0.
 AN EXISTING TEST ENDORSED THE DEFECT. `tests/test_regional_comps.py::TestClean::test_negative_fcf_yield_is_kept` asserted `rc._clean("fcf_yield", [-0.03, 0.05]) == [-0.03, 0.05]` under the docstring "Unlike P/E, a negative FCF yield is meaningful and in-band." This was not a coverage gap — it was coverage that argued for the bug, and the argument is not silly, so the inversion is recorded rather than quietly rewritten. The distinction it draws is the wrong one: a P/E is a MULTIPLE, where signedness is a data-quality judgement about what a loss-maker means; an FCF yield is a DENOMINATOR, where a divisor <= 0 means the arithmetic has no answer at all.
 
 A HARNESS TRAP FOUND WHILE TESTING THIS, recorded because its failure message misdiagnoses the cause. Hoisting `from src.data.regional_comps import MIN_VALID_FCF_YIELD` to `dcf_agent`'s module scope failed 14 of 17 golden tests with `AssertionError: AAPL: 1 recorded call(s) never used — the fixture is stale.` Following that message would have regenerated 14 fixtures and baked in a replay that reaches for the network with a dummy API key. The real mechanism: `regional_comps` binds `_fmp_get` BY VALUE (`from src.tools.api import _fmp_get`), which an attribute patch on `src.tools.api` cannot retroactively fix, and `golden_replay.replay_fixture` imports `dcf_agent` at line 400 — outside the `with gc.pinned_env(), gc.Replayer(calls) as rp:` block that opens at line 409. Whether a module holds the recorder or the real function therefore depends on when it is first imported. The import is lazy inside the leg, following `sector_profiles`, which has zero module-level first-party imports and imports `regional_comps` lazily at L3203/L3206/L3257. Three tests now pin the constraint by name, including one that enumerates every first-party module binding `_fmp_get` by value and asserts none is reachable from `dcf_agent`'s module scope, so the next hoist fails with an explanation instead of a misdiagnosis.
+
 ## 2026-09-17T10:08:45+00:00
 
 - regenerated at HEAD: `a4bce28`
@@ -968,3 +969,82 @@ The gate count in `tests/test_consumer_discretionary_gates.py` moves seven →
 eight, and its `not any("INVENT" in g ...)` assert still guards what it says it
 guards — `"REINVESTMENT"` does not contain `"INVENT"` — which is now pinned as a
 fact rather than left for the reader to check.
+
+## 2026-09-18T02:01:29+00:00
+
+- regenerated at HEAD: `1f79eb5`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- **expected moves, named**: 5 changed projection keys out of 3186 compared, all
+  of them `forward_flags` on `BN4_SI` (base, bear) and `U96_SI` (base, bear,
+  bull). **ZERO numeric leaves moved** — verified by snapshot-to-snapshot
+  comparison with `scratchpad/diff_golden_snapshots.py`, not by counting test
+  failures, because a tolerance is a reporting threshold and not a change
+  detector: "0 failures at ±5%" would also pass if every IV in the book had
+  drifted 4.9%. The other 3 changed keys are `_meta` bookkeeping
+  (`generated_at`, `reason`, `regenerated_at_commit`).
+- reason: Blend dropped-leg disclosure (chip lxv). ZERO numeric moves: all 42 scenario
+intrinsic values across all 14 fixtures are unchanged to the digit, and the only
+differing field kind in the update run is list_changed on forward_flags -- 5
+paths, 0 out_of_tolerance. Expected moves are exactly five new prose lines on two
+fixtures. BN4_SI base gains "Non-positive leg dropped: DCF = -1.3180 (25% of
+intended weight renormalised onto the survivors)". BN4_SI bear gains that same
+line for "EV/EBITDA = 0.0000 (40%)" PLUS "Single-method blend: only SOTP
+(published) ... 35% of the profile's intended weight survived". U96_SI base gains
+"Non-positive leg dropped: DCF = -5.0166 (25%)" PLUS "Single-method blend: only
+EV/EBITDA ... 40%"; U96_SI bear and bull each gain the EV/EBITDA single-method
+line. The other 12 fixtures gain nothing. MU gains nothing despite carrying a
+non-positive DCF, because that leg is in the T-1 backward-gate call whose flags go
+to the separate forward_flags_t1 list and are never published. The 18 legs that
+drop as uncomputable also gain nothing, by design: flagging all 24 drops would be
+prose no reader reaches the end of, which is the opposite failure from silence.
+
+The defect this discloses. _blend_methods dropped a leg whose value computed
+non-positive with the same bare `continue` as a leg that could not be computed at
+all, so the weight of the most bearish opinion in the set was handed to the more
+optimistic survivors and nothing downstream recorded that it happened. This is not
+hypothetical: measured on the shipped baseline it fires on 6 legs across 3 of 14
+fixtures (BN4_SI x3, MU x1, U96_SI x2), every one of them DCF except a single
+EV/EBITDA at exactly 0.0. And 6 of 57 blend calls resolve to a SINGLE surviving
+method -- U96_SI on all four of its calls, where the published base IV of 5.7269
+is literally its EV/EBITDA leg value to four decimals, while the payload reported
+weight_multi: 1.0 as though a blend had occurred.
+
+The arithmetic is UNCHANGED. Zero-filling a computed non-positive leg at 0.0 and
+keeping its weight was built, measured by source transformation of the real
+function, and REJECTED: it moves 2 of 14, both down -- BN4_SI base 5.20 to 3.90
+(-25.000%) and U96_SI base 5.73 to 3.52 (-38.569%) -- and each move is exactly
+the dropped leg's profile weight, because a zero at weight w pulls a weighted
+mean down by w. So the magnitude comes from the weight table and not from
+anything the method computed: a DCF of -1.318 and one of -15.630 receive
+identical treatment, and the information in the value is discarded by saturation
+just as completely as by omission. On U96_SI it would convert one surviving leg of
+5.7269 into "60% EV/EBITDA plus 40% fabricated zero", where neither input is a
+view about Sembcorp. Both names are also in _LOOKTHROUGH_PROMOTE, added
+2026-09-15 because they are valued by the street as a sum of parts and their
+templates previewed at +10% to price inside Maybank's ranges, so a negative
+CONSOLIDATED DCF on a conglomerate whose value sits in listed stakes is a
+statement about the model's reach, not about the equity. Limited liability makes 0
+a FLOOR on true value, not an estimate of it. Hence disclosure, not zero-filling:
+the drop stands, the silence goes.
+
+Two further things are newly disclosed and were previously silent. weight_surviving
+is the share of the profile's intended weight that actually voted; it reads below
+1.0 both when a leg is dropped and when Forward Gate A de-weights a DCF into a
+P/BV asset floor that turns out to be unavailable, in which case the share goes
+nowhere at all -- the one place in this function where weight is destroyed rather
+than moved. And the degenerate return used to be an empty dict, which published
+legs_dropped: None and therefore read as "nothing was dropped" on exactly the
+profile that dropped every leg; it now carries the record.
+
+NOT fixed here, reported separately. BN4_SI is the only non-monotonic fixture of
+14 and it is pinned in this baseline: bear 7.37 exceeds both base 5.20 and bull
+7.12. The cause is now visible in the payload rather than inferred -- in bear,
+EV/EBITDA computes exactly 0.0 and is discarded, leaving a scenario-INSENSITIVE
+published analyst SOTP carrying 100% of the surviving weight, while base blended
+in a low EV/EBITDA of 1.3016 that dragged it to 5.20. So a leg collapsing to zero
+in the bear case RAISED the bear value above the bull case. Fixing it means either
+making the leg set consistent across scenarios or adding a monotonicity clamp, and
+a clamp is an owner decision, not an engineering one.
+

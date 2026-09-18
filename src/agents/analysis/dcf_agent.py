@@ -7121,12 +7121,46 @@ def _blend_methods(
         "weight_multi":   0..1         — Multi fraction of total weight
         "composite":      float        — composite_mult applied
         "iv_pre_composite": float | None — what IV would be at composite=1.0
+        "legs_dropped":   list[dict]   — every profile leg that contributed no
+                                         value: method, proxy, intended weight,
+                                         computed value-or-None, and `reason`
+                                         ("non_positive" | "uncomputable")
+        "weight_surviving": 0..1 | None — share of the profile's intended
+                                         weight that actually voted
+        "weight_intended": float       — sum of the profile's raw leg weights
+        "methods_surviving": int       — len(effective_weights)
+        "single_method":  bool         — only one leg voted, so `final_iv` is
+                                         that leg's value and not an average
       }
+
+    A leg whose value is None is dropped because there is no opinion to average
+    in. A leg whose value computed non-positive is ALSO dropped, but for a
+    different reason: it is the most bearish opinion in the set, and dropping it
+    hands its weight to the more optimistic survivors. Zero-filling it instead
+    was measured and rejected — the resulting move is exactly the leg's profile
+    weight, because a zero at weight w pulls a weighted mean down by w, so the
+    magnitude comes from the weight table and not from anything the method
+    computed. Both cases are therefore disclosed in `legs_dropped` rather than
+    acted on. See the comment at the drop site.
     """
     dcf_bucket: list[tuple[float, float]] = []
     multi_bucket: list[tuple[float, float]] = []
     # (method, key whose value was used, weight after Gate A, bucket)
     parts: list[tuple[str, str, float, str]] = []
+    #: Legs the profile asked for that contributed no value, with the reason.
+    #: Recorded rather than `continue`d in silence — see the classification
+    #: comment at the drop site for why the two reasons are not the same event
+    #: and why neither is zero-filled.
+    dropped: list[dict] = []
+    #: Sum of the weights the profile table intended, before any drop. The
+    #: surviving weight divided by this is how much of the intended blend
+    #: actually voted; `weight_dcf` + `weight_multi` cannot express it because
+    #: both are renormalised to sum to 1.0 over the survivors.
+    intended_w = 0.0
+    #: Same quantity accumulated only over the legs that voted, in the SAME
+    #: pre-Gate-A terms as `intended_w` so the ratio between them is exact.
+    #: `parts` stores post-Gate-A weights, so it cannot be summed for this.
+    surviving_w = 0.0
     asset_floor_reweight = 0.0
 
     for m in profile_methods:
@@ -7143,10 +7177,70 @@ def _blend_methods(
             value, value_key = method_values.get(effective_name), effective_name
         if value is None:
             value, value_key = method_values.get(raw_name), raw_name
+        w = m["weight"]
+        intended_w += float(w or 0.0)
         if value is None or value <= 0:
+            # TWO DIFFERENT EVENTS, previously indistinguishable from outside
+            # this function because both took the same bare `continue`.
+            #
+            # `value is None` — nothing computed. There is no opinion to
+            # average in, so dropping the leg and renormalising over the
+            # survivors is the right arithmetic: you cannot mean in a number
+            # you do not have.
+            #
+            # `value <= 0` — the method DID compute and returned a non-positive
+            # equity value. That is an opinion, and the most bearish one in the
+            # set. Dropping it hands its weight to the more optimistic
+            # survivors, which is how a more conservative input produced a less
+            # conservative output on the reinvestment charge (09988_HK 160.84 →
+            # 188.82, +17.40%, `weight_dcf` 0.2778 → 0.0).
+            #
+            # Zero-filling the second case was measured and REJECTED. On the 14
+            # golden fixtures it moves 2 — BN4_SI base 5.20 → 3.90 (−25.000%)
+            # and U96_SI base 5.73 → 3.52 (−38.569%) — and each move is exactly
+            # the dropped leg's profile weight, because a zero at weight w pulls
+            # a weighted mean down by w. So the magnitude comes from the weight
+            # table and not from anything the method computed: a DCF of −1.318
+            # and one of −15.630 would be treated identically, and the
+            # information in the value is discarded by saturation just as
+            # completely as by omission. On U96_SI it would turn one surviving
+            # leg of 5.7269 into "60% EV/EBITDA + 40% fabricated zero". Both
+            # names are also in _LOOKTHROUGH_PROMOTE, added because they "are
+            # valued by the street as a sum of parts" and their templates
+            # "previewed at +10% to price" — a negative CONSOLIDATED DCF on a
+            # conglomerate whose value sits in listed stakes is a statement
+            # about the model's reach, not about the equity. Limited liability
+            # makes 0 a FLOOR on true value, not an estimate of it.
+            #
+            # So the drop stands and the silence goes: the reason, the intended
+            # weight and the computed value are published, and a non-positive
+            # drop also raises a forward flag, because that is the case where
+            # the published IV means something different from what it appears
+            # to mean.
+            dropped.append({
+                "method": raw_name,
+                "proxy": effective_name if effective_name != raw_name else None,
+                "weight": round(float(w or 0.0), 6),
+                "value": round(float(value), 4) if value is not None else None,
+                "reason": "non_positive" if value is not None else "uncomputable",
+            })
+            if value is not None:
+                # Only the non-positive case is flagged. 18 legs drop as
+                # `uncomputable` across the 14 golden fixtures against 6 that
+                # drop as non-positive, and flagging all 24 would be prose no
+                # reader gets to the end of — the opposite failure from silence.
+                # The non-positive case is the one worth a line because it is
+                # the one where the drop is a decision the blend made about an
+                # opinion it had, and the published IV is not what it looks like.
+                _flag = (
+                    f"Non-positive leg dropped: {raw_name} = {value:,.4f} "
+                    f"({float(w or 0.0):.0%} of intended weight renormalised "
+                    f"onto the survivors)"
+                )
+                if _flag not in forward_flags:
+                    forward_flags.append(_flag)
             continue
 
-        w = m["weight"]
         is_dcf = (raw_name in _DCF_FAMILY_NAMES) or (effective_name == "DCF")
 
         # Forward Gate A: de-weight DCF family if TV-dominated
@@ -7160,6 +7254,7 @@ def _blend_methods(
             dcf_bucket.append((value, w))
         else:
             multi_bucket.append((value, w))
+        surviving_w += float(w or 0.0)
         parts.append((raw_name, value_key, w, "dcf" if is_dcf else "multi"))
 
     # Asset floor reweight goes to multi (P/BV is a multi-method anchor)
@@ -7169,9 +7264,52 @@ def _blend_methods(
             multi_bucket.append((asset_floor_val, asset_floor_reweight))
             parts.append(("P/BV (asset floor)", "P/BV",
                           asset_floor_reweight, "multi"))
+            # Gate A moved this weight out of a DCF leg that already counted
+            # into `surviving_w` at its REDUCED post-Gate-A value, so the floor
+            # leg's share has to be added back or the ratio understates. With
+            # the floor created nothing was dropped — the weight changed
+            # buckets — and `weight_surviving` must say 1.0.
+            #
+            # The `else` is deliberately absent. When P/BV is unavailable the
+            # reweighted share goes nowhere at all: `total_w` is smaller than
+            # the profile intended and no leg receives it. Leaving it out of
+            # `surviving_w` makes the ratio report that loss, which is the one
+            # place in this function where weight is destroyed rather than
+            # moved, and it has been silent until now.
+            surviving_w += float(asset_floor_reweight)
+
+    # ── The disclosure block ────────────────────────────────────────────────
+    # Built BEFORE the degenerate returns, because a profile whose every leg
+    # dropped is precisely the case a reader needs the record for. Returning
+    # `{}` there would publish `legs_dropped: None`, which reads as "nothing was
+    # dropped" — the same silence this block exists to remove, one branch later.
+    # Every consumer reads these keys with `.get()`, so the numeric keys being
+    # absent on the degenerate paths is safe.
+    single_method = len(parts) == 1
+    disclosure = {
+        # `effective_weights` lists survivors only, so a dropped leg is
+        # invisible downstream and `iv_dcf: None` cannot be told apart from a
+        # DCF bucket that computed and came out non-positive. These keys close
+        # that gap without moving a single number.
+        "legs_dropped": dropped,
+        # Share of the profile's intended weight that actually voted. `intended_w`
+        # sums the raw table weights; `surviving_w` sums the weights of the legs
+        # that reached a bucket, plus the Gate A asset-floor share when that
+        # floor was created. So 1.0 means the profile voted as written, and
+        # anything below it means weight left the blend — either a leg was
+        # dropped, or Gate A de-weighted a DCF into a P/BV floor that turned out
+        # to be unavailable and the share went nowhere. Both were silent before.
+        "weight_surviving": (round(surviving_w / intended_w, 6)
+                             if intended_w > 0 else None),
+        "weight_intended":  round(intended_w, 6),
+        # Counts the P/BV asset-floor leg when Gate A added it, because it is a
+        # real voting leg carrying real weight.
+        "methods_surviving": len(parts),
+        "single_method":     single_method,
+    }
 
     if not dcf_bucket and not multi_bucket:
-        return None, {}
+        return None, disclosure
 
     # c_macro applies uniformly inside each bucket → cancels in the bucket's
     # weighted-mean. Kept for parity with the legacy formula (ratio-invariant).
@@ -7180,7 +7318,7 @@ def _blend_methods(
     multi_w_total = sum(w * macro for _, w in multi_bucket)
     total_w       = dcf_w_total + multi_w_total
     if total_w <= 0:
-        return None, {}
+        return None, disclosure
 
     iv_dcf   = (sum(v * w * macro for v, w in dcf_bucket)   / dcf_w_total)   if dcf_w_total   > 0 else 0.0
     iv_multi = (sum(v * w * macro for v, w in multi_bucket) / multi_w_total) if multi_w_total > 0 else 0.0
@@ -7191,6 +7329,28 @@ def _blend_methods(
     # Final blended IV
     final_iv = (dcf_w_total * iv_dcf + multi_w_total * iv_multi_post) / total_w
     iv_pre_composite = (dcf_w_total * iv_dcf + multi_w_total * iv_multi) / total_w
+
+    # Single-survivor disclosure. Threshold-free: `len(parts) == 1` needs no
+    # constant, so there is nothing here to tune or to get wrong. A "blend" of
+    # one method is not a blend, and the payload otherwise publishes
+    # `weight_multi: 1.0` as though one had happened. Measured on the shipped
+    # baseline this fires on 6 of 57 blend calls — U96_SI on all four of its
+    # calls, where base IV 5.7269 is literally its `EV/EBITDA` leg value to
+    # four decimals, plus BN4_SI's bear case and MU's backward-gate call.
+    if single_method:
+        _sm_name, _sm_key, _sm_w, _sm_bucket = parts[0]
+        _flag = (
+            f"Single-method blend: only {_sm_name} ({_sm_key}, {_sm_bucket}) "
+            f"contributed a value — {surviving_w / intended_w:.0%} of the "
+            f"profile's intended weight survived, so the published IV is that "
+            f"one method and not an average of views"
+            if intended_w > 0 else
+            f"Single-method blend: only {_sm_name} ({_sm_key}, {_sm_bucket}) "
+            f"contributed a value, so the published IV is that one method and "
+            f"not an average of views"
+        )
+        if _flag not in forward_flags:
+            forward_flags.append(_flag)
 
     breakdown = {
         "iv_dcf":           round(iv_dcf, 4)         if iv_dcf   > 0 else None,
@@ -7209,6 +7369,7 @@ def _blend_methods(
              "weight": round(w * macro / total_w, 6)}
             for n, k, w, b in parts
         ],
+        **disclosure,
     }
 
     return final_iv, breakdown
@@ -11085,6 +11246,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "weight_multi":      blend_breakdown.get("weight_multi"),
                 "effective_weights": blend_breakdown.get("effective_weights"),
                 "composite_applied": blend_breakdown.get("composite", _composite_mult),
+                # NEW: what the blend dropped, and how much of the profile's
+                # intended weight actually voted. `effective_weights` lists
+                # survivors only, so before these keys a leg the profile asked
+                # for and the blend discarded was invisible downstream — and
+                # `iv_dcf: None` could not be told apart from a DCF bucket that
+                # computed and came out non-positive, which is exactly the
+                # ambiguity that made the reinvestment charge's sign inversion
+                # unreadable from the payload.
+                #
+                # `methods_surviving` is NOT `methods_count` above: that one is
+                # `len(method_iv_table)`, built by intersecting raw profile row
+                # names against `method_values`, so it counts names the profile
+                # mentioned rather than legs that carried weight. This one
+                # counts legs that voted, including the P/BV asset floor Gate A
+                # adds.
+                "legs_dropped":      blend_breakdown.get("legs_dropped"),
+                "weight_surviving":  blend_breakdown.get("weight_surviving"),
+                "weight_intended":   blend_breakdown.get("weight_intended"),
+                "methods_surviving": blend_breakdown.get("methods_surviving"),
+                "single_method":     blend_breakdown.get("single_method"),
                 # ── Audit fields (item 3b) ─────────────────────────────────
                 # These three drove two gates and were recoverable only by
                 # regex-ing them back out of `forward_flags` prose, which is how
