@@ -48,19 +48,45 @@ def pulse_env(tmp_db):
 
 
 def _seed_recap(ticker: str = "BABA", action: str = "SHORT") -> None:
+    """Insert a prior recap that `report_recap.get_recent_recap` will return.
+
+    The timestamps are computed relative to now, and that is a repair rather
+    than a style choice. This seed originally hardcoded
+    ``run_at = "2026-08-19T10:00:00+00:00"``, which sat inside
+    ``report_recap._max_age_days()``'s default 30-day ``RECAP_MAX_AGE_DAYS``
+    window on the day it was written. It crossed the boundary at
+    2026-09-18T10:00:00 UTC and seven of this module's ten tests started
+    failing on the calendar, with no code change anywhere: ``get_recent_recap``
+    returned None, ``pulse`` emitted ``covered: False``, and every assertion
+    about a covered prior broke. The failure looked exactly like a regression in
+    ``app/backend/routes/analysis.py`` because this module imports it, and the
+    only way to tell them apart was to re-run with ``RECAP_MAX_AGE_DAYS=400``
+    and watch all ten pass.
+
+    Nothing in this module tests the age boundary — that belongs to
+    ``report_recap``'s own tests — so a seed one day old preserves every
+    assertion here while making the suite's green/red a statement about the code
+    instead of about the date. If the boundary ever needs pinning from this
+    side, pin it with a seed that is deliberately outside the window and say so
+    in the test name.
+    """
+    from datetime import datetime, timedelta, timezone
+
     from src.memory import report_recap
+    _run_at = (datetime.now(timezone.utc) - timedelta(days=1)).replace(
+        microsecond=0)
     report_recap._ensure_table()          # lazy DDL — direct INSERT needs it
     _db.execute(
         "INSERT INTO report_recaps (ticker, run_id, run_at, price_at_run, "
         "final_action, signal_score, recap_json, recap_text, created_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
-            ticker.upper(), "run-prior-1", "2026-08-19T10:00:00+00:00",
+            ticker.upper(), "run-prior-1", _run_at.isoformat(),
             127.48, action, -6.0,
             json.dumps({"price_target": 134.76,
                         "catalysts": ["Q1 results"], "assumptions": ["a"]}),
             "Cloud growth decelerating; commerce margins under pressure.",
-            "2026-08-19T10:05:00+00:00",
+            (_run_at + timedelta(minutes=5)).isoformat(),
         ],
     )
 
