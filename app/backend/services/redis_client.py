@@ -23,6 +23,7 @@ import logging
 import os
 import time
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,55 @@ _ready: Optional[bool] = None
 _ready_checked_at: float = 0.0
 _READY_TTL_SECONDS = 30.0
 _PROBE_TIMEOUT = 1.5
+
+#: what to log when a URL cannot even be parsed. A redactor whose failure mode
+#: is "give up and return the input" is worse than no redactor, because the
+#: caller has no way to tell the two apart in the log.
+_WITHHELD = "<redis url withheld: unparseable>"
+
+
+def redacted_url(url: Optional[str]) -> str:
+    """A connection URL with its password masked, safe to write to a log.
+
+        redis://default:hunter2@redis.railway.internal:6379
+            -> redis://default:***@redis.railway.internal:6379
+
+    The scheme, username and host:port are kept: they are the part that makes
+    the line useful for debugging (which addon, which internal host, which db),
+    and none of them is a credential. Only the secret goes.
+
+    This exists because `redis_ready()` used to log `redis_url()` raw at INFO,
+    which put a live Railway Redis password -- inline in the connection string,
+    as the addon injects it -- into the service log, where it is retained,
+    shipped to anyone who can read logs, and captured verbatim by any tool that
+    fetches them. Structural, not pattern-based: it splits the authority on the
+    LAST ``@`` and masks everything after the first ``:``, so it does not depend
+    on recognising the shape of the password.
+
+    ``rpartition``, not ``partition``. RFC 3986 puts userinfo before the LAST
+    ``@`` in the authority, and a password may itself contain one: on
+    ``redis://default:p@ss@host:6379`` a first-``@`` split reads the host as
+    ``ss@host:6379`` and publishes the password's tail in clear text. The split
+    that leaks is worse than no split, because the line still looks redacted.
+    """
+    if not url:
+        return ""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return _WITHHELD
+    userinfo, at, hostpart = parts.netloc.rpartition("@")
+    if not at:
+        # No credentials in the authority at all -- e.g. the local dev default
+        # `redis://localhost:6379`. Nothing to hide, and the host is worth
+        # keeping because it says WHICH Redis failed to answer.
+        return url
+    user, colon, _password = userinfo.partition(":")
+    # Mask even where no `:` was written: a bare `user@host` still discloses
+    # that the connection is authenticated, and `***` costs nothing.
+    masked = f"{user}{colon or ':'}***"
+    return urlunsplit((parts.scheme, f"{masked}@{hostpart}",
+                       parts.path, parts.query, parts.fragment))
 
 
 def redis_url() -> Optional[str]:
@@ -76,11 +126,12 @@ async def redis_ready(force: bool = False) -> bool:
     try:
         await asyncio.wait_for(client.ping(), timeout=_PROBE_TIMEOUT)
         if _ready is not True:
-            logger.info("Redis available at %s", redis_url())
+            logger.info("Redis available at %s", redacted_url(redis_url()))
         _ready = True
     except Exception:
         if _ready is not False:
-            logger.info("Redis not reachable at %s — falling back to in-process mode", redis_url())
+            logger.info("Redis not reachable at %s — falling back to in-process mode",
+                        redacted_url(redis_url()))
         _ready = False
     _ready_checked_at = now
     return _ready

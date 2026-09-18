@@ -5,6 +5,18 @@ WORKDIR /app
 # Set PYTHONPATH to include the app directory
 ENV PYTHONPATH=/app
 
+# Pipeline stdout must reach the log line by line. Without this, Python block-buffers
+# stdout when it is not a tty -- which it never is in a container -- so a phase banner
+# like `[4.5/10] DCF Engine` sits in the buffer until something flushes it. When the
+# container is replaced mid-run the buffer is lost with it, and the phase that DID
+# execute leaves no trace in the log. That is not hypothetical: an EL run killed 25 s
+# into phase 4.5 published `dcf_engine` to Redis (so the UI showed "Computing the
+# valuation model") but never printed its banner, and the post-mortem had to be
+# reconstructed from the frontend source to prove the phase had run at all.
+# PYTHONUNBUFFERED=1 is the whole fix; `-u` on the CMD would only cover the processes
+# these Dockerfiles name, not the ones START_CMD substitutes at runtime.
+ENV PYTHONUNBUFFERED=1
+
 # Install Poetry
 RUN pip install poetry==1.7.1
 

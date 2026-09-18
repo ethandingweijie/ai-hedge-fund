@@ -9,9 +9,10 @@ import asyncio
 import json
 import logging
 import os
+import re
 import traceback
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -651,6 +652,110 @@ async def delete_run(run_id: str, request: Request, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+# ── Dead-worker detection for /analysis/status ────────────────────────────────
+#: What the polling endpoint reports when the phase map says a run is live but
+#: no worker can be executing it. A distinct string, not a blank: the client
+#: needs to be able to tell "finished" from "was killed" and say so.
+_STATUS_CONTAINER_TERMINATED = "CONTAINER_TERMINATED_PRE_COMPLETION"
+
+#: arq writes its own health string every `health_check_interval = 60` s
+#: (worker.py:887), so `j_ongoing` can legitimately lag a job claimed
+#: milliseconds ago. Two intervals is the smallest grace that cannot fire on a
+#: run that has just started. MY CHOICE, not the owner's — they asked for "a
+#: dead heartbeat" without naming a window.
+_HEARTBEAT_GRACE_S = 120.0
+
+#: arq's own key, already read by admin.py's /admin/diag queue section.
+_ARQ_HEALTH_KEY = "arq:queue:health-check"
+_J_ONGOING_RE = re.compile(r"j_ongoing=(\d+)")
+
+
+async def _worker_heartbeat_dead(ticker: str, latest: dict) -> bool:
+    """True when the run this phase map belongs to cannot still be executing.
+
+    `in_progress` is inferred as `not latest.completed`, so a container killed
+    mid-phase leaves the ticker reporting a live run that no process is running
+    — until `_LIVE_TTL` (600 s) expires the map. That is a production incident,
+    not a hypothesis: a redeploy SIGKILLed a worker 25 s into phase 4.5, the
+    phase map survived with no `completed` marker, and the UI showed "Computing
+    the valuation model" for over an hour while the browser polled 505 times.
+
+    Two signals, BOTH required, because either alone is wrong:
+
+      * **arq's health key absent/expired.** 60 s interval, 61 s TTL, so no key
+        means no healthy worker is attached to this queue — the same reading
+        `admin.py` already makes. Covers a worker that is gone and has not been
+        replaced.
+      * **`j_ongoing=0` inside that key.** Covers what the first signal cannot:
+        a REDEPLOY, where the old container died and a new one is up and healthy
+        — the key exists, yet it is executing nothing. This is the incident's
+        actual shape, and a key-existence check alone would have missed it for
+        the whole window after the replacement came up.
+
+    The timestamp bound is what keeps this from firing on a live run: the map
+    must also have gone quiet for longer than `_HEARTBEAT_GRACE_S`. It matters
+    because a legitimate phase can be silent for a long time — deep research
+    runs ~12 min — and silence alone is not death.
+
+    Deliberately conservative: EVERY ambiguity resolves to "still running".
+    Redis unreadable, health string unparseable, timestamp missing or naive
+    (`web_runs.run_at` and `ticker_routing_cache.last_updated` are both written
+    on a naive-local clock, so a naive stamp here would be unboundable rather
+    than merely wrong), a run this web process is executing in-process with
+    queue mode off, or `j_ongoing >= 1` — with `max_jobs = 10` another ticker's
+    job keeps the count non-zero, so an orphan can hide behind a live run. That
+    is a false negative by design; a false positive would tell a user their
+    in-flight valuation is dead while it is still computing.
+
+    The phase map is NOT deleted. An invariant that erases the evidence of its
+    own violation cannot be audited — the map is the only record of which phase
+    the container died in.
+    """
+    # An in-process run writes the same phase map but is not the worker's job,
+    # so the worker's `j_ongoing` says nothing about it.
+    async with _in_flight_lock:
+        if ticker in _in_flight:
+            return False
+
+    ts = latest.get("timestamp")
+    if not ts:
+        return False
+    try:
+        when = datetime.fromisoformat(str(ts))
+    except ValueError:
+        return False
+    if when.tzinfo is None:
+        return False
+    if (datetime.now(timezone.utc) - when).total_seconds() < _HEARTBEAT_GRACE_S:
+        return False
+
+    try:
+        from app.backend.services import redis_client as _rc
+        if not await _rc.redis_ready():
+            return False
+        r = await _rc.get_redis()
+        if r is None:
+            return False
+        health = await r.get(_ARQ_HEALTH_KEY)
+    except Exception as exc:                                   # noqa: BLE001
+        logger.warning("heartbeat guard: Redis read failed for %s: %s", ticker, exc)
+        return False
+
+    if not health:
+        # No healthy worker is consuming this queue at all.
+        return True
+
+    m = _J_ONGOING_RE.search(str(health))
+    if not m:
+        # arq changed its health string, or something else owns the key. The
+        # guard goes inert rather than guessing — loudly, because an inert
+        # guard is indistinguishable from a healthy system in the response.
+        logger.warning("heartbeat guard: unparseable %s value %r — guard inert "
+                       "(expected 'j_ongoing=N')", _ARQ_HEALTH_KEY, str(health)[:120])
+        return False
+    return int(m.group(1)) == 0
+
+
 # ── GET /analysis/status/{ticker} — read-only live phase for reconnecting clients
 @router.get("/status/{ticker}")
 async def get_pipeline_status(ticker: str):
@@ -670,12 +775,28 @@ async def get_pipeline_status(ticker: str):
     bus_map = await progress_bus.get_phase_map(t)
     if bus_map:
         latest = bus_map.get("__latest__") or {}
+        in_progress = not bool(latest.get("completed"))
+        status = latest.get("status")
+        summary = latest.get("summary")
+        if in_progress and await _worker_heartbeat_dead(t, latest):
+            # `phase`, `all_phases` and `timestamp` are left exactly as the
+            # dead container wrote them: WHICH phase it died in is the useful
+            # part of the answer, and rewriting it would destroy the evidence.
+            in_progress = False
+            status = _STATUS_CONTAINER_TERMINATED
+            summary = (f"Run terminated before completion — no worker was "
+                       f"executing it and the last phase ({latest.get('phase')}) "
+                       f"never reported in. Re-run the analysis.")
+            logger.warning("heartbeat guard: %s reported in_progress off an "
+                           "orphaned phase map (last phase %r, timestamp %r) — "
+                           "flipped to %s", t, latest.get("phase"),
+                           latest.get("timestamp"), _STATUS_CONTAINER_TERMINATED)
         return {
             "ticker": t,
-            "in_progress": not bool(latest.get("completed")),
+            "in_progress": in_progress,
             "phase": latest.get("phase"),
-            "status": latest.get("status"),
-            "summary": latest.get("summary"),
+            "status": status,
+            "summary": summary,
             "timestamp": latest.get("timestamp"),
             "all_phases": {
                 k: v for k, v in bus_map.items() if k != "__latest__" and v

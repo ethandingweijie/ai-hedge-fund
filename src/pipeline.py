@@ -110,6 +110,17 @@ _DCF_CACHE_VERSION = 2
 # job timeout. Past this they are reported and the run continues without them.
 _BG_JOIN_TIMEOUT_S = _env_seconds("PIPELINE_BG_JOIN_TIMEOUT_S", 600.0)
 
+# Phase 4.5: the DCF engine's own deadline. `run_dcf_agent` was called bare
+# inside a try/except that catches exceptions -- and a hang is not an
+# exception, so it caught nothing. The only bound was arq's job_timeout (3600 s),
+# which fires long after the user has given up and releases nothing until then.
+# Measured phase time is 3.7-4.4 s (`[timing] 4_5_dcf_engine`), so 900 s is
+# ~200x the observed cost: this cannot fire on a legitimate run, it only
+# converts an infinite block into the bounded failure the neighbouring joins
+# already produce. Set generously on purpose -- a deadline tight enough to
+# abort a real valuation destroys a good run, which is worse than waiting.
+_DCF_PHASE_TIMEOUT_S = _env_seconds("PIPELINE_DCF_TIMEOUT_S", 900.0)
+
 
 def _start_fmp_risk_prewarm(state, tickers):
     """Fetch the FMP risk KPIs the post-PM augment will need, in the background.
@@ -1103,6 +1114,21 @@ def run_advanced_pipeline(
         print("[4.5/10] DCF Engine (multi-method, macro-aware)")
         print('='*60)
         with _timed("4_5_dcf_engine"):
+            #: Did the compute path raise? Read 40 lines below to decide whether
+            #: the success status may be published. Defined here, not inside the
+            #: branch, because the cache path skips the try/except entirely and
+            #: the guard at the bottom of the block runs on both paths.
+            _dcf_crashed = False
+            #: The live status string for this phase, shared by BOTH publishes
+            #: below. `update_status` overwrites the agent's status wholesale, so
+            #: a second emit that hardcodes the success string silently undoes the
+            #: guard on the first -- which is the whole defect the guard exists
+            #: for. The sector-card emit further down publishes to this same agent
+            #: and did exactly that, 16 lines after the guard that was supposed to
+            #: stop it. The card payload is worth emitting on a crashed run (it is
+            #: built from Phase 3 data, not from the DCF), so the fix is to carry
+            #: the truthful status into it, not to suppress it.
+            _dcf_status = "✓ DCF complete"
             _dcf_cache_ok = _all_cached("dcf_range", age_days=60.0)
             if _dcf_cache_ok:
                 # Engine version gate: DCF-engine code changes (task #26 FX
@@ -1137,21 +1163,57 @@ def run_advanced_pipeline(
                 # would propagate up through run_advanced_pipeline, be caught by the
                 # analysis_service wrapper, and become an invisible RuntimeError —
                 # user would see "pipeline_complete" with no valuation and no trace.
+                #
+                # The call is also BOUNDED. A hang inside run_dcf_agent is not an
+                # exception, so this handler could not catch one: the only bound was
+                # arq's job_timeout (3600 s), which fires long after the user has
+                # given up and releases nothing until then. Submitting the phase to a
+                # one-worker executor and joining it with `_bounded_join` turns a hang
+                # into the same RuntimeError the front block and phase 7 already
+                # produce, which lands in this handler and becomes a real
+                # `dcf_engine_error`.
+                #
+                # Accepted tradeoff, identical to the neighbouring joins: a thread
+                # blocked inside a network call cannot be cancelled (`cancel_futures`
+                # only reaches QUEUED futures), so on deadline it is orphaned and may
+                # still be mutating `state` while the handler below writes an empty
+                # `dcf_range` into it. arq's job_timeout is the outer stop on that
+                # thread. The deadline is sized so this never happens on real work —
+                # measured phase time is 3.7-4.4 s (`[timing] 4_5_dcf_engine`), so
+                # 900 s is ~200x. A deadline tight enough to abort a genuine
+                # valuation destroys a good run, which is worse than waiting.
+                #
+                # `_ctx_submit`, not `executor.submit`: run_dcf_agent publishes
+                # progress events, and `update_status` stamps each with
+                # `_run_id_var.get()` so handlers belonging to other runs can drop
+                # it. A bare submit runs in a fresh context, the stamp comes back
+                # None, and every phase event from inside the DCF detaches from
+                # this run — the frontend would freeze on the previous phase.
+                _dcf_ex = ThreadPoolExecutor(max_workers=1)
                 try:
                     progress.update_status("dcf_engine", primary_ticker, "Starting DCF engine")
-                    state = run_dcf_agent(state)
+                    state = _bounded_join(
+                        _dcf_ex,
+                        [_ctx_submit(_dcf_ex, run_dcf_agent, state)],
+                        _DCF_PHASE_TIMEOUT_S, "Phase 4.5 DCF engine")[0]
                 except Exception as _dcf_exc:
+                    _dcf_crashed = True
                     import traceback as _tb
                     _err_head = f"{type(_dcf_exc).__name__}: {str(_dcf_exc)[:200]}"
                     _err_trace = _tb.format_exc()[:1500]
+                    # Assigned to the shared status, not published as a literal:
+                    # the sector-card emit below re-publishes to this same agent
+                    # and must carry THIS string forward, or it overwrites the
+                    # crash with a success 16 lines later.
+                    _dcf_status = f"DCF CRASHED — {_err_head}"
                     progress.update_status(
-                        "dcf_engine", primary_ticker,
-                        f"DCF CRASHED — {_err_head}"
+                        "dcf_engine", primary_ticker, _dcf_status
                     )
                     print(f"\n[ERROR] DCF engine crashed:\n{_err_trace}\n")
                     # Persist the exception to state for post-hoc forensics —
-                    # progress.update_status is transient, print() goes to
-                    # Railway logs but isn't accessible from /analysis/runs.
+                    # print() goes to Railway logs but isn't accessible from
+                    # /analysis/runs, and the status published above is a
+                    # per-ticker live field that the next writer can replace.
                     # state["data"]["dcf_engine_error"] is the only surface
                     # that survives into the run JSON for browsing later.
                     state["data"]["dcf_engine_error"] = {
@@ -1187,8 +1249,20 @@ def run_advanced_pipeline(
             else:
                 print(f"  {ticker}: DCF skipped (insufficient data)")
 
-        progress.update_status("dcf_engine", primary_ticker, "✓ DCF complete",
-                               partial_data={"dcf_range": state["data"].get("dcf_range")})
+        # Conditional, and it was not before. The crash handler above publishes
+        # "DCF CRASHED — <err>", and this line ran unconditionally ~40 lines
+        # later in the same run, replacing it. So /analysis/status and the SSE
+        # stream reported a clean valuation for a run that produced none, and
+        # `runProgress.ts`'s SETTLED_RE (/^✓|\bcomplete\b/…) matched "✓ DCF
+        # complete" and marked the phase done on the client as well. The only
+        # surviving trace was the archived `dcf_engine_error`. The comment this
+        # replaced justified the archive by claiming update_status "is
+        # transient" — it is not transient by nature, it was overwritten here.
+        # Both halves matter: the archive is still the only durable surface,
+        # AND the live status must be allowed to say the phase failed.
+        if not _dcf_crashed:
+            progress.update_status("dcf_engine", primary_ticker, _dcf_status,
+                                   partial_data={"dcf_range": state["data"].get("dcf_range")})
 
         # ── Sector valuation card — FIRST mid-run emit ────────────────────────
         # By this point profile_names (Phase 3), the metric extractors (Phase 3),
@@ -1199,11 +1273,19 @@ def run_advanced_pipeline(
         # later (Phase 10) and flows to the archive. Wrapped in try/except so a
         # render failure never breaks this phase emit (mirrors the final render's
         # defensive guard below).
+        #
+        # Publishes `_dcf_status`, NOT a hardcoded "✓ DCF complete". It used to
+        # hardcode it, which made the `if not _dcf_crashed` guard above
+        # decorative: on a crashed DCF the guard correctly withheld the success
+        # status, and then this line — 16 lines later, same agent, same string —
+        # published it anyway and the frontend's SETTLED_RE marked the phase
+        # done. The card itself is independent of the DCF (Phase 3 data), so it
+        # still ships; only the claim about the DCF changes.
         try:
             from src.data.sector_kpi_framework import render_card_payloads_for_run as _render_sc
             _sc_partial = _render_sc(state) or {}
             if _sc_partial:
-                progress.update_status("dcf_engine", primary_ticker, "✓ DCF complete",
+                progress.update_status("dcf_engine", primary_ticker, _dcf_status,
                                        partial_data={"sector_card": _sc_partial})
         except Exception as _sc_e:
             print(f"  [sector_card] mid-run render failed (non-fatal): {_sc_e!r}")
