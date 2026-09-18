@@ -57,7 +57,7 @@ import random
 import re
 import statistics
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from src.graph.state import AgentState
@@ -679,6 +679,88 @@ _BALANCE_SHEET_LINES = ("cash_and_equivalents", "short_term_investments",
                         "total_debt", "net_debt")
 
 
+#: Step-change threshold for the quarterly balance-sheet overlay, as a ratio of
+#: the ANNUAL net cash. Owner-set at 0.25 (2026-09-18), replacing the 0.15 in
+#: the original Phase 1.4 plan text: 15% fires on ordinary quarterly
+#: working-capital drift, 25% clears that and leaves true structural
+#: step-changes. Measured against the cases the overlay exists for --
+#: 09988.HK's 31-Mar-2026 year end at RMB98.6bn net cash against the
+#: 30-Jun-2026 quarter at RMB161.7bn is 0.64, so it fires; a normal quarter
+#: does not. Disclosure only, `applied: False`: crossing this threshold never
+#: aborts the overlay and never reverts the row to stale annual data.
+#:
+#: The `max(abs(annual), 1.0)` denominator floor is the owner's formula, not a
+#: tuning knob. It only binds when annual net cash is exactly 0.0 -- including
+#: the `_net_debt_net_of_investments` "no net_debt on the row" case, which
+#: returns 0.0 rather than None -- and there the ratio correctly explodes,
+#: because a move off an unreported base IS a step change and the recorded
+#: `annual_net_cash: 0.0` says so plainly.
+#:
+#: ── The wide-gap threshold ──────────────────────────────────────────────────
+#: 0.25 alone fires too often to be read. Measured across the golden fixtures
+#: (`scratchpad/probe_stepchange_golden.py`, replayed offline against all 14
+#: captured runs): the overlay applied on 8 of them and ALL 8 crossed 0.25 --
+#: a 100% firing rate, so the flag carried no information. The reason is
+#: temporal, not economic. This overlay does not compare one quarter against
+#: the previous one; it compares the ANNUAL year end against the latest
+#: reported quarter, and the two are routinely 8-9 months apart (AAPL
+#: 2025-09-27 -> 2026-06-27 = 273 days, MU 2025-08-28 -> 2026-05-28 = 273,
+#: V 2025-09-30 -> 2026-06-30 = 273, COST 2025-08-31 -> 2026-05-10 = 252).
+#: Three quarters of balance-sheet movement is not a step change, it is a
+#: baseline drift the annual figure simply predates.
+#:
+#: Owner ruling (2026-09-19): "Adjust the step-change flag threshold from 0.25
+#: to 0.50 (50%) when period_delta_days > 180". The conditional is implemented
+#: rather than a global 0.50, which was the ruling's parenthetical alternative:
+#: a genuine 91-day year-end-to-Q1 comparison keeps the tighter 0.25 and stays
+#: sensitive, while the multi-quarter case is the one that needs the wider band.
+#: Measured effect on those same 8 fixtures -- one dropout, MELI at 0.4620 over
+#: a 181-day gap; the other seven (0.6202-4.9521) clear 0.50 and still fire.
+#:
+#: Still disclosure only. Neither threshold aborts the overlay, and nothing
+#: here is a materiality floor on the denominator -- that floor stays exactly
+#: `max(abs(a_net_cash), 1.0)`.
+_BALANCE_SHEET_STEP_CHANGE_THRESHOLD = 0.25
+
+#: Selected when the annual-to-quarterly gap exceeds
+#: ``_BALANCE_SHEET_STEP_CHANGE_WIDE_GAP_DAYS``. Owner-set 2026-09-19; see the
+#: firing-rate measurement above.
+_BALANCE_SHEET_STEP_CHANGE_THRESHOLD_WIDE = 0.50
+
+#: Strictly greater than 180 days selects the wide threshold. 180 itself does
+#: not: half a year of drift is still the tight case.
+_BALANCE_SHEET_STEP_CHANGE_WIDE_GAP_DAYS = 180
+
+
+def _period_delta_days(earlier, later) -> Optional[int]:
+    """Calendar days between two ISO period strings, or None if either is unusable.
+
+    Both operands at the call site are already ISO ``YYYY-MM-DD`` strings --
+    the overlay's own staleness guard compares them lexicographically, which
+    only works for that format -- so this parses rather than guesses. It is
+    still defensive, because a provider that ever returns ``"FY2026"`` or a
+    timestamp would otherwise raise inside a telemetry path whose whole job is
+    to be unable to break a valuation.
+
+    Returns None on anything unparseable. The caller then falls back to the
+    STRICTER 0.25 threshold rather than the wider one: this is disclosure, so
+    the safer failure mode is recording a move that turns out to be ordinary
+    drift, not silently dropping one that was structural.
+    """
+    try:
+        a = date.fromisoformat(str(earlier or "")[:10])
+        b = date.fromisoformat(str(later or "")[:10])
+    except (TypeError, ValueError):
+        return None
+    # abs() because the sign is a property of the call order, not of the gap.
+    # The overlay guarantees `later > earlier` before it gets here, so the
+    # absolute value changes nothing in practice -- but a negative delta would
+    # otherwise select the STRICT threshold for a reason nobody can see in the
+    # record, and abs() makes the recorded number mean "how far apart".
+    return abs((b - a).days)
+
+
+
 def _refresh_balance_sheet_from_latest_quarter(
     ticker: str,
     row: dict,
@@ -700,6 +782,22 @@ def _refresh_balance_sheet_from_latest_quarter(
     and a debt figure. Mutates in place -- the row IS ``series[-1]``, and the
     FX loop downstream converts the series -- and returns a flag, or None when
     nothing was applied (no quarterly data, a stale quarter, a partial row).
+
+    A move larger than the applicable step-change threshold is additionally
+    recorded on ``row["_balance_sheet_step_change"]`` for the caller to lift
+    into ``gate_evaluations``. Which threshold applies depends on the gap
+    between the two readings: ``_BALANCE_SHEET_STEP_CHANGE_THRESHOLD`` (0.25)
+    normally, ``_BALANCE_SHEET_STEP_CHANGE_THRESHOLD_WIDE`` (0.50) when the
+    year end and the substituted quarter are more than
+    ``_BALANCE_SHEET_STEP_CHANGE_WIDE_GAP_DAYS`` apart, because over a
+    three-quarter gap ordinary drift alone clears 0.25 and the flag stops being
+    readable. The record carries ``threshold_used`` and ``period_delta_days``
+    so the choice is visible on the payload rather than inferable. That is
+    telemetry and nothing more: it never gates, never aborts this overlay, and
+    never reverts the row to the annual figures. The overlay has already been
+    applied by the time the ratio is computed, which is the point -- the record
+    exists so a post-mortem can see how far the balance sheet moved, not so
+    this function can second-guess it.
     """
     try:
         q = search_line_items(ticker, list(_BALANCE_SHEET_LINES), end_date,
@@ -729,6 +827,68 @@ def _refresh_balance_sheet_from_latest_quarter(
         row["net_debt"] = float(debt) - float(cash)
     row["_balance_sheet_period"] = q_period
     after = _net_debt_net_of_investments(row, sector)
+
+    # ── Step-change telemetry ────────────────────────────────────────────────
+    # NOT a cross-provider parity check, and the Phase 1.4 plan text ("when FMP
+    # and the fallback both return a period") cannot be one: `src/tools/api.py`
+    # dispatches exclusive-or, so FMP and the HK/SG fallback are never both in
+    # hand and nothing on the served row says which one served it. Real
+    # cross-provider validation belongs in an offline fixture or an intake smoke
+    # test, not in this function.
+    #
+    # What this compares is one provider's ANNUAL balance sheet against the same
+    # run's QUARTERLY overlay -- the substitution this function just performed.
+    # Both operands come from `_net_debt_net_of_investments` with the same
+    # `sector`, so they share a convention (short-term investments netted, the
+    # sector guard applied) and the ratio measures the overlay, not a change of
+    # definition between the two readings.
+    #
+    # Net CASH is the negation of net debt. The negation is cosmetic for
+    # `delta_ratio` -- both operands sit inside `abs()` -- but the recorded
+    # values are what a post-mortem reads, and "net cash +161.7bn" is the figure
+    # the 09988.HK case is actually discussed in.
+    a_net_cash = -float(before) if before else 0.0
+    q_net_cash = -float(after) if after else 0.0
+    delta_ratio = abs(q_net_cash - a_net_cash) / max(abs(a_net_cash), 1.0)
+    # WHICH threshold applies is a function of how far apart the two readings
+    # are, not of the ratio itself -- see the constant's comment for the
+    # measured 100% firing rate that motivated the split. `row["period"]` is
+    # still the ANNUAL period here: `_BALANCE_SHEET_LINES` does not include it
+    # and the quarter is stashed under `_balance_sheet_period` instead.
+    # An unparseable period yields None and falls through to the STRICTER
+    # 0.25, because for a disclosure-only record the safer error is a flag
+    # that turns out to be ordinary drift, not a silently dropped structural
+    # move.
+    _gap_days = _period_delta_days(row.get("period"), q_period)
+    if (_gap_days is not None
+            and _gap_days > _BALANCE_SHEET_STEP_CHANGE_WIDE_GAP_DAYS):
+        _threshold = _BALANCE_SHEET_STEP_CHANGE_THRESHOLD_WIDE
+    else:
+        _threshold = _BALANCE_SHEET_STEP_CHANGE_THRESHOLD
+    if delta_ratio > _threshold:
+        row["_balance_sheet_step_change"] = {
+            "flag": "BALANCE_SHEET_QUARTERLY_STEP_CHANGE",
+            "annual_net_cash": a_net_cash,
+            "quarterly_net_cash": q_net_cash,
+            "delta_ratio": round(delta_ratio, 4),
+            "source": "quarterly_overlay_refresh",
+            "action": "applied_quarterly_override",
+            # Both figures are pre-FX: the series is converted downstream, and
+            # this runs before it. A reader comparing them against a
+            # reported-currency disclosure would otherwise be off by the FX rate
+            # with nothing on the payload to say so.
+            "currency_basis": "source_currency_pre_fx",
+            # Mine, not the owner's six -- and disclosed as such. Without
+            # `threshold_used` a reader sees `delta_ratio: 0.4620` and cannot
+            # tell whether it fired against 0.25 or was measured against 0.50
+            # and dropped; `period_delta_days` is the input that chose it, so
+            # the choice is auditable from the record instead of inferred from
+            # source. Both are None/absent-proof: `period_delta_days` is
+            # literally None when either period was unparseable, which is the
+            # signal that the stricter threshold was used as a fallback.
+            "period_delta_days": _gap_days,
+            "threshold_used": _threshold,
+        }
     return (f"Balance sheet from {q_period}, not the {row.get('period')} year "
             f"end: net debt {before / 1e9:,.1f}bn → {after / 1e9:,.1f}bn "
             f"(cash {cash / 1e9:,.1f}bn, short-term investments "
@@ -8544,6 +8704,79 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # period reports. Cheap now and impossible retroactively: a snapshot
         # written without them can never be scored.
         gate_evaluations: list[dict] = []
+
+        # ── Quarterly balance-sheet step change → the run's audit payload ────
+        # Computed inside `_refresh_balance_sheet_from_latest_quarter`, which is
+        # the only place both readings are in hand, and lifted here because that
+        # function runs ~340 lines before this list exists and returns prose.
+        # `.pop` keeps the stashed key off the row: `most_recent` IS
+        # `series[-1]`, it is serialized into the payload downstream, and an
+        # internal hand-off key has no business in a published run.
+        _bs_step = most_recent.pop("_balance_sheet_step_change", None)
+        if isinstance(_bs_step, dict):
+            # `.get` with a default rather than `[...]`: the record is built and
+            # consumed in one process, so a missing key would mean a code path
+            # that never wrote it, and the fallback is the strict threshold
+            # rather than a KeyError inside a disclosure-only gate.
+            _th_used = _bs_step.get(
+                "threshold_used", _BALANCE_SHEET_STEP_CHANGE_THRESHOLD)
+            _gap = _bs_step.get("period_delta_days")
+            _gap_clause = (
+                f"the period gap was unparseable, so the stricter "
+                f"{_BALANCE_SHEET_STEP_CHANGE_THRESHOLD:.0%} threshold was used "
+                f"as the fallback" if _gap is None else
+                f"a {_gap}-day gap between the two readings"
+            )
+            gate_evaluations.append({
+                "gate_id": "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE",
+                "metric": "balance_sheet_quarterly_step_change",
+                # Path A is the year end the engine would otherwise have priced;
+                # path B is the quarter it priced instead. Nothing here chose
+                # between them -- the overlay applies unconditionally -- which is
+                # exactly why `applied` is False: the pair is recorded so a
+                # post-mortem (or the forward scorer, once the next annual
+                # reports) can see which reading was closer, not so this run can
+                # act on it. Both are net CASH in the statement's source
+                # currency, pre-FX.
+                "raw_input_path_a": round(float(_bs_step["annual_net_cash"]), 2),
+                "gated_output_path_b": round(float(_bs_step["quarterly_net_cash"]), 2),
+                "flag": _bs_step["flag"],
+                "annual_net_cash": _bs_step["annual_net_cash"],
+                "quarterly_net_cash": _bs_step["quarterly_net_cash"],
+                "delta_ratio": _bs_step["delta_ratio"],
+                "source": _bs_step["source"],
+                "action": _bs_step["action"],
+                # Carried onto the payload, not left on the popped record:
+                # without them the published `delta_ratio` does not say which
+                # threshold it was measured against, and a reader cannot tell a
+                # 0.46 that fired at 0.25 from a 0.46 that was dropped at 0.50.
+                "period_delta_days": _gap,
+                "threshold_used": _th_used,
+                "basis": (
+                    f"The quarterly overlay replaced the "
+                    f"{most_recent.get('period')} year-end balance sheet with "
+                    f"{most_recent.get('_balance_sheet_period')}, moving net "
+                    f"cash by {_bs_step['delta_ratio']:.2%} of the annual "
+                    f"figure over {_gap_clause} — above the "
+                    f"{_th_used:.0%} structural "
+                    f"step-change threshold, so the move is worth explaining "
+                    f"rather than burying in a prose flag. The quarterly figure "
+                    f"is applied regardless: it is the balance sheet that "
+                    f"exists, and reverting to a stale year end would price "
+                    f"every EV-based method on a position nobody reports any "
+                    f"more. Figures are net cash (not net debt) in the source "
+                    f"currency, before the downstream FX conversion."
+                ),
+                "applied": False,
+            })
+            ticker_forward_flags.append(
+                f"Balance-sheet step change: net cash "
+                f"{_bs_step['annual_net_cash'] / 1e9:,.1f}bn at the "
+                f"{most_recent.get('period')} year end → "
+                f"{_bs_step['quarterly_net_cash'] / 1e9:,.1f}bn at "
+                f"{most_recent.get('_balance_sheet_period')} "
+                f"({_bs_step['delta_ratio']:+.0%}, source ccy pre-FX) — "
+                f"quarterly override APPLIED, disclosure only, no gate fired")
 
         # ── Normalized (cycle-adjusted) earnings for P/E (norm), EV/EBITDA (norm) ──
         # Damodaran-style: mean(field / revenue) over last 5 yrs × current revenue.

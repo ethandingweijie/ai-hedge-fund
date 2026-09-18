@@ -173,6 +173,129 @@ def test_changelog_records_unknown_when_the_regeneration_commit_is_missing(
         encoding="utf-8")
 
 
+# ── line endings ────────────────────────────────────────────────────────────
+#
+# These exist because of a defect that shipped silently for 21 entries and was
+# caught only by reading `git diff --cached --numstat` before committing: a
+# multi-paragraph `reason`, arriving through `GOLDEN_UPDATE_REASON="$(cat file)"`
+# from a CRLF-authored file, carries `\r\n` between paragraphs. Text-mode writes
+# on Windows then translate each `\n` to `\r\n`, producing `\r\r\n`. Git treats a
+# lone CR as binary (`convert_is_binary` returns 1 on `lonecr`), so
+# `tests/golden/CHANGELOG.md` flipped to `i/-text` and its append-only history
+# became "Binary files differ" from that commit onwards -- permanently, and with
+# no test failing. A single-paragraph reason never triggers it, which is why it
+# survived until a reason long enough to need paragraphs was written.
+
+
+def test_a_crlf_reason_does_not_put_a_lone_cr_in_the_changelog(changelog):
+    """The exact shape that broke: a reason read from a CRLF file on Windows."""
+    reason = "first paragraph\r\n\r\nsecond paragraph\r\n"
+    doc = gs.build_doc({"BN4_SI": _replay()}, reason=reason,
+                       commit=_FIXTURE_COMMIT, head_commit=_HEAD_COMMIT)
+    gs.append_changelog(doc, reason=reason)
+    raw = changelog.read_bytes()
+    assert b"\r" not in raw, (
+        "a carriage return survived into the changelog; git will classify the "
+        f"file as binary and its diff becomes unreadable -- {raw[-160:]!r}")
+    # And the paragraph break the author intended is still there, exactly one
+    # blank line rather than the three a mechanical CR-per-newline expansion
+    # would leave behind.
+    text = raw.decode("utf-8")
+    assert "- reason: first paragraph\n\nsecond paragraph\n" in text
+
+
+def test_the_changelog_is_written_with_lf_on_every_platform(changelog):
+    for reason in ("first", "second\r\nwith a crlf"):
+        doc = gs.build_doc({"BN4_SI": _replay()}, reason=reason,
+                           commit=_FIXTURE_COMMIT, head_commit=_HEAD_COMMIT)
+        gs.append_changelog(doc, reason=reason)
+    raw = changelog.read_bytes()
+    assert b"\r" not in raw
+    assert raw.count(b"\n") > 0
+
+
+def test_save_writes_the_snapshot_with_lf_on_every_platform(
+        tmp_path, monkeypatch, changelog):
+    """`snapshots.json` never showed the symptom -- git classified it as text and
+    normalised it on the way in, so the index blob was always LF while the
+    working copy was CRLF. Pinning it anyway: a file whose committed form and
+    checked-out form differ by 4000 bytes of line endings makes every future
+    `git diff` on the golden baseline noisy, and the writer is the only place
+    that can decide it once."""
+    snap = tmp_path / "snapshots.json"
+    monkeypatch.setattr(gs, "SNAPSHOT_PATH", snap)
+    doc = gs.build_doc({"BN4_SI": _replay()}, reason="r",
+                       commit=_FIXTURE_COMMIT, head_commit=_HEAD_COMMIT)
+    gs.save(doc, reason="r")
+    assert b"\r" not in snap.read_bytes()
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("plain\n", "plain\n"),
+    ("crlf\r\n", "crlf\n"),
+    ("doubled\r\r\n", "doubled\n"),          # the bug's exact output
+    ("para\r\n\r\npara\r\n", "para\n\npara\n"),
+    ("para\r\r\n\r\r\npara", "para\n\npara"),   # the case that discriminates
+    ("old mac\r", "old mac\n"),
+    ("no line ending", "no line ending"),
+], ids=["lf", "crlf", "doubled-cr", "paragraphs", "doubled-paragraphs",
+       "lone-cr", "none"])
+def test_lf_collapses_a_run_of_carriage_returns_into_one_line_ending(
+        raw, expected):
+    """A run of CRs before an LF is ONE line ending, however many CRs the
+    text-mode doubling produced. Expanding each CR into its own LF instead is
+    the wrong repair and was the first thing tried: it turns the author's single
+    blank line between paragraphs into three.
+
+    Only `doubled-cr` and `doubled-paragraphs` can tell the two repairs apart --
+    measured, on a sequential `replace("\\r\\n", "\\n").replace("\\r", "\\n")`
+    against the collapse: 2 newlines vs 1, and 4 vs 2. Every other case agrees,
+    including `paragraphs`, which is the shape a CRLF-authored reason actually
+    arrives in. This test caught exactly that: `_lf` shipped as the sequential
+    replace, so the bug it was written to prevent was still present in its own
+    repair for any reason that had already been through a text-mode write.
+    """
+    assert gs._lf(raw) == expected
+
+
+def test_lf_is_idempotent():
+    """Normalising twice must equal normalising once.
+
+    Without the collapse this fails: `replace` passes leave a `\\r` for the
+    second pass to find, so an already-normalised reason is not a fixed point
+    and a regeneration run twice on the same input would grow blank lines.
+    """
+    for raw in ("a\r\nb", "a\r\r\nb", "a\r\r\n\r\r\nb", "a\rb", "a\nb"):
+        once = gs._lf(raw)
+        assert gs._lf(once) == once
+        assert b"\r" not in once.encode("utf-8")
+
+
+def test_the_committed_changelog_carries_no_carriage_return():
+    """The real file, not a tmp copy -- this is the guard that would have caught
+    the corruption before it was committed rather than after.
+
+    Reads bytes, because `read_text` applies universal-newline translation and
+    would report a CRLF file as perfectly clean. That translation is also why
+    an append-only check written as `new_text.startswith(old_text)` passes on a
+    file whose every line ending just changed: it compares the normalised forms
+    and cannot see the difference git is about to store.
+    """
+    if not gs.CHANGELOG_PATH.exists():
+        pytest.skip(f"{gs.CHANGELOG_PATH} not present")
+    raw = gs.CHANGELOG_PATH.read_bytes()
+    assert b"\r" not in raw, (
+        "the committed changelog contains a carriage return, so git classifies "
+        "it as binary and its append-only history stops being reviewable. "
+        "Regenerate with the `newline='\\n'` writer, or normalise the file.")
+
+
+def test_the_committed_snapshot_carries_no_carriage_return():
+    if not gs.SNAPSHOT_PATH.exists():
+        pytest.skip(f"{gs.SNAPSHOT_PATH} not present")
+    assert b"\r" not in gs.SNAPSHOT_PATH.read_bytes()
+
+
 # ── save ────────────────────────────────────────────────────────────────────
 
 def test_save_writes_readable_json_and_appends_the_changelog(

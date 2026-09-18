@@ -341,10 +341,10 @@ def test_the_engine_turns_inventory_into_days_at_exactly_one_site():
     assert dcf_agent._INVENTORY_MARKDOWN_HAIRCUT == 0.15
 
 
-def test_gate_vocabulary_is_closed_and_has_ten_members():
+def test_gate_vocabulary_is_closed_and_has_eleven_members():
     """The set of gate ids the engine can emit, extracted from its own source.
 
-    Ten. This is what makes a claim about which gates exist a fact about the
+    Eleven. This is what makes a claim about which gates exist a fact about the
     engine rather than a fact about a brief's prose — and it means adding one is
     a deliberate act that turns this test red until the list is updated.
 
@@ -375,13 +375,71 @@ def test_gate_vocabulary_is_closed_and_has_ten_members():
     of the two directions (no `base > bull` anywhere, so the bull half ships
     implemented but unexercised).
 
+    The eleventh, `GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE`, is the first that
+    is not a gate at all in the sense the other ten are: it changes nothing and
+    cannot. `_refresh_balance_sheet_from_latest_quarter` substitutes the latest
+    reported quarter for the year-end balance sheet UNCONDITIONALLY — the engine
+    anchors on the last annual row, so a March year end carries up to four
+    quarters of stale cash and debt into every EV-based method — and this record
+    only sizes the substitution it just made, as net CASH annual vs. quarterly
+    over `max(abs(annual), 1.0)`. `applied` is a literal False with no branch
+    that could set it True; the owner's instruction was "Disclosure / Telemetry
+    Only ... Never abort the overlay or revert to stale annual data
+    automatically." Both threshold and denominator are owner-set and neither is a
+    tuning knob: the denominator on 2026-09-18, replacing the 0.15 in the Phase
+    1.4 plan text, and the threshold twice — 0.25 flat on 2026-09-18, then on
+    2026-09-19 "Adjust the step-change flag threshold from 0.25 to 0.50 (50%)
+    when period_delta_days > 180". The CONDITIONAL is what shipped, not the
+    ruling's parenthetical global 0.50, so a 91-day year-end-to-Q1 comparison
+    keeps the tighter band; that choice is mine and is recorded as mine next to
+    the constant.
+
+    Why the ruling was needed is measured, not argued. At a flat 0.25 the flag
+    fired on 8 of the 8 golden fixtures whose overlay applied — a 100% firing
+    rate, so it carried no information. A dedicated probe first checked the
+    obvious alternative reading, eight trivial firings off the
+    `max(abs(annual), 1.0)` denominator floor, and found zero: every firing had
+    a real non-zero annual base. The actual cause is temporal. The comparison
+    spans year-end → latest quarter, which across those fixtures is 91 to 273
+    days (AAPL 2025-09-27 → 2026-06-27, MU 2025-08-28 → 2026-05-28, V
+    2025-09-30 → 2026-06-30, COST 252, MELI and U96_SI 181, 09988_HK and BABA
+    91), not one quarter. Three quarters of balance-sheet drift is not a step
+    change; it is a baseline the annual figure simply predates.
+
+    Post-ruling the flag fires on 7 of the 14 fixtures, ratios 0.6202 to 4.9521.
+    Exactly one dropout, MELI: net cash −5.093bn at the 2025-12-31 year end
+    against −7.446bn at 2026-06-30, a ratio of 0.4620 over a 181-day gap, the
+    only one of the eight sitting between the two thresholds. 09988_HK and BABA
+    are unaffected by the ruling on principle — at 91 days they are measured
+    against the STRICT 0.25 and both fire on it.
+
+    A disclosure-only gate still moves the golden baseline, and that is a
+    property of the projection rather than evidence of a valuation move:
+    `golden_replay.py` reduces `gate_evaluations` to sorted metric NAMES, so the
+    name lands in `gate_metrics` on each fixture the flag fires on, plus one
+    prose line in each of that fixture's three `forward_flags` lists. Numeric
+    leaves that moved: zero, verified by an independent whole-document numeric
+    diff (14 fixtures, 3192 projection keys), and all fourteen base intrinsic
+    values are byte-identical. The 2026-09-19 regeneration moved 4 leaves on
+    MELI alone — `gate_metrics` and the three `forward_flags` — and left the
+    other thirteen fixtures byte-identical, which is what "one dropout" costs.
+
+    The record also carries `period_delta_days` and `threshold_used`, mine and
+    not among the owner's six keys, disclosed as such in the source and pinned
+    here. Without the second, a published `delta_ratio` of 0.4620 does not say
+    whether it fired against 0.25 or was measured against 0.50 and dropped; all
+    three of `basis`, `period_delta_days` and `threshold_used` are
+    golden-invisible for the reason above, so the payload became self-describing
+    at zero baseline cost.
+
     Those facts are pinned below by name rather than left to the count, because
-    a count alone cannot tell "ten gates" from "ten gates, two of which moved a
-    number nobody named".
+    a count alone cannot tell "eleven gates" from "eleven gates, two of which
+    moved a number nobody named".
     """
     emitted = sorted(set(re.findall(r'"gate_id":\s*"(GATE_[A-Z_]+)"', _engine_src())))
     assert emitted == [
         "GATE_BALANCE_SHEET_FINANCIAL",
+        "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE",
         "GATE_CASH_CONVERSION",
         "GATE_CYCLICAL_PEAK_CONSENSUS",
         "GATE_DETERMINISTIC_KPI_PRECEDENCE",
@@ -399,7 +457,7 @@ def test_gate_vocabulary_is_closed_and_has_ten_members():
     assert "INVENT" not in "GATE_GROWTH_REINVESTMENT"
     assert sum("INVENT" in g for g in emitted) == 1, emitted
     # `applied` is a literal on every record, never derived, and the split is
-    # the fact worth pinning: six records say True and three say False. A first
+    # the fact worth pinning: six records say True and four say False. A first
     # version of this assert claimed the inventory gate was the ONLY True in the
     # file, which is wrong — CAGR divergence, balance-sheet-financial (twice)
     # and deterministic-KPI precedence all applied what they measured long
@@ -415,8 +473,70 @@ def test_gate_vocabulary_is_closed_and_has_ten_members():
     # are now cross-referenced; keep them in step.
     src = _engine_src()
     assert src.count('"applied": True,') == 6, src.count('"applied": True,')
-    assert src.count('"applied": False,') == 3, src.count('"applied": False,')
+    # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
+    # has no branch that could make it True. This is the third time a new
+    # observation-only record has moved this count and reddened a module whose
+    # name has nothing to do with the gate — the count is a fact about the whole
+    # file, so it lives nowhere in particular and breaks everywhere. If you are
+    # reading this because it failed, the second copy is in
+    # `test_reinvestment_scope_and_cap.py` and both have to move together.
+    assert src.count('"applied": False,') == 4, src.count('"applied": False,')
     assert '"applied": _s_to_c is not None' not in src
+
+    # ── the eleventh gate's named facts ──────────────────────────────────────
+    # Its record shape is pinned from its own side by
+    # `tests/test_phase14_balance_sheet_fallbacks_0918.py`. What belongs HERE is
+    # the vocabulary-level claim: that it is disclosure by construction and not
+    # by omission, so a future edit cannot quietly give it teeth without
+    # reddening the module that counts gates.
+    assert dcf_agent._BALANCE_SHEET_STEP_CHANGE_THRESHOLD == 0.25, (
+        "owner-set 2026-09-18, replacing the 0.15 in the Phase 1.4 plan text; "
+        "15% fires on ordinary quarterly working-capital drift")
+    # Owner-set 2026-09-19: "Adjust the step-change flag threshold from 0.25 to
+    # 0.50 (50%) when period_delta_days > 180". The conditional is what shipped,
+    # not a global 0.50 -- a real 91-day year-end-to-Q1 comparison keeps the
+    # tighter band. The measured reason is in the constant's comment: at 0.25
+    # alone all 8 golden fixtures the overlay applied on crossed the threshold,
+    # so the flag fired 100% of the time and told nobody anything, because the
+    # two readings are 8-9 months apart rather than one quarter.
+    assert dcf_agent._BALANCE_SHEET_STEP_CHANGE_THRESHOLD_WIDE == 0.50
+    assert dcf_agent._BALANCE_SHEET_STEP_CHANGE_WIDE_GAP_DAYS == 180
+    assert (dcf_agent._BALANCE_SHEET_STEP_CHANGE_THRESHOLD
+            < dcf_agent._BALANCE_SHEET_STEP_CHANGE_THRESHOLD_WIDE), (
+        "the wide-gap threshold must be the LOOSER one, or a long gap would "
+        "make the flag fire MORE often, which is the opposite of the ruling")
+    # The owner's formula, character for character — including the denominator,
+    # which is the ANNUAL figure alone floored at one currency unit and not the
+    # max of both readings.
+    assert ("delta_ratio = abs(q_net_cash - a_net_cash) / "
+            "max(abs(a_net_cash), 1.0)") in src
+    # Strictly greater than, against whichever threshold the gap selected. The
+    # numeric boundary cases for BOTH thresholds are parametrised in the Phase
+    # 1.4 module; this one is about the source. The resolved-threshold variable
+    # is pinned rather than the constant so that a future edit cannot quietly
+    # compare against 0.25 while the record claims 0.50 was used.
+    assert "if delta_ratio > _threshold:" in src
+    assert "_threshold = _BALANCE_SHEET_STEP_CHANGE_THRESHOLD_WIDE" in src
+    assert "> _BALANCE_SHEET_STEP_CHANGE_WIDE_GAP_DAYS" in src
+    # And the record says which one it used, so a published `delta_ratio` is
+    # interpretable without reading source.
+    assert '"threshold_used": _threshold,' in src
+    assert '"period_delta_days": _gap_days,' in src
+    # One occurrence only. `GATE_INVENTORY_STRESS` has two — the record and a
+    # `#:` constant comment — and a gate whose id is mirrored somewhere else is
+    # a gate something else can dispatch on. Nothing does here.
+    assert src.count("GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE") == 1
+    _i = src.index('"gate_id": "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE"')
+    _rec = src[_i:src.index('"applied":', _i)]
+    assert '"applied": True,' not in _rec
+    # And it is not reachable from the scorer: `gate_backtest` keys off gate-id
+    # literals, so a record carrying net-CASH values in `raw_input_path_a` /
+    # `gated_output_path_b` would be graded as a forecast if it ever iterated
+    # `gate_evaluations` generically. Cross-module, so asserted on that module.
+    from src.memory import gate_backtest
+    assert "BALANCE_SHEET_QUARTERLY_STEP_CHANGE" not in inspect.getsource(
+        gate_backtest)
+    assert "gate_evaluations" not in inspect.getsource(gate_backtest)
 
 
 

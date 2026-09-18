@@ -22,6 +22,7 @@ tolerance is still reported in the diff table on a failure.
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -206,9 +207,47 @@ def build_doc(replays: dict[str, dict], *, reason: str,
     return doc
 
 
+#: A run of CRs immediately before an LF is ONE line ending, however many CRs
+#: the doubling described below produced.
+_CR_RUN_LF = re.compile(r"\r+\n")
+#: Any CR left after that is a genuine old-Mac line ending.
+_CR_RUN = re.compile(r"\r+")
+
+
+def _lf(text: str) -> str:
+    """Normalise any line ending to a bare LF, collapsing runs.
+
+    Both files below are opened with ``newline="\\n"`` so this process writes
+    the same bytes on every platform, matching what git stores. That alone is
+    not enough, because ``reason`` arrives through the ``GOLDEN_UPDATE_REASON``
+    environment variable and a shell ``$(cat file)`` on Windows preserves the
+    CRLFs of a CRLF-authored file. Text-mode translation then turns each of
+    those ``\\r\\n`` into ``\\r\\r\\n``, and a lone CR makes git classify
+    CHANGELOG.md as BINARY (``git ls-files --eol`` reports ``i/-text``) -- which
+    silently replaces an append-only audit trail's readable diff with "Binary
+    files differ", permanently, from the commit that introduced it.
+
+    Measured, not theorised: a multi-paragraph reason produced exactly 16 lone
+    CRs, one per ``\\r\\n`` in the reason, and flipped the classification. A
+    single-paragraph reason never showed it, which is why 21 entries went by
+    without anyone noticing.
+
+    The collapse matters and the naive repair is wrong.
+    ``replace("\\r\\n", "\\n").replace("\\r", "\\n")`` -- which is what this
+    function first shipped as -- turns ``\\r\\r\\n\\r\\r\\n``, the exact shape the
+    defect left behind between paragraphs, into FOUR newlines instead of two:
+    the author's single blank line becomes three. A run of CRs before an LF is
+    one line ending. The test that pinned this caught the function disagreeing
+    with its own docstring before either was committed; the same collapse is
+    what the corrupted artefacts were repaired with, so the writer and the
+    files it maintains now agree byte for byte.
+    """
+    return _CR_RUN.sub("\n", _CR_RUN_LF.sub("\n", text))
+
+
 def save(doc: dict, *, reason: str) -> Path:
     SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(SNAPSHOT_PATH, "w", encoding="utf-8") as fh:
+    with open(SNAPSHOT_PATH, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(doc, fh, indent=1, default=str, sort_keys=False)
         fh.write("\n")
     append_changelog(doc, reason=reason)
@@ -220,7 +259,7 @@ def append_changelog(doc: dict, *, reason: str) -> None:
     meta = doc.get("_meta", {})
     CHANGELOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     new = not CHANGELOG_PATH.exists()
-    with open(CHANGELOG_PATH, "a", encoding="utf-8") as fh:
+    with open(CHANGELOG_PATH, "a", encoding="utf-8", newline="\n") as fh:
         if new:
             fh.write("# Golden valuation snapshots\n\n"
                      "Every entry is one `--update-snapshots` run. An entry\n"
@@ -231,4 +270,4 @@ def append_changelog(doc: dict, *, reason: str) -> None:
                  f"- fixtures recorded at: `{meta.get('commit', '?')}`\n"
                  f"- tickers: {meta.get('tickers', '?')}\n"
                  f"- tolerance: ±{TOLERANCE:.0%} on numeric leaves\n"
-                 f"- reason: {reason}\n\n")
+                 f"- reason: {_lf(reason)}\n\n")

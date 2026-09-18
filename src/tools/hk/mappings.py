@@ -142,6 +142,56 @@ HK_BALANCE_COLS: dict[str, str] = {
     # Goodwill: Tencent/large HK co. include goodwill inside intangibles or
     # as a separate item; map if present
     "商誉":             "goodwill",
+    # ── Short-term investments (Phase 1.4) ────────────────────────────────
+    # FOUR EastMoney labels have to be ADDED to reach FMP's
+    # `shortTermInvestments`, so they cannot all map to one field:
+    # `_parse_statement` keeps the first value it sees per field and drops the
+    # rest, which would silently lose three of the four. They map to distinct
+    # staging keys and `_compute_derived` sums them into
+    # `short_term_investments`.
+    #
+    # Scored against FMP at EVERY period the provider returns on four names,
+    # not only the newest one. The newest period is within 0.34% on all four:
+    #     02020.HK 2025  26.1950 vs  26.2062   -0.04%
+    #     09988.HK 2026 185.3640 vs 184.7444   +0.34%
+    #     00700.HK 2025 285.7120 vs 285.8342   -0.04%
+    #     01810.HK 2025  80.7822 vs  80.8168   -0.04%
+    # Going back in time the rule sum runs ABOVE FMP on five periods, and that is
+    # the true envelope rather than the +0.34% this comment used to claim:
+    #     00700.HK 2024 +2.3574%   2023 +3.2672%   2022 +2.4094%
+    #              2021 +2.0370%
+    #     01810.HK 2022 +1.4328%
+    # The other fourteen periods scored are exact to the last digit.
+    #
+    # Those five deviations are KNOWN AND ACCEPTED, not unknown. An offline gap
+    # analysis over every unmapped label on Tencent's balance sheet found no
+    # single line that closes the 2021-2024 gap, so the residual is a
+    # classification difference between the two feeds rather than a missing
+    # label here. Owner decision 2026-09-18, verbatim: "Overfitting the baseline
+    # with ad-hoc label exceptions for 2021-2024 historical filings would
+    # introduce regression risk across the broader HK universe." The rule is
+    # therefore NOT to be tuned to fit those filings. If a future change does
+    # tune it, update the envelope in
+    # tests/test_phase14_balance_sheet_fallbacks_0918.py in the same commit --
+    # `test_the_all_period_envelope_is_the_one_the_owner_accepted` pins +3.27%
+    # as the worst case and will fail on any widening.
+    #
+    # The two-label rule (短期投资 + 短期存款 alone) fitted the first two and was
+    # REFUTED by the other two, -17.15% on Tencent and -36.26% on Xiaomi; the
+    # gap in both is the CURRENT fair-value / other-financial-asset lines.
+    # Adding 受限制存款及现金 is worse on all four (+2.4% to +23.1%) and adding
+    # the NON-current 指定以公允价值记账之金融资产 is catastrophic (+197.2%
+    # Tencent, +100.0% Xiaomi) -- so the (流动) current qualifier below is
+    # load-bearing and must not be "simplified" away. 交易性金融资产(流动) is
+    # present on Tencent only and is correctly excluded: Tencent matches to
+    # -0.04% without it.
+    #
+    # The parentheses are HALF-WIDTH U+0028/U+0029, as EastMoney emits them.
+    # Full-width （） would match nothing and fail silently.
+    "短期投资":                        "short_term_investments_securities",
+    "短期存款":                        "short_term_investments_deposits",
+    "指定以公允价值记账之金融资产(流动)": "short_term_investments_fv_current",
+    "其他金融资产(流动)":                "short_term_investments_other_current",
 }
 
 # ---------------------------------------------------------------------------

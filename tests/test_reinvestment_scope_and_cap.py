@@ -391,15 +391,26 @@ class TestTheInvariantsAreNotDuplicated:
                     '"margin_headroom"', '"cap_binds"'):
             assert key in rec, key
         assert '"applied": _reinvest_in_scope' not in src
-        assert src.count('"applied": False,') == 3
+        # FOUR, not three. The fourth is
+        # `GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE`, Phase 1.4 telemetry over
+        # the quarterly balance-sheet overlay: the overlay substitutes the
+        # latest reported quarter for the year-end balance sheet
+        # unconditionally, and the record sizes that substitution for the audit
+        # payload (`applied` a literal False, with no branch that could make it
+        # True). It has nothing to do with reinvestment scope and everything to
+        # do with this count being a fact about the whole file rather than about
+        # this gate — which is why an unrelated change reddens a test whose name
+        # says "not applied and publishes both gates".
+        assert src.count('"applied": False,') == 4
         # SIX, not five, since GATE_SCENARIO_ORDERING landed with a literal
         # `"applied": True,`. This is the SECOND copy of that count — the first
         # is in `test_consumer_discretionary_gates.py::
-        # test_gate_vocabulary_is_closed_and_has_ten_members`, and neither
+        # test_gate_vocabulary_is_closed_and_has_eleven_members`, and neither
         # mentions the other, so adding a live gate turns two tests red in two
         # modules that look unrelated. Both were widened together when the
-        # tenth gate arrived; if you are reading this because one of them
-        # failed and the other did not, a gate was added without a record.
+        # tenth gate arrived, and again when the eleventh did; if you are reading
+        # this because one of them failed and the other did not, a gate was
+        # added without a record.
         assert src.count('"applied": True,') == 6
 
     def test_the_two_flag_branches_are_mutually_exclusive(self):

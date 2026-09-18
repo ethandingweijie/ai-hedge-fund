@@ -47,6 +47,12 @@ _BALANCE_FIELDS = frozenset({
     "total_debt", "net_debt", "working_capital",
     "goodwill_and_intangible_assets", "current_ratio", "debt_to_equity",
     "book_value_per_share",
+    # Derived (Phase 1.4) from four AKShare labels that map to their own
+    # staging keys in HK_BALANCE_COLS -- see the comment there for why they
+    # cannot share one field, and for the validation against FMP on four names.
+    # Only the aggregate is requestable; the components stay in `staging` so a
+    # figure can be traced back to the labels that produced it.
+    "short_term_investments",
 })
 
 _CASHFLOW_FIELDS = frozenset({
@@ -55,6 +61,16 @@ _CASHFLOW_FIELDS = frozenset({
     # derived from cashflow
     "capital_expenditure", "free_cash_flow",
 })
+
+#: Staging keys that aggregate into ``short_term_investments``, DERIVED from the
+#: mapping rather than listed here a second time -- a fifth label added to
+#: ``HK_BALANCE_COLS`` joins the sum without this file being touched, and the
+#: two cannot drift apart. Sorted so the order is stable for tests and for the
+#: basis string a run can print.
+_SHORT_TERM_INVESTMENT_PARTS: tuple[str, ...] = tuple(sorted(
+    v for v in HK_BALANCE_COLS.values()
+    if v.startswith("short_term_investments_")
+))
 
 
 def search_hk_line_items(
@@ -490,7 +506,35 @@ def _compute_derived(s: dict[str, Any]) -> None:
     if ca is not None and cl is not None:
         s["working_capital"] = ca - cl
 
-    # ── net_debt ──────────────────────────────────────────────────────────────
+    # ── short_term_investments ───────────────────────────────────────────────
+    # Four EastMoney labels aggregate into one field; HK_BALANCE_COLS maps each
+    # to its own staging key because `_parse_statement` is first-wins per field
+    # and would drop three of the four. Summed here. A label the company does
+    # not report is simply absent, so this is a sum over what exists -- NOT a
+    # sum over four expected values, and an all-absent name yields no field at
+    # all rather than 0.0. That distinction matters downstream:
+    # `_net_debt_net_of_investments` treats a falsy STI as "this feed has
+    # nothing to net" and leaves net debt alone.
+    _sti_parts = tuple(s.get(k) for k in _SHORT_TERM_INVESTMENT_PARTS)
+    _sti = [p for p in _sti_parts if isinstance(p, (int, float))]
+    if _sti:
+        s["short_term_investments"] = sum(_sti)
+
+    # ── net_debt ─────────────────────────────────────────────────────────────
+    # DELIBERATELY total_debt - cash, NOT net of short-term investments, even
+    # though the plan for this change reads "net_debt = total_debt - cash - STI".
+    # That instruction is self-contradictory: its own closing clause says "the
+    # engine's sector guard in `_net_debt_net_of_investments` still applies",
+    # and pre-netting here is exactly what would DEFEAT that guard. The helper
+    # only subtracts STI when the feed's figure is visibly `debt - cash` alone;
+    # a provider that has already netted trips the guard and is passed through
+    # untouched -- which is right for an industrial and WRONG for a bank or an
+    # insurer, whose investment portfolio backs its liabilities rather than
+    # sitting idle (see `_NO_INVESTMENT_NETTING_SECTORS`, and the Molina test in
+    # tests/test_valuation_fixes_0916.py). The provider does not know the
+    # sector, so it must not make the sector-dependent call. Emitting the raw
+    # difference lets the one place that does know the sector make it, and both
+    # feeds then agree: FMP's own `netDebt` is `total_debt - cash` too.
     total_debt = s.get("total_debt")
     cash = s.get("cash_and_equivalents")
     if total_debt is not None and cash is not None:
