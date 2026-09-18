@@ -315,6 +315,134 @@ class TestPlatformsMislabelledAsRetail:
             "Tech", "Tech Manufacturing / EMS (SG)")
 
 
+class TestFootwearLabelWasUnmapped:
+    """FMP's "Apparel - Footwear & Accessories" was absent from the table.
+
+    Measured live on 2026-09-18 across the 16-name Consumer Discretionary
+    basket: NKE, ONON, DECK, CPRI and 02313.HK all carry that label, all five
+    returned route=None, and `_industry_routed_profile` recorded
+    outcome='unmapped' and declined rather than guessing. Declining is the
+    right behaviour for an industry the table has never seen and the wrong
+    outcome for one it should have covered: all five fell through to the LLM
+    router, so the same filing could land on different profiles on different
+    runs, and a profile that cannot deliver its own recommended method arrives
+    with nothing in the log saying so.
+
+    The ruling that added the row named the target as "Consumer/Apparel &
+    Footwear". No such profile exists -- Consumer has 13 and none is called
+    that -- so the row uses "Apparel / Athletic Wear", which is the pair
+    "Apparel - Manufacturers" already maps to and the profile NKE, LULU and
+    02020.HK are pinned to. Pointing it at Consumer Growth instead would have
+    Guardrail 4a route those three one way and the ticker override pull them
+    straight back, the internal contradiction this file's v3 note warns
+    against.
+    """
+
+    LABEL = "Apparel - Footwear & Accessories"
+    NAMES = ("NKE", "ONON", "DECK", "CPRI", "02313.HK")
+
+    def test_the_label_routes_to_the_apparel_profile(self):
+        assert profile_for_industry(self.LABEL) == (
+            "Consumer", "Apparel / Athletic Wear")
+
+    def test_the_names_measured_on_the_label_all_take_the_row(self):
+        """None of the five has a ticker_overrides entry, so for four of them
+        this row is the only deterministic route there is. ONON is the fifth
+        and is decided elsewhere -- see the override test below."""
+        from src.data.industry_profile_map import profile_for_ticker, ticker_overrides
+        ovr = ticker_overrides()
+        for t in self.NAMES:
+            assert t not in ovr, f"{t} gained an override; this row no longer decides it"
+            assert profile_for_ticker(t, self.LABEL) == (
+                "Consumer", "Apparel / Athletic Wear"), t
+
+    def test_the_routed_profile_can_deliver_a_dcf_leg(self):
+        """The reason to route these five deterministically is that the profile
+        can compute the method the practitioner spec asks for. Traditional
+        Retail -- where the sibling "Apparel - Retail" label sends LULU and
+        01368.HK -- has no DCF-family leg at all, which is the 01368.HK
+        finding this row is the cheap half of."""
+        prof = P["Consumer"]["Apparel / Athletic Wear"]
+        names = {m["name"] for m in prof["methods"]}
+        assert "DCF (FCF+)" in names, names
+        # _industry_routed_profile declines any profile whose ANCHOR is not
+        # implementable, so a row pointing at one would silently not route.
+        anchor = next(m for m in prof["methods"] if m.get("anchor"))
+        assert anchor.get("implementable"), anchor
+
+    def test_the_row_does_not_fight_the_pins_it_agrees_with(self):
+        """Three of the pinned Consumer names share this label. The row must
+        land where their pins already do, or Guardrail 4a and the override
+        disagree on every run and the trace reads as a flip-flop."""
+        from src.data.sector_profiles import get_wacc_profile_for_ticker
+        for t in ("NKE", "LULU", "02020.HK"):
+            assert get_wacc_profile_for_ticker(t) == profile_for_industry(self.LABEL), t
+
+    def test_onon_is_the_one_disagreement_and_the_override_wins(self):
+        """ONON is pinned to Consumer Growth at ~30% CAGR; this row says
+        Apparel / Athletic Wear. The ticker override sits BELOW industry
+        routing in run_dcf_agent and wins, so the pin holds and the row is
+        inert for ONON -- which is why adding the key is safe for it."""
+        from src.data.sector_profiles import get_wacc_profile_for_ticker
+        assert get_wacc_profile_for_ticker("ONON") == ("Consumer", "Consumer Growth")
+        assert get_wacc_profile_for_ticker("ONON") != profile_for_industry(self.LABEL)
+
+        import inspect
+        from src.agents.analysis import dcf_agent as d
+        src = inspect.getsource(d.run_dcf_agent)
+        routed = '_routing_trace["winner"] = "industry_map"'
+        override = '_routing_trace["winner"] = "ticker_override"'
+        # Uniqueness measured before indexing: str.index() returns the FIRST
+        # match, so a second occurrence anywhere would make the ordering
+        # assertion silently measure the wrong one.
+        assert src.count(routed) == 1, src.count(routed)
+        assert src.count(override) == 1, src.count(override)
+        assert src.index(routed) < src.index(override), (
+            "the ticker override no longer runs after industry routing, so a "
+            "routed profile would overwrite the pin")
+
+
+class TestXtepIsNotAShopEstateRetailer:
+    """FMP's "Apparel - Retail" sends 01368.HK to Traditional Retail.
+
+    Traditional Retail anchors EV/EBITDAR, a LEASE-ADJUSTED metric for a shop
+    estate, and its five legs contain no DCF-family method at all. Xtep is a
+    branded sportswear manufacturer and retailer whose value is its cash flow,
+    not its rents, and its own peer set agrees: 02020.HK and 02331.HK sit on
+    Apparel / Athletic Wear and Consumer Growth.
+
+    The override names the exception rather than re-pointing the row, which is
+    the v3/v9 pattern. The row does serve genuine shop-estate retailers, the
+    population it covers has not been measured, and moving all of it onto a DCF
+    leg would be a regression risk taken without evidence.
+    """
+
+    LABEL = "Apparel - Retail"
+
+    def test_the_row_still_serves_real_retailers(self):
+        assert industry_map()[self.LABEL] == ("Consumer", "Traditional Retail")
+        from src.data.industry_profile_map import profile_for_ticker
+        # LULU carries this label and has no override, so the row still decides
+        # it -- its pin lives in TICKER_SECTOR_LOOKUP, a different layer.
+        assert profile_for_ticker("LULU", self.LABEL) == (
+            "Consumer", "Traditional Retail")
+
+    def test_xtep_overrides_to_the_apparel_profile(self):
+        from src.data.industry_profile_map import profile_for_ticker
+        assert profile_for_ticker("01368.HK", self.LABEL) == (
+            "Consumer", "Apparel / Athletic Wear")
+
+    def test_the_premise_the_override_rests_on(self):
+        """Traditional Retail has no DCF-family leg. If that ever changes the
+        override stops being necessary and this test says so, rather than
+        leaving a stale exception behind."""
+        names = [m["name"] for m in P["Consumer"]["Traditional Retail"]["methods"]]
+        assert not any("DCF" in n for n in names), names
+        # ...and the profile the override points at does have one.
+        assert any("DCF" in m["name"]
+                   for m in P["Consumer"]["Apparel / Athletic Wear"]["methods"])
+
+
 class TestTencentIsTheExceptionInsideACorrectRow:
     """"Internet Content & Information" -> Mature Platform is RIGHT for
     Kuaishou (deviation 109.5% -> 24.7%) and for TME, and WRONG for Tencent

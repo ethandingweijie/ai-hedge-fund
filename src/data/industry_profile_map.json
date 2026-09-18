@@ -2,7 +2,7 @@
   "_doc": [
     "FMP industry -> (sector, valuation profile).",
     "",
-    "The routing unit is the INDUSTRY, not the ticker. 71 rows cover 100/100 of",
+    "The routing unit is the INDUSTRY, not the ticker. 72 rows cover 100/100 of",
     "the HK large-cap universe and generalise to any future listing in the same",
     "industry, where a per-ticker table would need a new row for every name.",
     "",
@@ -22,9 +22,10 @@
     "v6: SGX ticker overrides. FMP carries no company profile for 24 of the SGX large/mid caps, so there is no industry to route on and the ticker is the only key available. A further five are labelled in a way that routes them to the wrong archetype -- Bukit Sembawang, a landed-residential developer, came through as Travel & Dining. Each choice follows the practitioner spec's PRIMARY method rather than name recognition.",
     "v7: distressed and foreign-asset trusts move off S-REIT. S-REIT anchors DDM (S-REIT) at 0.55, which is the wrong primary for a trust that has suspended or cut its distribution -- Manulife US REIT, Prime US REIT, Keppel Pacific Oak US REIT and Lippo Malls are all restructuring or liquidation cases whose value is the asset NAV net of debt. The REIT row anchors NAV (Cap Rates) instead. For the three US-office trusts the US calibration is also the CORRECT one: they are SGX-listed but hold American property priced on American cap rates.",
     "v8: Insurance - Property & Casualty routes to the new Insurance (P&C) node instead of the life profile. Embedded Value discounts an in-force book of long-duration policies; a general insurer writes one-year contracts and has none, so PICC was anchored on a method that does not exist for it.",
-    "v9: platform businesses mislabelled as retail, and one exception inside a correct row. FMP's 'Specialty Retail' holds Meituan, SHEIN and a semiconductor test company -- none of them pays rent on a shop estate, which is all that Traditional Retail's EV/EBITDAR anchor measures. And 'Internet Content & Information' -> Mature Platform is right for Kuaishou and TME but wrong for Tencent, whose gaming, fintech, cloud and investment portfolio are a conglomerate. The row stays; the exception is named."
+    "v9: platform businesses mislabelled as retail, and one exception inside a correct row. FMP's 'Specialty Retail' holds Meituan, SHEIN and a semiconductor test company -- none of them pays rent on a shop estate, which is all that Traditional Retail's EV/EBITDAR anchor measures. And 'Internet Content & Information' -> Mature Platform is right for Kuaishou and TME but wrong for Tencent, whose gaming, fintech, cloud and investment portfolio are a conglomerate. The row stays; the exception is named.",
+    "v13: 'Apparel - Footwear & Accessories' added. FMP labels NKE, ONON, DECK, CPRI and 02313.HK with it, and the key was absent -- so profile_for_ticker returned None, _industry_routed_profile recorded outcome='unmapped' and declined, and all five fell through to the LLM router. That is the non-determinism this table exists to remove: the same filing produced different profiles on different runs, and a profile that cannot deliver its own recommended method can arrive without anything in the log saying so. The ruling named the target as 'Consumer/Apparel & Footwear', which does not exist in INDUSTRY_VALUATION_PROFILES -- the Consumer node has 13 profiles and none is called that -- so the row uses 'Consumer/Apparel / Athletic Wear' instead, on three grounds. It is in-file precedent: 'Apparel - Manufacturers' already maps to exactly that pair. It agrees with the pins rather than contradicting them: NKE, LULU and 02020.HK are all pinned to Apparel / Athletic Wear in TICKER_SECTOR_LOOKUP, and a map row pointing elsewhere would have Guardrail 4a route a name one way and the ticker override immediately pull it back -- the internal contradiction this file's own v3 note warns against. And it delivers the legs: EV/EBITDA 0.40 anchor plus DCF (FCF+) 0.30 covers the recommended primary for NKE, DECK, CPRI and 02313.HK. ONON is unaffected either way; it is pinned to Consumer Growth and the override wins. The alternative, Consumer Growth, would leave 02313.HK -- a contract OEM valued on capital intensity and factory utilisation -- with its Mid-Cycle EV/EBITDA primary at 0.15 weight and mis-describe a manufacturer as a growth company. Also in v13: a ticker override for 01368.HK (Xtep). FMP's 'Apparel - Retail' sends it to Traditional Retail, whose five legs are EV/EBITDAR, P/E, EV/Revenue, ROIC vs WACC and FCF Yield -- no DCF-family leg at all, because EV/EBITDAR is a lease-adjusted metric for a shop estate, and Xtep's value is not its rents. Its own peer set says as much: 02020.HK and 02331.HK are branded sportswear names sitting on Apparel / Athletic Wear and Consumer Growth, and neither is a retailer of other people's product. The override names the exception instead of re-pointing the row, following v3 and v9 -- 'Apparel - Retail' does genuinely serve shop-estate retailers, the population it covers has not been measured, and moving all of it onto a DCF leg would be a regression risk taken without evidence. The row-level question, whether Traditional Retail ought to carry a DCF leg at all, is left open and reported rather than settled here."
   ],
-  "version": 12,
+  "version": 13,
   "map": {
     "Agricultural - Machinery": [
       "Industrials",
@@ -37,6 +38,10 @@
     "Aluminum": [
       "Resources",
       "Mining (Major)"
+    ],
+    "Apparel - Footwear & Accessories": [
+      "Consumer",
+      "Apparel / Athletic Wear"
     ],
     "Apparel - Manufacturers": [
       "Consumer",
@@ -479,6 +484,10 @@
     "00148.HK": [
       "Tech",
       "Electronic Materials & Industrial Diversified"
+    ],
+    "01368.HK": [
+      "Consumer",
+      "Apparel / Athletic Wear"
     ]
   },
   "markets": {
