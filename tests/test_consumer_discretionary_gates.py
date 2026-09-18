@@ -999,70 +999,111 @@ def test_el_changes_profile_with_the_cycle_and_lands_on_trailing_e_at_the_trough
     assert m("Apparel / Athletic Wear")["P/E (norm)"]["anchor"] is False
 
 
-def test_the_consumer_ladder_is_a_knife_edge_on_two_thresholds():
-    """Below 5% CAGR the Consumer ladder is a band-pass on FCF margin — and a
-    BETTER margin demotes the name to a worse profile.
+def test_the_consumer_ladder_no_longer_demotes_a_better_margin():
+    """RENAMED AND INVERTED. This test used to be
+    `test_the_consumer_ladder_is_a_knife_edge_on_two_thresholds`, and it FAILED on
+    four assertion groups when Step 7 landed. It is rewritten here rather than
+    deleted, because it was written as a defect witness and the defect is now
+    fixed — so its old assertions are the precise record of what was broken.
 
-    Measured, because it bounds how much confidence any archetype label
-    deserves. `classify_valuation_profile` is a first-match ladder on
-    `revenue_cagr` and `fcf_margin`; there is no hysteresis, no weighting and no
-    smoothing, so a name sitting near a rung re-classifies on a restatement.
+    What it used to assert, and what the ladder does now:
 
-    For any Consumer name with CAGR below 5% — which is NKE at 3%, and most of
-    mature apparel — the first rung (`0.0 <= cagr < 0.40 and 0.05 <= fcf < 0.18`)
-    and the third (`cagr < 0.05 -> Household / Personal`) between them make the
-    profile a pure band-pass on FCF margin:
+        cagr 3%, fcf 0.179 -> Apparel / Athletic Wear   (unchanged)
+        cagr 3%, fcf 0.180 -> Household / Personal      -> Luxury Goods
+        cagr 4.9%, fcf 0.30 -> Household / Personal      -> Luxury Goods
+        cagr 50%, fcf 0.12 -> Traditional Retail         -> Apparel / Athletic Wear
 
-        NKE, cagr 3%   fcf 0.049 -> Household / Personal
-                       fcf 0.050 -> Apparel / Athletic Wear
-                       fcf 0.179 -> Apparel / Athletic Wear
-                       fcf 0.180 -> Household / Personal
+    The first two were cliff (i): the `cagr < 0.05` Household rung stood ABOVE the
+    `fcf >= 0.15` Luxury rung, so the strongest cash converter in a slow-growth
+    band got the second-weakest profile in the sector. The band-pass upper bound
+    `fcf < 0.18` on rung 1 is still there — it could not simply be deleted, because
+    deleting it would have made the band swallow every margin above 0.05 and left
+    Luxury Goods unreachable at a low CAGR — but the fall-through it produces is
+    now a promotion instead of a demotion, which is what makes the bound safe.
 
-    One tenth of a point either side of 5% or 18% swaps the anchor between
-    EV/EBITDA at 0.40 and trailing P/E at 0.40. The upper edge runs the wrong
-    way: raising NKE's FCF margin from 17.9% to 18.0% moves it OFF the apparel
-    profile built for it and ONTO `Household / Personal`, which halves its DCF
-    weight (0.30 -> 0.20), drops its only normalized leg (`P/E (norm)` 0.20) and
-    hands 40% of the blend to unadjusted trailing earnings. A stronger business
-    gets a lower-quality valuation.
+    The third was cliff (ii), the documented ONON case: `cagr >= 0.40` was outside
+    the band's CAGR range, and with `fcf` below 0.15 nothing caught it until
+    Traditional Retail — the only Consumer profile with no DCF leg at all. A name
+    was punished for growing fast by being valued entirely on what its peers cost.
 
-    The other two flips measured here are the ones the brief's archetypes sit
-    near: Anta across the 15% FCF rung, and ONON across the 40% CAGR rung.
+    Both are now repaired, and the repair is verified over a 3000-cell grid with a
+    complete enumeration of the move set in
+    `tests/test_consumer_monotonic_ladder.py`. This test keeps the shapes the brief
+    cared about; that module keeps the proof.
+
+    Still true and still worth pinning: the ladder remains a first-match ladder
+    with no hysteresis, no weighting and no smoothing, so a name near a rung
+    re-classifies on a restatement. The migration removed the rungs that classified
+    in the WRONG DIRECTION. It did not make the ladder continuous, and one
+    margin-axis step into a structural profile survives — `cagr < 0.03`,
+    fcf 0.179 -> 0.180 moves Apparel -> Food & Beverage — because repairing it by
+    reordering would make Food & Beverage unreachable. That residual is named and
+    pinned in `TestTheKnownResiduals` over there.
     """
     c = classify_valuation_profile
-    # The band-pass, at its edges.
+    # The lower edge of the band is unchanged: below 5% FCF margin a slow grower
+    # is Household / Personal, and this was never a defect.
     for fcf in (0.02, 0.04, 0.049):
         assert c("Consumer", 0.03, fcf, 0.6) == "Household / Personal", fcf
     for fcf in (0.05, 0.10, 0.179):
         assert c("Consumer", 0.03, fcf, 0.6) == "Apparel / Athletic Wear", fcf
+    # WAS: Household / Personal. The upper edge now promotes.
     for fcf in (0.18, 0.25, 0.30):
-        assert c("Consumer", 0.03, fcf, 0.6) == "Household / Personal", fcf
+        assert c("Consumer", 0.03, fcf, 0.6) == "Luxury Goods", fcf
     # And it holds across the whole sub-5% CAGR range, not just at NKE's 3%.
+    # WAS: in ("Household / Personal", "Food & Beverage"). At cagr < 0.03 the
+    # Food & Beverage rung still catches a >= 0.15 margin, which is a structural
+    # classification and not a demotion; at 0.04 and 0.049 it is Luxury Goods.
     for cagr in (0.0, 0.02, 0.049):
         assert c("Consumer", cagr, 0.04, 0.6) == "Household / Personal"
         assert c("Consumer", cagr, 0.30, 0.6) in \
-            ("Household / Personal", "Food & Beverage")
-    # Crossing 5% CAGR at a strong margin jumps two rungs at once.
-    assert c("Consumer", 0.049, 0.30, 0.6) == "Household / Personal"
+            ("Luxury Goods", "Food & Beverage")
+    assert c("Consumer", 0.0, 0.30, 0.6) == "Food & Beverage"
+    assert c("Consumer", 0.02, 0.30, 0.6) == "Food & Beverage"
+    assert c("Consumer", 0.049, 0.30, 0.6) == "Luxury Goods"
+    # Crossing 5% CAGR at a strong margin used to JUMP two rungs, from Household
+    # (tier 2) to Luxury (tier 5). It is now continuous: Luxury on both sides.
+    assert c("Consumer", 0.049, 0.30, 0.6) == "Luxury Goods"
     assert c("Consumer", 0.05, 0.30, 0.6) == "Luxury Goods"
 
-    # The demotion is a real downgrade in method quality, not a relabel.
+    # The method-quality comparison that made the old cliff a real downgrade and
+    # not a relabel. Kept as a table fact: it is what the demotion cost, and it is
+    # also what the NEW edge costs nothing, because Apparel -> Luxury keeps a DCF
+    # leg and gains a premium earnings anchor.
     ap, hh = _methods("Apparel / Athletic Wear"), _methods("Household / Personal")
     assert ap["DCF (FCF+)"]["weight"] == 0.30 and ap["EV/EBITDA"]["anchor"] is True
     assert hh["DCF"]["weight"] == 0.20 and hh["P/E"]["anchor"] is True
     assert hh["P/E"]["weight"] == 0.40
     assert "P/E (norm)" in ap and "P/E (norm)" not in hh
     assert set(ap) & set(hh) == {"EV/EBITDA"}, sorted(set(ap) & set(hh))
+    lux = _methods("Luxury Goods")
+    assert lux["P/E (Premium)"]["anchor"] is True
+    assert "DCF (LTG)" in lux, sorted(lux)
+    # Both spellings on the old demotion's anchor and on the new arrival's anchor
+    # are in `_PE_NORM_SWAP_LEGS`, so the Failure-2 trough repair reaches a name
+    # whichever side of the 0.18 bound it sits on. That is the reason the
+    # remaining step is survivable.
+    from src.agents.analysis import dcf_agent as _da
+    assert {"P/E", "P/E (Premium)"} <= set(_da._PE_NORM_SWAP_LEGS)
 
-    # Anta across the 15% FCF rung, and ONON across the 40% CAGR rung.
+    # Anta across the 15% FCF rung — unchanged by the migration.
     assert c("Consumer", 0.12, 0.18, 0.4) == "Luxury Goods"
     assert c("Consumer", 0.12, 0.12, 0.4) == "Apparel / Athletic Wear"
+    # ONON across the 40% CAGR rung. WAS: Traditional Retail.
     assert c("Consumer", 0.30, 0.12, 0.3) == "Apparel / Athletic Wear"
-    assert c("Consumer", 0.50, 0.12, 0.3) == "Traditional Retail"
-    assert _methods("Luxury Goods")["P/E (Premium)"]["anchor"] is True
+    assert c("Consumer", 0.50, 0.12, 0.3) == "Apparel / Athletic Wear"
+    assert c("Consumer", 0.399, 0.12, 0.3) == "Apparel / Athletic Wear"
+    # The Luxury and Traditional Retail method sets are still disjoint, which is
+    # what made the ONON flip violent when it happened. It no longer happens, but
+    # the disjointness is the reason the fix was worth making rather than cosmetic.
     assert set(_methods("Luxury Goods")) & set(_methods("Traditional Retail")) == set(), (
-        "the two ends of the Anta flip now share a method, so the flip is "
-        "less violent than this test documents")
+        "Luxury Goods and Traditional Retail now share a method, so the cliff-(ii) "
+        "demotion this test documents was less violent than stated")
+    assert "DCF (LTG)" not in _methods("Traditional Retail")
+    assert not any("dcf" in n.lower() for n in _methods("Traditional Retail")), (
+        "Traditional Retail now carries a DCF leg, so it is no longer the weakest "
+        "methodology in the sector and the tier order in "
+        "tests/test_consumer_monotonic_ladder.py needs re-deriving")
 
 
 def test_pe_premium_and_pe_share_the_trailing_branch():
@@ -1419,12 +1460,14 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
     which is the observable proof that nothing consumed the number.
 
     PARTLY ADDRESSED, and the residual is narrower than it was. The Failure-2
-    swap now rewrites `P/E` and `P/E (Premium)` to `P/E (norm)` when trailing
-    net income deviates more than 40% from its five-year norm, so above 40% the
-    promise is kept for the 31 profiles that carry one of those two spellings
-    and no normalized P/E leg. (37 carry a trailing P/E of ANY spelling; the
-    other 6 use `P/E (ops)` / `P/E (Ops)`, which the swap deliberately does not
-    touch — see `test_the_swap_leaves_the_ops_spellings_on_the_trailing_branch`.)
+    swap now rewrites ALL FOUR trailing P/E spellings — `P/E`, `P/E (Premium)`,
+    `P/E (ops)` and `P/E (Ops)` — to `P/E (norm)` when trailing net income
+    deviates more than 40% from its five-year norm, so above 40% the promise is
+    kept for all 37 profiles that carry a trailing P/E leg and no normalized P/E
+    leg. It used to name two spellings and reach 31; the owner widened it, on the
+    reasoning that operating earnings are distorted by the same cycle as
+    consolidated ones (see `test_the_ops_spellings_are_now_in_the_swap`). The
+    spelling gap is closed.
     Two gaps remain and both are load-bearing:
 
       * the thresholds differ — the flag fires at 15%, the swap at 40%, so the
@@ -1772,23 +1815,39 @@ def test_the_swap_is_not_gated_on_the_cyclical_profiles():
     assert "_CYCLICAL_PROFILES" in dcf_agent._mid_cycle_leg_swaps.__code__.co_names
 
 
-def test_the_swap_population_is_thirty_one_of_ninety_nine():
+def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     """The measured size of the change, off the real profile table.
 
-    99 profiles. 37 carry a trailing P/E leg of some spelling. 31 carry one of
-    the two spellings the swap names. 10 of those 31 anchor on it, so for those
-    ten the swap changes the earnings source of the single most-weighted leg in
-    the profile. None of the 31 also carries a normalized P/E leg, which is what
-    makes the double-weight guard above vacuous today.
+    RENAMED from `test_the_swap_population_is_thirty_one_of_ninety_nine` and
+    INVERTED, because the owner authorised the widening: "Include `P/E (ops)` /
+    `P/E (Ops)` in `_PE_NORM_SWAP_LEGS`: Excluding operating P/E while swapping
+    standard P/E is an artificial distinction. If a company's consolidated margin
+    is cyclically depressed or inflated, operating earnings are equally distorted."
 
-    Four of the ten anchors are Consumer: `Food & Beverage` (P/E 0.50),
-    `Luxury Goods` (P/E (Premium) 0.50), `Household / Personal` (P/E 0.40) and
-    `Membership / Subscription Retail` (P/E 0.40). The brief's archetypes are
-    disproportionately represented in the population this change reaches, which
-    is the argument that it was worth building rather than documenting.
+    99 profiles. 37 carry a trailing P/E leg of some spelling. The swap used to
+    name two spellings and reached 31 of those 37; it now names four and reaches
+    all 37. 10 of the 31 anchored on it and 13 of the 37 do now, so for those
+    thirteen the swap changes the earnings source of the single most-weighted leg
+    in the profile. None of the 37 also carries a normalized P/E leg, which is what
+    makes the double-weight guard below vacuous today.
+
+    Four of the thirteen anchors are Consumer and the widening did not add any:
+    `Food & Beverage` (P/E 0.50), `Luxury Goods` (P/E (Premium) 0.50),
+    `Household / Personal` (P/E 0.40) and `Membership / Subscription Retail`
+    (P/E 0.40). No Consumer profile carries an ops spelling. The three the widening
+    added are all healthcare at 0.40 — `Biopharma / Managed Care`,
+    `HealthcareServices / Managed Care` and `HealthcareServices / Pharma
+    Distribution` — and they are the point of the change: a trough-earnings
+    healthcare name now gets the same repair a trough-earnings beauty name already
+    got, instead of keeping an unnormalized trailing anchor at 40% of its blend.
+
+    The brief's archetypes are still disproportionately represented in the
+    population this change reaches, which is the argument that it was worth
+    building rather than documenting.
     """
     tot = trail = elig = anchored = 0
     consumer_anchors = []
+    added_anchors = []
     for sec, profs in INDUSTRY_VALUATION_PROFILES.items():
         for pn, cfg in profs.items():
             tot += 1
@@ -1803,27 +1862,44 @@ def test_the_swap_population_is_thirty_one_of_ninety_nine():
                     anchored += 1
                     if sec == "Consumer":
                         consumer_anchors.append((pn, m["name"], m["weight"]))
-    assert (tot, trail, elig, anchored) == (99, 37, 31, 10)
+                    if m["name"] in ("P/E (ops)", "P/E (Ops)"):
+                        added_anchors.append((sec, pn, m["name"], m["weight"]))
+    assert (tot, trail, elig, anchored) == (99, 37, 37, 13)
+    # The swap now names every trailing P/E spelling that exists in the taxonomy,
+    # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
+    # is the assertion that says the map is stale rather than the census drifting.
+    assert elig == trail
     assert sorted(consumer_anchors) == [
         ("Food & Beverage", "P/E", 0.5),
         ("Household / Personal", "P/E", 0.4),
         ("Luxury Goods", "P/E (Premium)", 0.5),
         ("Membership / Subscription Retail", "P/E", 0.4),
     ], consumer_anchors
+    assert sorted(added_anchors) == [
+        ("Biopharma", "Managed Care", "P/E (Ops)", 0.4),
+        ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4),
+        ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4),
+    ], added_anchors
     assert dcf_agent._PE_NORM_SWAP_LEGS == {
-        "P/E": "P/E (norm)", "P/E (Premium)": "P/E (norm)"}
+        "P/E": "P/E (norm)", "P/E (Premium)": "P/E (norm)",
+        "P/E (ops)": "P/E (norm)", "P/E (Ops)": "P/E (norm)"}
+    # Both case spellings, because the taxonomy is not case-consistent and the map
+    # keys on exact string match: `P/E (Ops)` appears 4 times and `P/E (ops)` 2.
+    assert len({k.lower() for k in dcf_agent._PE_NORM_SWAP_LEGS}) == 3
 
-    # No profile names both swappable spellings, and no profile names any method
-    # twice. Both matter because the mapping has two keys and one value: a
-    # profile carrying `P/E` and `P/E (Premium)` would produce two rows named
-    # `P/E (norm)`, and `_blend_methods` resolves rows by name, so the branch's
-    # weight would double with nothing in the output to show it.
+    # No profile names two swappable spellings, and no profile names any method
+    # twice. Both matter MORE now than they did at two keys: the mapping has four
+    # keys and one value, so a profile carrying `P/E` and `P/E (Ops)` would produce
+    # two rows named `P/E (norm)`, and `_blend_methods` resolves rows by name, so
+    # the branch's weight would double with nothing in the output to show it.
+    # Widened from a two-name conjunction to a set intersection for that reason.
+    keys = set(dcf_agent._PE_NORM_SWAP_LEGS)
     both = dups = 0
     for _sec, profs in INDUSTRY_VALUATION_PROFILES.items():
         for _pn, cfg in profs.items():
             names = [m.get("name") for m in cfg.get("methods", [])
                      if isinstance(m, dict)]
-            both += int("P/E" in names and "P/E (Premium)" in names)
+            both += int(len(keys & set(names)) > 1)
             dups += int(len(names) != len(set(names)))
     assert (both, dups) == (0, 0)
 
@@ -1861,29 +1937,52 @@ def test_the_promotion_is_first_wins_when_two_legs_would_collapse():
     assert dcf_agent._pe_norm_leg_swaps(rev, 0.90)[0]["from"] == "P/E (Premium)"
 
 
-def test_the_swap_leaves_the_ops_spellings_on_the_trailing_branch():
-    """Six profiles dispatch to the identical trailing branch under two other
-    spellings and are deliberately NOT in the swap. Three of them anchor.
+def test_the_ops_spellings_are_now_in_the_swap():
+    """RENAMED AND INVERTED. This test used to be
+    `test_the_swap_leaves_the_ops_spellings_on_the_trailing_branch`, and it FAILED
+    on its own first assertion when Step 7 landed, because its entire premise was
+    authorised away by the owner:
 
-    `P/E (ops)` and `P/E (Ops)` sit in the same `if method_name in {...}` set as
-    `P/E`, so they read the same TTM net income and carry the same exposure.
-    They are excluded because the post-mortem named `P/E` and `P/E (Premium)`
-    and only those two, and widening an authorised change to cover a spelling
-    it did not mention is not the same as completing it.
+        "Include `P/E (ops)` / `P/E (Ops)` in `_PE_NORM_SWAP_LEGS`: Excluding
+        operating P/E while swapping standard P/E is an artificial distinction. If
+        a company's consolidated margin is cyclically depressed or inflated,
+        operating earnings are equally distorted. Add `P/E (ops)` to the swap
+        target list."
 
-    Recorded rather than fixed, because the cost of the omission is concrete:
-    `Biopharma / Managed Care`, `HealthcareServices / Managed Care` and
-    `HealthcareServices / Pharma Distribution` each anchor 40% of their blend on
-    `P/E (Ops)`, so a trough-earnings healthcare name keeps its trailing anchor
-    while an identical deviation on a beauty name gets promoted. That is an
-    inconsistency between two profiles that read the same number, and it is
-    exactly the kind this swap exists to remove.
+    The old test asserted `ops & set(_PE_NORM_SWAP_LEGS) == set()` and explained
+    the exclusion as scope discipline — "widening an authorised change to cover a
+    spelling it did not mention is not the same as completing it". That reasoning
+    was correct at the time and is now overruled. What it got RIGHT and what is
+    kept below is the census: six profiles dispatch to the identical trailing
+    branch under the two ops spellings, three of them anchoring at 0.40, and the
+    old test called that omission "an inconsistency between two profiles that read
+    the same number, and exactly the kind this swap exists to remove". It was a
+    defect witness in the shape of a scope note. The defect is fixed; the census
+    stays, because it is the complete list of profiles that read trailing earnings
+    through an ops spelling and is what makes the widening's blast radius
+    enumerable.
+
+    Also kept: `37 - 31 = 6` was the arithmetic that proved the omission was the
+    WHOLE of the gap between the trailing-P/E count and the swappable count. That
+    identity is now `37 - 37 = 0`, which is the same proof in its fixed form, and
+    it is asserted rather than left as a comment.
     """
     ops = {"P/E (ops)", "P/E (Ops)"}
-    assert ops & set(dcf_agent._PE_NORM_SWAP_LEGS) == set()
+    assert ops <= set(dcf_agent._PE_NORM_SWAP_LEGS)
+    assert set(dcf_agent._PE_NORM_SWAP_LEGS) == ops | {"P/E", "P/E (Premium)"}
+    # Every key maps to the one target, so the swap cannot produce two different
+    # normalized spellings and `_blend_methods`' name resolution stays unambiguous.
+    assert set(dcf_agent._PE_NORM_SWAP_LEGS.values()) == {"P/E (norm)"}
 
     src = _engine_src()
+    # The dispatcher treats all four spellings as the SAME earnings source, which
+    # is the economic argument for swapping all four. Pinning it here means a
+    # future split of the trailing branch — giving the ops spellings their own
+    # operating-earnings source — fails this test rather than silently making the
+    # swap promote a leg onto a different number than the one it was normalized
+    # against.
     assert 'if method_name in {"P/E", "P/E (ops)", "P/E (Premium)", "P/E (Ops)"}:' in src
+    assert 'if method_name in {"P/E (norm)", "P/E norm", "Normalized P/E"}:' in src
 
     carriers = []
     for sec, profs in INDUSTRY_VALUATION_PROFILES.items():
@@ -1900,9 +1999,32 @@ def test_the_swap_leaves_the_ops_spellings_on_the_trailing_branch():
         ("HealthcareServices", "Managed Care", "P/E (Ops)", 0.4, True),
         ("HealthcareServices", "Pharma Distribution", "P/E (Ops)", 0.4, True),
     ], carriers
-    # 37 − 31 = 6, and the six are exactly these. So the omission is the whole
-    # of the gap between the two counts and nothing else is being left behind.
+    # The six are the whole of the former gap, and the gap is now closed.
     assert len(carriers) == 37 - 31
+    assert all(c[2] in dcf_agent._PE_NORM_SWAP_LEGS for c in carriers)
+    # None of the six also carries a normalized leg, so the first-wins dedup is
+    # still vacuous after the widening and the three new anchors cannot collide
+    # with an existing `P/E (norm)` row.
+    offenders = []
+    for sec, pn, *_ in carriers:
+        names = {m.get("name") for m in
+                 INDUSTRY_VALUATION_PROFILES[sec][pn].get("methods", [])
+                 if isinstance(m, dict)}
+        if names & set(dcf_agent._PE_NORM_BRANCH_SPELLINGS):
+            offenders.append((sec, pn, sorted(names)))
+    assert not offenders, offenders
+    # No cyclical profile carries an ops leg, so `_MID_CYCLE_LEG_SWAPS` — which
+    # also targets `P/E (norm)` and is gated on `_CYCLICAL_PROFILES` — cannot race
+    # this swap on the same row. The four cyclical profiles with a P/E-family leg
+    # all carry plain `P/E`, which both maps already handled, so the widening
+    # needed no matching change there.
+    for sec, profs in INDUSTRY_VALUATION_PROFILES.items():
+        for pn, cfg in profs.items():
+            if pn not in dcf_agent._CYCLICAL_PROFILES:
+                continue
+            names = {m.get("name") for m in cfg.get("methods", [])
+                     if isinstance(m, dict)}
+            assert not (names & ops), (sec, pn, sorted(names & ops))
 
 
 def test_apply_rewrites_the_proxy_even_when_no_leg_of_that_name_exists():
@@ -2519,19 +2641,31 @@ def test_the_four_archetypes_are_pinned_and_every_pin_resolves():
     override and 44 left it empty, the brief's four archetypes were in the empty
     set, and their two closest listed competitors (LULU, BIRK) were pinned. So
     the anchor names were routed by whatever their latest FCF margin and revenue
-    CAGR happened to be, through the band-pass measured in
-    `test_the_consumer_ladder_is_a_knife_edge_on_two_thresholds`. Anta's note
+    CAGR happened to be, through the band-pass measured in what is now
+    `test_the_consumer_ladder_no_longer_demotes_a_better_margin`. Anta's note
     even recorded the intended answer — "P/E ~25x near US level" — in a field
     that is documentation, not routing.
 
     They are pinned now, and the counts moved 83->84 rows, 39->43 filled,
     44->41 empty. Three of the four pins CHANGE routing rather than freeze it:
 
-        NKE      Apparel / Athletic Wear  (same as it classified at ~10% FCF;
-                                           the pin protects it past 18%)
+        NKE      Apparel / Athletic Wear  (same as it classifies at ~10% FCF;
+                                           past 18% the ladder now returns
+                                           Luxury Goods, so the pin holds NKE
+                                           BELOW where the ladder would put it —
+                                           see the correction in
+                                           `test_the_pins_override_a_classification_that_would_otherwise_move`)
         ONON     Apparel -> Consumer Growth
         EL       trough Household / Personal -> Luxury Goods   (was absent)
         02020.HK Luxury Goods -> Apparel / Athletic Wear
+
+    The `ONON` line above records the pin against the ladder as it was BEFORE the
+    Step 7 monotonic migration. Unpinned, ONON's shape (50% CAGR, 12% FCF) used to
+    resolve to Traditional Retail — the sector's only profile with no DCF leg — and
+    the pin was what rescued it. That fall-through is now Apparel / Athletic Wear,
+    so the pin still overrides but is no longer protecting against the weakest
+    methodology in the sector. The pin is retained regardless: it is owner-directed
+    and a pin is a stronger guarantee than a rung.
 
     THE FAILURE MODE THIS GUARD EXISTS FOR. An override that does not resolve is
     not an error. The D3 guard in `dcf_agent` logs a warning, sets
@@ -2611,10 +2745,22 @@ def test_the_pins_override_a_classification_that_would_otherwise_move():
     pinned = {t: TICKER_SECTOR_LOOKUP[t][1]
               for t in ("NKE", "ONON", "EL", "02020.HK")}
     # NKE is the one pin that currently agrees with the classifier. It is not
-    # redundant: the classifier only returns Apparel while NKE's FCF margin
-    # stays inside [0.05, 0.18), and the pin is what survives a margin
-    # improvement past 0.18.
+    # redundant, but WHAT it is doing changed with the Step 7 monotonic migration
+    # and the old comment here was stale. It used to say the classifier "only
+    # returns Apparel while NKE's FCF margin stays inside [0.05, 0.18), and the
+    # pin is what survives a margin improvement past 0.18" — true, and it framed
+    # the pin as protection against a DEMOTION, because past 0.18 the band-pass
+    # sent NKE to Household / Personal (tier 2 against Apparel's tier 4).
+    #
+    # Past 0.18 the ladder now returns Luxury Goods (tier 5). So the pin no longer
+    # rescues NKE from a worse methodology; it holds NKE BELOW where the ladder
+    # would put it, on EV/EBITDA at 0.40 with a `P/E (norm)` leg instead of a
+    # premium trailing P/E anchor at 0.50. That is a policy choice about which
+    # method suits the name rather than a guard against a defect, and it is still
+    # the owner's choice to make — the pin is retained byte-identical.
     assert pinned["NKE"] == would_classify["NKE"]
+    assert _c("Consumer", 0.03, 0.179, 0.6) == "Apparel / Athletic Wear" == pinned["NKE"]
+    assert _c("Consumer", 0.03, 0.180, 0.6) == "Luxury Goods" != pinned["NKE"]
     overridden = {t for t in pinned if pinned[t] != would_classify[t]}
     assert overridden == {"ONON", "EL", "02020.HK"}, overridden
 

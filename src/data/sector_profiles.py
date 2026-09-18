@@ -3657,6 +3657,8 @@ def classify_valuation_profile(
     debt_to_equity: float,
     is_pre_revenue: bool = False,
     revenue_base: float | None = None,
+    *,
+    gross_margin: float | None = None,
 ) -> str:
     """
     Auto-classify a company into the most appropriate valuation profile given
@@ -3665,6 +3667,20 @@ def classify_valuation_profile(
     Returns the profile key string to look up in INDUSTRY_VALUATION_PROFILES.
     Falls back to the sector's explicit default in _SECTOR_PROFILE_DEFAULT
     when no ladder branch matches (never order-dependent).
+
+    ``gross_margin`` is KEYWORD-ONLY and OPTIONAL, so every positional caller
+    keeps working unchanged. It is read by exactly one rung today (the Consumer
+    luxury rung) and the convention there is the one the growth-reinvestment
+    charge already established: **None means "not measured" and fails closed.**
+    An absent gross margin never promotes a name onto a better methodology,
+    because a rung that treats an unmeasured margin as a low one and a rung that
+    treats it as a high one are both guesses, and only one of them is silent.
+    Measured availability on the golden basket: 14 of 14 fixtures carry both
+    ``gross_profit`` and ``cost_of_revenue`` on the most recent series row
+    (``scratchpad/probe_gross_margin.py``, one subprocess per fixture), so None
+    is a real-data-gap path rather than a common one -- but it is a path, and
+    ``_gross_margin`` returns None whenever revenue is non-positive or neither
+    gross profit nor cost of revenue is present.
     """
     # Loose-match helpers (local import to avoid any load-time cycles).
     # These accept LLM classifier variants like "Technology", "Biotechnology",
@@ -3784,42 +3800,184 @@ def classify_valuation_profile(
         # metrics alone cannot distinguish them reliably.  The classify function
         # only provides a fallback if the ticker is NOT in the lookup.
         #
+        # ── MONOTONIC LADDER (2026-09-18) ───────────────────────────────────
+        # The invariant, in the owner's words: **"A higher margin must never
+        # degrade the valuation methodology to a lower-tier profile."**
+        #
+        # The pre-change ladder was a BAND-PASS, and a band-pass has an exit on
+        # both sides. Its first rung was
+        # `0.0 <= revenue_cagr < 0.40 and 0.05 <= fcf_margin < 0.18`, so a name
+        # whose FCF margin IMPROVED past 0.18 fell out of the top of the band,
+        # missed every later rung whose own bound it no longer satisfied, and
+        # landed wherever the fall-through happened to be. Gridded over
+        # 14 CAGRs x 17 FCF margins (`scratchpad/probe_consumer_ladder.py`, log
+        # `scratchpad/consumer_ladder.log`) that produced THREE places where a
+        # better number bought a worse methodology:
+        #
+        #   (i)   cagr in [0.03, 0.05), fcf >= 0.18
+        #           Apparel / Athletic Wear -> Household / Personal
+        #         The `< 0.05` Household rung stood ABOVE the `fcf >= 0.15`
+        #         Luxury rung, so the highest-margin cell in that CAGR band
+        #         resolved to the weakest profile in the sector.
+        #   (ii)  cagr >= 0.40, fcf in [0.05, 0.15)
+        #           Apparel / Athletic Wear -> Traditional Retail
+        #         The documented ONON case: growing faster, at an unchanged
+        #         margin, demoted the name two tiers.
+        #   (iii) cagr > 0.15, fcf in [0.01, 0.05)
+        #           Membership / Subscription Retail -> Traditional Retail
+        #
+        # (i) and (ii) are fixed below. (iii) is NOT, and the reason is stated
+        # rather than hidden: the only rung that would catch a >15% grower is
+        # Consumer Growth, whose `fcf >= 0.15` conjunct is load-bearing -- it is
+        # the gate that keeps a hyper-growth name from being rewarded for growth
+        # it does not convert to cash, which is the defect the growth-
+        # reinvestment charge exists to price. Promoting on CAGR alone would
+        # reopen it. Widening the Membership rung's own CAGR bound instead would
+        # classify a 20% grower as a warehouse club, which is a structural claim
+        # about recurring membership-fee economics and not a claim about growth.
+        # Neither repair is obviously right, so (iii) is pinned as a measured
+        # residual by
+        # tests/test_consumer_monotonic_ladder.py::TestTheKnownResiduals
+        # and left for an owner decision. It is a CAGR-axis step; the invariant
+        # this ladder enforces is on the MARGIN axes.
+        #
+        # RUNG ORDER IS THE DESIGN. Every rung below is either a lower bound on
+        # an improving metric or a structural test, and the rungs are ordered
+        # strongest-methodology-first so that satisfying a harder test can never
+        # be pre-empted by an easier one. Where a rung keeps an UPPER bound, the
+        # bound is on a rung whose fall-through is a BETTER profile, not a worse
+        # one -- which is what makes it not a cliff.
+        #
         # Financial-metric routing order (when no profile override):
 
-        # Apparel / Athletic Wear: brand-driven athletic/apparel, mid-to-high growth, mid-FCF margins.
-        # CAGR bound raised to <0.40 to capture fast-growing brands (ONON ~50%, SKX ~25%, CROX ~30%).
-        # FCF threshold capped at <0.18 to separate from luxury (Hermès, LVMH: FCF 20–35%).
-        # MUST come before Food & Beverage to prevent misclassifying NKE/LULU/VFC/ONON.
-        # NKE: CAGR ~3%, FCF ~10%; LULU: CAGR ~15%, FCF ~16%; ONON: CAGR ~30%, FCF ~12%.
-        if 0.0 <= revenue_cagr < 0.40 and 0.05 <= fcf_margin < 0.18:
-            return "Apparel / Athletic Wear"
-        # Food & Beverage: genuine FMCG staples — very low growth + high FCF margin
-        # (KO, PEP, MDLZ: CAGR ~2–3%, FCF margin 20–25%)
-        if revenue_cagr < 0.03 and fcf_margin >= 0.15:
-            return "Food & Beverage"
-        if revenue_cagr < 0.05:
-            return "Household / Personal"
-        # Change 7: fast-growing consumer brand (CAGR ≥ 15%) with strong FCF margin
-        # gets Consumer Growth profile (3-method: DCF 50% + EV/Revenue 30% + EV/EBITDA 20%)
-        # before the Luxury Goods fallthrough (which would over-weight P/E Premium).
+        # Rung 1 — Consumer Growth: fast-growing consumer brand (CAGR >= 15%)
+        # WITH a strong FCF margin. Promoted to the top of the ladder from
+        # position 4 because a rung that returns the sector's best methodology
+        # must be tested before one that returns a merely adequate one; at
+        # cagr in [0.15, 0.40) and fcf in [0.15, 0.18) the Apparel band used to
+        # win purely by standing first, which is an ordering artifact and not a
+        # judgement. Its `fcf >= 0.15` conjunct is DELIBERATELY RETAINED and not
+        # replaced by the owner's unconditioned `cagr >= 0.15`: see (iii) above.
+        # 3-method profile: DCF 50% + EV/Revenue 30% + EV/EBITDA 20%.
         if revenue_cagr >= 0.15 and fcf_margin >= 0.15:
             return "Consumer Growth"
+        # Rung 2 — Luxury Goods on GROSS margin. A >= 65% gross margin is a
+        # pricing-power measurement and the only one in this ladder that is not
+        # a cash-conversion measurement, so it earns its own rung: Hermès and
+        # Estée Lauder are distinguishable from a warehouse club by what they
+        # charge, not by what they convert. `is not None` is the fail-closed
+        # convention documented on the signature -- an unmeasured margin does
+        # not promote.
+        #
+        # Placed at the TOP of the margin rungs, which is the owner's stated
+        # precedence ("if gross_margin >= 0.65: return Luxury Goods" ahead of
+        # the FCF band). It can only ever promote: everything it pre-empts
+        # below resolves to Apparel (4), Luxury (5, same answer), Household (2),
+        # Traditional Retail (1) or a structural profile, and Luxury sits above
+        # all of the quality ones in the tier order the ladder tests pin. So no
+        # margin improvement can route through this rung into a worse
+        # methodology.
+        #
+        # It does take two populations off the rungs below it, and both are
+        # correct rather than incidental. Premium spirits and prestige beauty
+        # (Diageo ~60%, Pernod ~65%, Rémy Cointreau ~70%, Estée Lauder ~74%)
+        # clear 0.65 and belong on Luxury, not on `Food & Beverage` -- and note
+        # that their former destination anchored on plain `P/E` at 0.50 while
+        # Luxury anchors on `P/E (Premium)` at 0.50, both of which are in
+        # `_PE_NORM_SWAP_LEGS`, so the Failure-2 trough-margin repair reaches
+        # either. Genuine FMCG staples do NOT clear it: KO ~59%, PEP ~53%,
+        # Nestlé ~48%, UN ~45%, MDLZ ~36%. So the rung does not raid F&B's
+        # stated population (KO, PEP, MDLZ at a 20-25% FCF margin).
+        #
+        # Measured reach on the golden basket: ZERO. The only Consumer fixture
+        # is COST at a 0.1284 gross margin, and the three fixtures that do clear
+        # 0.65 (C38U.SI 0.6698, V 0.8036, SCHW 0.8644) are a REIT and two
+        # Financials, none of which reaches this branch. So this rung is covered
+        # by unit tests and by nothing else, and saying so is the point: the
+        # basket cannot arbitrate it.
+        if gross_margin is not None and gross_margin >= 0.65:
+            return "Luxury Goods"
+        # Rung 3 — Apparel / Athletic Wear: brand-driven athletic/apparel,
+        # mid-to-high growth, mid-FCF margins.
+        # CAGR bound raised to <0.40 to capture fast-growing brands (SKX ~25%,
+        # CROX ~30%); ONON at ~50% is past it and is pinned by override.
+        # FCF threshold capped at <0.18 to separate from luxury (Hermès, LVMH:
+        # FCF 20–35%) -- and that cap is NOT a cliff any more. Before the
+        # migration the rung it fell through to at `cagr < 0.05` was
+        # Household / Personal, the weakest methodology in the sector, which is
+        # cliff (i). It now falls through to rung 5, Luxury Goods, a strictly
+        # better tier.
+        # MUST come before Food & Beverage to prevent misclassifying
+        # NKE/LULU/VFC/ONON. NKE: CAGR ~3%, FCF ~10%; LULU: CAGR ~15%,
+        # FCF ~16%; ONON: CAGR ~30%, FCF ~12%. That ordering constraint is
+        # inherited from the pre-migration ladder verbatim and is PRESERVED:
+        # the overlap between this band and F&B is `cagr in [0, 0.03)` at
+        # `fcf in [0.15, 0.18)`, and in that overlap Apparel still wins, so no
+        # name changes profile because of the migration except through the three
+        # rungs this block documents.
+        if 0.0 <= revenue_cagr < 0.40 and 0.05 <= fcf_margin < 0.18:
+            return "Apparel / Athletic Wear"
+        # Rung 4 — Food & Beverage: genuine FMCG staples — very low growth +
+        # high FCF margin (KO, PEP, MDLZ: CAGR ~2–3%, FCF margin 20–25%). Its
+        # stated population starts at a 20% FCF margin, above the overlap with
+        # rung 3, so the `< 0.03` CAGR bound here is doing structural work and
+        # not competing with the apparel band.
+        # A STRUCTURAL classification (staples), not a quality tier -- which is
+        # why the ladder's monotonicity tests exclude it from the tier order
+        # rather than placing it in it. At `cagr < 0.03` a margin improvement
+        # from 0.179 to 0.180 still moves a name off Apparel and onto this rung;
+        # that adjacency predates the migration, cannot be repaired by
+        # reordering without making this rung unreachable, and is pinned as a
+        # measured residual rather than left implicit.
+        if revenue_cagr < 0.03 and fcf_margin >= 0.15:
+            return "Food & Beverage"
+        # Rung 5 — Luxury Goods on CASH margin.
         if fcf_margin >= 0.15:
             return "Luxury Goods"
-        # Membership / Subscription Retail: warehouse clubs and membership-model
-        # retailers with intentionally thin margins but strong revenue scale.
-        # Signature: revenue > $50B, FCF margin 1-5%, CAGR 5-15%, low leverage.
-        # COST, BJ, SAMS — these MUST NOT fall through to Traditional Retail
-        # because their premium multiples (45-55x P/E) are structurally justified
-        # by recurring membership fee economics, not merchandise margins.
+        # Rung 6 — Household / Personal. MOVED DOWN from position 3, which is
+        # the whole of fix (i). Standing above rung 5 it caught
+        # `cagr in [0.03, 0.05)` before the margin was ever read, so the
+        # highest-margin names in that band got the sector's weakest profile.
+        # Below rung 5 it still catches exactly what it should -- a slow grower
+        # that converts less than 15% of revenue to cash -- and a margin
+        # improvement can only move a name up.
+        if revenue_cagr < 0.05:
+            return "Household / Personal"
+        # Rung 7 — Membership / Subscription Retail: warehouse clubs and
+        # membership-model retailers with intentionally thin margins but strong
+        # revenue scale. Signature: revenue > $50B, FCF margin 1-5%, CAGR
+        # 5-15%, low leverage. COST, BJ, SAMS — these MUST NOT fall through to
+        # Traditional Retail because their premium multiples (45-55x P/E) are
+        # structurally justified by recurring membership fee economics, not
+        # merchandise margins.
+        #
+        # COST IS THE FIXTURE THIS RUNG EXISTS FOR and its resolution is pinned
+        # twice over: by this ladder on its own measured inputs (cagr 0.0887,
+        # fcf 0.0232, revenue $275.2bn, D/E 0.3505 -> Membership) and by the
+        # golden archive, which carries the same name. See the coverage warning
+        # at the head of the module's ladder tests -- the archive holds the
+        # ladder's ANSWER, so the golden suite cannot see this rung change.
         if (revenue_base and revenue_base > 50e9
                 and 0.01 <= fcf_margin < 0.05
                 and 0.04 <= revenue_cagr <= 0.15
                 and debt_to_equity < 1.0):
             return "Membership / Subscription Retail"
-        # Automotive & EV fallback: very high capex + negative FCF typical of EV ramp
+        # Rung 8 — Automotive & EV fallback: very high capex + negative FCF
+        # typical of EV ramp. A DISTRESS classification rather than a quality
+        # tier, which is why it sits low and why a margin improvement out of it
+        # is a promotion and not a lateral move.
         if fcf_margin < -0.05 and debt_to_equity > 1.0:
             return "Automotive & EV"
+        # Rung 9 — the catch that is the whole of fix (ii). Anything arriving
+        # here with a >= 5% FCF margin was excluded from every rung above by a
+        # CAGR bound and not by a margin, and the only such population is
+        # `cagr >= 0.40, fcf in [0.05, 0.15)`. Those names used to fall through
+        # to Traditional Retail, the weakest methodology in the sector, for the
+        # crime of growing fast. They now get the Apparel band they would have
+        # got at a 39% CAGR.
+        if fcf_margin >= 0.05:
+            return "Apparel / Athletic Wear"
+        # Rung 10 — Traditional Retail.
         return "Traditional Retail"
 
     if sector == "Industrials":
@@ -3916,14 +4074,19 @@ def get_valuation_profile(
     debt_to_equity: float = 0.0,
     is_pre_revenue: bool = False,
     revenue_base: float | None = None,
+    *,
+    gross_margin: float | None = None,
 ) -> tuple[str, dict]:
     """
     Classify and return (profile_name, profile_dict) for the given sector + company data.
     Returns ("", {}) if sector is unrecognised.
+
+    ``gross_margin`` is keyword-only and optional and is forwarded verbatim; see
+    ``classify_valuation_profile`` for what None means and why it fails closed.
     """
     profile_key = classify_valuation_profile(
         sector, revenue_cagr, fcf_margin, debt_to_equity, is_pre_revenue,
-        revenue_base=revenue_base,
+        revenue_base=revenue_base, gross_margin=gross_margin,
     )
     # Normalize sector key: "REIT" (from SGX universe) → "RealEstate" (profiles key)
     sector_lookup = "RealEstate" if sector == "REIT" else sector
@@ -4295,31 +4458,64 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "ABNB":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Airbnb — asset-light travel platform"),
     "BKNG":  ("Consumer", "Travel & Dining", "Hotel/Gaming",             "Booking Holdings — OTA platform"),
     # ── Apparel & Footwear ────────────────────────────────────────────────
-    # NKE and ONON are pinned rather than classified because the Consumer
-    # financial-metric ladder is a BAND-PASS below 5% CAGR, not a monotonic
-    # ladder: `0.05 <= fcf_margin < 0.18` returns Apparel / Athletic Wear, and
-    # anything at or above 0.18 falls through to Household / Personal. Measured
-    # at NKE's ~3% CAGR, 0.179 -> Apparel (DCF 0.30, and the only Consumer
-    # profile carrying a `P/E (norm)` leg at 0.20) while 0.180 -> Household
-    # (DCF 0.20, anchor plain trailing `P/E` at 0.40). So a name whose margin
-    # IMPROVES past 18% is DEMOTED: DCF weight is cut by a third, the sole
-    # normalized leg is lost, and 40% of the blend moves onto unadjusted
-    # trailing earnings. The two profiles share exactly one method
-    # (`EV/EBITDA`), so this is not a cosmetic relabelling.
+    # NKE, LULU and BIRK are pinned. The pins STAY, but the reason they were
+    # originally needed is now history and is recorded as such rather than left
+    # standing as if it still applied -- a stale justification on a live pin is
+    # how the next reader talks themselves out of the pin, or out of the fix.
     #
-    # The `< 0.18` bound cannot simply be deleted: its own comment says it
-    # exists "to separate from luxury (Hermès, LVMH: FCF 20-35%)", and removing
-    # it reclassifies Hermès-, LVMH- and Richemont-like names from Luxury Goods
-    # to Apparel / Athletic Wear. Fixing the ladder properly needs a
-    # gross-margin test ahead of the FCF test, and `classify_valuation_profile`
-    # takes no gross margin. Pinning the anchor names is the safe move while
-    # that signature change is outstanding — a pin is also what LULU and BIRK
-    # already do.
+    # WHAT THE LADDER USED TO DO. It was a BAND-PASS below 5% CAGR, not a
+    # monotonic ladder: `0.05 <= fcf_margin < 0.18` returned Apparel / Athletic
+    # Wear, and anything at or above 0.18 fell through to Household / Personal.
+    # Measured at NKE's ~3% CAGR, 0.179 -> Apparel (DCF 0.30, and the only
+    # Consumer profile carrying a `P/E (norm)` leg at 0.20) while 0.180 ->
+    # Household (DCF 0.20, anchor plain trailing `P/E` at 0.40). So a name whose
+    # margin IMPROVED past 18% was DEMOTED: DCF weight cut by a third, the sole
+    # normalized leg lost, and 40% of the blend moved onto unadjusted trailing
+    # earnings. The two profiles share exactly one method (`EV/EBITDA`), so it
+    # was never a cosmetic relabelling.
+    #
+    # WHY THE `< 0.18` BOUND COULD NOT SIMPLY BE DELETED. Its own comment says
+    # it exists "to separate from luxury (Hermès, LVMH: FCF 20-35%)", and
+    # removing it reclassifies Hermès-, LVMH- and Richemont-like names from
+    # Luxury Goods to Apparel / Athletic Wear. Fixing the ladder properly needed
+    # a gross-margin test ahead of the FCF test, and `classify_valuation_profile`
+    # took no gross margin. Pinning the anchor names was the safe move while that
+    # signature change was outstanding.
+    #
+    # BOTH HALVES HAVE NOW LANDED (2026-09-18). `classify_valuation_profile`
+    # takes a keyword-only `gross_margin`, the luxury rung reads it, and the
+    # Household rung moved BELOW the `fcf >= 0.15` Luxury rung -- so at a 3%
+    # CAGR an 0.180 FCF margin now resolves to Luxury Goods rather than
+    # Household / Personal, and the demotion-for-improving is gone without the
+    # `< 0.18` bound being deleted. The pins are retained because they are
+    # owner-directed anchors and because a pin is a stronger guarantee than a
+    # rung: it does not depend on the margin series the extractor managed to
+    # fetch. What the pins no longer do is stand between NKE and a wrong
+    # profile if they were removed -- verified by
+    # tests/test_consumer_monotonic_ladder.py, which resolves NKE's own measured
+    # shape through the ladder with the pin bypassed.
+    #
+    # The NOTE STRING below is left byte-identical and is now historical: it still
+    # says the ladder "demotes it past an 18% FCF margin", which was true at
+    # 7530577 and is false now. Same treatment as ONON's note. A pin's note is
+    # owner-authored documentation of why the pin exists, and rewriting it here
+    # would erase the record of the defect the pin was bought against -- so the
+    # correction lives in this comment, above the tuple, and not inside it.
     "NKE":   ("Consumer", "Apparel / Athletic Wear", "Apparel", "Nike — pinned; the sub-5%-CAGR ladder is a band-pass that demotes it past an 18% FCF margin"),
     "LULU":  ("Consumer", "Apparel / Athletic Wear", "Athletic Apparel", "Lululemon — 4.50x Q5-Q8 EV/EBITDA"),
     "BIRK":  ("Consumer", "Apparel / Athletic Wear", "Footwear", "Birkenstock — DCF, 9.5pc WACC / 2.5pc terminal growth"),
     "FLUT":  ("Consumer", "Online Gaming / Sports Betting", "Sports Betting", "Flutter Entertainment — 11.75x NTM+4 EBITDA (US)"),
     "DKNG":  ("Consumer", "Online Gaming / Sports Betting", "Sports Betting", "DraftKings — EV/Sales (NTM+1) blended with an EV/EBITDA-exit DCF"),
+    # ONON's pin text is corrected here rather than quietly left wrong. It used
+    # to say that "at a 50% CAGR the ladder returns Traditional Retail, whose
+    # method set has an EMPTY intersection with Luxury Goods". Since the
+    # monotonic ladder that is FALSE: a >= 0.40 CAGR at ONON's ~12% FCF margin
+    # now hits the rung-9 catch and returns Apparel / Athletic Wear, which is
+    # the profile ONON would get at a 39% CAGR. The CAGR cliff that made 50%
+    # growth worse than 39% growth was fix (ii) and it is closed. The pin still
+    # earns its place on the OTHER half of its original reasoning -- ~30% CAGR
+    # is past the 15% fast-grower branch's intent, and Consumer Growth is the
+    # profile that prices a hyper-growth platform rather than an apparel band.
     "ONON":  ("Consumer", "Consumer Growth", "Apparel", "On Holding AG ADR — pinned to Consumer Growth: ~30% CAGR is past the 15% fast-grower branch's intent, and at a 50% CAGR the ladder returns Traditional Retail, whose method set has an EMPTY intersection with Luxury Goods. Trade accepted deliberately: Consumer Growth carries no normalized leg, so this swaps Apparel's `P/E (norm)` 0.20 for DCF weight 0.30 -> 0.50"),
     "DECK":  ("Consumer", "",          "Apparel",                         "Deckers Outdoor — UGG/HOKA"),
     "VFC":   ("Consumer", "",          "Apparel",                         "VF Corp — North Face/Vans/Timberland"),

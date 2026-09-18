@@ -6803,14 +6803,40 @@ def _mid_cycle_leg_swaps(
 #: Personal and Membership / Subscription Retail at 0.40-0.50 among them — so for
 #: those the swap moves the headline rather than a side row.
 #:
-#: Only the two spellings the owner named are rewritten. `P/E (ops)` / `P/E (Ops)`
-#: reach the identical branch and arguably belong here — Managed Care and Pharma
-#: Distribution both anchor on `P/E (Ops)` at 0.40 — but widening past the
-#: authorisation is not this change's call, and the omission is pinned rather than
-#: left implicit.
+#: All four spellings are rewritten. `P/E (ops)` / `P/E (Ops)` dispatch to the
+#: IDENTICAL trailing branch as `P/E` -- literally the same
+#: `if method_name in {...}` set at L5487, reading the same trailing-12m net
+#: income -- so excluding them while swapping `P/E` was an artificial
+#: distinction, and the owner closed it: *"If a company's consolidated margin is
+#: cyclically depressed or inflated, operating earnings are equally distorted."*
+#: Both case spellings are listed because the taxonomy is not case-consistent:
+#: `P/E (Ops)` x4 (Biopharma/Managed Care, HealthcareServices/Managed Care,
+#: Healthcare Providers / Services, Pharma Distribution) and `P/E (ops)` x2
+#: (Financials/Insurance, Insurance (P&C)). The map is keyed on an exact string
+#: match, so listing only one spelling would silently leave the other on
+#: trailing earnings -- which is the failure mode this whole mechanism exists to
+#: remove, arriving through a case difference.
+#:
+#: The census this changes, measured over all 99 profiles
+#: (`scratchpad/` census in tests/test_consumer_discretionary_gates.py):
+#: eligible profiles 31 -> 37, of which ANCHORED on a swappable trailing leg
+#: 10 -> 13. The three new anchors each carry `P/E (Ops)` at 0.40 -- Biopharma
+#: and HealthcareServices Managed Care, and Pharma Distribution -- so for a
+#: trough-earnings healthcare name the swap now moves the headline rather than a
+#: side row, exactly as it already did for Luxury Goods at 0.50.
+#:
+#: ZERO golden blast radius, stated plainly rather than left to be discovered:
+#: none of the 14 fixtures resolves to any of those six profiles (the basket is
+#: two banks, two Tech conglomerates, two SG industrials, an S-REIT, a miner, a
+#: memory IDM, a broker, an IPP, a payment network and COST), and separately
+#: nothing in the basket reaches the 0.40 deviation bar at all -- the largest is
+#: FCX at 0.3579 and FCX carries no trailing P/E leg. So this widening is
+#: validated by unit tests and by the owner's reasoning, and by no fixture.
 _PE_NORM_SWAP_LEGS: dict[str, str] = {
     "P/E":           "P/E (norm)",
     "P/E (Premium)": "P/E (norm)",
+    "P/E (ops)":     "P/E (norm)",
+    "P/E (Ops)":     "P/E (norm)",
 }
 
 #: Deviation of five-year normalized net income from trailing net income above
@@ -6920,17 +6946,56 @@ def _pe_norm_leg_swaps(
     present = {m.get("name") for m in methods}
     if present & _PE_NORM_BRANCH_SPELLINGS:
         return []
-    #: `_PE_NORM_SWAP_LEGS` has two keys and one value, so a profile naming both
-    #: `P/E` and `P/E (Premium)` would produce two rows named `P/E (norm)` and
-    #: double the weight on that branch. `emitted` makes the promotion first-wins
-    #: in row order. No profile in the taxonomy names both — measured, and pinned
-    #: by test_the_swap_population_is_thirty_one_of_ninety_nine — so this is a
-    #: structural guard rather than a live one, and first-wins is a choice rather
-    #: than a derivation: promoting both would double a weight, promoting neither
-    #: would leave the profile reading two earnings sources at once, and which of
-    #: those is wrong depends on why a profile would carry both in the first
-    #: place. Nothing today answers that, so the case is closed deterministically
-    #: and left undocumented in the profiles.
+    #: `_PE_NORM_SWAP_LEGS` now has FOUR keys and one value, so a profile naming
+    #: any two of them would produce two rows named `P/E (norm)` and double the
+    #: weight on that branch. `emitted` makes the promotion first-wins in row
+    #: order.
+    #:
+    #: ── THE EMISSION PRIORITY ORDER, DOCUMENTED RATHER THAN IMPLIED ─────────
+    #: First-wins is a choice, not a derivation: promoting both rows would
+    #: double a weight, promoting neither would leave the profile reading two
+    #: earnings sources at once, and which of those is wrong depends on why a
+    #: profile would carry both in the first place. Nothing in the taxonomy
+    #: answers that today -- measured, NO profile names two swappable spellings
+    #: (0 of 99, and the count is more load-bearing now that the map has four keys
+    #: and one value; pinned by
+    #: test_the_swap_population_is_thirty_seven_of_ninety_nine) -- so this is a
+    #: structural guard. Since it is a choice it needs a stated order, and the
+    #: order is the one the rest of the profile pipeline already uses:
+    #:
+    #:   1. **Profile Overrides** decide WHICH profile's rows are being read.
+    #:      `TICKER_SECTOR_LOOKUP`'s pin, then the ladder, then industry
+    #:      routing, then the SOTP promotions, applied in the order
+    #:      `_promote_lookthrough_sotp` -> `_promote_segment_sotp` ->
+    #:      `_promote_sotp_analyst_profile` in `run_dcf_agent`. A promotion here
+    #:      can replace the whole row set, so it is necessarily first.
+    #:   2. **Analytical Flags** rewrite the selected profile's rows. This swap
+    #:      is one of exactly two such mechanisms and it runs FIRST: applied in
+    #:      `run_dcf_agent` ABOVE the scenario loop, because the margin deviation
+    #:      it tests is scenario-invariant. `_mid_cycle_leg_swaps` is the other,
+    #:      and it runs later, INSIDE the loop, base-scenario only, gated on
+    #:      `_CYCLICAL_PROFILES`, and observation-only behind
+    #:      `GATE_CYCLICAL_PEAK_CONSENSUS` (`applied: False`). `_apply_pe_norm_swaps`
+    #:      is idempotent against a row the mid-cycle swap already renamed, so
+    #:      the ordering cannot produce a double promotion.
+    #:   3. **Default Rungs** are what survive: the profile table's own declared
+    #:      rows, in declaration order, when no swap fires.
+    #:
+    #: WITHIN layer 2 the tie-break is the profile's own `methods` row order,
+    #: which is the order its weights are declared in
+    #: `INDUSTRY_VALUATION_PROFILES` and the order `_blend_methods` reads them.
+    #: So "first" means "the row the profile author listed first", and a
+    #: reordering of that list is a change of policy -- which is why
+    #: tests/test_consumer_monotonic_ladder.py::
+    #: TestTheOpsSpellingsAreInTheSwap::
+    #: test_the_first_wins_order_is_the_profiles_own_row_order reverses a
+    #: profile's rows and asserts the winner reverses with them, rather than
+    #: asserting a fixed spelling wins.
+    #:
+    #: (Call sites are named rather than numbered on purpose. This file is ~12k
+    #: lines and every edit above this point moves the numbers; the three
+    #: numbered references this comment used to carry were already stale by 32
+    #: lines when the gross-margin plumbing landed.)
     swaps = []
     emitted: set[str] = set()
     for m in methods:
@@ -9021,6 +9086,22 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         revenue_cagr = _historical_cagr(series) or growth_base
         is_pre_revenue = (revenue_base < 10_000_000)  # <$10M revenue → treat as pre-revenue
 
+        # Gross margin for the classifier's luxury rung. `_gross_margin` is the
+        # SAME function the EV/Revenue multiple qualifier already uses, so the
+        # classifier and the multiple qualifier cannot disagree about what a
+        # gross margin is. It returns None when revenue is non-positive or when
+        # neither `gross_profit` nor `cost_of_revenue` is present, and None is
+        # passed through rather than defaulted: an unmeasured margin must not
+        # promote a name onto a better methodology.
+        #
+        # MEASURED on all 14 golden fixtures, one subprocess each
+        # (`scratchpad/probe_gross_margin.py` -> `scratchpad/gross_margin_table.json`):
+        # gross margin is computable on 14 of 14 and is IDENTICAL across the
+        # three scenario passes of each fixture, because it is read off the most
+        # recent historical row and scenarios vary the forward path, not the
+        # filing. So this adds no scenario-dependent branch to the profile.
+        _gross_margin_for_classify = _gross_margin(most_recent)
+
         _preclassified_profiles = state["data"].get("profile_names") or {}
         _preclassified_name = _preclassified_profiles.get(ticker)
         # B1 ledger: which routing layer produced the profile. Five layers can
@@ -9062,11 +9143,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 profile_name, profile_data = get_valuation_profile(
                     sector, revenue_cagr, _fcf_margin_for_classify, leverage,
                     is_pre_revenue, revenue_base=revenue_base,
+                    gross_margin=_gross_margin_for_classify,
                 )
         else:
             profile_name, profile_data = get_valuation_profile(
                 sector, revenue_cagr, _fcf_margin_for_classify, leverage,
                 is_pre_revenue, revenue_base=revenue_base,
+                gross_margin=_gross_margin_for_classify,
             )
 
         if _preclassified_name and not _profile_fallback_used:
@@ -9079,6 +9162,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "leverage":       _ledger_num(leverage),
                 "is_pre_revenue": bool(is_pre_revenue),
                 "revenue_base":   _ledger_num(revenue_base),
+                # Recorded so a profile can be audited against the rung that
+                # produced it. A None here means the gross margin was NOT
+                # measurable off the most recent filing, which is a different
+                # statement from "the gross margin is low" and must stay
+                # distinguishable in the ledger.
+                #
+                # GOLDEN IMPACT, MEASURED RATHER THAN ASSUMED: none, and not
+                # because `routing_trace` is unpinned -- it IS pinned, whole, by
+                # `_DICT_KEYS` in `src/memory/golden_replay.py`. It is because
+                # `ladder_inputs` is only ever set on this branch, and the
+                # branch is not taken by ANY of the 14 fixtures: the probe
+                # recorded `routing_trace.winner == "router"` on 13 and
+                # `"ticker_override"` on U96_SI, `get_valuation_profile` called
+                # ZERO times, and no `routing_trace.ladder_inputs.*` key present
+                # in any projection. See the coverage warning in
+                # tests/test_consumer_monotonic_ladder.py for why that is a
+                # hole and not a comfort.
+                "gross_margin":   _ledger_num(_gross_margin_for_classify),
             }
         _routing_trace["steps"].append(
             {"layer": _routing_trace["winner"], "sector": sector,
