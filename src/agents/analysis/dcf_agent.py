@@ -85,6 +85,8 @@ from src.data.sector_profiles import (
     BALANCE_SHEET_FINANCIAL_CONDITIONAL_PROFILES,
     BALANCE_SHEET_FINANCIAL_UNCLASSIFIED,
     TIER2_EXEMPT_PROFILES,
+    # ── Capital-turnover scope for the growth-reinvestment charge ──
+    CAPITAL_TURNOVER_PROFILES,
     # ── Biopharma rNPV helpers (Tier 2) ──
     phase_pos,
     phase_years_to_launch,
@@ -2612,9 +2614,9 @@ def _sales_to_capital(row: Optional[dict]) -> Optional[float]:
     return rev / ic
 
 
-def _reinvestment_margin_deduction(g: float, sales_to_capital: Optional[float]
-                                   ) -> float:
-    """The margin deduction one year of growth `g` requires, at ratio S/C.
+def _reinvestment_margin_deduction_raw(g: float, sales_to_capital: Optional[float],
+                                       *, profile: Optional[str] = None) -> float:
+    """The UNCAPPED margin deduction one year of growth `g` requires, at ratio S/C.
 
         ΔRev/(S/C) ÷ Rev_t  =  g / ((1 + g) · (S/C))
 
@@ -2627,6 +2629,78 @@ def _reinvestment_margin_deduction(g: float, sales_to_capital: Optional[float]
     rather than merely tested for — that is the `md_abs * 10` defect, which was
     exactly a parity obligation between these two that nobody had wired.
 
+    ── THE SCOPE GATE, AND WHY IT LIVES IN HERE ───────────────────────────────
+    Zero unless `profile` is in `CAPITAL_TURNOVER_PROFILES`. Owner-specified
+    2026-09-18: `revenue ÷ invested capital` is economic nonsense for
+    balance-sheet financial intermediaries, regulated utilities/IPPs and real
+    estate asset bases, and the charge is to be restricted STRICTLY to the
+    capital-turnover profiles. The measured case for it is the table at that
+    constant: S/C spans 175x across the 14 golden fixtures (0.0625 for an S-REIT
+    to 10.9116 for a membership retailer), and the span is not dispersion around
+    one quantity — it is fourteen different quantities wearing one name. On
+    C38U_SI the raw charge is +98.04% against a +55.83% base margin.
+
+    The gate is in the FUNCTION rather than at the call site so that it cannot be
+    bypassed by a new caller, and `profile=None` returns zero rather than charging
+    unscoped. That default direction is deliberate: the failure mode it protects
+    against is someone threading a ratio into `_project_dcf` later and getting an
+    unscoped charge on a bank, which is the defect this exists to close. Forgetting
+    the profile now costs nothing; forgetting it the other way would have moved
+    money. The same reasoning makes `profile` keyword-only — a positional third
+    argument would let a caller pass a growth schedule or a margin where a profile
+    name belongs and still type-check.
+
+    Two-sided on purpose: a negative `g` returns a negative deduction, because
+    a shrinking business releases working capital it was holding. Zero when S/C
+    is unmeasurable or when revenue would not survive the year (`1 + g <= 0`),
+    so the caller never has to guard the division. Note that the two-sidedness
+    was NOT the source of the sign inversion the live run found — that came from
+    the floor and the blend dropping a None leg, and it fired on growth years.
+    """
+    if profile is None or profile not in CAPITAL_TURNOVER_PROFILES:
+        return 0.0
+    if sales_to_capital is None or sales_to_capital <= 0.0:
+        return 0.0
+    if (1.0 + g) <= 0.0:
+        return 0.0
+    return g / ((1.0 + g) * sales_to_capital)
+
+
+def _reinvestment_margin_deduction(g: float, sales_to_capital: Optional[float],
+                                   *, profile: Optional[str] = None,
+                                   margin_headroom: Optional[float] = None
+                                   ) -> float:
+    """The LEVIABLE charge: the scoped raw deduction, rationed to the margin base.
+
+        deduction = min(g / ((1 + g) · (S/C)), max(fcf_margin_base − fcf_floor, 0))
+
+    Owner-specified 2026-09-18, verbatim: "A growth reinvestment deduction must
+    not consume cash beyond the operating baseline into negative territory unless
+    the model is explicitly running an un-floored multi-year cash-burn schedule."
+    `margin_headroom` is that baseline minus the sector's `FCF_MARGIN_FLOOR`, so
+    the bound is "do not push the projected margin through the floor the projector
+    is going to apply anyway" — which is stronger than capping at the base margin
+    and is the form the owner wrote.
+
+    The cap sits in a SEPARATE function from the formula rather than inside it, so
+    that each of the three things that must not drift lives in exactly one place:
+    the algebra and the scope gate in `_reinvestment_margin_deduction_raw`, the
+    rationing bound here. A caller that wants the uncapped number for disclosure —
+    which the gate record does, because "capped from +98.04% to +50.83%" is the
+    fact worth publishing and "+50.83%" alone is not — calls the raw function and
+    cannot thereby get a different algebra.
+
+    `margin_headroom=None` returns ZERO rather than the uncapped charge, for the
+    same reason `profile=None` does: a rationing bound cannot be enforced against
+    a baseline nobody supplied, and the safe direction when it cannot be enforced
+    is not to charge. Both gates must be passed explicitly for a non-zero result.
+
+    The cap binds only on the positive side. A negative deduction — a shrinking
+    year releasing working capital — passes through untouched, because `min()` of a
+    negative and a non-negative bound is the negative. That is the owner's formula
+    read literally and it is also the right reading: capping a CREDIT at zero would
+    silently delete the two-sidedness the raw function documents.
+
     Today the only live caller is the observation record at
     GATE_GROWTH_REINVESTMENT, which is the reason the helper exists separately
     rather than being inlined in the loop: the counterfactual has to be computed
@@ -2636,19 +2710,13 @@ def _reinvestment_margin_deduction(g: float, sales_to_capital: Optional[float]
     recorded at their own sites — `_y10_fcf_margin` above and the sensitivity
     grid's `_iv` / `_iv_gm`, whose comments already state that the grid's centre
     cell must reproduce the published base IV.
-
-    Two-sided on purpose: a negative `g` returns a negative deduction, because
-    a shrinking business releases working capital it was holding. Zero when S/C
-    is unmeasurable or when revenue would not survive the year (`1 + g <= 0`),
-    so the caller never has to guard the division. Note that the two-sidedness
-    was NOT the source of the sign inversion the live run found — that came from
-    the floor and the blend dropping a None leg, and it fired on growth years.
     """
-    if sales_to_capital is None or sales_to_capital <= 0.0:
+    raw = _reinvestment_margin_deduction_raw(g, sales_to_capital, profile=profile)
+    if raw == 0.0:
         return 0.0
-    if (1.0 + g) <= 0.0:
+    if margin_headroom is None:
         return 0.0
-    return g / ((1.0 + g) * sales_to_capital)
+    return min(raw, max(margin_headroom, 0.0))
 
 
 def _project_dcf(
@@ -2802,6 +2870,23 @@ def _project_dcf(
         # and the pre-floor figure is the only thing in the payload that shows
         # it happened. All four call sites pass `sales_to_capital=None` today,
         # so in production `reinvest_t` is 0.0 and the subtraction is inert.
+        #
+        # DOUBLY inert since the scope-and-rationing change, and that is worth
+        # stating plainly because it is a trap for whoever wires this live. This
+        # call passes no `profile` and no `margin_headroom`, and both gates fail
+        # closed — so threading a ratio in through `sales_to_capital` alone would
+        # now charge NOTHING and would look like a silent no-op rather than a
+        # missing argument. Wiring the charge live is therefore a three-part
+        # change, not a one-part one: add `profile` and `margin_headroom` to
+        # `_project_dcf`'s signature (which `test_the_projector_has_none_of_the_
+        # inputs_the_briefs_patch_needs` pins as an exact ordered parameter list,
+        # so that test moves deliberately and not by accident), pass them here,
+        # and move `_y10_fcf_margin` in the same commit because Gate B judges the
+        # terminal margin and a charged projection against an uncharged estimate
+        # is the `md_abs * 10` parity defect in a new disguise.
+        # `test_the_projectors_reinvestment_call_is_scope_inert` pins this call
+        # as it stands, so the obligation surfaces as a red test rather than as a
+        # valuation that quietly failed to change.
         reinvest_t = _reinvestment_margin_deduction(g_t, _s_to_c)
         margin_t -= reinvest_t
         # Floor then cap, in the legacy order: with `_s_to_c` None this is
@@ -10403,7 +10488,51 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # before anyone noticed it was a cache-leak artifact — see the
             # measurement-error section at the top of this function's gate
             # block, and `test_golden_replay_is_deterministic`.
-            _reinvest_ded = _reinvestment_margin_deduction(g, _s_to_c)
+            # ── SCOPE AND RATIONING, both owner-specified 2026-09-18 ──────────
+            # The charge is leviable only on a capital-turnover profile, and only
+            # up to the headroom between the base margin and the sector floor:
+            #
+            #   deduction = min(g/((1+g)·(S/C)), max(fcf_margin_base − fcf_floor, 0))
+            #
+            # Both gates live in the helpers rather than here, so a second caller
+            # cannot get the algebra without them. `_reinvest_raw` is computed
+            # only to disclose what the cap removed — "capped from +98.04% to
+            # +50.83%" is the fact worth publishing, and "+50.83%" on its own is
+            # indistinguishable from a charge that was never larger.
+            #
+            # Measured at `967a3c5`, one subprocess per fixture: exactly ONE of
+            # the 14 golden fixtures is in scope (MELI, `Hyper-Growth Platform`,
+            # S/C 1.9968, raw +6.53% against a +30.28% base margin, cap does not
+            # bind). So the scoping makes this charge inert on 13 of 14, and the
+            # cap binds on ZERO of them — all seven names where it binds are out
+            # of scope. Both facts are recorded in the comment at
+            # `CAPITAL_TURNOVER_PROFILES` rather than left to be rediscovered.
+            _reinvest_in_scope = profile_name in CAPITAL_TURNOVER_PROFILES
+            _reinvest_raw = _reinvestment_margin_deduction_raw(
+                g, _s_to_c, profile=profile_name)
+            _reinvest_headroom = float(fcf_margin_base) - float(fcf_floor)
+            _reinvest_ded = _reinvestment_margin_deduction(
+                g, _s_to_c, profile=profile_name,
+                margin_headroom=_reinvest_headroom)
+            _reinvest_cap_binds = abs(_reinvest_raw - _reinvest_ded) > 1e-12
+
+            if _s_to_c is None:
+                _reinvest_basis = ("S/C unmeasurable — invested capital absent "
+                                   "or non-positive on the row")
+            elif not _reinvest_in_scope:
+                _reinvest_basis = (
+                    f"profile '{profile_name}' is not in "
+                    f"CAPITAL_TURNOVER_PROFILES, so revenue ÷ invested capital "
+                    f"is not a sales-to-capital ratio here and no deduction is "
+                    f"leviable; S/C={_s_to_c:.4f}, g_yr1={g:.4f} measured for "
+                    f"reference only")
+            else:
+                _reinvest_basis = (
+                    f"S/C={_s_to_c:.4f}, g_yr1={g:.4f}, in scope"
+                    + (f"; raw {_reinvest_raw:+.4f} CAPPED to the base-margin "
+                       f"headroom {_reinvest_headroom:+.4f}"
+                       if _reinvest_cap_binds else ""))
+
             if scenario == "base":
                 gate_evaluations.append({
                     "gate_id": "GATE_GROWTH_REINVESTMENT",
@@ -10411,23 +10540,46 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     "raw_input_path_a": round(float(fcf_margin_base), 6),
                     "gated_output_path_b": round(
                         float(fcf_margin_base) - _reinvest_ded, 6),
-                    "basis": (f"S/C={_s_to_c:.4f}, g_yr1={g:.4f}"
-                              if _s_to_c is not None
-                              else "S/C unmeasurable — invested capital absent "
-                                   "or non-positive on the row"),
+                    "basis": _reinvest_basis,
+                    # The four numbers a reader needs to see the two gates work,
+                    # published rather than described. `in_scope` is the profile
+                    # allowlist's verdict; `margin_headroom` is the cap; the two
+                    # deductions are either side of it.
+                    "in_scope": _reinvest_in_scope,
+                    "deduction_uncapped": round(_reinvest_raw, 6),
+                    "deduction_leviable": round(_reinvest_ded, 6),
+                    "margin_headroom": round(_reinvest_headroom, 6),
+                    "cap_binds": _reinvest_cap_binds,
                     # NEVER True while the charge is observation-only. Not
                     # `_s_to_c is not None`, which is what this field said when
                     # the charge was live and which conflated "measurable" with
                     # "applied" — the distinction the Phase 1.2B gate exists to
                     # make. A reader must be able to tell from this record alone
-                    # that path B is a counterfactual.
+                    # that path B is a counterfactual. Nor is it `in_scope`: being
+                    # leviable in principle and being levied are still different
+                    # facts, and conflating them is the same error one level up.
                     "applied": False,
                 })
+            # Two branches, deliberately different lengths. The out-of-scope line
+            # is one sentence because 13 of the 14 golden fixtures land on it and
+            # a paragraph on each is prose no reader reaches the end of — the
+            # opposite failure from silence, which is what the blend's dropped-leg
+            # disclosure was written to avoid. The gate record above carries the
+            # full basis and the reference ratio either way, so shortening the
+            # flag hides nothing that is not still published.
+            if _s_to_c is not None and not _reinvest_in_scope:
+                forward_flags.append(
+                    f"Growth reinvestment NOT leviable on this profile: "
+                    f"'{profile_name}' is not a capital-turnover profile, so "
+                    f"revenue ÷ invested capital ({_s_to_c:.2f}) is not a "
+                    f"sales-to-capital ratio here and no deduction is computed. "
+                    f"Measured for reference only."
+                )
             # 5bp is a REPORTING threshold on the prose, not a change detector:
             # below it the sentence would name a charge too small to read. The
             # gate record above carries the unrounded value either way, so
             # nothing is hidden by the flag staying quiet.
-            if _s_to_c is not None and abs(_reinvest_ded) >= 0.0005:
+            elif _s_to_c is not None and abs(_reinvest_ded) >= 0.0005:
                 forward_flags.append(
                     f"Growth reinvestment NOT charged (observation only): at "
                     f"S/C {_s_to_c:.2f} (revenue ÷ invested capital) and "
@@ -10439,12 +10591,27 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     f"scenario delta, with no reinvestment deduction. "
                     f"Two-sided by construction — a shrinking year releases "
                     f"capital and raises the margin."
+                    + (f" The raw charge of {_reinvest_raw:+.2%} was CAPPED at "
+                       f"the base-margin headroom {_reinvest_headroom:+.2%} "
+                       f"(base {fcf_margin_base:.2%} less the sector floor "
+                       f"{fcf_floor:.2%}), so the figure above is the capped "
+                       f"one and not the algebra's."
+                       if _reinvest_cap_binds else "")
+                    # Reachable only when the sector floor is NEGATIVE. The cap
+                    # bounds the deduction at `base − floor`, which exceeds `base`
+                    # exactly when `floor < 0` — so this clause used to be able to
+                    # fire on any name and now cannot fire on one whose floor is
+                    # zero or positive. Kept rather than deleted as unreachable,
+                    # because MELI's floor is −5.00% and its headroom (+35.28%)
+                    # does exceed its base margin (+30.28%): the only in-scope
+                    # fixture is also the one where this stays live.
                     + (" The deduction EXCEEDS the base margin, so a live "
                        "charge would floor the projection, and a floored DCF "
                        "leg that resolves non-positive is DROPPED from the "
                        "blend — its weight renormalises onto the surviving "
                        "legs, which is how charging more can value the company "
-                       "higher."
+                       "higher. `legs_dropped` in the blend breakdown now names "
+                       "the leg when that happens."
                        if abs(_reinvest_ded) > abs(fcf_margin_base) else "")
                 )
             if scenario == "base":

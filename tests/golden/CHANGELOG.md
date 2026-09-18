@@ -1048,3 +1048,158 @@ in the bear case RAISED the bear value above the bull case. Fixing it means eith
 making the leg set consistent across scenarios or adding a monotonicity clamp, and
 a clamp is an owner decision, not an engineering one.
 
+## 2026-09-18T02:46:13+00:00
+
+- regenerated at HEAD: `967a3c5`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- **expected moves, named**: 36 changed projection keys out of 3186 compared, all
+  of them `forward_flags` on 12 fixtures × 3 scenarios (`02888_HK`, `09988_HK`,
+  `AAPL`, `BABA`, `BN4_SI`, `C38U_SI`, `COST`, `FCX`, `MU`, `SCHW`, `U96_SI`,
+  `V`). **ZERO numeric leaves moved** — verified by snapshot-to-snapshot
+  comparison with `scratchpad/diff_golden_snapshots.py`, not by counting test
+  failures, because a tolerance is a reporting threshold and not a change
+  detector: "0 failures at ±5%" would also pass if every IV in the book had
+  drifted 4.9%. The same reason applies to the pre-update run's failure count:
+  `grep -oE` over that log reported 48 `list_changed`, 24 `numeric` and 12
+  `out_of_tolerance`, and every one of the `numeric` and `out_of_tolerance` hits
+  is an echo of the *previous* baseline's own `_meta.reason` text quoted into each
+  failure message plus the header line "tolerance ±5% on numeric leaves" — a
+  second instance of that tally trap. The other 3 changed keys are `_meta`
+  bookkeeping (`generated_at`, `reason`, `regenerated_at_commit`), which is why
+  the diff tool reports 39 in total. `MELI` and `D05_SI` appear ZERO times in the
+  diff, exactly as predicted: MELI is the only fixture in the new allowlist and
+  neither of its two conditional clauses evaluates true, so its paragraph is
+  byte-identical, and D05_SI has no measurable invested capital at all.
+- reason: Growth-reinvestment charge SCOPED and CAPPED (Step 4 of the owner's summary
+checklist, actions two and three; action one, the blend's silent leg-dropping,
+shipped in 967a3c5). The charge STAYS applied: False. ZERO numeric moves: all 42
+scenario intrinsic values across all 14 fixtures are unchanged to the digit, and
+the only differing projection key kind in the update run is list_changed on
+forward_flags -- 36 paths (12 fixtures x 3 scenarios), 0 out_of_tolerance.
+
+EXPECTED MOVES, NAMED. Twelve fixtures -- 02888_HK, 09988_HK, AAPL, BABA, BN4_SI,
+C38U_SI, COST, FCX, MU, SCHW, U96_SI and V -- replace the long "Growth
+reinvestment NOT charged (observation only): at S/C ..." paragraph in all three
+scenarios with one short sentence: "Growth reinvestment NOT leviable on this
+profile: '<profile>' is not a capital-turnover profile, so revenue / invested
+capital (<S/C>) is not a sales-to-capital ratio here and no deduction is
+computed. Measured for reference only." TWO fixtures change nothing at all: MELI
+and D05_SI. MELI is the ONLY fixture inside the owner's allowlist (Hyper-Growth
+Platform, S/C 1.9968, raw +6.53% against a +30.28% base margin) and its cap does
+not bind and its deduction does not exceed its base margin, so both of the
+conditional clauses in its paragraph evaluate false and the text is byte-identical
+-- which is the point of keeping it long there. D05_SI has no measurable invested
+capital at all, so neither branch fired before and neither fires now.
+
+WHY THE TWELVE GET ONE SENTENCE AND NOT A PARAGRAPH. Thirteen of fourteen
+fixtures land on the out-of-scope branch and a paragraph on each is prose no
+reader reaches the end of -- the opposite failure from the silence the blend's
+dropped-leg disclosure was written to remove. The gate record carries the full
+basis string and the reference ratio either way, so shortening the flag hides
+nothing that is not still published in the same payload.
+
+THE TWO RULES, both owner-specified verbatim 2026-09-18. (1) SCOPE: "Revenue /
+Invested Capital is economic nonsense for balance-sheet financial intermediaries
+(SCHW), regulated utilities/IPPs (U96.SI), and real estate asset bases (C38U.SI,
+where capital turnover is ~0.06). Restrict _reinvestment_margin_deduction
+strictly to Apparel / Athletic Wear, Consumer Growth, Hyper-Growth Platform, and
+Capital Goods / Hardware." Implemented as a positive allowlist,
+CAPITAL_TURNOVER_PROFILES in sector_profiles.py, checked INSIDE the helper so a
+new caller cannot get the algebra without it, and failing closed: profile=None
+returns zero rather than charging unscoped, because the failure mode that matters
+is someone threading a ratio into _project_dcf later and getting an unscoped
+charge on a bank. A positive allowlist and not an exclusion of the existing
+BALANCE_SHEET_FINANCIAL_PROFILES, because that set names the profiles whose
+liabilities are their product -- it covers SCHW's Brokerage but NOT U96_SI's
+Conglomerate / Industrial (SG) and NOT C38U_SI's S-REIT, and C38U_SI carries the
+worst ratio in the basket at S/C 0.0625 producing a raw charge of +98.04% against
+a +55.83% base margin. Excluding only the financials set would have left the
+single worst case in scope. No numeric band on S/C was added: a band is a clamp
+and clamps are the owner's to choose, and the owner chose a profile list instead.
+
+(2) CAP: "deduction = min(g / ((1 + g) x (S/C)), max(fcf_margin_base -
+fcf_floor, 0.0)). A growth reinvestment deduction must not consume cash beyond
+the operating baseline into negative territory." The bound is base margin LESS
+THE SECTOR FLOOR, not the base margin, and the difference is reachable rather
+than theoretical: MELI's floor is -5.00%, so its headroom (+35.28%) exceeds its
+base margin (+30.28%), and capping at the base margin would have been a tighter
+bound than the one specified. The cap binds only on the positive side --
+min(negative, non-negative) is the negative -- so a shrinking year that releases
+working capital still raises the margin; capping a credit at zero would have
+silently deleted the two-sidedness the raw helper documents.
+
+ONE OWNER-SPECIFIED NAME DOES NOT EXIST, AND THE READING TAKEN. "Capital Goods /
+Hardware" is not a profile name. INDUSTRY_VALUATION_PROFILES has 98 distinct
+names, checked programmatically, and that string is not one of them; the other
+three are, verbatim. Two existing names are what it decomposes into -- "Capital
+Goods" and "Consumer Electronics / Hardware Ecosystem" -- so both are listed, the
+reasoning is written into the constant's comment, and a test pins the absence so
+the reading cannot be quietly forgotten. The taxonomy uses "/" INSIDE single
+profile names ("Apparel / Athletic Wear", "Conglomerate / Industrial (SG)", "Tech
+Manufacturing / EMS (SG)"), so the slash in the owner's string is not by itself
+evidence of one name or two. Neither candidate is a golden fixture profile, so
+the choice has zero effect on this baseline and striking either line is the whole
+change if the narrower reading was meant.
+
+WHAT THE MEASUREMENT SAYS, one subprocess per fixture at 967a3c5
+(scratchpad/probe_sc_ratio.py, log scratchpad/sc_ratio_table.log; a shared
+process leaks ~ten process-lifetime caches and once reported BN4_SI at +26.54%
+where the true figure is +0.00%). S/C spans 175x across the basket -- 0.0625 for
+C38U_SI to 10.9116 for COST -- and the span is not dispersion around one quantity
+but fourteen different quantities wearing one name, which is the argument for
+scoping by profile rather than banding the ratio. TWO FINDINGS THAT WERE NOT
+EXPECTED, recorded rather than smoothed over. First, once scoping lands the cap
+binds on ZERO of the 14 fixtures, because all seven names where it binds
+(C38U_SI, BN4_SI, U96_SI, MU, SCHW, FCX, COST) are out of scope; the cap is
+correct and stays and will bind on out-of-basket names, but on this basket it is
+inert and saying otherwise would overstate what shipped. Second, COST has the
+HIGHEST and most interpretable S/C in the set -- 10.91, a membership retailer
+that genuinely does turn capital over -- and is EXCLUDED, because Membership /
+Subscription Retail is not one of the four names given; that is conservative and
+costs a small well-behaved charge, but it is a consequence of the list and not of
+the economics.
+
+THE PERVERSE OUTCOME IS NO LONGER REACHABLE THROUGH THIS CHARGE. Wiring the
+charge live inverted the sign of the answer on 09988_HK (+17.40%) and BABA
+(+15.60%) -- a MORE conservative cash-flow assumption producing a HIGHER
+valuation -- because the deduction exceeded the base margin, the floor absorbed
+it, the DCF leg resolved non-positive, and the blend dropped it and renormalised
+its weight onto the surviving multiples. Both names are Hyperscaler / Tech
+Conglomerate, which is not in the allowlist, so neither is in scope now. Every
+name the owner cited as economic nonsense is likewise outside it: SCHW (Brokerage,
+S/C 0.8058), U96_SI (Conglomerate / Industrial (SG), 0.4102), C38U_SI (S-REIT,
+0.0625).
+
+A TRAP THIS CREATES, PINNED RATHER THAN LEFT IN A COMMENT. _project_dcf's
+internal call passes no profile and no headroom, so the projector is scope-inert
+BY CONSTRUCTION and would charge nothing even if every call site handed it a
+ratio. Threading sales_to_capital through alone now looks like it should work and
+does nothing, so making the charge live is a three-part change -- add both to the
+projector's signature (which a test pins as an exact ordered parameter list),
+pass them at the call, and move _y10_fcf_margin in the same commit because Gate B
+judges the terminal margin -- and test_the_projectors_reinvestment_call_is_
+scope_inert turns the omission into a red test instead of a valuation that
+quietly failed to move. One existing assertion had to be inverted for this:
+test_the_projector_still_reproduces_the_flat_margin_projection used to prove the
+mechanism fires when handed the post-mortem's own 1.85 worked example, producing
+an 11.82% deduction; it now proves the projector charges zero for that ratio and
+for every other, and proves the mechanism is still built one level down where the
+scope and the headroom can be supplied.
+
+The gate record gains five keys -- in_scope, deduction_uncapped,
+deduction_leviable, margin_headroom, cap_binds -- so both gates' verdicts are
+published rather than described, and its basis string now names which of three
+states it is in (unmeasurable, out of scope with the ratio recorded for
+reference, or in scope with the cap's effect stated when it binds). None of the
+five is in golden_replay's captured key list, which records gate_metrics (the
+sorted metric NAMES) and not gate_evaluations, so publishing them moves nothing
+here; the metric name is unchanged, so gate_metrics is unchanged too.
+
+Tests: 57 new in tests/test_reinvestment_scope_and_cap.py. The load-bearing ones
+are test_the_cap_binds_on_zero_of_the_fourteen_once_scoping_lands, which asserts
+the inert-on-this-basket finding as a checkable fact rather than leaving it in
+prose, and test_no_profile_means_no_charge_even_with_a_measurable_ratio, which
+pins the fail-closed direction the whole scoping design depends on.
+

@@ -307,6 +307,111 @@ BALANCE_SHEET_FINANCIAL_UNCLASSIFIED: dict[str, str] = {
 }
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Capital-turnover classification (growth-reinvestment charge)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+#: The ONLY profiles on which `_reinvestment_margin_deduction` may be levied.
+#: A positive allowlist, not an exclusion of the financials set above, and the
+#: difference is the whole point: `BALANCE_SHEET_FINANCIAL_PROFILES` names the
+#: profiles whose liabilities are their product, which covers a broker and a bank
+#: but NOT a regulated utility, NOT an S-REIT and NOT a conglomerate holding
+#: company. Excluding only the financials set would have left the single worst
+#: ratio in the golden basket in scope.
+#:
+#: The test the ratio has to pass is whether `revenue ÷ invested capital` is a
+#: SALES-TO-CAPITAL ratio at all — i.e. whether a dollar of incremental revenue
+#: really does require a dollar of incremental invested capital underneath it, so
+#: that `ΔRev/(S/C)` is the reinvestment that growth consumes. For a balance-sheet
+#: intermediary the denominator is a deposit or custody book; for a utility or IPP
+#: it is a regulated rate base whose return is set by a regulator and not by
+#: turnover; for a property vehicle it is a real-estate asset base whose "turnover"
+#: is a capitalisation rate wearing a ratio's clothes. In each case the identity
+#: `ΔRev/(S/C)` computes a number with no interpretation.
+#:
+#: Owner-specified 2026-09-18, verbatim: "Revenue / Invested Capital is economic
+#: nonsense for balance-sheet financial intermediaries (SCHW), regulated
+#: utilities/IPPs (U96.SI), and real estate asset bases (C38U.SI, where capital
+#: turnover is ~0.06). Restrict `_reinvestment_margin_deduction` strictly to
+#: `Apparel / Athletic Wear`, `Consumer Growth`, `Hyper-Growth Platform`, and
+#: `Capital Goods / Hardware`."
+#:
+#: ── ONE OWNER-SPECIFIED NAME DOES NOT EXIST, AND HOW IT WAS READ ─────────────
+#: `Capital Goods / Hardware` is NOT a profile name. `INDUSTRY_VALUATION_PROFILES`
+#: has 98 distinct profile names (checked programmatically, not by eye) and that
+#: string is not one of them; the other three ARE, verbatim. Two existing names
+#: are what the string decomposes into, so both are listed and the reading is
+#: recorded here rather than resolved silently — striking either line is the whole
+#: change if the narrower reading was meant:
+#:     "Capital Goods"                            exists
+#:     "Consumer Electronics / Hardware Ecosystem" exists
+#: Note the taxonomy uses "/" INSIDE single profile names ("Apparel / Athletic
+#: Wear", "Conglomerate / Industrial (SG)", "Tech Manufacturing / EMS (SG)"), so
+#: the slash in the owner's string is not by itself evidence of one name or two.
+#: Neither candidate is a golden fixture profile, so the choice has ZERO effect on
+#: the measured baseline either way.
+#:
+#: ── MEASURED, one subprocess per fixture at `967a3c5` ────────────────────────
+#: (a shared process leaks ~ten process-lifetime caches and once reported BN4_SI
+#: at +26.54% where the true figure is +0.00%). `raw` is the uncapped charge,
+#: `headroom` is `fcf_margin_base − fcf_floor`, and `cap` is the owner's rationing
+#: bound. Sorted by S/C, which spans 175x — and the span is the argument: the
+#: ratio is not comparable across these profiles because it is not measuring the
+#: same thing.
+#:
+#:   fixture   profile                              S/C      raw  headroom  cap
+#:   C38U_SI   S-REIT                            0.0625  +98.04%   +50.83%  YES
+#:   BN4_SI    Conglomerate / Industrial (SG)    0.2977  +16.00%    +7.79%  YES
+#:   U96_SI    Conglomerate / Industrial (SG)    0.4102  +11.61%    +7.16%  YES
+#:   02888_HK  Money Center Bank                 0.5009   +4.33%   +26.39%  no
+#:   MU        Memory / DRAM-NAND                0.6250  +18.12%    +8.96%  YES
+#:   SCHW      Brokerage                         0.8058  +16.19%   +11.53%  YES
+#:   09988_HK  Hyperscaler / Tech Conglomerate   0.8952  +10.72%   +14.51%  no
+#:   BABA      Hyperscaler / Tech Conglomerate   0.8956  +10.96%   +14.51%  no
+#:   V         Payment Networks                  0.9318  +13.70%   +56.67%  no
+#:   FCX       Mining (Major)                    0.9517  +12.94%    +5.39%  YES
+#:   MELI      Hyper-Growth Platform             1.9968   +6.53%   +35.28%  no   <== IN SCOPE
+#:   AAPL      Hyperscaler / Tech Conglomerate   2.7712   +4.62%   +30.25%  no
+#:   COST      Membership / Subscription Retail 10.9116   +0.82%    +0.32%  YES
+#:   D05_SI    Money Center Bank (SG)               n/a  unmeasurable — invested capital absent
+#:
+#: Exactly ONE of the 14 golden fixtures is in scope: MELI. So the scoping change
+#: makes the charge inert on 13 of 14, and every name the owner cited is outside
+#: it — SCHW (broker), U96_SI (utility/IPP holdco), C38U_SI (S-REIT, whose raw
+#: +98.04% charge against a +55.83% margin is the reductio). It also removes the
+#: two names on which wiring the charge live INVERTED the sign of the answer,
+#: 09988_HK (+17.40%) and BABA (+15.60%): both are `Hyperscaler / Tech
+#: Conglomerate`, which is not listed, so the perverse outcome where a more
+#: conservative cash-flow assumption raised intrinsic value is no longer reachable
+#: through this charge on the golden basket.
+#:
+#: TWO THINGS THIS TABLE SHOWS THAT WERE NOT EXPECTED, recorded rather than
+#: smoothed over:
+#:   * Once scoping lands, the cap binds on ZERO of the 14 fixtures — all seven
+#:     names where it binds are out of scope. The cap is correct and stays, but on
+#:     this basket it is inert, and saying otherwise would overstate what shipped.
+#:     It binds on out-of-basket names: COST is the shape to keep in mind, a
+#:     thin-margin retailer whose +0.82% raw charge exceeds its +0.32% headroom.
+#:   * COST has the HIGHEST and most interpretable S/C in the basket (10.91 — it
+#:     really does turn capital over) and is EXCLUDED by the allowlist, because
+#:     `Membership / Subscription Retail` is not one of the four names given. That
+#:     is conservative and costs a small well-behaved charge, but it is a
+#:     consequence of the list and not of the economics, so it is written down.
+#:
+#: Classification is by profile NAME, so a ticker routed to the wrong profile is
+#: charged on the wrong basis — the same caveat `BALANCE_SHEET_FINANCIAL_PROFILES`
+#: carries, and the same routing problem rather than a classification one.
+CAPITAL_TURNOVER_PROFILES: frozenset[str] = frozenset({
+    "Apparel / Athletic Wear",
+    "Consumer Growth",
+    "Hyper-Growth Platform",
+    # The two existing names the owner's "Capital Goods / Hardware" decomposes
+    # into. See the block above — that exact string is not a profile name.
+    "Capital Goods",
+    "Consumer Electronics / Hardware Ecosystem",
+})
+
+
 def get_wacc(sector: str, leverage: float = 0.0,
              macro_regime: str = "neutral", profile: str = "") -> float:
     """

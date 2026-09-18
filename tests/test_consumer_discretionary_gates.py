@@ -460,6 +460,14 @@ def test_the_projector_still_reproduces_the_flat_margin_projection():
     Compared against the algebraic legacy form `min(max(base + delta, floor),
     cap)` computed inline here, so the assertion does not depend on the engine
     agreeing with itself — that is the failure mode the `md_abs * 10` defect had.
+
+    STRONGER SINCE 2026-09-18, and the second half of the test changed with it:
+    the projector's deduction call now passes no `profile`, and the scope gate
+    fails closed, so NO ratio at all makes it charge — not just `None`. The
+    default path being the legacy path is no longer the only thing standing
+    between this change and a baseline rewrite; the scope gate is. See the inline
+    comment where the old "the charge does fire when handed a ratio" assertion
+    used to be.
     """
     revenue, fmb, floor = 10_000.0, 0.19, 0.02
     g, wacc, tgr = 0.28, 0.09, 0.025
@@ -479,13 +487,38 @@ def test_the_projector_still_reproduces_the_flat_margin_projection():
         assert r["reinvest_margin_deduction"] == 0.0
     assert [r["fcf_margin"] for r in explicit_zero] == \
            [r["fcf_margin"] for r in none_rows]
-    # And the charge does fire when handed a ratio — the mechanism is built, not
-    # stubbed out. 1.85 is the post-mortem's own worked example.
-    charged = rows(1.85)
-    assert charged[0]["reinvest_margin_deduction"] == pytest.approx(
-        0.28 / (1.28 * 1.85), abs=1e-12)
-    assert charged[0]["fcf_margin"] == pytest.approx(
-        max(fmb - 0.03 - 0.28 / (1.28 * 1.85), floor), abs=1e-12)
+    # CHANGED 2026-09-18, and the change is the point of the scoping work rather
+    # than collateral from it. This block used to assert the opposite — that
+    # handing the projector a ratio makes it charge, "the mechanism is built, not
+    # stubbed out". That is no longer true and must not be made true again by
+    # accident: `_project_dcf` calls the helper with no `profile` and no
+    # `margin_headroom`, and both gates fail closed, so the projector now charges
+    # NOTHING for any ratio. 1.85 is the post-mortem's own worked example; it used
+    # to produce a 0.28/(1.28 × 1.85) = 11.82% deduction here and now produces
+    # zero. That is the scope gate doing its job on a number nobody scoped.
+    for sc in (1.85, 0.0625, 1.9968, 10.9116):
+        inert = rows(sc)
+        assert inert[0]["reinvest_margin_deduction"] == 0.0, sc
+        assert [r["fcf_margin"] for r in inert] == \
+               [r["fcf_margin"] for r in none_rows], sc
+
+    # The mechanism is still built and not stubbed out — proved one level down,
+    # where the scope and the rationing bound can actually be supplied. Wiring it
+    # into the projector is a three-part change (signature, the call, and
+    # `_y10_fcf_margin` in the same commit), recorded in the comment above the
+    # call and pinned by
+    # `test_reinvestment_scope_and_cap.py::TestTheInvariantsAreNotDuplicated::
+    # test_the_projectors_reinvestment_call_is_scope_inert`.
+    charged = dcf_agent._reinvestment_margin_deduction(
+        0.28, 1.85, profile="Consumer Growth", margin_headroom=0.30)
+    assert charged == pytest.approx(0.28 / (1.28 * 1.85), abs=1e-12)
+    # And the cap binds when the headroom is smaller than the algebra's answer.
+    capped = dcf_agent._reinvestment_margin_deduction(
+        0.28, 1.85, profile="Consumer Growth", margin_headroom=0.05)
+    assert capped == 0.05
+    assert dcf_agent._reinvestment_margin_deduction_raw(
+        0.28, 1.85, profile="Consumer Growth") == pytest.approx(
+            0.28 / (1.28 * 1.85), abs=1e-12)
 
 
 def test_the_briefs_nike_arithmetic_is_right_about_a_cap_the_engine_does_not_use():
@@ -882,12 +915,30 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
     "the floor absorbed the rest, `forward_roic` went negative, and Gate B "
     "zeroed terminal growth on BABA, FCX and SCHW. A dropped leg renormalises "
     "onto the survivors, so where the DCF is the LOW leg — which is where it is "
-    "doing its job — charging more values the company HIGHER. The blocker is "
-    "not the algebra: it is that `revenue/invested_capital` is not "
-    "sales-to-capital for balance-sheet-funded profiles (measured S/C 0.063 for "
-    "an S-REIT, 0.806 for a broker, 10.912 for a retailer — a 173x span) and "
-    "that nothing decides what happens when a deduction exceeds the margin it "
-    "is taken from. Also note this test's own form is the CASH-LINE variant, "
+    "doing its job — charging more values the company HIGHER. "
+    "UPDATE 2026-09-18 — BOTH BLOCKERS THIS REASON NAMED ARE NOW CLOSED, and the "
+    "test still fails, which is the informative part. The reason used to read: "
+    "'the blocker is not the algebra: it is that revenue/invested_capital is not "
+    "sales-to-capital for balance-sheet-funded profiles (measured S/C 0.063 for an "
+    "S-REIT, 0.806 for a broker, 10.912 for a retailer — a 173x span) and that "
+    "nothing decides what happens when a deduction exceeds the margin it is taken "
+    "from.' The first is now a positive profile allowlist, "
+    "CAPITAL_TURNOVER_PROFILES, applied inside the helper — and the span is 175x "
+    "on a cleaner measurement (0.0625 for C38U_SI's S-REIT to 10.9116 for COST's "
+    "membership retail), not 173x. The second is now an explicit rationing bound, "
+    "min(raw, max(fcf_margin_base − fcf_floor, 0)), owner-specified. Exactly one "
+    "of the 14 golden fixtures is inside the allowlist (MELI, Hyper-Growth "
+    "Platform, raw +6.53% against a +30.28% base margin) and on that one the cap "
+    "does not bind, so after scoping the cap binds on ZERO of the 14 — all seven "
+    "names where it binds are out of scope. WHAT STILL BLOCKS IT, and why wiring "
+    "the ratio alone is no longer enough: `_project_dcf` calls the helper with no "
+    "`profile` and no `margin_headroom`, and both gates fail closed, so the "
+    "projector is scope-inert BY CONSTRUCTION and would charge nothing even if "
+    "every call site handed it a ratio. Making this test pass is a three-part "
+    "change — add both to the projector's signature, pass them at the call, and "
+    "move `_y10_fcf_margin` in the same commit — pinned by "
+    "`tests/test_reinvestment_scope_and_cap.py`. Also note this test's own form is "
+    "the CASH-LINE variant, "
     "`revenue*margin - charge`, which the post-mortem showed is algebraically "
     "identical per year but does NOT reach the terminal value, and the TV is "
     "86.0% of the total for these inputs; a green version of this test would "
