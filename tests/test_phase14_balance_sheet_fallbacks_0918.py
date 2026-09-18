@@ -36,6 +36,7 @@ across the broader HK universe.
 from __future__ import annotations
 
 import inspect
+import re
 
 import pandas as pd
 import pytest
@@ -530,6 +531,43 @@ class TestTheRecordIsLiftedIntoTheAuditPayload:
     def src(self):
         return inspect.getsource(d)
 
+    @pytest.fixture(scope="class")
+    def record_span(self, src):
+        """(start, end) of the lifted gate record, sliced on REAL boundaries.
+
+        Three tests here used to slice `src[i:i + 3_000]` from the `gate_id` line
+        -- a magic character count. That is brittle in the direction that hurts:
+        `applied` sits at the END of the record, so an explanatory comment added
+        anywhere above it pushes the assertion's target out of the window and a
+        passing test starts failing for a reason unrelated to what it checks. It
+        fired on exactly that when `currency_basis` was plumbed in. Bounding on
+        the closing `})` cannot be broken by prose, and it is also STRICTER --
+        the window no longer spills into neighbouring code that could satisfy an
+        `in` check by accident.
+        """
+        i = src.index('"gate_id": "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE"')
+        start = src.rindex("gate_evaluations.append({", 0, i)
+        return start, src.index("\n            })", i)
+
+    @pytest.fixture(scope="class")
+    def lift_block(self, src, record_span):
+        start, end = record_span
+        return src[start:end]
+
+    @pytest.fixture(scope="class")
+    def prose_block(self, src, record_span):
+        """The forward-flag statement that follows the record.
+
+        Anchored AFTER the record's close, not at its `gate_id`, so growth inside
+        the record cannot consume this window. That decoupling is the whole point:
+        the version anchored at `gate_id` with a 4,000-char window was measured at
+        447 chars of headroom after one comment landed -- one more comment and
+        this assertion goes blind, failing with a message about missing prose
+        rather than about the window that stopped reaching it.
+        """
+        _, end = record_span
+        return src[end:end + 2_000]
+
     def test_the_caller_pops_the_key_off_the_row(self, src):
         """`.pop`, not `.get`: `most_recent` IS `series[-1]`, it is serialized
         into the published payload downstream, and an internal hand-off key has
@@ -541,36 +579,80 @@ class TestTheRecordIsLiftedIntoTheAuditPayload:
         assert src.index("gate_evaluations: list[dict] = []") < \
             src.index('most_recent.pop("_balance_sheet_step_change"')
 
-    def test_the_lifted_record_is_disclosure_only(self, src):
-        i = src.index('"gate_id": "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE"')
-        rec = src[i:i + 3_000]
-        assert '"applied": False,' in rec
-        assert '"applied": True,' not in rec
+    def test_the_lifted_record_is_disclosure_only(self, lift_block):
+        assert '"applied": False,' in lift_block
+        assert '"applied": True,' not in lift_block
 
-    def test_the_lifted_record_carries_both_halves_of_its_path_pair(self, src):
+    def test_the_lifted_record_carries_both_halves_of_its_path_pair(self,
+                                                                    lift_block):
         """MANDATORY, not stylistic. `tests/test_balance_sheet_financial_gate.py`
         and `tests/test_gate_backtest.py` both assert
         `src.count('"raw_input_path_a"') == src.count('"gated_output_path_b"')`
         over this whole module, so a gate record missing either half fails two
         unrelated modules with a message that does not name this one."""
-        i = src.index('"gate_id": "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE"')
-        rec = src[i:i + 3_000]
-        assert rec.count('"raw_input_path_a"') == 1
-        assert rec.count('"gated_output_path_b"') == 1
-        assert '"gate_id"' in rec and '"metric"' in rec and '"basis"' in rec
+        assert lift_block.count('"raw_input_path_a"') == 1
+        assert lift_block.count('"gated_output_path_b"') == 1
+        assert ('"gate_id"' in lift_block and '"metric"' in lift_block
+                and '"basis"' in lift_block)
+
+    def test_every_stashed_key_is_lifted(self, src, lift_block):
+        """The invariant that was missing while `currency_basis` was dropped.
+
+        The producer test asserts an EXACT set equality on the stashed record;
+        this class asserted the presence of five DIFFERENT keys on the lifted
+        one. Both looked exact, and between them the hand-off was uncovered.
+        Shipped in `2f386f0` and found only by reading a production payload:
+        `currency_basis` was written at the stash, never copied into the lift,
+        and destroyed by the `.pop` above -- so the pre-FX disclosure the key
+        exists for reached no reader, on exactly the names where it matters
+        (02020.HK reports CNY against an HKD price; a reader comparing its
+        published 11.07bn net cash to an HKD disclosure is off by the FX rate).
+
+        Parsed from source on BOTH sides rather than enumerated by name, because
+        an enumerated list is what failed the first time: it named the keys the
+        author had just written and so could not notice the one left behind.
+        """
+        key_re = re.compile(r'^\s+"([a-z_0-9]+)":', re.M)
+
+        j = src.index('row["_balance_sheet_step_change"] = {')
+        stashed = set(key_re.findall(src[j:src.index("\n        }", j)]))
+        lifted = set(key_re.findall(lift_block))
+
+        # Both guards are load-bearing. Without them a regex that matches
+        # nothing yields `set() - set() == set()` and this test passes while
+        # asserting nothing at all -- the vacuous-pass failure mode, and the
+        # reason a detector is sanity-checked against a positive it can see.
+        assert stashed, "the stash block parsed to zero keys; the regex is wrong"
+        assert lifted, "the lift block parsed to zero keys; the regex is wrong"
+        assert stashed - lifted == set(), (
+            "stashed but never lifted, so the `.pop` destroys them and they "
+            f"reach no payload: {sorted(stashed - lifted)}")
 
     def test_the_module_wide_path_pair_invariant_still_holds(self, src):
         assert src.count('"raw_input_path_a"') == src.count('"gated_output_path_b"')
 
-    def test_the_prose_half_reaches_the_forward_flags(self, src):
+    def test_the_prose_half_reaches_the_forward_flags(self, prose_block):
         """`ticker_forward_flags` seeds every scenario's `forward_flags`, which
         IS emitted on the payload -- that is how the 02020.HK production run's
         balance-sheet prose got out. The structured record is for scoring; the
         prose is what a human reading the run sees."""
-        i = src.index('"gate_id": "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE"')
-        tail = src[i:i + 4_000]
-        assert "Balance-sheet step change: net cash" in tail
-        assert "quarterly override APPLIED" in tail
+        assert "Balance-sheet step change: net cash" in prose_block
+        assert "quarterly override APPLIED" in prose_block
+
+    def test_the_prose_window_has_headroom(self, src, record_span):
+        """How much can be added between the record's close and the forward-flag
+        prose before `prose_block` stops reaching it. Measured, not assumed: the
+        `applied` test failed at a 3,000-char window for exactly this reason, the
+        prose window was then measured at 447 chars of slack, and nothing in the
+        suite said how close either was. Anchoring past the record's close is
+        what makes this number stable under record growth; this test is what says
+        so when it stops being."""
+        _, end = record_span
+        k = src.index("Balance-sheet step change: net cash", end)
+        headroom = 2_000 - (k - end)
+        assert headroom > 1_000, (
+            f"only {headroom} chars of headroom between the record's close and "
+            f"the prose; widen `prose_block`")
 
     def test_gate_backtest_does_not_score_the_new_metric(self):
         """It keys off `gate_id` literals, so a new gate is inert there. Pinned

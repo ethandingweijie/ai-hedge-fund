@@ -8746,6 +8746,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "delta_ratio": _bs_step["delta_ratio"],
                 "source": _bs_step["source"],
                 "action": _bs_step["action"],
+                # The seventh key, and the one that was dropped. Shipped in
+                # `2f386f0` at the stash only: the `.pop` above then destroyed it
+                # and no payload ever carried it, which a production read of
+                # 02020.HK's gate record is what found. Both net-cash figures here
+                # are pre-FX, so without this a reader comparing them to a
+                # reported-currency disclosure is off by the FX rate with nothing
+                # on the payload to say so -- worst on the HK names, where the
+                # statement currency (CNY) is not the quote currency (HKD).
+                # `test_every_stashed_key_is_lifted` now pins the hand-off itself
+                # instead of a hand-written list of the keys that survived it.
+                "currency_basis": _bs_step["currency_basis"],
                 # Carried onto the payload, not left on the popped record:
                 # without them the published `delta_ratio` does not say which
                 # threshold it was measured against, and a reader cannot tell a
