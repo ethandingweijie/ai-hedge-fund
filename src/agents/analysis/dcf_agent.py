@@ -7869,6 +7869,137 @@ def _run_backward_gate(
         return False, f"Skipped — T-1 test error: {e}"
 
 
+# ── Scenario ordering invariant ───────────────────────────────────────────────
+#
+# Scenario ordering is an axiomatic property of risk, not an output of the
+# blend: a more conservative set of assumptions must never raise intrinsic
+# value. The blend cannot guarantee it, because its legs are not scenario-
+# invariant in whether they EXIST. A leg that resolves non-positive is dropped
+# and the survivors are renormalised, so a scenario that stresses the business
+# hardest is also the scenario most likely to lose a leg -- and losing the leg
+# that was doing the penalising raises the answer.
+#
+# Measured on BN4.SI (Keppel), which is the case this was written against. Its
+# profile "Conglomerate / Industrial (SG)" votes two multi legs: `EV/EBITDA` at
+# 0.5333 and `SOTP (published)` at 0.4667. There is no DCF leg in ANY scenario
+# (`weight_dcf` 0.0, `iv_dcf` None throughout).
+#
+#   bear  EV/EBITDA dropped -> SOTP (published) alone at weight 1.0 -> 8.3672
+#   base  EV/EBITDA 1.30 @ .5333 + SOTP 11.16 @ .4667              -> 5.9004
+#   bull  EV/EBITDA 2.95 @ .5333 + SOTP 13.95 @ .4667              -> 8.0789
+#
+# The dropout is an equity-bridge failure, not a cash-flow one. In bear the
+# scenario multiplier takes the enterprise value to SGD 9.021bn against
+# SGD 9.325bn of net debt plus SGD 0.322bn of minority interest, so
+# `_ev_to_equity_ps` computes SGD -0.626bn of ordinary equity and floors it at
+# 0.0 -- and a floored zero is then dropped as a non-positive leg. The single
+# survivor is the HIGHEST of bear's three computed legs (SOTP 8.37 against
+# Forward P/E 4.21 and Forward EV/EBITDA 0.07), so the blend lands at 7.37
+# after the 0.8812 composite, above base's 5.20.
+#
+# Had the zero been RETAINED at its 0.5333 weight, bear would read
+# 0.0 x 0.5333 + 8.37 x 0.4667 = 3.906, or 3.44 after the composite -- below
+# base, correctly ordered. The dropout is worth +3.93 to the bear IV. That is
+# the composition gain this invariant exists to stop publishing.
+#
+# The remedy is a clamp on the OUTPUT and not a change to the blend, on the
+# owner's explicit instruction. Flooring a non-positive leg at zero and keeping
+# its weight was tried and rejected -- "base IV for BN4 and u96 drop too much.
+# not intuitive" -- and `967a3c5` shipped the dropout as a DISCLOSURE instead
+# (`legs_dropped`, `weight_surviving`, `single_method`). So the leg still
+# drops; this stops the dropped leg from inverting the scenario set, and the
+# gate record names the composition change that caused it rather than leaving
+# the clamp to look like an unexplained edit to a published number.
+#
+# Base is the PIVOT and is never moved. The card leads with base IV, and an
+# invariant whose enforcement rewrites the headline number is an invariant
+# nobody will trust. Bear is pulled down onto base and bull up onto it, which
+# is exactly the owner's `min(Bear IV, Base IV)` generalised by symmetry.
+# Raising a bull case to base says "no upside modelled"; it does not invent
+# value, and it is the only reading that leaves base untouched on both sides.
+_SCENARIO_ORDER: tuple[str, ...] = ("bear", "base", "bull")
+
+
+def _voted_legs(scen: Optional[dict]) -> dict[str, float]:
+    """{method: weight} for the legs that actually carried weight.
+
+    `methods_used` cannot answer this. It is built from raw profile rows, so on
+    BN4.SI it names `'DCF'` in base and `'EV/EBITDA'` in bear while neither
+    carried any weight at all (`iv_dcf` None in all three scenarios;
+    `EV/EBITDA` absent from bear's `method_iv_table`). `effective_weights` is
+    the blend's own record of what voted.
+    """
+    out: dict[str, float] = {}
+    for row in ((scen or {}).get("effective_weights") or []):
+        if isinstance(row, dict) and row.get("method"):
+            try:
+                out[str(row["method"])] = float(row.get("weight") or 0.0)
+            except (TypeError, ValueError):
+                out[str(row["method"])] = 0.0
+    return out
+
+
+def _enforce_scenario_ordering(
+    scenario_results: dict[str, dict],
+) -> Optional[dict]:
+    """Clamp the outer scenarios onto base; return the record, or None if ordered.
+
+    Pure: it reads `scenario_results` and returns what it would change, and the
+    caller applies it. Keeping the mutation out of here is what makes the
+    invariant testable without an engine run -- a scenario triple is the whole
+    input.
+
+    The record answers the owner's step 1 ("check if the inversion is driven by
+    method dropouts / composition gain") with data rather than with inspection:
+    per scenario it names the legs that voted, the legs base had that this one
+    lost, and the share of base's voting weight those lost legs carried. A
+    dropout-driven inversion shows `weight_lost_vs_base` near the surviving
+    leg's weight; an inversion from genuinely disordered inputs shows zero.
+    """
+    base = scenario_results.get("base") or {}
+    base_iv = base.get("intrinsic_value")
+    if not isinstance(base_iv, (int, float)) or isinstance(base_iv, bool):
+        return None                     # no pivot to order against: refuse
+
+    base_legs = _voted_legs(base)
+    composition: dict[str, dict] = {}
+    for name in _SCENARIO_ORDER:
+        scen = scenario_results.get(name) or {}
+        legs = _voted_legs(scen)
+        lost = sorted(set(base_legs) - set(legs))
+        composition[name] = {
+            "legs_voted": sorted(legs),
+            "n_legs": len(legs),
+            "single_method": len(legs) == 1,
+            "legs_lost_vs_base": lost,
+            "weight_lost_vs_base": round(
+                sum(base_legs.get(m, 0.0) for m in lost), 6),
+        }
+
+    clamped: list[dict] = []
+    flags: list[str] = []
+    for name, cmp_ in (("bear", lambda a, b: a > b), ("bull", lambda a, b: a < b)):
+        iv = (scenario_results.get(name) or {}).get("intrinsic_value")
+        if not isinstance(iv, (int, float)) or isinstance(iv, bool):
+            continue                    # a missing scenario is not a violation
+        if not cmp_(float(iv), float(base_iv)):
+            continue
+        after = float(base_iv)
+        clamped.append({"scenario": name, "before": round(float(iv), 4),
+                        "after": round(after, 4)})
+        rel = "Bear" if name == "bear" else "Bull"
+        op = ">" if name == "bear" else "<"
+        flags.append(
+            f"⚠ INVARIANT_VIOLATION_SCENARIO_INVERSION: {rel} "
+            f"({float(iv):.2f}) {op} Base ({float(base_iv):.2f}); clamped to Base"
+        )
+
+    if not clamped:
+        return None
+    return {"pivot": "base", "base_iv": round(float(base_iv), 4),
+            "clamped": clamped, "composition": composition, "flags": flags}
+
+
 # ── Public Entry Point ────────────────────────────────────────────────────────
 
 def run_dcf_agent(state: AgentState) -> AgentState:
@@ -11727,6 +11858,76 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "sector_g_avg":      round(_sector_g_avg, 4) if _sector_g_avg is not None else None,
                 "sector_g_avg_basis": _sector_g_avg_basis,
             }
+
+        # ── Scenario ordering invariant: bear <= base <= bull ─────────────
+        # Runs here, before anything downstream reads a scenario IV, so the
+        # clamp reaches every consumer rather than only the published triple:
+        # the `_unanimous` same-side-of-spot test and the convergence bound
+        # that build `_12m_targets`, the two-sided PT band, the HK per-share
+        # note, and `base_iv` itself. Placing it after them would leave the
+        # 12m targets ordered against IVs that no longer exist -- which is
+        # precisely the state HEAD is in, where the ordering diagnostic a
+        # thousand lines below reports a violation it cannot act on.
+        #
+        # The blend's own arithmetic is left intact beside the clamp:
+        # `iv_multi`, `iv_multi_post` and `intrinsic_value_pre_composite` keep
+        # the unclamped values, and `intrinsic_value_unclamped` is added on the
+        # scenario that moved. An invariant that erases the evidence of its own
+        # violation cannot be audited, and the next person reading the payload
+        # would have no way to tell a clamped 5.20 from a computed one.
+        _order_rec = _enforce_scenario_ordering(scenario_results)
+        if _order_rec:
+            _base_pivot = _order_rec["base_iv"]
+            for _cl in _order_rec["clamped"]:
+                _sn_cl = _cl["scenario"]
+                _scen_cl = scenario_results.get(_sn_cl)
+                if not isinstance(_scen_cl, dict):
+                    continue
+                _scen_cl["intrinsic_value_unclamped"] = _cl["before"]
+                _scen_cl["intrinsic_value"] = _cl["after"]
+                _scen_cl["ordering_composition"] = (
+                    _order_rec["composition"].get(_sn_cl))
+            # All three scenarios, NOT `ticker_forward_flags`. That list is
+            # snapshotted per scenario inside the loop and never read again
+            # after it ends, so an append here reaches no payload at all -- the
+            # neighbouring PT-band block documents the same trap and the
+            # ordering diagnostic below it still writes to the dead list.
+            for _sn_fl in _SCENARIO_ORDER:
+                _sf_fl = (scenario_results.get(_sn_fl) or {}).get("forward_flags")
+                if isinstance(_sf_fl, list):
+                    _sf_fl.extend(_order_rec["flags"])
+            _ord_msg = " | ".join(_order_rec["flags"])
+            print(f"  [scenario-order] {ticker}: {_ord_msg}")
+            progress.update_status(agent_id, ticker, _ord_msg)
+            gate_evaluations.append({
+                "gate_id": "GATE_SCENARIO_ORDERING",
+                "metric": "scenario_iv_ordering",
+                # The scenario that moved, before and after. Base is the pivot
+                # and never moves, so one pair describes the whole clamp -- and
+                # if both outer scenarios ever moved, `clamped` below carries
+                # the second one rather than this field having to become a
+                # vector (the same reason GATE_PT_IV_BAND records base only).
+                "raw_input_path_a": _order_rec["clamped"][0]["before"],
+                "gated_output_path_b": _order_rec["clamped"][0]["after"],
+                "pivot": _order_rec["pivot"],
+                "base_iv": _base_pivot,
+                "clamped": _order_rec["clamped"],
+                # The owner's step 1, answered with data: which legs voted in
+                # each scenario, which of base's legs a scenario lost, and the
+                # share of base's voting weight those lost legs carried. A
+                # dropout-driven inversion shows a large `weight_lost_vs_base`
+                # beside `single_method: true`; an inversion from genuinely
+                # disordered inputs shows zero lost weight and is a different
+                # bug with a different fix.
+                "composition": _order_rec["composition"],
+                "basis": (
+                    "scenario ordering is an axiomatic property of risk, not an "
+                    "output of the blend; base is the pivot and is never moved, "
+                    "so the headline number is untouched and the outer scenarios "
+                    "are pulled onto it"
+                ),
+                "applied": True,
+            })
 
         # ── D3: profile methods the base scenario could not produce ──────
         # The profile declares a method set; if data gaps forced the blend

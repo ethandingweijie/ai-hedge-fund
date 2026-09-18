@@ -229,6 +229,51 @@ _FLOOR_MOVED = {
     },
 }
 
+#: ── THE THIRD RE-BASELINE: the scenario-ordering invariant
+#:
+#: `Bear IV <= Base IV <= Bull IV` is now enforced as an engine-level invariant
+#: (`_enforce_scenario_ordering`, gate `GATE_SCENARIO_ORDERING`), with base as
+#: the PIVOT: bear is pulled down onto base and bull up onto it, and base is
+#: never moved.
+#:
+#: Measured one subprocess per fixture across all 14 baselines, EXACTLY ONE
+#: fixture violated, and it is BN4_SI: bear published 7.37 above base 5.20 on a
+#: name trading at S$11.10. No `base > bull` anywhere, so the bull half of the
+#: invariant ships implemented but unexercised against a real run.
+#:
+#: The cause is a composition gain, not a disordered input. BN4.SI has NO DCF leg
+#: in any scenario (`weight_dcf` 0.0, `iv_dcf` None throughout); two multi legs
+#: vote, the anchor `EV/EBITDA` at 0.533333 and `SOTP (published)` at 0.466667.
+#: In bear only, the anchor fails its equity bridge — EV SGD 9.021bn against net
+#: debt SGD 9.325bn plus minority interest SGD 0.322bn is equity SGD -0.626bn,
+#: which `_ev_to_equity_ps` floors to a literal `0.0` rather than refusing — and
+#: the blend drops that zero as a non-positive leg and renormalises onto the
+#: single survivor, which is the HIGHEST of the three legs bear computed (SOTP
+#: 8.37 against Forward P/E 4.21 and Forward EV/EBITDA 0.07). Retaining the zero
+#: at its intended weight gives 0.0 x 0.5333 + 8.37 x 0.4667 = 3.906, or 3.44
+#: after the 0.8812 composite: below base, correctly ordered. The dropout is
+#: worth +3.93 to the bear IV.
+#:
+#: Gate B's own consequences on BN4_SI are UNCHANGED — `tgr` is still 0.0 and
+#: the bear growth premium is still the forced 1.0 — so this fixture still
+#: belongs in `_STILL_FIRES`. What moved is one level above the gate: the clamp
+#: rewrites the published bear IV, and `12m_targets.bear` follows it from 9.23 to
+#: 8.15. `scenarios.bear.intrinsic_value_unclamped` = 7.37 is preserved beside
+#: the clamp, so the archive keeps the evidence of its own violation.
+_ORDERING_CLAMPED = {
+    "BN4_SI": {
+        "pre_clamp_bear_iv": 7.37,     # still the HISTORICAL value in the table below
+        "clamped_bear_iv":   5.20,     # == base_iv, which did NOT move
+        "base_iv":           5.20,
+        "bull_iv":           7.12,     # correctly ordered, untouched
+        "bear_target":       8.15,     # was 9.23, -11.70%
+        "base_target":       8.15,     # unchanged
+        "bull_target":       9.11,     # unchanged
+        "weight_lost_vs_base": 0.533333,
+        "legs_lost_vs_base": ["EV/EBITDA"],
+    },
+}
+
 
 def _bear_gate_b_roic(projection: dict) -> float | None:
     """The ROIC Gate B printed into the bear flag, or None if it did not fire."""
@@ -745,11 +790,14 @@ def test_no_bear_terminal_value_was_the_pre_fix_state():
 #: Pinned as literals so that "did not move" is an assertion rather than an
 #: absence.
 #:
-#: FCX's 16.06 is now a HISTORICAL value. It is still true of the × 10 fix — that
-#: fix did not move FCX's bear IV — but the later relative-floor re-baseline did,
-#: to 16.90. It is left here unchanged on purpose: re-valuing it would make this
-#: table claim the × 10 fix moved FCX's bear leg, which it did not.
-#: `test_the_sign_flips_changed_only_their_flag_text` asserts both halves.
+#: FCX's 16.06 and BN4_SI's 7.37 are now BOTH historical values. Each is still
+#: true of the × 10 fix — that fix did not move either bear IV — but a later
+#: re-baseline did: the relative floor took FCX to 16.90, and the
+#: scenario-ordering clamp took BN4_SI down to 5.20. Both are left here
+#: unchanged on purpose: re-valuing them would make this table claim the × 10
+#: fix moved those bear legs, which it did not.
+#: `test_the_sign_flips_changed_only_their_flag_text` asserts both halves for
+#: each, so neither history is silently overwritten.
 _BEAR_IV_UNMOVED = {
     "09988_HK": 114.32,
     "BABA":     142.27,
@@ -785,12 +833,24 @@ def test_the_sign_flips_changed_only_their_flag_text():
     bear IV exactly where it was — a bear IV moving here would mean the fix
     reached something it was not supposed to.
 
-    Eight of the nine still qualify outright. FCX is the exception, and it is
-    worth being precise about WHICH claim fails for it: its `tgr` is still 0.0 and
-    its premium is still the forced 1.0, so the gate's consequences are unchanged.
-    What moved is the feed the gate sits on — re-admitting FY2021 to the
-    normalized EBITDA series raised the anchor, and with no terminal value the
-    bear leg scales straight with it. The gate did not reach anything new.
+    Seven of the nine still qualify outright. There are TWO exceptions now, and
+    it is worth being precise about WHICH claim fails for each, because in both
+    cases Gate B's own consequences are unchanged and the movement came from
+    somewhere else entirely.
+
+    FCX: its `tgr` is still 0.0 and its premium is still the forced 1.0. What
+    moved is the feed the gate sits on — re-admitting FY2021 to the normalized
+    EBITDA series raised the anchor, and with no terminal value the bear leg
+    scales straight with it. The gate did not reach anything new.
+
+    BN4_SI: also `tgr` 0.0 and premium 1.0, so it still belongs in
+    `_STILL_FIRES`. Its bear IV moved one level ABOVE the gate, when the
+    scenario-ordering invariant clamped a bear case that had published 7.37
+    against a base of 5.20 — an inversion caused by the anchor `EV/EBITDA`
+    failing its equity bridge in bear only and the blend renormalising onto its
+    single surviving leg, which happened to be the highest of the three. See
+    `_ORDERING_CLAMPED` for the arithmetic. Base did not move, and the
+    unclamped 7.37 is preserved in the archive beside the clamp.
     """
     for name in _STILL_FIRES:
         p = _proj(name)
@@ -803,7 +863,57 @@ def test_the_sign_flips_changed_only_their_flag_text():
             assert _BEAR_IV_UNMOVED["FCX"] == 16.06
             assert p["scenarios.bear.intrinsic_value"] == _FLOOR_MOVED["FCX"]["bear_iv"]
             continue
+        if name in _ORDERING_CLAMPED:
+            oc = _ORDERING_CLAMPED[name]
+            # Both halves again: the × 10 fix left BN4_SI at 7.37, and that is
+            # still what the historical table says; the clamp took the published
+            # value to base. Asserting the unclamped leaf too is what stops a
+            # future change from quietly deleting the evidence.
+            assert _BEAR_IV_UNMOVED[name] == oc["pre_clamp_bear_iv"], name
+            assert p["scenarios.bear.intrinsic_value"] == oc["clamped_bear_iv"], name
+            assert p["scenarios.bear.intrinsic_value_unclamped"] == \
+                oc["pre_clamp_bear_iv"], name
+            # The pivot. The whole point of clamping the OUTER scenarios is that
+            # the headline number is untouched, so this is the assertion that
+            # matters most in the block.
+            assert p["scenarios.base.intrinsic_value"] == oc["base_iv"], name
+            assert p["scenarios.bull.intrinsic_value"] == oc["bull_iv"], name
+            assert p["12m_targets.bear"] == oc["bear_target"], name
+            assert p["12m_targets.base"] == oc["base_target"], name
+            assert p["12m_targets.bull"] == oc["bull_target"], name
+            # The composition diagnostic that says WHY, frozen as data.
+            assert p["scenarios.bear.ordering_composition.legs_lost_vs_base"] == \
+                oc["legs_lost_vs_base"], name
+            assert p["scenarios.bear.ordering_composition.weight_lost_vs_base"] == \
+                oc["weight_lost_vs_base"], name
+            assert p["scenarios.bear.ordering_composition.single_method"] is True, name
+            continue
         assert p["scenarios.bear.intrinsic_value"] == _BEAR_IV_UNMOVED[name], name
+
+
+def test_the_ordering_clamp_fired_on_exactly_one_of_the_fourteen():
+    """The clamp is live, so its blast radius is a fact and not a prediction.
+
+    Asserted on the archive rather than on a re-run: exactly one fixture of the
+    fourteen carries `intrinsic_value_unclamped`, and it is BN4_SI. If this ever
+    goes red with a SECOND name, the invariant has started firing somewhere new
+    and that needs looking at before the baseline is regenerated again — not
+    after, when the evidence is overwritten.
+
+    It also pins the half that never fires: no fixture carries a clamped BULL,
+    so `bull := max(bull, base)` ships implemented but unexercised against a
+    real run. `tests/test_scenario_ordering_invariant.py::TestTheBullHalf` is
+    the only coverage it has and it is synthetic.
+    """
+    names = sorted(_fixtures())
+    assert len(names) == 14, names
+    clamped = []
+    for name in names:
+        p = _proj(name)
+        for scen in ("bear", "base", "bull"):
+            if p.get(f"scenarios.{scen}.intrinsic_value_unclamped") is not None:
+                clamped.append((name, scen))
+    assert clamped == [("BN4_SI", "bear")], clamped
 
 
 def test_bull_quality_gate_unbinds_on_exactly_six_not_nine():

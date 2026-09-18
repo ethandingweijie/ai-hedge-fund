@@ -342,6 +342,29 @@ _SCENARIO_KEYS = (
     # the three legs pass a real one) is checkable from the baseline instead of
     # inferable from source.
     "forward_roic", "roic_source", "sector_g_avg", "sector_g_avg_basis",
+    # Scenario-ordering invariant (`GATE_SCENARIO_ORDERING`). Both keys appear
+    # ONLY on a scenario the clamp moved, so they are absent from every ordered
+    # run and their presence in a baseline is itself the record that the
+    # invariant fired.
+    #
+    # `intrinsic_value_unclamped` is pinned because without it a clamped 5.20
+    # and a computed 5.20 are the same leaf. `iv_multi_post` keeps the blend's
+    # pre-composite arithmetic, but it is not the number that was published, so
+    # it cannot carry that distinction on its own.
+    #
+    # `ordering_composition` is the owner's "check whether the inversion is
+    # driven by method dropouts / composition gain", frozen as data: which legs
+    # voted, which of base's legs this scenario lost, and the share of base's
+    # voting weight they carried. Pinning it means a future change to WHICH leg
+    # drops moves the baseline even when the clamped IV is identical.
+    #
+    # Deliberately NOT added here: the five blend-disclosure keys `967a3c5`
+    # publishes (`legs_dropped`, `weight_surviving`, `weight_intended`,
+    # `methods_surviving`, `single_method`). They are present on EVERY scenario
+    # of EVERY fixture, so pinning them adds ~70 leaves to all 14 baselines --
+    # a real improvement, and a different change with a different named-move
+    # set than "clamp the inverted bear IV on BN4.SI".
+    "intrinsic_value_unclamped", "ordering_composition",
 )
 
 _SCENARIOS = ("bear", "base", "bull")

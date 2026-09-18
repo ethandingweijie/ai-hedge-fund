@@ -392,7 +392,15 @@ class TestTheInvariantsAreNotDuplicated:
             assert key in rec, key
         assert '"applied": _reinvest_in_scope' not in src
         assert src.count('"applied": False,') == 3
-        assert src.count('"applied": True,') == 5
+        # SIX, not five, since GATE_SCENARIO_ORDERING landed with a literal
+        # `"applied": True,`. This is the SECOND copy of that count — the first
+        # is in `test_consumer_discretionary_gates.py::
+        # test_gate_vocabulary_is_closed_and_has_ten_members`, and neither
+        # mentions the other, so adding a live gate turns two tests red in two
+        # modules that look unrelated. Both were widened together when the
+        # tenth gate arrived; if you are reading this because one of them
+        # failed and the other did not, a gate was added without a record.
+        assert src.count('"applied": True,') == 6
 
     def test_the_two_flag_branches_are_mutually_exclusive(self):
         """Out-of-scope names get one sentence; in-scope names get the paragraph.

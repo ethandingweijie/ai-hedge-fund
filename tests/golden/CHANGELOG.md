@@ -1203,3 +1203,106 @@ the inert-on-this-basket finding as a checkable fact rather than leaving it in
 prose, and test_no_profile_means_no_charge_even_with_a_measurable_ratio, which
 pins the fail-closed direction the whole scoping design depends on.
 
+## 2026-09-18T06:16:21+00:00
+
+- regenerated at HEAD: `9bf9610`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- **expected moves, named**: 12 changed projection keys out of 3192 compared, all
+  12 of them on `BN4_SI` and on no other fixture. Thirteen fixtures replay
+  byte-identical. **TWO numeric leaves moved**, and both are the bear case this
+  entry exists to correct: `scenarios.bear.intrinsic_value` 7.37 -> 5.20
+  (-29.44%) and `12m_targets.bear` 9.23 -> 8.15 (-11.70%). **BASE IV IS
+  UNCHANGED at 5.20** — verified by snapshot-to-snapshot comparison with
+  `scratchpad/diff_golden_snapshots.py` against
+  `scratchpad/snapshots_BEFORE_lxix.json`, not by counting test failures,
+  because a tolerance is a reporting threshold and not a change detector. The
+  other ten are: one new numeric leaf `scenarios.bear.intrinsic_value_unclamped`
+  = 7.37, which is what keeps a clamped 5.20 distinguishable from a computed
+  one; five new `scenarios.bear.ordering_composition` leaves (`legs_voted`
+  = ["SOTP (published)"], `n_legs` = 1, `single_method` = true,
+  `legs_lost_vs_base` = ["EV/EBITDA"], `weight_lost_vs_base` = 0.533333) that
+  freeze the owner's step-1 diagnostic as data; `gate_metrics` gaining
+  `scenario_iv_ordering`; and `forward_flags` gaining the one
+  `INVARIANT_VIOLATION_SCENARIO_INVERSION` line in all THREE scenarios, base and
+  bull included, because the flag describes the triple and a reader who lands
+  on base alone should still see it. `12m_targets.base` (8.15) and
+  `12m_targets.bull` (9.11) did NOT move. NOTHING WAS REMOVED from any
+  `forward_flags` list — measured, not assumed: all three lists gain exactly
+  one line and lose zero. The pre-existing `[12m-pt] ordering violated`
+  diagnostic never appeared in any payload at all, because it appends to
+  `ticker_forward_flags`, a list documented 60 lines above its own call site as
+  snapshotted per scenario inside the loop and never read again after it ends.
+  That is why this inversion was invisible in the golden record for however
+  many runs it was live, and it is why the new flag writes to
+  `scenario_results[...]["forward_flags"]` for all three scenarios instead of
+  joining the dead list. The diagnostic's `print` still fires on the way to
+  nowhere; post-clamp the targets are ordered (8.15 / 8.15 / 9.11) so it does
+  not fire on BN4.SI any more, but that is stdout, not the archive. `_meta`
+  bookkeeping (3 keys) accounts for the diff tool's 15 total.
+- reason: Clamp inverted Bear IV on BN4.SI caused by legacy method-dropout composition gain.
+
+Owner instruction, verbatim: "The engine must assert that scenario ordering is an
+axiomatic property of risk: Bear IV <= Base IV <= Bull IV." Enforced as an
+engine-level invariant (_enforce_scenario_ordering, called once after the
+scenario loop and before anything downstream reads a scenario IV), not as an
+ad-hoc clamp at the point of publication, so the clamp reaches the _unanimous
+same-side-of-spot test, the convergence bound that builds _12m_targets, the
+two-sided PT band, the HK per-share note and base_iv itself. A new gate,
+GATE_SCENARIO_ORDERING / metric scenario_iv_ordering, records it with applied:
+True. Base is the PIVOT and is never moved: bear is pulled down onto base and
+bull up onto it, which is the owner's min(Bear IV, Base IV) generalised by
+symmetry. The blend's own arithmetic is left intact beside the clamp --
+iv_multi, iv_multi_post and intrinsic_value_pre_composite keep their unclamped
+values and the scenario that moved gains intrinsic_value_unclamped -- because an
+invariant that erases the evidence of its own violation cannot be audited, and
+without that key a clamped 5.20 and a computed 5.20 are the same golden leaf.
+
+THE ROOT CAUSE, MEASURED AND NOT ASSUMED. The narrative that authorised this fix
+said the bear cash-flow model broke down (negative DCF / severe debt burden),
+that the DCF weight zeroed out completely, and that base kept a low or
+zero-floored DCF leg that diluted its multiples. The perverse-outcome mechanism
+is exactly right and is now quantified at +3.93, but three specifics are wrong
+and are recorded here because the shipped gate record contradicts them. BN4.SI
+has NO DCF LEG IN ANY SCENARIO -- weight_dcf 0.0 and iv_dcf None throughout --
+so nothing "zeroed out". The leg that drops is EV/EBITDA, the profile's ANCHOR,
+and it drops inside the MULTI bucket, where the blend renormalises 2 legs to 1.
+And base's dilution is EV/EBITDA = 1.30 at 0.533333 weight, not a DCF leg. What
+actually happens: _ev_to_equity_ps computes EV SGD 9.021bn against net debt SGD
+9.325bn plus minority interest SGD 0.322bn, i.e. equity SGD -0.626bn, and
+returns max(equity/shares, 0.0) -- a literal 0.0 where it means "not computable"
+(chip lxxi). The blend drops that zero as a non-positive leg and renormalises
+onto the single survivor, which is the HIGHEST of the three legs bear computed
+(SOTP 8.37 against Forward P/E 4.21 and Forward EV/EBITDA 0.07), so bear
+published 7.37 above base 5.20 on a name trading at S$11.10. Retaining the zero
+at its intended 0.533333 weight gives 0.0 x 0.5333 + 8.37 x 0.4667 = 3.906, or
+3.44 after the 0.8812 composite: below base, correctly ordered. The dropout is
+worth +3.93 to the bear IV.
+
+WHY THE CLAMP AND NOT THE BRIDGE. Flooring a non-positive leg at zero and keeping
+its weight was built, measured and rejected by the owner -- "base IV for BN4 and
+u96 drop too much. not intuitive" -- and 967a3c5 shipped the dropout as a
+DISCLOSURE instead (legs_dropped, weight_surviving, weight_intended,
+methods_surviving, single_method). So the leg still drops; this stops a dropped
+leg from inverting the scenario set, and the gate record names the composition
+change that caused it rather than leaving the clamp to look like an unexplained
+edit to a published number. composition is published per scenario with legs_voted,
+n_legs, single_method, legs_lost_vs_base and weight_lost_vs_base, which answers
+the owner's step 1 ("check if the inversion is driven by method dropouts /
+composition gain") with data: a dropout-driven inversion shows weight_lost_vs_base
+near the surviving leg's weight beside single_method true, and an inversion from
+genuinely disordered inputs shows zero. _voted_legs reads effective_weights and
+NOT methods_used, because methods_used is built from raw profile rows and on this
+fixture names 'DCF' in base and 'EV/EBITDA' in bear while neither carried any
+weight at all -- reading it would report n_legs 3 and legs_lost_vs_base [] on the
+exact fixture the invariant was written for.
+
+BLAST RADIUS, MEASURED ONE SUBPROCESS PER FIXTURE ACROSS ALL 14 (a shared process
+leaks ~ten process-lifetime caches and has previously reported BN4_SI at +26.54%
+where the true figure is +0.00%). EXACTLY ONE VIOLATION: BN4_SI, bear > base. NO
+base > bull ANYWHERE, so the bull half of the invariant ships implemented but
+unexercised against a real run; its only coverage is synthetic and
+TestTheBullHalf says so rather than letting a green suite imply otherwise.
+Thirteen fixtures replay byte-identical.
+

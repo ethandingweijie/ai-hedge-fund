@@ -341,10 +341,10 @@ def test_the_engine_turns_inventory_into_days_at_exactly_one_site():
     assert dcf_agent._INVENTORY_MARKDOWN_HAIRCUT == 0.15
 
 
-def test_gate_vocabulary_is_closed_and_has_nine_members():
+def test_gate_vocabulary_is_closed_and_has_ten_members():
     """The set of gate ids the engine can emit, extracted from its own source.
 
-    Nine. This is what makes a claim about which gates exist a fact about the
+    Ten. This is what makes a claim about which gates exist a fact about the
     engine rather than a fact about a brief's prose — and it means adding one is
     a deliberate act that turns this test red until the list is updated.
 
@@ -353,15 +353,31 @@ def test_gate_vocabulary_is_closed_and_has_nine_members():
     shipped OBSERVATION-ONLY: `applied` is False on every run and no call site
     passes a ratio to the projector, so it records a counterfactual beside the
     cash-conversion cap it was written to replace. The ninth,
-    `GATE_INVENTORY_STRESS`, is the brief's Gate 1 and is the opposite: it is the
-    only gate in the engine whose record says `applied: True`. Measured before it
-    was wired, it fires on none of the 14 golden fixtures — the largest positive
-    DSI expansion is FCX at +7.1 days against a 25-day trigger — so it ships
-    live with a nil blast radius on the recorded baseline.
+    `GATE_INVENTORY_STRESS`, is the brief's Gate 1 and is the opposite: it is
+    live, and when it was wired it was the only gate in the engine whose record
+    said `applied: True`. Measured before it was wired, it fires on none of the
+    14 golden fixtures — the largest positive DSI expansion is FCX at +7.1 days
+    against a 25-day trigger — so it shipped live with a nil blast radius on the
+    recorded baseline.
 
-    Both of those facts are pinned below by name rather than left to the count,
-    because a count alone cannot tell "nine gates" from "nine gates, two of
-    which moved a number nobody named".
+    The tenth, `GATE_SCENARIO_ORDERING`, is not from this brief at all. It
+    enforces Bear ≤ Base ≤ Bull as an engine-level invariant after a measured
+    inversion on BN4.SI: the profile's anchor leg `EV/EBITDA` failed its equity
+    bridge in bear only (EV SGD 9.021bn against net debt SGD 9.325bn plus
+    minority interest SGD 0.322bn is negative equity, floored to a literal 0.0
+    by `_ev_to_equity_ps` and then dropped as a non-positive leg), so the blend
+    renormalised bear onto its single surviving method — `SOTP (published)` at
+    weight 1.0, the HIGHEST of the three legs it had computed — and bear
+    published 7.37 against base 5.20. Base is the pivot and is never moved; the
+    outer scenarios are pulled onto it, and the unclamped value is kept beside
+    the clamp as `intrinsic_value_unclamped`. Unlike the ninth gate this one
+    fires on the recorded baseline: exactly one fixture of 14, and exactly one
+    of the two directions (no `base > bull` anywhere, so the bull half ships
+    implemented but unexercised).
+
+    Those facts are pinned below by name rather than left to the count, because
+    a count alone cannot tell "ten gates" from "ten gates, two of which moved a
+    number nobody named".
     """
     emitted = sorted(set(re.findall(r'"gate_id":\s*"(GATE_[A-Z_]+)"', _engine_src())))
     assert emitted == [
@@ -374,6 +390,7 @@ def test_gate_vocabulary_is_closed_and_has_nine_members():
         "GATE_INVENTORY_STRESS",
         "GATE_PT_IV_BAND",
         "GATE_REVENUE_SCALE_CAP",
+        "GATE_SCENARIO_ORDERING",
     ], emitted
     # The two substring facts that used to be one assert. `"REINVESTMENT"` does
     # not contain `"INVENT"`, which is why the old guard could assert
@@ -382,14 +399,22 @@ def test_gate_vocabulary_is_closed_and_has_nine_members():
     assert "INVENT" not in "GATE_GROWTH_REINVESTMENT"
     assert sum("INVENT" in g for g in emitted) == 1, emitted
     # `applied` is a literal on every record, never derived, and the split is
-    # the fact worth pinning: five records say True and three say False. A first
+    # the fact worth pinning: six records say True and three say False. A first
     # version of this assert claimed the inventory gate was the ONLY True in the
     # file, which is wrong — CAGR divergence, balance-sheet-financial (twice)
     # and deterministic-KPI precedence all applied what they measured long
-    # before it existed. Counted from source, so the numbers here cannot be a
-    # recollection.
+    # before it existed, and scenario ordering joined them. Counted from source,
+    # so the numbers here cannot be a recollection.
+    #
+    # This count has a SECOND copy in `test_reinvestment_scope_and_cap.py::
+    # TestTheInvariantsAreNotDuplicated::
+    # test_the_gate_record_still_says_not_applied_and_publishes_both_gates`.
+    # Neither mentions the other in the engine, so a new live gate reddens two
+    # modules that look unrelated — which is what happened when
+    # GATE_SCENARIO_ORDERING landed and only this one had been widened. Both
+    # are now cross-referenced; keep them in step.
     src = _engine_src()
-    assert src.count('"applied": True,') == 5, src.count('"applied": True,')
+    assert src.count('"applied": True,') == 6, src.count('"applied": True,')
     assert src.count('"applied": False,') == 3, src.count('"applied": False,')
     assert '"applied": _s_to_c is not None' not in src
 
