@@ -2385,25 +2385,55 @@ def _sotp_body() -> str:
 
 
 def test_associates_are_added_back_unconditionally_and_only_inside_the_segment_path():
-    """The add-back exists. It has no materiality test and no non-SOTP path.
+    """The add-back exists, has no materiality test, and is no longer losable.
 
-    `_sotp_analyst_style` does `nav = total_seg_value + associates + net_cash`
-    with `associates = _safe(assumptions.get("associates_investments")) or 0.0`.
-    So the brief's Gate 4 is half-implemented already, and the half that is
-    missing is the half its own rationale depends on: there is no comparison
-    against total equity, so the add-back is all-or-nothing on whether the LLM
-    extractor returned a number, not on whether the stake is material.
+    UPDATED 2026-09-18, and the update is the point rather than collateral. This
+    test used to pin the add-back as three inline lines inside
+    `_sotp_analyst_style` and its own docstring recorded the consequence:
 
-    It is also unreachable for a name with no segments — the function returns
-    None when `rows` is empty, and rows come from `assumptions["segments"]`.
-    Anta qualifies (Amer Sports is a segment story), but a single-brand apparel
-    name with a minority JV would not, and would silently drop the stake.
+        "It is also unreachable for a name with no segments — the function
+        returns None when `rows` is empty, and rows come from
+        `assumptions["segments"]`. Anta qualifies (Amer Sports is a segment
+        story), but a single-brand apparel name with a minority JV would not,
+        and would silently drop the stake."
+
+    That was the bug the owner then ordered fixed unconditionally (Step 6,
+    Route (a)). The three lines are now `_sotp_nonoperating_addback`, called
+    ABOVE the `if not rows:` guard, so the zero-row path returns a degraded
+    table carrying the add-back instead of returning None and taking the value
+    with it. The assertion below moved with it: the pinned literal is now the
+    helper's own line, and a new assertion pins the ordering that makes the fix
+    real -- the add-back call must appear BEFORE the guard, because the whole
+    defect was an ordering.
+
+    What is still true and still pinned: there is no comparison against total
+    equity, so the add-back remains all-or-nothing on whether the extractor
+    returned a number rather than on whether the stake is material. The brief's
+    Gate 4 is still half-implemented; the half that was missing was reachability
+    on the degraded path, and that half is now closed.
     """
     src = _engine_src()
-    assert 'associates = _safe(assumptions.get("associates_investments")) or 0.0' in src
+    assert 'associates = _safe(a.get("associates_investments")) or 0.0' in src
     assert "nav = total_seg_value + associates + net_cash" in src
+
+    # THE ORDERING IS THE FIX. Hoisting the computation above the guard is what
+    # makes the add-back unlosable; a future refactor that moves the call back
+    # below the guard reintroduces the original bug while leaving every other
+    # assertion in this file green.
+    _addback_call = src.index("associates, net_cash, _addback_basis = "
+                              "_sotp_nonoperating_addback(")
+    _sotp_start = src.index("def _sotp_analyst_style(")
+    assert _sotp_start < _addback_call, "the add-back call left the table builder"
+    _body_after = src[_addback_call:]
+    _guard = _body_after.index("if not rows:")
+    assert _guard > 0, "the zero-row guard vanished"
+    # And the guard no longer returns None unconditionally.
+    _guard_block = _body_after[_guard:_guard + 4000]
+    assert "degraded_no_segments" in _guard_block
+    assert '"per_share":           None' in _guard_block
+
     body = _sotp_body()
-    assert "if not rows:" in body and "return None" in body
+    assert "if not rows:" in body
     # The value arrives from the LLM extractor, FX-converted to USD there.
     import src.agents.analysis.sotp_extractor as sx
     sxs = inspect.getsource(sx)

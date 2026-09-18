@@ -2075,6 +2075,69 @@ def _pin_sotp_holdco_discount(
     )
 
 
+def _sotp_nonoperating_addback(
+    assumptions: Optional[dict],
+    net_debt: Optional[float] = None,
+) -> tuple[float, float, str]:
+    """``(associates, net_cash, basis)`` — the two non-operating items an SOTP
+    NAV carries on top of the sum of the segment values.
+
+    ── WHY THIS IS A FUNCTION AND NOT THREE INLINE LINES ──────────────────────
+    It used to be three inline lines inside ``_sotp_analyst_style``, sitting
+    BELOW that function's ``if not rows: return None`` guard. That placement had
+    a consequence nobody chose: when the segment narrative rows failed to
+    extract — every segment present but none carrying a usable forward revenue —
+    the guard returned ``None`` and the add-back was computed by nobody, so it
+    was discarded. On BABA that is $22.3bn of equity-method associates and
+    $68bn of net cash, dropped from the run because a prose extractor could not
+    find a revenue figure. The owner named it a severe bug on 2026-09-18 and
+    said to fix it unconditionally.
+
+    Lifting it out is the fix. Both the happy path and the degraded path now
+    call the same function, so there is exactly one place that decides what the
+    add-back is, and no ordering inside a table builder can silently delete it
+    again.
+
+    ── WHAT THE CALLER MAY AND MAY NOT DO WITH THE RESULT ────────────────────
+    ``associates`` is genuinely additive to a DCF equity value: equity-method
+    investees are consolidated neither in revenue nor in the operating income
+    that FCF is built from, so their value is nowhere in the projection.
+
+    ``net_cash`` is NOT additive to a DCF equity value, and adding it is a
+    double count. ``_project_dcf``'s bridge is
+    ``equity_value = pv_sum + pv_tv - (net_debt or 0.0)``, so a name with
+    negative net debt has already had its net cash added by the time anything
+    downstream sees an equity value. Both figures are returned anyway, because
+    an SOTP NAV needs both — but the ``basis`` string says which is which, and
+    any caller that adds this to an already-netted equity value must take
+    ``associates`` alone.
+
+    Returns ``(0.0, 0.0, "...")`` rather than raising on missing or malformed
+    input, so a caller cannot turn a research gap into a failed run.
+    """
+    a = assumptions if isinstance(assumptions, dict) else {}
+    associates = _safe(a.get("associates_investments")) or 0.0
+    net_cash = _safe(a.get("net_cash"))
+    if net_cash is None:
+        # Negative net debt IS net cash. Zero (not None) when the name is a net
+        # borrower, because an SOTP NAV subtracts debt once, in the bridge.
+        net_cash = -net_debt if (net_debt is not None and net_debt < 0) else 0.0
+        if net_debt is None:
+            _nc_src = "none (net debt not supplied)"
+        elif net_cash:
+            _nc_src = "derived from net_debt"
+        else:
+            _nc_src = "none (net borrower)"
+    else:
+        _nc_src = "assumptions['net_cash']"
+    basis = (
+        f"associates ${associates / 1e9:+.2f}bn from "
+        f"assumptions['associates_investments']; "
+        f"net cash ${net_cash / 1e9:+.2f}bn from {_nc_src}"
+    )
+    return associates, net_cash, basis
+
+
 def _sotp_analyst_style(
     assumptions: dict,
     shares: float,
@@ -2093,6 +2156,18 @@ def _sotp_analyst_style(
 
     Returns an Exhibit-17-shaped dict (rows + nav + holdco + final +
     per_share_reporting), or None when preconditions fail.
+
+    THREE outcomes, not two, since 2026-09-18:
+      * a complete table — ``degraded_no_segments`` False, ``per_share_reporting``
+        a number, safe to publish and to grade;
+      * a DEGRADED table — segments were supplied but none carried a usable
+        forward revenue. ``rows`` is empty, ``per_share`` and
+        ``per_share_reporting`` are **None**, ``degraded_no_segments`` is True,
+        and ``associates`` / ``net_cash`` / ``nav`` still carry the balance-sheet
+        add-back that used to be thrown away here. Never publish a per-share
+        value from it and never grade it against a sell-side reference;
+      * None — no assumptions, no shares, no segments at all, or a zero-row
+        extraction with no add-back to preserve.
     """
     if not assumptions or not shares or shares <= 0:
         return None
@@ -2161,13 +2236,59 @@ def _sotp_analyst_style(
             "rationale":     str(seg.get("rationale", "")),
         })
 
-    if not rows:
-        return None
+    # THE ADD-BACK IS COMPUTED ABOVE THE ZERO-ROW GUARD, ON PURPOSE. It used to
+    # be computed below it, which meant that when every segment failed the
+    # revenue filter the function returned None and the associates and net cash
+    # were discarded by nobody's decision. See `_sotp_nonoperating_addback`.
+    associates, net_cash, _addback_basis = _sotp_nonoperating_addback(
+        assumptions, net_debt)
 
-    associates = _safe(assumptions.get("associates_investments")) or 0.0
-    net_cash = _safe(assumptions.get("net_cash"))
-    if net_cash is None:
-        net_cash = -net_debt if (net_debt is not None and net_debt < 0) else 0.0
+    if not rows:
+        # ── THE DEGRADED PATH ────────────────────────────────────────────────
+        # Segments were supplied but none survived the positive-forward-revenue
+        # filter, so there is no operating value to sum. What there still is, is
+        # the balance-sheet add-back -- and it is returned rather than dropped.
+        #
+        # `per_share` and `per_share_reporting` are DELIBERATELY None. The
+        # tempting thing is to publish the add-back as a per-share value, and it
+        # is wrong by an order of magnitude: on BABA it is $90.3bn against a
+        # $193 IV, so a 35%-weighted SOTP leg at under half the answer would
+        # enter the blend and drag the published IV down for want of a revenue
+        # figure. That is the same defect class as the blend silently dropping a
+        # non-positive leg, only pointing the other way -- a MISSING input
+        # producing a confidently wrong PUBLISHED number instead of a silently
+        # inflated one. Both call sites are guarded on `degraded_no_segments`
+        # and neither publishes from this table.
+        #
+        # The holdco discount is not applied here. It is a discount on an
+        # operating NAV, and there is no operating NAV; discounting a cash and
+        # associates pile by 15% would be a number with no meaning attached.
+        if abs(associates) <= 0.0 and abs(net_cash) <= 0.0:
+            # Nothing to preserve, so the old contract holds exactly: no rows
+            # and no add-back is still None, and a caller cannot tell the
+            # difference between this and the pre-fix behaviour.
+            return None
+        _nav_addback = associates + net_cash
+        return {
+            "rows":                [],
+            "segment_value":       0.0,
+            "associates":          associates,
+            "net_cash":            net_cash,
+            "nav":                 _nav_addback,
+            "holdco_discount_pct": 0.0,
+            "holdco_discount":     0.0,
+            "final":               _nav_addback,
+            "per_share":           None,
+            "per_share_reporting": None,
+            "fx_to_reporting":     float(fx_to_reporting or 1.0),
+            "shares":              shares,
+            "degraded_no_segments": True,
+            "degraded_reason": (
+                f"{len(segments)} segment(s) supplied, none carried a usable "
+                f"forward revenue, so no operating value could be summed; "
+                f"{_addback_basis}"),
+        }
+
     nav = total_seg_value + associates + net_cash
     holdco_pct = float(assumptions.get("holdco_discount_pct", 0.0) or 0.0)
     holdco_value = nav * holdco_pct
@@ -2190,6 +2311,10 @@ def _sotp_analyst_style(
         "per_share_reporting": final * fx / shares,
         "fx_to_reporting":     fx,
         "shares":              shares,
+        # Present on the happy path too, so a consumer can ask the question
+        # without a `.get` default hiding a table that was never degraded from
+        # one whose key is missing for an unrelated reason.
+        "degraded_no_segments": False,
     }
 
 
@@ -5196,6 +5321,11 @@ def _compute_method_value(
             return None
         table = most_recent.get("sotp_analyst_table")
         if table is None:
+            if most_recent.get("sotp_analyst_degraded") is not None:
+                # An earlier scenario pass already found the extraction
+                # degraded. The verdict is a function of the assumptions alone,
+                # so recomputing per scenario cannot change it.
+                return None
             table = _sotp_analyst_style(
                 assumptions,
                 shares=shares,
@@ -5208,6 +5338,20 @@ def _compute_method_value(
                 tier=_resolve_segment_tier(sector, profile_name),
             )
             if table is None:
+                return None
+            if table.get("degraded_no_segments"):
+                # ── THE METHOD DOES NOT PUBLISH, BUT NOTHING IS DISCARDED ──
+                # Cached under a DIFFERENT key from `sotp_analyst_table`, and
+                # that is load-bearing rather than tidy. `build_sotp_breakdown`
+                # and the report layer read `sotp_analyst_table` and format
+                # `table['per_share_reporting']:,.2f`, which raises TypeError on
+                # the None a degraded table carries. Keeping the degraded table
+                # out of that key means the existing consumers are untouched,
+                # while `sotp_analyst_degraded` still gives the engine the
+                # associates and net cash figures to disclose by name and dollar
+                # in the ticker's forward flags. Before this change the value
+                # was not merely unpublished, it was unrecoverable.
+                most_recent["sotp_analyst_degraded"] = table
                 return None
             most_recent["sotp_analyst_table"] = table
         if scenario in ("bear", "bull") and assumptions.get("_scenarios"):
@@ -7041,8 +7185,39 @@ def _gate_live_sotp(ticker: str, assumptions: dict, shares: float,
     try:
         from src.agents.analysis.sotp_ground_truth import check_table
         fx = float(assumptions.get("fx_usd_to_reporting") or 1.0)
-        grade = check_table(ticker, _sotp_analyst_style(
-            assumptions, shares=shares, net_debt=net_debt, fx_to_reporting=fx))
+        _tbl = _sotp_analyst_style(
+            assumptions, shares=shares, net_debt=net_debt, fx_to_reporting=fx)
+        if (_tbl or {}).get("degraded_no_segments"):
+            # ── A DEGRADED EXTRACTION IS NOT A $0.00 EXTRACTION ─────────────
+            # `check_table` reads `float(table.get("per_share") or 0.0)`, so
+            # handing it the degraded table would grade the total as $0.00/ADS
+            # and the flag below would report "live value $0.00/ADS outside the
+            # reference" -- a true sentence about a number the engine never
+            # computed, and one that hides the real failure (no usable segment
+            # revenue) behind an arithmetic-looking one.
+            #
+            # The remedy is the same one an implausible grade triggers, because
+            # a live extraction that found no usable segment revenue at all is a
+            # strictly worse failure than the bad-multiple case this function
+            # exists for (25 Aug, BABA, 8x P/E on EBIT, $61/ADS against a
+            # $152-201 band). Only the flag text differs: it names what
+            # happened rather than what the total graded at.
+            from src.agents.analysis.sotp_snapshot import (
+                load_sotp_snapshot, lookup_snapshot,
+            )
+            key, snap = lookup_snapshot(load_sotp_snapshot(), ticker)
+            _reason = _tbl.get("degraded_reason") or "no usable segment revenue"
+            if not snap:
+                return assumptions, (
+                    f"SOTP (analyst): live extraction degraded -- {_reason}. "
+                    f"No validated snapshot to fall back to, so the method does "
+                    f"not publish; the associates and net cash it did find are "
+                    f"disclosed rather than valued.")
+            return ({**snap, "_origin": f"snapshot:{key}",
+                     "fx_usd_to_reporting": fx},
+                    f"SOTP (analyst): live extraction degraded -- {_reason}. "
+                    f"Replaced with the validated snapshot ({key}).")
+        grade = check_table(ticker, _tbl)
         if not grade or grade["plausible"]:
             return assumptions, None
         from src.agents.analysis.sotp_snapshot import load_sotp_snapshot, lookup_snapshot
@@ -12463,6 +12638,49 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     sotp_breakdown["ground_truth"] = check_table(ticker, sotp_breakdown)
                 except Exception:
                     sotp_breakdown["ground_truth"] = None
+
+            # ── Degraded SOTP disclosure ──────────────────────────────────
+            # `sotp_analyst_degraded` is set when the extractor supplied
+            # segments but none carried a usable forward revenue, so the SOTP
+            # (analyst) method did not publish a per-share value. Before
+            # 2026-09-18 `_sotp_analyst_style` returned None on that path and
+            # the balance-sheet add-back went with it: on BABA, $22.3bn of
+            # equity-method associates and $68bn of net cash, discarded because
+            # a prose extractor could not find a revenue figure. The figures
+            # survive now, and this is where they become visible in the run.
+            #
+            # A FLAG AND NOT AN ADD-BACK, and the reason is arithmetic rather
+            # than caution. The DCF equity bridge is
+            # `equity_value = pv_sum + pv_tv - (net_debt or 0.0)`, so net cash
+            # is ALREADY inside the published IV for any name with negative net
+            # debt -- adding the $68bn again would double count it. Associates
+            # genuinely are missing, but injecting them into the DCF leg needs
+            # an FX basis (the table publishes `final * fx / shares`, the DCF
+            # leg publishes in the reporting currency already) and a share
+            # count on the same basis as the assumptions, and getting that pair
+            # wrong on a China name is the documented raw-CNY-into-a-USD-base
+            # failure that once put PDD at 11.8x spot. Disclosing the dollar
+            # figure is the honest step; valuing it is a separate decision that
+            # needs both bases settled first.
+            _sotp_deg = most_recent.get("sotp_analyst_degraded")
+            if _sotp_deg:
+                try:
+                    _deg_assoc = float(_sotp_deg.get("associates") or 0.0)
+                    _deg_nc = float(_sotp_deg.get("net_cash") or 0.0)
+                    ticker_forward_flags.append(
+                        f"SOTP (analyst) did not publish: "
+                        f"{_sotp_deg.get('degraded_reason') or 'no usable segment revenue'}. "
+                        f"Non-operating assets found but NOT valued into the "
+                        f"answer -- associates ${_deg_assoc / 1e9:,.2f}bn and "
+                        f"net cash ${_deg_nc / 1e9:,.2f}bn (USD, before the "
+                        f"{float(_sotp_deg.get('fx_to_reporting') or 1.0):.4f} "
+                        f"reporting-currency conversion). Net cash is already "
+                        f"inside the DCF equity bridge, so the associates "
+                        f"figure is the part genuinely missing from the "
+                        f"published IV."
+                    )
+                except Exception:                  # never fail a run on a flag
+                    pass
 
         # ── Model-vs-consensus sanity gate ────────────────────────────────
         # `consensus_pt` was fetched for frontend display only. It is also the
