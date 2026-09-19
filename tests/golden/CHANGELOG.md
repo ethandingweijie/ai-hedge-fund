@@ -1346,3 +1346,11 @@ WHAT THE GATE PAYLOAD GAINED AT ZERO BASELINE COST. The record gained two keys, 
 
 This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the flag's introduction at a flat 0.25 and remains the correct history of that change. tests/golden/CHANGELOG.md is append-only.
 
+## 2026-09-19T05:18:57+00:00
+
+- regenerated at HEAD: `84ffe2a`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: T-1 backward gate dated to the financials it values, pinned as structured data; projecting DCF legs bucketed as DCF. (1) _run_backward_gate took its benchmark price from run date minus 365 days while valuing series[-2], the previous fiscal year - up to ~18 months apart (LULU: FY2025 ended 2025-02-02 at 414.20, benchmark read 169.62 on 2025-09-19, published as a 170% calibration error; across 61 scored prod runs 16 verdicts were mis-stated, 2 false alarms and 14 masked). The benchmark is now the last close on or before the T-1 fiscal period end, fetched in ONE window that also covers the close 365 days later for a new forward score (T-1 model vs T-1 market price, each against the later close; observation only, the flag does not read it). Fixture change: the old 15-day price window call is replaced in all 14 calls.json by the new window (historical closes, fetched live, every row dated before the fixture end_date). Projection change: calibration_record added to _DICT_KEYS, so every fixture gains calibration_record.* leaves. On the new benchmark: fired 02888_HK 09988_HK AAPL BABA FCX MELI MU U96_SI V; passed BN4_SI C38U_SI COST D05_SI SCHW. (3) DCF (5-yr), DCF (LTG), Rev DCF (GMV), Rev DCF moved into _DCF_FAMILY_NAMES so the blend stops applying the sentiment composite to them; no basket profile carries these legs, so NO projection field outside calibration_record moves on any of the 14 names (diffed before regenerating: zero non-calibration moves).
+

@@ -317,7 +317,13 @@ _SCALAR_KEYS = (
 #: is unchanged by rounding — and Decision 1 narrowed ``bank_clamp`` to a real
 #: bank test, a change the baseline could not previously see at all.
 _DICT_KEYS = ("multiples_used", "routing_trace", "12m_targets", "consensus_pt",
-              "composite_bridge")
+              "composite_bridge",
+              # The T-1 backward gate as structured fields: benchmark date and
+              # price, the T-1 IV, the verdict, and the forward score. The
+              # gate's prose note was never pinned, so the whole gate --
+              # including a benchmark dated a year away from the financials it
+              # scored -- was invisible to this suite.
+              "calibration_record")
 
 #: Per-scenario fields. ``method_iv_table`` is the load-bearing one: it is
 #: what shows WHICH valuation leg moved, and defects 1, 2 and 3 all change a

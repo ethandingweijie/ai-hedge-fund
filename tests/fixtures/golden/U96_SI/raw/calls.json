@@ -2828,9 +2828,453 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-09-01\", \"symbol\": \"U96.SI\", \"to\": \"2025-09-16\"}, \"<redacted>\"]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-12-16\", \"symbol\": \"U96.SI\", \"to\": \"2025-12-31\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-31",
+    "price": 6.02,
+    "volume": 1090400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-30",
+    "price": 6.01,
+    "volume": 3376800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-29",
+    "price": 6,
+    "volume": 1822500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-26",
+    "price": 5.99,
+    "volume": 1459200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-24",
+    "price": 6,
+    "volume": 953100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-23",
+    "price": 5.99,
+    "volume": 2475000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-22",
+    "price": 5.95,
+    "volume": 3499800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-19",
+    "price": 5.85,
+    "volume": 3278600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-18",
+    "price": 5.88,
+    "volume": 2684600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-17",
+    "price": 5.91,
+    "volume": 2384200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-16",
+    "price": 5.92,
+    "volume": 5451300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-15",
+    "price": 6.01,
+    "volume": 9433600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-12",
+    "price": 5.92,
+    "volume": 6284300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-11",
+    "price": 5.82,
+    "volume": 3022400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-10",
+    "price": 5.84,
+    "volume": 3631000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-09",
+    "price": 5.86,
+    "volume": 4595300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-08",
+    "price": 5.9,
+    "volume": 5263200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-05",
+    "price": 5.99,
+    "volume": 3570900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-04",
+    "price": 5.96,
+    "volume": 5657200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-03",
+    "price": 6.01,
+    "volume": 11893400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-02",
+    "price": 6.07,
+    "volume": 3844100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-12-01",
+    "price": 6.08,
+    "volume": 4440200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-28",
+    "price": 6.13,
+    "volume": 2049900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-27",
+    "price": 6.13,
+    "volume": 3868200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-26",
+    "price": 6.14,
+    "volume": 2147600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-25",
+    "price": 6.12,
+    "volume": 4696700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-24",
+    "price": 6.17,
+    "volume": 6602500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-21",
+    "price": 6.08,
+    "volume": 12917200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-20",
+    "price": 6.31,
+    "volume": 3488600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-19",
+    "price": 6.29,
+    "volume": 4996000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-18",
+    "price": 6.37,
+    "volume": 3817500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-17",
+    "price": 6.48,
+    "volume": 2252300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-14",
+    "price": 6.44,
+    "volume": 2764100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-13",
+    "price": 6.51,
+    "volume": 2972206
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-12",
+    "price": 6.48,
+    "volume": 2479700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-11",
+    "price": 6.47,
+    "volume": 5723300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-10",
+    "price": 6.36,
+    "volume": 2907900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-07",
+    "price": 6.35,
+    "volume": 3979200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-06",
+    "price": 6.37,
+    "volume": 4336700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-05",
+    "price": 6.3,
+    "volume": 7105900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-04",
+    "price": 6.36,
+    "volume": 9125900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-11-03",
+    "price": 6.58,
+    "volume": 5486400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-31",
+    "price": 6.53,
+    "volume": 3238500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-30",
+    "price": 6.5,
+    "volume": 3487000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-29",
+    "price": 6.55,
+    "volume": 3849500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-28",
+    "price": 6.6,
+    "volume": 4039600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-27",
+    "price": 6.57,
+    "volume": 4538900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-24",
+    "price": 6.46,
+    "volume": 2003200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-23",
+    "price": 6.45,
+    "volume": 2522400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-22",
+    "price": 6.44,
+    "volume": 3579300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-21",
+    "price": 6.38,
+    "volume": 4563800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-17",
+    "price": 6.23,
+    "volume": 3516100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-16",
+    "price": 6.31,
+    "volume": 3206800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-15",
+    "price": 6.33,
+    "volume": 3982700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-14",
+    "price": 6.27,
+    "volume": 4411100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-13",
+    "price": 6.37,
+    "volume": 5730500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-10",
+    "price": 6.41,
+    "volume": 3810500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-09",
+    "price": 6.47,
+    "volume": 6777900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-08",
+    "price": 6.43,
+    "volume": 4607000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-07",
+    "price": 6.36,
+    "volume": 9224000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-06",
+    "price": 6.2,
+    "volume": 2956300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-03",
+    "price": 6.22,
+    "volume": 9672200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-02",
+    "price": 6.08,
+    "volume": 4176100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-10-01",
+    "price": 6.05,
+    "volume": 3267400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-30",
+    "price": 6.02,
+    "volume": 4991300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-29",
+    "price": 6.02,
+    "volume": 2946700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-26",
+    "price": 6.01,
+    "volume": 2849500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-25",
+    "price": 6.03,
+    "volume": 3328800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-24",
+    "price": 6.06,
+    "volume": 4576200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-23",
+    "price": 6.1,
+    "volume": 2907100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-22",
+    "price": 6.06,
+    "volume": 2668400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-19",
+    "price": 6.08,
+    "volume": 4517600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-18",
+    "price": 6.07,
+    "volume": 3304200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-09-17",
+    "price": 6.06,
+    "volume": 5519200
+   },
    {
     "symbol": "U96.SI",
     "date": "2025-09-16",
@@ -2902,6 +3346,1068 @@
     "date": "2025-09-01",
     "price": 6.09,
     "volume": 3001700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-29",
+    "price": 6.07,
+    "volume": 3373800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-28",
+    "price": 6.03,
+    "volume": 3587800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-27",
+    "price": 6.05,
+    "volume": 3879200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-26",
+    "price": 6.09,
+    "volume": 8063800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-25",
+    "price": 6.11,
+    "volume": 4904000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-22",
+    "price": 6.12,
+    "volume": 4699400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-21",
+    "price": 6.08,
+    "volume": 3467900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-20",
+    "price": 6.06,
+    "volume": 5185900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-19",
+    "price": 6.1,
+    "volume": 7714700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-18",
+    "price": 6.01,
+    "volume": 11263500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-15",
+    "price": 6.15,
+    "volume": 12176100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-14",
+    "price": 6.27,
+    "volume": 11776300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-13",
+    "price": 6.38,
+    "volume": 10949300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-12",
+    "price": 6.35,
+    "volume": 15506200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-11",
+    "price": 6.49,
+    "volume": 21939100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-08",
+    "price": 6.72,
+    "volume": 28386700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-07",
+    "price": 7.8,
+    "volume": 4693200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-06",
+    "price": 7.7,
+    "volume": 4022200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-05",
+    "price": 7.8,
+    "volume": 2879500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-04",
+    "price": 7.82,
+    "volume": 3357900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-08-01",
+    "price": 7.61,
+    "volume": 3387600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-31",
+    "price": 7.76,
+    "volume": 4256200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-30",
+    "price": 7.62,
+    "volume": 3679900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-29",
+    "price": 7.67,
+    "volume": 2732700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-28",
+    "price": 7.68,
+    "volume": 1969800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-25",
+    "price": 7.72,
+    "volume": 2982800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-24",
+    "price": 7.84,
+    "volume": 1749400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-23",
+    "price": 7.84,
+    "volume": 1470484
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-22",
+    "price": 7.85,
+    "volume": 1756900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-21",
+    "price": 7.82,
+    "volume": 2030500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-18",
+    "price": 7.76,
+    "volume": 2714000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-17",
+    "price": 7.69,
+    "volume": 3585200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-16",
+    "price": 7.71,
+    "volume": 1941700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-15",
+    "price": 7.6,
+    "volume": 3432000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-14",
+    "price": 7.51,
+    "volume": 3715600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-11",
+    "price": 7.4,
+    "volume": 2328500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-10",
+    "price": 7.48,
+    "volume": 2420900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-09",
+    "price": 7.44,
+    "volume": 3547800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-08",
+    "price": 7.47,
+    "volume": 5979900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-07",
+    "price": 7.35,
+    "volume": 3865000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-04",
+    "price": 7.14,
+    "volume": 2431100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-03",
+    "price": 7.19,
+    "volume": 2019200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-02",
+    "price": 7.12,
+    "volume": 4295700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-07-01",
+    "price": 6.93,
+    "volume": 3475500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-30",
+    "price": 6.85,
+    "volume": 2875500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-27",
+    "price": 6.83,
+    "volume": 3280300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-26",
+    "price": 6.9,
+    "volume": 5072100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-25",
+    "price": 6.84,
+    "volume": 4232100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-24",
+    "price": 6.85,
+    "volume": 3424300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-23",
+    "price": 6.85,
+    "volume": 3116800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-20",
+    "price": 7,
+    "volume": 4495100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-19",
+    "price": 6.89,
+    "volume": 2066600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-18",
+    "price": 7.02,
+    "volume": 1522500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-17",
+    "price": 7.04,
+    "volume": 1746900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-16",
+    "price": 7.01,
+    "volume": 4054500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-13",
+    "price": 6.89,
+    "volume": 2730900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-12",
+    "price": 6.8,
+    "volume": 1607600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-11",
+    "price": 6.75,
+    "volume": 2330046
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-10",
+    "price": 6.83,
+    "volume": 1480200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-09",
+    "price": 6.79,
+    "volume": 1434300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-06",
+    "price": 6.85,
+    "volume": 4336500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-05",
+    "price": 6.65,
+    "volume": 4044200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-04",
+    "price": 6.52,
+    "volume": 1883200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-03",
+    "price": 6.57,
+    "volume": 1896100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-06-02",
+    "price": 6.58,
+    "volume": 2537000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-30",
+    "price": 6.62,
+    "volume": 11037000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-29",
+    "price": 6.69,
+    "volume": 1928900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-28",
+    "price": 6.64,
+    "volume": 2774200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-27",
+    "price": 6.71,
+    "volume": 2094400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-26",
+    "price": 6.65,
+    "volume": 1396200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-23",
+    "price": 6.56,
+    "volume": 3081100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-22",
+    "price": 6.66,
+    "volume": 3408100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-21",
+    "price": 6.7,
+    "volume": 2001500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-20",
+    "price": 6.53,
+    "volume": 2018600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-19",
+    "price": 6.6,
+    "volume": 2739200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-16",
+    "price": 6.61,
+    "volume": 2584700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-15",
+    "price": 6.51,
+    "volume": 3774800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-14",
+    "price": 6.56,
+    "volume": 3904700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-13",
+    "price": 6.57,
+    "volume": 4226400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-09",
+    "price": 6.59,
+    "volume": 3316000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-08",
+    "price": 6.51,
+    "volume": 4355400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-07",
+    "price": 6.58,
+    "volume": 3614000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-06",
+    "price": 6.58,
+    "volume": 1250700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-05",
+    "price": 6.58,
+    "volume": 2135000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-05-02",
+    "price": 6.6,
+    "volume": 3302800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-30",
+    "price": 6.6,
+    "volume": 4271100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-29",
+    "price": 6.62,
+    "volume": 4832600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-28",
+    "price": 6.45,
+    "volume": 2033300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-25",
+    "price": 6.45,
+    "volume": 2298000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-24",
+    "price": 6.47,
+    "volume": 4764600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-23",
+    "price": 6.33,
+    "volume": 2782900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-22",
+    "price": 6.34,
+    "volume": 2460300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-21",
+    "price": 6.34,
+    "volume": 1941300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-17",
+    "price": 6.35,
+    "volume": 2975300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-16",
+    "price": 6.31,
+    "volume": 3785000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-15",
+    "price": 6.17,
+    "volume": 2937900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-14",
+    "price": 6.13,
+    "volume": 2910900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-11",
+    "price": 6.21,
+    "volume": 4625100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-10",
+    "price": 6.12,
+    "volume": 6012500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-09",
+    "price": 6.04,
+    "volume": 6073500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-08",
+    "price": 6.23,
+    "volume": 10303000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-07",
+    "price": 5.79,
+    "volume": 9800000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-04",
+    "price": 6.41,
+    "volume": 6305900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-03",
+    "price": 6.62,
+    "volume": 5497800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-02",
+    "price": 6.58,
+    "volume": 7200200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-04-01",
+    "price": 6.42,
+    "volume": 4694400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-28",
+    "price": 6.34,
+    "volume": 2098800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-27",
+    "price": 6.37,
+    "volume": 3308200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-26",
+    "price": 6.4,
+    "volume": 3229100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-25",
+    "price": 6.33,
+    "volume": 3422600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-24",
+    "price": 6.31,
+    "volume": 2546500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-21",
+    "price": 6.36,
+    "volume": 5714500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-20",
+    "price": 6.31,
+    "volume": 4563700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-19",
+    "price": 6.15,
+    "volume": 3841600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-18",
+    "price": 6.2,
+    "volume": 5487200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-17",
+    "price": 6.1,
+    "volume": 3804500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-14",
+    "price": 5.96,
+    "volume": 7329800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-13",
+    "price": 6.09,
+    "volume": 4384200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-12",
+    "price": 6.05,
+    "volume": 5247200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-11",
+    "price": 6.08,
+    "volume": 5205000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-10",
+    "price": 6.22,
+    "volume": 2582200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-07",
+    "price": 6.3,
+    "volume": 3210500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-06",
+    "price": 6.32,
+    "volume": 5293000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-05",
+    "price": 6.35,
+    "volume": 4219100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-04",
+    "price": 6.25,
+    "volume": 4646800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-03-03",
+    "price": 6.32,
+    "volume": 8950700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-28",
+    "price": 6.09,
+    "volume": 10122500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-27",
+    "price": 6.03,
+    "volume": 8670600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-26",
+    "price": 5.88,
+    "volume": 3207800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-25",
+    "price": 5.88,
+    "volume": 2945600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-24",
+    "price": 5.9,
+    "volume": 6237000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-21",
+    "price": 5.75,
+    "volume": 10040600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-20",
+    "price": 5.54,
+    "volume": 2642900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-19",
+    "price": 5.63,
+    "volume": 5145961
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-18",
+    "price": 5.52,
+    "volume": 2983421
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-17",
+    "price": 5.43,
+    "volume": 1536900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-14",
+    "price": 5.41,
+    "volume": 2727500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-13",
+    "price": 5.35,
+    "volume": 3138700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-12",
+    "price": 5.28,
+    "volume": 2708100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-11",
+    "price": 5.27,
+    "volume": 4469200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-10",
+    "price": 5.37,
+    "volume": 2111000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-07",
+    "price": 5.42,
+    "volume": 2734100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-06",
+    "price": 5.42,
+    "volume": 1517800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-05",
+    "price": 5.39,
+    "volume": 1775300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-04",
+    "price": 5.4,
+    "volume": 4118000
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-02-03",
+    "price": 5.5,
+    "volume": 2733800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-31",
+    "price": 5.58,
+    "volume": 4536100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-28",
+    "price": 5.43,
+    "volume": 3824700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-27",
+    "price": 5.55,
+    "volume": 1674100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-24",
+    "price": 5.57,
+    "volume": 1791800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-23",
+    "price": 5.6,
+    "volume": 1888600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-22",
+    "price": 5.61,
+    "volume": 2784800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-21",
+    "price": 5.61,
+    "volume": 3177700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-20",
+    "price": 5.66,
+    "volume": 2082500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-17",
+    "price": 5.63,
+    "volume": 2060100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-16",
+    "price": 5.56,
+    "volume": 2327700
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-15",
+    "price": 5.48,
+    "volume": 3820100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-14",
+    "price": 5.49,
+    "volume": 1556300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-13",
+    "price": 5.51,
+    "volume": 4542200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-10",
+    "price": 5.46,
+    "volume": 4978400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-09",
+    "price": 5.66,
+    "volume": 2848800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-08",
+    "price": 5.65,
+    "volume": 2864100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-07",
+    "price": 5.53,
+    "volume": 2026200
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-06",
+    "price": 5.54,
+    "volume": 1928600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-03",
+    "price": 5.56,
+    "volume": 1246900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2025-01-02",
+    "price": 5.53,
+    "volume": 1081300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-31",
+    "price": 5.52,
+    "volume": 923800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-30",
+    "price": 5.54,
+    "volume": 2648900
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-27",
+    "price": 5.45,
+    "volume": 817100
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-26",
+    "price": 5.41,
+    "volume": 621500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-24",
+    "price": 5.44,
+    "volume": 1200800
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-23",
+    "price": 5.35,
+    "volume": 946300
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-20",
+    "price": 5.34,
+    "volume": 2336400
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-19",
+    "price": 5.41,
+    "volume": 1015500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-18",
+    "price": 5.45,
+    "volume": 1941500
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-17",
+    "price": 5.4,
+    "volume": 2619600
+   },
+   {
+    "symbol": "U96.SI",
+    "date": "2024-12-16",
+    "price": 5.49,
+    "volume": 2010000
    }
   ]
  }

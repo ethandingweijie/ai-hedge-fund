@@ -12191,9 +12191,819 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-09-01\", \"symbol\": \"BABA\", \"to\": \"2025-09-16\"}, \"<redacted>\"]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-03-16\", \"symbol\": \"BABA\", \"to\": \"2026-03-31\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "BABA",
+    "date": "2026-03-31",
+    "price": 125.46,
+    "volume": 9486100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-30",
+    "price": 121.98,
+    "volume": 7226700
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-27",
+    "price": 122.69,
+    "volume": 8105000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-26",
+    "price": 125.41,
+    "volume": 9240000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-25",
+    "price": 129.87,
+    "volume": 12843020
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-24",
+    "price": 125.48,
+    "volume": 8516233
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-23",
+    "price": 126.06,
+    "volume": 15583917
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-20",
+    "price": 122.41,
+    "volume": 15479300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-19",
+    "price": 124.9,
+    "volume": 33440500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-18",
+    "price": 134.43,
+    "volume": 17158600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-17",
+    "price": 136.57,
+    "volume": 10005700
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-16",
+    "price": 136.71,
+    "volume": 9972344
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-13",
+    "price": 135.21,
+    "volume": 6438401
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-12",
+    "price": 134.2,
+    "volume": 7591800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-11",
+    "price": 136.29,
+    "volume": 6685100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-10",
+    "price": 136.85,
+    "volume": 15264300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-09",
+    "price": 132.64,
+    "volume": 10072449
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-06",
+    "price": 130.79,
+    "volume": 10957000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-05",
+    "price": 130.35,
+    "volume": 18612932
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-04",
+    "price": 133.27,
+    "volume": 14293901
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-03",
+    "price": 135.59,
+    "volume": 18476800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-03-02",
+    "price": 142.56,
+    "volume": 9428300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-27",
+    "price": 144.11,
+    "volume": 9780307
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-26",
+    "price": 148.05,
+    "volume": 10256414
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-25",
+    "price": 152.28,
+    "volume": 5813403
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-24",
+    "price": 153.11,
+    "volume": 6655200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-23",
+    "price": 152.78,
+    "volume": 6751014
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-20",
+    "price": 154.45,
+    "volume": 8758715
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-19",
+    "price": 154.27,
+    "volume": 6582500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-18",
+    "price": 155.77,
+    "volume": 4506642
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-17",
+    "price": 155.43,
+    "volume": 6803612
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-13",
+    "price": 155.73,
+    "volume": 16045600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-12",
+    "price": 158.73,
+    "volume": 11457824
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-11",
+    "price": 164.32,
+    "volume": 8756900
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-10",
+    "price": 166.51,
+    "volume": 10990000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-09",
+    "price": 163,
+    "volume": 7260500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-06",
+    "price": 162.51,
+    "volume": 10972100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-05",
+    "price": 157.76,
+    "volume": 10936700
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-04",
+    "price": 159.14,
+    "volume": 11851400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-03",
+    "price": 163.65,
+    "volume": 10066600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-02-02",
+    "price": 168.39,
+    "volume": 6551800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-30",
+    "price": 169.56,
+    "volume": 10846100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-29",
+    "price": 174.25,
+    "volume": 12062505
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-28",
+    "price": 175.66,
+    "volume": 9001500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-27",
+    "price": 172.72,
+    "volume": 8931300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-26",
+    "price": 171.37,
+    "volume": 10166147
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-23",
+    "price": 173.23,
+    "volume": 13064100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-22",
+    "price": 177.18,
+    "volume": 32031100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-21",
+    "price": 168.67,
+    "volume": 11713726
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-20",
+    "price": 162.39,
+    "volume": 9885048
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-16",
+    "price": 165.4,
+    "volume": 18598300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-15",
+    "price": 170.93,
+    "volume": 12607000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-14",
+    "price": 169.9,
+    "volume": 17475100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-13",
+    "price": 167.01,
+    "volume": 18850400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-12",
+    "price": 166.31,
+    "volume": 35379014
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-09",
+    "price": 150.96,
+    "volume": 11437935
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-08",
+    "price": 154.47,
+    "volume": 20981700
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-07",
+    "price": 146.75,
+    "volume": 12613212
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-06",
+    "price": 150.9,
+    "volume": 12998105
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-05",
+    "price": 156.26,
+    "volume": 14744000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2026-01-02",
+    "price": 155.74,
+    "volume": 15778326
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-31",
+    "price": 146.58,
+    "volume": 6116035
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-30",
+    "price": 147.36,
+    "volume": 6832300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-29",
+    "price": 148.49,
+    "volume": 8900020
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-26",
+    "price": 152.24,
+    "volume": 6037200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-24",
+    "price": 150.06,
+    "volume": 3274200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-23",
+    "price": 151.23,
+    "volume": 5373306
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-22",
+    "price": 150.96,
+    "volume": 6779100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-19",
+    "price": 149.79,
+    "volume": 9004211
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-18",
+    "price": 147.32,
+    "volume": 6597400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-17",
+    "price": 147.09,
+    "volume": 8271036
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-16",
+    "price": 149.29,
+    "volume": 9051912
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-15",
+    "price": 150.09,
+    "volume": 11233112
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-12",
+    "price": 155.68,
+    "volume": 6708400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-11",
+    "price": 156.9,
+    "volume": 8171243
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-10",
+    "price": 158.82,
+    "volume": 10928600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-09",
+    "price": 155.96,
+    "volume": 6458100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-08",
+    "price": 158.13,
+    "volume": 7342015
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-05",
+    "price": 158.32,
+    "volume": 6277149
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-04",
+    "price": 157.44,
+    "volume": 6666349
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-03",
+    "price": 158.08,
+    "volume": 6968000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-02",
+    "price": 161.13,
+    "volume": 9878500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-12-01",
+    "price": 164.26,
+    "volume": 15321200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-28",
+    "price": 157.3,
+    "volume": 7185500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-26",
+    "price": 157.6,
+    "volume": 21453100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-25",
+    "price": 157.01,
+    "volume": 27097500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-24",
+    "price": 160.73,
+    "volume": 21796600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-21",
+    "price": 152.93,
+    "volume": 16240800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-20",
+    "price": 153.28,
+    "volume": 13466900
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-19",
+    "price": 158.89,
+    "volume": 7949937
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-18",
+    "price": 159.72,
+    "volume": 12438918
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-17",
+    "price": 157.71,
+    "volume": 16911400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-14",
+    "price": 153.8,
+    "volume": 33991002
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-13",
+    "price": 159.84,
+    "volume": 17213000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-12",
+    "price": 157.91,
+    "volume": 13920804
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-11",
+    "price": 160.8,
+    "volume": 11354400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-10",
+    "price": 165.89,
+    "volume": 9348727
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-07",
+    "price": 166.34,
+    "volume": 11581220
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-06",
+    "price": 167.61,
+    "volume": 12438908
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-05",
+    "price": 164.82,
+    "volume": 8631419
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-04",
+    "price": 164.3,
+    "volume": 9693135
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-11-03",
+    "price": 167.69,
+    "volume": 9702300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-31",
+    "price": 170.43,
+    "volume": 13181435
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-30",
+    "price": 173.93,
+    "volume": 10756300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-29",
+    "price": 179.97,
+    "volume": 12068930
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-28",
+    "price": 176.72,
+    "volume": 11906931
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-27",
+    "price": 179.45,
+    "volume": 12580845
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-24",
+    "price": 174.7,
+    "volume": 11841000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-23",
+    "price": 171.9,
+    "volume": 12792123
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-22",
+    "price": 165.86,
+    "volume": 15016541
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-21",
+    "price": 166.67,
+    "volume": 15662505
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-20",
+    "price": 173.47,
+    "volume": 20120500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-17",
+    "price": 167.05,
+    "volume": 17765727
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-16",
+    "price": 165.09,
+    "volume": 10979714
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-15",
+    "price": 165.91,
+    "volume": 15337400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-14",
+    "price": 162.86,
+    "volume": 18583211
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-13",
+    "price": 166.81,
+    "volume": 25703100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-10",
+    "price": 159.01,
+    "volume": 50296820
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-09",
+    "price": 173.68,
+    "volume": 21211600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-08",
+    "price": 181.12,
+    "volume": 15883700
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-07",
+    "price": 181.33,
+    "volume": 16942200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-06",
+    "price": 187.22,
+    "volume": 10973537
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-03",
+    "price": 188.03,
+    "volume": 13990900
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-02",
+    "price": 189.34,
+    "volume": 23687832
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-10-01",
+    "price": 182.78,
+    "volume": 14966900
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-30",
+    "price": 178.73,
+    "volume": 18681536
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-29",
+    "price": 179.9,
+    "volume": 21576309
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-26",
+    "price": 171.91,
+    "volume": 15971139
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-25",
+    "price": 175.47,
+    "volume": 20712240
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-24",
+    "price": 176.44,
+    "volume": 52642314
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-23",
+    "price": 163.08,
+    "volume": 18278600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-22",
+    "price": 164.25,
+    "volume": 18667746
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-19",
+    "price": 162.81,
+    "volume": 18183217
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-18",
+    "price": 162.48,
+    "volume": 19529600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-09-17",
+    "price": 166.17,
+    "volume": 29344345
+   },
    {
     "symbol": "BABA",
     "date": "2025-09-16",
@@ -12259,6 +13069,702 @@
     "date": "2025-09-02",
     "price": 138.55,
     "volume": 41625400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-29",
+    "price": 135,
+    "volume": 82165134
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-28",
+    "price": 119.57,
+    "volume": 14501143
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-27",
+    "price": 122.23,
+    "volume": 13833100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-26",
+    "price": 124.19,
+    "volume": 8706100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-25",
+    "price": 124.35,
+    "volume": 12888400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-22",
+    "price": 122.94,
+    "volume": 13855325
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-21",
+    "price": 118.09,
+    "volume": 8231200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-20",
+    "price": 119.49,
+    "volume": 7095804
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-19",
+    "price": 119.99,
+    "volume": 8106147
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-18",
+    "price": 121.4,
+    "volume": 8550427
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-15",
+    "price": 121.26,
+    "volume": 11141846
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-14",
+    "price": 122.28,
+    "volume": 15045624
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-13",
+    "price": 126.86,
+    "volume": 19362542
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-12",
+    "price": 122.42,
+    "volume": 11994896
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-11",
+    "price": 118.64,
+    "volume": 12072000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-08",
+    "price": 120.36,
+    "volume": 9763600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-07",
+    "price": 120.96,
+    "volume": 9480600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-06",
+    "price": 120.86,
+    "volume": 12079640
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-05",
+    "price": 117.04,
+    "volume": 5885633
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-04",
+    "price": 117.5,
+    "volume": 7272111
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-08-01",
+    "price": 117.07,
+    "volume": 12424300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-31",
+    "price": 120.63,
+    "volume": 13650447
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-30",
+    "price": 117.38,
+    "volume": 12794100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-29",
+    "price": 119.36,
+    "volume": 13599708
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-28",
+    "price": 122.15,
+    "volume": 11207400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-25",
+    "price": 120.03,
+    "volume": 7060600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-24",
+    "price": 121.15,
+    "volume": 11378418
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-23",
+    "price": 122.58,
+    "volume": 12874232
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-22",
+    "price": 120.71,
+    "volume": 11551511
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-21",
+    "price": 120.27,
+    "volume": 17937612
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-18",
+    "price": 120.23,
+    "volume": 26787700
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-17",
+    "price": 117.3,
+    "volume": 14573600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-16",
+    "price": 115.73,
+    "volume": 14439000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-15",
+    "price": 116.97,
+    "volume": 34785400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-14",
+    "price": 108.22,
+    "volume": 13231335
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-11",
+    "price": 106.72,
+    "volume": 10774600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-10",
+    "price": 106.64,
+    "volume": 13554500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-09",
+    "price": 103.83,
+    "volume": 24609300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-08",
+    "price": 107.99,
+    "volume": 11319900
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-07",
+    "price": 106.27,
+    "volume": 17446200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-03",
+    "price": 108.7,
+    "volume": 11847200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-02",
+    "price": 110.71,
+    "volume": 13843810
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-07-01",
+    "price": 113.97,
+    "volume": 9243200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-30",
+    "price": 113.41,
+    "volume": 10457300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-27",
+    "price": 114.08,
+    "volume": 12355500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-26",
+    "price": 113.93,
+    "volume": 8388014
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-25",
+    "price": 114.55,
+    "volume": 12835548
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-24",
+    "price": 117.01,
+    "volume": 17125100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-23",
+    "price": 113.09,
+    "volume": 12536509
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-20",
+    "price": 113.01,
+    "volume": 12737319
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-18",
+    "price": 113.49,
+    "volume": 14002314
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-17",
+    "price": 115.03,
+    "volume": 10205739
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-16",
+    "price": 115.96,
+    "volume": 10242923
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-13",
+    "price": 112.87,
+    "volume": 13355129
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-12",
+    "price": 116.62,
+    "volume": 10204500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-11",
+    "price": 120.33,
+    "volume": 10443100
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-10",
+    "price": 121.88,
+    "volume": 8892800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-09",
+    "price": 121.48,
+    "volume": 10410600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-06",
+    "price": 119.38,
+    "volume": 9753200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-05",
+    "price": 119.96,
+    "volume": 15375413
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-04",
+    "price": 119.45,
+    "volume": 18115500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-03",
+    "price": 114.97,
+    "volume": 14008938
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-06-02",
+    "price": 114.75,
+    "volume": 13147200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-30",
+    "price": 113.84,
+    "volume": 17213209
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-29",
+    "price": 117.18,
+    "volume": 12392828
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-28",
+    "price": 116.74,
+    "volume": 11707735
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-27",
+    "price": 119.52,
+    "volume": 8544500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-23",
+    "price": 120.73,
+    "volume": 7163427
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-22",
+    "price": 121.48,
+    "volume": 7820944
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-21",
+    "price": 123.59,
+    "volume": 8521416
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-20",
+    "price": 125.16,
+    "volume": 11790000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-19",
+    "price": 122.96,
+    "volume": 11197016
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-16",
+    "price": 123.46,
+    "volume": 20090000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-15",
+    "price": 123.9,
+    "volume": 35442800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-14",
+    "price": 134.05,
+    "volume": 18278334
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-13",
+    "price": 131.65,
+    "volume": 16123609
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-12",
+    "price": 132.55,
+    "volume": 22631735
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-09",
+    "price": 125.33,
+    "volume": 11172200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-08",
+    "price": 125.79,
+    "volume": 10846828
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-07",
+    "price": 123.23,
+    "volume": 16024031
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-06",
+    "price": 127.66,
+    "volume": 17919707
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-05",
+    "price": 126.57,
+    "volume": 9868800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-02",
+    "price": 125.76,
+    "volume": 18092542
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-05-01",
+    "price": 120.53,
+    "volume": 8690227
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-30",
+    "price": 119.43,
+    "volume": 10144809
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-29",
+    "price": 118.88,
+    "volume": 8295500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-28",
+    "price": 118.37,
+    "volume": 10748004
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-25",
+    "price": 120.28,
+    "volume": 9306404
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-24",
+    "price": 119.29,
+    "volume": 13696000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-23",
+    "price": 118.97,
+    "volume": 25762800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-22",
+    "price": 115.88,
+    "volume": 27662424
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-21",
+    "price": 110.15,
+    "volume": 12145700
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-17",
+    "price": 108.87,
+    "volume": 17885000
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-16",
+    "price": 106.75,
+    "volume": 18031600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-15",
+    "price": 112.28,
+    "volume": 16172344
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-14",
+    "price": 113.97,
+    "volume": 32926103
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-11",
+    "price": 107.73,
+    "volume": 40522800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-10",
+    "price": 104.18,
+    "volume": 53133403
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-09",
+    "price": 104.78,
+    "volume": 74981920
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-08",
+    "price": 99.37,
+    "volume": 52100200
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-07",
+    "price": 105.98,
+    "volume": 61386612
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-04",
+    "price": 116.54,
+    "volume": 57154549
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-03",
+    "price": 129.33,
+    "volume": 30607600
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-02",
+    "price": 129.79,
+    "volume": 21240902
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-04-01",
+    "price": 132.7,
+    "volume": 11627512
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-31",
+    "price": 132.23,
+    "volume": 12183816
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-28",
+    "price": 132.43,
+    "volume": 13271500
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-27",
+    "price": 135.63,
+    "volume": 16688316
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-26",
+    "price": 132.24,
+    "volume": 16023418
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-25",
+    "price": 132.75,
+    "volume": 17943400
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-24",
+    "price": 134.48,
+    "volume": 14019013
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-21",
+    "price": 135.14,
+    "volume": 13970300
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-20",
+    "price": 136.91,
+    "volume": 23646800
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-19",
+    "price": 143.2,
+    "volume": 16333817
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-18",
+    "price": 142.74,
+    "volume": 20950126
+   },
+   {
+    "symbol": "BABA",
+    "date": "2025-03-17",
+    "price": 147.57,
+    "volume": 33897000
    }
   ]
  }

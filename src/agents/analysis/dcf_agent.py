@@ -6302,12 +6302,18 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
     "Rev DCF (ARR)", "Backlog DCF", "PPA-backed DCF",
     "Unit Econ DCF", "Power Price DCF", "Reverse DCF",
     "DCF (Levered)", "Rev DCF (Mkt Sh)",
+    # These four project cash flows through `_project_dcf` exactly like the
+    # names above, but were missing here, so `_blend_methods` bucketed them as
+    # multiples and multiplied them by the sentiment composite -- contradicting
+    # the blend's own rule that DCF stays sentiment-free. On EL (Luxury Goods)
+    # every leg was "multi", so the 1.41 composite reached 100% of the IV,
+    # cash-flow leg included.
+    "DCF (5-yr)", "DCF (LTG)", "Rev DCF (GMV)", "Rev DCF",
 })
 
-#: Every method name _compute_method_value routes into _project_dcf. A
-#: superset of _DCF_FAMILY_NAMES (the blend's dcf-bucket membership test):
-#: several revenue-DCF variants are bucketed with the multiples by
-#: _blend_methods but still PROJECT via fcf_margin_base. The OE≤0 disable
+#: Every method name _compute_method_value routes into _project_dcf. Today it
+#: equals _DCF_FAMILY_NAMES (the blend's dcf-bucket membership test); it is
+#: kept as its own name because the OE≤0 disable
 #: gate (task #18) must knock out exactly the projecting set, so the
 #: dispatcher and the gate share this one constant and can never drift.
 #: Resources: the reserve runs out, so the projection stops. 15 years is the
@@ -6434,9 +6440,7 @@ def _industry_routed_profile(ticker: str, sector: str, end_date: str = "",
 _DEPLETING_DCF = "Depleting Asset DCF (Finite Life, No TV)"
 _DEPLETING_HORIZON_YEARS = 15
 
-_DCF_PROJECTION_FAMILY: frozenset[str] = _DCF_FAMILY_NAMES | frozenset({
-    "DCF (5-yr)", "DCF (LTG)", "Rev DCF (GMV)", "Rev DCF",
-})
+_DCF_PROJECTION_FAMILY: frozenset[str] = frozenset(_DCF_FAMILY_NAMES)
 
 
 # ── SOTP (analyst) blend promotion (task #25) ───────────────────────────────
@@ -7898,6 +7902,36 @@ def _blend_methods(
 
 # ── Backward Logic Gate ───────────────────────────────────────────────────────
 
+#: Horizon of the gate's forward score: the T-1 model and the T-1 market price
+#: are both scored against the close this many days after the T-1 fiscal
+#: period end.
+_T1_FORWARD_HORIZON_DAYS = 365
+#: How far back from a target date a close may be taken (weekends, holidays,
+#: a fiscal year ending on a non-trading day).
+_T1_PRICE_LOOKBACK_DAYS = 15
+
+
+def _close_on_or_before(prices, day: datetime) -> Optional[tuple[float, str]]:
+    """Last positive close dated on or before `day` and within the lookback.
+
+    `Price` carries its date on `.time`, not `.date`."""
+    lo = (day - timedelta(days=_T1_PRICE_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
+    hi = day.strftime("%Y-%m-%d")
+    best: Optional[tuple[str, float]] = None
+    for p in prices or []:
+        t = str(getattr(p, "time", None) or (p.get("time") if isinstance(p, dict) else "") or "")[:10]
+        c = getattr(p, "close", None) if not isinstance(p, dict) else p.get("close")
+        if not t or c is None or not (lo <= t <= hi):
+            continue
+        try:
+            c = float(c)
+        except (TypeError, ValueError):
+            continue
+        if c > 0 and (best is None or t > best[0]):
+            best = (t, c)
+    return (best[1], best[0]) if best else None
+
+
 def _run_backward_gate(
     ticker: str,
     series: list[dict],
@@ -7910,36 +7944,70 @@ def _run_backward_gate(
     profile_data: Optional[dict] = None,
     reported_currency: str = "USD",
     profile_name: str = "",
-) -> tuple[bool, str]:
+) -> tuple[bool, str, dict]:
     """
-    T-1 Year Test: run the valuation model with data from ~12 months ago and
-    compare to the actual stock price at that time.
+    T-1 Year Test: value the company on its previous fiscal year's financials
+    and compare to the stock price at the end of that fiscal year.
 
     Uses the same blended multi-method approach as the main valuation when
     profile_data is provided, falling back to pure DCF otherwise.
 
-    Returns (calibration_error: bool, calibration_note: str).
+    Returns (calibration_error, calibration_note, calibration_record).
     calibration_error=True means the model is >25% off → flag "Calibration Error".
+    calibration_record is the same result as structured fields, plus a forward
+    score: the T-1 model and the T-1 market price, each against the close
+    `_T1_FORWARD_HORIZON_DAYS` later. The contemporaneous gap cannot tell a
+    miscalibrated model from an early one (NKE: model $40.01, market $60.59,
+    a year later $35.51); the forward score can.
     """
+    record: dict = {"status": "skipped", "tolerance": _CALIBRATION_TOLERANCE,
+                    "forward": {"verdict": "UNSCORABLE"}}
+
+    def _skip(reason: str) -> tuple[bool, str, dict]:
+        record["skip_reason"] = reason
+        return False, f"Skipped — {reason}", record
+
     if len(series) < 3:
-        return False, "Skipped — insufficient history for T-1 test"
+        return _skip("insufficient history for T-1 test")
 
     try:
-        # Approximate T-1 date as 1 year before end_date
         end_dt = datetime.strptime(end_date[:10], "%Y-%m-%d")
-        t1_date = (end_dt - timedelta(days=365)).strftime("%Y-%m-%d")
-        t1_start = (end_dt - timedelta(days=380)).strftime("%Y-%m-%d")
-
-        prices = get_prices(ticker, t1_start, t1_date, api_key=api_key)
-        if not prices:
-            return False, "Skipped — no historical price data for T-1"
-
-        actual_price = float(prices[-1].close) if hasattr(prices[-1], "close") else float(prices[-1].get("close", 0))
-        if actual_price <= 0:
-            return False, "Skipped — invalid T-1 price"
-
-        # Use second-most-recent year as T-1 baseline financials
+        # T-1 baseline financials: the second-most-recent fiscal year.
         t1_row = series[-2]
+
+        # The benchmark price is dated to the END of that fiscal year, not to
+        # the run date minus 365 days. The two differ by up to a year and a
+        # half: LULU's FY2025 ended 2025-02-02 at $414.20, while the old window
+        # read $169.62 on 2025-09-19 and charged the model a 170% error for the
+        # stock's own collapse. Across 61 scored production runs the old date
+        # mis-stated 16 verdicts in both directions (2 false alarms, 14 masked
+        # failures).
+        try:
+            t1_dt = datetime.strptime(str(t1_row.get("period") or "")[:10], "%Y-%m-%d")
+        except ValueError:
+            t1_dt = None
+        if t1_dt is not None and t1_dt < end_dt:
+            record["benchmark_basis"] = "fiscal_period_end"
+        else:
+            t1_dt = end_dt - timedelta(days=365)
+            record["benchmark_basis"] = "run_date_minus_365"
+        record["t1_period"] = t1_dt.strftime("%Y-%m-%d")
+        fwd_dt = t1_dt + timedelta(days=_T1_FORWARD_HORIZON_DAYS)
+
+        # One fetch covers both the benchmark and the forward close.
+        prices = get_prices(
+            ticker,
+            (t1_dt - timedelta(days=_T1_PRICE_LOOKBACK_DAYS)).strftime("%Y-%m-%d"),
+            min(fwd_dt, end_dt).strftime("%Y-%m-%d"),
+            api_key=api_key,
+        )
+        if not prices:
+            return _skip("no historical price data for T-1")
+        t1_close = _close_on_or_before(prices, t1_dt)
+        if t1_close is None:
+            return _skip("invalid T-1 price")
+        actual_price, record["t1_price_date"] = t1_close
+        record["t1_price"] = actual_price
         revenue_t1 = t1_row.get("revenue", 0)
         shares_t1  = t1_row.get("shares_outstanding") or series[-1].get("shares_outstanding")
         net_debt_t1 = t1_row.get("net_debt") or 0.0
@@ -8048,21 +8116,48 @@ def _run_backward_gate(
             iv_t1 = iv_dcf_t1
             method_label = "DCF"
 
+        record["t1_iv"] = iv_t1
+        record["method"] = method_label
         if iv_t1 <= 0:
-            return False, "Skipped — T-1 model returned non-positive IV"
+            return _skip("T-1 model returned non-positive IV")
+
+        # Forward score (observation only; the flag below does not read it).
+        if fwd_dt <= end_dt:
+            fwd_close = _close_on_or_before(prices, fwd_dt)
+            if fwd_close is not None:
+                from src.memory.gate_backtest import delta_error_verdict
+                fwd_price, fwd_date = fwd_close
+                # Path A = the market's T-1 price, path B = the T-1 model.
+                v = delta_error_verdict(actual_price, iv_t1, fwd_price, metric="price_12m")
+                record["forward"] = {
+                    "horizon_days": _T1_FORWARD_HORIZON_DAYS,
+                    "price": fwd_price, "price_date": fwd_date,
+                    "model_error_pct": v.get("error_b_pct"),
+                    "market_error_pct": v.get("error_a_pct"),
+                    "delta_error_pct": v.get("delta_error_pct"),
+                    "verdict": {"HELPED": "MODEL_CLOSER", "FALSE_ALARM": "MARKET_CLOSER",
+                                "NEUTRAL": "TIE"}.get(v["verdict"], v["verdict"]),
+                }
+        else:
+            record["forward"] = {"verdict": "NOT_MATURED",
+                                 "matures_on": fwd_dt.strftime("%Y-%m-%d")}
 
         error_pct = abs(iv_t1 - actual_price) / actual_price
+        record["error_pct"] = error_pct
+        _when = f" on {record['t1_price_date']}"
         if error_pct > _CALIBRATION_TOLERANCE:
+            record["status"] = "fired"
             note = (f"Calibration Error: T-1 {method_label} IV ${iv_t1:.2f} vs actual "
-                    f"${actual_price:.2f} = {error_pct:.0%} error (>{_CALIBRATION_TOLERANCE:.0%} tolerance)")
-            return True, note
+                    f"${actual_price:.2f}{_when} = {error_pct:.0%} error (>{_CALIBRATION_TOLERANCE:.0%} tolerance)")
+            return True, note, record
 
+        record["status"] = "passed"
         note = (f"T-1 passed ({method_label}): model ${iv_t1:.2f} vs actual "
-                f"${actual_price:.2f} = {error_pct:.0%} error")
-        return False, note
+                f"${actual_price:.2f}{_when} = {error_pct:.0%} error")
+        return False, note, record
 
     except Exception as e:
-        return False, f"Skipped — T-1 test error: {e}"
+        return _skip(f"T-1 test error: {e}")
 
 
 # ── Scenario ordering invariant ───────────────────────────────────────────────
@@ -12262,7 +12357,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         base_tgr = tgr_table.get("base", _DEFAULT_TGR["base"])
         if wacc <= base_tgr:
             base_tgr = wacc - 0.005
-        calibration_error, calibration_note = _run_backward_gate(
+        calibration_error, calibration_note, calibration_record = _run_backward_gate(
             ticker=ticker,
             series=series,
             sector=sector,
@@ -13318,6 +13413,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "data_source":        data_source,
             "calibration_error":  calibration_error,
             "calibration_note":   calibration_note,
+            "calibration_record": calibration_record,
             "projection_rows":    _base_proj_rows,
             "pv_fcf_base":        _base_pv_fcf_per_share,
             "pv_tv_base":         _base_pv_tv_per_share,

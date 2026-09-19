@@ -2828,9 +2828,453 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-09-01\", \"symbol\": \"FCX\", \"to\": \"2025-09-16\"}, \"<redacted>\"]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-12-16\", \"symbol\": \"FCX\", \"to\": \"2025-12-31\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "FCX",
+    "date": "2025-12-31",
+    "price": 50.79,
+    "volume": 8776800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-30",
+    "price": 51.41,
+    "volume": 10055700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-29",
+    "price": 51.48,
+    "volume": 15231717
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-26",
+    "price": 53.04,
+    "volume": 14848316
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-24",
+    "price": 51.92,
+    "volume": 4073916
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-23",
+    "price": 51.9,
+    "volume": 14155700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-22",
+    "price": 50.64,
+    "volume": 15316628
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-19",
+    "price": 49.15,
+    "volume": 21954842
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-18",
+    "price": 47.92,
+    "volume": 15029535
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-17",
+    "price": 47.82,
+    "volume": 15613001
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-16",
+    "price": 47.54,
+    "volume": 15481500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-15",
+    "price": 47.52,
+    "volume": 15437700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-12",
+    "price": 47.38,
+    "volume": 17034900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-11",
+    "price": 48.11,
+    "volume": 20741000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-10",
+    "price": 46.45,
+    "volume": 17054800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-09",
+    "price": 44.8,
+    "volume": 10310102
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-08",
+    "price": 45,
+    "volume": 16538419
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-05",
+    "price": 45.2,
+    "volume": 20208133
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-04",
+    "price": 44.61,
+    "volume": 12392131
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-03",
+    "price": 44.53,
+    "volume": 22864300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-02",
+    "price": 42.97,
+    "volume": 11131949
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-12-01",
+    "price": 43.07,
+    "volume": 14614800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-28",
+    "price": 42.98,
+    "volume": 8848145
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-26",
+    "price": 42.15,
+    "volume": 13339400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-25",
+    "price": 41.07,
+    "volume": 11446600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-24",
+    "price": 40.79,
+    "volume": 15241042
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-21",
+    "price": 39.87,
+    "volume": 18896923
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-20",
+    "price": 39.63,
+    "volume": 15648030
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-19",
+    "price": 41.25,
+    "volume": 19873600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-18",
+    "price": 40,
+    "volume": 23695200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-17",
+    "price": 39,
+    "volume": 17578500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-14",
+    "price": 40.16,
+    "volume": 10358535
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-13",
+    "price": 40.54,
+    "volume": 10381747
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-12",
+    "price": 41.81,
+    "volume": 12842936
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-11",
+    "price": 41.07,
+    "volume": 10730746
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-10",
+    "price": 40.95,
+    "volume": 13890600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-07",
+    "price": 39.81,
+    "volume": 17305700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-06",
+    "price": 38.65,
+    "volume": 25307300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-05",
+    "price": 40.21,
+    "volume": 12057619
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-04",
+    "price": 39.42,
+    "volume": 14388400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-11-03",
+    "price": 41.18,
+    "volume": 13717228
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-31",
+    "price": 41.7,
+    "volume": 11939500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-30",
+    "price": 41.73,
+    "volume": 11822938
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-29",
+    "price": 42.19,
+    "volume": 19707800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-28",
+    "price": 41.17,
+    "volume": 11973800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-27",
+    "price": 41.1,
+    "volume": 14374400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-24",
+    "price": 41.37,
+    "volume": 10605300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-23",
+    "price": 41.23,
+    "volume": 18292600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-22",
+    "price": 40.78,
+    "volume": 12134400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-21",
+    "price": 41.31,
+    "volume": 12932209
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-20",
+    "price": 42.19,
+    "volume": 12617500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-17",
+    "price": 41.18,
+    "volume": 14027524
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-16",
+    "price": 41.7,
+    "volume": 15081000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-15",
+    "price": 41.71,
+    "volume": 16028100
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-14",
+    "price": 41.97,
+    "volume": 16563400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-13",
+    "price": 42.78,
+    "volume": 15475304
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-10",
+    "price": 40.88,
+    "volume": 24243418
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-09",
+    "price": 43.31,
+    "volume": 23238035
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-08",
+    "price": 42.85,
+    "volume": 25769017
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-07",
+    "price": 40.69,
+    "volume": 19846800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-06",
+    "price": 40.32,
+    "volume": 26706833
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-03",
+    "price": 39.67,
+    "volume": 23921637
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-02",
+    "price": 38.87,
+    "volume": 23508900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-10-01",
+    "price": 39.09,
+    "volume": 19117031
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-30",
+    "price": 39.22,
+    "volume": 38973116
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-29",
+    "price": 37.12,
+    "volume": 40224700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-26",
+    "price": 35.75,
+    "volume": 41515805
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-25",
+    "price": 35.34,
+    "volume": 86778644
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-24",
+    "price": 37.67,
+    "volume": 91311739
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-23",
+    "price": 45.36,
+    "volume": 14308500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-22",
+    "price": 45.16,
+    "volume": 11980805
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-19",
+    "price": 44.94,
+    "volume": 21120230
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-18",
+    "price": 44.93,
+    "volume": 13174435
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-09-17",
+    "price": 45.09,
+    "volume": 8951835
+   },
    {
     "symbol": "FCX",
     "date": "2025-09-16",
@@ -2896,6 +3340,1062 @@
     "date": "2025-09-02",
     "price": 44.94,
     "volume": 12166347
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-29",
+    "price": 44.4,
+    "volume": 7371000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-28",
+    "price": 44.37,
+    "volume": 9253900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-27",
+    "price": 43.87,
+    "volume": 11201800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-26",
+    "price": 44.35,
+    "volume": 11824700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-25",
+    "price": 43.69,
+    "volume": 12596800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-22",
+    "price": 43.28,
+    "volume": 10822129
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-21",
+    "price": 41.72,
+    "volume": 6181217
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-20",
+    "price": 41.31,
+    "volume": 5526200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-19",
+    "price": 41.46,
+    "volume": 7630500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-18",
+    "price": 41.75,
+    "volume": 8325013
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-15",
+    "price": 42.36,
+    "volume": 8885300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-14",
+    "price": 42.28,
+    "volume": 11933670
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-13",
+    "price": 42.74,
+    "volume": 13120807
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-12",
+    "price": 42.15,
+    "volume": 12574169
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-11",
+    "price": 41.47,
+    "volume": 10676610
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-08",
+    "price": 41.87,
+    "volume": 11828736
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-07",
+    "price": 40.8,
+    "volume": 9660400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-06",
+    "price": 39.86,
+    "volume": 9498400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-05",
+    "price": 40.03,
+    "volume": 11521300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-04",
+    "price": 40.42,
+    "volume": 12727215
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-08-01",
+    "price": 40.03,
+    "volume": 15601200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-31",
+    "price": 40.24,
+    "volume": 26276800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-30",
+    "price": 39.14,
+    "volume": 64894226
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-29",
+    "price": 43.23,
+    "volume": 16495800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-28",
+    "price": 43.79,
+    "volume": 26374101
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-25",
+    "price": 44.89,
+    "volume": 16011000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-24",
+    "price": 44.58,
+    "volume": 13223923
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-23",
+    "price": 44.84,
+    "volume": 23135900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-22",
+    "price": 45.8,
+    "volume": 15316100
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-21",
+    "price": 45.19,
+    "volume": 11250301
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-18",
+    "price": 44.8,
+    "volume": 13554700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-17",
+    "price": 44.46,
+    "volume": 11027900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-16",
+    "price": 43.98,
+    "volume": 11377600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-15",
+    "price": 44.12,
+    "volume": 20312200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-14",
+    "price": 45.63,
+    "volume": 11484600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-11",
+    "price": 46.36,
+    "volume": 17122845
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-10",
+    "price": 47.21,
+    "volume": 18647103
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-09",
+    "price": 45.59,
+    "volume": 24277027
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-08",
+    "price": 46.27,
+    "volume": 45175000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-07",
+    "price": 45.13,
+    "volume": 19630229
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-03",
+    "price": 45.8,
+    "volume": 7607321
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-02",
+    "price": 45.77,
+    "volume": 23271300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-07-01",
+    "price": 44.05,
+    "volume": 9385700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-30",
+    "price": 43.35,
+    "volume": 10256324
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-27",
+    "price": 43.87,
+    "volume": 13661038
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-26",
+    "price": 44.46,
+    "volume": 20484519
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-25",
+    "price": 41.61,
+    "volume": 7114000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-24",
+    "price": 42.01,
+    "volume": 10817934
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-23",
+    "price": 40.94,
+    "volume": 11692400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-20",
+    "price": 40.22,
+    "volume": 13986900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-18",
+    "price": 41.18,
+    "volume": 6185500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-17",
+    "price": 41.37,
+    "volume": 10291608
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-16",
+    "price": 41.91,
+    "volume": 10508000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-13",
+    "price": 40.94,
+    "volume": 9722100
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-12",
+    "price": 41.18,
+    "volume": 8750119
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-11",
+    "price": 41.01,
+    "volume": 13531012
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-10",
+    "price": 42.19,
+    "volume": 9460623
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-09",
+    "price": 42.34,
+    "volume": 9938445
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-06",
+    "price": 41.48,
+    "volume": 8501836
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-05",
+    "price": 41.69,
+    "volume": 17271403
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-04",
+    "price": 40.86,
+    "volume": 10979300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-03",
+    "price": 40.24,
+    "volume": 11741415
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-06-02",
+    "price": 40.15,
+    "volume": 15316708
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-30",
+    "price": 38.48,
+    "volume": 17241200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-29",
+    "price": 39.03,
+    "volume": 8928155
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-28",
+    "price": 38.89,
+    "volume": 7689500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-27",
+    "price": 39.64,
+    "volume": 11247800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-23",
+    "price": 39.02,
+    "volume": 15295500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-22",
+    "price": 37.7,
+    "volume": 9415423
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-21",
+    "price": 38.01,
+    "volume": 11012426
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-20",
+    "price": 38.4,
+    "volume": 7848306
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-19",
+    "price": 38.8,
+    "volume": 11107300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-16",
+    "price": 38.02,
+    "volume": 13552200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-15",
+    "price": 38.47,
+    "volume": 13149047
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-14",
+    "price": 39.06,
+    "volume": 10292839
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-13",
+    "price": 39.47,
+    "volume": 11879600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-12",
+    "price": 39.11,
+    "volume": 15649530
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-09",
+    "price": 37.86,
+    "volume": 7306047
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-08",
+    "price": 37.48,
+    "volume": 9814617
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-07",
+    "price": 37.02,
+    "volume": 11880029
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-06",
+    "price": 37.92,
+    "volume": 9778700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-05",
+    "price": 37.35,
+    "volume": 7701041
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-02",
+    "price": 37.6,
+    "volume": 11932244
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-05-01",
+    "price": 36.41,
+    "volume": 11614622
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-30",
+    "price": 36.03,
+    "volume": 15777400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-29",
+    "price": 37.17,
+    "volume": 11269600
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-28",
+    "price": 37.24,
+    "volume": 13380800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-25",
+    "price": 37.35,
+    "volume": 10958833
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-24",
+    "price": 37.63,
+    "volume": 23970933
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-23",
+    "price": 35.19,
+    "volume": 21643100
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-22",
+    "price": 34.06,
+    "volume": 19264308
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-21",
+    "price": 32.95,
+    "volume": 11419918
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-17",
+    "price": 32.9,
+    "volume": 16988032
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-16",
+    "price": 33.32,
+    "volume": 17261124
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-15",
+    "price": 33.37,
+    "volume": 18742021
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-14",
+    "price": 33.75,
+    "volume": 19645900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-11",
+    "price": 33.35,
+    "volume": 26250027
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-10",
+    "price": 31.35,
+    "volume": 25658438
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-09",
+    "price": 33.74,
+    "volume": 38575500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-08",
+    "price": 29.21,
+    "volume": 35158100
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-07",
+    "price": 30.37,
+    "volume": 40398821
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-04",
+    "price": 29.15,
+    "volume": 44734505
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-03",
+    "price": 33.51,
+    "volume": 31999802
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-02",
+    "price": 38.2,
+    "volume": 13166400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-04-01",
+    "price": 38.13,
+    "volume": 13121248
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-31",
+    "price": 37.86,
+    "volume": 17462500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-28",
+    "price": 38.42,
+    "volume": 20227430
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-27",
+    "price": 39.98,
+    "volume": 18010200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-26",
+    "price": 41.49,
+    "volume": 19433672
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-25",
+    "price": 43.01,
+    "volume": 20804715
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-24",
+    "price": 41.61,
+    "volume": 21356100
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-21",
+    "price": 40.25,
+    "volume": 22336021
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-20",
+    "price": 40.7,
+    "volume": 22075622
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-19",
+    "price": 40.42,
+    "volume": 17519016
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-18",
+    "price": 39.84,
+    "volume": 14569900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-17",
+    "price": 39.51,
+    "volume": 12880747
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-14",
+    "price": 38.85,
+    "volume": 15203307
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-13",
+    "price": 37.58,
+    "volume": 20682700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-12",
+    "price": 36.78,
+    "volume": 13995800
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-11",
+    "price": 35.88,
+    "volume": 18345220
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-10",
+    "price": 34.5,
+    "volume": 21433019
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-07",
+    "price": 36.94,
+    "volume": 16969400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-06",
+    "price": 37.68,
+    "volume": 18546825
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-05",
+    "price": 38.16,
+    "volume": 29191000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-04",
+    "price": 34.9,
+    "volume": 18310704
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-03-03",
+    "price": 35.53,
+    "volume": 18101210
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-28",
+    "price": 36.91,
+    "volume": 14779630
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-27",
+    "price": 37.42,
+    "volume": 13147009
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-26",
+    "price": 37.95,
+    "volume": 16632704
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-25",
+    "price": 36.76,
+    "volume": 10618900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-24",
+    "price": 37.11,
+    "volume": 8418400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-21",
+    "price": 36.98,
+    "volume": 16151103
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-20",
+    "price": 38.96,
+    "volume": 11471980
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-19",
+    "price": 38.57,
+    "volume": 12101232
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-18",
+    "price": 39.3,
+    "volume": 12261346
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-14",
+    "price": 39.47,
+    "volume": 17559200
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-13",
+    "price": 40.22,
+    "volume": 21444700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-12",
+    "price": 37.96,
+    "volume": 10946500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-11",
+    "price": 37.59,
+    "volume": 13957929
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-10",
+    "price": 38.46,
+    "volume": 16243406
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-07",
+    "price": 38.22,
+    "volume": 21532000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-06",
+    "price": 37.15,
+    "volume": 13748219
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-05",
+    "price": 36.68,
+    "volume": 14888320
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-04",
+    "price": 36.48,
+    "volume": 14490622
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-02-03",
+    "price": 35.86,
+    "volume": 15940400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-31",
+    "price": 35.85,
+    "volume": 13387300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-30",
+    "price": 36.64,
+    "volume": 11821922
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-29",
+    "price": 36.28,
+    "volume": 12599900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-28",
+    "price": 35.84,
+    "volume": 16842913
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-27",
+    "price": 36.67,
+    "volume": 18550521
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-24",
+    "price": 37.81,
+    "volume": 19076400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-23",
+    "price": 38.5,
+    "volume": 30475404
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-22",
+    "price": 39.09,
+    "volume": 15882700
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-21",
+    "price": 40.3,
+    "volume": 16558028
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-17",
+    "price": 40.22,
+    "volume": 12045611
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-16",
+    "price": 40.03,
+    "volume": 11793991
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-15",
+    "price": 40.03,
+    "volume": 10618044
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-14",
+    "price": 39.5,
+    "volume": 9801900
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-13",
+    "price": 39.41,
+    "volume": 10418100
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-10",
+    "price": 38.98,
+    "volume": 11971121
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-08",
+    "price": 39.74,
+    "volume": 15589000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-07",
+    "price": 38.74,
+    "volume": 15304645
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-06",
+    "price": 38.57,
+    "volume": 18974400
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-03",
+    "price": 37.71,
+    "volume": 10155209
+   },
+   {
+    "symbol": "FCX",
+    "date": "2025-01-02",
+    "price": 37.88,
+    "volume": 8791475
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-31",
+    "price": 38.08,
+    "volume": 9247000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-30",
+    "price": 38.16,
+    "volume": 11047300
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-27",
+    "price": 38.86,
+    "volume": 7892500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-26",
+    "price": 39.19,
+    "volume": 6127846
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-24",
+    "price": 39.22,
+    "volume": 3962500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-23",
+    "price": 39.25,
+    "volume": 8562506
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-20",
+    "price": 38.86,
+    "volume": 22372318
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-19",
+    "price": 38.24,
+    "volume": 15766500
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-18",
+    "price": 38.71,
+    "volume": 12501000
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-17",
+    "price": 40.62,
+    "volume": 11734125
+   },
+   {
+    "symbol": "FCX",
+    "date": "2024-12-16",
+    "price": 40.74,
+    "volume": 10232800
    }
   ]
  }

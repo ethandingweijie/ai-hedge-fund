@@ -2987,9 +2987,57 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-09-01\", \"symbol\": \"AAPL\", \"to\": \"2025-09-16\"}, \"<redacted>\"]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-09-13\", \"symbol\": \"AAPL\", \"to\": \"2025-09-28\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-26",
+    "price": 255.46,
+    "volume": 46076300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-25",
+    "price": 256.87,
+    "volume": 55202100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-24",
+    "price": 252.31,
+    "volume": 42303710
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-23",
+    "price": 254.43,
+    "volume": 60275200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-22",
+    "price": 256.08,
+    "volume": 105517416
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-19",
+    "price": 245.5,
+    "volume": 163741314
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-18",
+    "price": 237.88,
+    "volume": 44249600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-09-17",
+    "price": 238.99,
+    "volume": 46508017
+   },
    {
     "symbol": "AAPL",
     "date": "2025-09-16",
@@ -3055,6 +3103,1452 @@
     "date": "2025-09-02",
     "price": 229.72,
     "volume": 44075638
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-29",
+    "price": 232.14,
+    "volume": 39418437
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-28",
+    "price": 232.56,
+    "volume": 38074700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-27",
+    "price": 230.49,
+    "volume": 31259513
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-26",
+    "price": 229.31,
+    "volume": 54575107
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-25",
+    "price": 227.16,
+    "volume": 30983133
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-22",
+    "price": 227.76,
+    "volume": 42477811
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-21",
+    "price": 224.9,
+    "volume": 30621249
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-20",
+    "price": 226.01,
+    "volume": 42263900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-19",
+    "price": 230.56,
+    "volume": 39402600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-18",
+    "price": 230.89,
+    "volume": 37476200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-15",
+    "price": 231.59,
+    "volume": 56038700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-14",
+    "price": 232.78,
+    "volume": 51916300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-13",
+    "price": 233.33,
+    "volume": 69878546
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-12",
+    "price": 229.65,
+    "volume": 55672301
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-11",
+    "price": 227.18,
+    "volume": 61806132
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-08",
+    "price": 229.35,
+    "volume": 113854000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-07",
+    "price": 220.03,
+    "volume": 90224834
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-06",
+    "price": 213.25,
+    "volume": 108483103
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-05",
+    "price": 202.92,
+    "volume": 44155100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-04",
+    "price": 203.35,
+    "volume": 75109300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-08-01",
+    "price": 202.38,
+    "volume": 104434500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-31",
+    "price": 207.57,
+    "volume": 80698431
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-30",
+    "price": 209.05,
+    "volume": 45512514
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-29",
+    "price": 211.27,
+    "volume": 51411723
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-28",
+    "price": 214.05,
+    "volume": 37858017
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-25",
+    "price": 213.88,
+    "volume": 40268800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-24",
+    "price": 213.76,
+    "volume": 46022620
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-23",
+    "price": 214.15,
+    "volume": 46989301
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-22",
+    "price": 214.4,
+    "volume": 46404100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-21",
+    "price": 212.48,
+    "volume": 51377434
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-18",
+    "price": 211.18,
+    "volume": 48974600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-17",
+    "price": 210.02,
+    "volume": 48068141
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-16",
+    "price": 210.16,
+    "volume": 47490532
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-15",
+    "price": 209.11,
+    "volume": 42296339
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-14",
+    "price": 208.62,
+    "volume": 38840111
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-11",
+    "price": 211.16,
+    "volume": 39765812
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-10",
+    "price": 212.41,
+    "volume": 44443635
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-09",
+    "price": 211.14,
+    "volume": 48749400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-08",
+    "price": 210.01,
+    "volume": 42848928
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-07",
+    "price": 209.95,
+    "volume": 50229000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-03",
+    "price": 213.55,
+    "volume": 34955836
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-02",
+    "price": 212.44,
+    "volume": 67941811
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-07-01",
+    "price": 207.82,
+    "volume": 78788900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-30",
+    "price": 205.17,
+    "volume": 91912816
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-27",
+    "price": 201.08,
+    "volume": 73188600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-26",
+    "price": 201,
+    "volume": 50799121
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-25",
+    "price": 201.56,
+    "volume": 39525730
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-24",
+    "price": 200.3,
+    "volume": 54064033
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-23",
+    "price": 201.5,
+    "volume": 55814300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-20",
+    "price": 201,
+    "volume": 96813542
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-18",
+    "price": 196.58,
+    "volume": 45394700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-17",
+    "price": 195.64,
+    "volume": 38856200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-16",
+    "price": 198.42,
+    "volume": 43020700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-13",
+    "price": 196.45,
+    "volume": 51447349
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-12",
+    "price": 199.2,
+    "volume": 43904635
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-11",
+    "price": 198.78,
+    "volume": 60989900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-10",
+    "price": 202.67,
+    "volume": 54672608
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-09",
+    "price": 201.45,
+    "volume": 72862600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-06",
+    "price": 203.92,
+    "volume": 46607700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-05",
+    "price": 200.63,
+    "volume": 55221235
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-04",
+    "price": 202.82,
+    "volume": 43604000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-03",
+    "price": 203.27,
+    "volume": 46381600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-06-02",
+    "price": 201.7,
+    "volume": 35423300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-30",
+    "price": 200.85,
+    "volume": 70819942
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-29",
+    "price": 199.95,
+    "volume": 51477938
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-28",
+    "price": 200.42,
+    "volume": 45339700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-27",
+    "price": 200.21,
+    "volume": 56288500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-23",
+    "price": 195.27,
+    "volume": 78432918
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-22",
+    "price": 201.36,
+    "volume": 46742407
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-21",
+    "price": 202.09,
+    "volume": 59211800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-20",
+    "price": 206.86,
+    "volume": 42496635
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-19",
+    "price": 208.78,
+    "volume": 46140527
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-16",
+    "price": 211.26,
+    "volume": 54737900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-15",
+    "price": 211.45,
+    "volume": 45029500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-14",
+    "price": 212.33,
+    "volume": 49325825
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-13",
+    "price": 212.93,
+    "volume": 51909332
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-12",
+    "price": 210.79,
+    "volume": 63775814
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-09",
+    "price": 198.53,
+    "volume": 36453923
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-08",
+    "price": 197.49,
+    "volume": 50478900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-07",
+    "price": 196.25,
+    "volume": 68616943
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-06",
+    "price": 198.51,
+    "volume": 51216500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-05",
+    "price": 198.89,
+    "volume": 69018500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-02",
+    "price": 205.35,
+    "volume": 101010621
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-05-01",
+    "price": 213.32,
+    "volume": 57365700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-30",
+    "price": 212.5,
+    "volume": 52286500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-29",
+    "price": 211.21,
+    "volume": 36827633
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-28",
+    "price": 210.14,
+    "volume": 38743100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-25",
+    "price": 209.28,
+    "volume": 38222300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-24",
+    "price": 208.37,
+    "volume": 47311000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-23",
+    "price": 204.6,
+    "volume": 52929200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-22",
+    "price": 199.74,
+    "volume": 52976400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-21",
+    "price": 193.16,
+    "volume": 46742537
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-17",
+    "price": 196.98,
+    "volume": 52164700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-16",
+    "price": 194.27,
+    "volume": 59732423
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-15",
+    "price": 202.14,
+    "volume": 51343900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-14",
+    "price": 202.52,
+    "volume": 101352911
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-11",
+    "price": 198.15,
+    "volume": 87435915
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-10",
+    "price": 190.42,
+    "volume": 121880000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-09",
+    "price": 198.85,
+    "volume": 184395900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-08",
+    "price": 172.42,
+    "volume": 120859500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-07",
+    "price": 181.46,
+    "volume": 160466300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-04",
+    "price": 188.38,
+    "volume": 125910913
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-03",
+    "price": 203.19,
+    "volume": 103419006
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-02",
+    "price": 223.89,
+    "volume": 35905904
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-04-01",
+    "price": 223.19,
+    "volume": 36412740
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-31",
+    "price": 222.13,
+    "volume": 65299321
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-28",
+    "price": 217.9,
+    "volume": 39818617
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-27",
+    "price": 223.85,
+    "volume": 37094800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-26",
+    "price": 221.53,
+    "volume": 34532656
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-25",
+    "price": 223.75,
+    "volume": 34493600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-24",
+    "price": 220.73,
+    "volume": 44299500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-21",
+    "price": 218.27,
+    "volume": 94127800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-20",
+    "price": 214.1,
+    "volume": 48862947
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-19",
+    "price": 215.24,
+    "volume": 54385400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-18",
+    "price": 212.69,
+    "volume": 42432426
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-17",
+    "price": 214,
+    "volume": 48073426
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-14",
+    "price": 213.49,
+    "volume": 60107600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-13",
+    "price": 209.68,
+    "volume": 61368330
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-12",
+    "price": 216.98,
+    "volume": 62547500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-11",
+    "price": 220.84,
+    "volume": 76137410
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-10",
+    "price": 227.48,
+    "volume": 72071200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-07",
+    "price": 239.07,
+    "volume": 46273600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-06",
+    "price": 235.33,
+    "volume": 45170419
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-05",
+    "price": 235.74,
+    "volume": 47227643
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-04",
+    "price": 235.93,
+    "volume": 53798100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-03-03",
+    "price": 238.03,
+    "volume": 47184000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-28",
+    "price": 241.84,
+    "volume": 56833400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-27",
+    "price": 237.3,
+    "volume": 41153639
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-26",
+    "price": 240.36,
+    "volume": 44433600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-25",
+    "price": 247.04,
+    "volume": 48013300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-24",
+    "price": 247.1,
+    "volume": 51326400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-21",
+    "price": 245.55,
+    "volume": 53197431
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-20",
+    "price": 245.83,
+    "volume": 32316907
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-19",
+    "price": 244.87,
+    "volume": 32204215
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-18",
+    "price": 244.47,
+    "volume": 48822500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-14",
+    "price": 244.6,
+    "volume": 40896227
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-13",
+    "price": 241.53,
+    "volume": 53614100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-12",
+    "price": 236.87,
+    "volume": 45243300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-11",
+    "price": 232.62,
+    "volume": 53718400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-10",
+    "price": 227.65,
+    "volume": 33115645
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-07",
+    "price": 227.63,
+    "volume": 39707224
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-06",
+    "price": 233.22,
+    "volume": 29925349
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-05",
+    "price": 232.47,
+    "volume": 39664989
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-04",
+    "price": 232.8,
+    "volume": 45067301
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-02-03",
+    "price": 228.01,
+    "volume": 73063301
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-31",
+    "price": 236,
+    "volume": 101075128
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-30",
+    "price": 237.59,
+    "volume": 55658300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-29",
+    "price": 239.36,
+    "volume": 45486100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-28",
+    "price": 238.26,
+    "volume": 75707600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-27",
+    "price": 229.86,
+    "volume": 94863418
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-24",
+    "price": 222.78,
+    "volume": 54697907
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-23",
+    "price": 223.66,
+    "volume": 60234800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-22",
+    "price": 223.83,
+    "volume": 64126500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-21",
+    "price": 222.64,
+    "volume": 98070429
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-17",
+    "price": 229.98,
+    "volume": 68488301
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-16",
+    "price": 228.26,
+    "volume": 71759100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-15",
+    "price": 237.87,
+    "volume": 39832000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-14",
+    "price": 233.28,
+    "volume": 39435300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-13",
+    "price": 234.4,
+    "volume": 49630725
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-10",
+    "price": 236.85,
+    "volume": 61710900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-08",
+    "price": 242.7,
+    "volume": 37628940
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-07",
+    "price": 242.21,
+    "volume": 40856000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-06",
+    "price": 245,
+    "volume": 45045600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-03",
+    "price": 243.36,
+    "volume": 40244114
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2025-01-02",
+    "price": 243.85,
+    "volume": 55740731
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-31",
+    "price": 250.42,
+    "volume": 39480718
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-30",
+    "price": 252.2,
+    "volume": 35557542
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-27",
+    "price": 255.59,
+    "volume": 42355321
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-26",
+    "price": 259.02,
+    "volume": 27262983
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-24",
+    "price": 258.2,
+    "volume": 23234705
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-23",
+    "price": 255.27,
+    "volume": 40858800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-20",
+    "price": 254.49,
+    "volume": 147495300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-19",
+    "price": 249.79,
+    "volume": 60882300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-18",
+    "price": 248.05,
+    "volume": 56774101
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-17",
+    "price": 253.48,
+    "volume": 51356400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-16",
+    "price": 251.04,
+    "volume": 51694800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-13",
+    "price": 248.13,
+    "volume": 33155300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-12",
+    "price": 247.96,
+    "volume": 32777532
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-11",
+    "price": 246.49,
+    "volume": 45205814
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-10",
+    "price": 247.77,
+    "volume": 36914806
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-09",
+    "price": 246.75,
+    "volume": 44649232
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-06",
+    "price": 242.84,
+    "volume": 36870619
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-05",
+    "price": 243.04,
+    "volume": 40033900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-04",
+    "price": 243.01,
+    "volume": 44383935
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-03",
+    "price": 242.65,
+    "volume": 38861017
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-12-02",
+    "price": 239.59,
+    "volume": 48137103
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-29",
+    "price": 237.33,
+    "volume": 28481400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-27",
+    "price": 234.93,
+    "volume": 33498439
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-26",
+    "price": 235.06,
+    "volume": 45986200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-25",
+    "price": 232.87,
+    "volume": 90152832
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-22",
+    "price": 229.87,
+    "volume": 38168300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-21",
+    "price": 228.52,
+    "volume": 42108327
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-20",
+    "price": 229,
+    "volume": 35169600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-19",
+    "price": 228.28,
+    "volume": 36211800
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-18",
+    "price": 228.02,
+    "volume": 44686020
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-15",
+    "price": 225,
+    "volume": 47923700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-14",
+    "price": 228.22,
+    "volume": 44923941
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-13",
+    "price": 225.12,
+    "volume": 48566217
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-12",
+    "price": 224.23,
+    "volume": 40398300
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-11",
+    "price": 224.23,
+    "volume": 42005602
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-08",
+    "price": 226.96,
+    "volume": 38328824
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-07",
+    "price": 227.48,
+    "volume": 42137700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-06",
+    "price": 222.72,
+    "volume": 54561121
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-05",
+    "price": 223.45,
+    "volume": 28111338
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-04",
+    "price": 222.01,
+    "volume": 44944500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-11-01",
+    "price": 222.91,
+    "volume": 65276741
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-31",
+    "price": 225.91,
+    "volume": 64370100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-30",
+    "price": 230.1,
+    "volume": 47070907
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-29",
+    "price": 233.67,
+    "volume": 35417247
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-28",
+    "price": 233.4,
+    "volume": 36087134
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-25",
+    "price": 231.41,
+    "volume": 38802304
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-24",
+    "price": 230.57,
+    "volume": 31109503
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-23",
+    "price": 230.76,
+    "volume": 52287000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-22",
+    "price": 235.86,
+    "volume": 38846600
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-21",
+    "price": 236.48,
+    "volume": 36254500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-18",
+    "price": 235,
+    "volume": 46431500
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-17",
+    "price": 232.15,
+    "volume": 32993810
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-16",
+    "price": 231.78,
+    "volume": 34082240
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-15",
+    "price": 233.85,
+    "volume": 64751400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-14",
+    "price": 231.3,
+    "volume": 39882100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-11",
+    "price": 227.55,
+    "volume": 31759200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-10",
+    "price": 229.04,
+    "volume": 28183544
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-09",
+    "price": 229.54,
+    "volume": 33591100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-08",
+    "price": 225.77,
+    "volume": 31855700
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-07",
+    "price": 221.69,
+    "volume": 39505400
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-04",
+    "price": 226.8,
+    "volume": 37345098
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-03",
+    "price": 225.67,
+    "volume": 34044200
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-02",
+    "price": 226.78,
+    "volume": 32880605
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-10-01",
+    "price": 226.21,
+    "volume": 63285048
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-30",
+    "price": 233,
+    "volume": 54793391
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-27",
+    "price": 227.79,
+    "volume": 34026000
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-26",
+    "price": 227.52,
+    "volume": 36636707
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-25",
+    "price": 226.37,
+    "volume": 42308715
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-24",
+    "price": 227.37,
+    "volume": 43556100
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-23",
+    "price": 226.47,
+    "volume": 54146023
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-20",
+    "price": 228.2,
+    "volume": 318679900
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-19",
+    "price": 228.87,
+    "volume": 66781315
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-18",
+    "price": 220.69,
+    "volume": 59894928
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-17",
+    "price": 216.79,
+    "volume": 45519339
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-16",
+    "price": 216.32,
+    "volume": 59357427
+   },
+   {
+    "symbol": "AAPL",
+    "date": "2024-09-13",
+    "price": 222.5,
+    "volume": 36766619
    }
   ]
  }

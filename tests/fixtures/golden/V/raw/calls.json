@@ -2692,9 +2692,69 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-09-01\", \"symbol\": \"V\", \"to\": \"2025-09-16\"}, \"<redacted>\"]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-09-15\", \"symbol\": \"V\", \"to\": \"2025-09-30\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "V",
+    "date": "2025-09-30",
+    "price": 341.38,
+    "volume": 8164773
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-29",
+    "price": 340.16,
+    "volume": 7218209
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-26",
+    "price": 337.37,
+    "volume": 9619547
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-25",
+    "price": 334.93,
+    "volume": 5398713
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-24",
+    "price": 338.68,
+    "volume": 5207430
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-23",
+    "price": 338.7,
+    "volume": 10142700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-22",
+    "price": 344.36,
+    "volume": 5621800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-19",
+    "price": 341.61,
+    "volume": 13674340
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-18",
+    "price": 338.18,
+    "volume": 7526600
+   },
+   {
+    "symbol": "V",
+    "date": "2025-09-17",
+    "price": 346.2,
+    "volume": 5763537
+   },
    {
     "symbol": "V",
     "date": "2025-09-16",
@@ -2760,6 +2820,1446 @@
     "date": "2025-09-02",
     "price": 350.07,
     "volume": 4940539
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-29",
+    "price": 351.78,
+    "volume": 3671901
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-28",
+    "price": 349.86,
+    "volume": 4987541
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-27",
+    "price": 350.35,
+    "volume": 5531127
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-26",
+    "price": 351.18,
+    "volume": 5876224
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-25",
+    "price": 348.82,
+    "volume": 8020043
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-22",
+    "price": 350.04,
+    "volume": 4973223
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-21",
+    "price": 343.69,
+    "volume": 6073857
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-20",
+    "price": 343.93,
+    "volume": 5834400
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-19",
+    "price": 342.45,
+    "volume": 4457201
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-18",
+    "price": 342.74,
+    "volume": 3999600
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-15",
+    "price": 344.47,
+    "volume": 4946616
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-14",
+    "price": 345.49,
+    "volume": 6224008
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-13",
+    "price": 342.55,
+    "volume": 5693400
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-12",
+    "price": 336.74,
+    "volume": 5684596
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-11",
+    "price": 335.9,
+    "volume": 5715800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-08",
+    "price": 336.78,
+    "volume": 6073900
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-07",
+    "price": 332.09,
+    "volume": 8797100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-06",
+    "price": 339.74,
+    "volume": 5944108
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-05",
+    "price": 337.43,
+    "volume": 7295600
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-04",
+    "price": 342.15,
+    "volume": 7335300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-08-01",
+    "price": 339.35,
+    "volume": 8658700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-31",
+    "price": 345.47,
+    "volume": 8641733
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-30",
+    "price": 350.91,
+    "volume": 12129700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-29",
+    "price": 351.29,
+    "volume": 7402324
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-28",
+    "price": 355.47,
+    "volume": 3921000
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-25",
+    "price": 357.04,
+    "volume": 3915781
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-24",
+    "price": 353.97,
+    "volume": 5887647
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-23",
+    "price": 355.29,
+    "volume": 4385600
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-22",
+    "price": 351.86,
+    "volume": 4614217
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-21",
+    "price": 350.94,
+    "volume": 5216300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-18",
+    "price": 349.05,
+    "volume": 4927644
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-17",
+    "price": 349.81,
+    "volume": 4747460
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-16",
+    "price": 349.9,
+    "volume": 5544214
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-15",
+    "price": 347.02,
+    "volume": 4891719
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-14",
+    "price": 350.5,
+    "volume": 5599263
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-11",
+    "price": 347.93,
+    "volume": 7580200
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-10",
+    "price": 355.88,
+    "volume": 6121637
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-09",
+    "price": 357.76,
+    "volume": 7297100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-08",
+    "price": 354.55,
+    "volume": 6966800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-07",
+    "price": 356.64,
+    "volume": 5138011
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-03",
+    "price": 358.86,
+    "volume": 3702810
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-02",
+    "price": 354.22,
+    "volume": 5131422
+   },
+   {
+    "symbol": "V",
+    "date": "2025-07-01",
+    "price": 355.47,
+    "volume": 6653409
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-30",
+    "price": 355.05,
+    "volume": 7080119
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-27",
+    "price": 348.61,
+    "volume": 6601921
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-26",
+    "price": 346.03,
+    "volume": 8829500
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-25",
+    "price": 345.26,
+    "volume": 6836300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-24",
+    "price": 351.63,
+    "volume": 10172000
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-23",
+    "price": 343.75,
+    "volume": 7553346
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-20",
+    "price": 338.57,
+    "volume": 19332100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-18",
+    "price": 340.38,
+    "volume": 15008618
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-17",
+    "price": 357.84,
+    "volume": 5559643
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-16",
+    "price": 355.48,
+    "volume": 7234700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-13",
+    "price": 352.85,
+    "volume": 14181700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-12",
+    "price": 371.4,
+    "volume": 4874007
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-11",
+    "price": 373.31,
+    "volume": 5562874
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-10",
+    "price": 370.7,
+    "volume": 4109300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-09",
+    "price": 366.66,
+    "volume": 5000275
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-06",
+    "price": 370.22,
+    "volume": 5008500
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-05",
+    "price": 366.77,
+    "volume": 6884638
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-04",
+    "price": 368,
+    "volume": 4202306
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-03",
+    "price": 365.86,
+    "volume": 5221424
+   },
+   {
+    "symbol": "V",
+    "date": "2025-06-02",
+    "price": 365.32,
+    "volume": 3845997
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-30",
+    "price": 365.19,
+    "volume": 8726900
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-29",
+    "price": 362.4,
+    "volume": 4590972
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-28",
+    "price": 359.73,
+    "volume": 3299041
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-27",
+    "price": 359.3,
+    "volume": 6316301
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-23",
+    "price": 353.54,
+    "volume": 5346050
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-22",
+    "price": 357.97,
+    "volume": 4936600
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-21",
+    "price": 358.3,
+    "volume": 6125536
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-20",
+    "price": 366.84,
+    "volume": 5281778
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-19",
+    "price": 367.9,
+    "volume": 5081519
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-16",
+    "price": 365.12,
+    "volume": 5838100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-15",
+    "price": 362.3,
+    "volume": 5826126
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-14",
+    "price": 356.46,
+    "volume": 6208010
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-13",
+    "price": 356.14,
+    "volume": 5406243
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-12",
+    "price": 355.85,
+    "volume": 7985428
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-09",
+    "price": 352.54,
+    "volume": 3086734
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-08",
+    "price": 351.27,
+    "volume": 4156400
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-07",
+    "price": 349.85,
+    "volume": 5454135
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-06",
+    "price": 347.7,
+    "volume": 3438500
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-05",
+    "price": 348.64,
+    "volume": 3865342
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-02",
+    "price": 347.6,
+    "volume": 6113700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-05-01",
+    "price": 342.45,
+    "volume": 5849940
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-30",
+    "price": 345.5,
+    "volume": 9526712
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-29",
+    "price": 341.52,
+    "volume": 5519533
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-28",
+    "price": 337.51,
+    "volume": 5422903
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-25",
+    "price": 335.17,
+    "volume": 4452800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-24",
+    "price": 335.71,
+    "volume": 8055200
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-23",
+    "price": 334.27,
+    "volume": 8906235
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-22",
+    "price": 331.4,
+    "volume": 5435531
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-21",
+    "price": 320.1,
+    "volume": 6362425
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-17",
+    "price": 329.61,
+    "volume": 5655943
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-16",
+    "price": 331.33,
+    "volume": 5850819
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-15",
+    "price": 335.81,
+    "volume": 4386214
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-14",
+    "price": 335.18,
+    "volume": 5011800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-11",
+    "price": 333.4,
+    "volume": 6804507
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-10",
+    "price": 324.61,
+    "volume": 8709800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-09",
+    "price": 332.43,
+    "volume": 11361801
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-08",
+    "price": 308.27,
+    "volume": 9569300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-07",
+    "price": 312.32,
+    "volume": 12163443
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-04",
+    "price": 313.13,
+    "volume": 13201735
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-03",
+    "price": 339.39,
+    "volume": 8792900
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-02",
+    "price": 346.33,
+    "volume": 5682521
+   },
+   {
+    "symbol": "V",
+    "date": "2025-04-01",
+    "price": 346.35,
+    "volume": 7473329
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-31",
+    "price": 350.46,
+    "volume": 9950800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-28",
+    "price": 342.85,
+    "volume": 5687616
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-27",
+    "price": 349.86,
+    "volume": 7254807
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-26",
+    "price": 344.18,
+    "volume": 6187574
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-25",
+    "price": 344.62,
+    "volume": 3931200
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-24",
+    "price": 343.87,
+    "volume": 5675111
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-21",
+    "price": 335.66,
+    "volume": 17279700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-20",
+    "price": 339.5,
+    "volume": 5432700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-19",
+    "price": 339.87,
+    "volume": 5615204
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-18",
+    "price": 334.77,
+    "volume": 7778631
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-17",
+    "price": 334.55,
+    "volume": 6149652
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-14",
+    "price": 331.8,
+    "volume": 7810970
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-13",
+    "price": 328.55,
+    "volume": 7915323
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-12",
+    "price": 332.84,
+    "volume": 6295400
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-11",
+    "price": 332.14,
+    "volume": 9776100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-10",
+    "price": 341.48,
+    "volume": 8204300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-07",
+    "price": 345.32,
+    "volume": 6358901
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-06",
+    "price": 344.16,
+    "volume": 8611119
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-05",
+    "price": 352.68,
+    "volume": 8244242
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-04",
+    "price": 352.23,
+    "volume": 8955804
+   },
+   {
+    "symbol": "V",
+    "date": "2025-03-03",
+    "price": 361.82,
+    "volume": 9099607
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-28",
+    "price": 362.71,
+    "volume": 15857344
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-27",
+    "price": 355.74,
+    "volume": 7298114
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-26",
+    "price": 350.63,
+    "volume": 5960603
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-25",
+    "price": 352.09,
+    "volume": 6191949
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-24",
+    "price": 349.86,
+    "volume": 5055927
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-21",
+    "price": 348.53,
+    "volume": 6924127
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-20",
+    "price": 350.49,
+    "volume": 5697023
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-19",
+    "price": 355.23,
+    "volume": 4152300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-18",
+    "price": 356.73,
+    "volume": 5822034
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-14",
+    "price": 353.81,
+    "volume": 5720300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-13",
+    "price": 355.63,
+    "volume": 4279581
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-12",
+    "price": 351.49,
+    "volume": 6760100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-11",
+    "price": 350.72,
+    "volume": 5154800
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-10",
+    "price": 351.23,
+    "volume": 6067002
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-07",
+    "price": 348.02,
+    "volume": 4261612
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-06",
+    "price": 347.48,
+    "volume": 4294541
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-05",
+    "price": 349.44,
+    "volume": 4939100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-04",
+    "price": 345.15,
+    "volume": 5532600
+   },
+   {
+    "symbol": "V",
+    "date": "2025-02-03",
+    "price": 345.82,
+    "volume": 8004548
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-31",
+    "price": 341.8,
+    "volume": 8628071
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-30",
+    "price": 343.05,
+    "volume": 8081300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-29",
+    "price": 335.88,
+    "volume": 5087300
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-28",
+    "price": 334.48,
+    "volume": 5999623
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-27",
+    "price": 334.54,
+    "volume": 6636541
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-24",
+    "price": 330.2,
+    "volume": 4327755
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-23",
+    "price": 328.21,
+    "volume": 5297100
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-22",
+    "price": 323.56,
+    "volume": 5026500
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-21",
+    "price": 323.63,
+    "volume": 5653341
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-17",
+    "price": 319.62,
+    "volume": 5805810
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-16",
+    "price": 317.25,
+    "volume": 4606700
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-15",
+    "price": 316.28,
+    "volume": 5222278
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-14",
+    "price": 309.09,
+    "volume": 5107901
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-13",
+    "price": 306.92,
+    "volume": 9568727
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-10",
+    "price": 307.71,
+    "volume": 6660255
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-08",
+    "price": 312.6,
+    "volume": 5161601
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-07",
+    "price": 311.67,
+    "volume": 4958641
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-06",
+    "price": 313.04,
+    "volume": 6567336
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-03",
+    "price": 314.91,
+    "volume": 4271845
+   },
+   {
+    "symbol": "V",
+    "date": "2025-01-02",
+    "price": 314.4,
+    "volume": 5373059
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-31",
+    "price": 316.04,
+    "volume": 3963824
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-30",
+    "price": 315.31,
+    "volume": 3478763
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-27",
+    "price": 318.66,
+    "volume": 3489200
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-26",
+    "price": 320.91,
+    "volume": 2856059
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-24",
+    "price": 320.65,
+    "volume": 2684103
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-23",
+    "price": 317.22,
+    "volume": 7984610
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-20",
+    "price": 317.71,
+    "volume": 24387016
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-19",
+    "price": 314.88,
+    "volume": 8317119
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-18",
+    "price": 309.78,
+    "volume": 10479200
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-17",
+    "price": 318.3,
+    "volume": 8844349
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-16",
+    "price": 315.89,
+    "volume": 6562510
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-13",
+    "price": 314.74,
+    "volume": 4682543
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-12",
+    "price": 314.23,
+    "volume": 3218540
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-11",
+    "price": 313.79,
+    "volume": 4321824
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-10",
+    "price": 312.38,
+    "volume": 4539827
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-09",
+    "price": 308.3,
+    "volume": 5785300
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-06",
+    "price": 311.01,
+    "volume": 4302851
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-05",
+    "price": 309.08,
+    "volume": 5200100
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-04",
+    "price": 309.9,
+    "volume": 5981800
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-03",
+    "price": 313.01,
+    "volume": 5009907
+   },
+   {
+    "symbol": "V",
+    "date": "2024-12-02",
+    "price": 316.65,
+    "volume": 5597635
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-29",
+    "price": 315.08,
+    "volume": 3853300
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-27",
+    "price": 314.7,
+    "volume": 5204318
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-26",
+    "price": 311.82,
+    "volume": 7071592
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-25",
+    "price": 313.19,
+    "volume": 14189302
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-22",
+    "price": 309.92,
+    "volume": 5919518
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-21",
+    "price": 309.9,
+    "volume": 5757406
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-20",
+    "price": 307.39,
+    "volume": 6350282
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-19",
+    "price": 311.85,
+    "volume": 4885860
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-18",
+    "price": 312.16,
+    "volume": 4585944
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-15",
+    "price": 309.64,
+    "volume": 5106300
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-14",
+    "price": 308.25,
+    "volume": 4415800
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-13",
+    "price": 309.48,
+    "volume": 4046544
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-12",
+    "price": 309.8,
+    "volume": 4616616
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-11",
+    "price": 310.92,
+    "volume": 4674100
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-08",
+    "price": 307.87,
+    "volume": 6240616
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-07",
+    "price": 305.8,
+    "volume": 6237348
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-06",
+    "price": 307.4,
+    "volume": 10320500
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-05",
+    "price": 293.29,
+    "volume": 3753721
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-04",
+    "price": 291.85,
+    "volume": 4281721
+   },
+   {
+    "symbol": "V",
+    "date": "2024-11-01",
+    "price": 290.74,
+    "volume": 5471088
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-31",
+    "price": 289.85,
+    "volume": 7950228
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-30",
+    "price": 290.16,
+    "volume": 9606800
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-29",
+    "price": 281.88,
+    "volume": 7534800
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-28",
+    "price": 284.19,
+    "volume": 4306240
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-25",
+    "price": 281.73,
+    "volume": 4464600
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-24",
+    "price": 283.22,
+    "volume": 4680151
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-23",
+    "price": 283.76,
+    "volume": 5249300
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-22",
+    "price": 284.79,
+    "volume": 5736500
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-21",
+    "price": 286.85,
+    "volume": 6313148
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-18",
+    "price": 290.62,
+    "volume": 5350923
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-17",
+    "price": 290.39,
+    "volume": 8815841
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-16",
+    "price": 287.52,
+    "volume": 9442700
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-15",
+    "price": 279.29,
+    "volume": 5807021
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-14",
+    "price": 280.68,
+    "volume": 3996620
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-11",
+    "price": 277.84,
+    "volume": 4746446
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-10",
+    "price": 277.47,
+    "volume": 4063900
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-09",
+    "price": 276.93,
+    "volume": 4115807
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-08",
+    "price": 274.96,
+    "volume": 4370915
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-07",
+    "price": 273.79,
+    "volume": 4339337
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-04",
+    "price": 277.93,
+    "volume": 4260920
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-03",
+    "price": 276.86,
+    "volume": 3036700
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-02",
+    "price": 277,
+    "volume": 4741600
+   },
+   {
+    "symbol": "V",
+    "date": "2024-10-01",
+    "price": 277.6,
+    "volume": 5781600
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-30",
+    "price": 274.95,
+    "volume": 5971352
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-27",
+    "price": 275.17,
+    "volume": 6509600
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-26",
+    "price": 271.69,
+    "volume": 9552507
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-25",
+    "price": 269.63,
+    "volume": 11671300
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-24",
+    "price": 272.78,
+    "volume": 13690200
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-23",
+    "price": 288.63,
+    "volume": 6505632
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-20",
+    "price": 284.77,
+    "volume": 27810925
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-19",
+    "price": 285.24,
+    "volume": 10382100
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-18",
+    "price": 288.48,
+    "volume": 5890000
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-17",
+    "price": 291.56,
+    "volume": 5135913
+   },
+   {
+    "symbol": "V",
+    "date": "2024-09-16",
+    "price": 290.48,
+    "volume": 4458900
    }
   ]
  }

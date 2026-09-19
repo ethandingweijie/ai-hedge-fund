@@ -2736,9 +2736,453 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-09-01\", \"symbol\": \"MELI\", \"to\": \"2025-09-16\"}, \"<redacted>\"]]",
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-12-16\", \"symbol\": \"MELI\", \"to\": \"2025-12-31\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "MELI",
+    "date": "2025-12-31",
+    "price": 2014.26,
+    "volume": 199741
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-30",
+    "price": 2020.88,
+    "volume": 294173
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-29",
+    "price": 2014.97,
+    "volume": 276102
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-26",
+    "price": 2005.71,
+    "volume": 192536
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-24",
+    "price": 1998.21,
+    "volume": 98200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-23",
+    "price": 1995.07,
+    "volume": 254277
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-22",
+    "price": 1993.65,
+    "volume": 311112
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-19",
+    "price": 1997.61,
+    "volume": 737900
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-18",
+    "price": 1964.46,
+    "volume": 686120
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-17",
+    "price": 1916.28,
+    "volume": 687600
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-16",
+    "price": 1933.72,
+    "volume": 908305
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-15",
+    "price": 1966.76,
+    "volume": 487100
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-12",
+    "price": 2015.89,
+    "volume": 401373
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-11",
+    "price": 2019.81,
+    "volume": 522746
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-10",
+    "price": 1970.73,
+    "volume": 1173949
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-09",
+    "price": 2074.48,
+    "volume": 418183
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-08",
+    "price": 2088.36,
+    "volume": 361376
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-05",
+    "price": 2066.42,
+    "volume": 668900
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-04",
+    "price": 2139.56,
+    "volume": 443086
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-03",
+    "price": 2119.83,
+    "volume": 383800
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-02",
+    "price": 2115.91,
+    "volume": 616371
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-12-01",
+    "price": 2064.55,
+    "volume": 538712
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-28",
+    "price": 2071.78,
+    "volume": 248705
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-26",
+    "price": 2033.32,
+    "volume": 378105
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-25",
+    "price": 2055,
+    "volume": 524784
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-24",
+    "price": 2008.92,
+    "volume": 870208
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-21",
+    "price": 1951.78,
+    "volume": 816100
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-20",
+    "price": 1899.75,
+    "volume": 1195200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-19",
+    "price": 2077.18,
+    "volume": 428859
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-18",
+    "price": 2058.81,
+    "volume": 380027
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-17",
+    "price": 2057.72,
+    "volume": 375300
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-14",
+    "price": 2048.89,
+    "volume": 600885
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-13",
+    "price": 2031.05,
+    "volume": 700919
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-12",
+    "price": 2103.91,
+    "volume": 406033
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-11",
+    "price": 2099.57,
+    "volume": 395268
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-10",
+    "price": 2092.04,
+    "volume": 823965
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-07",
+    "price": 2108.6,
+    "volume": 655943
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-06",
+    "price": 2128.33,
+    "volume": 742547
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-05",
+    "price": 2301.88,
+    "volume": 464509
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-04",
+    "price": 2305.69,
+    "volume": 383692
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-11-03",
+    "price": 2316.4,
+    "volume": 497482
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-31",
+    "price": 2327.26,
+    "volume": 754766
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-30",
+    "price": 2360.76,
+    "volume": 892725
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-29",
+    "price": 2295.92,
+    "volume": 545820
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-28",
+    "price": 2290.14,
+    "volume": 385602
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-27",
+    "price": 2282.32,
+    "volume": 640426
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-24",
+    "price": 2161.11,
+    "volume": 367718
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-23",
+    "price": 2148.32,
+    "volume": 296386
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-22",
+    "price": 2095.21,
+    "volume": 283279
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-21",
+    "price": 2142.05,
+    "volume": 349419
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-20",
+    "price": 2102.11,
+    "volume": 361246
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-17",
+    "price": 2024.98,
+    "volume": 742277
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-16",
+    "price": 2043.06,
+    "volume": 818296
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-15",
+    "price": 2048.35,
+    "volume": 757000
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-14",
+    "price": 2157.82,
+    "volume": 315811
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-13",
+    "price": 2175.91,
+    "volume": 352689
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-10",
+    "price": 2133.67,
+    "volume": 731200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-09",
+    "price": 2275,
+    "volume": 523234
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-08",
+    "price": 2179.89,
+    "volume": 396471
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-07",
+    "price": 2187.57,
+    "volume": 332543
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-06",
+    "price": 2154.22,
+    "volume": 636849
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-03",
+    "price": 2172.75,
+    "volume": 617600
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-02",
+    "price": 2246.6,
+    "volume": 898141
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-10-01",
+    "price": 2176.91,
+    "volume": 1189734
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-30",
+    "price": 2336.94,
+    "volume": 928702
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-29",
+    "price": 2501.31,
+    "volume": 283323
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-26",
+    "price": 2468.42,
+    "volume": 249728
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-25",
+    "price": 2492.25,
+    "volume": 362522
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-24",
+    "price": 2510.97,
+    "volume": 272620
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-23",
+    "price": 2494.35,
+    "volume": 267950
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-22",
+    "price": 2460.66,
+    "volume": 288413
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-19",
+    "price": 2452.34,
+    "volume": 416953
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-18",
+    "price": 2476.37,
+    "volume": 378905
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-09-17",
+    "price": 2446.32,
+    "volume": 418489
+   },
    {
     "symbol": "MELI",
     "date": "2025-09-16",
@@ -2804,6 +3248,1062 @@
     "date": "2025-09-02",
     "price": 2379.76,
     "volume": 360087
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-29",
+    "price": 2472.91,
+    "volume": 292510
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-28",
+    "price": 2472.29,
+    "volume": 373338
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-27",
+    "price": 2413.43,
+    "volume": 224192
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-26",
+    "price": 2405.53,
+    "volume": 409826
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-25",
+    "price": 2407.74,
+    "volume": 199676
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-22",
+    "price": 2430.62,
+    "volume": 436344
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-21",
+    "price": 2337.44,
+    "volume": 216768
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-20",
+    "price": 2335.98,
+    "volume": 272523
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-19",
+    "price": 2342.94,
+    "volume": 352800
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-18",
+    "price": 2364.01,
+    "volume": 223400
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-15",
+    "price": 2392.3,
+    "volume": 411279
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-14",
+    "price": 2319.8,
+    "volume": 286250
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-13",
+    "price": 2327.3,
+    "volume": 313888
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-12",
+    "price": 2350.83,
+    "volume": 408710
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-11",
+    "price": 2292.04,
+    "volume": 351431
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-08",
+    "price": 2353.7,
+    "volume": 303516
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-07",
+    "price": 2334.82,
+    "volume": 352054
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-06",
+    "price": 2317.22,
+    "volume": 616200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-05",
+    "price": 2408.02,
+    "volume": 1124114
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-04",
+    "price": 2395.83,
+    "volume": 563545
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-08-01",
+    "price": 2375.92,
+    "volume": 375260
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-31",
+    "price": 2373.89,
+    "volume": 258237
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-30",
+    "price": 2381.39,
+    "volume": 227474
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-29",
+    "price": 2384.9,
+    "volume": 259321
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-28",
+    "price": 2354.11,
+    "volume": 192908
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-25",
+    "price": 2362.56,
+    "volume": 278625
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-24",
+    "price": 2391.05,
+    "volume": 159571
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-23",
+    "price": 2394.43,
+    "volume": 268210
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-22",
+    "price": 2384.72,
+    "volume": 266900
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-21",
+    "price": 2379.06,
+    "volume": 249248
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-18",
+    "price": 2413.57,
+    "volume": 319851
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-17",
+    "price": 2351.14,
+    "volume": 378962
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-16",
+    "price": 2405.15,
+    "volume": 210609
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-15",
+    "price": 2390,
+    "volume": 240671
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-14",
+    "price": 2380.25,
+    "volume": 230237
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-11",
+    "price": 2387.45,
+    "volume": 341942
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-10",
+    "price": 2402.1,
+    "volume": 472428
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-09",
+    "price": 2477.08,
+    "volume": 240110
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-08",
+    "price": 2476.6,
+    "volume": 224979
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-07",
+    "price": 2501.08,
+    "volume": 311526
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-03",
+    "price": 2514.05,
+    "volume": 194200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-02",
+    "price": 2472.05,
+    "volume": 416133
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-07-01",
+    "price": 2501.4,
+    "volume": 573489
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-30",
+    "price": 2613.63,
+    "volume": 293313
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-27",
+    "price": 2560.05,
+    "volume": 295900
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-26",
+    "price": 2560.2,
+    "volume": 326974
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-25",
+    "price": 2540.5,
+    "volume": 303188
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-24",
+    "price": 2528.95,
+    "volume": 313398
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-23",
+    "price": 2452.89,
+    "volume": 350700
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-20",
+    "price": 2403.81,
+    "volume": 368800
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-18",
+    "price": 2402.75,
+    "volume": 238238
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-17",
+    "price": 2389.48,
+    "volume": 310107
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-16",
+    "price": 2454.76,
+    "volume": 351069
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-13",
+    "price": 2371.98,
+    "volume": 341643
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-12",
+    "price": 2368.82,
+    "volume": 310100
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-11",
+    "price": 2387,
+    "volume": 499517
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-10",
+    "price": 2396.44,
+    "volume": 502700
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-09",
+    "price": 2448.6,
+    "volume": 399700
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-06",
+    "price": 2482.39,
+    "volume": 713991
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-05",
+    "price": 2581.74,
+    "volume": 238595
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-04",
+    "price": 2573.96,
+    "volume": 293100
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-03",
+    "price": 2602.26,
+    "volume": 268820
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-06-02",
+    "price": 2593.44,
+    "volume": 260686
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-30",
+    "price": 2563.29,
+    "volume": 405933
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-29",
+    "price": 2545.49,
+    "volume": 200100
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-28",
+    "price": 2550.71,
+    "volume": 267667
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-27",
+    "price": 2555.17,
+    "volume": 266222
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-23",
+    "price": 2507.83,
+    "volume": 502617
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-22",
+    "price": 2606.01,
+    "volume": 282400
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-21",
+    "price": 2601.97,
+    "volume": 344617
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-20",
+    "price": 2579.21,
+    "volume": 256132
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-19",
+    "price": 2578.35,
+    "volume": 367743
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-16",
+    "price": 2584.92,
+    "volume": 280200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-15",
+    "price": 2586.49,
+    "volume": 403553
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-14",
+    "price": 2564,
+    "volume": 317408
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-13",
+    "price": 2515.12,
+    "volume": 361396
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-12",
+    "price": 2504.61,
+    "volume": 550360
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-09",
+    "price": 2450,
+    "volume": 382880
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-08",
+    "price": 2410,
+    "volume": 906096
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-07",
+    "price": 2262.09,
+    "volume": 711900
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-06",
+    "price": 2229,
+    "volume": 475900
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-05",
+    "price": 2246.54,
+    "volume": 294269
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-02",
+    "price": 2280.69,
+    "volume": 352979
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-05-01",
+    "price": 2294.52,
+    "volume": 303934
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-30",
+    "price": 2330.85,
+    "volume": 601348
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-29",
+    "price": 2280.86,
+    "volume": 352351
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-28",
+    "price": 2208.4,
+    "volume": 249500
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-25",
+    "price": 2225.85,
+    "volume": 284214
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-24",
+    "price": 2204.81,
+    "volume": 391200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-23",
+    "price": 2139.92,
+    "volume": 331248
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-22",
+    "price": 2128.33,
+    "volume": 323300
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-21",
+    "price": 2056.43,
+    "volume": 227032
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-17",
+    "price": 2099.37,
+    "volume": 251100
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-16",
+    "price": 2064.37,
+    "volume": 426241
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-15",
+    "price": 2118.32,
+    "volume": 424725
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-14",
+    "price": 2037.12,
+    "volume": 318016
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-11",
+    "price": 1996.95,
+    "volume": 359400
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-10",
+    "price": 1933.99,
+    "volume": 383893
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-09",
+    "price": 1980.66,
+    "volume": 927427
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-08",
+    "price": 1826.11,
+    "volume": 621530
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-07",
+    "price": 1794.73,
+    "volume": 671414
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-04",
+    "price": 1841.29,
+    "volume": 853300
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-03",
+    "price": 1945.55,
+    "volume": 656139
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-02",
+    "price": 1934.03,
+    "volume": 466339
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-04-01",
+    "price": 1915,
+    "volume": 682533
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-31",
+    "price": 1950.87,
+    "volume": 681200
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-28",
+    "price": 2048.07,
+    "volume": 326900
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-27",
+    "price": 2095.85,
+    "volume": 268300
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-26",
+    "price": 2074.97,
+    "volume": 492520
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-25",
+    "price": 2191.3,
+    "volume": 429517
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-24",
+    "price": 2134.31,
+    "volume": 356407
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-21",
+    "price": 2095.27,
+    "volume": 442087
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-20",
+    "price": 2067.57,
+    "volume": 264544
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-19",
+    "price": 2065.94,
+    "volume": 349135
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-18",
+    "price": 2002.8,
+    "volume": 436288
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-17",
+    "price": 2106.46,
+    "volume": 443600
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-14",
+    "price": 2021.37,
+    "volume": 510639
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-13",
+    "price": 1989.7,
+    "volume": 510691
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-12",
+    "price": 2004.83,
+    "volume": 522363
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-11",
+    "price": 1990.11,
+    "volume": 649600
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-10",
+    "price": 1944.61,
+    "volume": 868400
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-07",
+    "price": 2009.34,
+    "volume": 771731
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-06",
+    "price": 2045.25,
+    "volume": 380392
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-05",
+    "price": 2112.77,
+    "volume": 333272
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-04",
+    "price": 2059.87,
+    "volume": 317431
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-03-03",
+    "price": 2070.41,
+    "volume": 358790
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-28",
+    "price": 2121.87,
+    "volume": 457494
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-27",
+    "price": 2129.8,
+    "volume": 433130
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-26",
+    "price": 2197.64,
+    "volume": 478750
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-25",
+    "price": 2168.6,
+    "volume": 528073
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-24",
+    "price": 2223.35,
+    "volume": 513990
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-21",
+    "price": 2260,
+    "volume": 1257220
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-20",
+    "price": 2110.47,
+    "volume": 731500
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-19",
+    "price": 2075.79,
+    "volume": 413883
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-18",
+    "price": 2098.75,
+    "volume": 365034
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-14",
+    "price": 2109.99,
+    "volume": 355484
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-13",
+    "price": 2066.15,
+    "volume": 294550
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-12",
+    "price": 2016.73,
+    "volume": 350869
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-11",
+    "price": 2035.18,
+    "volume": 315307
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-10",
+    "price": 2042.22,
+    "volume": 246040
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-07",
+    "price": 1996.65,
+    "volume": 331472
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-06",
+    "price": 2012.8,
+    "volume": 304997
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-05",
+    "price": 1975.19,
+    "volume": 212395
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-04",
+    "price": 1966.41,
+    "volume": 376600
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-02-03",
+    "price": 1908.9,
+    "volume": 426541
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-31",
+    "price": 1922.19,
+    "volume": 281400
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-30",
+    "price": 1947.32,
+    "volume": 487164
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-29",
+    "price": 1889.76,
+    "volume": 181861
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-28",
+    "price": 1895.53,
+    "volume": 352017
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-27",
+    "price": 1846,
+    "volume": 356039
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-24",
+    "price": 1843.45,
+    "volume": 325072
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-23",
+    "price": 1828.73,
+    "volume": 267880
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-22",
+    "price": 1818.49,
+    "volume": 402943
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-21",
+    "price": 1834.51,
+    "volume": 262800
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-17",
+    "price": 1836,
+    "volume": 245168
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-16",
+    "price": 1837.18,
+    "volume": 242096
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-15",
+    "price": 1838.15,
+    "volume": 364235
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-14",
+    "price": 1753.61,
+    "volume": 240375
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-13",
+    "price": 1740,
+    "volume": 298825
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-10",
+    "price": 1758.77,
+    "volume": 364848
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-08",
+    "price": 1739,
+    "volume": 388800
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-07",
+    "price": 1771.22,
+    "volume": 307598
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-06",
+    "price": 1799.42,
+    "volume": 365601
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-03",
+    "price": 1834.17,
+    "volume": 519665
+   },
+   {
+    "symbol": "MELI",
+    "date": "2025-01-02",
+    "price": 1765,
+    "volume": 392344
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-31",
+    "price": 1700.44,
+    "volume": 173294
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-30",
+    "price": 1721.8,
+    "volume": 241968
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-27",
+    "price": 1725.47,
+    "volume": 183800
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-26",
+    "price": 1732.76,
+    "volume": 156125
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-24",
+    "price": 1743.29,
+    "volume": 104943
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-23",
+    "price": 1729.85,
+    "volume": 502744
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-20",
+    "price": 1720.36,
+    "volume": 717828
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-19",
+    "price": 1666,
+    "volume": 930447
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-18",
+    "price": 1716.38,
+    "volume": 773942
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-17",
+    "price": 1809.12,
+    "volume": 559738
+   },
+   {
+    "symbol": "MELI",
+    "date": "2024-12-16",
+    "price": 1796.72,
+    "volume": 562907
    }
   ]
  }

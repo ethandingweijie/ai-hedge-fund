@@ -2523,9 +2523,463 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-09-01\", \"symbol\": \"C38U.SI\", \"to\": \"2025-09-16\"}, \"<redacted>\"]]",
+  "key": "[\"src.memory.assumption_store.get_analyst_reports\", [\"C38U.SI\", [\"limit\", 1]]]",
+  "target": "src.memory.assumption_store.get_analyst_reports",
+  "result": []
+ },
+ {
+  "key": "[\"src.memory.analyst_basis.get_analyst_basis\", [\"C38U.SI\"]]",
+  "target": "src.memory.analyst_basis.get_analyst_basis",
+  "result": null
+ },
+ {
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-12-16\", \"symbol\": \"C38U.SI\", \"to\": \"2025-12-31\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-31",
+    "price": 2.39,
+    "volume": 10223000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-30",
+    "price": 2.38,
+    "volume": 12571600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-29",
+    "price": 2.37,
+    "volume": 10011920
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-26",
+    "price": 2.36,
+    "volume": 4479100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-24",
+    "price": 2.36,
+    "volume": 7509600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-23",
+    "price": 2.35,
+    "volume": 19631900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-22",
+    "price": 2.35,
+    "volume": 15020700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-19",
+    "price": 2.34,
+    "volume": 58709800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-18",
+    "price": 2.33,
+    "volume": 17472200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-17",
+    "price": 2.32,
+    "volume": 23280551
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-16",
+    "price": 2.33,
+    "volume": 24344400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-15",
+    "price": 2.32,
+    "volume": 17695900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-12",
+    "price": 2.33,
+    "volume": 27700900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-11",
+    "price": 2.32,
+    "volume": 24810100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-10",
+    "price": 2.31,
+    "volume": 20947300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-09",
+    "price": 2.32,
+    "volume": 23932900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-08",
+    "price": 2.29,
+    "volume": 22822700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-05",
+    "price": 2.33,
+    "volume": 10363600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-04",
+    "price": 2.32,
+    "volume": 9343000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-03",
+    "price": 2.33,
+    "volume": 16781000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-02",
+    "price": 2.33,
+    "volume": 20420000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-12-01",
+    "price": 2.33,
+    "volume": 23635600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-28",
+    "price": 2.35,
+    "volume": 17024400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-27",
+    "price": 2.37,
+    "volume": 31050900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-26",
+    "price": 2.36,
+    "volume": 13908900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-25",
+    "price": 2.37,
+    "volume": 23125200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-24",
+    "price": 2.36,
+    "volume": 55882788
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-21",
+    "price": 2.33,
+    "volume": 18686800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-20",
+    "price": 2.35,
+    "volume": 24861200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-19",
+    "price": 2.34,
+    "volume": 16481000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-18",
+    "price": 2.32,
+    "volume": 24339900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-17",
+    "price": 2.33,
+    "volume": 22194000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-14",
+    "price": 2.32,
+    "volume": 30966200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-13",
+    "price": 2.34,
+    "volume": 24948200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-12",
+    "price": 2.36,
+    "volume": 23571200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-11",
+    "price": 2.36,
+    "volume": 35291000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-10",
+    "price": 2.33,
+    "volume": 21371800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-07",
+    "price": 2.32,
+    "volume": 21628400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-06",
+    "price": 2.31,
+    "volume": 54091000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-05",
+    "price": 2.31,
+    "volume": 50209100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-04",
+    "price": 2.33,
+    "volume": 42402600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-11-03",
+    "price": 2.35,
+    "volume": 29451600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-31",
+    "price": 2.37,
+    "volume": 34472400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-30",
+    "price": 2.37,
+    "volume": 33485500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-29",
+    "price": 2.41,
+    "volume": 15282838
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-28",
+    "price": 2.4,
+    "volume": 22072700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-27",
+    "price": 2.41,
+    "volume": 16626700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-24",
+    "price": 2.4,
+    "volume": 17366300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-23",
+    "price": 2.42,
+    "volume": 24773600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-22",
+    "price": 2.41,
+    "volume": 15796000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-21",
+    "price": 2.4,
+    "volume": 23644300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-17",
+    "price": 2.38,
+    "volume": 30952100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-16",
+    "price": 2.36,
+    "volume": 24778400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-15",
+    "price": 2.35,
+    "volume": 20912300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-14",
+    "price": 2.36,
+    "volume": 28005600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-13",
+    "price": 2.33,
+    "volume": 12587400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-10",
+    "price": 2.34,
+    "volume": 16564100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-09",
+    "price": 2.36,
+    "volume": 14469700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-08",
+    "price": 2.37,
+    "volume": 18663819
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-07",
+    "price": 2.36,
+    "volume": 20643400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-06",
+    "price": 2.35,
+    "volume": 9092400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-03",
+    "price": 2.35,
+    "volume": 14691000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-02",
+    "price": 2.36,
+    "volume": 41290800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-10-01",
+    "price": 2.31,
+    "volume": 33096700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-30",
+    "price": 2.29,
+    "volume": 33000230
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-29",
+    "price": 2.28,
+    "volume": 22396100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-26",
+    "price": 2.26,
+    "volume": 12501100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-25",
+    "price": 2.26,
+    "volume": 35497510
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-24",
+    "price": 2.29,
+    "volume": 15101400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-23",
+    "price": 2.31,
+    "volume": 31808000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-22",
+    "price": 2.28,
+    "volume": 16474773
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-19",
+    "price": 2.29,
+    "volume": 41877900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-18",
+    "price": 2.28,
+    "volume": 22760900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-09-17",
+    "price": 2.31,
+    "volume": 21534000
+   },
    {
     "symbol": "C38U.SI",
     "date": "2025-09-16",
@@ -2597,17 +3051,1069 @@
     "date": "2025-09-01",
     "price": 2.29,
     "volume": 9785400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-29",
+    "price": 2.28,
+    "volume": 18994500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-28",
+    "price": 2.26,
+    "volume": 16143800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-27",
+    "price": 2.27,
+    "volume": 18374757
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-26",
+    "price": 2.26,
+    "volume": 31913700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-25",
+    "price": 2.26,
+    "volume": 23238900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-22",
+    "price": 2.25,
+    "volume": 17822200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-21",
+    "price": 2.25,
+    "volume": 16593680
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-20",
+    "price": 2.25,
+    "volume": 32891800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-19",
+    "price": 2.24,
+    "volume": 29785700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-18",
+    "price": 2.18,
+    "volume": 30359200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-15",
+    "price": 2.2,
+    "volume": 18352800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-14",
+    "price": 2.21,
+    "volume": 18249700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-13",
+    "price": 2.21,
+    "volume": 30012800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-12",
+    "price": 2.2,
+    "volume": 16469200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-11",
+    "price": 2.27,
+    "volume": 10844000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-08",
+    "price": 2.26,
+    "volume": 17950700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-07",
+    "price": 2.26,
+    "volume": 17835600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-06",
+    "price": 2.25,
+    "volume": 48828200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-05",
+    "price": 2.24,
+    "volume": 0
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-04",
+    "price": 2.24,
+    "volume": 28682822
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-08-01",
+    "price": 2.19,
+    "volume": 23283800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-31",
+    "price": 2.2,
+    "volume": 17368400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-30",
+    "price": 2.24,
+    "volume": 29363970
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-29",
+    "price": 2.21,
+    "volume": 11166100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-28",
+    "price": 2.21,
+    "volume": 12859900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-25",
+    "price": 2.21,
+    "volume": 19516200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-24",
+    "price": 2.2,
+    "volume": 24086600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-23",
+    "price": 2.22,
+    "volume": 16835300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-22",
+    "price": 2.23,
+    "volume": 12996700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-21",
+    "price": 2.23,
+    "volume": 27843500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-18",
+    "price": 2.2,
+    "volume": 19037600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-17",
+    "price": 2.19,
+    "volume": 19560600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-16",
+    "price": 2.19,
+    "volume": 27261200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-15",
+    "price": 2.22,
+    "volume": 15693500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-14",
+    "price": 2.22,
+    "volume": 18331600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-11",
+    "price": 2.21,
+    "volume": 19628100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-10",
+    "price": 2.19,
+    "volume": 15442100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-09",
+    "price": 2.17,
+    "volume": 14566300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-08",
+    "price": 2.17,
+    "volume": 30104900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-07",
+    "price": 2.21,
+    "volume": 38539800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-04",
+    "price": 2.2,
+    "volume": 22698300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-03",
+    "price": 2.22,
+    "volume": 18051300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-02",
+    "price": 2.23,
+    "volume": 60003391
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-07-01",
+    "price": 2.18,
+    "volume": 26434200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-30",
+    "price": 2.17,
+    "volume": 30002000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-27",
+    "price": 2.18,
+    "volume": 29390700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-26",
+    "price": 2.16,
+    "volume": 33587200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-25",
+    "price": 2.15,
+    "volume": 90488300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-24",
+    "price": 2.14,
+    "volume": 27115600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-23",
+    "price": 2.16,
+    "volume": 22398200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-20",
+    "price": 2.17,
+    "volume": 51241000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-19",
+    "price": 2.17,
+    "volume": 16317000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-18",
+    "price": 2.17,
+    "volume": 16712200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-17",
+    "price": 2.17,
+    "volume": 27191900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-16",
+    "price": 2.13,
+    "volume": 12558600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-13",
+    "price": 2.13,
+    "volume": 12058600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-12",
+    "price": 2.12,
+    "volume": 16385300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-11",
+    "price": 2.1,
+    "volume": 13836000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-10",
+    "price": 2.1,
+    "volume": 16209300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-09",
+    "price": 2.1,
+    "volume": 9261300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-06",
+    "price": 2.11,
+    "volume": 15748700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-05",
+    "price": 2.08,
+    "volume": 18086856
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-04",
+    "price": 2.09,
+    "volume": 19477800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-03",
+    "price": 2.08,
+    "volume": 13851600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-06-02",
+    "price": 2.09,
+    "volume": 16503198
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-30",
+    "price": 2.09,
+    "volume": 79886956
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-29",
+    "price": 2.08,
+    "volume": 26657000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-28",
+    "price": 2.08,
+    "volume": 18589000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-27",
+    "price": 2.08,
+    "volume": 32126200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-26",
+    "price": 2.06,
+    "volume": 20796900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-23",
+    "price": 2.07,
+    "volume": 24218600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-22",
+    "price": 2.07,
+    "volume": 25845100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-21",
+    "price": 2.05,
+    "volume": 16477800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-20",
+    "price": 2.05,
+    "volume": 16985800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-19",
+    "price": 2.05,
+    "volume": 17159600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-16",
+    "price": 2.06,
+    "volume": 17035100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-15",
+    "price": 2.05,
+    "volume": 23034200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-14",
+    "price": 2.04,
+    "volume": 22255400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-13",
+    "price": 2.06,
+    "volume": 36471200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-09",
+    "price": 2.1,
+    "volume": 13546700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-08",
+    "price": 2.09,
+    "volume": 40237600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-07",
+    "price": 2.1,
+    "volume": 38852400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-06",
+    "price": 2.12,
+    "volume": 15022800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-05",
+    "price": 2.15,
+    "volume": 9006867
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-05-02",
+    "price": 2.15,
+    "volume": 20793800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-30",
+    "price": 2.15,
+    "volume": 23991300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-29",
+    "price": 2.16,
+    "volume": 20002100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-28",
+    "price": 2.17,
+    "volume": 23740700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-25",
+    "price": 2.14,
+    "volume": 31989500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-24",
+    "price": 2.14,
+    "volume": 24555700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-23",
+    "price": 2.14,
+    "volume": 16139600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-22",
+    "price": 2.12,
+    "volume": 17261600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-21",
+    "price": 2.1,
+    "volume": 5563500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-17",
+    "price": 2.12,
+    "volume": 15814100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-16",
+    "price": 2.11,
+    "volume": 30323000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-15",
+    "price": 2.07,
+    "volume": 29000600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-14",
+    "price": 2.04,
+    "volume": 27466500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-11",
+    "price": 2.04,
+    "volume": 23996200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-10",
+    "price": 2.05,
+    "volume": 42309600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-09",
+    "price": 1.99,
+    "volume": 62769800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-08",
+    "price": 2.02,
+    "volume": 52393100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-07",
+    "price": 2.06,
+    "volume": 66637800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-04",
+    "price": 2.14,
+    "volume": 56881400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-03",
+    "price": 2.17,
+    "volume": 57923600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-02",
+    "price": 2.1,
+    "volume": 24391100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-04-01",
+    "price": 2.11,
+    "volume": 36906400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-28",
+    "price": 2.1,
+    "volume": 29824100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-27",
+    "price": 2.1,
+    "volume": 35456500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-26",
+    "price": 2.11,
+    "volume": 22630500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-25",
+    "price": 2.11,
+    "volume": 46758500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-24",
+    "price": 2.12,
+    "volume": 25551359
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-21",
+    "price": 2.08,
+    "volume": 37373000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-20",
+    "price": 2.09,
+    "volume": 36932900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-19",
+    "price": 2.08,
+    "volume": 36165000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-18",
+    "price": 2.1,
+    "volume": 32411400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-17",
+    "price": 2.12,
+    "volume": 31925700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-14",
+    "price": 2.13,
+    "volume": 33694100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-13",
+    "price": 2.11,
+    "volume": 43664200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-12",
+    "price": 2.08,
+    "volume": 47485351
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-11",
+    "price": 2.03,
+    "volume": 35851400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-10",
+    "price": 2.01,
+    "volume": 19689200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-07",
+    "price": 2.01,
+    "volume": 42836000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-06",
+    "price": 2,
+    "volume": 26139300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-05",
+    "price": 2,
+    "volume": 21516200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-04",
+    "price": 1.98,
+    "volume": 15175200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-03-03",
+    "price": 1.98,
+    "volume": 24013300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-28",
+    "price": 1.97,
+    "volume": 38500500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-27",
+    "price": 1.97,
+    "volume": 21967000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-26",
+    "price": 1.98,
+    "volume": 26987700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-25",
+    "price": 1.97,
+    "volume": 21655400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-24",
+    "price": 1.95,
+    "volume": 23878300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-21",
+    "price": 1.95,
+    "volume": 19474100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-20",
+    "price": 1.94,
+    "volume": 27319300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-19",
+    "price": 1.96,
+    "volume": 19440300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-18",
+    "price": 1.97,
+    "volume": 29208200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-17",
+    "price": 1.98,
+    "volume": 13228400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-14",
+    "price": 1.97,
+    "volume": 22029500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-13",
+    "price": 1.95,
+    "volume": 15510600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-12",
+    "price": 1.97,
+    "volume": 22914700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-11",
+    "price": 1.99,
+    "volume": 19795300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-10",
+    "price": 1.99,
+    "volume": 22358100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-07",
+    "price": 1.98,
+    "volume": 17661200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-06",
+    "price": 1.97,
+    "volume": 23699500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-05",
+    "price": 1.94,
+    "volume": 21539300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-04",
+    "price": 1.93,
+    "volume": 24108800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-02-03",
+    "price": 1.93,
+    "volume": 16486600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-31",
+    "price": 1.95,
+    "volume": 26520493
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-28",
+    "price": 1.94,
+    "volume": 18504400
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-27",
+    "price": 1.93,
+    "volume": 17814500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-24",
+    "price": 1.95,
+    "volume": 22353200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-23",
+    "price": 1.94,
+    "volume": 22062600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-22",
+    "price": 1.94,
+    "volume": 24175800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-21",
+    "price": 1.96,
+    "volume": 21438300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-20",
+    "price": 1.97,
+    "volume": 15516600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-17",
+    "price": 1.96,
+    "volume": 31082500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-16",
+    "price": 1.95,
+    "volume": 23273800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-15",
+    "price": 1.91,
+    "volume": 16869300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-14",
+    "price": 1.91,
+    "volume": 32922000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-13",
+    "price": 1.94,
+    "volume": 17774900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-10",
+    "price": 1.94,
+    "volume": 19583100
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-09",
+    "price": 1.95,
+    "volume": 12494800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-08",
+    "price": 1.95,
+    "volume": 24732600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-07",
+    "price": 1.98,
+    "volume": 32365200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-06",
+    "price": 1.99,
+    "volume": 17701600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-03",
+    "price": 1.97,
+    "volume": 21059800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2025-01-02",
+    "price": 1.95,
+    "volume": 5472500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-31",
+    "price": 1.93,
+    "volume": 11270900
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-30",
+    "price": 1.95,
+    "volume": 10687300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-27",
+    "price": 1.94,
+    "volume": 5147700
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-26",
+    "price": 1.93,
+    "volume": 4164500
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-24",
+    "price": 1.94,
+    "volume": 10181300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-23",
+    "price": 1.93,
+    "volume": 19614800
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-20",
+    "price": 1.91,
+    "volume": 47770300
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-19",
+    "price": 1.92,
+    "volume": 28595200
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-18",
+    "price": 1.93,
+    "volume": 10562600
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-17",
+    "price": 1.93,
+    "volume": 21437000
+   },
+   {
+    "symbol": "C38U.SI",
+    "date": "2024-12-16",
+    "price": 1.93,
+    "volume": 18953200
    }
   ]
- },
- {
-  "key": "[\"src.memory.assumption_store.get_analyst_reports\", [\"C38U.SI\", [\"limit\", 1]]]",
-  "target": "src.memory.assumption_store.get_analyst_reports",
-  "result": []
- },
- {
-  "key": "[\"src.memory.analyst_basis.get_analyst_basis\", [\"C38U.SI\"]]",
-  "target": "src.memory.analyst_basis.get_analyst_basis",
-  "result": null
  }
 ]

@@ -11840,9 +11840,511 @@
   ]
  },
  {
-  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2025-08-18\", \"symbol\": \"2888.HK\", \"to\": \"2025-09-02\"}, \"<redacted>\"]]",
+  "key": "[\"src.memory.assumption_store.get_analyst_reports\", [\"02888.HK\", [\"limit\", 1]]]",
+  "target": "src.memory.assumption_store.get_analyst_reports",
+  "result": []
+ },
+ {
+  "key": "[\"src.memory.analyst_basis.get_analyst_basis\", [\"02888.HK\"]]",
+  "target": "src.memory.analyst_basis.get_analyst_basis",
+  "result": null
+ },
+ {
+  "key": "[\"src.tools.api._fmp_get\", [\"https://financialmodelingprep.com/stable/historical-price-eod/light\", {\"from\": \"2024-12-16\", \"symbol\": \"2888.HK\", \"to\": \"2025-12-31\"}, \"<redacted>\"]]",
   "target": "src.tools.api._fmp_get",
   "result": [
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-31",
+    "price": 188.8,
+    "volume": 585981
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-30",
+    "price": 189.2,
+    "volume": 296086
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-29",
+    "price": 189,
+    "volume": 486346
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-24",
+    "price": 189.3,
+    "volume": 317221
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-23",
+    "price": 188.6,
+    "volume": 282745
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-22",
+    "price": 187.9,
+    "volume": 747054
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-19",
+    "price": 187.2,
+    "volume": 1699608
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-18",
+    "price": 184,
+    "volume": 385910
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-17",
+    "price": 184.1,
+    "volume": 424392
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-16",
+    "price": 183,
+    "volume": 896357
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-15",
+    "price": 181,
+    "volume": 935160
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-12",
+    "price": 183.1,
+    "volume": 1802541
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-11",
+    "price": 177,
+    "volume": 1005005
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-10",
+    "price": 174.4,
+    "volume": 882152
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-09",
+    "price": 170.6,
+    "volume": 839512
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-08",
+    "price": 168.5,
+    "volume": 908785
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-05",
+    "price": 171.9,
+    "volume": 570732
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-04",
+    "price": 172.6,
+    "volume": 553631
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-03",
+    "price": 174.5,
+    "volume": 639650
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-02",
+    "price": 172.7,
+    "volume": 435477
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-12-01",
+    "price": 173,
+    "volume": 902007
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-28",
+    "price": 170.5,
+    "volume": 1375635
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-27",
+    "price": 167.6,
+    "volume": 1288424
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-26",
+    "price": 164.8,
+    "volume": 1232326
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-25",
+    "price": 163.3,
+    "volume": 1235903
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-24",
+    "price": 162.1,
+    "volume": 832027
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-21",
+    "price": 157,
+    "volume": 549325
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-20",
+    "price": 160.3,
+    "volume": 675825
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-19",
+    "price": 159,
+    "volume": 389424
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-18",
+    "price": 161.3,
+    "volume": 812647
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-17",
+    "price": 165.3,
+    "volume": 613462
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-14",
+    "price": 166.2,
+    "volume": 754918
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-13",
+    "price": 168.5,
+    "volume": 472100
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-12",
+    "price": 168.8,
+    "volume": 590237
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-11",
+    "price": 168.9,
+    "volume": 1082863
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-10",
+    "price": 166.3,
+    "volume": 698435
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-07",
+    "price": 163.3,
+    "volume": 610952
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-06",
+    "price": 163.1,
+    "volume": 786996
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-05",
+    "price": 161.4,
+    "volume": 503846
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-04",
+    "price": 162,
+    "volume": 1705305
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-11-03",
+    "price": 160.6,
+    "volume": 745086
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-31",
+    "price": 157.8,
+    "volume": 644719
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-30",
+    "price": 159.5,
+    "volume": 1887921
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-28",
+    "price": 153,
+    "volume": 1083602
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-27",
+    "price": 147.5,
+    "volume": 1083402
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-26",
+    "price": 147.5,
+    "volume": 383625
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-24",
+    "price": 145.5,
+    "volume": 345602
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-23",
+    "price": 144.5,
+    "volume": 576100
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-22",
+    "price": 144.4,
+    "volume": 551884
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-21",
+    "price": 145.3,
+    "volume": 499555
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-20",
+    "price": 146.4,
+    "volume": 534435
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-17",
+    "price": 142,
+    "volume": 1688827
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-16",
+    "price": 149.6,
+    "volume": 379652
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-15",
+    "price": 151.3,
+    "volume": 392741
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-14",
+    "price": 147.1,
+    "volume": 689508
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-13",
+    "price": 151.5,
+    "volume": 862797
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-10",
+    "price": 151.4,
+    "volume": 943226
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-09",
+    "price": 155.3,
+    "volume": 2660017
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-08",
+    "price": 153,
+    "volume": 238841
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-06",
+    "price": 152.6,
+    "volume": 282225
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-03",
+    "price": 152.6,
+    "volume": 289214
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-10-02",
+    "price": 154.1,
+    "volume": 931485
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-30",
+    "price": 149.7,
+    "volume": 511123
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-29",
+    "price": 151.3,
+    "volume": 1023702
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-26",
+    "price": 146.7,
+    "volume": 941362
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-25",
+    "price": 149.6,
+    "volume": 620100
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-24",
+    "price": 150.9,
+    "volume": 529528
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-23",
+    "price": 150.9,
+    "volume": 455145
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-22",
+    "price": 150.6,
+    "volume": 480858
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-19",
+    "price": 149.8,
+    "volume": 570530
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-18",
+    "price": 149.6,
+    "volume": 912286
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-17",
+    "price": 148.4,
+    "volume": 1468308
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-16",
+    "price": 152.3,
+    "volume": 801884
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-15",
+    "price": 150.8,
+    "volume": 878020
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-12",
+    "price": 150.9,
+    "volume": 921948
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-11",
+    "price": 149,
+    "volume": 622812
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-10",
+    "price": 148.4,
+    "volume": 897171
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-09",
+    "price": 147.2,
+    "volume": 678298
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-08",
+    "price": 144.6,
+    "volume": 732180
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-05",
+    "price": 144.5,
+    "volume": 524741
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-04",
+    "price": 143.2,
+    "volume": 537984
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-09-03",
+    "price": 141.5,
+    "volume": 1045160
+   },
    {
     "symbol": "2888.HK",
     "date": "2025-09-02",
@@ -11914,17 +12416,991 @@
     "date": "2025-08-18",
     "price": 139.6,
     "volume": 5729924
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-15",
+    "price": 147.4,
+    "volume": 2247708
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-14",
+    "price": 150.4,
+    "volume": 1874406
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-13",
+    "price": 150.5,
+    "volume": 1554190
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-12",
+    "price": 150.2,
+    "volume": 2131223
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-11",
+    "price": 147.4,
+    "volume": 1175011
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-08",
+    "price": 145.6,
+    "volume": 1130831
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-07",
+    "price": 145.8,
+    "volume": 2510154
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-06",
+    "price": 141.9,
+    "volume": 753454
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-05",
+    "price": 143.3,
+    "volume": 1008887
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-04",
+    "price": 141.9,
+    "volume": 1118590
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-08-01",
+    "price": 141.3,
+    "volume": 1648856
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-31",
+    "price": 142,
+    "volume": 4226951
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-30",
+    "price": 143.6,
+    "volume": 3330998
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-29",
+    "price": 141,
+    "volume": 1111519
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-28",
+    "price": 142.1,
+    "volume": 927466
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-25",
+    "price": 142.5,
+    "volume": 1168947
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-24",
+    "price": 143.5,
+    "volume": 1515236
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-23",
+    "price": 140.8,
+    "volume": 1258876
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-22",
+    "price": 141.7,
+    "volume": 1317080
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-21",
+    "price": 141.3,
+    "volume": 2353066
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-18",
+    "price": 143.3,
+    "volume": 2271262
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-17",
+    "price": 142.2,
+    "volume": 2907723
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-16",
+    "price": 139.6,
+    "volume": 2100286
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-15",
+    "price": 140,
+    "volume": 3009410
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-14",
+    "price": 137.6,
+    "volume": 1605621
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-11",
+    "price": 136.8,
+    "volume": 1463684
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-10",
+    "price": 137.9,
+    "volume": 3191434
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-09",
+    "price": 134.5,
+    "volume": 906597
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-08",
+    "price": 132.1,
+    "volume": 912882
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-07",
+    "price": 132.1,
+    "volume": 1448501
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-04",
+    "price": 130.3,
+    "volume": 984597
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-03",
+    "price": 130.1,
+    "volume": 1345493
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-07-02",
+    "price": 131.5,
+    "volume": 1950867
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-30",
+    "price": 130.9,
+    "volume": 2054236
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-27",
+    "price": 129.9,
+    "volume": 422889
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-26",
+    "price": 128.8,
+    "volume": 538974
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-25",
+    "price": 128.3,
+    "volume": 1254066
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-24",
+    "price": 127.5,
+    "volume": 1273778
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-23",
+    "price": 124.8,
+    "volume": 1164268
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-20",
+    "price": 126,
+    "volume": 900728
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-19",
+    "price": 121.9,
+    "volume": 437093
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-18",
+    "price": 123.9,
+    "volume": 939823
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-17",
+    "price": 125.1,
+    "volume": 1069669
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-16",
+    "price": 125.2,
+    "volume": 1210904
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-13",
+    "price": 120.9,
+    "volume": 831532
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-12",
+    "price": 122.7,
+    "volume": 842730
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-11",
+    "price": 123.4,
+    "volume": 849582
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-10",
+    "price": 123.8,
+    "volume": 562947
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-09",
+    "price": 125.4,
+    "volume": 1333732
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-06",
+    "price": 122.1,
+    "volume": 425669
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-05",
+    "price": 122.1,
+    "volume": 293418
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-04",
+    "price": 122.3,
+    "volume": 483170
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-03",
+    "price": 119.3,
+    "volume": 269189
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-06-02",
+    "price": 121.6,
+    "volume": 143752
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-30",
+    "price": 122.8,
+    "volume": 517805
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-29",
+    "price": 122,
+    "volume": 437063
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-28",
+    "price": 122,
+    "volume": 402526
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-27",
+    "price": 121.8,
+    "volume": 465874
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-26",
+    "price": 121.2,
+    "volume": 299234
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-23",
+    "price": 122.9,
+    "volume": 666026
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-22",
+    "price": 121.9,
+    "volume": 301087
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-21",
+    "price": 122,
+    "volume": 537615
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-20",
+    "price": 120.5,
+    "volume": 701092
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-19",
+    "price": 120,
+    "volume": 353721
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-16",
+    "price": 119,
+    "volume": 262593
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-15",
+    "price": 118,
+    "volume": 345736
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-14",
+    "price": 119.3,
+    "volume": 333129
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-13",
+    "price": 119.2,
+    "volume": 1046474
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-12",
+    "price": 115.5,
+    "volume": 1233602
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-09",
+    "price": 110.9,
+    "volume": 251898
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-08",
+    "price": 108.8,
+    "volume": 347199
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-07",
+    "price": 110,
+    "volume": 417050
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-06",
+    "price": 111,
+    "volume": 463257
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-05-02",
+    "price": 113.6,
+    "volume": 779602
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-30",
+    "price": 112.8,
+    "volume": 301899
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-29",
+    "price": 113.3,
+    "volume": 445888
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-28",
+    "price": 109.9,
+    "volume": 975909
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-25",
+    "price": 111.5,
+    "volume": 820540
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-24",
+    "price": 110.3,
+    "volume": 574263
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-23",
+    "price": 110.3,
+    "volume": 818311
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-22",
+    "price": 105.4,
+    "volume": 343847
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-18",
+    "price": 103.9,
+    "volume": 370859
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-17",
+    "price": 103.9,
+    "volume": 383259
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-16",
+    "price": 103.4,
+    "volume": 893383
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-15",
+    "price": 102.3,
+    "volume": 728718
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-14",
+    "price": 99.5,
+    "volume": 1510678
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-11",
+    "price": 93.4,
+    "volume": 692431
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-10",
+    "price": 94.9,
+    "volume": 2051539
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-09",
+    "price": 89,
+    "volume": 3570548
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-08",
+    "price": 91.4,
+    "volume": 1787638
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-07",
+    "price": 91.5,
+    "volume": 2816503
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-03",
+    "price": 109,
+    "volume": 2690612
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-02",
+    "price": 115,
+    "volume": 256322
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-04-01",
+    "price": 115.1,
+    "volume": 231452
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-31",
+    "price": 114.3,
+    "volume": 519582
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-28",
+    "price": 117.2,
+    "volume": 772908
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-27",
+    "price": 116,
+    "volume": 819510
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-26",
+    "price": 118.6,
+    "volume": 974906
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-25",
+    "price": 117.9,
+    "volume": 730448
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-24",
+    "price": 118.2,
+    "volume": 603324
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-21",
+    "price": 117.6,
+    "volume": 456382
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-20",
+    "price": 119.2,
+    "volume": 208156
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-19",
+    "price": 120.9,
+    "volume": 427042
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-18",
+    "price": 117.8,
+    "volume": 274971
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-17",
+    "price": 118.2,
+    "volume": 445383
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-14",
+    "price": 116.1,
+    "volume": 400489
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-13",
+    "price": 115.8,
+    "volume": 1059639
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-12",
+    "price": 113.5,
+    "volume": 2447142
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-11",
+    "price": 115.5,
+    "volume": 1485353
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-10",
+    "price": 122.1,
+    "volume": 343873
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-07",
+    "price": 122.4,
+    "volume": 406593
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-06",
+    "price": 125,
+    "volume": 1347956
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-05",
+    "price": 125,
+    "volume": 1071184
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-04",
+    "price": 124.4,
+    "volume": 1545176
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-03-03",
+    "price": 124,
+    "volume": 1124504
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-28",
+    "price": 122.4,
+    "volume": 1056859
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-27",
+    "price": 122,
+    "volume": 762191
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-26",
+    "price": 119.9,
+    "volume": 1244229
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-25",
+    "price": 116,
+    "volume": 549496
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-24",
+    "price": 114.1,
+    "volume": 824786
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-21",
+    "price": 116,
+    "volume": 2101118
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-20",
+    "price": 111.1,
+    "volume": 402801
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-19",
+    "price": 111,
+    "volume": 835146
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-18",
+    "price": 110,
+    "volume": 865544
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-17",
+    "price": 109.8,
+    "volume": 725242
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-14",
+    "price": 108.2,
+    "volume": 963954
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-13",
+    "price": 108.3,
+    "volume": 755762
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-12",
+    "price": 109,
+    "volume": 1270466
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-11",
+    "price": 106,
+    "volume": 1105747
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-10",
+    "price": 106.5,
+    "volume": 401979
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-07",
+    "price": 107,
+    "volume": 1342020
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-06",
+    "price": 104.5,
+    "volume": 417198
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-05",
+    "price": 103.6,
+    "volume": 322091
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-04",
+    "price": 103,
+    "volume": 323009
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-02-03",
+    "price": 102.8,
+    "volume": 314963
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-28",
+    "price": 102.9,
+    "volume": 113771
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-27",
+    "price": 103.1,
+    "volume": 307465
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-24",
+    "price": 103.8,
+    "volume": 609997
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-23",
+    "price": 102.3,
+    "volume": 291619
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-22",
+    "price": 103,
+    "volume": 348856
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-21",
+    "price": 102.4,
+    "volume": 539301
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-20",
+    "price": 102.5,
+    "volume": 369277
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-17",
+    "price": 102,
+    "volume": 1617365
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-16",
+    "price": 100.5,
+    "volume": 1520009
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-15",
+    "price": 97.9,
+    "volume": 331480
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-14",
+    "price": 97.4,
+    "volume": 807992
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-13",
+    "price": 96.95,
+    "volume": 242505
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-10",
+    "price": 96.95,
+    "volume": 477644
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-09",
+    "price": 95.85,
+    "volume": 293503
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-08",
+    "price": 95.2,
+    "volume": 644555
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-07",
+    "price": 97,
+    "volume": 348992
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-06",
+    "price": 96.05,
+    "volume": 435486
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-03",
+    "price": 94.5,
+    "volume": 839581
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2025-01-02",
+    "price": 96.05,
+    "volume": 302069
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-31",
+    "price": 95.55,
+    "volume": 89789
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-30",
+    "price": 95.05,
+    "volume": 228567
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-27",
+    "price": 96.2,
+    "volume": 155291
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-24",
+    "price": 95.95,
+    "volume": 72911
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-23",
+    "price": 95.6,
+    "volume": 324348
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-20",
+    "price": 94.45,
+    "volume": 733384
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-19",
+    "price": 96.6,
+    "volume": 198244
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-18",
+    "price": 98.2,
+    "volume": 433541
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-17",
+    "price": 97.4,
+    "volume": 132742
+   },
+   {
+    "symbol": "2888.HK",
+    "date": "2024-12-16",
+    "price": 98.05,
+    "volume": 194765
    }
   ]
- },
- {
-  "key": "[\"src.memory.assumption_store.get_analyst_reports\", [\"02888.HK\", [\"limit\", 1]]]",
-  "target": "src.memory.assumption_store.get_analyst_reports",
-  "result": []
- },
- {
-  "key": "[\"src.memory.analyst_basis.get_analyst_basis\", [\"02888.HK\"]]",
-  "target": "src.memory.analyst_basis.get_analyst_basis",
-  "result": null
  }
 ]
