@@ -343,6 +343,40 @@ export interface SegmentMemory {
   tickers: SegmentMemoryTicker[];
 }
 
+/** An industry input FMP does not carry (PV-10, backlog, maintenance capex),
+ *  cited as the filing prints it and checked against FMP; review-gated. */
+export interface IndustryInputRow {
+  ticker: string;
+  company?: string | null;
+  kind: 'pv10' | 'backlog' | 'maintenance_capex';
+  value?: number | null;
+  currency?: string | null;
+  scale?: string | null;
+  period?: string | null;
+  source_url?: string | null;
+  quote?: string | null;
+  detail?: Record<string, unknown>;
+  checks: { check: string; ok: boolean | null; detail: string }[];
+  ok?: boolean | null;
+  model?: string | null;
+  built_at?: string | null;
+  status: SegmentMemoryReview['status'];
+  reviewer?: string | null;
+  reviewed_at?: string | null;
+  stale?: boolean;
+}
+
+export function getIndustryInputs(): Promise<{ rows: IndustryInputRow[]; kinds: string[] }> {
+  return fetchJson(`${BASE}/model-accuracy/industry-inputs`, { headers: { ..._authHeaders() } });
+}
+
+export function reviewIndustryInput(ticker: string, kind: string, action: 'accept' | 'revoke'):
+    Promise<SegmentMemoryReview> {
+  return fetchJson(
+    `${BASE}/model-accuracy/industry-inputs/${encodeURIComponent(ticker)}/${encodeURIComponent(kind)}/${action}`,
+    { method: 'POST', headers: { ..._authHeaders() } });
+}
+
 export function getSegmentMemory(): Promise<SegmentMemory> {
   return fetchJson(`${BASE}/model-accuracy/segment-memory`, { headers: { ..._authHeaders() } });
 }

@@ -64,6 +64,34 @@ async def revoke_segment_memory(ticker: str, admin=Depends(require_model_accurac
     return await _review(ticker, "revoked", admin)
 
 
+@router.get("/industry-inputs")
+async def industry_inputs(admin=Depends(require_model_accuracy_owner)):
+    """Industry inputs FMP does not carry (PV-10, backlog, maintenance capex):
+    cited figures, their checks against FMP, and review status."""
+    from src.data import industry_inputs as ii
+    return await asyncio.to_thread(ii.ui_summary)
+
+
+async def _review_input(ticker: str, kind: str, status: str, admin):
+    from src.data import industry_inputs as ii
+    try:
+        return await asyncio.to_thread(ii.set_review, ticker, kind, status, _actor(admin))
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"no {kind!r} input for {ticker!r}")
+
+
+@router.post("/industry-inputs/{ticker}/{kind}/accept")
+async def accept_industry_input(ticker: str, kind: str, admin=Depends(require_model_accuracy_owner)):
+    """Accept these exact figures for live valuations. A rebuilt entry with
+    different figures needs a new acceptance."""
+    return await _review_input(ticker, kind, "accepted", admin)
+
+
+@router.post("/industry-inputs/{ticker}/{kind}/revoke")
+async def revoke_industry_input(ticker: str, kind: str, admin=Depends(require_model_accuracy_owner)):
+    return await _review_input(ticker, kind, "revoked", admin)
+
+
 @router.get("/calibration/{version_id}")
 async def calibration_detail(version_id: str, admin=Depends(require_model_accuracy_owner)):
     from src.memory import calibration_review as review

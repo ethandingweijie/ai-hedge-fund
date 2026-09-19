@@ -1,0 +1,680 @@
+{
+ "tickers": {
+  "00883.HK": {
+   "pv10": {
+    "built_at": "2026-09-19T17:53:23+00:00",
+    "checks": [
+     {
+      "check": "cited_amount",
+      "detail": "no cited amount of known scale and convertible currency",
+      "ok": false
+     }
+    ],
+    "company": "CNOOC Limited",
+    "data": {
+     "measure": "standardized_measure",
+     "price_basis": "",
+     "proved_reserves": null,
+     "value": {
+      "currency": "USD",
+      "period": "",
+      "quote": "",
+      "scale": "units",
+      "source_url": "",
+      "value": 0.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "CNOOC Limited",
+     "depreciation_and_amortization": 12178022929.49,
+     "market_cap": 142995212318.89142,
+     "operating_cash_flow": 30736265650.49,
+     "period": "2025-12-31",
+     "revenue": 59537872200.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 586.5,
+    "value_usd": null
+   }
+  },
+  "02883.HK": {
+   "backlog": {
+    "built_at": "2026-09-19T18:12:10+00:00",
+    "checks": [
+     {
+      "check": "backlog / revenue",
+      "detail": "0.04x (plausible 0.05x to 15.0x)",
+      "ok": false,
+      "ratio": 0.0354
+     }
+    ],
+    "company": "China Oilfield Services Limited",
+    "data": {
+     "book_to_bill": null,
+     "kind": "rpo",
+     "value": {
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "The transaction price allocated to the remaining performance obligations (performed or partially performed) as at 31. December 2025 and 2024 and the expected timing of recognising revenue are as follows: As at 31 December 2025 ... Total. 305,021. 1,118,911. 269,241. 86,986. 1,780,159.",
+      "scale": "thousands",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFUpx4CEhEBdTJ9M75Y--bsGi0_kMoH_tOQaWjhjdIB1UwNvxRW3EGXo34F_44lDWlQNGOP12bpxF_F7T0oih_uB2jNX2oqmgGp0iq-krhpWuQk6GfpVC9jl8xy6DzZejD44FlnJ2idi7CawtAUuHBxVv16fooyHuHC6ZrMW9yh5jY=",
+      "value": 1780159.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "China Oilfield Services Limited",
+     "depreciation_and_amortization": 851853408.85,
+     "market_cap": 8088459313.8632,
+     "operating_cash_flow": 1687958331.3600001,
+     "period": "2025-12-31",
+     "revenue": 7517733199.0642
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 35.2,
+    "value_usd": 266151572.09
+   }
+  },
+  "03337.HK": {
+   "backlog": {
+    "built_at": "2026-09-19T18:12:23+00:00",
+    "checks": [
+     {
+      "check": "backlog / revenue",
+      "detail": "3.32x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 3.3233
+     }
+    ],
+    "company": "Anton Oilfield Services Group",
+    "data": {
+     "book_to_bill": null,
+     "kind": "order_backlog",
+     "value": {
+      "currency": "CNY",
+      "period": "2Q2026",
+      "quote": "As of June 30 2026, the Group had order backlog of approximately RMB18,516.5 million.",
+      "scale": "mn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFQ3iUnOg7Qmbd1Qx2a8q6bxo8VJveoRhXCiZzxo3-k5zpNhrp4LuB2tEjo_pMsYg8hKLLbWQt0XNi9V73tO3SBXyyBVX7oXhjmvuJ6-rq00k5ycvClArJ3MHQHr5p-5-TWHrGO1Q==",
+      "value": 18516.5
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Anton Oilfield Services Group",
+     "depreciation_and_amortization": 47927374.13,
+     "market_cap": 306827808.12428004,
+     "operating_cash_flow": 182238374.86603,
+     "period": "2025-12-31",
+     "revenue": 833028156.22
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 9.5,
+    "value_usd": 2768401915.0
+   }
+  },
+  "5WH.SI": {
+   "pv10": {
+    "built_at": "2026-09-19T17:54:49+00:00",
+    "checks": [
+     {
+      "check": "cited_amount",
+      "detail": "no cited amount of known scale and convertible currency",
+      "ok": false
+     }
+    ],
+    "company": "Rex International Holding Limited",
+    "data": {
+     "measure": "pv10",
+     "price_basis": "Not reported",
+     "proved_reserves": null,
+     "value": {
+      "currency": "USD",
+      "period": "FY2024",
+      "quote": "",
+      "scale": "mn",
+      "source_url": "https://www.rexih.com",
+      "value": 0.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Rex International Holding Limited",
+     "depreciation_and_amortization": 0.0,
+     "market_cap": 68492647.7066,
+     "operating_cash_flow": -739.63,
+     "period": "2026-01-31",
+     "revenue": 0.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 80.7,
+    "value_usd": null
+   }
+  },
+  "BKR": {
+   "backlog": {
+    "built_at": "2026-09-19T18:11:00+00:00",
+    "checks": [
+     {
+      "check": "backlog / revenue",
+      "detail": "1.45x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 1.4459
+     }
+    ],
+    "company": "Baker Hughes Company",
+    "data": {
+     "book_to_bill": 1.6,
+     "kind": "rpo",
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Remaining Performance Obligations (\"RPO\") in the second quarter of 2026 ended at $40.1 billion, an increase of $4.0 billion from the first quarter of 2026.",
+      "scale": "bn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPOETEbv5XrlM0EHeVtaKUYjMbEmPA2QGzF67kQak2VLJ56n6X8rbk5hDc41YGi7qpBa3XnJtbl76R5bDQRF6AsWeohpVN5DhNbDow-xIViVsUs0MJKsYk3KN9N60-1sZe9xbf3YuXLGK6U54RUkmxUlG0npxh0A5Z1s93Et-PP9tle32xj7x8q4PbpxoMYGjAT_92XU5kMZzJxlmfx5zlAIfuLNV05EYoAELxzKVxZ1JwWqcFXEgmRbYOuEY=",
+      "value": 40.1
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Baker Hughes Company",
+     "depreciation_and_amortization": 1188000000.0,
+     "market_cap": 56830586500.0,
+     "operating_cash_flow": 3810000000.0,
+     "period": "2025-12-31",
+     "revenue": 27733000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 8.5,
+    "value_usd": 40100000000.0
+   }
+  },
+  "COP": {
+   "pv10": {
+    "built_at": "2026-09-19T17:30:08+00:00",
+    "checks": [
+     {
+      "check": "pv10 / market_cap",
+      "detail": "0.35x (plausible 0.05x to 10.0x)",
+      "ok": true,
+      "ratio": 0.3484
+     }
+    ],
+    "company": "ConocoPhillips",
+    "data": {
+     "measure": "standardized_measure",
+     "price_basis": "SEC 12-month average prices: calculated as the unweighted arithmetic average of the first-day-of-the-month price for each month within the 12-month period prior to the end of the reporting period (adjusted only for existing contractual terms)",
+     "proved_reserves": {
+      "period": "FY2025",
+      "quote": "Total company, 7,637, 7,812, 6,758.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1163165/000116316526000009/cop-20251231.htm",
+      "unit": "MMboe",
+      "value": 7637.0
+     },
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Discounted future net cash flows at year end ... $ 55,962",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1163165/000116316526000009/cop-20251231.htm",
+      "value": 55962.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "ConocoPhillips",
+     "depreciation_and_amortization": 11500000000.0,
+     "market_cap": 160607698943.0,
+     "operating_cash_flow": 19796000000.0,
+     "period": "2025-12-31",
+     "revenue": 58944000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 58.8,
+    "value_usd": 55962000000.0
+   }
+  },
+  "DVN": {
+   "pv10": {
+    "built_at": "2026-09-19T17:43:11+00:00",
+    "checks": [
+     {
+      "check": "pv10 / market_cap",
+      "detail": "0.35x (plausible 0.05x to 10.0x)",
+      "ok": true,
+      "ratio": 0.3509
+     }
+    ],
+    "company": "Devon Energy Corporation",
+    "data": {
+     "measure": "standardized_measure",
+     "price_basis": "For 2025 estimates, Devon's future realized prices were assumed to be $62.67 per Bbl of oil, $1.32 per Mcf of gas and $20.85 per Bbl of NGLs.",
+     "proved_reserves": {
+      "period": "December 31, 2025",
+      "quote": "Total Proved. 961. 4,482. 720. 2,428.",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1090012/000119312526056485/dvn-20251231.htm",
+      "unit": "MMBoe",
+      "value": 2428.0
+     },
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Standardized measure of discounted future net cash flows. $. 18,765.",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1090012/000119312526056485/dvn-20251231.htm",
+      "value": 18765.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Devon Energy Corporation",
+     "depreciation_and_amortization": 3595000000.0,
+     "market_cap": 53471000000.0,
+     "operating_cash_flow": 6711000000.0,
+     "period": "2025-12-31",
+     "revenue": 17188000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 44.2,
+    "value_usd": 18765000000.0
+   }
+  },
+  "EOG": {
+   "pv10": {
+    "built_at": "2026-09-19T17:42:24+00:00",
+    "checks": [
+     {
+      "check": "cited_amount",
+      "detail": "no cited amount of known scale and convertible currency",
+      "ok": false
+     }
+    ],
+    "company": "EOG Resources, Inc.",
+    "data": {
+     "measure": "standardized_measure",
+     "price_basis": "",
+     "proved_reserves": null,
+     "value": {
+      "currency": "USD",
+      "period": "",
+      "quote": "",
+      "scale": "units",
+      "source_url": "",
+      "value": 0.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "EOG Resources, Inc.",
+     "depreciation_and_amortization": 4461000000.0,
+     "market_cap": 76821080670.0,
+     "operating_cash_flow": 10044000000.0,
+     "period": "2025-12-31",
+     "revenue": 22567000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 722.7,
+    "value_usd": null
+   }
+  },
+  "ET": {
+   "maintenance_capex": {
+    "built_at": "2026-09-19T17:59:42+00:00",
+    "checks": [
+     {
+      "check": "maintenance_capex / depreciation_and_amortization",
+      "detail": "0.23x (plausible 0.1x to 3.0x)",
+      "ok": true,
+      "ratio": 0.2316
+     },
+     {
+      "check": "maintenance capex < OCF",
+      "detail": "0.13x of operating cash flow",
+      "ok": true
+     }
+    ],
+    "company": "Energy Transfer LP",
+    "data": {
+     "definition": "“Maintenance Capital Expenditures” means cash expenditures including expenditures for the addition or improvement to or replacement of the capital assets owned by any Group Member or for the acquisition of existing, or the construction or development of new, capital assets if such expenditures are made to maintain, including for a period longer than the short-term, the operating capacity and/or operating income of the Partnership Group. Maintenance Capital Expenditures shall not include (a) Expansion Capital Expenditures or (b) Investment Capital Expenditures.",
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Maintenance capital expenditures (462) (376) (1,316) (1,161)",
+      "scale": "mn",
+      "source_url": "https://ir.energytransfer.com/news-releases/news-release-details/energy-transfer-reports-fourth-quarter-2025-results",
+      "value": 1316.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Energy Transfer LP",
+     "depreciation_and_amortization": 5682000000.0,
+     "market_cap": 72746122400.0,
+     "operating_cash_flow": 10149000000.0,
+     "period": "2025-12-31",
+     "revenue": 82626000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 24.0,
+    "value_usd": 1316000000.0
+   }
+  },
+  "HAL": {
+   "backlog": {
+    "built_at": "2026-09-19T18:10:48+00:00",
+    "checks": [
+     {
+      "check": "positive",
+      "detail": "amount 0 is not positive",
+      "ok": false
+     },
+     {
+      "check": "backlog / revenue",
+      "detail": "0.00x (plausible 0.05x to 15.0x)",
+      "ok": false,
+      "ratio": 0.0
+     }
+    ],
+    "company": "Halliburton Company",
+    "data": {
+     "book_to_bill": null,
+     "kind": "rpo",
+     "value": {
+      "currency": "USD",
+      "period": "FY2024",
+      "quote": "Revenue allocated to remaining performance obligations for these long-term contracts is not material.",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/45012/000004501225000010/hal-20241231.htm",
+      "value": 0.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Halliburton Company",
+     "depreciation_and_amortization": 1136000000.0,
+     "market_cap": 28102779805.0,
+     "operating_cash_flow": 2926000000.0,
+     "period": "2025-12-31",
+     "revenue": 22184000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": false,
+    "secs": 55.8,
+    "value_usd": 0.0
+   }
+  },
+  "KMI": {
+   "maintenance_capex": {
+    "built_at": "2026-09-19T17:55:20+00:00",
+    "checks": [
+     {
+      "check": "maintenance_capex / depreciation_and_amortization",
+      "detail": "0.41x (plausible 0.1x to 3.0x)",
+      "ok": true,
+      "ratio": 0.4113
+     },
+     {
+      "check": "maintenance capex < OCF",
+      "detail": "0.16x of operating cash flow",
+      "ok": true
+     }
+    ],
+    "company": "Kinder Morgan, Inc.",
+    "data": {
+     "definition": "Investments to maintain the operational integrity and extend the useful life of our assets. Budgeting of maintenance capital expenditures, which we refer to as sustaining capital expenditures, is done annually on a bottom-up basis. For each of our assets, we budget for and make those sustaining capital expenditures that are necessary to maintain safe and efficient operations, meet customer needs and comply with our operating policies and applicable law. We may budget for and make additional sustaining capital expenditures that we expect to produce economic benefits such as increasing efficiency and/or lowering future expenses.",
+     "value": {
+      "currency": "USD",
+      "period": "FY2024",
+      "quote": "Capital expenditures: Sustaining capital expenditures $ 1,009",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1506307/000150630725000008/kmi-20241231.htm",
+      "value": 1009.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Kinder Morgan, Inc.",
+     "depreciation_and_amortization": 2453000000.0,
+     "market_cap": 70901312000.0,
+     "operating_cash_flow": 6247000000.0,
+     "period": "2025-12-31",
+     "revenue": 16950000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 27.8,
+    "value_usd": 1009000000.0
+   }
+  },
+  "OKE": {
+   "maintenance_capex": {
+    "built_at": "2026-09-19T18:00:11+00:00",
+    "checks": [
+     {
+      "check": "maintenance_capex / depreciation_and_amortization",
+      "detail": "0.38x (plausible 0.1x to 3.0x)",
+      "ok": true,
+      "ratio": 0.3804
+     },
+     {
+      "check": "maintenance capex < OCF",
+      "detail": "0.10x of operating cash flow",
+      "ok": true
+     }
+    ],
+    "company": "ONEOK, Inc.",
+    "data": {
+     "definition": "Maintenance capital expenditures are those capital expenditures required to maintain our existing assets and operations and do not generate additional revenues. Maintenance capital expenditures are made to replace partially or fully depreciated assets, to maintain the existing operating capacity of our assets and to extend their useful lives.",
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Maintenance capital $ 181 $ 136 $ 576 $ 411",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1039684/000103968426000004/okeq42025earningsrelease.htm",
+      "value": 576.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "ONEOK, Inc.",
+     "depreciation_and_amortization": 1514000000.0,
+     "market_cap": 58893538620.0,
+     "operating_cash_flow": 5599000000.0,
+     "period": "2025-12-31",
+     "revenue": 33629000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 25.6,
+    "value_usd": 576000000.0
+   }
+  },
+  "OXY": {
+   "pv10": {
+    "built_at": "2026-09-19T17:43:32+00:00",
+    "checks": [
+     {
+      "check": "pv10 / market_cap",
+      "detail": "0.63x (plausible 0.05x to 10.0x)",
+      "ok": true,
+      "ratio": 0.6258
+     }
+    ],
+    "company": "Occidental Petroleum Corporation",
+    "data": {
+     "measure": "standardized_measure",
+     "price_basis": "Unweighted arithmetic average of the first-day-of-the-month price for each month within the year: Average WTI Oil $65.34/Bbl, Average Brent Oil $68.42/Bbl, Average Henry Hub Natural Gas $3.39/MMbtu, Average Mt. Belvieu NGL $31.79/Bbl",
+     "proved_reserves": {
+      "period": "December 31, 2025",
+      "quote": "Balance as of December 31, 2025 3,788 815 4,603",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/797468/000162828026009059/oxy-20251231.htm",
+      "unit": "MMboe",
+      "value": 4603.0
+     },
+     "value": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "Standardized measure of discounted future net cash flows $ 29,898 $ 6,729 $ 36,627",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/797468/000162828026009059/oxy-20251231.htm",
+      "value": 36627.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Occidental Petroleum Corporation",
+     "depreciation_and_amortization": 7533000000.0,
+     "market_cap": 58524305807.0,
+     "operating_cash_flow": 10532000000.0,
+     "period": "2025-12-31",
+     "revenue": 21593000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 17.8,
+    "value_usd": 36627000000.0
+   }
+  },
+  "RIG": {
+   "backlog": {
+    "built_at": "2026-09-19T18:11:30+00:00",
+    "checks": [
+     {
+      "check": "backlog / revenue",
+      "detail": "1.70x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 1.6979
+     }
+    ],
+    "company": "Transocean Ltd.",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "value": {
+      "currency": "USD",
+      "period": "Q2 2026",
+      "quote": "Total contract backlog. $. 6,732.",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1451505/000145150526000030/rig-20260630.htm",
+      "value": 6732.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Transocean Ltd.",
+     "depreciation_and_amortization": 659000000.0,
+     "market_cap": 5732776821.0,
+     "operating_cash_flow": 749000000.0,
+     "period": "2025-12-31",
+     "revenue": 3965000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 27.2,
+    "value_usd": 6732000000.0
+   }
+  },
+  "SLB": {
+   "backlog": {
+    "built_at": "2026-09-19T18:09:49+00:00",
+    "checks": [
+     {
+      "check": "backlog / revenue",
+      "detail": "0.17x (plausible 0.05x to 15.0x)",
+      "ok": true,
+      "ratio": 0.1652
+     }
+    ],
+    "company": "Slb N.V.",
+    "data": {
+     "book_to_bill": null,
+     "kind": "total",
+     "value": {
+      "currency": "USD",
+      "period": "March 31, 2026",
+      "quote": "Total backlog was $5.9 billion at March 31, 2026, of which approximately 65% is expected to be recognized as revenue over the next 12 months.",
+      "scale": "bn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/87347/000119312526190101/slb-20260331.htm",
+      "value": 5.9
+     }
+    },
+    "fmp_context_usd": {
+     "company": "Slb N.V.",
+     "depreciation_and_amortization": 2643000000.0,
+     "market_cap": 75869403860.0,
+     "operating_cash_flow": 6489000000.0,
+     "period": "2025-12-31",
+     "revenue": 35709000000.0
+    },
+    "grounding_urls": [
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGmzZVek8cQ4ZHAmwaLR3bUD0EpHF7Kl0popN7Rt4AT2mUvBALXmmSgiNnZ-GBfFmakH8GMdK5NkTz_jm-LiXIxk2aMPsEVVuRC0ggKotyzwL-MqUmwRx7lVv2Af6DoPpeUxv39msxQs0zCKFcnmJLMocIYGEw-wmlNLBlLx1mtJbK2Zx2DN-aisIT2J81BZG7CCfZNkf56tUsfew==",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF5KnGF270q-z8eSnOBSZGBoR05UM6lZuiTns_fzwDDS7GukEOroDYKoZ8uAbJc_OlinxArd7UjcmMoFcf3fQysd3nl8x4lQ_bxRRqh-z4EbEQ5sx_VRBdQan78McYkmZzEDAFY3igYH1oIbYh4xQ8be8FPzH1YRSsbyooFH0qsGsenknKUnw==",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEmKYAgVyWL0w_vHr-Ig5zWaH3jOsrvSeTwDoe6Ef4eN0rEreflfK7isarymkfWElCmS8SKNHBcBfZq5UcT9XOYZ_GcS9xxTZZXsK7XDh90CKDJwkRoCxeg1bVCVqi13CqIpJ-a1pN5lEFMYa6Te62ZGKlFSKWIu_dw10Hskw718f1jcZsWsF7F6hUC6wCy1H_kYmKs",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEU7w2XKYu1ku2bX4Y-uKYhThr0I4N8bFbmsr1wi-tYwoFzdN054TjbjXQA1tIhAfFVDXwI_X4l0Qo9HFm65EBsVS_Nk-37AFHp2v3_BpP2DAnW7Ybemv7iiuU3W4_aq4x7RSC_hxdyDUUZgMsQu0ykvehyhDSuKXg=",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFDXy4pugZizo2Teof1Xp0khCwdd0GvhT9cA48OHpqwLJqj8TgVecOtwULcbHnNKVf5C--Z_2JVcgN06Bew43EeDIKtn4cN8XqjR4AiOblZnvn5tC-q0boOKX5eCsfDWkLAk2p8LQ7WxMZtsbe9G3K9Qfd8VfgozKzWchtlbme9gF_SbVIa5w==",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGAtj5OjF1Rx-oESu_-a9YYFIPBPjdlpTelYfXdsd4BtHOE0eSKU45HHyg2-Zwdg-NYHApwoWa7rl_lJe397eydnFMQuKanNy8lLPJSFZPoFZB45lBfpMJww1xBHC7G3hk17RxCzws5F0Uw66LbJNl--3eLtvW_38t_l5ZniYYkEg9y-7E4",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGcJt9d_3ThzZpAhZxFVil9__SacJ9gt1KQa7FSve9Gy6dHY1cO48_Nj2RlXGBQwcBkSkqzCaCpkONbjC4n88HKCHi_Ez6FVqvK7QVgKwXptUxCpTB0UxvCZoaTkPtKDlS_SSV_Zmpumso1GNspyw_Lx22_D0s-4tcrKqaLahy10wjz",
+     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHLpuO5i6TM75QdtvQaLtZG-64hq5j7fqCC8hiUhD1UHY3D7x_zzG30VCa2-K1e5UEb61KjK5CE1CPyThl90PtY9ADTAsqlfibtJtLAeWwFxVeutnEluUyolhwRjWsHc1u20XdtuILt8s_uxWiGpRvsSjJwqUlBU7ejaFsdb7lFTgnftwMMNg=="
+    ],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 574.4,
+    "value_usd": 5900000000.0
+   }
+  },
+  "WMB": {
+   "maintenance_capex": {
+    "built_at": "2026-09-19T17:59:15+00:00",
+    "checks": [
+     {
+      "check": "maintenance_capex / depreciation_and_amortization",
+      "detail": "0.38x (plausible 0.1x to 3.0x)",
+      "ok": true,
+      "ratio": 0.3835
+     },
+     {
+      "check": "maintenance capex < OCF",
+      "detail": "0.15x of operating cash flow",
+      "ok": true
+     }
+    ],
+    "company": "The Williams Companies, Inc.",
+    "data": {
+     "definition": "Investments in working condition of assets to protect the business. Maintenance capital supporting integrity of pipelines and continued investments in emissions reduction program.",
+     "value": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "Maintenance Capital2 $900MM",
+      "scale": "mn",
+      "source_url": "https://investor.williams.com",
+      "value": 900.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "The Williams Companies, Inc.",
+     "depreciation_and_amortization": 2347000000.0,
+     "market_cap": 88129216358.0,
+     "operating_cash_flow": 5898000000.0,
+     "period": "2025-12-31",
+     "revenue": 11950000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 231.9,
+    "value_usd": 900000000.0
+   }
+  }
+ },
+ "version": 1
+}

@@ -24,6 +24,7 @@ import { TabHero } from '@/components/layout/TabHero';
 import { useAuth } from '@/contexts/auth-context';
 import {
   getModelAccuracyOverview, getCalibrationDetail, getSegmentMemory, reviewSegmentMemory,
+  getIndustryInputs, reviewIndustryInput, type IndustryInputRow,
   promoteCalibration, rollbackCalibration, dismissCalibration,
   type CalibrationCard, type CalibrationDetail, type DiagnosticCard, type ModelAccuracyOverview,
   type SegmentMemory, type SegmentMemoryTicker,
@@ -407,6 +408,100 @@ function ReviewControls({ t, onChanged }: { t: SegmentMemoryTicker; onChanged: (
   );
 }
 
+const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
+  pv10: 'Reserve value (PV-10)',
+  backlog: 'Backlog',
+  maintenance_capex: 'Maintenance capex',
+};
+
+function IndustryInputReview({ row, onChanged }: { row: IndustryInputRow; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const act = (action: 'accept' | 'revoke') => {
+    setBusy(true);
+    reviewIndustryInput(row.ticker, row.kind, action)
+      .then(() => { toast.success(`${row.ticker} ${INPUT_LABEL[row.kind]} ${action === 'accept' ? 'accepted' : 'revoked'}`); onChanged(); })
+      .catch((e: Error) => toast.error(`Could not ${action}: ${e.message}`))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <span className="flex gap-2 justify-end">
+      {row.status !== 'accepted' && (
+        <Button size="sm" disabled={busy} onClick={() => act('accept')}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : 'Accept'}
+        </Button>
+      )}
+      {(row.status === 'accepted' || row.status === 'changed_since_acceptance') && (
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => act('revoke')}>Revoke</Button>
+      )}
+    </span>
+  );
+}
+
+/** Inputs FMP does not carry, cited as filed and checked against FMP. Nothing
+ *  reaches a valuation until accepted here (owner decision 2026-09-20). */
+function IndustryInputsSection({ allowed }: { allowed: boolean }) {
+  const [rows, setRows] = useState<IndustryInputRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const reload = useCallback(() => {
+    getIndustryInputs().then((r) => setRows(r.rows)).catch((e: Error) => setError(e.message));
+  }, []);
+  useEffect(() => { if (allowed) reload(); }, [allowed, reload]);
+  return (
+    <section>
+      <SectionTitle hint="Figures FMP does not report, taken as each filing prints them. Checked against FMP; used in valuations only once accepted. Click a figure for its source.">
+        Industry inputs {rows && (
+          <Chip strong>{rows.filter((r) => r.status === 'accepted').length} of {rows.length} accepted</Chip>
+        )}
+      </SectionTitle>
+      {error && <Card className="p-4 text-sm text-foreground">Could not load industry inputs: {error}</Card>}
+      {rows && rows.length === 0 && <Card className="p-4 text-sm text-muted-foreground">Not built yet.</Card>}
+      {rows && rows.length > 0 && (
+        <Card className="p-0 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-muted-foreground border-b border-border">
+                <th className="text-left font-medium px-3 py-2">Ticker</th>
+                <th className="text-left font-medium px-3 py-2">Input</th>
+                <th className="text-right font-medium px-3 py-2">As filed</th>
+                <th className="text-left font-medium px-3 py-2">Checks against FMP</th>
+                <th className="text-left font-medium px-3 py-2">Status</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={`${r.ticker}|${r.kind}`} className="border-b border-border last:border-0 align-top">
+                  <td className="px-3 py-2 font-medium tabular-nums">
+                    {r.ticker}
+                    {r.company && <div className="font-normal text-muted-foreground">{r.company}</div>}
+                  </td>
+                  <td className="px-3 py-2">{INPUT_LABEL[r.kind] ?? r.kind}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {r.source_url ? (
+                      <a href={r.source_url} target="_blank" rel="noreferrer" title={r.quote ?? undefined}
+                         className="underline decoration-dotted underline-offset-2">
+                        {r.value?.toLocaleString()} {r.currency} {r.scale}
+                      </a>
+                    ) : <span>{r.value?.toLocaleString()} {r.currency} {r.scale}</span>}
+                    {r.period && <div className="text-muted-foreground">{r.period}</div>}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {r.checks.map((c) => (
+                      <div key={c.check}>{c.ok === false ? '✕' : c.ok ? '✓' : '·'} {c.check}: {c.detail}</div>
+                    ))}
+                  </td>
+                  <td className="px-3 py-2"><Chip strong={r.status === 'accepted'}>{REVIEW_LABEL[r.status] ?? r.status}</Chip></td>
+                  <td className="px-3 py-2"><IndustryInputReview row={r} onChanged={reload} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </section>
+  );
+}
+
 function SegmentMemorySection({ allowed }: { allowed: boolean }) {
   const [memory, setMemory] = useState<SegmentMemory | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -622,6 +717,8 @@ export function ModelAccuracyPage() {
             </section>
 
             <SegmentMemorySection allowed={allowed} />
+
+            <IndustryInputsSection allowed={allowed} />
 
             {data.history.length > 0 && (
               <section>

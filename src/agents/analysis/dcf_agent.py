@@ -9270,6 +9270,19 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _norm_ebit   = _normalized_earnings(series, "ebit",       window=5)
         most_recent["normalized_net_income"] = _norm_ni
         most_recent["normalized_ebitda"]     = _norm_ebitda
+        # Review-gated industry input (Wave 1): an owner-accepted maintenance
+        # capex replaces the D&A stand-in in the Distributable CF Yield leg. In
+        # the currency the statements are now in -- the listing currency when
+        # the FX block above converted them, the statement currency otherwise.
+        try:
+            from src.data import industry_inputs as _ii
+            _mc_ccy = (_target_ccy if (reported_currency != _target_ccy and fx_rate > 0
+                                       and fx_rate != 1.0) else reported_currency)
+            _mc = _ii.accepted_amount(ticker, "maintenance_capex", _mc_ccy)
+            if _mc is not None:
+                most_recent["maintenance_capex_accepted"] = _mc
+        except Exception:                                  # noqa: BLE001
+            pass
         most_recent["normalized_ebit"]       = _norm_ebit
         # Audit flag when normalization materially moves earnings (>15% delta)
         _cur_ni = most_recent.get("net_income")

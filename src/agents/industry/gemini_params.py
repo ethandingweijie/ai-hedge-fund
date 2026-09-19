@@ -459,6 +459,75 @@ def direct_prompt(company: str, ticker: str, per: str) -> str:
 
 # ── guardrails and the engine bridge ────────────────────────────────────────
 
+# ── industry inputs FMP does not carry (energy & A&D waves, review-gated) ────
+
+class CitedQuantity(BaseModel):
+    """A physical quantity exactly as the source states it."""
+    value: float = Field(description="The number exactly as printed in the source")
+    unit: str = Field(description="Unit as printed, e.g. MMboe, MMbbl, Bcf, Bcfe, Mt")
+    period: str = Field(description="Date or fiscal year the quantity refers to")
+    source_url: str
+    quote: str
+
+
+class ReserveValue(BaseModel):
+    """Proved reserves and their discounted value (upstream oil & gas)."""
+    measure: Literal["standardized_measure", "pv10"] = Field(
+        description="standardized_measure = the after-tax standardized measure of discounted "
+                    "future net cash flows; pv10 = the pre-tax PV-10 non-GAAP measure")
+    value: Cited = Field(description="The discounted value of proved reserves, total for the company")
+    proved_reserves: Optional[CitedQuantity] = Field(
+        default=None, description="Total proved reserves (1P), oil-equivalent if the company reports it")
+    price_basis: str = Field(description="The price deck the value uses, as the filing states it "
+                                         "(e.g. 'SEC 12-month average: WTI $75.48/bbl')")
+
+
+class BacklogValue(BaseModel):
+    """Contracted backlog (oilfield services, drillers, EPC, defense)."""
+    kind: Literal["total", "funded", "contract_drilling", "order_backlog", "rpo"] = Field(
+        description="What the company calls it: total backlog, funded backlog, contract drilling "
+                    "backlog, order backlog, or remaining performance obligations (RPO)")
+    value: Cited = Field(description="Backlog at the latest reported period end, total for the company")
+    book_to_bill: Optional[float] = Field(default=None, description="Latest reported book-to-bill ratio, if stated")
+
+
+class MaintenanceCapex(BaseModel):
+    """Capital expenditure to sustain the existing asset base (midstream)."""
+    value: Cited = Field(description="Maintenance (sustaining) capital expenditure for the latest fiscal year")
+    definition: str = Field(description="How the company defines maintenance capex, as it states it")
+
+
+INDUSTRY_INPUT_SCHEMAS: dict = {
+    "pv10": ReserveValue,
+    "backlog": BacklogValue,
+    "maintenance_capex": MaintenanceCapex,
+}
+
+_INDUSTRY_ASK = {
+    "pv10": (
+        "the discounted value of its PROVED oil and gas reserves at the latest fiscal year end. "
+        "Prefer the standardized measure of discounted future net cash flows from the annual "
+        "report's supplementary oil and gas disclosures; use the company's PV-10 only if it does "
+        "not publish the standardized measure. Include total proved reserves and the price deck "
+        "the value uses. Total company, not a single basin."),
+    "backlog": (
+        "its contracted BACKLOG at the latest reported period end, using the company's own term "
+        "(total backlog, funded backlog, contract drilling backlog, order backlog, or remaining "
+        "performance obligations) and its latest book-to-bill ratio if it states one."),
+    "maintenance_capex": (
+        "its MAINTENANCE (sustaining) capital expenditure for the latest fiscal year, as the "
+        "company reports it (often in its distributable cash flow reconciliation), and the "
+        "company's definition of it. Growth or expansion capex must not be included."),
+}
+
+
+def industry_input_prompt(kind: str, company: str, ticker: str) -> str:
+    """Prompt for one review-gated industry input, reported figures only."""
+    return (f"From {company}'s ({ticker}) own filings (annual report, 10-K, 20-F, results "
+            f"announcement or investor presentation), report {_INDUSTRY_ASK[kind]} Reported "
+            "figures only -- no estimates, no broker figures.\n" + _AMOUNT_RULE)
+
+
 def _cited_ok(c: Optional[dict]) -> bool:
     return bool(c) and c.get("value") is not None \
         and str(c.get("source_url", "")).startswith("http") and bool(str(c.get("quote", "")).strip())

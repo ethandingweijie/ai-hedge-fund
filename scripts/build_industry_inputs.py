@@ -1,0 +1,128 @@
+"""Pre-fill review-gated industry inputs with a grounded Gemini call.
+
+Energy and A&D profiles need figures FMP does not report (see
+src/data/industry_inputs.py): PV-10 / standardized measure for upstream oil &
+gas, contracted backlog for oilfield services and drillers, maintenance capex
+for midstream. Each figure is taken exactly as the filing prints it, with its
+URL and a verbatim quote, then checked in USD against what FMP reports for the
+same company (market cap, revenue, D&A, operating cash flow). Results are
+stored "pending"; nothing reaches a valuation until the owner accepts them on
+the Model Accuracy page.
+
+Resumable: an existing ticker/kind is skipped unless --force.
+
+    .venv/Scripts/python.exe scripts/build_industry_inputs.py --kind pv10 --tickers COP,EOG
+    .venv/Scripts/python.exe scripts/build_industry_inputs.py --wave 1
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(ROOT / ".env.local", override=True)
+load_dotenv(ROOT / ".env")
+
+from src.agents.industry import gemini_params as gp  # noqa: E402
+from src.data import industry_inputs as ii  # noqa: E402
+
+#: Wave 1 (oil, gas & coal): which input each FMP-covered name needs.
+WAVE1 = {
+    "pv10": ["COP", "EOG", "DVN", "OXY", "00883.HK", "5WH.SI"],
+    "maintenance_capex": ["KMI", "WMB", "ET", "OKE"],
+    "backlog": ["SLB", "HAL", "BKR", "RIG", "02883.HK", "03337.HK"],
+}
+
+
+def _fmp(path: str, params: dict):
+    from src.tools.api import _fmp_get
+    return _fmp_get(f"https://financialmodelingprep.com/stable/{path}", params,
+                    os.environ.get("FMP_API_KEY")) or []
+
+
+def fmp_context(ticker: str) -> dict:
+    """FMP figures for the checks, all in USD, plus the company name."""
+    from src.tools.fmp_transcripts import to_fmp_symbol
+    sym = to_fmp_symbol(ticker)
+    usd = ii._fx("USD")
+    prof = (_fmp("profile", {"symbol": sym}) or [{}])[0]
+    inc = (_fmp("income-statement", {"symbol": sym, "limit": 1}) or [{}])[0]
+    cf = (_fmp("cash-flow-statement", {"symbol": sym, "limit": 1}) or [{}])[0]
+    rep = (inc.get("reportedCurrency") or cf.get("reportedCurrency") or "USD")
+    r_rep, r_list = usd(rep), usd(prof.get("currency") or "USD")
+
+    def conv(v, r):
+        return float(v) * r if isinstance(v, (int, float)) and r else None
+    return {
+        "company": prof.get("companyName") or ticker,
+        "period": inc.get("date"),
+        "market_cap": conv(prof.get("marketCap"), r_list),
+        "revenue": conv(inc.get("revenue"), r_rep),
+        "depreciation_and_amortization": conv(cf.get("depreciationAndAmortization")
+                                              or inc.get("depreciationAndAmortization"), r_rep),
+        "operating_cash_flow": conv(cf.get("operatingCashFlow"), r_rep),
+    }
+
+
+def build_one(ticker: str, kind: str) -> dict:
+    ctx = fmp_context(ticker)
+    schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
+    t0 = time.time()
+    out = gp.generate(gp.industry_input_prompt(kind, ctx["company"], ticker), schema=schema, grounded=True)
+    data = out.get("json")
+    if not isinstance(data, dict):
+        raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
+    value_usd = gp.amount((data or {}).get("value"), ii._fx("USD"))
+    checks = ii.reconcile(kind, value_usd, ctx)
+    return {
+        "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
+        "value_usd": value_usd, "checks": checks,
+        "ok": all(c["ok"] is not False for c in checks),
+        "grounding_urls": out.get("grounding_urls") or [],
+        "model": out.get("model") or gp.model_name(), "secs": round(time.time() - t0, 1),
+        "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--kind", choices=ii.KINDS)
+    ap.add_argument("--tickers", default="")
+    ap.add_argument("--wave", choices=["1"])
+    ap.add_argument("--force", action="store_true")
+    a = ap.parse_args(argv)
+    jobs = ([(k, t) for k, ts in WAVE1.items() for t in ts] if a.wave == "1"
+            else [(a.kind, t.strip()) for t in a.tickers.split(",") if t.strip()])
+    if not jobs or any(k is None for k, _ in jobs):
+        ap.error("give --wave 1, or --kind with --tickers")
+    doc = ii.load() or {"version": 1, "tickers": {}}
+    for kind, t in jobs:
+        key = ii._key(t)
+        if not a.force and ((doc["tickers"].get(key) or {}).get(kind)):
+            print(f"  {t:<10} {kind:<18} skip (present)")
+            continue
+        try:
+            e = build_one(t, kind)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {t:<10} {kind:<18} FAILED {type(exc).__name__}: {str(exc)[:120]}")
+            continue
+        doc["tickers"].setdefault(key, {})[kind] = e
+        ii.save(doc)
+        v = e["data"].get("value") or {}
+        print(f"  {t:<10} {kind:<18} {v.get('value')} {v.get('currency')} {v.get('scale')} "
+              f"({v.get('period')}) -> ${(e['value_usd'] or 0) / 1e9:,.2f}bn "
+              f"{'OK' if e['ok'] else 'CHECK FAILED'} "
+              + "; ".join(c["detail"] for c in e["checks"]), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
