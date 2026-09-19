@@ -1,4 +1,4 @@
-"""Excel valuation workbook export for a saved run.
+"""Report exports for a saved run: the Excel valuation workbook and the PDF report.
 
 Wires the pure workbook builder (src/utils/valuation_workbook.py) to its two
 live data sources: the reported statements (FMP, via the same
@@ -100,6 +100,34 @@ def _members(exchange, level, key, cohort="all"):
 def safe_filename(ticker: str, run_at: Optional[str]) -> str:
     day = (run_at or "")[:10] or date.today().isoformat()
     return re.sub(r"[^A-Za-z0-9._-]", "_", f"{ticker}_valuation_{day}.xlsx")
+
+
+def build_run_pdf(run: dict, ticker: Optional[str] = None) -> tuple[bytes, str]:
+    """(pdf bytes, filename) for a run payload: the same report the CLI writes.
+
+    Raises KeyError when the run has no result for `ticker`.
+    """
+    import os
+    import tempfile
+    from src.utils.pdf_report import generate_pdf_report
+    data = run.get("data") or {}
+    decisions = data.get("decisions") or {}
+    t = ticker or data.get("primary_ticker") or next(iter(decisions), None)         or next(iter(data.get("dcf_range") or {}), None)
+    if not t or (decisions and t not in decisions):
+        raise KeyError(t or "")
+    fd, path = tempfile.mkstemp(suffix=".pdf")
+    os.close(fd)
+    try:
+        generate_pdf_report(data, path, open_after=False)
+        with open(path, "rb") as fh:
+            blob = fh.read()
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    day = (run.get("run_at") or data.get("end_date") or "")[:10] or date.today().isoformat()
+    return blob, re.sub(r"[^A-Za-z0-9._-]", "_", f"{t}_report_{day}.pdf")
 
 
 def build_run_workbook(run: dict, ticker: Optional[str] = None) -> tuple[bytes, str]:

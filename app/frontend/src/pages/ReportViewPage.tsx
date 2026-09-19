@@ -22,6 +22,7 @@ import { FinancialStatements } from '@/components/report/FinancialStatements';
 import type { FinancialStatementsPayload } from '@/components/report/FinancialStatements';
 import { ValuationLadder } from '@/components/report/ValuationLadder';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
+import { ExportFab } from '@/components/report/ExportFab';
 import { REITValuationPanel } from '@/components/report/reit/REITValuationPanel';
 import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel';
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
@@ -349,7 +350,7 @@ export function ReportViewPage() {
         {/* Full width: this is the 6-column scenario table that was being
             squeezed into a 403px column, wrapping its headers onto three
             lines. */}
-        <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} runId={runId} />
+        <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 
         {/* Sector Valuation Card. Mounted here as well as in V2ReportView:
             the mobile view bypasses this JSX entirely, so a card added only
@@ -418,6 +419,8 @@ export function ReportViewPage() {
         <CitationPanel data={data as Record<string, unknown>} ticker={ticker} />
 
       </div>
+      {/* Export: Report (PDF) / Model (XLSX) */}
+      {runId && <ExportFab runId={runId} ticker={ticker} />}
     </div>
   );
 }

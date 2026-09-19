@@ -586,18 +586,13 @@ def test_the_y10_estimate_and_the_engine_read_the_same_clamp():
     assert not [ln for ln in inspect.getsource(dcf_agent).splitlines()
                 if "sales_to_capital=" in ln and not ln.lstrip().startswith("#")
                 and "`" not in ln], "a call site charges the projection"
-    # And the third copy: the PDF sensitivity grid recomputes the DCF, and it
-    # once did so with a per-year margin drift the engine does not have. Read as
-    # text rather than imported — this module's job is to check a shape, and
-    # pulling in the report builder to do it would make the guard fail for
-    # reasons that have nothing to do with the clamp. This literal is also the
-    # reason the grid stayed in parity through the reinvestment work: with no
-    # call site charging, the engine's expression reduces to exactly this one,
-    # so the grid's centre cell still reproduces the published base IV.
+    # There was a third copy: the PDF sensitivity grid recomputed the DCF. The
+    # grids were removed from the report on 2026-09-19, so the engine's clamp
+    # now has no second implementation to drift from.
     with open(os.path.join(_REPO, "src", "utils", "pdf_report.py"),
               encoding="utf-8") as fh:
         pdf = fh.read()
-    assert "min(max(margin + margin_delta, fcf_floor), 0.60)" in pdf
+    assert "margin + margin_delta" not in pdf
 
 
 @pytest.mark.parametrize("name", _DEACTIVATED)

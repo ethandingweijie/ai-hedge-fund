@@ -617,22 +617,6 @@ def test_the_helper_never_raises_and_never_scales(payload):
     assert got == 0.0
 
 
-@pytest.mark.parametrize("fn,step", [
-    (pdf_report._sensitivity_table, "margin + margin_delta"),
-    (pdf_report._sensitivity_table_growth_margin, "margin_val + margin_delta"),
-])
-def test_neither_grid_scales_the_delta_by_the_year(fn, step):
-    body = _strip_comments(inspect.getsource(fn))
-    for form in ("margin_delta * t", "margin_delta*t",
-                 "margin_delta * YEARS", "margin_delta*YEARS"):
-        assert form not in body, f"{fn.__name__} still drifts the margin: {form!r}"
-    # And the one step it does take is a single statement, hoisted above the
-    # t loop — which is the point: the projected margin is one value, not a drift.
-    assert body.count(step) == 1, f"{fn.__name__}: expected exactly one {step!r}"
-    assert body.index(step) < body.index("for t in range(1, YEARS + 1):"), \
-        f"{fn.__name__}: the step must be hoisted out of the year loop"
-
-
 def test_the_section_2f_row_says_one_shot_not_per_year():
     body = inspect.getsource(pdf_report._section_2f)
     assert "Margin delta (one-shot, Y1–Y10)" in body
@@ -640,133 +624,12 @@ def test_the_section_2f_row_says_one_shot_not_per_year():
     assert "%/yr" not in _strip_comments(body)
 
 
-def test_both_grids_read_the_base_scenario_so_the_delta_is_usually_zero():
-    """The reach of the per-year misreading, stated as a fact about the code.
-
-    Neither grid takes a scenario argument: both pull `dcf_ticker["base"]`, whose
-    delta is `guidance_margin_adj`. That is 0 for all 14 golden fixtures, so the
-    old `* t` produced identical output for them — the defect was latent for
-    unguided names and live for guided ones. A future edit that gives these grids
-    a bear or bull block inherits the corrected one-step arithmetic for free,
-    which is the point of centralising the read in `_margin_delta_abs`.
-    """
-    for fn in (pdf_report._sensitivity_table,
-               pdf_report._sensitivity_table_growth_margin):
-        body = _strip_comments(inspect.getsource(fn))
-        assert 'dcf_ticker.get("base")' in body, fn.__name__
-        assert "_margin_delta_abs(base)" in body, fn.__name__
-        assert '"bear"' not in body and '"bull"' not in body, \
-            f"{fn.__name__} now reads a non-base scenario — re-check the delta"
-    for name, fx in _fixtures().items():
-        assert fx["projection"]["scenarios.base.margin_delta_absolute"] == 0.0, name
-
-
-# A synthetic name whose DCF is small enough that the grid renders two decimals
-# (`_iv_prec = 2 if base_iv < 10`), so the centre cell can be compared to the
-# engine at cent precision. Its base delta of −0.04 is the GUIDED case — the one
-# where the pre-fix `* t` actually changed the output.
-_SYNTH = dict(
-    wacc=0.09, revenue_base=10e9, revenue_base_usd=10e9,
-    shares_outstanding=10e9, net_debt=1e9, fcf_floor=-0.05,
-    reported_currency="USD", fcf_margin_base=0.20, growth_rate=0.10, tgr=0.02,
-)
-
-
-def _engine_iv(md: float) -> float:
-    """What the engine itself computes for this name, per share."""
-    iv, _, _, _ = _project_dcf(
-        revenue_base=_SYNTH["revenue_base"], fcf_margin_base=_SYNTH["fcf_margin_base"],
-        growth_rate=_SYNTH["growth_rate"], margin_delta_per_year=0.0,
-        wacc=_SYNTH["wacc"], tgr=_SYNTH["tgr"], fcf_floor=_SYNTH["fcf_floor"],
-        net_debt=_SYNTH["net_debt"], shares=_SYNTH["shares_outstanding"],
-        margin_delta_absolute=md)
-    return iv
-
-
-def _render(md: float, stored_iv: float) -> tuple[list, float]:
-    """Render the WACC × TGR grid; return (flowables, centre-cell value)."""
-    styles = {k: ParagraphStyle(name=k, fontName="Helvetica", fontSize=8, leading=10)
-              for k in ("RptBody", "RptLabel", "RptValue")}
-    dcf_ticker = dict(_SYNTH)
-    dcf_ticker["base"] = {
-        "tgr": _SYNTH["tgr"], "growth_rate": _SYNTH["growth_rate"],
-        "fcf_margin_start": _SYNTH["fcf_margin_base"],
-        "intrinsic_value": stored_iv, "margin_delta_absolute": md,
-    }
-    out = pdf_report._sensitivity_table(dcf_ticker, styles, page_w=400.0)
-    assert any(isinstance(f, Table) for f in out), "the grid did not render"
-    footer = next(f for f in out
-                  if hasattr(f, "text") and "DCF IV $" in f.text).text
-    centre = float(re.search(r"DCF IV \$(-?[\d.,]+)", footer)
-                   .group(1).replace(",", ""))
-    return out, centre
-
-
-def test_the_grid_centre_reproduces_the_engine_iv():
-    """The identity the grid's own divergence warning claims to police.
-
-    With the delta stepped once and held flat, the grid's centre cell IS the
-    engine's IV: the two formulas agree term for term whenever WACC is flat and
-    ``tgr <= wacc − 0.005``, which holds here and for every fixture. The −0.04
-    delta is the guided case — a non-zero BASE delta, the only kind these grids
-    ever see, and the only kind the pre-fix ``* t`` could get wrong.
-    """
-    md = -0.04
-    engine = _engine_iv(md)
-    out, centre = _render(md, stored_iv=engine)
-    assert centre == pytest.approx(engine, abs=0.005)
-    joined = " ".join(getattr(f, "text", "") for f in out)
-    assert "diverges" not in joined, "the centre matched the engine, so no warning"
-
-
-def test_the_grid_warning_fires_when_the_stored_iv_really_is_wrong():
-    """Control for the assertion above: the warning is reachable at all."""
-    engine = _engine_iv(-0.04)
-    out, centre = _render(-0.04, stored_iv=engine * 2)
-    joined = " ".join(getattr(f, "text", "") for f in out)
-    assert "diverges" in joined
-    assert centre == pytest.approx(engine, abs=0.005), "the centre ignores stored_iv"
-
-
-@pytest.mark.parametrize("md,expected_div,sign", [
-    (-0.04, 1.181, -1),   # measured: engine +4.1374, old grid −0.7493
-    (+0.04, 1.226, +1),   # measured: engine +6.2561, old grid +13.9285
-])
-def test_the_old_per_year_reading_would_have_diverged(md, expected_div, sign):
-    """Discriminating control: the identity test above is not vacuous.
-
-    Both directions, at the magnitudes quoted in the docstrings. The negative
-    delta floors out (the drifted margin passes `fcf_floor` around Y5) so the old
-    grid read LOW; the positive one compounds, so it read HIGH by more than the
-    engine's entire value. Either would have surfaced as an FX/share-count
-    warning blaming two innocent fields.
-    """
-    margin, fcf_floor = 0.20, -0.05
-    rev, gr, YEARS = _SYNTH["revenue_base"], 0.10, 10
-    wacc, tgr = _SYNTH["wacc"], 0.02
-
-    # Verbatim transcription of the pre-fix `_iv` closure, from
-    # `git show a4bce28:src/utils/pdf_report.py`, which carried the comment
-    # "CHECK 3 FIX (b): apply margin delta per year, matching main DCF".
-    def _iv_old(wacc_, tgr_):
-        _tgr = min(tgr_, wacc_ - 0.005)
-        pv = 0.0
-        for t in range(1, YEARS + 1):
-            margin_t = max(margin + md * t, fcf_floor)
-            margin_t = min(margin_t, 0.60)
-            pv += (rev * (1 + gr) ** t * margin_t) / (1 + wacc_) ** t
-        margin_T = min(max(margin + md * YEARS, fcf_floor), 0.60)
-        fcf_T = rev * (1 + gr) ** YEARS * margin_T
-        tv = fcf_T * (1 + _tgr) / (wacc_ - _tgr)
-        return (pv + tv / (1 + wacc_) ** YEARS
-                - _SYNTH["net_debt"]) / _SYNTH["shares_outstanding"]
-
-    engine = _engine_iv(md)
-    old = _iv_old(wacc, tgr)
-    divergence = abs(old - engine) / max(abs(engine), 1.0)
-    assert divergence == pytest.approx(expected_div, abs=0.005), divergence
-    assert divergence > 0.05, "below the warning threshold, so nothing would fire"
-    assert (old - engine) * sign > 0, "direction of the old grid's error"
+def test_the_report_no_longer_renders_sensitivity_grids():
+    """Both grids were removed from the PDF (owner, 2026-09-19): their centre was
+    recomputed from stored parameters and its "diverges" banner was a stale trace
+    beside the engine's own value. The Excel model carries the live sensitivity."""
+    assert not hasattr(pdf_report, "_sensitivity_table")
+    assert not hasattr(pdf_report, "_sensitivity_table_growth_margin")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

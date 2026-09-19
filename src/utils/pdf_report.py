@@ -80,12 +80,17 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as _rl_canvas
 from reportlab.platypus import (
+    BaseDocTemplate,
+    CondPageBreak,
     Flowable,
+    Frame,
+    FrameBreak,
     HRFlowable,
     KeepTogether,
+    NextPageTemplate,
     PageBreak,
+    PageTemplate,
     Paragraph,
-    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
@@ -125,6 +130,26 @@ C_AMBER = colors.HexColor("#e65100")
 C_GREY  = colors.HexColor("#424242")
 C_LGREY = colors.HexColor("#e0e0e0")
 C_PALE  = colors.HexColor("#f5f5f5")
+
+# ── Price currency (per report) ────────────────────────────────────────────────
+# Per-share figures (price, targets, intrinsic values) are in the listing's
+# trading currency: an ANTA report is in HK$, not $. Set once per report from
+# the valuation's currency; every per-share amount renders through _cs().
+# Statement amounts (key financials) carry their own currency label instead.
+_CCY_SYMBOLS = {"USD": "$", "HKD": "HK$", "SGD": "S$", "CNY": "RMB ", "CNH": "RMB ",
+                "EUR": "\u20ac", "GBP": "\u00a3", "JPY": "\u00a5", "KRW": "KRW ",
+                "TWD": "NT$", "AUD": "A$", "CAD": "C$", "INR": "INR "}
+_PX_SYM = "$"
+
+
+def _cs() -> str:
+    return _PX_SYM
+
+
+def _set_price_currency(ccy) -> None:
+    global _PX_SYM
+    code = str(ccy or "USD").upper()
+    _PX_SYM = _CCY_SYMBOLS.get(code, f"{code} ")
 
 # ── Helper: bold text for table header cells (light-gray background) ───────────
 # All data table headers now use C_PALE background with dark bold text.
@@ -223,18 +248,6 @@ _TRAP_CHECKS = [
 
 _SKIP_AGENTS = {"risk_management_agent", "advanced_risk_manager"}
 
-# ── Catalyst keyword patterns (4C) ───────────────────────────────────────────────
-_CATALYST_PATTERNS = [
-    (re.compile(r'\b(Q[1-4]\s*\d{0,4}|next quarter|quarterly results?|earnings (release|beat|miss|call)|earnings surprise)\b', re.I), "Earnings",       "Near-term"),
-    (re.compile(r'\b(FDA|EMA|PDUFA|NDA|BLA|regulatory approval|510k)\b', re.I),                                                       "Regulatory",     "Event-driven"),
-    (re.compile(r'\b(product launch|product release|Blackwell|roadmap|H100|B200|next gen(eration)?|new chip|new model)\b', re.I),      "Product Cycle",  "Medium-term"),
-    (re.compile(r'\b(buyback|share repurchase|capital return|dividend increase|special dividend)\b', re.I),                            "Capital Return", "Near-term"),
-    (re.compile(r'\b(rate cut|Fed (pivot|cut|hike)|FOMC|interest rate|monetary (policy|easing)|pivot)\b', re.I),                      "Macro / Rates",  "External"),
-    (re.compile(r'\b(merger|acquisition|M&A|strategic review|spinoff|spin-off|takeover)\b', re.I),                                    "Corporate Action","Event-driven"),
-    (re.compile(r'\b(analyst day|investor day|capital markets day|management guidance|guidance update)\b', re.I),                      "Management",     "Near-term"),
-    (re.compile(r'\b(contract win|landmark (deal|contract)|new partnership|joint venture|framework agreement)\b', re.I),               "Business Dev.",  "Medium-term"),
-]
-
 # ── Price history cache + fetch (6D) ─────────────────────────────────────────────
 _PRICE_HISTORY_CACHE: dict[str, list] = {}
 
@@ -308,7 +321,7 @@ def _kv_table(rows: list, col1_w: float, col2_w: float, styles) -> Table:
 
 
 def _fmt_billions(v) -> str:
-    """Format a raw dollar value as $XB or $XM for readability."""
+    """Format a statement amount as XB / XM (currency stated by the table)."""
     if v is None:
         return "—"
     try:
@@ -316,10 +329,10 @@ def _fmt_billions(v) -> str:
     except (TypeError, ValueError):
         return "—"
     if abs(v) >= 1e9:
-        return f"${v/1e9:.1f}B"
+        return f"{v/1e9:.1f}B"
     if abs(v) >= 1e6:
-        return f"${v/1e6:.0f}M"
-    return f"${v:,.0f}"
+        return f"{v/1e6:.0f}M"
+    return f"{v:,.0f}"
 
 
 # ── Price Sparkline Flowable (item 6D) ─────────────────────────────────────────
@@ -344,7 +357,8 @@ class _PriceSparkline(Flowable):
             c.drawCentredString(self.width / 2, self._H / 2, "Price history unavailable")
             return
 
-        PAD_L, PAD_R, PAD_T, PAD_B = 44, 54, 8, 22
+        narrow = self.width < 260          # page-1 side column
+        PAD_L, PAD_R, PAD_T, PAD_B = (30, 34, 8, 22) if narrow else (44, 54, 8, 22)
         cw = self.width - PAD_L - PAD_R
         ch = self._H - PAD_T - PAD_B
 
@@ -389,7 +403,7 @@ class _PriceSparkline(Flowable):
             c.setDash()
             c.setFont("Helvetica", 5.5)
             c.setFillColor(colors.HexColor("#1a7a4a"))
-            c.drawString(PAD_L + cw + 3, y_pt - 3, f"PT ${pt:.0f}")
+            c.drawString(PAD_L + cw + 3, y_pt - 3, f"PT {_cs()}{pt:.0f}")
 
         # Price line
         c.setStrokeColor(colors.HexColor("#0a2342"))
@@ -404,7 +418,7 @@ class _PriceSparkline(Flowable):
         c.setFont("Helvetica", 5.5)
         c.setFillColor(colors.HexColor("#555555"))
         for frac, val in [(0.0, mn), (0.5, (mn + mx) / 2), (1.0, mx)]:
-            c.drawRightString(PAD_L - 2, PAD_B + frac * ch - 3, f"${val:.0f}")
+            c.drawRightString(PAD_L - 2, PAD_B + frac * ch - 3, f"{_cs()}{val:.0f}")
 
         # Current price dot + label
         last_p = prices[-1]
@@ -413,7 +427,7 @@ class _PriceSparkline(Flowable):
         c.circle(xl, yl, 2.5, fill=1, stroke=0)
         c.setFont("Helvetica-Bold", 6)
         lbl_y = yl + 5 if yl + 14 < PAD_B + ch else yl - 11
-        c.drawCentredString(xl, lbl_y, f"${last_p:.0f}")
+        c.drawCentredString(xl, lbl_y, f"{_cs()}{last_p:.0f}")
 
         # Date labels
         c.setFont("Helvetica", 5.5)
@@ -525,9 +539,9 @@ def _peer_comparison_table(
         row = peer_data.get(t, {})
         cap = row.get("market_cap")
         cap_s = (
-            f"${cap/1e12:.1f}T" if cap and cap >= 1e12 else
-            f"${cap/1e9:.0f}B"  if cap and cap >= 1e9  else
-            f"${cap/1e6:.0f}M"  if cap and cap >= 1e6  else ""
+            f"{_cs()}{cap/1e12:.1f}T" if cap and cap >= 1e12 else
+            f"{_cs()}{cap/1e9:.0f}B"  if cap and cap >= 1e9  else
+            f"{_cs()}{cap/1e6:.0f}M"  if cap and cap >= 1e6  else ""
         )
         inner = f"{t}" + (f" {cap_s}" if cap_s else "")
         hdr.append(Paragraph(_wh(inner), styles["RptLabel"]))
@@ -576,122 +590,11 @@ def _peer_comparison_table(
     return [tbl, Spacer(1, 6)]
 
 
-# ── Catalysts Timeline (item 4C) ───────────────────────────────────────────────
-def _extract_catalysts(
-    ticker: str,
-    analyst_signals: dict,
-    scenario: dict,
-) -> list[dict]:
-    """Scan agent text for catalyst mentions using keyword patterns.
-    Returns list of {type, timeline, catalyst, source}, max 6.
-    """
-    seen_types: set[str] = set()
-    results: list[dict] = []
-
-    # Build (text, source_label) pairs from all available agent outputs
-    text_sources: list[tuple[str, str]] = []
-
-    # Scenario agent assumptions
-    for case in ("bull", "base", "bear"):
-        assum = str((scenario.get(ticker) or {}).get(case, {}).get("assumptions", "") or "")
-        if assum.strip():
-            text_sources.append((assum, "Scenario Agent"))
-
-    # System-agent thesis + CoT logs (investor committee decommissioned —
-    # M2 Track E; analyst_signals now holds system agents only)
-    for agent_key, sig_map in analyst_signals.items():
-        if agent_key in _SKIP_AGENTS:
-            continue
-        if not isinstance(sig_map, dict) or ticker not in sig_map:
-            continue
-        sig = sig_map[ticker]
-        if not isinstance(sig, dict):
-            continue
-        name   = _AGENT_DISPLAY.get(agent_key, agent_key.replace("_", " ").title())
-        thesis = str(sig.get("thesis_summary", "") or "")
-        cot    = str(sig.get("cot_log", "") or "")
-        if thesis.strip():
-            text_sources.append((thesis, name))
-        if cot.strip():
-            text_sources.append((cot[:600], name))   # cap CoT length
-
-    for text, source in text_sources:
-        if len(results) >= 6:
-            break
-        for pat, cat_type, timeline in _CATALYST_PATTERNS:
-            if cat_type in seen_types:
-                continue
-            m = pat.search(text)
-            if not m:
-                continue
-            seen_types.add(cat_type)
-            # Extract the surrounding sentence
-            start = max(0, m.start() - 40)
-            end   = min(len(text), m.end() + 70)
-            snippet = re.sub(r'\s+', ' ', text[start:end]).strip()
-            # Trim to nearest sentence boundary
-            for sep in (". ", "! ", "? "):
-                idx = snippet.find(sep, 15)
-                if idx != -1:
-                    snippet = snippet[:idx + 1]
-                    break
-            if len(snippet) > 130:
-                snippet = snippet[:130].rstrip() + "…"
-            results.append({"type": cat_type, "timeline": timeline,
-                            "catalyst": snippet, "source": source})
-
-    return results
-
-
-def _catalyst_section(
-    ticker: str,
-    analyst_signals: dict,
-    scenario: dict,
-    styles,
-    page_w: float,
-) -> list:
-    """Render a Key Catalysts table. Returns [] if no catalysts found."""
-    cats = _extract_catalysts(ticker, analyst_signals, scenario)
-    if not cats:
-        return []
-
-    hdr = [
-        Paragraph(_wh("Type"),     styles["RptLabel"]),
-        Paragraph(_wh("Timeline"), styles["RptLabel"]),
-        Paragraph(_wh("Catalyst"), styles["RptLabel"]),
-        Paragraph(_wh("Source"),   styles["RptLabel"]),
-    ]
-    cw  = [page_w * 0.14, page_w * 0.11, page_w * 0.55, page_w * 0.20]
-    rows = [hdr]
-    for c_item in cats:
-        rows.append([
-            Paragraph(_strip(c_item["type"]),     styles["RptBody"]),
-            Paragraph(_strip(c_item["timeline"]), styles["RptValue"]),
-            Paragraph(_strip(c_item["catalyst"]), styles["RptBody"]),
-            Paragraph(_strip(c_item["source"]),   styles["RptValue"]),
-        ])
-
-    t = Table(rows, colWidths=cw, hAlign="LEFT", repeatRows=1)
-    t.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), C_PALE),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), C_NAVY),
-        ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, C_PALE]),
-        ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-    ]))
-    return [Paragraph("Key Catalysts", styles["RptSubsection"]), t, Spacer(1, 8)]
-
-
 # ── Key Financials Table (item 15) ─────────────────────────────────────────────
-def _key_financials_table(raw_financials: dict, styles, page_w) -> "Table | None":
+def _key_financials_table(raw_financials: dict, styles, page_w, years: int = 5) -> "Table | None":
     """Compact multi-year historical financials table (Revenue / Net Income / FCF / Net Debt).
     Returns None if raw_financials is absent or contains no parseable year-keyed data.
+    `page_w` is the width available; `years` the most recent fiscal years shown.
     """
     if not raw_financials or not isinstance(raw_financials, dict):
         return None
@@ -700,7 +603,7 @@ def _key_financials_table(raw_financials: dict, styles, page_w) -> "Table | None
     fy_keys = sorted(k for k in raw_financials if isinstance(raw_financials.get(k), dict))
     if not fy_keys:
         return None
-    fy_keys = fy_keys[-5:]          # show at most the last 5 fiscal years
+    fy_keys = fy_keys[-years:]      # the most recent fiscal years
 
     def _get(fy, key):
         v = raw_financials.get(fy, {})
@@ -724,7 +627,8 @@ def _key_financials_table(raw_financials: dict, styles, page_w) -> "Table | None
                 pass
         return None
 
-    hdr = [Paragraph(_wh("KEY FINANCIALS"), styles["RptLabel"])]
+    _ccy = _strip(str(raw_financials.get("currency") or "")).upper()
+    hdr = [Paragraph(_wh(f"{_ccy} bn" if _ccy else "Key financials"), styles["RptLabel"])]
     for fy in fy_keys:
         hdr.append(Paragraph(_wh(_strip(str(fy))), styles["RptLabel"]))
 
@@ -738,10 +642,10 @@ def _key_financials_table(raw_financials: dict, styles, page_w) -> "Table | None
         _data_row("Revenue",          [_get(fy, "revenue")          for fy in fy_keys]),
         _data_row("Net Income",        [_get(fy, "net_income")        for fy in fy_keys]),
         _data_row("FCF",               [_fcf(fy)                      for fy in fy_keys]),
-        _data_row("Net Debt / (Cash)", [_get(fy, "net_debt")          for fy in fy_keys]),
+        _data_row("Net debt", [_get(fy, "net_debt")          for fy in fy_keys]),
     ]
 
-    label_w = page_w * 0.22
+    label_w = page_w * (0.34 if page_w < 260 else 0.22)
     data_w  = (page_w - label_w) / len(fy_keys)
     t = Table(rows, colWidths=[label_w] + [data_w] * len(fy_keys), hAlign="LEFT", repeatRows=1)
     t.setStyle(TableStyle([
@@ -750,10 +654,10 @@ def _key_financials_table(raw_financials: dict, styles, page_w) -> "Table | None
         ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
         ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 3),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 3),
         ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, C_PALE]),
         ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
         ("ALIGN",         (1, 0), (-1, -1), "RIGHT"),
@@ -862,7 +766,7 @@ def _intel_summary(
         conv_sell   = bool(_getv(insider_act, "conviction_sell_flag", False))
         src         = _strip(str(_getv(insider_act, "data_source", "—")))
         net_s       = (
-            f"${net_12m/1e6:+.1f}M net 12m" if isinstance(net_12m, (int, float)) else "—"
+            f"{_cs()}{net_12m/1e6:+.1f}M net 12m" if isinstance(net_12m, (int, float)) else "—"
         )
         bsr_s       = f"B/S ratio: {bsr:.1f}x" if isinstance(bsr, (int, float)) else ""
         score_s     = f"{net_s}  |  {bsr_s}" if bsr_s else net_s
@@ -1156,121 +1060,6 @@ def _compute_vgpm(
     }
 
 
-def _vgpm_scorecard(vgpm: dict, ticker: str, company_name: str, styles, page_w) -> list:
-    """
-    Render the 4-card VGPM Scorecard as a single horizontal strip.
-
-    Each card shows:
-      ┌──────────────┐
-      │  DIMENSION   │  ← navy header
-      │     A+       │  ← grade in coloured box
-      │  sub-metric  │  ← 3 sub-metric lines
-      │  sub-metric  │
-      │  sub-metric  │
-      └──────────────┘
-    """
-    DIMS = [
-        ("VALUATION",     "valuation"),
-        ("GROWTH",        "growth"),
-        ("PROFITABILITY", "profitability"),
-        ("MOMENTUM",      "momentum"),
-    ]
-
-    card_w = page_w / 4
-    cards  = []
-
-    for label, key in DIMS:
-        dim    = vgpm.get(key, {})
-        grade  = dim.get("grade", "B")
-        subs   = dim.get("subs", [])
-        score  = dim.get("score", 50)
-        bg, fg = _GRADE_STYLES.get(grade, (colors.HexColor("#eab308"), colors.black))
-
-        # ── Header ────────────────────────────────────────────────────────────
-        hdr = Table(
-            [[Paragraph(f'<font color="white"><b>{label}</b></font>', styles["RptLabel"])]],
-            colWidths=[card_w - 4],
-        )
-        hdr.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), C_NAVY),
-            ("TOPPADDING",    (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 5),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
-            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ]))
-
-        # ── Grade box ─────────────────────────────────────────────────────────
-        grade_style = ParagraphStyle(
-            f"Grade_{grade}",
-            parent=styles["RptTitle"],
-            fontSize=26,
-            leading=32,
-            alignment=1,    # centre
-            textColor=fg,
-        )
-        grade_tbl = Table(
-            [[Paragraph(f"<b>{grade}</b>", grade_style)]],
-            colWidths=[card_w - 4],
-        )
-        grade_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), bg),
-            ("TOPPADDING",    (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ]))
-
-        # ── Sub-metrics ───────────────────────────────────────────────────────
-        sub_rows = [[Paragraph(s, styles["RptSource"])] for s in subs]
-        sub_rows.append([Paragraph(
-            f'<font color="{_fmt_hex(C_LGREY)}">score: {score:.0f}/100</font>',
-            styles["RptSource"],
-        )])
-        sub_tbl = Table(sub_rows, colWidths=[card_w - 4])
-        sub_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, -1), C_PALE),
-            ("TOPPADDING",    (0, 0), (-1, -1), 2),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 5),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 5),
-        ]))
-
-        # Stack into single cell
-        cell_tbl = Table(
-            [[hdr], [grade_tbl], [sub_tbl]],
-            colWidths=[card_w - 4],
-        )
-        cell_tbl.setStyle(TableStyle([
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-            ("LINEBELOW",     (0, 0), (-1, -1), 0.5, C_LGREY),
-        ]))
-        cards.append(cell_tbl)
-
-    outer = Table([cards], colWidths=[card_w] * 4)
-    outer.setStyle(TableStyle([
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 2),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
-        ("LINERIGHT",     (0, 0), (-2, -1), 0.5, C_LGREY),
-        ("BOX",           (0, 0), (-1, -1), 0.8, C_NAVY),
-    ]))
-
-    return [
-        Paragraph("Stock Scorecard — Valuation · Growth · Profitability · Momentum",
-                  styles["RptLabel"]),
-        Spacer(1, 4),
-        outer,
-        Spacer(1, 6),
-    ]
-
-
 def _fmt_hex(colour) -> str:
     """Convert a ReportLab Color to hex string for inline XML markup."""
     try:
@@ -1327,529 +1116,6 @@ def _margin_delta_abs(scenario: dict) -> float:
         return float(v or 0.0)
     except (TypeError, ValueError):
         return 0.0
-
-
-# ── Sensitivity Table (WACC × TGR — item G) ────────────────────────────────────
-def _sensitivity_table(
-    dcf_ticker: dict,
-    styles,
-    page_w,
-    current_price: float | None = None,
-    pt_12m: float | None = None,
-    pt_method: str | None = None,
-) -> list:
-    """5 × 5 WACC vs. Terminal Growth Rate sensitivity grid.
-    Returns [] if required DCF parameters are missing.
-
-    CHECK 3 FIX (2026-03-23):
-    - net_debt now reads the actual dollar net debt stored by dcf_agent,
-      not the D/E ratio ("leverage") — those are two different fields.
-    - _iv() now applies the absolute margin delta so the Year 1–10 margins match
-      the main DCF, making the sensitivity centre-point identical to the base
-      case intrinsic value. (2026-09-17: that claim was only true while the
-      delta was zero. The delta had been applied per-year, `margin + delta * t`,
-      which is NOT what the engine does — it steps once and holds flat — so the
-      centre-point identity held for every run whose base delta was 0 and broke
-      for any guided name with a non-zero one. See _margin_delta_abs for the
-      measured divergence.)
-
-    current_price / pt_12m: optional reference anchors shown in the sub-header
-    so readers can immediately see where the market price and 12m PT land
-    relative to the DCF-only grid (the two can diverge for growth companies
-    whose market value is driven by revenue multiples, not FCF margins).
-    """
-    if not dcf_ticker:
-        return []
-
-    base          = dcf_ticker.get("base") or {}
-    wacc_base     = dcf_ticker.get("wacc")
-    tgr_base      = base.get("tgr")
-    gr            = base.get("growth_rate")
-    margin        = base.get("fcf_margin_start")        # base-year FCF margin (pre-delta)
-    margin_delta  = _margin_delta_abs(base)             # ONE-SHOT absolute delta, not per-year
-    # Change 9: prefer revenue_base_usd (explicit post-FX value) over revenue_base.
-    # For live pipeline runs these are identical. For reconstructed/partial dicts,
-    # revenue_base_usd guarantees we use the USD-converted value.
-    rev           = dcf_ticker.get("revenue_base_usd") or dcf_ticker.get("revenue_base")
-    shares        = dcf_ticker.get("shares_outstanding")
-    # CHECK 3 FIX (a): use actual dollar net debt, not D/E leverage ratio
-    net_debt      = dcf_ticker.get("net_debt", 0) or 0
-    # CHECK 3 FIX (b): floor is needed to cap margin compression
-    fcf_floor     = dcf_ticker.get("fcf_floor", -0.05)
-
-    # Explicit None checks — do NOT use not all([...]) because 0.0 is falsy
-    # and a zero growth rate or zero margin is a valid (if extreme) input.
-    if any(v is None for v in [wacc_base, tgr_base, gr, margin, rev, shares]):
-        return []
-    if wacc_base <= 0 or shares <= 0:
-        return []
-
-    YEARS = 10
-
-    def _iv(wacc, tgr):
-        _tgr = min(tgr, wacc - 0.005)  # guard against TGR ≥ WACC
-        # One-shot delta: the engine steps the margin ONCE and holds it flat for
-        # all ten years (_project_dcf's `margin_delta_absolute` branch), so the
-        # projected margin is a single value, not a drift. Hoisted out of the
-        # loop because it no longer depends on t — which is the point.
-        margin_proj = min(max(margin + margin_delta, fcf_floor), 0.60)
-        pv = 0.0
-        for t in range(1, YEARS + 1):
-            pv += (rev * (1 + gr) ** t * margin_proj) / (1 + wacc) ** t
-        # Terminal year uses the same held margin
-        margin_T = margin_proj
-        fcf_T = rev * (1 + gr) ** YEARS * margin_T
-        tv    = fcf_T * (1 + _tgr) / (wacc - _tgr)
-        pv_tv = tv / (1 + wacc) ** YEARS
-        # Do NOT clamp to 0 — negative equity value is meaningful information
-        # (company is FCF-negative; net debt exceeds discounted cash flows).
-        return (pv + pv_tv - net_debt) / shares
-
-    base_iv = _iv(wacc_base, tgr_base)
-
-    # ── Change 1: Center-cell verification ────────────────────────────────────
-    # Recomputed base_iv should match the stored DCF intrinsic_value. A large
-    # divergence signals a unit mismatch (FX-unconverted revenue, ADS vs ordinary
-    # share count, etc.). Show a visible warning so the reader doesn't trust the
-    # sensitivity grid blindly.
-    _stored_iv = base.get("intrinsic_value") or 0.0
-    _div_pct = abs(base_iv - _stored_iv) / max(abs(_stored_iv), 1.0) if _stored_iv else 0.0
-    _sens_warn = None
-    if _stored_iv > 0 and _div_pct > 0.05:
-        _sens_warn = (
-            f"⚠ Sensitivity center (${base_iv:.2f}) diverges {_div_pct:.0%} from "
-            f"stored blended IV (${_stored_iv:.2f}). "
-            f"Likely cause: revenue_base or shares_outstanding unit mismatch "
-            f"(check FX conversion — reported_currency may not be USD). "
-            f"Stored blended IV is authoritative; treat grid as directional only."
-        )
-
-    # Grid axes — WACC rows, TGR columns
-    wacc_steps = [-0.020, -0.010, 0.0, +0.010, +0.020]
-    tgr_steps  = [-0.010, -0.005, 0.0, +0.005, +0.010]
-    wacc_vals  = [wacc_base + s for s in wacc_steps]
-    tgr_vals   = [tgr_base  + s for s in tgr_steps]
-
-    # Header row — sensitivity keeps navy, so white markup is inlined explicitly
-    def _wh_s(t): return f'<font color="white"><b>{t}</b></font>'
-    hdr = [Paragraph(_wh_s("WACC / TGR"), styles["RptLabel"])]
-    for j, tgr in enumerate(tgr_vals):
-        lbl = f"{'→' if j == 2 else ''}{tgr*100:.1f}%"
-        hdr.append(Paragraph(_wh_s(lbl), styles["RptLabel"]))
-
-    rows = [hdr]
-    style_cmds: list = [
-        ("BACKGROUND",    (0, 0), (-1,  0), C_NAVY),
-        ("TEXTCOLOR",     (0, 0), (-1,  0), colors.white),
-        ("BACKGROUND",    (0, 0), ( 0, -1), C_NAVY),
-        ("TEXTCOLOR",     (0, 0), ( 0, -1), colors.white),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-        ("ALIGN",         (1, 1), (-1, -1), "CENTER"),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-        ("LINERIGHT",     (0, 0), (-1, -1), 0.25, C_LGREY),
-    ]
-
-    # Colour thresholds for heatmap shading
-    _C_UP   = colors.HexColor("#d4edda")   # light green — IV > base
-    _C_DOWN = colors.HexColor("#f8d7da")   # light red   — IV < base
-    _C_BASE = colors.HexColor("#0a2342")   # navy        — base cell
-
-    # Adaptive decimal precision: whole-dollar rounding collapses a $2.30/$2.80
-    # grid into all "$2" cells for low-priced stocks like GRAB (~$3).
-    # Use the base IV to determine how many decimals the whole grid needs.
-    _iv_prec = 2 if base_iv < 10 else (1 if base_iv < 100 else 0)
-
-    for i, wacc in enumerate(wacc_vals):
-        w_lbl = f"{'→' if i == 2 else ''}{wacc*100:.1f}%"
-        row   = [Paragraph(_wh_s(w_lbl), styles["RptLabel"])]  # white on navy
-        for j, tgr in enumerate(tgr_vals):
-            iv  = _iv(wacc, tgr)
-            is_base = (i == 2 and j == 2)
-            if iv < 0:
-                txt = f"{'★ ' if is_base else ''}<$0"
-            else:
-                txt = f"${'★ ' if is_base else ''}{iv:.{_iv_prec}f}"
-            cell_sty = styles["RptLabel"] if is_base else styles["RptValue"]
-            row.append(Paragraph(
-                f'<font color="white"><b>{txt}</b></font>' if is_base else txt,
-                cell_sty,
-            ))
-            ri, ci = i + 1, j + 1
-            if is_base:
-                style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_BASE))
-            elif base_iv <= 0:
-                # base_iv ≤ 0: relative threshold breaks — use absolute $0 as boundary
-                if iv > 0:
-                    style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_UP))
-                elif iv < base_iv:
-                    style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_DOWN))
-            elif iv > base_iv * 1.05:
-                style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_UP))
-            elif iv < base_iv * 0.95:
-                style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_DOWN))
-        rows.append(row)
-
-    col_w = page_w / 6
-    t = Table(rows, colWidths=[col_w] * 6, hAlign="LEFT")
-    t.setStyle(TableStyle(style_cmds))
-
-    # ── Change 4: Net-cash positive disclosure ─────────────────────────────────
-    if net_debt >= 1e8:
-        _nd_note = f"Net debt ${net_debt/1e9:.1f}B"
-    elif net_debt > 0:
-        _nd_note = f"Net debt ${net_debt/1e6:.0f}M"
-    elif net_debt < -1e8:
-        _cash_abs = abs(net_debt)
-        _nd_note = (
-            f"Net cash ${_cash_abs/1e9:.1f}B (cash > debt — "
-            f"EV = mkt cap + net debt is negative; "
-            f"IVs above include cash as equity value floor)"
-        )
-    else:
-        _nd_note = "Net cash"
-    # ── Change 2: FX annotation for first-principles metrics ──────────────────
-    _rpt_ccy = dcf_ticker.get("reported_currency", "USD") or "USD"
-    _fx_ann  = (
-        f"  |  ⚠ Financials reported in {_rpt_ccy}: first-principles P/E and FCF "
-        f"yield use {_rpt_ccy} figures ÷ USD market cap — API values are authoritative"
-        if _rpt_ccy != "USD" else ""
-    )
-    # Build optional reference anchors line
-    _ref_parts = []
-    if current_price is not None and current_price > 0:
-        _ref_parts.append(f"Current price: ${current_price:.{_iv_prec}f}")
-    if pt_12m is not None and pt_12m > 0:
-        _method_note = f" ({pt_method})" if pt_method else " (fwd multiple)"
-        _ref_parts.append(f"12m PT: ${pt_12m:.{_iv_prec}f}{_method_note}")
-        if current_price and current_price > 0:
-            _pt_pct = (pt_12m - current_price) / current_price * 100
-            _sign = "+" if _pt_pct >= 0 else ""
-            _ref_parts.append(f"PT upside: {_sign}{_pt_pct:.1f}%")
-    # Divergence warning: if 12m PT is outside the entire DCF grid range, flag it
-    _divergence_note = ""
-    if pt_12m is not None and pt_12m > 0 and base_iv > 0:
-        _pct_diff = abs(pt_12m - base_iv) / base_iv
-        if _pct_diff > 0.5:
-            _direction = "above" if pt_12m > base_iv else "below"
-            _divergence_note = (
-                f"  ⚠ 12m PT is {_pct_diff*100:.0f}% {_direction} DCF centre — "
-                f"market pricing reflects forward multiples (revenue/EBITDA), not FCF-only DCF. "
-                f"Common for growth companies with thin FCF margins."
-            )
-    _ref_line = ("  |  " + "  |  ".join(_ref_parts)) if _ref_parts else ""
-    _out = [
-        Paragraph("Sensitivity Analysis — DCF Component (WACC vs. Terminal Growth Rate)", styles["RptLabel"]),
-        Spacer(1, 3),
-    ]
-    # Change 1: prepend divergence warning banner if center cell mismatches stored IV
-    if _sens_warn:
-        _warn_style = ParagraphStyle(
-            name="_sens_warn",
-            parent=styles["RptBody"],
-            backColor=colors.HexColor("#fff3cd"),
-            borderPadding=4,
-            textColor=colors.HexColor("#856404"),
-        )
-        _out.append(Paragraph(_sens_warn, _warn_style))
-        _out.append(Spacer(1, 3))
-    _out += [
-        Paragraph(
-            f"DCF-only sensitivity: WACC {wacc_base*100:.1f}%  |  TGR {tgr_base*100:.1f}%  |  "
-            f"DCF IV ${base_iv:.{_iv_prec}f}  |  {_nd_note}"
-            f"{_ref_line}  |  "
-            f"Note: Blended IV (shown in KPI box) incorporates multi-method weighting "
-            f"(EV/EBITDA, P/E etc.) — the centre here reflects the pure DCF component only."
-            f"{_fx_ann}"
-            f"{_divergence_note}  |  "
-            f"Green = upside vs DCF centre  |  Red = downside",
-            styles["RptBody"],
-        ),
-        Spacer(1, 3),
-        t,
-        Spacer(1, 6),
-    ]
-    return _out
-
-
-def _sensitivity_table_growth_margin(
-    dcf_ticker: dict,
-    styles,
-    page_w,
-    current_price: float | None = None,
-    pt_12m: float | None = None,
-) -> list:
-    """P0.2 — 5 × 5 Revenue Growth vs. FCF Margin sensitivity grid.
-
-    Holds WACC and TGR fixed at base values; varies the two dominant IV
-    drivers for growth companies so the analyst can see their combined
-    impact. Centre-point (base growth × base margin) equals the base IV
-    produced by the main DCF, making it directly comparable to the
-    WACC × TGR grid.
-    """
-    if not dcf_ticker:
-        return []
-
-    base         = dcf_ticker.get("base") or {}
-    wacc_base    = dcf_ticker.get("wacc")
-    tgr_base     = base.get("tgr")
-    gr_base      = base.get("growth_rate")
-    margin_base  = base.get("fcf_margin_start")
-    margin_delta = _margin_delta_abs(base)   # ONE-SHOT absolute delta, not per-year
-    # Change 9: prefer revenue_base_usd for FX consistency (same as WACC×TGR grid)
-    rev          = dcf_ticker.get("revenue_base_usd") or dcf_ticker.get("revenue_base")
-    shares       = dcf_ticker.get("shares_outstanding")
-    net_debt     = dcf_ticker.get("net_debt", 0) or 0
-    fcf_floor    = dcf_ticker.get("fcf_floor", -0.05)
-
-    # Explicit None checks — 0.0 is falsy so not all([...]) would incorrectly
-    # discard tables where growth rate or margin is exactly zero.
-    if any(v is None for v in [wacc_base, gr_base, margin_base, rev, shares]):
-        return []
-    if wacc_base <= 0 or shares <= 0:
-        return []
-
-    YEARS = 10
-    _tgr_safe = min(tgr_base or 0.025, wacc_base - 0.005)
-
-    def _iv_gm(gr_val, margin_val):
-        """DCF IV with fixed WACC/TGR; varying revenue growth and FCF margin."""
-        # Same one-shot step as _iv above and as _project_dcf: the cell's margin
-        # is stepped once by the scenario delta and then held flat, so the
-        # centre cell (grid margin == stored base margin) reproduces the stored
-        # base IV. Drifting it by `margin_delta * t` broke that identity.
-        margin_proj = min(max(margin_val + margin_delta, fcf_floor), 0.60)
-        pv = 0.0
-        for t in range(1, YEARS + 1):
-            pv += (rev * (1 + gr_val) ** t * margin_proj) / (1 + wacc_base) ** t
-        margin_T = margin_proj
-        fcf_T = rev * (1 + gr_val) ** YEARS * margin_T
-        tv    = fcf_T * (1 + _tgr_safe) / (wacc_base - _tgr_safe)
-        pv_tv = tv / (1 + wacc_base) ** YEARS
-        # Do NOT clamp to 0 — negative equity value is meaningful information.
-        return (pv + pv_tv - net_debt) / shares
-
-    base_iv = _iv_gm(gr_base, margin_base)
-
-    # Change 1 (growth×margin grid): verify center cell matches stored IV
-    _stored_iv_gm = base.get("intrinsic_value") or 0.0
-    _div_pct_gm = abs(base_iv - _stored_iv_gm) / max(abs(_stored_iv_gm), 1.0) if _stored_iv_gm else 0.0
-    _sens_warn_gm = None
-    if _stored_iv_gm > 0 and _div_pct_gm > 0.05:
-        _sens_warn_gm = (
-            f"⚠ Growth×Margin grid centre (${base_iv:.2f}) diverges {_div_pct_gm:.0%} "
-            f"from stored IV (${_stored_iv_gm:.2f}). "
-            f"Stored blended IV is authoritative; treat grid as directional only."
-        )
-    # Change 2 (growth×margin): FX annotation
-    _rpt_ccy_gm = dcf_ticker.get("reported_currency", "USD") or "USD"
-    _fx_ann_gm  = (
-        f"  |  ⚠ Financials in {_rpt_ccy_gm} — first-principles ratios use {_rpt_ccy_gm} ÷ USD mkt cap"
-        if _rpt_ccy_gm != "USD" else ""
-    )
-
-    # Grid axes: revenue growth rows, FCF margin columns
-    # Steps are absolute percentage-point shifts
-    gr_steps  = [-0.050, -0.025, 0.0, +0.025, +0.050]
-    fcfm_steps = [-0.050, -0.025, 0.0, +0.025, +0.050]
-    gr_vals   = [gr_base   + s for s in gr_steps]
-    fcfm_vals = [margin_base + s for s in fcfm_steps]
-
-    def _wh_s(t):
-        return f'<font color="white"><b>{t}</b></font>'
-
-    hdr = [Paragraph(_wh_s("RevGr / FCFMgn"), styles["RptLabel"])]
-    for j, fcfm in enumerate(fcfm_vals):
-        lbl = f"{'→' if j == 2 else ''}{fcfm*100:.1f}%"
-        hdr.append(Paragraph(_wh_s(lbl), styles["RptLabel"]))
-
-    rows = [hdr]
-    style_cmds: list = [
-        ("BACKGROUND",    (0, 0), (-1,  0), C_NAVY),
-        ("TEXTCOLOR",     (0, 0), (-1,  0), colors.white),
-        ("BACKGROUND",    (0, 0), ( 0, -1), C_NAVY),
-        ("TEXTCOLOR",     (0, 0), ( 0, -1), colors.white),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-        ("ALIGN",         (1, 1), (-1, -1), "CENTER"),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-        ("LINERIGHT",     (0, 0), (-1, -1), 0.25, C_LGREY),
-    ]
-
-    _C_UP   = colors.HexColor("#d4edda")
-    _C_DOWN = colors.HexColor("#f8d7da")
-    _C_BASE = colors.HexColor("#0a2342")
-
-    _gm_prec = 2 if abs(base_iv) < 10 else (1 if abs(base_iv) < 100 else 0)
-    for i, gr_v in enumerate(gr_vals):
-        g_lbl = f"{'→' if i == 2 else ''}{gr_v*100:.1f}%"
-        row   = [Paragraph(_wh_s(g_lbl), styles["RptLabel"])]
-        for j, fcfm_v in enumerate(fcfm_vals):
-            iv      = _iv_gm(gr_v, fcfm_v)
-            is_base = (i == 2 and j == 2)
-            if iv < 0:
-                txt = f"{'★ ' if is_base else ''}<$0"
-            else:
-                txt = f"${'★ ' if is_base else ''}{iv:.{_gm_prec}f}"
-            cell_sty = styles["RptLabel"] if is_base else styles["RptValue"]
-            row.append(Paragraph(
-                f'<font color="white"><b>{txt}</b></font>' if is_base else txt,
-                cell_sty,
-            ))
-            ri, ci = i + 1, j + 1
-            if is_base:
-                style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_BASE))
-            elif base_iv <= 0:
-                # base_iv ≤ 0: relative threshold breaks — use absolute $0 as boundary
-                if iv > 0:
-                    style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_UP))
-                elif iv < base_iv:
-                    style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_DOWN))
-            elif iv > base_iv * 1.05:
-                style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_UP))
-            elif iv < base_iv * 0.95:
-                style_cmds.append(("BACKGROUND", (ci, ri), (ci, ri), _C_DOWN))
-        rows.append(row)
-
-    col_w = page_w / 6
-    t = Table(rows, colWidths=[col_w] * 6, hAlign="LEFT")
-    t.setStyle(TableStyle(style_cmds))
-
-    # Optional reference anchors for the note
-    _ref_parts2 = []
-    if current_price is not None and current_price > 0:
-        _ref_parts2.append(f"Current price: ${current_price:.{_gm_prec}f}")
-    if pt_12m is not None and pt_12m > 0:
-        _ref_parts2.append(f"12m PT: ${pt_12m:.{_gm_prec}f} (fwd multiple)")
-    _ref_line2 = ("  |  " + "  |  ".join(_ref_parts2)) if _ref_parts2 else ""
-
-    _out2 = [
-        Paragraph(
-            "Sensitivity Analysis — Revenue Growth vs. FCF Margin",
-            styles["RptLabel"],
-        ),
-        Spacer(1, 3),
-    ]
-    if _sens_warn_gm:
-        _warn_style_gm = ParagraphStyle(
-            name="_sens_warn_gm",
-            parent=styles["RptBody"],
-            backColor=colors.HexColor("#fff3cd"),
-            borderPadding=4,
-            textColor=colors.HexColor("#856404"),
-        )
-        _out2.append(Paragraph(_sens_warn_gm, _warn_style_gm))
-        _out2.append(Spacer(1, 3))
-    _out2 += [
-        Paragraph(
-            f"Base: Rev growth {gr_base*100:.1f}%  |  FCF margin {margin_base*100:.1f}%  |  "
-            f"DCF IV ${base_iv:.{_gm_prec}f}  |  WACC {wacc_base*100:.1f}% fixed  |  "
-            f"TGR {(tgr_base or 0.025)*100:.1f}% fixed"
-            f"{_ref_line2}"
-            f"{_fx_ann_gm}  |  "
-            f"★ = centre matches base IV  |  Green = upside  |  Red = downside",
-            styles["RptBody"],
-        ),
-        Spacer(1, 3),
-        t,
-        Spacer(1, 6),
-    ]
-    return _out2
-
-
-# ── Key Points generator (deterministic, no LLM call) ──────────────────────────
-def _build_key_points(
-    ticker: str,
-    decision: dict,
-    scen: dict,
-    pl: dict,
-    trap: dict,
-    analyst_signals: dict,
-    dcf_ticker: dict,
-) -> list[str]:
-    """Return 3–5 proper English bullet-point sentences for the Executive Summary block.
-    All data is sourced deterministically from the pipeline result dict.
-    """
-    points: list[str] = []
-
-    # ── 1. Rating + price target + EV upside ─────────────────────────────────
-    action  = _strip(decision.get("action", "")).upper()
-    pt      = decision.get("price_target")
-    horizon = _strip(decision.get("time_horizon", "medium")).lower()
-    upside  = scen.get("upside_pct")
-    rationale_short = _strip(str(decision.get("rationale", decision.get("reasoning", ""))))[:120]
-    if action in ("SHORT", "SELL"):
-        # SHORT/SELL positions may not have an upside price target — use stop-cover level
-        _stop_lvl = decision.get("stop_loss")
-        _stop_txt = f" (stop/cover: ${_stop_lvl:.2f})" if isinstance(_stop_lvl, (int, float)) else ""
-        _pt_txt   = f" targeting ${pt:.2f}" if isinstance(pt, (int, float)) else ""
-        points.append(
-            f"Initiate {action}{_pt_txt}{_stop_txt}. {rationale_short}"
-            if rationale_short else f"Initiate {action}{_pt_txt}{_stop_txt}."
-        )
-    elif action and isinstance(pt, (int, float)):
-        up_txt = (
-            f", implying {upside:+.0f}% probability-weighted upside"
-            if isinstance(upside, (int, float)) else ""
-        )
-        points.append(
-            f"Initiate {action} with a {horizon}-term price target of ${pt:.2f}{up_txt}."
-        )
-    elif action:
-        points.append(f"Recommendation: {action}. {rationale_short}".strip())
-
-    # ── 2. Valuation: DCF intrinsic value vs current price ───────────────────
-    base_iv  = (dcf_ticker.get("base") or {}).get("intrinsic_value")
-    curr_px  = scen.get("current_price")
-    if isinstance(base_iv, (int, float)) and isinstance(curr_px, (int, float)) and curr_px > 0:
-        gap     = (base_iv / curr_px - 1) * 100
-        rel_str = f"{abs(gap):.0f}% {'discount' if gap > 0 else 'premium'} to current price"
-        points.append(
-            f"DCF analysis returns an intrinsic value of ${base_iv:.2f}, "
-            f"a {rel_str} of ${curr_px:.2f}."
-        )
-
-    # ── 3. Category leadership (Power Law) ───────────────────────────────────
-    pl_score = pl.get("total_score")
-    pl_interp = _strip(str(pl.get("interpretation", "")))
-    if isinstance(pl_score, (int, float)):
-        # Pull highest-scoring dimensions for colour commentary
-        dims = {
-            "network effects":    pl.get("network_effects", 0),
-            "switching costs":    pl.get("switching_costs", 0),
-            "scale economies":    pl.get("scale_economies", 0),
-            "data / IP moat":     pl.get("data_ip_moat", 0),
-            "winner-take-most":   pl.get("winner_take_most", 0),
-        }
-        top_dims = sorted(dims, key=dims.get, reverse=True)[:2]  # type: ignore[arg-type]
-        dim_txt = " and ".join(top_dims)
-        points.append(
-            f"Category leadership scores {pl_score}/10, driven by {dim_txt}; "
-            f"{pl_interp[:90].rstrip('.') if pl_interp else 'strong moat characteristics'}."
-        )
-
-    # ── 4. Risk audit (Value Trap) ────────────────────────────────────────────
-    trap_verdict = _strip(trap.get("overall_verdict", ""))
-    if trap_verdict:
-        _VERDICT_PROSE = {
-            "TRAP RISK LOW":    "forensic accounting, FCF sustainability and balance sheet checks all pass — low value trap risk.",
-            "TRAP RISK MEDIUM": "forensic checks return medium value trap risk; monitor FCF-to-earnings alignment.",
-            "TRAP RISK HIGH":   "forensic checks flag HIGH value trap risk; position sizing reduced accordingly.",
-        }
-        points.append(_VERDICT_PROSE.get(trap_verdict, f"Risk audit verdict: {trap_verdict}."))
-
-    # (Analyst committee consensus point removed with the committee —
-    #  M2 Track E. The PM decision card carries the verdict now.)
-
-    return points[:5]
 
 
 # ── Markdown rendering helpers ──────────────────────────────────────────────
@@ -1922,6 +1188,10 @@ def _parse_md_table(lines: list, page_w: float, styles) -> "Table | None":
     return t
 
 
+_BRIEF_TITLE_RE = re.compile(
+    r"\s*#*\s*(?:SECTION\s+\d+\s*[\u2014\-]\s*)?INDUSTRY INTELLIGENCE BRIEF\s*", re.I)
+
+
 def _render_md_block(
     text: str,
     story: list,
@@ -1939,7 +1209,7 @@ def _render_md_block(
       - Inline italic    (*text*)
       - Blank lines      → small spacer
     """
-    lines = _ANSI_RE.sub("", text).splitlines()
+    lines = [l for l in _ANSI_RE.sub("", text).splitlines() if not _BRIEF_TITLE_RE.fullmatch(l)]
     i = 0
     while i < len(lines):
         raw = lines[i]
@@ -1967,7 +1237,7 @@ def _render_md_block(
             continue
 
         # ── Standalone horizontal rule ──
-        if re.fullmatch(r"[-=]{3,}\s*", stripped):
+        if re.fullmatch(r"[-=\u2500-\u257f\u25a0]{3,}\s*", stripped):
             story.append(_hr())
             i += 1
             continue
@@ -1988,299 +1258,7 @@ def _render_md_block(
             i += 1
 
 
-# ── Section 2f — Valuation Model ───────────────────────────────────────────────
-
-def _final_summary_table(
-    dcf_data: dict,
-    scenario: dict,
-    decision: dict,
-    styles,
-    page_w: float,
-) -> list:
-    """P1.3 — §12 Final Summary Table.
-
-    Three sub-tables per ticker, rendered at the bottom of each ticker section:
-      (1) Method | EV (prob-wtd) | Weight  →  Blended IV
-      (2) Scenario | Probability | DCF IV | 12m PT
-      (3) Decision Snapshot box
-    """
-    story = []
-    story.append(Paragraph("§12 — Final Valuation Summary", styles["RptSubsection"]))
-
-    # ── Extract scenario probabilities ────────────────────────────────────────
-    _bear_p = float(((scenario.get("bear") or {}).get("probability")) or 0.25)
-    _base_p = float(((scenario.get("base") or {}).get("probability")) or 0.50)
-    _bull_p = float(((scenario.get("bull") or {}).get("probability")) or 0.25)
-
-    # ── (1) Per-Method EV table ───────────────────────────────────────────────
-    if dcf_data and dcf_data.get("base"):
-        bear_d = dcf_data.get("bear", {}) or {}
-        base_d = dcf_data.get("base", {}) or {}
-        bull_d = dcf_data.get("bull", {}) or {}
-
-        bear_method_ivs = bear_d.get("method_iv_table", {}) or {}
-        base_method_ivs = base_d.get("method_iv_table", {}) or {}
-        bull_method_ivs = bull_d.get("method_iv_table", {}) or {}
-
-        _pw_list = base_d.get("profile_weights", []) or []
-        _pw_map: dict[str, float] = {
-            pw["name"]: pw["weight"] for pw in _pw_list if "name" in pw and "weight" in pw
-        }
-        total_weight = sum(_pw_map.values()) or 1.0
-
-        all_method_names: list[str] = []
-        seen: set[str] = set()
-        for _ivt in (bear_method_ivs, base_method_ivs, bull_method_ivs):
-            for mn in _ivt:
-                if mn not in seen:
-                    all_method_names.append(mn)
-                    seen.add(mn)
-
-        if all_method_names:
-            story.append(Paragraph(
-                "(1) Per-Method Expected Value (§6 Framework)",
-                styles["RptLabel"],
-            ))
-            story.append(Spacer(1, 2))
-
-            _m1_w = [page_w * 0.30, page_w * 0.18, page_w * 0.08, page_w * 0.44]
-            m1_hdr = [
-                Paragraph(_wh("Method"),      styles["RptLabel"]),
-                Paragraph(_wh("EV (prob-wtd)"), styles["RptLabel"]),
-                Paragraph(_wh("Wt"),          styles["RptLabel"]),
-                Paragraph(_wh("Bear IV × p  +  Base IV × p  +  Bull IV × p"), styles["RptLabel"]),
-            ]
-            m1_rows = [m1_hdr]
-            method_evs: list[tuple[str, float, float]] = []  # (name, ev, weight)
-            for mn in all_method_names:
-                b_iv  = bear_method_ivs.get(mn)
-                ba_iv = base_method_ivs.get(mn)
-                bu_iv = bull_method_ivs.get(mn)
-                w     = _pw_map.get(mn, 0)
-                wt_str = f"{w/total_weight:.0%}" if w else "—"
-                if b_iv is not None and ba_iv is not None and bu_iv is not None:
-                    ev_m = float(b_iv)*_bear_p + float(ba_iv)*_base_p + float(bu_iv)*_bull_p
-                    detail = (
-                        f"${float(b_iv):.0f}×{_bear_p:.0%}  +  "
-                        f"${float(ba_iv):.0f}×{_base_p:.0%}  +  "
-                        f"${float(bu_iv):.0f}×{_bull_p:.0%}"
-                    )
-                    ev_str = f"${ev_m:.0f}"
-                    method_evs.append((mn, ev_m, w))
-                else:
-                    ev_m = None
-                    ev_str = "—"
-                    detail = "Partial data"
-                m1_rows.append([
-                    Paragraph(_strip(mn),  styles["RptBody"]),
-                    Paragraph(ev_str,      styles["RptValue"]),
-                    Paragraph(wt_str,      styles["RptValue"]),
-                    Paragraph(detail,      styles["RptBody"]),
-                ])
-
-            # Blended IV footer
-            bear_iv = bear_d.get("intrinsic_value", 0) or 0
-            base_iv = base_d.get("intrinsic_value", 0) or 0
-            bull_iv = bull_d.get("intrinsic_value", 0) or 0
-            blended_ev = float(bear_iv)*_bear_p + float(base_iv)*_base_p + float(bull_iv)*_bull_p
-            blended_detail = (
-                f"${bear_iv:.0f}×{_bear_p:.0%}  +  "
-                f"${base_iv:.0f}×{_base_p:.0%}  +  "
-                f"${bull_iv:.0f}×{_bull_p:.0%}"
-            )
-            m1_rows.append([
-                Paragraph("<b>Blended IV (Prob-Wtd)</b>", styles["RptLabel"]),
-                Paragraph(f"<b>${blended_ev:.0f}</b>", styles["RptLabel"]),
-                Paragraph("<b>100%</b>", styles["RptLabel"]),
-                Paragraph(blended_detail, styles["RptBody"]),
-            ])
-
-            m1_tbl = Table(m1_rows, colWidths=_m1_w, hAlign="LEFT", repeatRows=1)
-            m1_tbl.setStyle(TableStyle([
-                ("BACKGROUND",    (0, 0), (-1, 0), C_PALE),
-                ("TEXTCOLOR",     (0, 0), (-1, 0), C_NAVY),
-                ("BACKGROUND",    (0, -1), (-1, -1), C_PALE),
-                ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-                ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-                ("TOPPADDING",    (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-                ("ROWBACKGROUNDS",(0, 1), (-1, -2), [colors.white, C_PALE]),
-                ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-            ]))
-            story.append(m1_tbl)
-            story.append(Spacer(1, 6))
-
-    # ── (2) Scenario Reconciliation table ────────────────────────────────────
-    story.append(Paragraph("(2) Scenario Reconciliation", styles["RptLabel"]))
-    story.append(Spacer(1, 2))
-
-    scen_rec = scenario.get("reconciliation") or {}
-    _12m_by  = scenario.get("12m_targets_by_scenario") or {}
-    _12m_pt_method = scenario.get("12m_pt_method", "")
-
-    _bear_sc = scenario.get("bear") or {}
-    _base_sc = scenario.get("base") or {}
-    _bull_sc = scenario.get("bull") or {}
-
-    _dcf_bear_iv = (dcf_data.get("bear") or {}).get("intrinsic_value") if dcf_data else None
-    _dcf_base_iv = (dcf_data.get("base") or {}).get("intrinsic_value") if dcf_data else None
-    _dcf_bull_iv = (dcf_data.get("bull") or {}).get("intrinsic_value") if dcf_data else None
-
-    _m2_w = [page_w * 0.14, page_w * 0.12, page_w * 0.15, page_w * 0.15, page_w * 0.15, page_w * 0.29]
-    m2_hdr = [
-        Paragraph(_wh("Scenario"),    styles["RptLabel"]),
-        Paragraph(_wh("Prob"),        styles["RptLabel"]),
-        Paragraph(_wh("LLM FV"),      styles["RptLabel"]),
-        Paragraph(_wh("Fair value"),  styles["RptLabel"]),
-        Paragraph(_wh("12m PT"),      styles["RptLabel"]),
-        Paragraph(_wh("Key Assumption"), styles["RptLabel"]),
-    ]
-    m2_rows = [m2_hdr]
-
-    def _iv_str(v):
-        try:
-            return f"${float(v):.0f}"
-        except Exception:
-            return "—"
-
-    for _sn, _sp, _sc_d, _dcf_iv, _12m in [
-        ("Bear", _bear_p, _bear_sc, _dcf_bear_iv, _12m_by.get("bear")),
-        ("Base", _base_p, _base_sc, _dcf_base_iv, _12m_by.get("base")),
-        ("Bull", _bull_p, _bull_sc, _dcf_bull_iv, _12m_by.get("bull")),
-    ]:
-        _fv   = _sc_d.get("fair_value")
-        _assm = _sc_d.get("assumptions", "")
-        m2_rows.append([
-            Paragraph(f"<b>{_sn}</b>", styles["RptLabel"]),
-            Paragraph(f"{_sp:.0%}",    styles["RptValue"]),
-            Paragraph(_iv_str(_fv),    styles["RptValue"]),
-            Paragraph(_iv_str(_dcf_iv), styles["RptValue"]),
-            Paragraph(_iv_str(_12m),   styles["RptValue"]),
-            Paragraph((_strip(_assm)[:347] + "...") if len(_strip(_assm)) > 350 else _strip(_assm), styles["RptBody"]),
-        ])
-
-    # EV / 12m PT summary row
-    _ev   = scenario.get("expected_value") or 0.0
-    _12m_pt = scenario.get("12m_price_target")
-    _cp   = scen_rec.get("current_price") or scenario.get("current_price") or 0.0
-    _pt_method_note = _12m_pt_method or "—"
-    _pt_below_current = _cp > 0 and (_12m_pt or 0) < _cp
-    _pt_label = f"<b>{_iv_str(_12m_pt)}</b>" + (" ⚠ below spot" if _pt_below_current else "")
-    m2_rows.append([
-        Paragraph("<b>EV (DCF intrinsic) / 12m PT</b>", styles["RptLabel"]),
-        Paragraph("—", styles["RptLabel"]),
-        Paragraph(f"<b>{_iv_str(_ev)}</b>", styles["RptLabel"]),
-        Paragraph(f"<b>{_iv_str(scen_rec.get('blended_iv'))}</b>", styles["RptLabel"]),
-        Paragraph(_pt_label, styles["RptLabel"]),
-        Paragraph(_pt_method_note, styles["RptBody"]),
-    ])
-
-    m2_tbl = Table(m2_rows, colWidths=_m2_w, hAlign="LEFT", repeatRows=1)
-    m2_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), C_PALE),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), C_NAVY),
-        ("BACKGROUND",    (0, -1), (-1, -1), C_PALE),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -2), [colors.white, C_PALE]),
-        ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-    ]))
-    story.append(m2_tbl)
-    story.append(Spacer(1, 6))
-
-    # ── Change 5: Valuation ladder bridge ─────────────────────────────────────
-    # When the sensitivity center diverges materially from the blended IV and/or
-    # the 12m PT, add an explicit arithmetic bridge so the reader understands
-    # which figure to trust and why each differs.
-    _recon_blended = scen_rec.get("blended_iv") or _dcf_base_iv
-    _recon_cp      = scen_rec.get("current_price") or scenario.get("current_price") or 0.0
-    _recon_pt      = scenario.get("12m_price_target") or 0.0
-    if _recon_blended and _recon_cp:
-        _rpt_ccy_scen = (dcf_data.get("reported_currency", "USD") or "USD") if dcf_data else "USD"
-        _crp_note = (
-            f" (WACC includes +{dcf_data.get('crp', 0):.1%} country risk premium for "
-            f"{_rpt_ccy_scen} jurisdiction)"
-            if dcf_data and dcf_data.get("crp", 0) > 0 else ""
-        )
-        _bridge_lines = [
-            f"<b>Valuation Ladder Bridge</b>{_crp_note}:",
-            f"  • DCF Sensitivity Centre (WACC×TGR grid) — recomputed from stored parameters; "
-            f"may differ from Blended IV if revenue_base unit or FX conversion is inconsistent.",
-            f"  • Blended IV = <b>${_recon_blended:.2f}</b> — probability-weighted multi-method "
-            f"intrinsic value (authoritative long-run fair value).",
-        ]
-        if _recon_pt:
-            _pt_upside = (_recon_pt - _recon_cp) / _recon_cp * 100 if _recon_cp else 0
-            _pt_vs_iv  = (_recon_pt - _recon_blended) / _recon_blended * 100 if _recon_blended else 0
-            _bridge_lines.append(
-                f"  • 12m Price Target = <b>${_recon_pt:.2f}</b> "
-                f"({_pt_upside:+.1f}% vs spot; {_pt_vs_iv:+.1f}% vs blended IV) — "
-                f"forward market multiple ({_12m_pt_method or 'EV/Revenue or EV/EBITDA'}), "
-                f"reflects market pricing not intrinsic value."
-            )
-        _bridge_lines.append(
-            f"  • Current Price = <b>${_recon_cp:.2f}</b> — market quote."
-        )
-        if _recon_blended and _recon_cp:
-            _iv_vs_spot = (_recon_blended - _recon_cp) / _recon_cp * 100
-            _bridge_lines.append(
-                f"  • Implied MoS (Blended IV vs Current): {_iv_vs_spot:+.1f}%."
-            )
-        story.append(Paragraph("<br/>".join(_bridge_lines), styles["RptBody"]))
-        story.append(Spacer(1, 6))
-
-    # ── (3) Decision Snapshot ─────────────────────────────────────────────────
-    story.append(Paragraph("(3) Decision Snapshot", styles["RptLabel"]))
-    story.append(Spacer(1, 2))
-
-    action    = _strip(decision.get("action", "—"))
-    pos_size  = decision.get("position_size_pct", 0)
-    entry_lo  = decision.get("entry_price_low",  decision.get("entry_range", [None, None])[0] if isinstance(decision.get("entry_range"), list) else None)
-    entry_hi  = decision.get("entry_price_high", decision.get("entry_range", [None, None])[-1] if isinstance(decision.get("entry_range"), list) else None)
-    stop      = decision.get("stop_loss")
-    pt        = decision.get("price_target")
-    rationale = _strip(decision.get("rationale", "") or "")
-    horizon   = _strip(decision.get("time_horizon", "—"))
-
-    snap_rows = [
-        ["Action",         action],
-        ["Position Size",  f"{pos_size:.1%}" if isinstance(pos_size, float) else str(pos_size)],
-        ["Entry Range",    f"${entry_lo:.2f} – ${entry_hi:.2f}" if entry_lo and entry_hi else "—"],
-        ["Stop Loss",      f"${stop:.2f}" if stop else "—"],
-        ["Price Target",   f"${pt:.2f}" if pt else "—"],
-        ["Time Horizon",   horizon],
-        ["Rationale",      rationale[:300] if rationale else "—"],
-    ]
-    _snap_c1 = page_w * 0.20
-    _snap_c2 = page_w * 0.80
-    snap_tbl = Table(
-        [[Paragraph(r, styles["RptLabel"]), Paragraph(v, styles["RptBody"])] for r, v in snap_rows],
-        colWidths=[_snap_c1, _snap_c2],
-        hAlign="LEFT",
-    )
-    snap_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (0, -1), C_PALE),
-        ("TEXTCOLOR",     (0, 0), (0, -1), C_NAVY),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("ROWBACKGROUNDS",(0, 0), (-1, -1), [colors.white, C_PALE]),
-        ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-    ]))
-    story.append(snap_tbl)
-    story.append(Spacer(1, 8))
-
-    return story
-
+# ── Valuation Analysis (DCF, blend, assumptions, projection) ─────────────────
 
 def _section_2f(
     ticker: str,
@@ -2420,7 +1398,7 @@ def _section_2f(
 
     def _fmtiv(v):
         try:
-            return f"${float(v):.0f}" if v else "—"
+            return f"{_cs()}{float(v):.0f}" if v else "—"
         except Exception:
             return "—"
 
@@ -2507,9 +1485,9 @@ def _section_2f(
         method_rows.append([
             Paragraph("Current price", styles["RptBody"]),
             Paragraph("—", styles["RptValue"]),
-            Paragraph(f"${current_price:.2f}", styles["RptValue"]),
-            Paragraph(f"${current_price:.2f}", styles["RptValue"]),
-            Paragraph(f"${current_price:.2f}", styles["RptValue"]),
+            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
+            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
+            Paragraph(f"{_cs()}{current_price:.2f}", styles["RptValue"]),
             Paragraph("—", styles["RptValue"]),
         ])
         method_rows.append([
@@ -2743,7 +1721,7 @@ def _section_2f(
                     Paragraph("", styles["RptValue"]),
                     Paragraph("", styles["RptValue"]),
                     Paragraph("", styles["RptValue"]),
-                    Paragraph(f"<b>${base_iv:.2f}</b>", styles["RptLabel"]),
+                    Paragraph(f"<b>{_cs()}{base_iv:.2f}</b>", styles["RptLabel"]),
                 ])
 
         pw = [page_w * 0.10, page_w * 0.15, page_w * 0.10, page_w * 0.13,
@@ -2764,306 +1742,407 @@ def _section_2f(
         story.append(pt)
         story.append(Spacer(1, 6))
 
-    # ── D. Price Target Summary + §7/§8 Reconciliation ────────────────────────
-    # §7: 12m Price Target from forward multiples (EV/EBITDA or EV/Revenue)
-    # §8: Reconciliation explaining gap between IV, 12m PT, and current price
-    story.append(Paragraph("D — Price Target Summary & Reconciliation (§7/§8)", styles["RptSubsection"]))
-
-    pm_target    = decision.get("price_target")
-    bull_scen_p  = scenario.get("bull", {}).get("probability", 0)
-    base_scen_p  = scenario.get("base", {}).get("probability", 0)
-    bear_scen_p  = scenario.get("bear", {}).get("probability", 0)
-    ev_upside    = scenario.get("upside_pct", 0)
-    expected_val = scenario.get("expected_value", 0)
-    _12m_pt      = scenario.get("12m_price_target")
-    _12m_scens   = scenario.get("12m_targets_by_scenario", {})
-    _12m_method  = scenario.get("12m_pt_method", "forward multiple")
-    recon        = scenario.get("reconciliation", {})
-    _dir_flag    = scenario.get("directional_consistency_flag", "")
-
-    def _pct_prob(v):
-        try:
-            return f"{float(v)*100:.0f}%"
-        except Exception:
-            return "—"
-
-    pt_hdr = [
-        Paragraph(_wh(""),    styles["RptLabel"]),
-        Paragraph(_wh("Bear"),styles["RptLabel"]),
-        Paragraph(_wh("Base"),styles["RptLabel"]),
-        Paragraph(_wh("Bull"),styles["RptLabel"]),
-    ]
-    pt_rows = [
-        pt_hdr,
-        # §6: Blended intrinsic value (multi-method, probability-weighted by scenario)
-        [Paragraph("Blended IV (§6 intrinsic)", styles["RptBody"]),
-         Paragraph(f"${bear_iv:.0f}" if bear_iv else "—", styles["RptValue"]),
-         Paragraph(f"${base_iv:.0f}" if base_iv else "—", styles["RptValue"]),
-         Paragraph(f"${bull_iv:.0f}" if bull_iv else "—", styles["RptValue"])],
-        [Paragraph("Scenario probability", styles["RptBody"]),
-         Paragraph(_pct_prob(bear_scen_p), styles["RptValue"]),
-         Paragraph(_pct_prob(base_scen_p), styles["RptValue"]),
-         Paragraph(_pct_prob(bull_scen_p), styles["RptValue"])],
-    ]
-    # §7: 12m forward-multiple price targets (distinct from IV)
-    if _12m_scens:
-        pt_rows.append([
-            Paragraph(f"12m PT — {_12m_method[:40]}", styles["RptBody"]),
-            Paragraph(_fmtiv(_12m_scens.get("bear")), styles["RptValue"]),
-            Paragraph(_fmtiv(_12m_scens.get("base")), styles["RptValue"]),
-            Paragraph(_fmtiv(_12m_scens.get("bull")), styles["RptValue"]),
-        ])
-    if expected_val:
-        pt_rows.append([
-            Paragraph("<b>Expected Value EV (prob-wtd IV)</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-            Paragraph(f"<b>${expected_val:.2f}</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-        ])
-    if _12m_pt:
-        pt_rows.append([
-            Paragraph("<b>12m Price Target (prob-wtd)</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-            Paragraph(f"<b>${float(_12m_pt):.2f}</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-        ])
-    if current_price:
-        pt_rows.append([
-            Paragraph("Current price", styles["RptBody"]),
-            Paragraph("", styles["RptValue"]),
-            Paragraph(f"${current_price:.2f}", styles["RptValue"]),
-            Paragraph("", styles["RptValue"]),
-        ])
-    # §11: Skew ratio and upside/downside to targets
-    _up_to_pt = recon.get("upside_to_pt_pct")
-    _down_to_bear = recon.get("downside_to_bear_pct")
-    _skew = recon.get("skew_ratio")
-    if _up_to_pt is not None:
-        sign = "+" if float(_up_to_pt) >= 0 else ""
-        pt_rows.append([
-            Paragraph("<b>Upside to 12m PT</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-            Paragraph(f"<b>{sign}{float(_up_to_pt):.1f}%</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-        ])
-    if _down_to_bear is not None:
-        sign = "+" if float(_down_to_bear) >= 0 else ""
-        pt_rows.append([
-            Paragraph("<b>Downside to Bear IV</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-            Paragraph(f"<b>{sign}{float(_down_to_bear):.1f}%</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-        ])
-    if _skew is not None:
-        pt_rows.append([
-            Paragraph("<b>Skew ratio (up/down)</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-            Paragraph(f"<b>{float(_skew):.1f}x</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-        ])
-    if pm_target:
-        pt_rows.append([
-            Paragraph("<b>Portfolio Manager target</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-            Paragraph(f"<b>${float(pm_target):.2f}</b>", styles["RptLabel"]),
-            Paragraph("", styles["RptValue"]),
-        ])
-
-    aw3 = [page_w * 0.40, page_w * 0.20, page_w * 0.20, page_w * 0.20]
-    ptt = Table(pt_rows, colWidths=aw3, hAlign="LEFT", repeatRows=1)
-    ptt.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), C_PALE),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), C_NAVY),
-        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, C_PALE]),
-        ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-    ]))
-    story.append(ptt)
-    story.append(Spacer(1, 6))
-
-    # CHECK 4: EV arithmetic flag — show if LLM EV was overridden by Python computation
-    _ev_arith_flag = scenario.get("ev_arithmetic_flag")
-    if _ev_arith_flag:
-        story.append(Paragraph(
-            f"<b>EV Arithmetic Check:</b> {_ev_arith_flag}",
-            styles.get("RptWarning", styles["RptBody"]),
-        ))
-        story.append(Spacer(1, 4))
-
-    # §8 Reconciliation note: explain IV vs 12m PT gap + any directional flag
-    _recon_text = (
-        "<b>§8 Reconciliation:</b> "
-        f"Blended IV (${base_iv:.0f} base) measures long-run intrinsic value via {methods_count} "
-        f"method{'s' if methods_count != 1 else ''}. "
-        f"12m Price Target (${_12m_pt:.2f}) is a market-pricing exercise using forward "
-        f"sector multiples — the gap to current price (${current_price:.2f}) reflects near-term "
-        "multiple compression/expansion vs. long-run fair value. "
-        "These are independent outputs; expect divergence when macro or sentiment dislocations exist."
-    ) if base_iv and _12m_pt and current_price else ""
-    if _recon_text:
-        story.append(Paragraph(_recon_text, styles["RptBody"]))
-        story.append(Spacer(1, 4))
-    if _dir_flag:
-        story.append(Paragraph(
-            f"<b>Consistency Flag:</b> {_dir_flag}",
-            styles.get("RptWarning", styles["RptBody"]),
-        ))
-        story.append(Spacer(1, 4))
-    story.append(Spacer(1, 6))
-
     return story
 
 
-# ── Cover Card ─────────────────────────────────────────────────────────────────
-def _cover_card(
-    ticker: str,
-    decision: dict,
-    scenario_data: dict,
-    macro: dict,
-    sector: str,
-    styles,
-    page_w: float,
-) -> list:
-    """Professional 2-column cover card: large rating badge + thesis bullets + key metrics."""
-    action        = _strip(decision.get("action", "—")).upper()
-    size_pct      = decision.get("position_size_pct") or 0.0
-    stop          = decision.get("stop_loss")
-    target        = decision.get("price_target")
-    horizon       = _strip(decision.get("time_horizon", "—"))
-    rationale_raw = _ANSI_RE.sub("", str(
-        decision.get("rationale", decision.get("reasoning", "")) or ""
-    ))
 
-    current_price = 0.0
+# ── Report building blocks (page 1, valuation summary, decision) ──────────────
+
+def _company_label(ticker: str, raw_financials: dict) -> str:
+    """Company name: live lookup, else the name stored with the run, else the ticker."""
     try:
-        current_price = float(scenario_data.get("current_price") or 0)
+        name = _fetch_company_name(ticker)
+    except Exception:  # noqa: BLE001
+        name = None
+    if name and name != ticker:
+        return _strip(name)
+    stored = (raw_financials or {}).get("company") if isinstance(raw_financials, dict) else None
+    return _strip(stored) if stored else ticker
+
+
+def _money(v, dp: int = 2) -> str:
+    try:
+        return f"{_cs()}{float(v):,.{dp}f}"
     except (TypeError, ValueError):
-        pass
+        return "—"
 
-    # ── Price target + upside % ───────────────────────────────────────────────
-    upside_pct = None
-    if target and current_price:
-        try:
-            upside_pct = (float(target) - current_price) / current_price * 100
-        except (TypeError, ValueError):
-            pass
-    if target is not None:
-        try:
-            t_val = float(target)
-            if upside_pct is not None:
-                sign = "+" if upside_pct >= 0 else ""
-                pt_display = f"${t_val:.2f}  ({sign}{upside_pct:.1f}%)"
-            else:
-                pt_display = f"${t_val:.2f}"
-        except (TypeError, ValueError):
-            pt_display = "—"
-    else:
-        pt_display = "—"
 
-    # ── Rating badge colour ───────────────────────────────────────────────────
-    badge_bg = {
-        "BUY": C_GREEN, "COVER": C_GREEN,
-        "HOLD": C_AMBER,
-        "SELL": C_RED,  "SHORT": C_RED,
-    }.get(action, C_NAVY)
+def _pct_s(v, dp: int = 1, signed: bool = True) -> str:
+    try:
+        return f"{float(v):+.{dp}f}%" if signed else f"{float(v):.{dp}f}%"
+    except (TypeError, ValueError):
+        return "—"
 
-    # ── LEFT COLUMN: ticker name, sector tag, thesis bullets ─────────────────
-    left_w   = page_w * 0.62
-    _tk_sty  = ParagraphStyle(name="_cc_tk",  fontName="Helvetica-Bold",
-                               fontSize=22, leading=26, textColor=C_NAVY, spaceAfter=2)
-    _sec_sty = ParagraphStyle(name="_cc_sec", fontName="Helvetica",
-                               fontSize=9,  leading=11, textColor=C_GREY,  spaceAfter=6)
-    _bul_sty = ParagraphStyle(name="_cc_bul", fontName="Helvetica",
-                               fontSize=8.5, leading=12, textColor=colors.black,
-                               leftIndent=8, spaceAfter=3)
 
-    left_cells = [
-        [Paragraph(ticker, _tk_sty)],
-        [Paragraph(_strip(sector), _sec_sty)],
-    ]
-    sentences = re.split(r'(?<=[.!?])\s+', rationale_raw.strip())
-    for s in [s.strip() for s in sentences if len(s.strip()) > 20][:4]:
-        left_cells.append([Paragraph(f"• {html.escape(s)}", _bul_sty)])
+_BULLET_MARK = re.compile(r"^(?:[•·▪◦‣*-]|\d+[.)])\s+")
 
-    left_tbl = Table(left_cells, colWidths=[left_w])
-    left_tbl.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",   (0, 0), (-1, -1), 2),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 2),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-    ]))
 
-    # ── RIGHT COLUMN: large badge + metrics table ─────────────────────────────
-    right_w    = page_w * 0.38
-    _badge_sty = ParagraphStyle(name="_cc_bdg", fontName="Helvetica-Bold",
-                                 fontSize=22, leading=26,
-                                 textColor=colors.white, alignment=1)
+def _rationale_points(text: str) -> list[str]:
+    """The PM rationale as its themes: one point per line/paragraph, markers dropped.
 
-    badge_tbl = Table([[Paragraph(action, _badge_sty)]], colWidths=[right_w])
-    badge_tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (0, 0), badge_bg),
-        ("ALIGN",         (0, 0), (0, 0), "CENTER"),
-        ("VALIGN",        (0, 0), (0, 0), "MIDDLE"),
-        ("TOPPADDING",    (0, 0), (0, 0), 12),
-        ("BOTTOMPADDING", (0, 0), (0, 0), 12),
-        ("LEFTPADDING",   (0, 0), (0, 0), 4),
-        ("RIGHTPADDING",  (0, 0), (0, 0), 4),
-    ]))
+    Same split the web report uses (RationaleBlock): themes are separated by
+    newlines; a leading bullet or number marker is removed.
+    """
+    lines = [l.strip() for l in re.split(r"\n+", _strip(text or "")) if l.strip()]
+    return [_BULLET_MARK.sub("", l) for l in lines]
 
-    m1, m2 = right_w * 0.46, right_w * 0.54
-    metrics = [("Price Target", pt_display)]
-    if current_price:
-        metrics.append(("Current Price", f"${current_price:.2f}"))
-    metrics += [
-        ("Position Size", f"{size_pct:.1%}"),
-        ("Stop Loss",     f"${float(stop):.2f}" if isinstance(stop, (int, float)) else "—"),
-        ("Time Horizon",  horizon),
-        ("Macro",         f"{macro.get('risk_appetite','—')} / {macro.get('rate_direction','—')}"),
-    ]
-    metrics_tbl = Table(
-        [[Paragraph(_strip(k), styles["RptLabel"]),
-          Paragraph(html.escape(str(v)), styles["RptValue"])]
-         for k, v in metrics],
-        colWidths=[m1, m2],
-    )
-    metrics_tbl.setStyle(TableStyle([
+
+def _block_table(rows, col_w, styles, header: bool = True, total_rows: int = 0) -> Table:
+    t = Table(rows, colWidths=col_w, hAlign="LEFT", repeatRows=1 if header else 0)
+    st = [
+        ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
         ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",    (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("TOPPADDING",    (0, 0), (-1, -1), 2.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
         ("LEFTPADDING",   (0, 0), (-1, -1), 4),
         ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ("ROWBACKGROUNDS",(0, 0), (-1, -1), [colors.white, C_PALE]),
         ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-    ]))
+    ]
+    if header:
+        st += [("BACKGROUND", (0, 0), (-1, 0), C_PALE), ("TEXTCOLOR", (0, 0), (-1, 0), C_NAVY)]
+    if total_rows:
+        st += [("BACKGROUND", (0, -total_rows), (-1, -1), C_PALE)]
+    t.setStyle(TableStyle(st))
+    return t
 
-    right_tbl = Table([[badge_tbl], [metrics_tbl]], colWidths=[right_w])
-    right_tbl.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",   (0, 1), (0, 1), 6),   # gap between badge and metrics
-        ("TOPPADDING",   (0, 0), (0, 0), 0),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-    ]))
 
-    # ── OUTER 2-COLUMN TABLE ─────────────────────────────────────────────────
-    outer = Table([[left_tbl, right_tbl]], colWidths=[left_w, right_w])
-    outer.setStyle(TableStyle([
-        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
-        ("TOPPADDING",   (0, 0), (-1, -1), 0),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 0),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 0),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ("LINEAFTER",    (0, 0), (0, 0), 0.5, C_LGREY),
+def _decision_block(decision: dict, scen: dict, dcf_t: dict, styles, width: float) -> list:
+    """Page 1, left column: rating, headline numbers, the PM thesis as bullets."""
+    out: list = []
+    rv = decision.get("research_view") or {}
+    action = _strip(decision.get("action", "")).upper() or "—"
+    rating = _strip(rv.get("rating_label") or decision.get("rating_label") or "")
+    pill_txt = f"{rating.upper()}  ·  {action}" if rating else action
+    pill = Table([[Paragraph(f'<font color="white"><b>{pill_txt}</b></font>', styles["RptLabel"])]],
+                 hAlign="LEFT")
+    pill.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), C_NAVY),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
     ]))
+    out += [pill, Spacer(1, 5)]
 
-    return [outer, Spacer(1, 6), _hr()]
+    price = scen.get("current_price") or rv.get("price")
+    target = decision.get("price_target") or scen.get("12m_price_target")
+    iv = (scen.get("reconciliation") or {}).get("blended_iv") or rv.get("intrinsic_value") \
+        or ((dcf_t.get("base") or {}).get("intrinsic_value"))
+    up = ((float(target) - float(price)) / float(price) * 100
+          if isinstance(target, (int, float)) and isinstance(price, (int, float)) and price else None)
+    weight = decision.get("position_size_pct")
+    tsr = rv.get("tsr_12m")
+    cells = [
+        ("12m target", _money(target), f"{_pct_s(up)} vs price" if up is not None else ""),
+        ("Fair value (IV)", _money(iv), "blended intrinsic value"),
+        ("Price", _money(price), _strip(str(rv.get("price_as_of") or ""))),
+        ("Weight", f"{float(weight):.1%}" if isinstance(weight, (int, float)) else "—",
+         _strip(decision.get("time_horizon", "")).title()),
+    ]
+    cw = width / len(cells)
+    row = [[Paragraph(f'<font size="6.5" color="#555555">{a}</font><br/>'
+                      f'<font size="11"><b>{b}</b></font><br/>'
+                      f'<font size="6.5" color="#555555">{c}</font>', styles["RptBody"])
+            for a, b, c in cells]]
+    kt = Table(row, colWidths=[cw] * len(cells), hAlign="LEFT")
+    kt.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.5, C_LGREY), ("INNERGRID", (0, 0), (-1, -1), 0.25, C_LGREY),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    out += [kt, Spacer(1, 4)]
+    if rv.get("callout"):
+        out.append(Paragraph(_strip(rv["callout"]), styles["RptSource"]))
+    points = _rationale_points(decision.get("rationale") or decision.get("reasoning") or "")
+    for p in points:
+        out.append(Paragraph(p, styles["RptBullet"], bulletText="•"))
+    return out
+
+
+def _scenario_block(scen: dict, dcf_t: dict, styles, width: float) -> list:
+    """Page 1, left column: bear / base / bull value, probability, 12m target."""
+    if not scen:
+        return []
+    by12 = scen.get("12m_targets_by_scenario") or {}
+    pb = (dcf_t.get("pt_bridge") or {}).get("scenarios") or {}
+    names = ("bear", "base", "bull")
+
+    def _p(s):
+        v = (scen.get(s) or {}).get("probability")
+        return f"{float(v):.0%}" if isinstance(v, (int, float)) else "—"
+
+    def _fv(s):
+        return (scen.get(s) or {}).get("fair_value") or (dcf_t.get(s) or {}).get("intrinsic_value")
+
+    def _t(s):
+        return by12.get(s) if by12.get(s) is not None else (pb.get(s) or {}).get("target")
+
+    hdr = [Paragraph(_wh(x), styles["RptLabel"]) for x in ("", "Bear", "Base", "Bull")]
+    rows = [hdr,
+            [Paragraph("Probability", styles["RptBody"])] + [Paragraph(_p(s), styles["RptValue"]) for s in names],
+            [Paragraph("Fair value (IV)", styles["RptBody"])] + [Paragraph(_money(_fv(s)), styles["RptValue"]) for s in names],
+            [Paragraph("12m target", styles["RptBody"])] + [Paragraph(_money(_t(s)), styles["RptValue"]) for s in names]]
+    tot = 0
+    if scen.get("12m_price_target") is not None:
+        rows.append([Paragraph("<b>12m target (probability-weighted)</b>", styles["RptLabel"]),
+                     "", Paragraph(f"<b>{_money(scen['12m_price_target'])}</b>", styles["RptLabel"]), ""])
+        tot += 1
+    if scen.get("expected_value") is not None:
+        up = scen.get("upside_pct")
+        rows.append([Paragraph("<b>Expected value (probability-weighted IV)</b>", styles["RptLabel"]),
+                     "", Paragraph(f"<b>{_money(scen['expected_value'])}</b>"
+                                   + (f"  ({_pct_s(up)})" if up is not None else ""), styles["RptLabel"]), ""])
+        tot += 1
+    t = _block_table(rows, [width * 0.40, width * 0.20, width * 0.20, width * 0.20], styles, total_rows=tot)
+    out = [t, Spacer(1, 4)]
+    for s in names:
+        a = _strip((scen.get(s) or {}).get("assumptions") or "")
+        if a:
+            out.append(Paragraph(f"<b>{s.title()}:</b> {a}", styles["RptBody"]))
+    return out
+
+
+def _intel_compact(short_int: dict, earn_q: dict, insider_act: dict, news_sent: dict,
+                   analyst_rev: dict, styles, width: float) -> list:
+    """Page 1, side column: one line per intelligence signal."""
+    rows = [[Paragraph(_wh("Signals"), styles["RptLabel"]), Paragraph(_wh("Reading"), styles["RptLabel"])]]
+    if earn_q:
+        sc = _getv(earn_q, "overall_quality_score")
+        v = _strip(str(_getv(earn_q, "quality_verdict", "—")))
+        rows.append(["Earnings quality", f"{v} ({sc:.1f}/10)" if isinstance(sc, (int, float)) else v])
+    if short_int:
+        sf = _getv(short_int, "short_float_pct")
+        v = _strip(str(_getv(short_int, "signal", "—")))
+        rows.append(["Short interest", f"{v} ({sf:.1f}% float)" if isinstance(sf, (int, float)) else v])
+    if insider_act:
+        rows.append(["Insider activity", _strip(str(_getv(insider_act, "signal", "—")))])
+    if news_sent:
+        rows.append(["News sentiment", _strip(str(_getv(news_sent, "signal", "—")))])
+    if analyst_rev:
+        rows.append(["Analyst revisions", _strip(str(_getv(analyst_rev, "revision_direction", "—")))])
+    if len(rows) == 1:
+        return []
+    body = [rows[0]] + [[Paragraph(a, styles["RptBody"]), Paragraph(b.replace("_", " "), styles["RptValue"])]
+                        for a, b in rows[1:]]
+    return [_block_table(body, [width * 0.50, width * 0.50], styles)]
+
+
+def _valuation_summary(dcf_t: dict, scen: dict, styles, page_w: float) -> list:
+    """Intrinsic value → 12m target, per scenario, by the one rule every name uses."""
+    pb = dcf_t.get("pt_bridge") or {}
+    sc = pb.get("scenarios") or {}
+    if not sc:
+        return [Paragraph("Target derivation not recorded for this run.", styles["RptBody"])]
+    spot, cap = pb.get("spot"), pb.get("capture")
+    out = [Paragraph(
+        f"12-month target = price + capture × (intrinsic value − price). "
+        f"Price {_money(spot)}; capture {float(cap):.0%} of the gap to fair value over 12 months."
+        if isinstance(cap, (int, float)) else _strip(pb.get("rule") or ""), styles["RptBody"]), Spacer(1, 3)]
+    hdr = [Paragraph(_wh(x), styles["RptLabel"])
+           for x in ("Scenario", "Probability", "Intrinsic value", "Gap to price", "12m target", "vs price")]
+    rows = [hdr]
+    for s in ("bear", "base", "bull"):
+        d = sc.get(s) or {}
+        iv, tg = d.get("intrinsic_value"), d.get("target")
+        p = (scen.get(s) or {}).get("probability")
+        gap = (float(iv) - float(spot)) if isinstance(iv, (int, float)) and isinstance(spot, (int, float)) else None
+        vs = ((float(tg) - float(spot)) / float(spot) * 100
+              if isinstance(tg, (int, float)) and isinstance(spot, (int, float)) and spot else None)
+        rows.append([Paragraph(s.title(), styles["RptBody"]),
+                     Paragraph(f"{float(p):.0%}" if isinstance(p, (int, float)) else "—", styles["RptValue"]),
+                     Paragraph(_money(iv), styles["RptValue"]),
+                     Paragraph(_money(gap) if gap is not None else "—", styles["RptValue"]),
+                     Paragraph(_money(tg), styles["RptValue"]),
+                     Paragraph(_pct_s(vs) if vs is not None else "—", styles["RptValue"])])
+    pw = scen.get("12m_price_target")
+    rows.append([Paragraph("<b>Probability-weighted</b>", styles["RptLabel"]), "",
+                 Paragraph(f"<b>{_money(scen.get('expected_value'))}</b>", styles["RptLabel"]), "",
+                 Paragraph(f"<b>{_money(pw)}</b>", styles["RptLabel"]),
+                 Paragraph(f"<b>{_pct_s((float(pw) - float(spot)) / float(spot) * 100)}</b>"
+                           if isinstance(pw, (int, float)) and isinstance(spot, (int, float)) and spot
+                           else "", styles["RptLabel"])])
+    out.append(_block_table(rows, [page_w * w for w in (0.20, 0.14, 0.18, 0.16, 0.16, 0.16)],
+                            styles, total_rows=1))
+    return out
+
+
+def _decision_section(decision: dict, scen: dict, dcf_t: dict, styles, page_w: float) -> list:
+    """Final section: the trade and the rating, as decided."""
+    rv = decision.get("research_view") or {}
+    er = decision.get("entry_range")
+    entry = (f"{_money(er[0])} – {_money(er[1])}"
+             if isinstance(er, list) and len(er) == 2 and all(isinstance(x, (int, float)) for x in er) else "—")
+    iv = (scen.get("reconciliation") or {}).get("blended_iv") or rv.get("intrinsic_value")
+    w = decision.get("position_size_pct")
+    rows = [
+        ("Rating", _strip(rv.get("rating_label") or decision.get("rating_label") or "—")),
+        ("Trade action", _strip(decision.get("action", "—")).upper()),
+        ("12-month target", _money(decision.get("price_target") or scen.get("12m_price_target"))),
+        ("Fair value (IV)", _money(iv)),
+        ("Price", _money(scen.get("current_price") or rv.get("price"))),
+        ("Position weight", f"{float(w):.1%}" if isinstance(w, (int, float)) else "—"),
+        ("Entry range", entry),
+        ("Stop loss", _money(decision.get("stop_loss"))),
+        ("Time horizon", _strip(decision.get("time_horizon", "—")).title()),
+    ]
+    tsr = rv.get("tsr_12m")
+    if isinstance(tsr, (int, float)):
+        bm = (rv.get("benchmark") or {})
+        rows.append(("12m total return", f"{tsr:+.1%}"
+                     + (f" vs {bm.get('name')} {float(bm.get('expected_return')):.1%}"
+                        if bm.get("name") and isinstance(bm.get("expected_return"), (int, float)) else "")))
+    out = [_block_table([[Paragraph(a, styles["RptLabel"]), Paragraph(b, styles["RptValue"])] for a, b in rows],
+                        [page_w * 0.26, page_w * 0.74], styles, header=False), Spacer(1, 4)]
+    for key in ("callout", "rating_definition", "disclaimer"):
+        if rv.get(key):
+            out.append(Paragraph(_strip(rv[key]), styles["RptSource"] if key != "callout" else styles["RptBody"]))
+    return out
+
+
+
+# ── Financial statements page (sell-side two-column layout) ────────────────────
+
+_PER_SHARE_HINTS = ("eps", "per_share", "bvps", "dps")
+
+
+def _is_per_share(row: dict) -> bool:
+    k = str(row.get("key") or "").lower()
+    lab = str(row.get("label") or "").lower()
+    return any(h in k for h in _PER_SHARE_HINTS) or "per share" in lab or "eps" in lab
+
+
+def _fs_num(v, per_share: bool) -> str:
+    """Millions to one decimal (per-share lines unscaled, two decimals); negatives in parentheses."""
+    if not isinstance(v, (int, float)):
+        return "\u2013"
+    x = float(v) if per_share else float(v) / 1e6
+    body = f"{abs(x):,.2f}" if per_share else f"{abs(x):,.1f}"
+    return f"({body})" if x < 0 else body
+
+
+def _fs_pct(v) -> str:
+    """A ratio as a percentage to one decimal; negatives in parentheses."""
+    if not isinstance(v, (int, float)):
+        return "–"
+    x = float(v) * 100
+    return f"({abs(x):,.1f})" if x < 0 else f"{x:,.1f}"
+
+
+def _fs_table(title: str, periods: list, rows: list, styles, width: float,
+              pct_rows: bool = False) -> list:
+    """One statement block: title rule, period header, rows (bold = subtotal)."""
+    lab_w = width * 0.40
+    col_w = (width - lab_w) / max(len(periods), 1)
+    st_l = ParagraphStyle("_fsl", fontName="Helvetica", fontSize=6.5, leading=8)
+    st_lb = ParagraphStyle("_fslb", parent=st_l, fontName="Helvetica-Bold")
+    st_v = ParagraphStyle("_fsv", parent=st_l, alignment=2)
+    st_vb = ParagraphStyle("_fsvb", parent=st_v, fontName="Helvetica-Bold")
+    data = [[Paragraph("", st_l)] + [Paragraph(f"<b>{_strip(str(p)).replace('FY', 'FY')}</b>", st_vb)
+                                      for p in periods]]
+    bold_rows = []
+    for r in rows:
+        emph = bool(r.get("emphasis"))
+        ind = "&nbsp;&nbsp;" * int(r.get("indent") or 0)
+        vals = r.get("values") or {}
+        if pct_rows:
+            cells = [_fs_pct(vals.get(p)) for p in periods]
+        else:
+            ps = _is_per_share(r)
+            cells = [_fs_num(vals.get(p), ps) for p in periods]
+        data.append([Paragraph(ind + _strip(str(r.get("label") or "")), st_lb if emph else st_l)]
+                    + [Paragraph(c, st_vb if emph else st_v) for c in cells])
+        if emph:
+            bold_rows.append(len(data) - 1)
+    t = Table(data, colWidths=[lab_w] + [col_w] * len(periods), hAlign="LEFT")
+    style = [
+        ("TOPPADDING", (0, 0), (-1, -1), 0.6), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.6),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_NAVY),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]
+    t.setStyle(TableStyle(style))
+    head = ParagraphStyle("_fsh", fontName="Helvetica-Bold", fontSize=9.5, leading=12, textColor=C_NAVY)
+    return [Paragraph(title, head), HRFlowable(width="100%", thickness=0.75, color=C_NAVY, spaceAfter=2),
+            t, Spacer(1, 8)]
+
+
+def _fs_ratio_rows(stmts: dict, periods: list) -> list:
+    """Growth & margins derived from the statement rows themselves."""
+    def row(section, key):
+        for r in (stmts.get(section) or {}).get("rows") or []:
+            if r.get("key") == key:
+                return r.get("values") or {}
+        return {}
+
+    rev = row("income", "revenue")
+    out = []
+
+    def add(label, fn):
+        vals = {}
+        for i, p in enumerate(periods):
+            try:
+                v = fn(i, p)
+            except (KeyError, TypeError, ValueError, ZeroDivisionError):   # line absent that year
+                v = None
+            vals[p] = v
+        if any(isinstance(v, (int, float)) for v in vals.values()):
+            out.append({"label": label, "values": vals})
+
+    def growth(src):
+        return lambda i, p: (src[p] / src[periods[i - 1]] - 1) if i > 0 and src.get(periods[i - 1]) else None
+
+    def margin(src):
+        return lambda i, p: src[p] / rev[p] if rev.get(p) else None
+
+    ebitda, ni = row("income", "ebitda"), row("income", "net_income")
+    gp, op = row("income", "gross_profit"), row("income", "operating_income")
+    fcf = row("cashflow", "free_cash_flow")
+    eq = row("balance", "shareholders_equity") or row("balance", "total_equity")
+    add("Revenue growth", growth(rev))
+    add("EBITDA growth", growth(ebitda))
+    add("Net income growth", growth(ni))
+    add("Gross margin", margin(gp))
+    add("EBITDA margin", margin(ebitda))
+    add("Operating margin", margin(op))
+    add("Net margin", margin(ni))
+    add("FCF margin", margin(fcf))
+    add("ROE", lambda i, p: ni[p] / eq[p] if eq.get(p) else None)
+    return out
+
+
+def _financial_statements_page(fs: dict, styles, page_w: float) -> list:
+    """Income statement, balance sheet and cash flow, last four fiscal years."""
+    if not isinstance(fs, dict) or not fs.get("statements"):
+        return []
+    stmts = fs["statements"]
+    periods = list(fs.get("periods") or [])[-4:]
+    if not periods:
+        return []
+    ccy = _strip(str(fs.get("currency") or "")).upper()
+    unit = f"{ccy} mn" if ccy else "mn"
+    gutter = 7 * mm
+    col = (page_w - gutter) / 2
+    left, right = [], []
+    ratios = _fs_ratio_rows(stmts, periods)
+    if ratios:
+        left += _fs_table("Growth &amp; Margins (%)", periods, ratios, styles, col, pct_rows=True)
+    if stmts.get("income"):
+        left += _fs_table(f"Income Statement ({unit})", periods, stmts["income"].get("rows") or [], styles, col)
+    if stmts.get("balance"):
+        right += _fs_table(f"Balance Sheet ({unit})", periods, stmts["balance"].get("rows") or [], styles, col)
+    if stmts.get("cashflow"):
+        right += _fs_table(f"Cash Flow ({unit})", periods, stmts["cashflow"].get("rows") or [], styles, col)
+    for k, st in stmts.items():                                  # any further section (e.g. bank layouts)
+        if k not in ("income", "balance", "cashflow") and isinstance(st, dict) and st.get("rows"):
+            (left if len(left) <= len(right) else right).extend(
+                _fs_table(f"{_strip(str(st.get('title') or k))} ({unit})", periods, st["rows"], styles, col))
+    grid = Table([[left, right]], colWidths=[col + gutter, col], hAlign="LEFT")
+    grid.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (0, 0), gutter),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0), ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return [grid, Paragraph("Source: company filings via Financial Modeling Prep. Fiscal years as reported; "
+                            "per-share lines unscaled.", styles["RptSource"])]
 
 
 # ── Full-width section header bar ──────────────────────────────────────────────
@@ -3150,7 +2229,8 @@ def generate_pdf_reports_per_ticker(result: dict) -> list[str]:
 
 
 # ── Main entry point ───────────────────────────────────────────────────────────
-def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
+def generate_pdf_report(result: dict, output_path: str | None = None,
+                        open_after: bool = True) -> str:
     """
     Generate an untruncated PDF investment report from the advanced pipeline
     result dict.
@@ -3159,6 +2239,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
         result:      The dict returned by run_advanced_pipeline().
         output_path: Optional file path.  Defaults to
                      report_<TICKERS>_<YYYYMMDD_HHMM>.pdf in the cwd.
+        open_after:  Open the file in the desktop viewer (CLI use). The web
+                     export passes False: a server must never launch a viewer.
 
     Returns:
         Absolute path of the saved PDF.
@@ -3179,15 +2261,28 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
 
     # ── Page geometry ────────────────────────────────────────────────────────
     margin  = 16 * mm
-    doc     = SimpleDocTemplate(
-        output_path,
-        pagesize=A4,
-        leftMargin=margin,  rightMargin=margin,
-        topMargin=20 * mm,  bottomMargin=18 * mm,   # extra room for header/footer
-    )
     page_w = A4[0] - 2 * margin
     col1   = page_w * 0.26
     col2   = page_w * 0.74
+    _top, _bot = 20 * mm, 18 * mm                  # room for running header/footer
+    _body_h = A4[1] - _top - _bot
+    # Page 1: title band, then the decision (wide, left) beside a narrow column
+    # of market context (price chart, key financials, signals) on the right.
+    _title_h = 20 * mm
+    _gutter  = 5 * mm
+    left_w   = page_w * 0.63
+    side_w   = page_w - left_w - _gutter
+    _np = dict(leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    _cover = PageTemplate(id="cover", frames=[
+        Frame(margin, _bot + _body_h - _title_h, page_w, _title_h, id="title", **_np),
+        Frame(margin + left_w + _gutter, _bot, side_w, _body_h - _title_h - 2 * mm, id="side", **_np),
+        Frame(margin, _bot, left_w, _body_h - _title_h - 2 * mm, id="main", **_np),
+    ])
+    _body = PageTemplate(id="body", frames=[Frame(margin, _bot, page_w, _body_h, id="body", **_np)])
+    doc = BaseDocTemplate(
+        output_path, pagesize=A4,
+        leftMargin=margin, rightMargin=margin, topMargin=_top, bottomMargin=_bot,
+    )
 
     # ── Text collector for truncation validation ─────────────────────────────
     _all_text: list[str] = []
@@ -3228,287 +2323,80 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
     analyst_revisions = result.get("analyst_revisions") or {}
     tickers          = list(decisions.keys())
     run_date        = datetime.now().strftime("%d %B %Y  %H:%M")
+    _single = len(tickers) == 1
+    doc.addPageTemplates([_cover, _body] if _single else [_body])
+    _set_price_currency(
+        ((result.get("dcf_range") or {}).get(tickers[0]) or {}).get("reported_currency")
+        if tickers else None)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # HEADER — two-column layout: exec narrative (left) | rating scorecard (right)
+    # SECTION 1 — INVESTMENT DECISION + SCENARIO ANALYSIS (page 1)
+    # Decision first and widest; market context in a narrow right-hand column.
     # ═══════════════════════════════════════════════════════════════════════════
-    if len(tickers) == 1:
-        _t       = tickers[0]
-        _dec     = decisions.get(_t, {})
-        _act     = _strip(_dec.get("action", "")).upper()
-        _co_name = _fetch_company_name(_t)
-
-        # Pre-compute data for both columns
-        _dcf_all    = result.get("dcf_range", {})
-        _dcf_ticker = _dcf_all.get(_t, {})
-        _scen_t     = (result.get("scenario_analysis") or {}).get(_t, {})
-        _pl_t       = (result.get("power_law_analysis") or {}).get(_t, {})
-        _trap_t     = (result.get("value_trap_analysis") or {}).get(_t, {})
-
-        _rat  = _strip(_dec.get("rationale", "") or _dec.get("reasoning", ""))
-        _sent = (_rat.split(".")[0].strip() + ".") if _rat else ""
-        _kp   = _build_key_points(
-            ticker=_t, decision=_dec, scen=_scen_t, pl=_pl_t,
-            trap=_trap_t, analyst_signals=analyst_signals, dcf_ticker=_dcf_ticker,
-        )
-
-        # ── GS-style cover: full-width title + price line, then 2-col split ────
-        # LEFT 38% = data panel (badge pill + key metrics)
-        # RIGHT 62% = narrative (exec line + executive summary + bullets)
-        _col_l_w = page_w * 0.38
-        _col_r_w = page_w * 0.62
-
-        _pt_raw    = _dec.get("price_target")
-        # Fix 1c: treat 0.0 price_target as absent — "$0.00" is never a valid target.
-        # For SELL/SHORT, portfolio_manager now always provides a bear anchor, but
-        # guard here as well so stale cached results also render cleanly.
-        _pt        = _pt_raw if (isinstance(_pt_raw, (int, float)) and _pt_raw > 0) else None
-        _curr      = _scen_t.get("current_price")
-        _upside    = _scen_t.get("upside_pct")
-        _size_pct  = _dec.get("position_size_pct", 0)
-        _stop      = _dec.get("stop_loss")
-        _entry     = _dec.get("entry_range", [])
-        _base_iv   = (_dcf_ticker.get("base") or {}).get("intrinsic_value")
-        _horizon   = _strip(_dec.get("time_horizon", "—")).title()
-        _macro_str = (
-            f'{_strip(str(macro.get("risk_appetite","—"))).replace("-"," ").title()} / '
-            f'{_strip(str(macro.get("rate_direction","—"))).replace("-"," ").title()}'
-        )
-        def _r_fmt(v):
-            return f"${v:.2f}" if isinstance(v, (int, float)) else "—"
-        _entry_s  = (f"${_entry[0]:.2f} – ${_entry[1]:.2f}"
-                     if isinstance(_entry, list) and len(_entry) == 2 else "—")
-        # Header upside: use PT-based upside (PM final price_target vs current price)
-        # EV upside (probability-weighted) is shown separately in the KPI box
-        _pt_upside = (
-            (_pt - _curr) / _curr * 100
-            if isinstance(_pt, (int, float)) and isinstance(_curr, (int, float)) and _curr > 0
-            else None
-        )
-        _upside_s = (
-            f"{_pt_upside:+.1f}%"
-            if _pt_upside is not None
-            else (f"{_upside:+.1f}%" if isinstance(_upside, (int, float)) else "—")
-        )
-        _action_colour = {"BUY": C_GREEN, "COVER": C_GREEN,
-                          "SELL": C_RED,  "SHORT": C_RED}.get(_act, C_AMBER)
-
-        # Full-width: company name
-        story.append(Paragraph(f"{_co_name} ({_t})", styles["RptTitle"]))
-        # Full-width: compact price data line (#3 — GS-style inline prices)
-        story.append(Paragraph(
-            f"12m Price Target: <b>{_r_fmt(_pt)}</b>  \u2502  "
-            f"Price: <b>{_r_fmt(_curr)}</b>  \u2502  "
-            f"Upside: <b>{_upside_s}</b>  \u2502  "
-            f"Horizon: <b>{_horizon}</b>",
-            styles["RptPriceLine"],
-        ))
-        story.append(Spacer(1, 5))
-
-        # ── LEFT: small badge pill (#2) + borderless key metrics table ────────
-        _badge_tbl = Table(
-            [[Paragraph(f'<font color="white"><b>  {_act}  </b></font>',
-                        styles["RptLabel"]), ""]],
-            colWidths=[_col_l_w * 0.52, _col_l_w * 0.48], hAlign="LEFT",
-        )
-        _badge_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (0, 0), _action_colour),
-            ("ALIGN",         (0, 0), (0, 0), "CENTER"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-        ]))
-
-        def _sc_row(label, value):
-            return [Paragraph(label, styles["RptLabel"]),
-                    Paragraph(value, styles["RptValue"])]
-
-        _12m_pt_cover = _scen_t.get("12m_price_target")
-        _ev_cover     = _scen_t.get("expected_value")
-        # PM final price_target takes priority; show fwd model estimate as secondary label
-        _kpi_pt = _pt or _12m_pt_cover
-        _kpi_pt_label = "12m Price Tgt"
-        if _pt and _12m_pt_cover and abs(_pt - _12m_pt_cover) > 0.5:
-            _kpi_pt_label = f"12m Price Tgt (fwd: {_r_fmt(_12m_pt_cover)})"
-        # Prob-Wtd upside in KPI box = EV-based upside (expected value vs current price)
-        _ev_upside_s = (f"{_upside:+.1f}%" if isinstance(_upside, (int, float)) else "—")
-        # Blended IV: prefer probability-weighted value from reconciliation; fallback to base DCF IV
-        _blended_iv_kpi = (_scen_t.get("reconciliation") or {}).get("blended_iv") or _base_iv
-        _metrics_tbl = Table(
-            [_sc_row("Time Horizon",     _horizon),
-             _sc_row("Macro Regime",     _macro_str),
-             _sc_row(_kpi_pt_label,      _r_fmt(_kpi_pt)),
-             _sc_row("Blended IV",       _r_fmt(_blended_iv_kpi)),
-             _sc_row("Exp. Value",       _r_fmt(_ev_cover)),
-             _sc_row("Current Price",    _r_fmt(_curr)),
-             _sc_row("Prob-Wtd Upside",  _ev_upside_s),
-             _sc_row("Position Size",    f"{_size_pct:.1%}"),
-             _sc_row("Stop Loss",        _r_fmt(_stop)),
-             _sc_row("Entry Range",      _entry_s)],
-            colWidths=[_col_l_w * 0.52, _col_l_w * 0.48], hAlign="LEFT",
-        )
-        _metrics_tbl.setStyle(TableStyle([
-            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, C_PALE]),
-            ("FONTSIZE",       (0, 0), (-1, -1), 7.5),
-            ("VALIGN",         (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING",     (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING",  (0, 0), (-1, -1), 3),
-            ("LEFTPADDING",    (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING",   (0, 0), (-1, -1), 4),
-            ("LINEBELOW",      (0, 0), (-1, -1), 0.25, C_LGREY),
-            ("BOX",            (0, 0), (-1, -1), 0.5, C_LGREY),
-        ]))
-
-        # Stack badge + metrics in the left cell
-        _left_inner = Table(
-            [[_badge_tbl], [_metrics_tbl]],
-            colWidths=[_col_l_w], hAlign="LEFT",
-        )
-        _left_inner.setStyle(TableStyle([
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ]))
-
-        # ── RIGHT: exec line + Executive Summary + bullets ────────────────────
-        _right_rows: list[list] = []
-        if _sent:
-            _right_rows.append([Paragraph(_sent, styles["RptExecLine"])])
-        _right_rows.append(
-            [Paragraph("<b>Executive Summary</b>", styles["RptExecHeader"])]
-        )
-        for _bp in _kp:
-            _right_rows.append([Paragraph(f"• {_strip(_bp)}", styles["RptBullet"])])
-        _right_tbl = Table(_right_rows, colWidths=[_col_r_w - 4], hAlign="LEFT")
-        _right_tbl.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ]))
-
-        # ── Outer two-column frame ─────────────────────────────────────────────
-        _outer = Table(
-            [[_left_inner, _right_tbl]],
-            colWidths=[_col_l_w, _col_r_w], hAlign="LEFT",
-        )
-        _outer.setStyle(TableStyle([
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 0),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
-        ]))
-        story.append(_outer)
-
-    else:
-        # Multi-ticker: compact header only
-        story.append(Paragraph(
-            f"{', '.join(tickers)} — Multi-Ticker Analysis", styles["RptTitle"],
-        ))
-        _acts = "  |  ".join(
-            f"{t}: {_strip(decisions.get(t, {}).get('action', '—')).upper()}"
-            for t in tickers
-        )
-        story.append(Paragraph(_acts, styles["RptSubtitle"]))
-
-    story.append(_hr())
-
-    story.append(Spacer(1, 4))
-
-    # ── VGPM Scorecard — one card row per ticker ─────────────────────────────
-    _dcf_all_vgpm  = result.get("dcf_range", {})
-    _scen_all_vgpm = result.get("scenario_analysis") or {}
-    _cal_all_vgpm  = result.get("dcf_calibration_signals") or {}
-    _rf_raw        = result.get("raw_financials") or {}
-    _ins_raw       = result.get("insider_summary") or result.get("insider_activity") or {}
-    # Sector map for sector-aware VGPM sub-score thresholds (2026-05-21 fix).
-    _sectors_pdf   = result.get("sectors") or {}
-    for _vt in tickers:
-        _vgpm_dcf  = _dcf_all_vgpm.get(_vt, {})
-        _vgpm_scen = _scen_all_vgpm.get(_vt, {})
-        _vgpm_cal  = _cal_all_vgpm.get(_vt, {})
-        # insider_summary may be a plain string, a dict keyed by ticker, or the
-        # per-ticker value may itself be a dict (signal/summary sub-keys).
-        # Always resolve to a plain string before passing to _compute_vgpm.
-        _ins_raw_val = _ins_raw.get(_vt, "") if isinstance(_ins_raw, dict) else (_ins_raw or "")
-        if isinstance(_ins_raw_val, dict):
-            # flatten: prefer "summary" or "insider_summary" sub-key, else stringify
-            _ins_str = str(
-                _ins_raw_val.get("insider_summary")
-                or _ins_raw_val.get("summary")
-                or _ins_raw_val.get("signal")
-                or _ins_raw_val
-            )
-        else:
-            _ins_str = str(_ins_raw_val or "")
-        if _vgpm_dcf or _vgpm_scen:
-            _vgpm_scores = _compute_vgpm(
-                dcf_ticker=_vgpm_dcf,
-                scen_ticker=_vgpm_scen,
-                raw_financials=_rf_raw,
-                dcf_cal=_vgpm_cal,
-                insider_summary=_ins_str,
-                sector=_sectors_pdf.get(_vt) if isinstance(_sectors_pdf, dict) else None,
-            )
-            _co_vgpm = _fetch_company_name(_vt)
-            story.extend(_vgpm_scorecard(_vgpm_scores, _vt, _co_vgpm, styles, page_w))
-
-    # ── Price Sparkline (item 6D) — prefer pipeline data, fall back to API ──
     _ph_pipeline = result.get("price_history", {})
-    for _sp_t in tickers:
-        # Pipeline data is [{date, close}] dicts; convert to (date, close) tuples
-        _ph_raw = _ph_pipeline.get(_sp_t, [])
-        if _ph_raw:
-            _ph = [(p["date"], p["close"]) for p in _ph_raw]
-        else:
-            _ph = _fetch_price_history(_sp_t)   # live fallback
-        _pt_val = decisions.get(_sp_t, {}).get("price_target")
+
+    def _side_column(t: str, width: float) -> list:
+        col: list = []
+        _ph_raw = _ph_pipeline.get(t, [])
+        _ph = [(p["date"], p["close"]) for p in _ph_raw] if _ph_raw else _fetch_price_history(t)
         if _ph:
-            story.append(Paragraph(
-                f"12-Month Price History — {_sp_t}",
-                styles["RptLabel"],
-            ))
-            story.append(Spacer(1, 2))
-            story.append(_PriceSparkline(_ph, _pt_val, page_w))
-            story.append(Spacer(1, 6))
+            col += [Paragraph("12-month price", styles["RptLabel"]), Spacer(1, 2),
+                    _PriceSparkline(_ph, decisions.get(t, {}).get("price_target"), width), Spacer(1, 6)]
+        _kf = _key_financials_table(raw_financials, styles, width, years=3)
+        if _kf:
+            col += [Paragraph("Key financials", styles["RptLabel"]), Spacer(1, 2), _kf, Spacer(1, 6)]
+        col += _intel_compact(short_interest.get(t) or {}, earnings_qual.get(t) or {},
+                              insider_activity.get(t) or {}, news_sentiment.get(t) or {},
+                              analyst_revisions.get(t) or {}, styles, width)
+        return col
 
-    # ── Key Financials table (item 15) ───────────────────────────────────────
-    _kf = _key_financials_table(raw_financials, styles, page_w)
-    if _kf:
-        story.append(_kf)
-        story.append(Spacer(1, 6))
-
-    # ── Intelligence Signals — Phase 2.5 (item I) ────────────────────────────
-    # Show per-ticker if single ticker; aggregate header if multi-ticker (use first)
-    _intel_ticker = tickers[0] if tickers else None
-    if _intel_ticker:
-        _si_data  = short_interest.get(_intel_ticker) or {}
-        _eq_data  = earnings_qual.get(_intel_ticker) or {}
-        _ia_data  = insider_activity.get(_intel_ticker) or {}
-        _ns_data  = news_sentiment.get(_intel_ticker) or {}
-        _ar_data  = analyst_revisions.get(_intel_ticker) or {}
-        story.extend(_intel_summary(
-            _intel_ticker, _si_data, _eq_data,
-            _ia_data, _ns_data, _ar_data,
-            styles, page_w,
-        ))
+    _dash = "\u2014"
+    _bar = "|"
+    for _i, _t in enumerate(tickers):
+        _dec   = decisions.get(_t, {})
+        _scn   = scenario.get(_t, {})
+        _dcf_t = (result.get("dcf_range") or {}).get(_t, {})
+        _collect(_dec.get("rationale", _dec.get("reasoning", "")))
+        _price = _scn.get("current_price")
+        _tgt   = _dec.get("price_target") or _scn.get("12m_price_target")
+        _up    = ((_tgt - _price) / _price * 100
+                  if isinstance(_tgt, (int, float)) and isinstance(_price, (int, float)) and _price else None)
+        _up_s  = _pct_s(_up) if _up is not None else _dash
+        _hz    = _strip(_dec.get("time_horizon", _dash)).title()
+        _title = [
+            Paragraph(f"{_company_label(_t, raw_financials)} ({_t})", styles["RptTitle"]),
+            Paragraph(
+                f"12m target: <b>{_money(_tgt)}</b>  {_bar}  Price: <b>{_money(_price)}</b>  {_bar}  "
+                f"Upside: <b>{_up_s}</b>  {_bar}  Horizon: <b>{_hz}</b>",
+                styles["RptPriceLine"]),
+        ]
+        _w = left_w if _single else page_w
+        _main = (_section_header("INVESTMENT DECISION", _w)
+                 + _decision_block(_dec, _scn, _dcf_t, styles, _w)
+                 + [Spacer(1, 6)]
+                 + _section_header("SCENARIO ANALYSIS", _w)
+                 + _scenario_block(_scn, _dcf_t, styles, _w))
+        if _single:
+            story += _title + [FrameBreak()] + _side_column(_t, side_w) + [FrameBreak()]
+            story += [NextPageTemplate("body")] + _main
+        else:
+            if _i > 0:
+                story.append(PageBreak())
+            story += _title + _main + [Spacer(1, 6)] + _side_column(_t, page_w)
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SECTION 1 — INDUSTRY INTELLIGENCE BRIEF  (after executive summary)
+    # SECTION 2 — INDUSTRY INTELLIGENCE BRIEF
     # ═══════════════════════════════════════════════════════════════════════════
-    story.extend(_section_header("SECTION 1 — INDUSTRY INTELLIGENCE BRIEF", page_w))
+    story.append(CondPageBreak(90 * mm))
+    story.extend(_section_header("SECTION 2 — INDUSTRY INTELLIGENCE BRIEF", page_w))
 
     # Determine source tier for attribution (deep_research = live web; else LLM knowledge)
     _ib_src_raw = result.get("industry_brief", "") or ""
     _used_deep  = (not _ib_src_raw or _ib_src_raw.startswith(_BRIEF_ERROR_PREFIX))
     _ib_source  = (
-        "Anthropic Web Search (live) + Financial Datasets API"
+        "Anthropic Web Search (live) + Financial Modeling Prep"
         if _used_deep else
-        "AI Hedge Fund Phase 3 Industry Specialist · Financial Datasets API · "
+        "AI Hedge Fund Phase 3 Industry Specialist · Financial Modeling Prep · "
         "Sector KPI framework (internal)"
     )
 
@@ -3592,116 +2480,24 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
     story.append(Spacer(1, 8))
 
     # ═══════════════════════════════════════════════════════════════════════════
-    # SECTION 2 — FULL RESULT SUMMARY  (per ticker, untruncated)
+    # SECTION 3 — VALUATION AND RISK
     # ═══════════════════════════════════════════════════════════════════════════
     story.append(PageBreak())
-    story.extend(_section_header("SECTION 2 — FULL RESULT SUMMARY", page_w))
-    story.append(Spacer(1, 8))
+    story.extend(_section_header("SECTION 3 — VALUATION AND RISK", page_w))
 
     for i, (ticker, decision) in enumerate(decisions.items()):
         if i > 0:
             story.append(PageBreak())
-        story.append(Paragraph(f"Ticker: {ticker}", styles["RptSubsection"]))
-        story.append(_hr())
-
-        # Pull per-ticker analytics upfront (used across multiple sections)
+        if len(decisions) > 1:
+            story.append(Paragraph(f"Ticker: {ticker}", styles["RptSubsection"]))
+            story.append(_hr())
         scen = scenario.get(ticker, {})
         pl   = power_law.get(ticker, {})
         trap = value_trap.get(ticker, {})
+        dcf_ticker = (result.get("dcf_range") or {}).get(ticker, {})
 
-        # ── 1. Investment Decision — rationale only (metrics shown on cover scorecard)
-        rationale = _collect(decision.get("rationale", decision.get("reasoning", "")))
-        if rationale:
-            story.append(Paragraph("Investment Decision", styles["RptSubsection"]))
-            story.append(Paragraph(rationale, styles["RptBody"]))
-            story.append(Spacer(1, 8))
-
-        # ── 1b. Key Catalysts (item 4C) ───────────────────────────────────────
-        story.extend(_catalyst_section(
-            ticker          = ticker,
-            analyst_signals = analyst_signals,
-            scenario        = scenario,
-            styles          = styles,
-            page_w          = page_w,
-        ))
-
-        # ── 2. Scenario Analysis (item 3+4: moved up, renamed, structured table)
-        story.append(Paragraph("Scenario Analysis", styles["RptSubsection"]))
-
-        bull_fv = scen.get("bull", {}).get("fair_value")
-        base_fv = scen.get("base", {}).get("fair_value")
-        bear_fv = scen.get("bear", {}).get("fair_value")
-        bull_p  = scen.get("bull", {}).get("probability", 0)
-        base_p  = scen.get("base", {}).get("probability", 0)
-        bear_p  = scen.get("bear", {}).get("probability", 0)
-        bull_assum = _collect(scen.get("bull", {}).get("assumptions", ""))
-        base_assum = _collect(scen.get("base", {}).get("assumptions", ""))
-        bear_assum = _collect(scen.get("bear", {}).get("assumptions", ""))
-        ev_val  = scen.get("expected_value")
-        upside  = scen.get("upside_pct")
-
-        def _fv(v): return f"${v:.0f}" if isinstance(v, (int, float)) else "—"
-        def _pp(v): return f"{v*100:.0f}%" if isinstance(v, (int, float)) and v else "—"
-
-        scen_w = [page_w * 0.28, page_w * 0.24, page_w * 0.24, page_w * 0.24]
-        scen_rows = [
-            [Paragraph(_wh(""),     styles["RptLabel"]),
-             Paragraph(_wh("Bear"), styles["RptLabel"]),
-             Paragraph(_wh("Base"), styles["RptLabel"]),
-             Paragraph(_wh("Bull"), styles["RptLabel"])],
-            [Paragraph("Fair Value",  styles["RptBody"]),
-             Paragraph(_fv(bear_fv),  styles["RptValue"]),
-             Paragraph(_fv(base_fv),  styles["RptValue"]),
-             Paragraph(_fv(bull_fv),  styles["RptValue"])],
-            [Paragraph("Probability", styles["RptBody"]),
-             Paragraph(_pp(bear_p),   styles["RptValue"]),
-             Paragraph(_pp(base_p),   styles["RptValue"]),
-             Paragraph(_pp(bull_p),   styles["RptValue"])],
-        ]
-        if any([bear_assum, base_assum, bull_assum]):
-            scen_rows.append([
-                Paragraph("Key Assumptions", styles["RptBody"]),
-                Paragraph(bear_assum, styles["RptBody"]),
-                Paragraph(base_assum, styles["RptBody"]),
-                Paragraph(bull_assum, styles["RptBody"]),
-            ])
-        if ev_val:
-            scen_rows.append([
-                Paragraph("<b>Expected Value</b>", styles["RptLabel"]),
-                Paragraph("", styles["RptValue"]),
-                Paragraph(f"<b>${float(ev_val):.2f}</b>", styles["RptLabel"]),
-                Paragraph("", styles["RptValue"]),
-            ])
-        if upside is not None:
-            _sign = "+" if float(upside) >= 0 else ""
-            scen_rows.append([
-                Paragraph("<b>Prob-Wtd Upside / Downside vs Current Price</b>", styles["RptLabel"]),
-                Paragraph("", styles["RptValue"]),
-                Paragraph(f"<b>{_sign}{float(upside):.1f}%</b>", styles["RptLabel"]),
-                Paragraph("", styles["RptValue"]),
-            ])
-
-        scen_tbl = Table(scen_rows, colWidths=scen_w, hAlign="LEFT", repeatRows=1)
-        scen_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0, 0), (-1, 0), C_PALE),
-            ("TEXTCOLOR",     (0, 0), (-1, 0), C_NAVY),
-            ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING",    (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-            ("ROWBACKGROUNDS",(0, 1), (-1, -3), [colors.white, C_PALE]),
-            ("BACKGROUND",    (0, -2), (-1, -1), C_PALE),
-            ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-        ]))
-        story.append(scen_tbl)
-        story.append(Spacer(1, 8))
-
-        # ── 3. Valuation Analysis (item 4: renamed from "Phase 4.5 — Valuation Model") ──
+        # ── Valuation Analysis ──
         story.append(Paragraph("Valuation Analysis", styles["RptSubsection"]))
-        dcf_all    = result.get("dcf_range", {})
-        dcf_ticker = dcf_all.get(ticker, {})
         story.extend(_section_2f(
             ticker   = ticker,
             dcf_data = dcf_ticker,
@@ -3710,58 +2506,44 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
             styles   = styles,
             page_w   = page_w,
         ))
-        story.append(Spacer(1, 4))
-        # ── 3a. Forward Financial Estimates — Year 1–5 (item 5A) ─────────────
         _fwd_rows = _forward_financial_model(dcf_ticker, styles, page_w)
         if _fwd_rows:
             story.append(Paragraph(
-                "Forward Financial Estimates — DCF Base Case (Year 1–5)",
-                styles["RptLabel"],
-            ))
+                "Forward Financial Estimates \u2014 DCF Base Case (Year 1\u20135)", styles["RptLabel"]))
             story.append(Spacer(1, 2))
             story.extend(_fwd_rows)
             story.append(Spacer(1, 4))
-        # ── 3b. Industry Peer Comparison (item B) ────────────────────────────
-        _all_peers = result.get("peer_comparison", {})
         _peer_rows = _peer_comparison_table(
-            _all_peers.get(ticker, {}), ticker, styles, page_w
-        )
+            (result.get("peer_comparison") or {}).get(ticker, {}), ticker, styles, page_w)
         if _peer_rows:
             story.append(Paragraph("Industry Peer Comparison", styles["RptLabel"]))
             story.append(Spacer(1, 2))
             story.extend(_peer_rows)
 
-        # ── 3c. Sensitivity Analysis (item G) ────────────────────────────────
-        _sens_cp   = scen.get("current_price") or scen.get("reconciliation", {}).get("current_price")
-        _sens_pt   = scen.get("12m_price_target")
-        _sens_meth = scen.get("12m_pt_method")
-        story.extend(_sensitivity_table(
-            dcf_ticker, styles, page_w,
-            current_price=_sens_cp,
-            pt_12m=_sens_pt,
-            pt_method=_sens_meth,
-        ))
-        # P0.2 — second grid: Revenue Growth × FCF Margin
-        story.extend(_sensitivity_table_growth_margin(
-            dcf_ticker, styles, page_w,
-            current_price=_sens_cp,
-            pt_12m=_sens_pt,
-        ))
-        story.append(Spacer(1, 4))
+        # ── Financial statements: their own page after the valuation model ──
+        _fs_raw = result.get("financial_statements") or {}
+        _fs_t = _fs_raw.get(ticker) if isinstance(_fs_raw, dict) and ticker in _fs_raw else _fs_raw
+        _fs_page = _financial_statements_page(_fs_t, styles, page_w)
+        if _fs_page:
+            story.append(PageBreak())
+            story.extend(_section_header("FINANCIAL STATEMENTS", page_w))
+            story.extend(_fs_page)
+            story.append(PageBreak())
 
-        # ── 4. Risk Assessment (item 3+4: renamed; consolidates risk mgr + value trap) ──
+        # ── Valuation Summary: intrinsic value to 12-month target ──
+        story.append(Paragraph("Valuation Summary", styles["RptSubsection"]))
+        story.extend(_valuation_summary(dcf_ticker, scen, styles, page_w))
+        story.append(Spacer(1, 8))
+
+        # ── Risk Assessment (value-trap checks + risk flags) ──
         story.append(Paragraph("Risk Assessment", styles["RptSubsection"]))
 
+        # Risk flags only: position sizing is the decision's (Section 4), not
+        # the risk manager's earlier pre-decision size, which contradicted it.
         risk      = analyst_signals.get("advanced_risk_manager", {}).get(ticker, {})
         risk_rows = []
-        if risk:
-            approved  = risk.get("approved_size_pct", 0)
-            risk_rows.append(["Approved Position Size", f"{approved:.1%}"])
-            all_flags = risk.get("level1_flags", []) + risk.get("sector_flags", [])
-            for flag in all_flags:
-                risk_rows.append(["Risk Flag", _collect(flag)])
-            if not all_flags:
-                risk_rows.append(["Risk Flags", "None — all checks passed"])
+        for flag in (risk.get("level1_flags", []) + risk.get("sector_flags", [])) if risk else []:
+            risk_rows.append(["Risk Flag", _collect(flag)])
 
         trap_verdict = _strip(trap.get("overall_verdict", "—"))
         risk_rows.append(["Value Trap Verdict", trap_verdict])
@@ -3779,12 +2561,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
             story.append(Paragraph("Risk data not available for this ticker.", styles["RptBody"]))
         story.append(Spacer(1, 8))
 
-        # ── 5+6. Analyst Committee & Debate Round — decommissioned (M2 Track
-        # D/E): the PM decides from research + valuation directly, so the
-        # persona cards and debate table no longer exist. The intelligence
-        # sections below carry the evidence instead.
-
-        # ── 7. Power Law Analysis (item 3+4: separated from analytics block, renamed) ──
+        # ── Power Law Analysis ──
         story.append(Paragraph("Power Law Analysis", styles["RptSubsection"]))
 
         pl_score  = pl.get("total_score", "—")
@@ -3796,13 +2573,6 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
             story.append(Spacer(1, 4))
 
         # Dimension table: Dimension | Score | Justification
-        _PL_JUSTIFICATIONS = {
-            "scale_economies":  "Unit costs decline as compute volume scales; chip design amortised over larger base.",
-            "network_effects":  "CUDA developer ecosystem grows with each GPU generation, raising adoption barriers.",
-            "winner_take_most": "AI training workloads concentrated on NVIDIA; hyperscaler procurement reflects this.",
-            "switching_costs":  "Re-engineering ML pipelines away from CUDA represents multi-year effort and cost.",
-            "data_ip_moat":     "Proprietary CUDA libraries, cuDNN, TensorRT and NIM create deep software lock-in.",
-        }
         _dim_labels = {
             "scale_economies": "Scale economies",
             "network_effects": "Network effects",
@@ -3815,14 +2585,15 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
             Paragraph(_wh("Score"),         styles["RptLabel"]),
             Paragraph(_wh("Justification"), styles["RptLabel"]),
         ]]
+        _dim_vals = [pl.get(k) for k in _dim_labels if isinstance(pl.get(k), (int, float))]
+        _dim_scale = 10 if any(v > 2 for v in _dim_vals) else 2
         for dim_key, dim_label in _dim_labels.items():
             score_val = pl.get(dim_key, "?")
             # Use agent-provided interpretation if available in the pl dict, else fallback
-            justif = _strip(str(pl.get(f"{dim_key}_note", "")
-                                or _PL_JUSTIFICATIONS.get(dim_key, "")))
+            justif = _strip(str(pl.get(f"{dim_key}_note", "") or "\u2014"))
             pl_dim_rows.append([
                 Paragraph(dim_label,             styles["RptBody"]),
-                Paragraph(f"{score_val} / 2",    styles["RptValue"]),
+                Paragraph(f"{score_val} / {_dim_scale}", styles["RptValue"]),
                 Paragraph(justif,                styles["RptBody"]),
             ])
         pl_dim_rows.append([
@@ -3853,202 +2624,23 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
         story.append(pl_tbl)
         story.append(Spacer(1, 6))
 
-        # ── 8. BU-Level Analysis (Phase 7.5) ─────────────────────────────────
-        bu_all = result.get("bu_analysis", {})
-        bu = bu_all.get(ticker, {})
-        if bu:
-            story.append(Paragraph("BU-Level Analysis", styles["RptSubsection"]))
 
-            # KPI Extraction
-            kpi = bu.get("kpi_extraction", {})
-            if isinstance(kpi, dict):
-                kpi_rows = []
-                if kpi.get("unit_economics"):
-                    kpi_rows.append(["Unit Economics", _collect(kpi["unit_economics"])])
-                if kpi.get("backlog_rpo"):
-                    kpi_rows.append(["Backlog / RPO", _collect(kpi["backlog_rpo"])])
-                if kpi.get("segment_nrr"):
-                    kpi_rows.append(["Segment NRR", _collect(kpi["segment_nrr"])])
-                if kpi_rows:
-                    story.append(Paragraph("KPI Extraction", styles["RptLabel"]))
-                    story.append(_kv_table(kpi_rows, col1, col2, styles))
-                    story.append(Spacer(1, 4))
-
-            # Margin Attribution
-            margin_attr = _collect(bu.get("margin_attribution", ""))
-            if margin_attr:
-                story.append(Paragraph("Margin Attribution", styles["RptLabel"]))
-                story.append(Paragraph(margin_attr, styles["RptBody"]))
-                story.append(Spacer(1, 4))
-
-            # Capex Breakdown
-            capex_bd = bu.get("capex_breakdown", {})
-            if isinstance(capex_bd, dict) and capex_bd.get("commentary"):
-                capex_rows = []
-                if capex_bd.get("growth_capex_pct") is not None:
-                    capex_rows.append(["Growth Capex", f"{capex_bd['growth_capex_pct']:.0f}%"])
-                if capex_bd.get("maintenance_capex_pct") is not None:
-                    capex_rows.append(["Maintenance Capex", f"{capex_bd['maintenance_capex_pct']:.0f}%"])
-                if capex_bd.get("capex_as_pct_revenue") is not None:
-                    capex_rows.append(["Capex / Revenue", f"{capex_bd['capex_as_pct_revenue']:.1f}%"])
-                if capex_bd.get("commentary"):
-                    capex_rows.append(["Commentary", _collect(capex_bd["commentary"])])
-                if capex_rows:
-                    story.append(Paragraph("Capex Breakdown", styles["RptLabel"]))
-                    story.append(_kv_table(capex_rows, col1, col2, styles))
-                    story.append(Spacer(1, 4))
-
-            # Product Resilience
-            prod_res = _collect(bu.get("product_resilience", ""))
-            if prod_res:
-                story.append(Paragraph("Product Resilience", styles["RptLabel"]))
-                story.append(Paragraph(prod_res, styles["RptBody"]))
-                story.append(Spacer(1, 4))
-
-            # 3-Year Segment Forecast
-            seg_fcast = bu.get("segment_forecast", {})
-            if isinstance(seg_fcast, dict) and any(seg_fcast.get(s) for s in ("bear", "base", "bull")):
-                story.append(Paragraph("3-Year Segment Revenue and Margin Forecast", styles["RptLabel"]))
-                seg_w = [page_w * 0.18, page_w * 0.10, page_w * 0.10, page_w * 0.10, page_w * 0.12, page_w * 0.40]
-                seg_rows = [[
-                    Paragraph(_wh("Scenario"),   styles["RptLabel"]),
-                    Paragraph(_wh("Yr1 Rev%"),   styles["RptLabel"]),
-                    Paragraph(_wh("Yr2 Rev%"),   styles["RptLabel"]),
-                    Paragraph(_wh("Yr3 Rev%"),   styles["RptLabel"]),
-                    Paragraph(_wh("EBITDA Yr3"), styles["RptLabel"]),
-                    Paragraph(_wh("Assumption"), styles["RptLabel"]),
-                ]]
-                for scen_name in ("bear", "base", "bull"):
-                    s = seg_fcast.get(scen_name, {})
-                    if not s:
-                        continue
-                    def _pct(v): return f"{v:.1f}%" if isinstance(v, (int, float)) else "—"
-                    seg_rows.append([
-                        Paragraph(scen_name.capitalize(), styles["RptBody"]),
-                        Paragraph(_pct(s.get("yr1_rev_growth")), styles["RptValue"]),
-                        Paragraph(_pct(s.get("yr2_rev_growth")), styles["RptValue"]),
-                        Paragraph(_pct(s.get("yr3_rev_growth")), styles["RptValue"]),
-                        Paragraph(_pct(s.get("ebitda_margin_yr3")), styles["RptValue"]),
-                        Paragraph(_collect(s.get("assumption", "")), styles["RptBody"]),
-                    ])
-                seg_tbl = Table(seg_rows, colWidths=seg_w, hAlign="LEFT", repeatRows=1)
-                seg_tbl.setStyle(TableStyle([
-                    ("BACKGROUND",    (0, 0), (-1, 0), C_PALE),
-                    ("TEXTCOLOR",     (0, 0), (-1, 0), C_NAVY),
-                    ("FONTSIZE",      (0, 0), (-1, -1), 7.5),
-                    ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-                    ("TOPPADDING",    (0, 0), (-1, -1), 3),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                    ("LEFTPADDING",   (0, 0), (-1, -1), 4),
-                    ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
-                    ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, C_PALE]),
-                    ("LINEBELOW",     (0, 0), (-1, -1), 0.25, C_LGREY),
-                ]))
-                story.append(seg_tbl)
-                story.append(Spacer(1, 4))
-
-            # Data limitations
-            data_lim = _collect(bu.get("data_limitations", ""))
-            if data_lim and data_lim not in ("N/A", "LLM call failed."):
-                story.append(Paragraph(
-                    f"<i>Data limitations: {data_lim}</i>", styles["RptSource"]
-                ))
-            story.append(Spacer(1, 6))
-
-        # ── 9. Senior Financial Editor Review (Phase 7.5) ─────────────────────
-        editor_all = result.get("editor_review", {})
-        editor = editor_all.get(ticker, {})
-        if editor:
-            story.append(Paragraph("Editorial Review", styles["RptSubsection"]))
-
-            # Polished summary
-            polished = _collect(editor.get("polished_summary", ""))
-            if polished and polished != "Editor review unavailable.":
-                story.append(Paragraph("<b>Executive Summary (Polished)</b>", styles["RptLabel"]))
-                story.append(Paragraph(polished, styles["RptBody"]))
-                story.append(Spacer(1, 4))
-
-            # Quality score + logic flags
-            quality = editor.get("report_quality_score", "—")
-            logic_flags = editor.get("logic_audit_flags", [])
-            ed_rows = [["Report Quality Score", f"{quality} / 10"]]
-            for flag in logic_flags:
-                ed_rows.append(["Logic Flag", _collect(flag)])
-            if not logic_flags:
-                ed_rows.append(["Logic Flags", "None — no contradictions detected"])
-
-            # Formatting notes
-            fmt_notes = editor.get("formatting_notes", [])
-            for note in fmt_notes:
-                ed_rows.append(["Formatting Note", _collect(note)])
-
-            # Key corrections
-            corrections = editor.get("key_corrections", [])
-            for c in corrections:
-                ed_rows.append(["Key Correction", _collect(c)])
-
-            story.append(_kv_table(ed_rows, col1, col2, styles))
-            story.append(Spacer(1, 6))
-
-        # ── 10. Citation & Hallucination Audit (Phase 7.5) ────────────────────
-        ca_all = result.get("citation_audit", {})
-        ca = ca_all.get(ticker, {})
-        if ca:
-            story.append(Paragraph("Citation & Hallucination Audit", styles["RptSubsection"]))
-
-            audit_score  = ca.get("audit_score", "—")
-            halluc_flags = ca.get("hallucination_flags", [])
-            src_gaps     = ca.get("primary_source_gaps", [])
-
-            ca_summary_rows = [["Citation Audit Score", f"{audit_score} / 10"]]
-            for hf in halluc_flags:
-                ca_summary_rows.append(["Hallucination Flag", _collect(hf)])
-            if not halluc_flags:
-                ca_summary_rows.append(["Hallucination Flags", "None detected"])
-            for sg in src_gaps:
-                ca_summary_rows.append(["Source Gap", _collect(sg)])
-            if not src_gaps:
-                ca_summary_rows.append(["Source Gaps", "None — all claims sourced"])
-            story.append(_kv_table(ca_summary_rows, col1, col2, styles))
-            story.append(Spacer(1, 6))
-
-        # ── §12 Final Summary Table (P1.3) ───────────────────────────────────
-        story.extend(_final_summary_table(
-            dcf_data   = dcf_ticker,
-            scenario   = scen,
-            decision   = decision,
-            styles     = styles,
-            page_w     = page_w,
-        ))
-
-    # ── Post-Trade Review (if available) ─────────────────────────────────────
-    ptr = result.get("post_trade_review")
-    if ptr:
-        story.extend(_section_header("SECTION 3 — POST-TRADE REVIEW (Phase 10)", page_w))
-        ptr_rows = [["Calls Reviewed", str(ptr.get("reviewed", 0))]]
-        for upd in ptr.get("weight_updates", []):
-            ptr_rows.append(["Weight Update", _collect(upd)])
-        story.append(_kv_table(ptr_rows, col1, col2, styles))
-        story.append(Spacer(1, 8))
-
-    # ── Appendix — Macro Regime ───────────────────────────────────────────────
-    story.extend(_section_header("APPENDIX — MACRO REGIME", page_w))
-    macro_rows = [
-        ["Risk Appetite",  macro.get("risk_appetite", "—")],
-        ["Rate Direction", macro.get("rate_direction", "—")],
-        ["Dollar Trend",   macro.get("dollar_trend",   "—")],
-        ["Vol Regime",     macro.get("volatility_regime", "—")],
-    ]
-    notes = _strip(macro.get("regime_notes", ""))
-    if notes:
-        macro_rows.append(["Notes", _collect(notes)])
-    story.append(_kv_table(macro_rows, col1, col2, styles))
-    story.append(Spacer(1, 6))
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SECTION 4 — DECISION
+    # ═══════════════════════════════════════════════════════════════════════════
+    story.extend(_section_header("SECTION 4 \u2014 DECISION", page_w))
+    for ticker, decision in decisions.items():
+        if len(decisions) > 1:
+            story.append(Paragraph(f"Ticker: {ticker}", styles["RptSubsection"]))
+        story.extend(_decision_section(decision, scenario.get(ticker, {}),
+                                       (result.get("dcf_range") or {}).get(ticker, {}),
+                                       styles, page_w))
+        story.append(Spacer(1, 6))
 
     # ── Build PDF with running headers + page numbers (item E) ───────────────
     # Header text is captured in closure; _NumberedCanvas draws on every page.
     _hdr_left  = f"{', '.join(tickers)} — {_strip(sector)}"
-    _hdr_right = f"AI Hedge Fund Research  |  {run_date}"
+    _hdr_right = f"Equitable Research  |  {run_date}"
     _W, _H     = A4
     _footer_txt = "For research purposes only. Not investment advice."
 
@@ -4096,7 +2688,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
             self.setFont("Helvetica", 5.5)
             self.drawString(
                 margin, fy,
-                "Sources: Financial Datasets API · Anthropic Web Search · Internal Sector KPI Framework",
+                "Sources: Financial Modeling Prep · Anthropic Web Search · Internal Sector KPI Framework",
             )
 
             self.restoreState()
@@ -4107,7 +2699,8 @@ def generate_pdf_report(result: dict, output_path: str | None = None) -> str:
     _validate_no_truncation(_all_text, output_path)
 
     # ── Auto-open ─────────────────────────────────────────────────────────────
-    _open_pdf(output_path)
+    if open_after:
+        _open_pdf(output_path)
 
     return output_path
 

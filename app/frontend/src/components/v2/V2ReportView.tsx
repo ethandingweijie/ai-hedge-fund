@@ -56,6 +56,7 @@ import { BiopharmaValuationPanel } from '@/components/report/biopharma/Biopharma
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SectorValuationCard } from '@/components/report/SectorValuationCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
+import { ExportFab } from '@/components/report/ExportFab';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
 import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryStrip';
@@ -320,7 +321,6 @@ export function V2ReportView({
           </div>
         )}
         {tab === 'valuation'  && <ValuationBody
-          runId={runId}
           dcfRange={dcfRange}
           dcfSkipReason={dcfSkipReason}
           scenarioAnalysis={scenarioAnalysis}
@@ -362,6 +362,8 @@ export function V2ReportView({
           />
         )}
       </div>
+      {/* Export (saved run only): Report (PDF) / Model (XLSX), above the nav pill. */}
+      {!isRunning && runId && <ExportFab runId={runId} ticker={ticker} />}
     </div>
   );
 }
@@ -531,10 +533,7 @@ function SummaryBody({
 function ValuationBody({
   dcfRange, dcfSkipReason, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
   sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics, sectorCard, ptHistory,
-  runId,
 }: {
-  /** Saved run id: enables the Excel workbook export. */
-  runId?: string;
   dcfRange: DcfRange | undefined;
   /** Why dcfRange came back {} for this ticker, if known (see DcfMethodologyPanel). */
   dcfSkipReason?: string;
@@ -652,8 +651,7 @@ function ValuationBody({
           sector branch rendered above; the DCF methodology panel follows. ── */}
       {dcfRange?.sotp_breakdown && <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />}
 
-      <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason}
-                           runId={isRunning ? null : runId} />
+      <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 
       {/* ── Sector Valuation Card (Option B render) ─────────────────── */}
       {sectorCard && <SectorValuationCard payload={sectorCard} />}

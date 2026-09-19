@@ -30,6 +30,7 @@ import { PowerLawRadar }       from '@/components/report/PowerLawRadar';
 import { ValueTrapChecklist }  from '@/components/report/ValueTrapChecklist';
 import { DecisionInputsCard }  from '@/components/report/DecisionInputsCard';
 import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
+import { ExportFab } from '@/components/report/ExportFab';
 import { SectorValuationCard } from '@/components/report/SectorValuationCard';
 import type { SectorCardPayload } from '@/lib/reportTypes';
 import { IntelligenceGrid }    from '@/components/report/IntelligenceGrid';
@@ -1404,8 +1405,7 @@ export function ReportPage() {
                 as its own full-width strip — fills the column's remaining
                 height instead of leaving the ladder's sparse-data cards
                 (no bear/bull IV stored) looking like dead space above a gap. */}
-            <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} skipReason={dcfSkipReason}
-                                 runId={state === 'complete' ? runId : null} />
+            <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} skipReason={dcfSkipReason} />
             {/* ── Sector Valuation Card ────────────────────────────────
                 Mounted here as well as in V2ReportView: the mobile view
                 bypasses this JSX entirely, so a card added only there is
@@ -1499,7 +1499,11 @@ export function ReportPage() {
       </div>
 
       {/* ── Collapsible progress log (bottom-right overlay) ──────────────────── */}
-      <ProgressOverlay events={events} isRunning={isRunning} error={error} />
+      <ProgressOverlay events={events} isRunning={isRunning} error={error}
+                       clearRight={state === 'complete' && !!runId} />
+
+      {/* ── Export (saved run only): Report (PDF) / Model (XLSX) ─────────── */}
+      {state === 'complete' && runId && <ExportFab runId={runId} ticker={liveTicker} />}
 
     </div>
   );
@@ -1510,10 +1514,13 @@ function ProgressOverlay({
   events,
   isRunning,
   error,
+  clearRight = false,
 }: {
   events: ProgressEvent[];
   isRunning: boolean;
   error: string | null;
+  /** Leave the bottom-right corner to the export button. */
+  clearRight?: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -1530,7 +1537,7 @@ function ProgressOverlay({
   if (deduped.length === 0 && !error) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-80 shadow-xl rounded-lg border border-border bg-background/95 backdrop-blur text-xs">
+    <div className={`fixed bottom-4 ${clearRight ? 'right-24' : 'right-4'} z-40 w-80 shadow-xl rounded-lg border border-border bg-background/95 backdrop-blur text-xs`}>
 
       {/* Header */}
       <div

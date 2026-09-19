@@ -51,15 +51,18 @@ export function pulseTicker(ticker: string, signal?: AbortSignal): Promise<Respo
   return fetch(`${BASE}/analysis/pulse?ticker=${encodeURIComponent(ticker)}`, { signal });
 }
 
-/** Fetch the full result for a completed run. */
+/** A saved run's export: the report as a PDF, or the valuation model as Excel. */
+export type RunExportKind = 'pdf' | 'xlsx';
+
+const _EXPORT_PATH: Record<RunExportKind, string> = { pdf: 'report.pdf', xlsx: 'workbook' };
+
 /**
- * Download the run's valuation as a traceable Excel workbook (live formulas,
- * institutional colour code). Sends the auth header explicitly: this is a
- * file download, not a JSON call.
+ * Download a run export. Sends the auth header explicitly: this is a file
+ * download, not a JSON call. The server names the file (Content-Disposition).
  */
-export async function downloadRunWorkbook(runId: string, ticker?: string): Promise<void> {
+export async function downloadRunExport(runId: string, kind: RunExportKind, ticker?: string): Promise<void> {
   const qs = ticker ? `?ticker=${encodeURIComponent(ticker)}` : '';
-  const res = await fetch(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/workbook${qs}`, {
+  const res = await fetch(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/${_EXPORT_PATH[kind]}${qs}`, {
     headers: _authHeaders(),
   });
   if (!res.ok) {
@@ -69,7 +72,7 @@ export async function downloadRunWorkbook(runId: string, ticker?: string): Promi
   const blob = await res.blob();
   const cd = res.headers.get('Content-Disposition') || '';
   const m = /filename="?([^";]+)"?/i.exec(cd);
-  const name = m ? m[1] : `${ticker || 'valuation'}_valuation.xlsx`;
+  const name = m ? m[1] : `${ticker || 'run'}_${kind === 'pdf' ? 'report.pdf' : 'valuation.xlsx'}`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -80,6 +83,7 @@ export async function downloadRunWorkbook(runId: string, ticker?: string): Promi
   URL.revokeObjectURL(url);
 }
 
+/** Fetch the full result for a completed run. */
 export function getRunResult(runId: string): Promise<RunResult> {
   return fetchJson<RunResult>(`${BASE}/analysis/runs/${runId}`);
 }

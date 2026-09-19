@@ -666,6 +666,34 @@ async def get_run_workbook(run_id: str, request: Request, ticker: Optional[str] 
     )
 
 
+# ── GET /analysis/runs/{run_id}/report.pdf ───────────────────────────────────
+
+@router.get("/runs/{run_id}/report.pdf")
+async def get_run_report_pdf(run_id: str, request: Request, ticker: Optional[str] = None,
+                             db: Session = Depends(get_db)):
+    """The run's investment report as a PDF (same renderer as the CLI report).
+
+    Same access rule as GET /runs/{run_id}.
+    """
+    from fastapi.responses import Response
+    from app.backend.services import workbook_export_service as wx
+    user_id = _get_user_id(request, db)
+    result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    try:
+        blob, filename = await asyncio.to_thread(
+            wx.build_run_pdf, {**result, "run_id": run_id},
+            canonical_ticker(ticker) if ticker else None)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No result for that ticker in this run")
+    except Exception:
+        logger.exception("pdf export failed for %s", run_id)
+        raise HTTPException(status_code=500, detail="PDF export failed")
+    return Response(content=blob, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
 # ── DELETE /analysis/runs/{run_id} ───────────────────────────────────────────
 
 @router.delete("/runs/{run_id}")
