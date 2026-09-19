@@ -24,11 +24,6 @@ def _dr(table, weights=None, iv=None, pre=None, profile_weights=None, **extra):
 
 
 class TestCauses:
-    def test_composite_named_when_it_pushed_iv_away(self):
-        att = va.attribute_run(_dr({"DCF": 100.0}, {"DCF": 1.0}, iv=130.0, pre=100.0), 100.0)
-        assert att["composite_effect"] == pytest.approx(math.log(1.3), abs=1e-6)
-        assert att["cause"] == "composite"
-
     def test_weights_named_when_a_carried_method_was_much_closer(self):
         att = va.attribute_run(_dr({"DCF": 200.0, "P/E": 100.0},
                                    {"DCF": 0.5, "P/E": 0.5}), 100.0)
@@ -127,7 +122,7 @@ class TestLegacyRows:
         att = va.attribute_run(dr, 100.0)
         assert att["weights_source"] == "nominal"
         assert att["weights"] == pytest.approx({"DCF": 2 / 3, "EPV": 1 / 3})
-        assert att["pre_composite_err"] == att["iv_err"]      # no pre-composite stored
+        assert "pre_composite_err" not in att              # composite retired
 
     def test_unscorable_inputs_return_none(self):
         assert va.attribute_run({}, 100.0) is None

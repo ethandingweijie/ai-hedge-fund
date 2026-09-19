@@ -116,13 +116,6 @@ def test_inventory_days_is_gone():
     assert "memory_inventory_days" not in keys
 
 
-def test_the_risk_anchor_is_the_sufficiency_ratio():
-    risk = SECTOR_KPI_FRAMEWORK[PROFILE]["risk_adjustment"]
-    assert risk["kpi"] == "bit_supply_demand_gap"
-    # Negative gap = supply deficit = pricing power, so lower is better.
-    assert risk["direction"] == "lower_better"
-
-
 def test_foundry_metrics_are_absent():
     """Utilisation and leading-edge mix describe a foundry, not a memory maker."""
     keys = {k["key"] for k in SECTOR_KPI_FRAMEWORK[PROFILE]["kpis"]}

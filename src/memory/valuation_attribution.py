@@ -3,7 +3,6 @@
 valuation_outcomes says how far off a run was. This says why, from what the
 run stored -- no engine re-run, no fetch, no LLM:
 
-  composite  the Q x R x C multiplier moved IV further from the label
   weights    re-weighting the methods the blend carried would have come much
              closer: they straddled the label, or the closest one was near it
   routing    a profile another routing layer picked would have been closer
@@ -71,7 +70,7 @@ def _blend_weights(base: dict, table: dict[str, float]) -> tuple[dict[str, float
 
 
 def _alternatives(dr: dict, table: dict[str, float], label: float,
-                  pre_err: float) -> list[dict]:
+                  iv_err: float) -> list[dict]:
     """Profiles another routing layer chose or proposed, priced on this run's
     method values."""
     rt = dr.get("routing_trace") or {}
@@ -110,7 +109,7 @@ def _alternatives(dr: dict, table: dict[str, float], label: float,
             alt_iv = num / covered
             alt_err = _ln(alt_iv, label)
             alt.update(iv=round(alt_iv, 4), err=round(alt_err, 6),
-                       gain=round(abs(pre_err) - abs(alt_err), 6))
+                       gain=round(abs(iv_err) - abs(alt_err), 6))
         out.append(alt)
     return out
 
@@ -124,20 +123,18 @@ def attribute_run(dr: dict, label: float) -> Optional[dict]:
     if not iv:
         return None
     table = {k: float(v) for k, v in (base.get("method_iv_table") or {}).items() if _pos(v)}
-    pre = _pos(base.get("intrinsic_value_pre_composite")) or iv
-    iv_err, pre_err = _ln(iv, label), _ln(pre, label)
+    iv_err = _ln(iv, label)
     weights, weights_source = _blend_weights(base, table)
     method_err = {k: round(_ln(v, label), 6) for k, v in table.items()}
 
     carried = [k for k in weights if weights[k] > 0]
     best = min(carried, key=lambda k: abs(method_err[k])) if carried else None
-    headroom = (abs(pre_err) - abs(method_err[best])) if best else None
+    headroom = (abs(iv_err) - abs(method_err[best])) if best else None
     nonzero = [method_err[k] for k in carried if method_err[k] != 0]
     shared_bias = (len(carried) >= 2 and len(nonzero) == len(carried)
                    and (all(e > 0 for e in nonzero) or all(e < 0 for e in nonzero)))
     equal_iv = (sum(table[k] for k in carried) / len(carried)) if carried else None
-    composite_effect = abs(iv_err) - abs(pre_err)
-    alternatives = _alternatives(dr, table, label, pre_err)
+    alternatives = _alternatives(dr, table, label, iv_err)
     routing_gain = max((a["gain"] for a in alternatives if a["gain"] is not None),
                        default=None)
 
@@ -148,8 +145,7 @@ def attribute_run(dr: dict, label: float) -> Optional[dict]:
     # "weights" for TSLA, ARM and CRWD while every method missed the same way.
     weights_can_fix = headroom is not None and (
         not shared_bias or abs(method_err[best]) <= CAUSE_THRESHOLD)
-    contributions = {"composite": composite_effect,
-                     "weights": headroom if weights_can_fix else None,
+    contributions = {"weights": headroom if weights_can_fix else None,
                      "routing": routing_gain}
     named = {k: v for k, v in contributions.items() if v is not None and v > CAUSE_THRESHOLD}
     if named:
@@ -160,8 +156,7 @@ def attribute_run(dr: dict, label: float) -> Optional[dict]:
         cause = "method_values"
 
     return {
-        "iv_err": round(iv_err, 6), "pre_composite_err": round(pre_err, 6),
-        "composite_effect": round(composite_effect, 6),
+        "iv_err": round(iv_err, 6),
         "weights_source": weights_source, "weights": weights,
         "method_err": method_err, "best_method": best,
         "weight_headroom": None if headroom is None else round(headroom, 6),
@@ -229,13 +224,11 @@ def attribution_report(horizon: str = vo.CONSENSUS,
             continue
         label = " / ".join(str(r[g] or "?") for g in group_by) or "all"
         g = groups.setdefault(label, {
-            "iv": [], "pre": [], "pt": [], "pm": [], "composite": [],
+            "iv": [], "pt": [], "pm": [],
             "scenario_layer": [], "pm_layer": [], "equal": [],
             "methods": {}, "sources": Counter(), "causes": Counter(),
             "shared": 0, "alt_runs": 0, "alt_better": 0, "alt_gain": []})
         g["iv"].append(att["iv_err"])
-        g["pre"].append(att["pre_composite_err"])
-        g["composite"].append(att["composite_effect"])
         g["equal"].append(att["equal_weight_err"])
         g["pt"].append(r["pt_log_err"])
         g["pm"].append(r["pm_log_err"])
@@ -269,9 +262,8 @@ def attribution_report(horizon: str = vo.CONSENSUS,
         out_groups[label] = {
             "n_runs": n,
             "weights_source": dict(g["sources"]),
-            "layers": {"iv": _signed(g["iv"]), "iv_pre_composite": _signed(g["pre"]),
+            "layers": {"iv": _signed(g["iv"]),
                        "engine_12m_target": _signed(g["pt"]), "pm_target": _signed(g["pm"])},
-            "composite_change_in_miss": _change(g["composite"]),
             "scenario_layer_change_in_miss": _change(g["scenario_layer"]),
             "pm_layer_change_in_miss": _change(g["pm_layer"]),
             "equal_weight_blend": _signed(g["equal"]),

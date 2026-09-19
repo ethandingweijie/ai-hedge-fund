@@ -91,20 +91,6 @@ class TestSotpLedTwelveMonthTarget:
         assert "convergence toward SOTP-led intrinsic value" in src
 
 
-class TestCompositeStillScalesAnalystSotp:
-    """Owner decision 2026-09-15: SOTP (analyst) takes the quality composite like
-    every multi-bucket method. Production re-run d45c3f57 published HK$214.24
-    from these inputs and that figure stands."""
-    METHODS = [{"name": "EV/EBITDA", "weight": 0.40}, {"name": "P/E", "weight": 0.25},
-               {"name": "DCF", "weight": 0.25}, {"name": "SOTP (analyst)", "weight": 3.0}]
-    VALUES = {"EV/EBITDA": 217.08, "P/E": 102.48, "DCF": 70.60, "SOTP (analyst)": 177.86}
-
-    def test_the_published_214_is_reproduced(self):
-        iv, bd = d._blend_methods(self.METHODS, dict(self.VALUES), 0.0, [], 0.0, composite_mult=1.266)
-        assert iv == pytest.approx(214.24, abs=0.05)
-        assert "composite_exempt_weight" not in bd
-
-
 def test_decision_inputs_carry_the_executed_trade_action():
     import inspect
     from src.agents import portfolio_manager as pm

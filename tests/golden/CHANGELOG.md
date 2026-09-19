@@ -1370,3 +1370,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Peer-bounded 12m premium applies leg by leg to peer-multiple legs only (EV/EBITDA, P/E, EV/Revenue, P/B families and their forward variants), never to DCF or SOTP legs. A sum-of-the-parts already prices each segment at its own multiple: on 09618.HK (prod 2026-09-19 07:07) SOTP (analyst) is 77% of the blend and a 0.825x consolidated EV/EBITDA discount on it pulled the base target from HK$151 to HK$135. Fixtures carry no peer quartiles (premium 1.0x), so the only projection move is the 12m_pt_method label ('multiples leg' -> 'peer-multiple legs') on all 14 names; no numeric leaf moves.
 
+## 2026-09-19T08:07:19+00:00
+
+- regenerated at HEAD: `a2bbf35`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Composite retired (owner decision 2026-09-19): the quality x risk x commodity composite, its KPI bands, the z-score engine, the composite audit bridge and the 12m peer-bounded premium are removed from backend and frontend. No numeric valuation leaf moves on any of the 14 names: the IV already carried no composite (two-tier), and fixtures carry no peer quartiles so the premium was 1.0x. Projection changes, all structural: removed composite_bridge.* (380 leaves), scenarios.*.intrinsic_value_pre_composite / composite_applied / iv_multi_post (42 each); added pt_bridge.* (spot, capture, per-scenario IV and target, cross-check recipes) and scenarios.*.cross_check_methods; 12m_pt_method label drops the premium clause on all 14; gate_metrics loses composite_multiplier on 09988_HK, BABA, BN4_SI, U96_SI (GATE_DETERMINISTIC_KPI_PRECEDENCE recorded the composite as its decision variable and was retired with it; the deterministic KPI overrides themselves are unchanged).
+

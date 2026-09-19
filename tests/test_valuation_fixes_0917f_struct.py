@@ -41,7 +41,7 @@ _SCENARIO_AUDIT = ("forward_roic", "roic_source", "sector_g_avg",
                    "sector_g_avg_basis")
 
 #: The new top-level leaves.
-_TOP_AUDIT = ("composite_bridge", "normalized_net_income")
+_TOP_AUDIT = ("normalized_net_income",)
 
 
 # ── A. The payload writes them ───────────────────────────────────────────────
@@ -240,41 +240,11 @@ def test_the_new_scenario_leaves_are_in_the_projection():
 
 
 def test_the_new_top_level_leaves_are_in_the_projection():
-    assert "composite_bridge" in gr._DICT_KEYS
+    assert "composite_bridge" not in gr._DICT_KEYS      # composite retired
     assert "normalized_net_income" in gr._SCALAR_KEYS
 
 
-def test_composite_bridge_is_carried_as_a_dict_not_flattened_away():
-    """It is a nested block, so it belongs in `_DICT_KEYS`; `_flatten` expands
-    it into dotted leaves, which is what makes a single changed sub-score
-    visible in a diff."""
-    assert isinstance(gr._DICT_KEYS, tuple)
-    assert "composite_bridge" in gr._DICT_KEYS
-
-
 # ── C. The composite bridge actually carries what an audit needs ─────────────
-
-
-def test_the_bridge_holds_the_three_sub_scores_and_the_clamp():
-    """Decision 1 narrowed `bank_clamp` to a real bank test. The golden
-    baseline could not see that change at all, because the bridge was never
-    persisted — only the resulting multiple was, and a narrowing that leaves the
-    multiple unchanged is invisible. Pinning the bridge's KEY SET here means the
-    next change to it has to be deliberate."""
-    src = inspect.getsource(dcf_agent)
-    assert '_composite_bridge["bank_clamp"]' in src
-    # The three sub-scores the log line prints.
-    for part in ("quality", "risk", "commodity", "composite_score"):
-        assert f"'{part}'" in src or f'"{part}"' in src, part
-
-
-def test_bank_clamp_is_written_only_under_a_bank_test():
-    """The clamp assignment must sit inside a condition, not apply to every
-    profile — that was Decision 1."""
-    src = inspect.getsource(dcf_agent)
-    i = src.index('_composite_bridge["bank_clamp"]')
-    preceding = src[max(0, i - 1200):i]
-    assert "if " in preceding, "bank_clamp appears to be assigned unconditionally"
 
 
 # ── D. The 12m-target peer call is the one whose provenance is published ─────

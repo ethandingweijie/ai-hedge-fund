@@ -49,7 +49,7 @@ MAX_GRADE_CHANGE_SAMPLES = 50
 
 
 def _resolve_db_path(db_path: str | None) -> str:
-    """Mirror src/data/zscore_engine.py::_resolve_db_path. Uses
+    """Resolve the local sqlite path. Uses
     RUN_ARCHIVE_PATH env var first, then default location."""
     if db_path:
         return db_path

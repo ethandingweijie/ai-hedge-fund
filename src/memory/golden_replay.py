@@ -311,13 +311,11 @@ _SCALAR_KEYS = (
 #: without IV moving, and ``_convergence_bound`` exists precisely because it
 #: once implied a full re-rating inside a year.
 #:
-#: ``composite_bridge`` is item 3b: the Q/R/C decomposition and ``bank_clamp``
-#: behind ``composite_applied``. Pinning it means a change to the composite's
-#: sub-scores moves the baseline even in the cases where the resulting multiple
-#: is unchanged by rounding — and Decision 1 narrowed ``bank_clamp`` to a real
-#: bank test, a change the baseline could not previously see at all.
+#: ``pt_bridge`` is the 12m target's own derivation (spot, capture, the IV it
+#: converges on, and the recipes kept as cross-checks), so a change to the
+#: target rule moves the baseline even when the target rounds the same.
 _DICT_KEYS = ("multiples_used", "routing_trace", "12m_targets", "consensus_pt",
-              "composite_bridge",
+              "pt_bridge",
               # The T-1 backward gate as structured fields: benchmark date and
               # price, the T-1 IV, the verdict, and the forward score. The
               # gate's prose note was never pinned, so the whole gate --
@@ -329,7 +327,7 @@ _DICT_KEYS = ("multiples_used", "routing_trace", "12m_targets", "consensus_pt",
 #: what shows WHICH valuation leg moved, and defects 1, 2 and 3 all change a
 #: single leg rather than the blend.
 _SCENARIO_KEYS = (
-    "intrinsic_value", "intrinsic_value_pre_composite", "composite_applied",
+    "intrinsic_value",
     "growth_rate", "tgr", "fcf_margin_start", "tv_pct", "methods_count",
     "weight_dcf", "weight_multi", "growth_premium",
     # Both spellings of the same one-shot absolute margin delta are pinned:
@@ -337,9 +335,11 @@ _SCENARIO_KEYS = (
     # deprecated read-compatibility alias. Carrying both means a replay that
     # ever lets them diverge fails the baseline instead of shipping it.
     "margin_delta_absolute", "margin_delta_per_year",
-    "iv_dcf", "iv_multi", "iv_multi_post",
+    "iv_dcf", "iv_multi",
     "yr1_revenue", "yr1_ebitda_est", "yr1_eps_est",
     "method_iv_table", "methods_used", "forward_flags", "effective_weights",
+    # Legs computed but not in the blend, published as cross-checks.
+    "cross_check_methods",
     # Item 3b audit fields. These drove Gate B and the growth-premium quality
     # gate while being recoverable only by regex-ing them out of
     # `forward_flags` prose — which is literally how the `md_abs * 10` defect
@@ -354,9 +354,7 @@ _SCENARIO_KEYS = (
     # invariant fired.
     #
     # `intrinsic_value_unclamped` is pinned because without it a clamped 5.20
-    # and a computed 5.20 are the same leaf. `iv_multi_post` keeps the blend's
-    # pre-composite arithmetic, but it is not the number that was published, so
-    # it cannot carry that distinction on its own.
+    # and a computed 5.20 are the same leaf.
     #
     # `ordering_composition` is the owner's "check whether the inversion is
     # driven by method dropouts / composition gain", frozen as data: which legs

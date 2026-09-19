@@ -139,11 +139,11 @@ def test_promoted_profile_blends_at_75_percent():
     values = {"DCF": 100.0, "P/E": 80.0, "SOTP (analyst)": 120.0}
     legacy_iv, _ = dcf_agent._blend_methods(
         _PROFILE["methods"], values, c_macro=0.0, forward_flags=[],
-        dcf_tv_fraction=0.0, composite_mult=1.0)
+        dcf_tv_fraction=0.0)
     promoted = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
     iv, bd = dcf_agent._blend_methods(
         promoted["methods"], values, c_macro=0.0, forward_flags=[],
-        dcf_tv_fraction=0.0, composite_mult=1.0)
+        dcf_tv_fraction=0.0)
     assert legacy_iv == pytest.approx(92.0)
     # Weight-share contract: IV = (legacy sum + w·V_sotp) / (1 + w)
     assert iv == pytest.approx(
@@ -162,23 +162,10 @@ def test_sotp_none_renormalizes_to_legacy_blend():
     promoted = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
     iv, bd = dcf_agent._blend_methods(
         promoted["methods"], values, c_macro=0.0, forward_flags=[],
-        dcf_tv_fraction=0.0, composite_mult=1.0)
+        dcf_tv_fraction=0.0)
     assert iv == pytest.approx(92.0)
     assert bd["weight_dcf"] == pytest.approx(0.6)
     assert bd["weight_multi"] == pytest.approx(0.4)
-
-
-def test_composite_applies_to_sotp_leg():
-    """SOTP sits in the multi bucket → v3.19 composite biases its leg."""
-    w = dcf_agent._SOTP_ANALYST_BLEND_WEIGHT
-    promoted = dcf_agent._promote_sotp_analyst_profile(_PROFILE, True)
-    values = {"DCF": 100.0, "P/E": 80.0, "SOTP (analyst)": 120.0}
-    iv, _ = dcf_agent._blend_methods(
-        promoted["methods"], values, c_macro=0.0, forward_flags=[],
-        dcf_tv_fraction=0.0, composite_mult=0.9)
-    legacy_c = 0.6 * 100.0 + 0.4 * 80.0 * 0.9   # composite-biased legacy
-    assert iv == pytest.approx((legacy_c + 0.9 * w * 120.0) / (1.0 + w))
-    assert iv == pytest.approx(103.2)  # at w=3.0
 
 
 # ── Dispatcher scenario awareness ─────────────────────────────────────────────

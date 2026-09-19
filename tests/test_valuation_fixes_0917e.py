@@ -1227,11 +1227,11 @@ def test_02888_six_legs_split_exactly_along_the_premium_line():
         # The post-adjustment is a constant 1.1x scale on this fixture, so it
         # transmitted the leg move without adding anything of its own.
         multi = proj[f"scenarios.{scen}.iv_multi"]
-        post = proj[f"scenarios.{scen}.iv_multi_post"]
-        # Two-tier re-baseline: no composite on the IV, so post == multi. The
-        # 1.1x relationship below is the history this test was written for.
+        # The composite is retired (2026-09-19), so there is no post-composite
+        # leaf. The 1.1x relationship below is the history this test was
+        # written for.
         assert multi == _02888_BLEND[scen][0], scen
-        assert post == multi, (scen, multi, post)
+        assert f"scenarios.{scen}.iv_multi_post" not in proj, scen
         assert _02888_BLEND[scen][1] == pytest.approx(multi * 1.1, rel=1e-6), scen
 
 

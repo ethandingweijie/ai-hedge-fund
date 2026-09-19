@@ -482,9 +482,6 @@ def test_the_keppel_profile_is_the_one_the_defect_was_reported_on():
     roic = next(k for k in spec["kpis"] if k.get("key") == "roic_pct")
     assert roic["mandatory"] is True
     assert roic["extractor_only"] is False
-    # And the band that made 1.09% expensive: the quality tier reads this KPI.
-    band = (spec.get("quality_tiers", {}).get("kpi_bands") or [{}])[0]
-    assert band.get("kpi") == "roic_pct"
 
 
 def test_no_balance_sheet_financial_profile_is_eligible_for_roic():
@@ -753,71 +750,6 @@ def test_the_kpis_are_computed_before_the_quarterly_balance_sheet_refresh():
     assert compute_at < refresh_at, (
         "deterministic KPIs must be computed from the annual row as filed, "
         "before the quarterly refresh mutates it")
-
-
-def test_the_override_lands_before_the_composite_and_before_attach_overrides():
-    """The ordering is the whole of the fix. `composite_adjustment` runs inside
-    `run_dcf_agent` at phase 4.5, but `_augment_metrics_with_fmp_risk` runs at
-    phase 10 — so a deterministic value computed where the FMP gap-fill is
-    computed today would fix the sector card and leave the valuation scoring the
-    sentence. `test_peer_z_scores_are_computed_before_the_valuation_composite`
-    is the recorded bug from getting this class of ordering wrong."""
-    import src.agents.analysis.dcf_agent as d
-    src_text = inspect.getsource(d.run_dcf_agent)
-    apply_at = src_text.index("_apply_det_kpis(")
-    attach_at = src_text.index("_fm_override = (framework_metrics_all or {}).get(ticker)")
-    composite_at = src_text.index("_composite_mult, _composite_bridge = _composite_adjustment(")
-    assert apply_at < attach_at < composite_at, (
-        "the override must precede attach_overrides (which writes KPIs onto the "
-        "row) and the V3 composite (which scales the multiples bucket)")
-
-
-def test_the_gate_record_is_written_from_the_same_scope_as_the_composite():
-    """Path A is re-derived by reverting the overridden keys on the composite's
-    OWN input — the framework vector with the legacy buckets overlaid — because
-    anything else compares a different dict and the counterfactual is not a
-    counterfactual."""
-    import src.agents.analysis.dcf_agent as d
-    src_text = inspect.getsource(d.run_dcf_agent)
-    gate_at = src_text.index('"gate_id": "GATE_DETERMINISTIC_KPI_PRECEDENCE"')
-    composite_at = src_text.index("_composite_mult, _composite_bridge = _composite_adjustment(")
-    assert composite_at < gate_at
-
-
-def test_the_gate_record_carries_the_forward_ledger_contract():
-    """Every item in Phases 1–2 emits gate_id / metric / path A / path B /
-    applied, so the forward test can score a row from the ledger alone without
-    replaying anything."""
-    import src.agents.analysis.dcf_agent as d
-    src_text = inspect.getsource(d.run_dcf_agent)
-    start = src_text.index('"gate_id": "GATE_DETERMINISTIC_KPI_PRECEDENCE"')
-    block = src_text[start:start + 3_000]
-    for field in ("gate_id", "metric", "raw_input_path_a",
-                  "gated_output_path_b", "basis", "applied"):
-        assert f'"{field}"' in block, f"gate record is missing {field}"
-
-
-def test_the_gate_is_applied_not_observed():
-    """Recorded as a decision, not left implicit. Phase 1.2B shipped
-    observation-only because its backward test had zero scoreable firings until
-    Phase 3 back-fills history. This item's evidence does not need history: the
-    question is whether a computed ratio beats an extracted one against a
-    reference, which is answerable from the filings in hand."""
-    import src.agents.analysis.dcf_agent as d
-    src_text = inspect.getsource(d.run_dcf_agent)
-    start = src_text.index('"gate_id": "GATE_DETERMINISTIC_KPI_PRECEDENCE"')
-    block = src_text[start:start + 3_000]
-    assert '"applied": True' in block
-
-
-def test_a_row_where_nothing_was_overridden_emits_no_gate_record():
-    import src.agents.analysis.dcf_agent as d
-    src_text = inspect.getsource(d.run_dcf_agent)
-    start = src_text.index('"gate_id": "GATE_DETERMINISTIC_KPI_PRECEDENCE"')
-    guard = src_text[max(0, start - 2_000):start]
-    assert "if _det_overrides:" in guard, (
-        "the record must be conditional on an override actually happening, or "
-        "every run inflates the firing count the shipping rule is scored on")
 
 
 def test_a_failure_in_the_override_never_breaks_the_valuation():

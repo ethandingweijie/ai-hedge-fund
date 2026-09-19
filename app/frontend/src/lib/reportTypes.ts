@@ -525,42 +525,6 @@ export interface SectorKpiGroup {
   kpis: SectorKpi[];
 }
 
-// V3 — Composite adjustment audit bridge. Tells the user WHY the IV moved:
-// Quality (operational) × Risk (balance sheet) × Commodity (forward leverage)
-// → Final composite multiplier (capped at 1.85x or 1.70x for commodity sectors).
-export interface AuditBridge {
-  quality: number;
-  quality_note: string;
-  quality_weight?: number;           // V4-α profile-specific weight (0–1)
-  quality_z?: number | null;         // V4-β peer-cohort z-score (when n≥3)
-  quality_cohort?: number | null;    // V4-β peer cohort size used for z
-  quality_extracted?: number;        // P2 — # of tier KPIs with non-null values
-  quality_total?: number;            // P2 — total tier KPIs in schema
-  risk: number;
-  risk_note: string;
-  risk_weight?: number;
-  risk_z?: number | null;
-  risk_cohort?: number | null;
-  risk_extracted?: number;           // P2 — # extracted (0 or 1)
-  risk_total?: number;               // P2 — 0 or 1
-  risk_cap_gate_kpi?: string | null; // P2 — cap_when gate KPI name (if any)
-  commodity: number;
-  commodity_note: string;
-  commodity_weight?: number;
-  raw_composite: number;
-  final_multiplier: number;
-  cap_high: number;     // 1.70 for Resources/Energy/Materials, else 1.85
-  was_capped: boolean;
-  // P1 — extraction completeness signals from extract_via_framework
-  completeness_score?: number | null;
-  mandatory_missing?: string[];
-  // v3.19 — Composite normalised to 0-100 score with tier label for UI display
-  // (replaces the raw "1.14x" multiplier as the prominent number on the card).
-  // tier_label ∈ {"premium" (≥80), "in-band" (40-79), "haircut" (<40)}.
-  composite_score?: number | null;
-  tier_label?: 'premium' | 'in-band' | 'haircut' | null;
-}
-
 export interface SectorCardPayload {
   ticker: string;
   sector: string;
@@ -569,7 +533,6 @@ export interface SectorCardPayload {
   anchor_methods: string[];
   groups: SectorKpiGroup[];
   source_priority?: string[];
-  audit_bridge?: AuditBridge;  // V3 composite adjustment breakdown
 }
 
 export interface PipelineData {

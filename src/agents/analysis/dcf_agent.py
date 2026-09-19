@@ -3972,12 +3972,8 @@ def _bank_profile_calibration(profile_name: str) -> dict:
 #: routing returns.
 #:
 #: Hoisted to module level from inside :func:`run_dcf_agent`, where it was a
-#: local at the 12m-target block. Two readers need it and they are ~1000 lines
-#: apart — the composite's bank clamp and the 12m dispatch — and a name assigned
-#: anywhere in a function body is local to the WHOLE body, so referencing it
-#: from the earlier site would have raised ``UnboundLocalError`` rather than
-#: falling back to a module-level default. There is no such default: the local
-#: assignment is deleted, not shadowed.
+#: local at the 12m-target block. There is no module-level default to fall back
+#: on: the local assignment is deleted, not shadowed.
 #:
 #: Note that a separate and unrelated ``_BANK_PROFILES`` exists in
 #: ``src/pipeline.py``. They are not the same set and are not kept in step.
@@ -3986,57 +3982,6 @@ _BANK_PROFILES: frozenset[str] = frozenset({
     "Investment Bank", "Insurance", "FinTech", "Asset Manager",
     "Bank / Lending Institution",   # FMP routing label
 })
-
-
-def _is_bank_for_composite(profile_name: Optional[str]) -> bool:
-    """Whether the composite quality/risk tilt is clamped to [0.90, 1.10].
-
-    The clamp exists for one reason: the composite scores a bank on ROE, CET1,
-    NPL and cost-income, and the GGM / 2-stage Residual Income models already
-    consume those same inputs to set the book multiple, so applying the tilt on
-    top double-counts the evidence. The question this answers is therefore
-    narrow — "does this entity have a book-value engine that already prices its
-    quality?" — and not "is this company in the Financials sector?".
-
-    ``sector`` is deliberately NOT a parameter. The predicate used to lead with
-    ``is_bank_sector(sector)``, which swept in every Financials name including
-    fee-driven franchises with no book-value engine to double-count against.
-    Measured cost (owner decision, 2026-09-17): ICE earned a raw composite of
-    1.2224 and was clamped to 1.10, worth +11.0% of IV (132.47 → 147.06, gap
-    −13.6% → −4.0%); V earned 1.1703, clamped to 1.10, worth +4.3% (281.05 →
-    293.19). Neither is a bank — ``Market Infrastructure`` and ``Payment
-    Networks`` are in neither table, and their quality comes from margin and
-    volume rather than from ROE-on-book. A signature that accepted ``sector``
-    and ignored it would invite the test back in; the enumeration of what is
-    and is not clamped lives in ``tests/test_composite_bank_clamp.py`` instead.
-
-    Three arms, any of which suffices:
-
-    * ``_BANK_PROFILE_CALIBRATION`` — has a GGM / Residual-Income row to
-      double-count against, which is the actual reason the clamp exists.
-      Includes ``Brokerage`` (SCHW, IBKR), kept per owner decision 4: the DCF
-      weight stays 0 there and the clamp is not binding anyway (SCHW's raw
-      composite measures 1.0918, already inside the band).
-    * ``_BANK_PROFILES`` — the 12m-target dispatch set, which carries
-      ``FinTech`` and ``Asset Manager`` on the same float-funding judgement
-      Phase 1.2A's Tier 2 makes by measurement.
-    * ``"Bank" in profile_name`` — the substring test, now scoped to the
-      profile rather than to the sector.
-
-    Returns False for a falsy profile: an unknown profile is not a bank, and
-    the clamp restricts a valuation rather than defaulting one. The
-    ``"default"`` sentinel key in ``_BANK_PROFILE_CALIBRATION`` is excluded for
-    the same reason — it is a fallback row, not a profile, and no framework
-    profile is named ``default`` (verified over the union of
-    ``SECTOR_KPI_FRAMEWORK`` and ``INDUSTRY_VALUATION_PROFILES``, 109 names).
-    """
-    if not profile_name or profile_name == "default":
-        return False
-    return (
-        profile_name in _BANK_PROFILE_CALIBRATION
-        or profile_name in _BANK_PROFILES
-        or "Bank" in profile_name
-    )
 
 
 # ── Per-ticker GGM assumptions extracted from analyst research ───────────
@@ -6312,10 +6257,9 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
     "DCF (Levered)", "Rev DCF (Mkt Sh)",
     # These four project cash flows through `_project_dcf` exactly like the
     # names above, but were missing here, so `_blend_methods` bucketed them as
-    # multiples and multiplied them by the sentiment composite -- contradicting
-    # the blend's own rule that DCF stays sentiment-free. On EL (Luxury Goods)
-    # every leg was "multi", so the 1.41 composite reached 100% of the IV,
-    # cash-flow leg included.
+    # multiples (which then took the since-retired sentiment composite). On
+    # EL (Luxury Goods) every leg was "multi", so the 1.41 composite reached
+    # 100% of the IV, cash-flow leg included.
     "DCF (5-yr)", "DCF (LTG)", "Rev DCF (GMV)", "Rev DCF",
 })
 
@@ -6457,8 +6401,8 @@ _DCF_PROJECTION_FAMILY: frozenset[str] = frozenset(_DCF_FAMILY_NAMES)
 # blended IV — 3.0 → exactly 75%: the analyst SOTP carries three quarters
 # and the DCF+multiples blend keeps one quarter, internally renormalized
 # (user-chosen for the 3690.HK/BABA/PDD/JD/MSFT/AMZN SOTP coverage; the
-# method lands in the multi bucket so the v3.19 composite applies to it
-# like every other peer-relative method). Override via the env var
+# method lands in the multi bucket like every other peer-relative method).
+# Override via the env var
 # (1.0 → 50/50, the original setting); 0 keeps the method shadow-only
 # (pre-promotion behaviour).
 try:
@@ -7623,24 +7567,18 @@ def _blend_methods(
     c_macro: float,
     forward_flags: list[str],
     dcf_tv_fraction: float,
-    composite_mult: float = 1.0,
 ) -> tuple[Optional[float], dict]:
     """
-    Apply the Master Map weights with C_macro modifier and (v3.19+) the V3
-    Composite multiplier on the multi-method portion only.
+    Apply the Master Map weights with the C_macro modifier.
 
-    Formula (v3.19+):
+    Formula:
       IV_DCF   = weighted-mean(values from DCF-family methods)
       IV_Multi = weighted-mean(values from non-DCF methods, e.g. P/E, EV/EBITDA, P/BV)
-      IV_Final = (W_DCF × IV_DCF + W_Multi × IV_Multi × Composite) / (W_DCF + W_Multi)
+      IV_Final = (W_DCF × IV_DCF + W_Multi × IV_Multi) / (W_DCF + W_Multi)
 
-    Composite ONLY biases the multi-method portion (peer/historical-relative
-    multiples). DCF stays sentiment-free per the V4 architecture spec — DCF is
-    the "fair math" anchor agnostic of market quality recognition; Composite is
-    the premium/discount the market applies to peer-relative multiples.
-
-    When composite_mult == 1.0, behaviour is byte-equivalent to the pre-v3.19
-    unsplit weighted-mean.
+    No quality/sentiment overlay: the quality x risk x commodity composite was
+    retired (owner decision 2026-09-19), so every leg is a financial input
+    times a peer multiple or a projection, and the IV can be rebuilt from them.
 
     Forward Gate A: if dcf_tv_fraction > 0.80, reduce DCF family weight by
     _TV_DOMINANCE_REWEIGHT and redistribute to P/BV (asset floor, multi bucket).
@@ -7648,12 +7586,9 @@ def _blend_methods(
     Returns (final_iv, breakdown). breakdown is:
       {
         "iv_dcf":         float | None — weighted-mean DCF IV
-        "iv_multi":       float | None — weighted-mean Multi IV (PRE-composite)
-        "iv_multi_post":  float | None — Multi IV × composite_mult
+        "iv_multi":       float | None — weighted-mean Multi IV
         "weight_dcf":     0..1         — DCF fraction of total weight
         "weight_multi":   0..1         — Multi fraction of total weight
-        "composite":      float        — composite_mult applied
-        "iv_pre_composite": float | None — what IV would be at composite=1.0
         "legs_dropped":   list[dict]   — every profile leg that contributed no
                                          value: method, proxy, intended weight,
                                          computed value-or-None, and `reason`
@@ -7856,12 +7791,8 @@ def _blend_methods(
     iv_dcf   = (sum(v * w * macro for v, w in dcf_bucket)   / dcf_w_total)   if dcf_w_total   > 0 else 0.0
     iv_multi = (sum(v * w * macro for v, w in multi_bucket) / multi_w_total) if multi_w_total > 0 else 0.0
 
-    # v3.19 — Composite biases multi-method portion only
-    iv_multi_post = iv_multi * composite_mult
-
     # Final blended IV
-    final_iv = (dcf_w_total * iv_dcf + multi_w_total * iv_multi_post) / total_w
-    iv_pre_composite = (dcf_w_total * iv_dcf + multi_w_total * iv_multi) / total_w
+    final_iv = (dcf_w_total * iv_dcf + multi_w_total * iv_multi) / total_w
 
     # Single-survivor disclosure. Threshold-free: `len(parts) == 1` needs no
     # constant, so there is nothing here to tune or to get wrong. A "blend" of
@@ -7888,15 +7819,11 @@ def _blend_methods(
     breakdown = {
         "iv_dcf":           round(iv_dcf, 4)         if iv_dcf   > 0 else None,
         "iv_multi":         round(iv_multi, 4)       if iv_multi > 0 else None,
-        "iv_multi_post":    round(iv_multi_post, 4)  if iv_multi > 0 else None,
         "weight_dcf":       round(dcf_w_total   / total_w, 4),
         "weight_multi":     round(multi_w_total / total_w, 4),
-        "composite":        round(composite_mult, 4),
-        "iv_pre_composite": round(iv_pre_composite, 4),
         # The weight each method actually carried, after proxies, skipped
         # methods and Gate A. The profile table states intent; this states
-        # what happened. IV = sum(weight x method_values[value_key]), with the
-        # composite applied to the "multi" bucket terms.
+        # what happened. IV = sum(weight x method_values[value_key]).
         "effective_weights": [
             {"method": n, "value_key": k, "bucket": b,
              "weight": round(w * macro / total_w, 6)}
@@ -8011,98 +7938,19 @@ def _sotp_scenario_from_trees(table: dict, trees: Optional[dict], scenario: str,
 # ── Two-tier valuation (owner decision, 2026-09-19) ─────────────────────────
 #
 # Tier 1, the FUNDAMENTAL IV, is DCF plus peer-median multiples and nothing
-# else: no sentiment or quality overlay, so every number in it can be rebuilt
-# from a financial input and a peer multiple. Tier 2, the 12-MONTH TARGET, is
-# derived from that IV by one rule for every name: it converges a stated share
-# of the way from spot toward the IV, after applying a premium or discount to
-# the multiples leg only -- and that premium is bounded by where the actual
-# peers trade (the cohort's interquartile range around the median multiple).
+# else, so every number in it can be rebuilt from a financial input and a peer
+# multiple. Tier 2, the 12-MONTH TARGET, is derived from that IV by one rule
+# for every name: it converges a stated share of the way from spot toward the
+# IV. Nothing adjusts either tier for "quality": the quality x risk x commodity
+# composite was retired outright (owner decision, same day) after it had
+# multiplied the IV's multiples leg by up to 1.85x with no peer evidence, and
+# then, as a peer-bounded premium on the target, moved targets by ~2% in a
+# direction set by hand-cut bands.
 #
-# Before this, the quality x risk x commodity composite (0.50-1.85) multiplied
-# the IV's multiples leg directly (MELI 1.85, COST 1.78, MSTR 1.75), and the
-# target came from five different recipes, two of which (the bank P/B path)
-# could land on the far side of the IV from spot (SCHW $32.88 against IV
-# $86.42 and price $104.85). Those recipes are still computed, and published
-# as cross-checks in `pt_bridge.cross_checks`.
-
-#: Peer-multiple field that bounds the premium, by the method it re-prices.
-_PEER_FIELD_FOR_METHOD = {
-    "EV/EBITDA": "ev_ebitda", "EV/EBIT": "ev_ebitda", "EV/EBITDAR": "ev_ebitda",
-    "P/E": "pe", "P/E (norm)": "pe", "P/E (Premium)": "pe",
-    "EV/Revenue": "ev_revenue", "EV/Sales": "ev_revenue",
-    "P/B": "pb", "P/BV": "pb", "P/TBV": "pb",
-}
-_PEER_FIELD_ORDER = ("ev_ebitda", "pe", "ev_revenue", "pb")
-
-
-def _peer_bounded_premium(signal: Optional[float], peer: Optional[dict],
-                          anchor_method: str = "") -> dict:
-    """Premium/discount to the peer median, limited to the peers' own range.
-
-    `signal` is the quality x risk x commodity composite: the direction and
-    strength of the case for trading above or below peers. The bound is the
-    cohort's P25/median .. P75/median for the multiple the anchor uses (falling
-    back to the first field that carries quartiles). With no quartiles there is
-    no evidence of dispersion, so no premium is applied -- 1.0x, not a guess.
-    """
-    out: dict = {"signal": None if signal is None else round(float(signal), 6),
-                 "applied": 1.0, "field": None, "bound": None}
-    basis = (peer or {}).get("_comp_basis") or {}
-    field = _PEER_FIELD_FOR_METHOD.get(anchor_method or "")
-    cands = ([field] if field else []) + [f for f in _PEER_FIELD_ORDER if f != field]
-    for f in cands:
-        row = basis.get(f) or {}
-        med, q1, q3 = (peer or {}).get(f), row.get("p25"), row.get("p75")
-        if all(isinstance(v, (int, float)) and v > 0 for v in (med, q1, q3)) and q1 <= med <= q3:
-            lo, hi = q1 / med, q3 / med
-            sig = float(signal) if isinstance(signal, (int, float)) and signal > 0 else 1.0
-            applied = min(hi, max(lo, sig))
-            out.update(field=f, peer_median=med, p25=q1, p75=q3, peer_count=row.get("peer_count"),
-                       lo=round(lo, 6), hi=round(hi, 6), applied=round(applied, 6),
-                       bound=("p75" if sig > hi else "p25" if sig < lo else None),
-                       basis=(f"peer {f} median {med:.4g}x, interquartile {q1:.4g}-{q3:.4g}x "
-                              f"({row.get('peer_count')} peers): premium bounded to "
-                              f"{lo:.3f}-{hi:.3f}x"))
-            return out
-    out["basis"] = "no peer quartiles available: no premium applied (1.0x)"
-    return out
-
-
-#: Legs priced as (peer-median multiple x the company's own metric). Only
-#: these take the peer-bounded premium: a DCF is not a multiple, and a
-#: sum-of-the-parts already prices each segment at ITS own multiple, so a
-#: consolidated peer premium on top would re-price it twice. JD, 2026-09-19:
-#: the SOTP (analyst) leg is 77% of the blend, and a 0.825x EV/EBITDA
-#: discount applied to it pulled the base target from HK$151 to HK$135.
-_PEER_MULTIPLE_LEGS = frozenset(_PEER_FIELD_FOR_METHOD) | frozenset({
-    "Forward P/E", "Forward EV/EBITDA",
-})
-
-
-def _premium_adjusted_iv(scenario: dict, premium: float) -> tuple:
-    """(scenario IV with `premium` on its peer-multiple legs only, those legs).
-
-    Leg by leg from `effective_weights` x `method_iv_table`, in ratio form so
-    any scaling applied to the blended IV after the blend (calibration)
-    carries through unchanged. No weights -> no premium."""
-    iv = scenario.get("intrinsic_value")
-    table = scenario.get("method_iv_table") or {}
-    num = den = 0.0
-    legs: list[str] = []
-    for w in scenario.get("effective_weights") or []:
-        v = table.get(w.get("value_key"))
-        wt = w.get("weight") or 0.0
-        if not isinstance(v, (int, float)) or v <= 0 or wt <= 0:
-            continue
-        p = premium if w.get("value_key") in _PEER_MULTIPLE_LEGS else 1.0
-        if p != 1.0 or w.get("value_key") in _PEER_MULTIPLE_LEGS:
-            legs.append(w.get("method"))
-        num += wt * v * p
-        den += wt * v
-    if not isinstance(iv, (int, float)) or den <= 0:
-        return iv, []
-    return iv * num / den, legs
-
+# Before this, the target came from five different recipes, two of which (the
+# bank P/B path) could land on the far side of the IV from spot (SCHW $32.88
+# against IV $86.42 and price $104.85). Those recipes are still computed, and
+# published as cross-checks in `pt_bridge.cross_checks`.
 
 def _cross_check_methods(method_iv_table: Optional[dict],
                          effective_weights: Optional[list]) -> list[str]:
@@ -8319,7 +8167,6 @@ def _run_backward_gate(
                 c_macro=0.0,  # no macro adjustment for historical T-1 test
                 forward_flags=forward_flags_t1,
                 dcf_tv_fraction=tv_fraction_t1,
-                composite_mult=1.0,  # v3.19: T-1 calibration is sentiment-free
             )
             iv_t1 = iv_t1_blended if (iv_t1_blended is not None and iv_t1_blended > 0) else iv_dcf_t1
             method_label = "blended"
@@ -10369,11 +10216,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # missing input leaves the extractor's value standing rather than being
         # replaced by an invention.
         #
-        # Runs BEFORE attach_overrides below and before the V3 composite, so the
-        # row, the card and the multiplier that scales the multiples bucket all
-        # read one number. Applying it at phase 10 instead — where
-        # _augment_metrics_with_fmp_risk gap-fills today — would fix the card
-        # and leave the valuation scoring the sentence.
+        # Runs BEFORE attach_overrides below, so the row and the card read one
+        # number.
         _det_overrides: list[dict] = []
         _det_pre_override: dict = {}
         if _det_kpis and profile_name:
@@ -10872,142 +10716,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # tighter bands to model genuine scenario risk; Banks/REITs/Mature SaaS
         # keep legacy bands that are calibrated for cash-generative profiles.
         _g_mult, _m_mult = _scenario_mults_for_profile(profile_name)
-
-        # v3.19 — Compute V3 composite multiplier ONCE per ticker (before
-        # scenario loop). Per Phase 1 spec: the composite biases the multi-
-        # method portion only inside _blend_methods. DCF stays sentiment-free
-        # (the "fair math" anchor). Same composite applied uniformly across
-        # bear/base/bull scenarios; bull/bear differentiation comes from the
-        # existing scenario growth multipliers (and Phase 2 Z_width, future).
-        _composite_mult = 1.0
-        _composite_bridge: dict = {}
-        try:
-            from src.data.sector_kpi_framework import (
-                composite_adjustment as _composite_adjustment,
-                is_legacy_profile as _is_legacy_for_composite,
-            )
-            if profile_name and not _is_legacy_for_composite(profile_name):
-                _ticker_metrics: dict = dict((framework_metrics_all or {}).get(ticker) or {})
-                # Overlay legacy buckets (saas_metrics, bank_metrics, reit_metrics,
-                # insurance_metrics) so post-v3.13 bridged keys feed the composite
-                # for legacy-covered profiles. framework_metrics_all wins on conflicts.
-                for _legacy_key in ("saas_metrics", "bank_metrics", "reit_metrics",
-                                    "insurance_metrics"):
-                    _legacy_bucket = state["data"].get(_legacy_key, {}) or {}
-                    _legacy_for_t = _legacy_bucket.get(ticker) or {}
-                    if isinstance(_legacy_for_t, dict):
-                        for _k, _v in _legacy_for_t.items():
-                            if isinstance(_k, str) and not _k.startswith("_") and _k not in _ticker_metrics:
-                                _ticker_metrics[_k] = _v
-                _composite_mult, _composite_bridge = _composite_adjustment(
-                    profile_name, sector, _ticker_metrics
-                )
-                # ── GATE_DETERMINISTIC_KPI_PRECEDENCE (item 4) ─────────────
-                # Recorded only when a computed value actually displaced an
-                # extracted one, so a run where the two agreed — the common
-                # case, and the point of having a cross-check — does not emit a
-                # row that would inflate the firing count the shipping rule is
-                # scored on.
-                #
-                # Path A is re-derived rather than captured earlier because the
-                # composite input at this point is the framework vector with the
-                # legacy buckets overlaid on top; reverting the overridden keys
-                # on THAT dict is the only apples-to-apples counterfactual. Both
-                # sides are the pre-clamp multiplier: the bank clamp below is a
-                # property of the profile, not of this gate, and applies to
-                # either path identically.
-                if _det_overrides:
-                    try:
-                        _path_a_metrics = dict(_ticker_metrics)
-                        for _o in _det_overrides:
-                            if _o.get("llm") is None:
-                                _path_a_metrics.pop(_o["kpi"], None)
-                            else:
-                                _path_a_metrics[_o["kpi"]] = _o["llm"]
-                        _composite_path_a, _ = _composite_adjustment(
-                            profile_name, sector, _path_a_metrics)
-                        gate_evaluations.append({
-                            "gate_id": "GATE_DETERMINISTIC_KPI_PRECEDENCE",
-                            # The multiplier, not a counterfactual IV — same
-                            # reasoning as GATE_BALANCE_SHEET_FINANCIAL: the
-                            # composite IS this gate's decision variable, and
-                            # the valuation consequence lands in base_iv and in
-                            # the golden baseline.
-                            "metric": "composite_multiplier",
-                            "raw_input_path_a": round(float(_composite_path_a or 0.0), 6),
-                            "gated_output_path_b": round(float(_composite_mult or 0.0), 6),
-                            "overrides": [
-                                {"kpi": o["kpi"], "llm": o["llm"],
-                                 "deterministic": round(float(o["deterministic"]), 6)}
-                                for o in _det_overrides
-                            ],
-                            "period": _det_basis.get("period"),
-                            "roic_basis": (_det_basis.get("roic") or {}),
-                            "basis": (
-                                f"{len(_det_overrides)} framework KPI(s) on "
-                                f"{profile_name} are arithmetic on filed "
-                                f"statements and were extracted from research "
-                                f"narrative instead: "
-                                + ", ".join(
-                                    f"{o['kpi']} "
-                                    f"{('gap' if o.get('llm') is None else format(o['llm'], '.4g'))}"
-                                    f"→{o['deterministic']:.4g}"
-                                    for o in _det_overrides)
-                                + f". Computed on the FY{str(_det_basis.get('period') or '?')[:4]} "
-                                f"annual row as filed, before the quarterly "
-                                f"balance-sheet refresh, so ROIC's denominator "
-                                f"is one filing period end to end. Composite "
-                                f"{float(_composite_path_a or 0.0):.4f}x → "
-                                f"{float(_composite_mult or 0.0):.4f}x."
-                            ),
-                            "applied": True,
-                        })
-                    except Exception:
-                        # The override already happened; losing the ledger row
-                        # must not lose the valuation.
-                        pass
-                # Banks: clamp the quality/risk composite to a narrow band.
-                # The composite scores a bank on ROE, CET1, NPL and cost-
-                # income — but those are the very inputs the GGM and the
-                # 2-stage Residual Income model already consume to set the
-                # book multiple. Multiplying the output by a quality tilt
-                # derived from the same evidence double-counts it. D05.SI
-                # earned a 1.39x composite off a 15.9% ROE and 16.9% CET1,
-                # lifting blended IV from S$29.82 to S$41.44 on top of a
-                # ROE-driven model. Kept as a small tilt rather than
-                # removed, so genuinely stressed banks still get marked
-                # down for factors the ROE input doesn't capture.
-                #
-                # WHO gets clamped is decided by `_is_bank_for_composite`,
-                # which tests the PROFILE by name and not the sector. It used
-                # to lead with `is_bank_sector(sector)`, which swept in every
-                # Financials name — including fee-driven franchises with no
-                # book-value engine to double-count against, costing ICE 11.0%
-                # of IV and V 4.3% (owner decision, 2026-09-17). The docstring
-                # carries the arms, the measurements and the list of released
-                # profiles; `tests/test_composite_bank_clamp.py` enumerates
-                # every framework profile and pins the answer, so adding a
-                # profile to either table is a visible act.
-                if _is_bank_for_composite(profile_name) and _composite_mult:
-                    _pre_clamp = _composite_mult
-                    _composite_mult = max(0.90, min(1.10, _composite_mult))
-                    if abs(_pre_clamp - _composite_mult) > 1e-9:
-                        _composite_bridge["bank_clamp"] = (
-                            f"{_pre_clamp:.3f}x → {_composite_mult:.3f}x "
-                            f"(bank quality already priced in ROE)"
-                        )
-                progress.update_status(
-                    agent_id, ticker,
-                    f"V3 composite {_composite_mult:.3f}x "
-                    f"(Q={_composite_bridge.get('quality', 1.0):.2f} "
-                    f"R={_composite_bridge.get('risk', 1.0):.2f} "
-                    f"C={_composite_bridge.get('commodity', 1.0):.2f}) "
-                    f"score={_composite_bridge.get('composite_score', 'n/a')}"
-                )
-        except Exception as _ce:
-            print(f"  [composite v3.19] {ticker} composite computation failed: "
-                  f"{type(_ce).__name__}: {_ce!r} — defaulting to 1.0x")
-            _composite_mult = 1.0
 
         # ── Structural method availability across scenarios ──────────────
         # Scenario analysis varies INPUTS (growth, margins, multiples), not
@@ -12201,10 +11909,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     c_macro=c_macro,
                     forward_flags=forward_flags,
                     dcf_tv_fraction=tv_fraction,
-                    # Two-tier valuation: the fundamental IV carries no
-                    # composite. The composite is a SIGNAL for the 12m
-                    # target's peer-bounded premium (see _peer_bounded_premium).
-                    composite_mult=1.0,
                 )
                 # ── Phase 1.2B path-B blend (observation-only) ────────────
                 # The plan asks that an item changing a method or target carry
@@ -12232,7 +11936,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         c_macro=c_macro,
                         forward_flags=_scratch_flags,
                         dcf_tv_fraction=tv_fraction,
-                        composite_mult=1.0,
                     )
                     _cyc_rec["base_iv_path_a"] = blended_iv
                     _cyc_rec["base_iv_path_b"] = _iv_b
@@ -12269,7 +11972,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 or method_values.get(m["name"]) is not None]
             else:
                 # No profile found — fall back to pure DCF with C_macro scaling
-                # (composite NOT applied — pure-DCF fallback is sentiment-free)
                 # D3: flag the degradation (once per ticker, not per scenario).
                 if not _profile_fallback_used:
                     _log.warning(
@@ -12280,13 +11982,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 final_iv = iv_dcf * (1.0 + c_macro)
                 methods_used = ["DCF (fallback)"]
 
-            # B4: the active calibration's market bias correction. The
-            # pre-composite figure moves with it, so attribution does not read
-            # a bias correction as a composite effect.
+            # B4: the active calibration's market bias correction.
             if _iv_calibration_k:
                 final_iv = final_iv * _iv_calibration_k
-                if blend_breakdown.get("iv_pre_composite"):
-                    blend_breakdown["iv_pre_composite"] *= _iv_calibration_k
 
             # Store per-method individual IVs for transparent PDF display
             # Each method gets its own bull/base/bear value — "Blended IV" is the weighted sum
@@ -12405,12 +12103,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "yr1_eps_est":       round(yr1_eps_est, 4) if yr1_eps_est else None,
                 "methods_count":     len(method_iv_table),
                 "growth_premium":    round(growth_premium, 3) if profile_data else 1.0,
-                # v3.19 — Composite breakdown (pre/post for audit_bridge transparency)
-                "intrinsic_value_pre_composite": round(blend_breakdown["iv_pre_composite"], 2)
-                                                  if blend_breakdown.get("iv_pre_composite") else None,
                 "iv_dcf":            blend_breakdown.get("iv_dcf"),
                 "iv_multi":          blend_breakdown.get("iv_multi"),
-                "iv_multi_post":     blend_breakdown.get("iv_multi_post"),
                 "weight_dcf":        blend_breakdown.get("weight_dcf"),
                 "weight_multi":      blend_breakdown.get("weight_multi"),
                 "effective_weights": blend_breakdown.get("effective_weights"),
@@ -12418,7 +12112,6 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # cross-checks, never as part of the blend.
                 "cross_check_methods": _cross_check_methods(
                     method_iv_table, blend_breakdown.get("effective_weights")),
-                "composite_applied": blend_breakdown.get("composite", _composite_mult),
                 # NEW: what the blend dropped, and how much of the profile's
                 # intended weight actually voted. `effective_weights` lists
                 # survivors only, so before these keys a leg the profile asked
@@ -12469,8 +12162,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # thousand lines below reports a violation it cannot act on.
         #
         # The blend's own arithmetic is left intact beside the clamp:
-        # `iv_multi`, `iv_multi_post` and `intrinsic_value_pre_composite` keep
-        # the unclamped values, and `intrinsic_value_unclamped` is added on the
+        # `iv_multi` keeps the unclamped value, and `intrinsic_value_unclamped` is added on the
         # scenario that moved. An invariant that erases the evidence of its own
         # violation cannot be audited, and the next person reading the payload
         # would have no way to tell a clamped 5.20 from a computed one.
@@ -12961,8 +12653,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
 
         # ── 12m target: one rule for every name (two-tier valuation) ─────────
-        # Converge from spot toward each scenario's IV, with the peer-bounded
-        # premium on the multiples leg. Everything computed above -- forward
+        # Converge from spot toward each scenario's IV. Everything computed
+        # above -- forward
         # multiple, SOTP/normalised convergence, bank P/B, REIT P/FFO -- is kept
         # as a cross-check. The capture fraction is the existing one (20-35%,
         # +15pp when all three scenarios sit on the same side of spot).
@@ -12970,40 +12662,27 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _pt_bridge: Optional[dict] = None
         if _spot_for_cap and float(_spot_for_cap) > 0:
             _pt_cross = {"method": _12m_pt_method_label, "targets": dict(_12m_targets)}
-            _prem = _peer_bounded_premium(_composite_mult, peer, _anchor_method)
             _pt_rows: dict = {}
             for _sn in ("bear", "base", "bull"):
                 _sr = scenario_results.get(_sn) or {}
                 _siv = _sr.get("intrinsic_value")
                 if not isinstance(_siv, (int, float)) or _siv <= 0:
                     continue
-                _ivp, _prem_legs = _premium_adjusted_iv(_sr, _prem["applied"])
-                _tgt = round(_convergence_bound(_ivp, float(_spot_for_cap), _max_capture), 2)
+                _tgt = round(_convergence_bound(_siv, float(_spot_for_cap), _max_capture), 2)
                 _12m_targets[_sn] = _tgt
-                _pt_rows[_sn] = {"intrinsic_value": _siv,
-                                 "iv_with_premium": round(float(_ivp), 4),
-                                 "premium_legs": _prem_legs,
-                                 "target": _tgt}
+                _pt_rows[_sn] = {"intrinsic_value": _siv, "target": _tgt}
             if _pt_rows:
                 _pt_unified = True
                 _12m_pt_method_label = (
                     f"convergence toward intrinsic value: {_max_capture:.0%} of "
-                    f"the spot-to-IV gap, peer-multiple legs at a "
-                    f"{_prem['applied']:.3f}x peer-bounded premium")
+                    f"the spot-to-IV gap")
                 _pt_bridge = {
-                    "rule": ("target = spot + capture x (IV_premium - spot); "
-                             "IV_premium = IV with the peer-bounded premium on "
-                             "the peer-multiple legs only (not DCF, not SOTP)"),
+                    "rule": "target = spot + capture x (IV - spot)",
                     "spot": float(_spot_for_cap),
                     "capture": _max_capture,
-                    "premium": _prem,
                     "scenarios": _pt_rows,
                     "cross_checks": _pt_cross,
                 }
-                if _composite_bridge is not None:
-                    _composite_bridge["applied_to"] = (
-                        "12m target only, as a peer-bounded premium; the "
-                        "fundamental IV carries no composite")
 
         # ── 12m PT vs DCF IV divergence guard ────────────────────────────────
         # Skipped when the unified rule set the target: it guarded a target
@@ -13758,20 +13437,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                        "iv_multiplier": _iv_calibration_k}
                                       if _active_cal else None),
             # ── Audit fields (item 3b), scenario-invariant ─────────────────
-            # `_composite_bridge` is computed once before the scenario loop, so
-            # it lives here rather than being triplicated into each scenario.
-            # `composite_applied` (per scenario) already published the resulting
-            # MULTIPLE while the Q/R/C decomposition and `bank_clamp` behind it
-            # were never persisted at all — the one field an audit most needs
-            # when a composite looks wrong is the one that says which of the
-            # three sub-scores moved it, and whether a bank clamp was applied to
-            # a name that is not a bank. That clamp was the subject of Decision
-            # 1 and the golden baseline still cannot see it change.
-            #
             # `normalized_net_income` is the earnings figure the normalisation
             # path substituted for a distorted reported one. Several legs read
             # it off `most_recent`; none of them recorded which value they used.
-            "composite_bridge":      dict(_composite_bridge) if _composite_bridge else None,
             "normalized_net_income": _ledger_num(most_recent.get("normalized_net_income")),
             "is_cache_copy":         False,
             "ledger_schema":         1,

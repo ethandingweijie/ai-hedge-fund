@@ -133,12 +133,11 @@ def test_projecting_legs_sit_in_the_dcf_bucket(leg):
         profile_methods=[{"name": "P/E", "weight": 0.8, "anchor": True, "implementable": True},
                          {"name": leg, "weight": 0.2, "anchor": False, "implementable": True}],
         method_values={"P/E": 100.0, leg: 50.0},
-        c_macro=0.0, forward_flags=[], dcf_tv_fraction=0.5, composite_mult=1.5)
+        c_macro=0.0, forward_flags=[], dcf_tv_fraction=0.5)
     buckets = {w["method"]: w["bucket"] for w in bd["effective_weights"]}
     assert buckets == {"P/E": "multi", leg: "dcf"}
     assert bd["iv_dcf"] == pytest.approx(50.0)
-    # The composite reaches the multiple only: 0.8*100*1.5 + 0.2*50.
-    assert iv == pytest.approx(0.8 * 150.0 + 0.2 * 50.0)
+    assert iv == pytest.approx(0.8 * 100.0 + 0.2 * 50.0)
 
 
 def test_projection_family_and_blend_family_cannot_drift():

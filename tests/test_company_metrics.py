@@ -122,5 +122,5 @@ def test_the_pipeline_resolves_metrics_before_it_scores_them():
     import src.pipeline as pipeline
     src = inspect.getsource(pipeline)
     assert src.index('_timed("4_44_company_metrics")') < \
-        src.index('_timed("4_45_zscore_for_valuation")') < \
         src.index('_timed("4_5_dcf_engine")')
+    assert "zscore" not in src

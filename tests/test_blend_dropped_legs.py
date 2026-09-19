@@ -60,7 +60,7 @@ SOTP = 11.1562
 EVE = 1.3016
 
 
-def _blend(method_values, *, tv=0.0, composite=1.0):
+def _blend(method_values, *, tv=0.0):
     """Run the blend and return (iv, breakdown, flags)."""
     flags: list[str] = []
     iv, bd = _blend_methods(
@@ -69,7 +69,6 @@ def _blend(method_values, *, tv=0.0, composite=1.0):
         c_macro=0.0,
         forward_flags=flags,
         dcf_tv_fraction=tv,
-        composite_mult=composite,
     )
     return iv, bd, flags
 
@@ -447,9 +446,7 @@ class TestThePayloadPublishesTheDisclosure:
             )
 
     def test_the_payload_readers_are_get_not_index(self):
-        """`blend_breakdown["iv_pre_composite"]` at the payload assembly is a
-        direct index guarded by a `.get()` on the same key. The five new keys
-        must not adopt that shape: on the degenerate return they are present but
+        """The five new keys must be read with `.get()`, never indexed: on the degenerate return they are present but
         the numeric ones are not, and an unguarded index would turn "no leg
         produced a value" into a KeyError."""
         import inspect

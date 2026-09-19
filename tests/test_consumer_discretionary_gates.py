@@ -442,7 +442,6 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         "GATE_BALANCE_SHEET_QUARTERLY_STEP_CHANGE",
         "GATE_CASH_CONVERSION",
         "GATE_CYCLICAL_PEAK_CONSENSUS",
-        "GATE_DETERMINISTIC_KPI_PRECEDENCE",
         "GATE_GROWTH_CAGR_DIVERGENCE",
         "GATE_GROWTH_REINVESTMENT",
         "GATE_INVENTORY_STRESS",
@@ -472,7 +471,9 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
     # GATE_SCENARIO_ORDERING landed and only this one had been widened. Both
     # are now cross-referenced; keep them in step.
     src = _engine_src()
-    assert src.count('"applied": True,') == 6, src.count('"applied": True,')
+    # FIVE since 2026-09-19: deterministic-KPI precedence recorded the
+    # composite as its decision variable and was retired with it.
+    assert src.count('"applied": True,') == 5, src.count('"applied": True,')
     # FOUR, not three: the eleventh gate is a literal `"applied": False,` and
     # has no branch that could make it True. This is the third time a new
     # observation-only record has moved this count and reddened a module whose
@@ -3140,13 +3141,13 @@ def test_consumer_growth_declares_a_leg_it_always_strips():
     assert "P/E excluded" in prof["rationale"]
 
     flat = {"DCF": 100.0, "EV/Revenue": 100.0, "P/E": 100.0, "EV/EBITDA": 100.0}
-    _, with_pe = _blend_methods(ms, dict(flat), 1.0, [], 0.5, 1.0)
+    _, with_pe = _blend_methods(ms, dict(flat), 1.0, [], 0.5)
     assert with_pe["weight_dcf"] == pytest.approx(0.40)
     assert {e["method"]: e["weight"] for e in with_pe["effective_weights"]} == \
         {"DCF": 0.40, "EV/Revenue": 0.25, "P/E": 0.20, "EV/EBITDA": 0.15}
 
     stripped = {k: v for k, v in flat.items() if k != "P/E"}
-    iv, no_pe = _blend_methods(ms, dict(stripped), 1.0, [], 0.5, 1.0)
+    iv, no_pe = _blend_methods(ms, dict(stripped), 1.0, [], 0.5)
     assert no_pe["weight_dcf"] == pytest.approx(0.50)
     assert {e["method"]: e["weight"] for e in no_pe["effective_weights"]} == \
         {"DCF": 0.50, "EV/Revenue": 0.3125, "EV/EBITDA": 0.1875}
@@ -3154,7 +3155,7 @@ def test_consumer_growth_declares_a_leg_it_always_strips():
     # The renormalisation is exact, so the effective weights are checkable by
     # hand rather than merely observed.
     v = {"DCF": 200.0, "EV/Revenue": 100.0, "EV/EBITDA": 60.0}
-    iv2, bd = _blend_methods(ms, dict(v), 1.0, [], 0.5, 1.0)
+    iv2, bd = _blend_methods(ms, dict(v), 1.0, [], 0.5)
     assert iv2 == pytest.approx(
         0.50 * 200.0 + 0.50 * (0.625 * 100.0 + 0.375 * 60.0), rel=1e-12)
     assert iv2 == pytest.approx(142.5, rel=1e-12)

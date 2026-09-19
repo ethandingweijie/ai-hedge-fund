@@ -125,7 +125,7 @@ def resolve_company_metrics(
     window; otherwise returns ``metrics`` untouched. The adopted copy carries
     ``_metrics_company`` / ``_metrics_source`` so a run records whose numbers
     it used, and any private keys the current run computed for itself
-    (``_z_scores``, completeness annotations) are left to be recomputed.
+    (completeness annotations and the like) are left to be recomputed.
     """
     current = dict(metrics or {})
     shared, source, run_at = latest_sibling_metrics(

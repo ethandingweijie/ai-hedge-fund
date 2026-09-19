@@ -17,11 +17,9 @@ _PROFILE = [
 ]
 
 
-def _reproduce(values: dict, breakdown: dict, composite: float) -> float:
-    return sum(
-        e["weight"] * values[e["value_key"]]
-        * (composite if e["bucket"] == "multi" else 1.0)
-        for e in breakdown["effective_weights"])
+def _reproduce(values: dict, breakdown: dict) -> float:
+    return sum(e["weight"] * values[e["value_key"]]
+               for e in breakdown["effective_weights"])
 
 
 def _weight(breakdown: dict, method: str) -> float:
@@ -35,22 +33,21 @@ class TestEffectiveWeights:
     def test_weights_sum_to_one_and_reproduce_the_blend(self):
         values = {"DCF": 100.0, "P/E": 80.0, "EV/EBITDA": 90.0}
         iv, bd = d._blend_methods(_PROFILE, values, c_macro=0.07,
-                                  forward_flags=[], dcf_tv_fraction=0.5,
-                                  composite_mult=0.85)
+                                  forward_flags=[], dcf_tv_fraction=0.5)
         assert sum(e["weight"] for e in bd["effective_weights"]) == \
             pytest.approx(1.0, abs=1e-5)
-        assert _reproduce(values, bd, 0.85) == pytest.approx(iv, rel=1e-5)
+        assert _reproduce(values, bd) == pytest.approx(iv, rel=1e-5)
 
     def test_a_method_with_no_value_carries_no_weight(self):
         values = {"DCF": 100.0, "P/E": None, "EV/EBITDA": 90.0}
-        iv, bd = d._blend_methods(_PROFILE, values, 0.0, [], 0.5, 1.0)
+        iv, bd = d._blend_methods(_PROFILE, values, 0.0, [], 0.5)
         assert "P/E" not in [e["method"] for e in bd["effective_weights"]]
         assert _weight(bd, "DCF") == pytest.approx(0.5 / 0.7, abs=1e-5)
-        assert _reproduce(values, bd, 1.0) == pytest.approx(iv, rel=1e-5)
+        assert _reproduce(values, bd) == pytest.approx(iv, rel=1e-5)
 
     def test_gate_a_moves_weight_to_the_asset_floor(self):
         values = {"DCF": 100.0, "P/E": 80.0, "EV/EBITDA": 90.0, "P/BV": 60.0}
-        iv, bd = d._blend_methods(_PROFILE, values, 0.0, [], 0.9, 1.0)
+        iv, bd = d._blend_methods(_PROFILE, values, 0.0, [], 0.9)
         floor = [e for e in bd["effective_weights"]
                  if e["method"] == "P/BV (asset floor)"]
         assert len(floor) == 1 and floor[0]["bucket"] == "multi"
@@ -58,17 +55,17 @@ class TestEffectiveWeights:
             0.5 * d._TV_DOMINANCE_REWEIGHT, abs=1e-5)
         assert _weight(bd, "DCF") == pytest.approx(
             0.5 * (1 - d._TV_DOMINANCE_REWEIGHT), abs=1e-5)
-        assert _reproduce(values, bd, 1.0) == pytest.approx(iv, rel=1e-5)
+        assert _reproduce(values, bd) == pytest.approx(iv, rel=1e-5)
 
     def test_a_proxy_records_the_value_it_actually_used(self):
         profile = [{"name": "DCF", "weight": 0.6},
                    {"name": "NAV", "weight": 0.4, "implementable": False,
                     "proxy": "P/BV"}]
         values = {"DCF": 100.0, "P/BV": 70.0}
-        iv, bd = d._blend_methods(profile, values, 0.0, [], 0.5, 1.0)
+        iv, bd = d._blend_methods(profile, values, 0.0, [], 0.5)
         nav = next(e for e in bd["effective_weights"] if e["method"] == "NAV")
         assert nav["value_key"] == "P/BV"
-        assert _reproduce(values, bd, 1.0) == pytest.approx(iv, rel=1e-5)
+        assert _reproduce(values, bd) == pytest.approx(iv, rel=1e-5)
 
 
 # ── industry routing trace ──────────────────────────────────────────────────

@@ -149,13 +149,6 @@ _STILL_FIRES = ("09988_HK", "BABA", "BN4_SI", "C38U_SI", "FCX", "MU", "SCHW",
 #: bear ROIC clears WACC, so terminal growth survives.
 _DEACTIVATED = ("02888_HK", "AAPL", "COST", "MELI", "V")
 
-#: The two money-center banks, and the only two fixtures with a `bank_clamp` leaf.
-_BANKS = ("02888_HK", "D05_SI")
-_BANK_CLAMP_TO = 1.100
-
-#: Fixtures whose composite ran on ZERO extracted KPIs across both scored bands.
-_ZERO_KPI = ("AAPL", "C38U_SI", "FCX", "SCHW", "V")
-
 _GATE_B_RE = re.compile(
     r"^Gate B \(bear\): Forward ROIC \((-?[\d.]+)%(?:\s*\[([^\]]+)\])?\)")
 #: Currency-agnostic on purpose. The earlier form was
@@ -165,13 +158,6 @@ _GATE_B_RE = re.compile(
 #: guard can have: green, and wrong. `[^\d]*` skips whatever currency token the
 #: engine printed and captures the number after it.
 _NORM_NI_RE = re.compile(r"Normalized NI: TTM .*? 5y-cycle[^\d]*([\d.]+)B")
-
-
-def _bridge(name: str) -> dict:
-    """The composite bridge as a dict, reassembled from its dotted leaves."""
-    p = _proj(name)
-    pre = "composite_bridge."
-    return {k[len(pre):]: v for k, v in p.items() if k.startswith(pre)}
 
 
 def _basis(name: str, scenario: str) -> dict | None:
@@ -219,7 +205,8 @@ def test_every_fixture_carries_the_new_top_level_leaves():
     for name in _ALL:
         p = _proj(name)
         assert "normalized_net_income" in p, name
-        assert any(k.startswith("composite_bridge.") for k in p), name
+        # The composite bridge was retired with the composite (2026-09-19).
+        assert not any(k.startswith("composite_bridge.") for k in p), name
 
 
 def test_roic_source_only_ever_takes_one_of_the_three_chain_values():
@@ -940,220 +927,6 @@ def test_02888_carries_a_forty_six_percent_bank_sector_growth_average():
     assert _basis("02888_HK", "bear")["basis"] == "industry"
     assert _basis("02888_HK", "bear")["cohort"] == "all"
     assert p["scenarios.base.growth_premium"] == pytest.approx(0.891, abs=5e-4)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# E. The composite bridge
-# ══════════════════════════════════════════════════════════════════════════════
-
-
-def test_the_bridge_carries_the_three_sub_scores_their_weights_and_the_cap():
-    required = {
-        "quality", "quality_weight", "risk", "risk_weight", "commodity",
-        "commodity_weight", "raw_composite", "final_multiplier", "cap_high",
-        "was_capped", "composite_score", "tier_label", "completeness_score",
-        "mandatory_missing", "quality_note", "risk_note", "commodity_note",
-        "quality_extracted", "quality_total", "risk_extracted", "risk_total",
-    }
-    for name in _ALL:
-        missing = required - set(_bridge(name))
-        assert not missing, (name, sorted(missing))
-
-
-def test_the_weights_sum_to_one_for_every_fixture():
-    for name in _ALL:
-        b = _bridge(name)
-        total = b["quality_weight"] + b["risk_weight"] + b["commodity_weight"]
-        assert total == pytest.approx(1.0, abs=1e-9), (name, total)
-
-
-def test_the_final_multiplier_is_the_raw_one_unless_it_was_capped():
-    """The cap is the only thing allowed to sit between the two. Pinning the
-    relationship means a new clamp has to announce itself via `was_capped`."""
-    for name in _ALL:
-        b = _bridge(name)
-        if b["was_capped"]:
-            assert b["final_multiplier"] == b["cap_high"], (name, b)
-            assert b["raw_composite"] > b["cap_high"], (name, b)
-        else:
-            assert b["final_multiplier"] == b["raw_composite"], (name, b)
-            assert b["raw_composite"] <= b["cap_high"], (name, b)
-
-
-def test_meli_is_the_only_capped_composite_and_it_is_capped_hard():
-    """Raw 2.174 against a ceiling of 1.85, `composite_score` 100. Two "elite"
-    quality KPIs (take-rate expansion 150bp, Rule of 40 at 83.4) at a 0.7 quality
-    weight, with `commodity_weight` 0.0 and a risk sub-score of 0.92 that cannot
-    reach it. This is the decomposition behind MELI's base IV of 5578.42 — the
-    known live overstatement — and until now the baseline published only the
-    resulting 1.85 with nothing to read it against."""
-    capped = [n for n in _ALL if _bridge(n)["was_capped"]]
-    assert capped == ["MELI"]
-    b = _bridge("MELI")
-    assert b["raw_composite"] == pytest.approx(2.174, abs=5e-4)
-    assert b["cap_high"] == 1.85 and b["final_multiplier"] == 1.85
-    assert b["composite_score"] == 100
-    assert b["quality"] == pytest.approx(1.5)
-    assert b["risk"] == pytest.approx(0.92)
-    assert b["quality_weight"] == pytest.approx(0.7)
-    assert b["commodity_weight"] == 0.0
-
-
-@pytest.mark.parametrize("name", _BANKS)
-def test_the_bank_clamp_is_a_note_on_the_raw_value_not_a_change_to_it(name):
-    """`final_multiplier` is the PRE-clamp figure; the clamp lands on
-    `composite_applied`, outside the bridge. That split is why Decision 1 was
-    unauditable before: the bridge was not persisted at all, and the one number
-    that WAS (`composite_applied`) could not be told apart from a profile that
-    simply scored 1.1. Now the note states the move and both ends are checkable."""
-    b = _bridge(name)
-    m = re.match(r"^([\d.]+)x → ([\d.]+)x ", b["bank_clamp"])
-    assert m, b["bank_clamp"]
-    assert float(m.group(1)) == pytest.approx(b["raw_composite"], abs=5e-4)
-    assert float(m.group(2)) == pytest.approx(_BANK_CLAMP_TO)
-    assert b["final_multiplier"] == b["raw_composite"], "clamp is not in the bridge"
-    # Two-tier valuation (2026-09-19): the clamped composite no longer reaches
-    # the IV -- `composite_applied` is 1.0 on every scenario -- and is used only
-    # as the 12m target's peer-bounded premium signal. The clamp itself, and
-    # its note in the bridge, are unchanged.
-    p = _proj(name)
-    for s in _SCENARIOS:
-        assert p[f"scenarios.{s}.composite_applied"] == pytest.approx(1.0), (name, s)
-
-
-def test_the_clamp_actually_bites_on_both_banks():
-    """A clamp to 1.100 only means something where the raw value exceeded it."""
-    for name in _BANKS:
-        assert _bridge(name)["raw_composite"] > _BANK_CLAMP_TO, name
-    assert _bridge("02888_HK")["raw_composite"] == pytest.approx(1.278, abs=5e-4)
-    assert _bridge("D05_SI")["raw_composite"] == pytest.approx(1.453, abs=5e-4)
-
-
-def test_schw_is_a_brokerage_and_is_not_clamped():
-    """Decision 1 narrowed the clamp from "the composite's bank list" to a real
-    bank test, and `Brokerage` was the profile that made the difference. The
-    baseline can now SEE that: SCHW has no `bank_clamp` leaf and its applied
-    multiplier is its own raw 1.0, while both money-center banks are clamped."""
-    p = _proj("SCHW")
-    assert p["profile"] == "Brokerage"
-    assert "bank_clamp" not in _bridge("SCHW")
-    for s in _SCENARIOS:
-        assert p[f"scenarios.{s}.composite_applied"] == pytest.approx(1.0), s
-
-
-def test_the_clamp_is_present_on_exactly_the_two_money_center_banks():
-    clamped = sorted(n for n in _ALL if "bank_clamp" in _bridge(n))
-    assert clamped == sorted(_BANKS)
-    for name in _BANKS:
-        assert "Bank" in _proj(name)["profile"], (name, _proj(name)["profile"])
-
-
-def test_composite_applied_is_exactly_the_ratio_of_the_two_multiples_leaves():
-    """The composite is applied as a pure multiplier on the multiples blend, in
-    all three scenarios, for all 14 fixtures. Tolerance covers the 4dp rounding of
-    `composite_applied` against full-precision `iv_multi`/`iv_multi_post`."""
-    checked = 0
-    for name in _ALL:
-        p = _proj(name)
-        for s in _SCENARIOS:
-            pre, post = p[f"scenarios.{s}.iv_multi"], p[f"scenarios.{s}.iv_multi_post"]
-            if not pre:
-                continue
-            checked += 1
-            assert post / pre == pytest.approx(
-                p[f"scenarios.{s}.composite_applied"], abs=2e-4), (name, s)
-    # Guard against the `continue` above turning this into a test of nothing.
-    # Every one of the 14 fixtures has a multiples leg in all three scenarios.
-    assert checked == len(_ALL) * len(_SCENARIOS), checked
-
-
-def test_the_z_score_path_fires_on_no_fixture_at_all():
-    """`quality_z`, `risk_z`, `quality_cohort`, `risk_cohort` and
-    `risk_cap_gate_kpi` are None in all 14. Every sub-score in the baseline is a
-    raw threshold band, never a cohort-normalised z-score — which is the same
-    absence Phase 2.1 looks for in `zscore_engine.py` (no `tanh`, no `0.175`),
-    now visible from the valuation side. A change here would be a real change in
-    how the composite scores, and the baseline would say so."""
-    for name in _ALL:
-        b = _bridge(name)
-        for key in ("quality_z", "risk_z", "quality_cohort", "risk_cohort",
-                    "risk_cap_gate_kpi"):
-            assert b[key] is None, (name, key, b[key])
-
-
-@pytest.mark.parametrize("name", _ZERO_KPI)
-def test_five_fixtures_run_the_composite_on_zero_extracted_kpis(name):
-    """`quality_extracted == 0` and `risk_extracted == 0`, and the composite still
-    emits a confident answer: score 50, multiplier exactly 1.0, tier "in-band".
-    Nothing in that output says "measured nothing". Three of the five — AAPL, SCHW
-    and V — are names from the undervaluation investigation, so their composite
-    contributes precisely nothing to the verdict, not because they are average but
-    because no KPI reached it. The notes name what was missing."""
-    b = _bridge(name)
-    assert b["quality_extracted"] == 0, (name, b)
-    assert b["risk_extracted"] == 0, (name, b)
-    assert b["composite_score"] == 50, (name, b)
-    assert b["final_multiplier"] == 1.0, (name, b)
-    assert b["tier_label"] == "in-band", (name, b)
-    assert "not extracted" in b["risk_note"] or "no quality" in b["risk_note"]
-
-
-def test_the_zero_kpi_set_is_exactly_those_five():
-    zero = sorted(n for n in _ALL
-                  if _bridge(n)["quality_extracted"] == 0
-                  and _bridge(n)["risk_extracted"] == 0)
-    assert zero == sorted(_ZERO_KPI)
-
-
-def test_fcx_gives_eighty_percent_of_its_weight_to_a_band_it_could_not_score():
-    """`commodity_weight` is 0.8 — the highest in the baseline — and the commodity
-    sub-score is 1.0 with a note naming three absent price KPIs, while
-    `mandatory_missing` is empty and the tier still reads "in-band". A missing band
-    scoring as in-band is the general form of the defect; FCX is where it carries
-    the most weight, on a Mining (Major) in `_CYCLICAL_PROFILES`."""
-    b = _bridge("FCX")
-    assert b["commodity_weight"] == pytest.approx(0.8)
-    assert b["commodity"] == 1.0
-    assert "no commodity price KPIs" in b["commodity_note"]
-    assert b["mandatory_missing"] == []
-    assert b["cap_high"] == 1.7, "cyclicals carry a lower ceiling"
-
-
-def test_mandatory_missing_and_completeness_are_recorded_where_they_apply():
-    """Three fixtures declare a gap. The other eleven carry an empty list, so the
-    field distinguishes "nothing mandatory was missing" from "we did not look"."""
-    expect = {
-        "02888_HK": (["nim_pct"], 0.75),
-        "MU":       (["dram_bit_growth"], 0.75),
-        "U96_SI":   (["weighted_avg_contract_life"], 0.67),
-    }
-    for name, (missing, score) in expect.items():
-        b = _bridge(name)
-        assert b["mandatory_missing"] == missing, (name, b)
-        assert b["completeness_score"] == pytest.approx(score), (name, b)
-    for name in _ALL:
-        if name not in expect:
-            assert _bridge(name)["mandatory_missing"] == [], name
-
-
-def test_a_sub_score_note_names_the_kpi_it_scored_where_one_was_scored():
-    """The notes are the audit trail for the sub-scores. Where a KPI was extracted
-    the note carries its name and value; where it was not the note says so. Either
-    way the note is non-empty, so a future silent band cannot pass unnoticed."""
-    for name in _ALL:
-        b = _bridge(name)
-        for key in ("quality_note", "risk_note", "commodity_note"):
-            assert isinstance(b[key], str) and b[key].strip(), (name, key)
-
-
-def test_the_bridge_is_recorded_once_per_run_not_once_per_scenario():
-    """`_composite_bridge` is computed before the scenario loop, so it is a
-    top-level leaf. Triplicating it would have made a per-scenario divergence
-    representable — and silently possible."""
-    for name in _ALL:
-        p = _proj(name)
-        assert not any(k.startswith("scenarios.") and "composite_bridge" in k
-                       for k in p), name
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -390,7 +390,7 @@ def apply_overrides(
 
     if basis is not None and (overrides or deterministic):
         # Private key: stripped on entity-cache adoption and ignored by the card
-        # renderer, the same convention as `_z_scores` and `_metrics_source`.
+        # renderer, the same convention as `_metrics_source`.
         out["_deterministic_kpis"] = {
             "overridden": [o["kpi"] for o in overrides],
             "computed": list(basis.get("computed") or sorted(deterministic)),

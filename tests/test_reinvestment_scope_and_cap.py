@@ -411,7 +411,9 @@ class TestTheInvariantsAreNotDuplicated:
         # tenth gate arrived, and again when the eleventh did; if you are reading
         # this because one of them failed and the other did not, a gate was
         # added without a record.
-        assert src.count('"applied": True,') == 6
+        # FIVE since 2026-09-19: GATE_DETERMINISTIC_KPI_PRECEDENCE was retired
+        # with the composite it measured.
+        assert src.count('"applied": True,') == 5
 
     def test_the_two_flag_branches_are_mutually_exclusive(self):
         """Out-of-scope names get one sentence; in-scope names get the paragraph.

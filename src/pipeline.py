@@ -1064,47 +1064,6 @@ def run_advanced_pipeline(
                 print(f"  [company-metrics] failed: {_e!r} — each listing keeps "
                       f"its own extraction")
 
-        # ── Peer z-scores BEFORE the engine (not only before the card) ─────
-        # The V4-beta composite is built to prefer a peer-relative z-tier over
-        # the static KPI band whenever a cohort exists, and the DCF engine
-        # applies that composite to the whole multiples bucket at phase 4.5 --
-        # but the z-score pass ran at phase 10, so the valuation never saw a
-        # z-score and every ticker was scored on absolute bands. 09618.HK,
-        # 2026-09-15: a 1.5% GAAP operating margin scored "weak" on a mega-cap
-        # band calibrated for 30-40% hyperscaler margins and took 17.5% off the
-        # multiples bucket, while the cohort put JD 0.4 sigma from the median
-        # -- in-band. Runs the archive cannot cohort (fewer than 3 peers) still
-        # fall back to the bands, and the phase-10 pass below stays for the
-        # buckets the FMP augmentation fills in after this point.
-        with _timed("4_45_zscore_for_valuation"):
-            try:
-                from src.data.zscore_engine import (
-                    augment_metrics_with_z_scores as _z_augment_early,
-                )
-                from src.data.sector_kpi_framework import (
-                    is_legacy_profile as _is_legacy_early,
-                )
-                _pn_early = state["data"].get("profile_names", {})
-                _early_hits: list[str] = []
-                for _t in (state["data"].get("tickers", []) or list(_pn_early)):
-                    _profile = (_pn_early.get(_t)
-                                or state["data"].get("profile_name") or "")
-                    if not _profile or _is_legacy_early(_profile):
-                        continue
-                    for _state_key in ("framework_metrics", "framework_metrics_all",
-                                       "insurance_metrics_all", "bank_metrics_all"):
-                        _bucket = state["data"].get(_state_key) or {}
-                        if isinstance(_bucket.get(_t), dict):
-                            _bucket[_t] = _z_augment_early(_profile, _t, _bucket[_t])
-                            state["data"][_state_key] = _bucket
-                            if _bucket[_t].get("_z_scores"):
-                                _early_hits.append(f"{_t}:{len(_bucket[_t]['_z_scores'])}")
-                print(f"  [zscore_engine/pre-valuation] "
-                      f"{', '.join(_early_hits) if _early_hits else 'no peer cohorts yet'}")
-            except Exception as _e:
-                print(f"  [zscore_engine/pre-valuation] failed: {_e!r} — "
-                      f"composite falls back to band-based tiers")
-
         # ----------------------------------------------------------------
         # PHASE 4.5 — DCF Engine (deterministic, no LLM)
         # Cache: reuse dcf_range if all tickers have a <3-day cached run.
@@ -1533,7 +1492,7 @@ def run_advanced_pipeline(
         #   1. Become part of framework_metrics_all[ticker] dict
         #   2. Get persisted to web_runs JSON + archive ticker_signals
         #   3. Survive the run replay path (get_run_result reconstruction)
-        #   4. Show up in the V3 audit_bridge Risk multiplier (no longer 1.0x)
+        #   4. Show up on the sector card's risk KPIs
         # ----------------------------------------------------------------
         with _timed("10_fmp_risk_augment"):
             _join_prewarm(_risk_prewarm)
@@ -1614,49 +1573,7 @@ def run_advanced_pipeline(
                             print(f"  [sec_edgar] {_t} CET1={_sec['cet1_ratio']*100:.2f}% "
                                   f"from {_sec.get('filing_date','?')} 10-Q")
             except Exception as _e:
-                print(f"  [sec_edgar_fallback] failed: {_e!r} — banks without LLM CET1 will use band default 1.0x")
-
-        # ----------------------------------------------------------------
-        # V4-β — Z-Score Engine: augment per-ticker metrics dicts with
-        # peer-cohort z-scores. Runs AFTER FMP augmentation (so z-scores
-        # cover augmented KPIs too) and BEFORE render_card_payloads_for_run
-        # (so the audit_bridge picks up z-driven tier kickers).
-        #
-        # Cohort source: web_runs WHERE profile_name=<this profile>
-        # within last 60 days. Self-excludes the current ticker.
-        #
-        # Sparse-cohort safety: per-KPI skip when cohort < 3 peers; the
-        # multiplier path silently falls back to band-based tiers. So a
-        # fresh deploy with empty archive degrades to v3.0 behaviour
-        # (band-only) and progressively migrates to z-driven as runs
-        # accumulate.
-        # ----------------------------------------------------------------
-        with _timed("10_zscore_engine"):
-            try:
-                from src.data.zscore_engine import augment_metrics_with_z_scores as _z_augment
-                from src.data.sector_kpi_framework import is_legacy_profile as _is_legacy
-                _profile_names_z = state["data"].get("profile_names", {})
-                _tickers_z = state["data"].get("tickers", []) or list(_profile_names_z.keys())
-                _z_summary: list[str] = []
-                for _t in _tickers_z:
-                    _profile = _profile_names_z.get(_t) or state["data"].get("profile_name") or ""
-                    if not _profile or _is_legacy(_profile):
-                        continue
-                    for _state_key in ("framework_metrics_all",
-                                       "insurance_metrics_all", "bank_metrics_all"):
-                        _bucket = state["data"].get(_state_key) or {}
-                        if _t in _bucket and isinstance(_bucket[_t], dict):
-                            _bucket[_t] = _z_augment(_profile, _t, _bucket[_t])
-                            state["data"][_state_key] = _bucket
-                            _zs = _bucket[_t].get("_z_scores") or {}
-                            if _zs:
-                                _z_summary.append(f"{_t}({_profile}):{len(_zs)}KPIs")
-                if _z_summary:
-                    print(f"  [zscore_engine] {' | '.join(_z_summary)}")
-                else:
-                    print(f"  [zscore_engine] no peer cohorts found (fresh archive or sparse profiles)")
-            except Exception as _e:
-                print(f"  [zscore_engine] failed: {_e!r} — composite will use band-based tiers")
+                print(f"  [sec_edgar_fallback] failed: {_e!r} — banks without LLM CET1 show it as missing")
 
         # ----------------------------------------------------------------
         # Sector valuation card payload — per-ticker dict consumed by the
@@ -1679,7 +1596,7 @@ def run_advanced_pipeline(
             state["data"]["sector_card"] = _sector_card
 
         # SECOND mid-run emit — the now-fully-correct card (includes any KPIs
-        # that only landed after the DCF emit, e.g. z-score composite inputs).
+        # that only landed after the DCF emit, e.g. FMP-augmented risk KPIs).
         # Streams it BEFORE the Card-QA phase (which can run up to ~$0.50/ticker
         # of LLM time) + save_run, so the user sees the final card without
         # waiting for the run to fully complete.
@@ -1877,13 +1794,10 @@ def run_advanced_pipeline(
             # These are the per-ticker structured KPI dicts (e.g.
             # framework_metrics_all["AAPL"] = {"revenue_growth_pct": 0.064,
             # "operating_margin_pct": 0.324, ...}). The RENDERED `sector_card`
-            # above already has the multipliers computed, BUT:
-            #   - Z-engine `fetch_peer_cohort` reads framework_metrics_all from
-            #     past web_runs to build peer cohorts. Without persistence the
-            #     cohort is always empty → z-tier kickers never fire across runs.
+            # above already has the card rendered, BUT:
             #   - Admin re-render after schema fix needs raw KPIs to recompute.
             #   - Replay path (analysis_service.reconstruct) needs these to
-            #     rebuild the audit_bridge with current code.
+            #     rebuild the sector card with current code.
             # Bug discovered 2026-04-26: these dicts existed in state but were
             # never persisted to web_runs.full_result_json.
             "framework_metrics_all":  state["data"].get("framework_metrics_all", {}),

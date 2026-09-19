@@ -199,16 +199,6 @@ class TestUnanimousScenariosCloseMoreOfTheGap:
         assert not (all(v > spot for v in ivs) or all(v < spot for v in ivs))
 
 
-def test_peer_z_scores_are_computed_before_the_valuation_composite():
-    """The composite prefers a peer z-tier over the static band, but the z pass
-    ran at phase 10 and the composite at phase 4.5, so no valuation ever saw
-    one."""
-    import src.pipeline as pipeline
-    src = inspect.getsource(pipeline)
-    assert src.index('_timed("4_45_zscore_for_valuation")') < \
-        src.index('_timed("4_5_dcf_engine")')
-
-
 class TestTheBalanceSheetComesFromTheLatestQuarter:
     """Flows stay annual; only cash and debt move."""
     ANNUAL = {"period": "2026-03-31", "revenue": 1_000e9,
@@ -373,74 +363,3 @@ class TestOneHoldcoDiscountPerCompany:
         assert at15 == pytest.approx(at25 * 0.85 / 0.75)
 
 
-class TestThePeerCohortIsUsable:
-    """09988.HK, 2026-09-16: running the z pass before the composite (fix 4)
-    exposed the cohort itself. Alibaba's HK line was scored against a cohort
-    holding its own ADR, whose extractor had read the operating margin
-    differently, giving z=+3.19 "top-decile" on three names -- quality to its
-    1.50x ceiling and the composite to the 1.85x cap, IV HK$295 on a HK$106
-    price. Capex intensity scored off a MAD of 0.0003."""
-
-    def test_a_company_is_not_its_own_peer(self):
-        from src.data import zscore_engine as z
-        rows = [("BABA", "2026-09-16", json.dumps({"data": {"framework_metrics_all": {
-                    "BABA": {"operating_margin_pct": -0.003}}}})),
-                ("JD", "2026-09-16", json.dumps({"data": {"framework_metrics_all": {
-                    "JD": {"operating_margin_pct": 0.015}}}}))]
-        cohort = self._cohort(z, rows, exclude="09988.HK")
-        assert cohort.get("operating_margin_pct") == [0.015]      # BABA dropped
-
-    def test_a_dual_listed_peer_is_counted_once(self):
-        """BABA and 09988.HK are one company; two rows would skew the median
-        toward it and shrink the spread."""
-        from src.data import zscore_engine as z
-        rows = [("BABA", "2026-09-16", json.dumps({"data": {"framework_metrics_all": {
-                    "BABA": {"operating_margin_pct": -0.003}}}})),
-                ("09988.HK", "2026-09-16", json.dumps({"data": {"framework_metrics_all": {
-                    "09988.HK": {"operating_margin_pct": 0.10}}}})),
-                ("MSFT", "2026-09-16", json.dumps({"data": {"framework_metrics_all": {
-                    "MSFT": {"operating_margin_pct": 0.45}}}}))]
-        cohort = self._cohort(z, rows, exclude="JD")
-        assert sorted(cohort["operating_margin_pct"]) == [-0.003, 0.45]
-
-    def test_an_unrelated_peer_is_kept(self):
-        from src.data import zscore_engine as z
-        rows = [("JD", "2026-09-16", json.dumps({"data": {"framework_metrics_all": {
-                    "JD": {"operating_margin_pct": 0.015}}}}))]
-        cohort = self._cohort(z, rows, exclude="09988.HK")
-        assert cohort.get("operating_margin_pct") == [0.015]
-
-    @staticmethod
-    def _cohort(z, rows, exclude):
-        import src.data.db as _db
-        real_is_pg, real_query = _db.is_postgres, _db.query
-        try:
-            _db.is_postgres = lambda: True
-            _db.query = lambda sql, params: [
-                {"ticker": t, "run_at": r, "full_result_json": j} for t, r, j in rows]
-            return z.fetch_peer_cohort("Hyperscaler / Tech Conglomerate",
-                                       exclude_ticker=exclude)
-        finally:
-            _db.is_postgres, _db.query = real_is_pg, real_query
-
-    def test_a_degenerate_spread_is_skipped(self):
-        from src.data import zscore_engine as z
-        out = z.compute_z_scores(
-            "P", {"capex_intensity_pct": 0.124},
-            cohort={"capex_intensity_pct": [0.1237, 0.1240, 0.1234, 0.1238, 0.1236]},
-            min_cohort=5)
-        assert "capex_intensity_pct" not in out
-
-    def test_a_real_spread_still_scores(self):
-        from src.data import zscore_engine as z
-        out = z.compute_z_scores(
-            "P", {"operating_margin_pct": 0.10},
-            cohort={"operating_margin_pct": [0.01, 0.02, 0.04, 0.06, 0.08]},
-            min_cohort=5)
-        assert out["operating_margin_pct"]["z"] > 0
-
-    def test_three_names_no_longer_form_a_cohort(self):
-        from src.data import zscore_engine as z
-        assert z.DEFAULT_MIN_COHORT >= 5
-        out = z.compute_z_scores("P", {"k": 1.0}, cohort={"k": [0.1, 0.5, 0.9]})
-        assert out == {}
