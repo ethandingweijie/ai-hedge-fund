@@ -99,7 +99,7 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
         <h3 className="text-sm font-semibold">Valuation Methodology — {ticker}</h3>
         {dcfRange.calibration_error && (
           <Badge variant="warning" className="h-5 px-2 text-[10px] shrink-0">
-            CALIBRATION WARNING
+            BACKTEST WARNING
           </Badge>
         )}
       </div>
@@ -119,8 +119,18 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
         {dcfRange.profile_rationale && (
           <p className="text-xs text-muted-foreground italic">{dcfRange.profile_rationale}</p>
         )}
+        {/* The T-1 backward gate: today's methodology re-run on the PREVIOUS
+            fiscal year and compared with the price at that year end. Its IV is
+            last year's model, not today's, so it is labelled as a backtest --
+            unlabelled, LULU's "$458.14" read as the current blend. */}
         {dcfRange.calibration_note && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">{dcfRange.calibration_note}</p>
+          <p
+            className="text-xs text-amber-600 dark:text-amber-400"
+            title="Today's methodology re-run on the previous fiscal year's financials and compared with the share price at that year end. It tests how the method performed in the past; it is not today's valuation."
+          >
+            <span className="font-medium">Methodology Backtest:</span>{' '}
+            {dcfRange.calibration_note}
+          </p>
         )}
       </div>
 

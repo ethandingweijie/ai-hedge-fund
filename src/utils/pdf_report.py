@@ -2318,8 +2318,15 @@ def _section_2f(
     fx_note   = dcf_data.get("fx_note", "") or ""
 
     # ── Header info block ────────────────────────────────────────────────────
-    cal_status = "CALIBRATION WARN" if cal_err else "CALIBRATION PASS"
-    cal_color  = C_AMBER if cal_err else C_GREEN
+    # The T-1 gate re-runs today's methodology on the previous fiscal year and
+    # compares it with the price at that year end: a backtest of the method,
+    # not today's valuation. A skipped test is neither a pass nor a miss.
+    if cal_err:
+        cal_status, cal_color = "MISS", C_AMBER
+    elif str(cal_note).startswith("Skipped"):
+        cal_status, cal_color = "SKIPPED", colors.black
+    else:
+        cal_status, cal_color = "PASS", C_GREEN
     flag_text  = ("  |  Flags: " + "; ".join(fwd_flags)) if fwd_flags else ""
 
     ds_display = (data_src.replace("analyst", "Analyst consensus")
@@ -2330,7 +2337,7 @@ def _section_2f(
         ("Profile",        _strip(profile)),
         ("Data Source",    _strip(ds_display)),
         ("Macro modifier", f"C_macro = {c_mac:+.3f}"),
-        ("Calibration",    f"{cal_status}  {_strip(cal_note[:120])}"),
+        ("Methodology Backtest", f"{cal_status}  {_strip(cal_note[:120])}"),
     ]
     if reported_currency != "USD":
         fx_display = f"{reported_currency}→USD @ {fx_rate:.4f}  |  {_strip(fx_note[:100])}"
@@ -2342,7 +2349,7 @@ def _section_2f(
     col2 = page_w * 0.78
     h_data = []
     for label, val in header_rows:
-        is_cal = label == "Calibration"
+        is_cal = label == "Methodology Backtest"
         val_style = ParagraphStyle(
             name=f"_cal_{label}",
             parent=styles["RptValue"],
