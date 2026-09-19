@@ -275,6 +275,32 @@ _ORDERING_CLAMPED = {
 }
 
 
+#: ── THE FOURTH RE-BASELINE: two-tier valuation (owner decision 2026-09-19)
+#:
+#: The quality x risk x commodity composite no longer multiplies the IV's
+#: multiples leg, so every fixture whose composite was not 1.0 moved its IVs,
+#: and every 12m target now converges from spot toward the IV (the forward-
+#: multiple target, the PT-IV band and its validation fallback are superseded:
+#: the band is skipped under the unified rule). Gate B's own consequences
+#: (bear `tgr`, forced premium) and every method leg are untouched. The tables
+#: above keep their history; these are the regenerated baseline.
+#: BN4_SI's bear is still clamped onto base; its unclamped bear is 8.37, i.e.
+#: the 7.37 above without the 0.8812 composite.
+_TWO_TIER_MOVED = {
+    #            base_iv   bear_iv   bull_iv   targets (bear, base, bull)
+    "02888_HK": (258.53,   214.64,   301.76,   (225.27, 240.64, 255.77)),
+    "09988_HK": (156.06,   110.71,   207.48,   (108.45, 131.13, 156.84)),
+    "BABA":     (187.48,   138.01,   240.72,   (123.69, 148.43, 175.05)),
+    "BN4_SI":   (5.90,     5.90,     8.08,     (8.50,   8.50,   9.59)),
+    "COST":     (816.88,   589.32,   1066.04,  (792.14, 871.79, 958.99)),
+    "D05_SI":   (43.53,    35.65,    51.42,    (55.65,  59.59,  63.54)),
+    "MELI":     (4007.19,  3531.09,  4427.40,  (2424.69, 2591.33, 2738.40)),
+    "MU":       (182.97,   139.37,   228.84,   (533.49, 555.29, 578.22)),
+}
+_TWO_TIER_BN4_UNCLAMPED_BEAR = 8.37
+_TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (43.13, 48.02, 58.14)}
+
+
 def _bear_gate_b_roic(projection: dict) -> float | None:
     """The ROIC Gate B printed into the bear flag, or None if it did not fire."""
     for flag in projection.get("scenarios.bear.forward_flags") or []:
@@ -755,6 +781,11 @@ def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
             assert fx["base_iv"] == _FLOOR_MOVED["FCX"]["base_iv"]
             assert _PREFIX["FCX"][0] == 25.58, "the pre-×-10 pin stays as history"
             continue
+        if name in _TWO_TIER_MOVED:
+            # Moved by the fourth re-baseline (composite out of the IV), not by
+            # this fix; the pre-fix pin stays as history.
+            assert fx["base_iv"] == _TWO_TIER_MOVED[name][0], name
+            continue
         assert fx["base_iv"] == _PREFIX[name][0], name
 
 
@@ -823,7 +854,10 @@ def test_d05_is_the_one_fixture_whose_bear_column_did_not_change():
     assert _bear_gate_b_roic(p) is None
     assert p["scenarios.bear.tgr"] == 0.01
     assert p["scenarios.bear.growth_premium"] == 0.65
-    assert p["scenarios.bear.intrinsic_value"] == _BEAR_IV_UNMOVED["D05_SI"]
+    # The × 10 fix left it at 39.21; the two-tier re-baseline (its 1.10
+    # composite out of the IV) took it to 35.65. Both halves asserted.
+    assert _BEAR_IV_UNMOVED["D05_SI"] == 39.21
+    assert p["scenarios.bear.intrinsic_value"] == _TWO_TIER_MOVED["D05_SI"][1]
 
 
 def test_the_sign_flips_changed_only_their_flag_text():
@@ -870,6 +904,20 @@ def test_the_sign_flips_changed_only_their_flag_text():
             # value to base. Asserting the unclamped leaf too is what stops a
             # future change from quietly deleting the evidence.
             assert _BEAR_IV_UNMOVED[name] == oc["pre_clamp_bear_iv"], name
+            if name in _TWO_TIER_MOVED:
+                # Still clamped onto base after the two-tier re-baseline, at
+                # the new levels; the third re-baseline's numbers stay in the
+                # table as history.
+                tt = _TWO_TIER_MOVED[name]
+                assert oc["clamped_bear_iv"] == oc["base_iv"] == 5.20
+                assert p["scenarios.bear.intrinsic_value"] == tt[1] == tt[0], name
+                assert p["scenarios.bear.intrinsic_value_unclamped"] == \
+                    _TWO_TIER_BN4_UNCLAMPED_BEAR, name
+                assert p["scenarios.bull.intrinsic_value"] == tt[2], name
+                assert (p["12m_targets.bear"], p["12m_targets.base"],
+                        p["12m_targets.bull"]) == tt[3], name
+                assert p["scenarios.bear.ordering_composition.single_method"] is True, name
+                continue
             assert p["scenarios.bear.intrinsic_value"] == oc["clamped_bear_iv"], name
             assert p["scenarios.bear.intrinsic_value_unclamped"] == \
                 oc["pre_clamp_bear_iv"], name
@@ -887,6 +935,9 @@ def test_the_sign_flips_changed_only_their_flag_text():
             assert p["scenarios.bear.ordering_composition.weight_lost_vs_base"] == \
                 oc["weight_lost_vs_base"], name
             assert p["scenarios.bear.ordering_composition.single_method"] is True, name
+            continue
+        if name in _TWO_TIER_MOVED:
+            assert p["scenarios.bear.intrinsic_value"] == _TWO_TIER_MOVED[name][1], name
             continue
         assert p["scenarios.bear.intrinsic_value"] == _BEAR_IV_UNMOVED[name], name
 
@@ -972,7 +1023,10 @@ def test_02888_is_the_one_bull_premium_that_rose():
     """
     p = _proj("02888_HK")
     assert p["scenarios.bull.growth_premium"] == 0.815
-    assert p["scenarios.bull.intrinsic_value"] == 331.93
+    # 331.93 was this bull IV with the 1.10 composite; the two-tier
+    # re-baseline removed the composite from the IV.
+    assert p["scenarios.bull.intrinsic_value"] == _TWO_TIER_MOVED["02888_HK"][2]
+    assert 331.93 == pytest.approx(301.76 * 1.10, abs=0.01)
     assert 0.815 < 1.0
 
 
@@ -991,9 +1045,19 @@ def test_fcx_12m_band_fires_for_the_first_time():
     bring FCX back inside the band. It has to fall another 2.1% to do that.
     """
     p = _proj("FCX")
-    assert p["12m_pt_method"].startswith("validation fallback")
+    # SUPERSEDED by the two-tier re-baseline: the target is now derived from
+    # the IV by one rule and lies between spot and IV by construction, so the
+    # band is skipped and never fires. The band-era numbers stay as history.
+    assert _FLOOR_MOVED["FCX"]["targets"] == (18.66, 24.89, 31.11)
+    assert p["12m_pt_method"].startswith("convergence toward intrinsic value")
     assert (p["12m_targets.bear"], p["12m_targets.base"], p["12m_targets.bull"]) == \
-           _FLOOR_MOVED["FCX"]["targets"]
+           _TWO_TIER_TARGETS_UNMOVED_IV["FCX"]
+    assert "pt_over_scenario_iv" not in p["gate_metrics"]
+    for scen in _SCENARIOS:
+        assert not any("VALIDATION ERROR" in f
+                       for f in p[f"scenarios.{scen}.forward_flags"]), scen
+    return
+    assert _FLOOR_MOVED["FCX"]["targets"]
     assert "pt_over_scenario_iv" in p["gate_metrics"]
     for scen in _SCENARIOS:
         flags = p[f"scenarios.{scen}.forward_flags"]
@@ -1025,6 +1089,15 @@ def test_meli_bear_floor_mechanics_and_its_policy_conflict():
     0.271× and the ceiling won at 1554.60; base and bull targets did not move.
     """
     p = _proj("MELI")
+    # SUPERSEDED by the two-tier re-baseline (see the FCX test above): no band,
+    # no policy conflict. The band-era values stay as history in the prose.
+    tt = _TWO_TIER_MOVED["MELI"]
+    assert (p["12m_targets.bear"], p["12m_targets.base"], p["12m_targets.bull"]) == tt[3]
+    assert p["scenarios.bear.intrinsic_value"] == tt[1]
+    for scen in _SCENARIOS:
+        assert not any("POLICY CONFLICT" in f
+                       for f in p[f"scenarios.{scen}.forward_flags"]), scen
+    return
     assert p["12m_targets.bear"] == 1630.24
     assert (p["12m_targets.base"], p["12m_targets.bull"]) == (3141.26, 3334.71)
     assert p["scenarios.bear.intrinsic_value"] == 4940.12
@@ -1049,6 +1122,12 @@ def test_the_bear_deactivations_raise_bear_iv_and_nothing_else_does():
               "MELI": 4588.16, "V": 276.28}
     for name, want in raised.items():
         got = _proj(name)["scenarios.bear.intrinsic_value"]
+        if name in _TWO_TIER_MOVED:
+            # Composite removed from the IV by the two-tier re-baseline, so
+            # the direction check against `before` (which carried it) no
+            # longer compares like with like. The value is pinned instead.
+            assert got == _TWO_TIER_MOVED[name][1], name
+            continue
         assert got == want, name
         if name == "02888_HK":
             # The exception, and an instructive one: its bear IV carries no DCF
@@ -1149,8 +1228,11 @@ def test_02888_six_legs_split_exactly_along_the_premium_line():
         # transmitted the leg move without adding anything of its own.
         multi = proj[f"scenarios.{scen}.iv_multi"]
         post = proj[f"scenarios.{scen}.iv_multi_post"]
-        assert (multi, post) == _02888_BLEND[scen], scen
-        assert post == pytest.approx(multi * 1.1, rel=1e-6), (scen, multi, post)
+        # Two-tier re-baseline: no composite on the IV, so post == multi. The
+        # 1.1x relationship below is the history this test was written for.
+        assert multi == _02888_BLEND[scen][0], scen
+        assert post == multi, (scen, multi, post)
+        assert _02888_BLEND[scen][1] == pytest.approx(multi * 1.1, rel=1e-6), scen
 
 
 def test_02888_carries_no_dcf_leg_so_a_surviving_tgr_adds_nothing():

@@ -1012,10 +1012,13 @@ def test_the_bank_clamp_is_a_note_on_the_raw_value_not_a_change_to_it(name):
     assert float(m.group(1)) == pytest.approx(b["raw_composite"], abs=5e-4)
     assert float(m.group(2)) == pytest.approx(_BANK_CLAMP_TO)
     assert b["final_multiplier"] == b["raw_composite"], "clamp is not in the bridge"
+    # Two-tier valuation (2026-09-19): the clamped composite no longer reaches
+    # the IV -- `composite_applied` is 1.0 on every scenario -- and is used only
+    # as the 12m target's peer-bounded premium signal. The clamp itself, and
+    # its note in the bridge, are unchanged.
     p = _proj(name)
     for s in _SCENARIOS:
-        assert p[f"scenarios.{s}.composite_applied"] == pytest.approx(
-            _BANK_CLAMP_TO), (name, s)
+        assert p[f"scenarios.{s}.composite_applied"] == pytest.approx(1.0), (name, s)
 
 
 def test_the_clamp_actually_bites_on_both_banks():

@@ -192,10 +192,16 @@ def test_dispatcher_scenario_aware_values():
     assert mr["sotp_analyst_table"]["per_share"] == pytest.approx(150.0)
 
 
-def test_dispatcher_flat_without_scenario_block():
+def test_dispatcher_flexes_segments_without_scenario_block():
+    """Owner decision A+ (2026-09-19): no analyst `_scenarios` block no longer
+    means the same value in every scenario. Segment value takes the standard
+    0.75x / 1.25x multiple band (no revenue trees attached here), so base is
+    unchanged and bear < base < bull. It used to return 150 for all three,
+    which let a SOTP-dominated blend keep its bear case above spot."""
     mr = {"sotp_assumptions": _minimal_assumptions()}
-    for scen in ("base", "bear", "bull"):
-        assert _dispatch(mr, scen) == pytest.approx(150.0)
+    base = _dispatch(mr, "base")
+    assert base == pytest.approx(150.0)
+    assert _dispatch(mr, "bear") < base < _dispatch(mr, "bull")
 
 
 def test_dispatcher_base_ignores_scenario_overrides():
@@ -208,7 +214,10 @@ def test_dispatcher_unmatched_override_falls_back_flat():
     a["_scenarios"] = {
         "bear": [{"name": "Nonexistent Segment", "pe_multiple": 8.0}]}
     mr = {"sotp_assumptions": a}
-    assert _dispatch(mr, "bear") == pytest.approx(150.0)
+    # An override matching no segment yields no scenario TP, so bear falls
+    # through to the tree + band flex rather than to the flat base value.
+    assert _dispatch(mr, "base") == pytest.approx(150.0)
+    assert _dispatch(mr, "bear") < 150.0
 
 
 def test_dispatcher_net_debt_threads_into_scenarios():

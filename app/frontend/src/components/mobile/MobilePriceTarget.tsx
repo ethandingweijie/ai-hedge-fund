@@ -131,7 +131,7 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
                   <div className={`h-full ${r.color} rounded-full`} style={{ width: `${pct ?? 0}%` }} />
                 </div>
                 <span className="text-xs font-semibold w-[36px]">{r.label}</span>
-                {/* 12m target + DCF IV */}
+                {/* 12m target + fair value (blended IV) */}
                 <div className="text-right w-[60px]">
                   <p className="text-[10px] font-mono tabular-nums">{r.target != null && r.target > 0 ? fmt(r.target, sym) : '—'}</p>
                 </div>
@@ -147,7 +147,7 @@ export function MobilePriceTarget({ dcfRange, scenario, decision, ticker }: Prop
             <div className="flex-1" />
             <span className="w-[36px]" />
             <span className="text-[8px] text-muted-foreground text-right w-[60px]">12m Target</span>
-            <span className="text-[8px] text-muted-foreground text-right w-[60px]">DCF IV</span>
+            <span className="text-[8px] text-muted-foreground text-right w-[60px]">Fair value</span>
           </div>
         </div>
       )}

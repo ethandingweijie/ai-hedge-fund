@@ -135,3 +135,55 @@ def test_quartiles_attach_to_the_median_from_the_same_rung(monkeypatch):
     out = rc.get_regional_multiples("US", "Apparel", "Consumer", market_cap=5e9)
     assert set(out) == {"ev_ebitda"}
     assert (out["ev_ebitda"]["p25"], out["ev_ebitda"]["p75"]) == (8.0, 12.0)
+
+
+# ── scenario-aware analyst SOTP (option A+) ───────────────────────────────
+
+_JD_TABLE = {
+    "rows": [{"name": "JD Retail", "value": 52248868893.94},
+             {"name": "JD Logistics", "value": 5849489702.59},
+             {"name": "New Businesses", "value": 5780459159.17}],
+    "segment_value": 63878817755.70, "associates": 2.0e9, "net_cash": 17403261970.32,
+    "nav": 83282079726.02, "holdco_discount_pct": 0.15, "holdco_discount": 12492311958.90,
+    "final": 70789767767.12, "per_share_reporting": 186.4685,
+}
+_JD_TREES = {
+    "JD Retail": {"scenarios": [{"prob": .25, "rate": -.04}, {"prob": .55, "rate": .05}, {"prob": .20, "rate": .09}]},
+    "JD Logistics": {"scenarios": [{"prob": .20, "rate": .12}, {"prob": .55, "rate": .22}, {"prob": .25, "rate": .30}]},
+    "New Businesses": {"scenarios": [{"prob": .30, "rate": -.15}, {"prob": .50, "rate": .05}, {"prob": .20, "rate": .18}]},
+}
+
+
+def test_jd_bear_sotp_flexes_segments_by_tree_and_band():
+    bear = d._sotp_scenario_from_trees(_JD_TABLE, _JD_TREES, "bear", 0.75)
+    bull = d._sotp_scenario_from_trees(_JD_TABLE, _JD_TREES, "bull", 1.25)
+    assert bear["trees_matched"] == 3
+    # Production run 2026-09-19: HK$186.47 in every scenario before.
+    assert bear["per_share_reporting"] == pytest.approx(141.92, abs=0.05)
+    assert bull["per_share_reporting"] == pytest.approx(233.61, abs=0.05)
+
+
+def test_net_cash_and_associates_do_not_flex():
+    flat = {"JD Retail": {"scenarios": [{"prob": 1.0, "rate": 0.05}]}}
+    zero = dict(_JD_TABLE, rows=[{"name": "JD Retail", "value": 0.0}], segment_value=0.0,
+                nav=_JD_TABLE["associates"] + _JD_TABLE["net_cash"])
+    zero["holdco_discount"] = zero["nav"] * 0.15
+    zero["final"] = zero["nav"] * 0.85
+    a = d._sotp_scenario_from_trees(zero, flat, "bear", 0.75)["per_share_reporting"]
+    assert a == pytest.approx(zero["per_share_reporting"])
+
+
+def test_alibaba_segment_names_match_their_trees_and_generic_names_do_not():
+    rows = ["Alibaba China E-commerce Group", "All others", "Cloud intelligence group",
+            "Alibaba International Digital Commerce Group"]
+    m = d._match_segment_trees(rows, {"Cloud / AI": {"n": 1}, "E-commerce": {"n": 2},
+                                      "Quick Commerce": {"n": 3}})
+    assert m == {"Alibaba China E-commerce Group": {"n": 2}, "Cloud intelligence group": {"n": 1}}
+
+
+def test_tree_factor_is_relative_to_the_probability_weighted_rate():
+    tree = _JD_TREES["JD Retail"]
+    ref = .25 * -.04 + .55 * .05 + .20 * .09
+    assert d._tree_factor(tree, "bear") == pytest.approx(0.96 / (1 + ref))
+    assert d._tree_factor(tree, "bull") == pytest.approx(1.09 / (1 + ref))
+    assert d._tree_factor(tree, "base") == 1.0 and d._tree_factor(None, "bear") == 1.0

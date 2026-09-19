@@ -5537,6 +5537,14 @@ def _compute_method_value(
             _scen_ps = _scen.get("per_share_reporting")
             if _scen_ps and _scen_ps > 0:
                 return float(_scen_ps)
+        # No analyst scenario TP: flex each segment by its revenue tree and
+        # the standard multiple band (see _sotp_scenario_from_trees).
+        if scenario in ("bear", "bull"):
+            _flex = _sotp_scenario_from_trees(
+                table, most_recent.get("segment_scenarios"), scenario, sm)
+            if _flex is not None:
+                most_recent.setdefault("_sotp_analyst_flex", {})[scenario] = _flex
+                return float(_flex["per_share_reporting"])
         return table["per_share_reporting"]
 
     # ── EV/Revenue and variants ────────────────────────────────────────────
@@ -7902,6 +7910,104 @@ def _blend_methods(
 
 # ── Backward Logic Gate ───────────────────────────────────────────────────────
 
+# ── Scenario-aware analyst SOTP (owner decision A+, 2026-09-19) ─────────────
+#
+# Without an analyst `_scenarios` block the analyst SOTP returned its base
+# value in all three scenarios. On 09618.HK and 09988.HK it carries 77% of the
+# blend, so the bear case could barely fall: JD's bear IV was HK$184 against a
+# HK$105 spot -- above every published broker target -- and Alibaba's bear
+# stayed 39% above spot. Each SEGMENT now flexes by (a) its own 12-month
+# revenue scenario tree from deep research (bear = the tree's lowest rate,
+# bull = its highest, relative to the tree's probability-weighted rate) and
+# (b) the same 0.75x / 1.25x multiple band every other multiple leg and the
+# published SOTP already carry. Net cash and associates do not flex: they are
+# balance-sheet facts, not scenario outcomes. Revenue trees alone moved the
+# bear SOTP only 4-6%; the band is what makes the bear case a bear case.
+
+#: Tokens too generic to identify a segment on their own.
+_SEGMENT_GENERIC_TOKENS = frozenset({
+    "group", "segment", "segments", "business", "businesses", "division",
+    "services", "service", "other", "others", "all", "new", "and", "the",
+    "international", "digital", "commerce", "holdings", "inc", "ltd", "co",
+})
+
+
+def _segment_tokens(name: str) -> frozenset:
+    n = (name or "").lower().replace("e-commerce", "ecommerce")
+    return frozenset(t for t in re.split(r"[^a-z0-9]+", n)
+                     if t and t not in _SEGMENT_GENERIC_TOKENS)
+
+
+def _match_segment_trees(row_names: list, trees: dict) -> dict:
+    """{row name: tree} -- exact normalised name first, then shared
+    non-generic tokens (overlap coefficient >= 0.5), each tree used once.
+    A segment with no confident match gets no tree (band only), rather than
+    a neighbour's scenarios."""
+    out: dict = {}
+    free = dict(trees or {})
+    norm = lambda x: re.sub(r"[^a-z0-9]+", "", (x or "").lower())
+    for rn in row_names:
+        for tn in list(free):
+            if norm(tn) == norm(rn):
+                out[rn] = free.pop(tn)
+                break
+    cands = []
+    for rn in row_names:
+        if rn in out:
+            continue
+        a = _segment_tokens(rn)
+        for tn in free:
+            b = _segment_tokens(tn)
+            if a and b:
+                sc = len(a & b) / min(len(a), len(b))
+                if sc >= 0.5:
+                    cands.append((sc, rn, tn))
+    for sc, rn, tn in sorted(cands, key=lambda x: -x[0]):
+        if rn not in out and tn in free:
+            out[rn] = free.pop(tn)
+    return out
+
+
+def _tree_factor(tree: Optional[dict], scenario: str) -> float:
+    """Revenue level factor for bear/bull relative to the tree's expectation."""
+    scens = [x for x in ((tree or {}).get("scenarios") or [])
+             if isinstance(x.get("rate"), (int, float))]
+    if not scens or scenario not in ("bear", "bull"):
+        return 1.0
+    tot = sum(float(x.get("prob") or 0.0) for x in scens)
+    ref = (sum(float(x.get("prob") or 0.0) * x["rate"] for x in scens) / tot
+           if tot > 0 else sum(x["rate"] for x in scens) / len(scens))
+    r = min(x["rate"] for x in scens) if scenario == "bear" else max(x["rate"] for x in scens)
+    return (1.0 + r) / (1.0 + ref) if 1.0 + ref > 0 else 1.0
+
+
+def _sotp_scenario_from_trees(table: dict, trees: Optional[dict], scenario: str,
+                              sm: float) -> Optional[dict]:
+    """Per-share analyst SOTP for `scenario`, flexing segment values only."""
+    rows = table.get("rows") or []
+    final, ps = table.get("final"), table.get("per_share_reporting")
+    nav = table.get("nav")
+    if not rows or not final or not ps or not nav or final <= 0 or nav <= 0:
+        return None
+    matched = _match_segment_trees([r.get("name") for r in rows], trees or {})
+    seg = 0.0
+    detail = []
+    for r in rows:
+        v = float(r.get("value") or 0.0)
+        f = _tree_factor(matched.get(r.get("name")), scenario)
+        seg += v * f * sm
+        detail.append({"segment": r.get("name"), "tree": r.get("name") in matched,
+                       "revenue_factor": round(f, 6), "multiple_band": sm})
+    fixed = float(nav) - float(table.get("segment_value") or sum(float(r.get("value") or 0) for r in rows))
+    nav_s = seg + fixed
+    disc = float(table.get("holdco_discount") or 0.0) / float(nav)
+    final_s = nav_s * (1.0 - disc)
+    if final_s <= 0:
+        return None
+    return {"per_share_reporting": final_s * float(ps) / float(final),
+            "segments": detail, "trees_matched": len(matched)}
+
+
 # ── Two-tier valuation (owner decision, 2026-09-19) ─────────────────────────
 #
 # Tier 1, the FUNDAMENTAL IV, is DCF plus peer-median multiples and nothing
@@ -9085,6 +9191,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"Segment scenarios ({len(_ticker_scenarios)} segments, "
                         f"conf={_block.get('confidence','?')}): " + ", ".join(_scen_mix)
                     )
+
+        # The analyst SOTP flexes by these trees per scenario, and names valued
+        # on a published SOTP often have no product segmentation, so the trees
+        # are attached here too rather than only inside the segments branch.
+        if segment_scenarios_all.get(ticker) and not most_recent.get("segment_scenarios"):
+            most_recent["segment_scenarios"] = segment_scenarios_all[ticker]
 
         # ── Attach GS-style SOTP assumptions (feeds "SOTP (analyst)") ───────
         # Assumptions are USD-denominated; resolve USD→target-currency FX so

@@ -2133,7 +2133,7 @@ def _final_summary_table(
         Paragraph(_wh("Scenario"),    styles["RptLabel"]),
         Paragraph(_wh("Prob"),        styles["RptLabel"]),
         Paragraph(_wh("LLM FV"),      styles["RptLabel"]),
-        Paragraph(_wh("DCF IV"),      styles["RptLabel"]),
+        Paragraph(_wh("Fair value"),  styles["RptLabel"]),
         Paragraph(_wh("12m PT"),      styles["RptLabel"]),
         Paragraph(_wh("Key Assumption"), styles["RptLabel"]),
     ]

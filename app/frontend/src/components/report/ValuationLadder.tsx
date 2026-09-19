@@ -38,7 +38,7 @@ export function ValuationLadder({ dcfRange, currentPrice, ticker }: ValuationLad
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold">DCF Valuation Ladder — {ticker}</h3>
+        <h3 className="text-sm font-semibold">Fair Value Ladder — {ticker}</h3>
         <div className="text-xs text-muted-foreground space-x-2">
           {dcfRange.wacc != null && <span>WACC: {(dcfRange.wacc * 100).toFixed(1)}%</span>}
         </div>

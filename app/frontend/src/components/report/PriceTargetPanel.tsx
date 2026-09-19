@@ -123,15 +123,20 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
           )}
           {baseDelta != null && bearDelta != null && (
             <p className="text-[11px] text-muted-foreground leading-relaxed mt-2.5">
-              Base case implies {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% upside;{' '}
+              {/* These are FAIR VALUES (intrinsic value), not targets. The
+                  12-month target converges only part of the way from spot
+                  toward them, so a target below the bear-case IV is the rule
+                  working, not a contradiction -- said explicitly here. */}
+              Fair value (IV): base case {baseDelta >= 0 ? '+' : ''}{baseDelta.toFixed(0)}% vs spot;{' '}
               {/* A bear case ABOVE spot is not a downside. Math.abs() printed
                   the sign away and called it one — MELI showed "bear-case
                   downside is 562%" when the bear IV sat 5.6x above the price,
                   which reads as risk where the model is in fact saying there
                   is none at that level. */}
               {bearDelta < 0
-                ? `bear-case downside is ${Math.abs(bearDelta).toFixed(0)}%.`
-                : `even the bear case sits ${bearDelta.toFixed(0)}% above spot.`}
+                ? `bear case ${Math.abs(bearDelta).toFixed(0)}% below spot.`
+                : `bear case ${bearDelta.toFixed(0)}% above spot.`}{' '}
+              The 12-month target closes part of that gap.
             </p>
           )}
         </div>
@@ -147,7 +152,7 @@ export function PriceTargetPanel({ dcfRange, scenario, decision, ticker }: Price
           </div>
           <div className="flex items-center justify-end gap-2 px-1 pb-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/70">
             <span className="w-[60px] text-right">12M Target</span>
-            <span className="w-[56px] text-right">DCF IV</span>
+            <span className="w-[56px] text-right">Fair value</span>
           </div>
           {[
             { prob: probBear, name: 'Bear', target12m: bear12m, iv: bearIV, color: 'rose' as const },

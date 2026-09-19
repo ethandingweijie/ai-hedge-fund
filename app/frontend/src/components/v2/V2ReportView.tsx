@@ -566,7 +566,7 @@ function ValuationBody({
     return (
       <div className="px-4 pt-5 pb-10 space-y-5">
         <LoadingCard label="12-Month Price Target" minH={320} />
-        <LoadingCard label="DCF Valuation Ladder" minH={160} />
+        <LoadingCard label="Fair Value Ladder" minH={160} />
       </div>
     );
   }
@@ -639,7 +639,7 @@ function ValuationBody({
           <V2ValuationLadder dcfRange={dcfRange} current={current ?? undefined} wacc={wacc} />
         )
       ) : (
-        <LoadingCard label="DCF Valuation Ladder" minH={160} />
+        <LoadingCard label="Fair Value Ladder" minH={160} />
       )}
 
       {/* ── Tier 1: GS-style SOTP report card ──────────────────────────────
@@ -695,7 +695,7 @@ function V2ValuationLadder({
     <div className="rounded-xl border border-border/70 bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04),0_2px_10px_rgb(0_0_0/0.04)] p-5">
       <div className="flex items-center justify-between mb-3">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
-          DCF Valuation Ladder
+          Fair Value Ladder
         </span>
         {wacc != null && (
           <span className="text-[10px] tabular-nums text-muted-foreground/70">
