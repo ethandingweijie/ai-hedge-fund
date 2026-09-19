@@ -191,7 +191,31 @@ _BANDS: dict[str, tuple[float, float]] = {
     "pb":         (0.05, 30.0),
     "fcf_yield":  (MIN_VALID_FCF_YIELD, MAX_VALID_FCF_YIELD),
     "growth_avg": (-0.60, 2.00),
+    # EV / operating cash flow -- the cash-flow multiple oil producers are
+    # priced on (EV/DACF's reportable cousin). Same key-metrics-ttm call as
+    # EV/EBITDA, so it costs no extra request.
+    "ev_ocf":     (0.5, 60.0),
 }
+
+#: Same-market pools for industries whose individual baskets are too thin.
+#: Hong Kong carries 4 integrated oil names, 2 E&P and 1 midstream; Singapore
+#: about one per industry, so each fell to its whole Energy sector basket --
+#: coal, solar and utilities included. A family pools only these industries,
+#: on the same exchange (no market borrows another's multiples), and ranks
+#: after the target's own industry and before its sector.
+INDUSTRY_FAMILIES: dict[str, frozenset] = {
+    "Oil, Gas & Coal (family)": frozenset({
+        "Oil & Gas Integrated", "Oil & Gas Exploration & Production",
+        "Oil & Gas Midstream", "Oil & Gas Refining & Marketing",
+        "Oil & Gas Equipment & Services", "Oil & Gas Drilling", "Coal",
+    }),
+}
+
+
+def family_of(industry: Optional[str]) -> Optional[str]:
+    """The pooled family an FMP industry belongs to, or None."""
+    ind = (industry or "").strip()
+    return next((f for f, members in INDUSTRY_FAMILIES.items() if ind in members), None)
 
 FIELDS = tuple(_BANDS.keys())
 
@@ -337,6 +361,11 @@ def build_baskets(rows: list[dict]) -> tuple[dict, dict, list[str]]:
         if r["sector"]:
             by_sector.setdefault(r["sector"], []).append(r)
 
+    # Family pools, largest names first (rows arrive sorted by market cap).
+    for fam, members in INDUSTRY_FAMILIES.items():
+        pooled = [r for r in rows if r["industry"] in members]
+        if pooled:
+            by_industry.setdefault(fam, pooled)
     ind = {k: v[:INDUSTRY_BASKET_SIZE] for k, v in by_industry.items()}
     sec = {k: v[:SECTOR_BASKET_SIZE] for k, v in by_sector.items()}
 
@@ -362,6 +391,7 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
         out["ev_ebitda"] = _safe_float(row.get("evToEBITDATTM"))
         out["ev_revenue"] = _safe_float(row.get("evToSalesTTM"))
         out["fcf_yield"] = _safe_float(row.get("freeCashFlowYieldTTM"))
+        out["ev_ocf"] = _safe_float(row.get("evToOperatingCashFlowTTM"))
 
     rt = _fmp_get(f"{_STABLE}/ratios-ttm", {"symbol": symbol}, api_key=None)
     if isinstance(rt, list) and rt:
@@ -720,6 +750,8 @@ def get_regional_multiples(
 
         industry / large   (only when the target is itself a large name)
         industry / all
+        family   / large   (same-exchange pool, see INDUSTRY_FAMILIES)
+        family   / all
         sector   / large   (likewise)
         sector   / all
 
@@ -733,6 +765,11 @@ def get_regional_multiples(
     if market_cap:
         rungs.append(("industry", industry or "", "large", MIN_INDUSTRY_PEERS))
     rungs.append(("industry", industry or "", "all", MIN_INDUSTRY_PEERS))
+    _fam = family_of(industry)
+    if _fam:
+        if market_cap:
+            rungs.append(("industry", _fam, "large", MIN_INDUSTRY_PEERS))
+        rungs.append(("industry", _fam, "all", MIN_INDUSTRY_PEERS))
     if market_cap:
         rungs.append(("sector", sector or "", "large", MIN_SECTOR_PEERS))
     rungs.append(("sector", sector or "", "all", MIN_SECTOR_PEERS))

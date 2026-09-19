@@ -1104,7 +1104,7 @@ class TestTheOpsSpellingsAreInTheSwap:
                         anchors.append((sec, pn, m["name"], m["weight"]))
                         if sec == "Consumer":
                             consumer_anchors.append((pn, m["name"], m["weight"]))
-        assert (tot, trail, elig, anchored) == (99, 37, 37, 13)
+        assert (tot, trail, elig, anchored) == (104, 37, 37, 13)
         assert sorted(consumer_anchors) == [
             ("Food & Beverage", "P/E", 0.5),
             ("Household / Personal", "P/E", 0.4),

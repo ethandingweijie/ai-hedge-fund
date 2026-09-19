@@ -1394,3 +1394,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Excel export instrumentation, no valuation move. multiples_used.fields.* gains 'key' and 'exchange' (the comps basket each live peer multiple came from, so the workbook can list its named members) on the six fixtures whose peers resolve from live HK/SG comps: 02888_HK, 09988_HK, BN4_SI, C38U_SI, D05_SI (and none on static/dynamic US tables). No existing leaf changes on any of the 14 names; IVs, targets, legs and weights are byte-identical. New per-run fields (leg_inputs, financials_used, wacc_build incl. base_breakdown) are not in the projection.
 
+## 2026-09-19T17:16:41+00:00
+
+- regenerated at HEAD: `de1c900`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Wave 1 oil, gas & coal (owner-approved 2026-09-20): new Integrated Oil & Gas, Midstream / Pipelines, Refining & Marketing (mid-cycle anchor + 0.20 forward leg), Oilfield Services & Drilling and Coal profiles; Upstream re-anchored on EV/OCF; EV/OCF comps field; scoped industry routing for the seven oil, gas & coal industries. No fixture is in scope (FCX is Copper, U96.SI Diversified Utilities): only param_version, the hash of the profile constants, changes. Also: replay now serves each fixture's regional comps from tests/fixtures/golden/<name>/comps.json (frozen from this baseline's multiples_used) instead of the local regional_comps table, which moved every fixture's peer multiples when the local store was refreshed.
+

@@ -67,7 +67,8 @@ def test_every_sgx_ticker_routes_deterministically(ticker):
         ("V03.SI", "Tech Manufacturing / EMS (SG)"),
         ("OYY.SI", "Real Estate Agency (SG)"),
         ("40T.SI", "Specialised Accommodation (SG)"),
-        ("RE4.SI", "Offshore Marine & Resources (SG)"),
+        # Geo Energy is a thermal coal producer: Coal profile, Wave 1 oil, gas & coal (owner-approved 2026-09-20).
+        ("RE4.SI", "Coal"),
     ],
 )
 def test_representative_tickers_land_on_the_right_profile(ticker, expected):

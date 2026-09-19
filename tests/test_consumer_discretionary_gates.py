@@ -1349,10 +1349,16 @@ def test_no_consumer_profile_can_reach_the_normalized_ebitda_branch():
             for m in d.get("methods", []):
                 if m.get("name") in norm_ev:
                     users.append((sector, pname, m["name"]))
+    # Wave 1 oil, gas & coal (owner-approved 2026-09-20) added five users, none of them Consumer.
     assert sorted(users) == [
         ("Crypto", "Digital Asset Mining", "EV/EBITDA (norm)"),
+        ("Energy", "Oilfield Services & Drilling", "EV/EBITDA (norm)"),
+        ("Energy", "Refining & Marketing", "EV/EBITDA (norm)"),
         ("Materials", "Steel / Metals", "EV/EBITDA (Norm)"),
+        ("Resources", "Coal", "EV/EBITDA (norm)"),
+        ("Resources", "Integrated Oil & Gas", "EV/EBITDA (norm)"),
         ("Resources", "Mining (Major)", "EV/EBITDA (norm)"),
+        ("Resources", "Upstream Oil & Gas", "EV/EBITDA (norm)"),
         ("Tech", "Local Services & Instant Retail", "EV/EBITDA (norm)"),
     ], users
     consumer_vocab = {m["name"] for d in _consumer_profiles().values()
@@ -1652,8 +1658,11 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
             names = [m.get("name", "") for m in cfg.get("methods", [])]
             if any("norm" in n.lower() for n in names):
                 with_norm += 1
-    assert (total, with_norm) == (99, 28), (total, with_norm)
-    assert with_norm / total < 0.30, "most profiles have no normalized leg"
+    # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 profiles, all five with a normalised leg.
+    assert (total, with_norm) == (104, 33), (total, with_norm)
+    # "Most" means a majority; the earlier 0.30 bound was the census at the
+    # time, not the claim (33/104 = 32% after Wave 1).
+    assert with_norm / total < 0.50, "most profiles have no normalized leg"
 
 
 def test_the_normalized_leg_names_are_not_case_consistent():
@@ -1673,9 +1682,10 @@ def test_the_normalized_leg_names_are_not_case_consistent():
                 n = m.get("name", "")
                 if "norm" in n.lower():
                     spellings[n] = spellings.get(n, 0) + 1
-    assert spellings.get("EV/EBITDA (norm)") == 3, spellings
+    # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 EV/EBITDA (norm), +2 P/E (norm) (Refining, OFS).
+    assert spellings.get("EV/EBITDA (norm)") == 8, spellings
     assert spellings.get("EV/EBITDA (Norm)") == 1, spellings
-    assert spellings.get("P/E (norm)") == 24, spellings
+    assert spellings.get("P/E (norm)") == 26, spellings
     assert len(spellings) == 3, spellings
 
 
@@ -2013,7 +2023,7 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
                         consumer_anchors.append((pn, m["name"], m["weight"]))
                     if m["name"] in ("P/E (ops)", "P/E (Ops)"):
                         added_anchors.append((sec, pn, m["name"], m["weight"]))
-    assert (tot, trail, elig, anchored) == (99, 37, 37, 13)
+    assert (tot, trail, elig, anchored) == (104, 37, 37, 13)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.

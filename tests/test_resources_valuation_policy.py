@@ -83,15 +83,24 @@ class TestNomenclature:
 
 
 class TestResourcesWeights:
-    @pytest.mark.parametrize("prof,anchor", [
-        ("Mining (Major)", "EV/EBITDA (norm)"),
-        ("Upstream Oil & Gas", "P/CF"),
+    # Upstream re-anchored in Wave 1 oil, gas & coal (owner-approved 2026-09-20): its "P/CF (mid-cycle)" anchor dispatched
+    # to the FCF-yield branch on trailing FCF, so the label described neither
+    # the metric nor the cycle. EV/OCF is computed as named.
+    @pytest.mark.parametrize("prof,anchor,weight", [
+        ("Mining (Major)", "EV/EBITDA (norm)", 0.60),
+        ("Upstream Oil & Gas", "EV/OCF", 0.40),
+        ("Integrated Oil & Gas", "EV/EBITDA (norm)", 0.45),
+        ("Coal", "EV/EBITDA (norm)", 0.40),
     ])
-    def test_anchored_on_a_computable_normalised_multiple(self, prof, anchor):
+    def test_anchored_on_a_computable_multiple(self, prof, anchor, weight):
         ms = {m["name"]: m for m in P["Resources"][prof]["methods"]}
         assert ms[anchor]["anchor"] is True
         assert ms[anchor]["implementable"] is True
-        assert ms[anchor]["weight"] == pytest.approx(0.60)
+        assert ms[anchor]["weight"] == pytest.approx(weight)
+
+    def test_no_resources_profile_names_the_mislabelled_pcf(self):
+        for prof, d in P["Resources"].items():
+            assert "P/CF" not in {m["name"] for m in d["methods"]}, prof
 
     @pytest.mark.parametrize("prof", ["Mining (Major)", "Upstream Oil & Gas"])
     def test_nothing_is_proxied_any_more(self, prof):
@@ -99,10 +108,11 @@ class TestResourcesWeights:
         assert sum(m["weight"] for m in ms if not m.get("implementable")) == 0.0
         assert round(sum(m["weight"] for m in ms), 6) == 1.0
 
-    @pytest.mark.parametrize("prof", ["Mining (Major)", "Upstream Oil & Gas"])
-    def test_the_depleting_dcf_carries_thirty_percent(self, prof):
+    @pytest.mark.parametrize("prof,weight", [
+        ("Mining (Major)", 0.30), ("Upstream Oil & Gas", 0.25), ("Coal", 0.25)])
+    def test_the_depleting_dcf_carries_its_weight(self, prof, weight):
         ms = {m["name"]: m for m in P["Resources"][prof]["methods"]}
-        assert ms[_DEPLETING_DCF]["weight"] == pytest.approx(0.30)
+        assert ms[_DEPLETING_DCF]["weight"] == pytest.approx(weight)
         assert ms[_DEPLETING_DCF]["implementable"] is True
 
     def test_it_is_not_in_the_perpetual_projection_family(self):

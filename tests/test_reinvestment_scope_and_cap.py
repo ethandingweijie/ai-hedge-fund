@@ -110,7 +110,8 @@ class TestTheAllowlistIsTheOwnersList:
         every = {p for profiles in INDUSTRY_VALUATION_PROFILES.values()
                  for p in profiles}
         assert "Capital Goods / Hardware" not in every
-        assert len(every) == 98, (
+        # 98 -> 103 with the five profiles of Wave 1 oil, gas & coal (owner-approved 2026-09-20); none is the fourth name.
+        assert len(every) == 103, (
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:

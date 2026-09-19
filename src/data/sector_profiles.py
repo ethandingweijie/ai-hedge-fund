@@ -128,6 +128,13 @@ _ENERGY_PROFILE_WACC: dict[str, float] = {
     "IPP":               0.060,  # PPA-backed; semi-regulated visible cash flows; Damo 6.04%
     "Merchant Power":    0.065,  # investment-grade IPPs w/ nuclear+PPA: 7.5-8.2% per Gemini; base 6.5% + overlays
     "EPC Contractor":    0.087,  # project execution risk; Damo Eng/Construction 8.69%
+    # Wave 1 oil & gas (owner-approved 2026-09-20). Damodaran Jan 2026:
+    #   Oil/Gas Distribution 5.78% D/(D+E)=36.9%; Oilfield Svcs/Equip. 7.04%
+    #   D/(D+E)=27.2%. Damodaran publishes no refining row: refiners take the
+    #   Resources sector rate (7.0%) the commodity producers use.
+    "Midstream / Pipelines":        0.058,
+    "Refining & Marketing":         0.070,
+    "Oilfield Services & Drilling": 0.070,
 }
 
 # Leverage premium caps by Energy sub-type.
@@ -138,6 +145,9 @@ _ENERGY_LEVERAGE_CAP: dict[str, float] = {
     "IPP":               0.020,  # PPA visibility compresses the max addendum
     "Merchant Power":    0.035,  # full commodity exposure → wider cap
     "EPC Contractor":    0.030,
+    "Midstream / Pipelines":        0.020,  # structural leverage (D/(D+E) 37%), fee-based
+    "Refining & Marketing":         0.035,  # full crack-spread exposure
+    "Oilfield Services & Drilling": 0.035,  # full activity-cycle exposure
 }
 
 # Contracted-revenue WACC discount for Merchant Power / IPP companies.
@@ -552,6 +562,9 @@ _ENERGY_PROFILE_CREDIT_BUCKET: dict[str, str] = {
     "Merchant Power":      "Industrial",
     "EPC Contractor":      "Industrial",
     "Energy Tech Licensor":"Industrial",
+    "Midstream / Pipelines":        "Industrial",
+    "Refining & Marketing":         "Industrial",
+    "Oilfield Services & Drilling": "Industrial",
 }
 
 # Hard fallback when FRED is unreachable. Values are in percentage points.
@@ -1767,6 +1780,61 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": [],
             "rationale": "Long-term contracts (PPAs) provide visibility for project-level cash flow modeling.",
         },
+        "Midstream / Pipelines": {
+            "methods": [
+                {"name": "EV/EBITDA",               "weight": 0.45, "anchor": True,  "implementable": True},
+                {"name": "Distributable CF Yield",  "weight": 0.25, "anchor": False, "implementable": True,
+                 "note": "(OCF - maintenance capex) / required yield; maintenance capex = D&A until reported values are accepted"},
+                {"name": "DDM",                     "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "DCF",                     "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": (
+                "Fee-based pipelines and processing: volume-driven, largely contracted "
+                "EBITDA, valued on EV/EBITDA and on the cash that can be distributed "
+                "after sustaining the asset base."
+            ),
+            "data_limitation": (
+                "Maintenance capex is not reported by FMP; D&A stands in, flagged on "
+                "the leg, until a cited reported figure is accepted."
+            ),
+        },
+        "Refining & Marketing": {
+            "methods": [
+                {"name": "EV/EBITDA (norm)",  "weight": 0.40, "anchor": True,  "implementable": True, "note": "mid-cycle"},
+                {"name": "Forward EV/EBITDA", "weight": 0.20, "anchor": False, "implementable": True,
+                 "note": "the current crack-spread cycle, partially"},
+                {"name": "FCF Yield",         "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/BV",              "weight": 0.10, "anchor": False, "implementable": True, "note": "replacement-cost floor"},
+                {"name": "P/E (norm)",        "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": (
+                "Refiners and fuel marketers earn the crack spread, which mean-reverts: "
+                "mid-cycle EBITDA anchors, the asset book floors. A forward leg lets the "
+                "current cycle count in part (owner, 2026-09-20: Valero sat 44% under "
+                "consensus on the pure mid-cycle table while cracks ran above their "
+                "5-year average)."
+            ),
+        },
+        "Oilfield Services & Drilling": {
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.50, "anchor": True,  "implementable": True, "note": "mid-cycle"},
+                {"name": "P/BV",             "weight": 0.20, "anchor": False, "implementable": True, "note": "fleet / rig replacement floor"},
+                {"name": "FCF Yield",        "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "P/E (norm)",       "weight": 0.10, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": (
+                "Activity follows upstream capex with a lag: mid-cycle EBITDA anchors; "
+                "for drillers the fleet book value is the downside."
+            ),
+            "data_limitation": (
+                "EV/Backlog not yet weighted: backlog arrives review-gated (SEC "
+                "remaining performance obligations for US filers, cited Gemini "
+                "pre-fill otherwise)."
+            ),
+        },
         "EPC Contractor": {
             "methods": [
                 {"name": "Backlog DCF",  "weight": 0.50, "anchor": True,  "implementable": True,  "note": "proxied by DCF"},
@@ -2753,11 +2821,17 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
 
     "Resources": {
         "Upstream Oil & Gas": {
+            # Wave 1 (owner-approved 2026-09-20). The previous anchor was named
+            # "P/CF (mid-cycle)" but dispatched to the FCF-yield branch on
+            # trailing FCF: neither price-to-cash-flow nor mid-cycle. EV/OCF is
+            # the reportable cash-flow multiple E&Ps are priced on.
             "methods": [
-                {"name": "P/CF",         "weight": 0.60, "anchor": True,  "implementable": True,  "note": "mid-cycle"},
+                {"name": "EV/OCF",           "weight": 0.40, "anchor": True,  "implementable": True,
+                 "note": "EV / operating cash flow vs same-market peers; EV/DACF's reportable form"},
+                {"name": "EV/EBITDA (norm)", "weight": 0.25, "anchor": False, "implementable": True,  "note": "mid-cycle"},
                 {"name": "Depleting Asset DCF (Finite Life, No TV)",
-                                         "weight": 0.30, "anchor": False, "implementable": True},
-                {"name": "P/BV",         "weight": 0.10, "anchor": False, "implementable": True,  "note": "reserve-replacement / equity floor"},
+                                             "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "P/BV",             "weight": 0.10, "anchor": False, "implementable": True,  "note": "reserve-replacement / equity floor"},
             ],
             "excluded": [],
             "rationale": (
@@ -2772,8 +2846,41 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
                 "perpetual-growth proxy rather than renaming it."
             ),
             "data_limitation": (
-                "Reserve NPV (PV-10) omitted: no proven reserve or strip price-deck "
-                "data available. EV/DACF omitted: DACF is not derived."
+                "Reserve NPV (PV-10) omitted from the blend until accepted: reserve "
+                "values arrive review-gated (SEC standardized measure for US filers, "
+                "cited Gemini pre-fill for HK/SG)."
+            ),
+        },
+        "Integrated Oil & Gas": {
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.45, "anchor": True,  "implementable": True, "note": "mid-cycle"},
+                {"name": "EV/OCF",           "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "FCF Yield",        "weight": 0.15, "anchor": False, "implementable": True},
+                {"name": "DDM",              "weight": 0.15, "anchor": False, "implementable": True},
+            ],
+            "excluded": [],
+            "rationale": (
+                "Upstream, refining and chemicals under one balance sheet: priced on "
+                "through-cycle EBITDA because any single year sits somewhere on the "
+                "oil and crack-spread cycles. Cash-flow and dividend legs because "
+                "the majors are valued on distribution capacity."
+            ),
+        },
+        "Coal": {
+            "methods": [
+                {"name": "EV/EBITDA (norm)", "weight": 0.40, "anchor": True,  "implementable": True, "note": "mid-cycle"},
+                {"name": "Depleting Asset DCF (Finite Life, No TV)",
+                                             "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "DDM",              "weight": 0.20, "anchor": False, "implementable": True,
+                 "note": "state-owned coal producers distribute heavily"},
+                {"name": "P/BV",             "weight": 0.15, "anchor": False, "implementable": True, "note": "floor"},
+            ],
+            "excluded": [],
+            "rationale": (
+                "Thermal and metallurgical coal: a depleting, price-taking resource. "
+                "Mid-cycle EBITDA because realised coal prices swing earnings several-fold; "
+                "finite-life DCF because reserves end; dividend leg because the "
+                "Chinese majors pay out most of earnings."
             ),
         },
         "Mining (Major)": {
@@ -4793,8 +4900,8 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "NUE":   ("Materials",  "",  "Steel",                 "Nucor — steel mini-mills"),
     "FCX":   ("Resources",  "Mining (Major)",      "Metals & Mining",       "Freeport-McMoRan — copper/gold"),
     "NEM":   ("Resources",  "Mining (Major)",      "Precious Metals",       "Newmont Mining"),
-    "XOM":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (Integrated)",  "ExxonMobil — integrated O&G → Resources"),
-    "CVX":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (Integrated)",  "Chevron — integrated"),
+    "XOM":   ("Resources",  "Integrated Oil & Gas", "Oil/Gas (Integrated)",  "ExxonMobil — integrated O&G (Wave 1, 2026-09-20)"),
+    "CVX":   ("Resources",  "Integrated Oil & Gas", "Oil/Gas (Integrated)",  "Chevron — integrated (Wave 1, 2026-09-20)"),
     "COP":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "ConocoPhillips — pure-play E&P"),
     "EOG":   ("Resources",  "Upstream Oil & Gas",  "Oil/Gas (E&P)",         "EOG Resources"),
     "LEU":   ("Resources",  "",  "Uranium",               "Centrus Energy — uranium enrichment (SWU contracts); NOT power generation"),
@@ -5434,7 +5541,7 @@ SGX_TICKER_SECTOR_LOOKUP: dict[str, tuple[str, str, str, str]] = {
     "W05.SI":  ("Property", "Property Developer (SG)",  "Real Estate Development","Wing Tai Holdings"),
     "40T.SI":  ("Property", "Specialised Accommodation (SG)",  "Workers Dormitory",      "Centurion Corporation"),
     # Energy
-    "RE4.SI":  ("Industrials", "Offshore Marine & Resources (SG)",       "Coal Mining",            "Geo Energy Resources"),
+    "RE4.SI":  ("Resources",   "Coal",                                   "Coal Mining",            "Geo Energy Resources — thermal coal producer (Wave 1, owner 2026-09-20)"),
     # Healthcare
     "CLN.SI":  ("Healthcare", "Healthcare Provider (SG)", "Medical Gloves",         "Riverstone Holdings"),
     "A50.SI":  ("Healthcare", "Healthcare Provider (SG)",   "Healthcare Services",    "Thomson Medical Group"),

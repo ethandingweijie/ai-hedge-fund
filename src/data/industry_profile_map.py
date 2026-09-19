@@ -44,6 +44,26 @@ def ticker_overrides() -> dict[str, tuple[str, str]]:
     return {k: (v[0], v[1]) for k, v in (_load().get("ticker_overrides") or {}).items()}
 
 
+def routing_scope() -> frozenset:
+    """Industries routed by this map whatever FEATURE_INDUSTRY_ROUTING says.
+
+    The global flag moves ~88/100 HK and ~98/100 SG profiles at once, so it
+    stays off; a sector wave that has been measured and approved switches on
+    exactly its own industries here.
+    """
+    return frozenset(_load().get("routing_scope") or [])
+
+
+def in_routing_scope(ticker: str | None, industry: str | None) -> bool:
+    """True when this ticker's industry (or the ticker itself) is in scope."""
+    if (industry or "").strip() in routing_scope():
+        return True
+    if ticker:
+        from src.tools.ticker_canonical import canonical_ticker
+        return canonical_ticker(ticker) in set(_load().get("routing_scope_tickers") or [])
+    return False
+
+
 def market_of(ticker: str | None) -> str:
     """US / HK / SG from the ticker suffix."""
     t = (ticker or "").strip().upper()

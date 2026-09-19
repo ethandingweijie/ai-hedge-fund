@@ -292,6 +292,10 @@ _CYCLICAL_PROFILES: frozenset[str] = frozenset({
     "Memory / DRAM-NAND",
     "Mining (Major)",
     "Upstream Oil & Gas",
+    "Integrated Oil & Gas",
+    "Refining & Marketing",
+    "Oilfield Services & Drilling",
+    "Coal",
     "Steel / Metals",
     "Specialty Chemicals",
     "Airlines",
@@ -362,6 +366,10 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     "Steel / Metals",
     "Specialty Chemicals",
     "Upstream Oil & Gas",
+    "Integrated Oil & Gas",
+    "Refining & Marketing",
+    "Oilfield Services & Drilling",
+    "Coal",
     "Mining (Major)",
     "Memory / DRAM-NAND",
     "Digital Asset Mining",
@@ -6010,6 +6018,58 @@ def _compute_method_value(
             return (fcf / shares) / target_yield
         return None
 
+    # ── EV / operating cash flow (Wave 1 oil & gas, owner-approved 2026-09-20) ──
+    # The cash-flow multiple producers are priced on: EV/DACF's reportable
+    # form (DACF adds back after-tax interest; OCF is what FMP reports for the
+    # target and its peers alike, so both sides of the ratio are the same
+    # measure). Returns None -- the leg drops and the blend renormalises --
+    # when the peer set carries no EV/OCF reading: a multiple is not invented.
+    if method_name in {"EV/OCF", "EV/Operating CF", "EV/DACF"}:
+        ocf = most_recent.get("operating_cash_flow")
+        peer_ev_ocf = peer.get("ev_ocf")
+        if not ocf or ocf <= 0 or not peer_ev_ocf or peer_ev_ocf <= 0 or shares <= 0:
+            return None
+        mult = peer_ev_ocf * sm * growth_premium
+        if reported_currency == "CNY":
+            mult *= peer.get("cn_adr_haircut", 1.0)
+        ev = ocf * mult
+        _leg_trace(kind="ev_multiple", metric="Operating cash flow (latest FY)",
+                   metric_value=float(ocf), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(peer_ev_ocf),
+                                   "peer_source": "peer median ev_ocf",
+                                   "scenario_band": sm, "growth_premium": growth_premium,
+                                   "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                      if reported_currency == "CNY" else 1.0)})
+        return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
+
+    # ── Distributable cash flow yield (midstream) ────────────────────────────
+    # Distributable CF = OCF - maintenance capex. FMP does not report
+    # maintenance capex, so D&A stands in (the asset base's own wear) and the
+    # trace says so; a reported, accepted figure replaces it when available.
+    # Required yield = the peer FCF yield under the scenario band, the same
+    # rule as the FCF Yield leg, and the same refusal below a valid benchmark.
+    if method_name in {"Distributable CF Yield", "DCF Yield (distributable)"}:
+        from src.data.regional_comps import MIN_VALID_FCF_YIELD
+        ocf = most_recent.get("operating_cash_flow")
+        maint = most_recent.get("maintenance_capex_accepted")
+        maint_src = "accepted maintenance capex"
+        if maint is None:
+            maint = most_recent.get("depreciation_and_amortization")
+            maint_src = "D&A (maintenance capex not reported)"
+        if not ocf or maint is None or shares <= 0:
+            return None
+        dcf_amt = ocf - abs(maint)
+        target_yield = peer.get("fcf_yield", 0.05) / (sm * growth_premium)
+        if dcf_amt <= 0 or target_yield <= MIN_VALID_FCF_YIELD:
+            return None
+        _leg_trace(kind="yield", metric=f"Distributable CF: OCF - {maint_src}",
+                   metric_value=float(dcf_amt), shares=float(shares),
+                   per_share_metric=float(dcf_amt / shares), target_yield=float(target_yield),
+                   multiple=float(1.0 / target_yield),
+                   multiple_parts={"peer_fcf_yield": float(peer.get("fcf_yield", 0.05)),
+                                   "scenario_band": sm, "growth_premium": growth_premium})
+        return (dcf_amt / shares) / target_yield
+
     # ── rNPV (Biopharma pipeline) ─────────────────────────────────────────
     # Risk-adjusted NPV of the drug pipeline. Pipeline assets are extracted
     # from deep research by _extract_pipeline_assets(); each asset is valued
@@ -6473,6 +6533,33 @@ _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
 INDUSTRY_ROUTING_FLAG = "FEATURE_INDUSTRY_ROUTING"
 
 
+def _industry_routing_in_scope(ticker: str) -> bool:
+    """Industry routing for an approved sector wave, independent of the flag."""
+    try:
+        from src.data.industry_profile_map import in_routing_scope
+        return in_routing_scope(ticker, _company_industry(ticker))
+    except Exception:                                      # noqa: BLE001
+        return False
+
+
+def _company_industry(ticker: str):
+    """FMP industry via the comps classification cache.
+
+    The comps path fetches the same /stable/profile row for every run, so
+    reading it here costs no extra request (a second, separately cached
+    profile fetch is also what golden replay would see as unrecorded).
+    """
+    try:
+        from src.data.regional_comps import get_fmp_classification
+        ind = (get_fmp_classification(ticker) or {}).get("industry")
+        if ind:
+            return ind
+    except Exception:                                      # noqa: BLE001
+        pass
+    from src.tools.api import get_company_industry
+    return get_company_industry(ticker)
+
+
 def _industry_routing_enabled() -> bool:
     """Industry-based profile routing, behind its own flag (default off)."""
     return os.getenv(INDUSTRY_ROUTING_FLAG, "").strip().lower() in ("1", "true", "yes", "on")
@@ -6505,8 +6592,7 @@ def _industry_routed_profile(ticker: str, sector: str, end_date: str = "",
     try:
         from src.data.industry_profile_map import profile_for_ticker
         from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES
-        from src.tools.api import get_company_industry
-        industry = get_company_industry(ticker)
+        industry = _company_industry(ticker)
         _t["industry"] = industry
         hit = profile_for_ticker(ticker, industry)
         if not hit:
@@ -10003,12 +10089,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         #
         # This sits BELOW the ticker override that follows (a company fact
         # still beats an industry rule) and ABOVE the financial ladder.
-        if _industry_routing_enabled():
+        _ir_flag = _industry_routing_enabled()
+        if _ir_flag or _industry_routing_in_scope(ticker):
             _ir_trace: dict = {}
             _routed = _industry_routed_profile(ticker, sector, end_date,
                                                trace=_ir_trace)
             _routing_trace["industry_routing"] = {
-                "enabled": True, **_ir_trace,
+                "enabled": True, "scope": "flag" if _ir_flag else "industry_scope",
+                **_ir_trace,
                 "changed_profile": bool(_routed and _routed[1] != profile_name)}
             if _routed and _routed[1] != profile_name:
                 _r_sector, _r_profile, _r_data = _routed

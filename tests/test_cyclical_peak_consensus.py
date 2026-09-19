@@ -276,11 +276,15 @@ def test_non_cyclical_profiles_are_untouched():
                                 "Money Center Bank") == []
 
 
-def test_the_eight_cyclical_profiles_are_the_ones_the_plan_names():
+def test_the_cyclical_profiles_are_the_ones_the_plans_name():
+    # The eight of the hardening plan, plus the four commodity-cycle profiles
+    # of Wave 1 oil, gas & coal (owner-approved 2026-09-20).
     assert _CYCLICAL_PROFILES == frozenset({
         "Memory / DRAM-NAND", "Mining (Major)", "Upstream Oil & Gas",
         "Steel / Metals", "Specialty Chemicals", "Airlines",
-        "Automotive (OEM)", "Digital Asset Mining"})
+        "Automotive (OEM)", "Digital Asset Mining",
+        "Integrated Oil & Gas", "Refining & Marketing",
+        "Oilfield Services & Drilling", "Coal"})
     for name in _CYCLICAL_PROFILES:
         _profile(name)          # raises if the taxonomy drifted
 
