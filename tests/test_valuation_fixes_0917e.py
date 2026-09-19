@@ -298,6 +298,20 @@ _TWO_TIER_MOVED = {
     "MU":       (182.97,   139.37,   228.84,   (533.49, 555.29, 578.22)),
 }
 _TWO_TIER_BN4_UNCLAMPED_BEAR = 8.37
+
+#: ── THE FIFTH RE-BASELINE: DCF-family parity (2026-09-19)
+#: Every DCF-family leg now projects with the core DCF's growth schedule,
+#: staged WACC and scenario margin delta. Only MELI moves (its weighted
+#: DCF (FCF+) leg on a decay profile). The two-tier table above keeps its
+#: MELI row as history.
+_DCF_PARITY_MOVED = {
+    "MELI": (3109.89, 2375.97, 3601.18, (2020.4, 2277.27, 2449.22)),
+}
+
+
+def _current(name: str) -> tuple:
+    """The latest re-baselined (base, bear, bull, targets) for a moved name."""
+    return _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name]
 _TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (43.13, 48.02, 58.14)}
 
 
@@ -784,7 +798,7 @@ def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
         if name in _TWO_TIER_MOVED:
             # Moved by the fourth re-baseline (composite out of the IV), not by
             # this fix; the pre-fix pin stays as history.
-            assert fx["base_iv"] == _TWO_TIER_MOVED[name][0], name
+            assert fx["base_iv"] == _current(name)[0], name
             continue
         assert fx["base_iv"] == _PREFIX[name][0], name
 
@@ -1091,7 +1105,7 @@ def test_meli_bear_floor_mechanics_and_its_policy_conflict():
     p = _proj("MELI")
     # SUPERSEDED by the two-tier re-baseline (see the FCX test above): no band,
     # no policy conflict. The band-era values stay as history in the prose.
-    tt = _TWO_TIER_MOVED["MELI"]
+    tt = _current("MELI")
     assert (p["12m_targets.bear"], p["12m_targets.base"], p["12m_targets.bull"]) == tt[3]
     assert p["scenarios.bear.intrinsic_value"] == tt[1]
     for scen in _SCENARIOS:
@@ -1126,7 +1140,7 @@ def test_the_bear_deactivations_raise_bear_iv_and_nothing_else_does():
             # Composite removed from the IV by the two-tier re-baseline, so
             # the direction check against `before` (which carried it) no
             # longer compares like with like. The value is pinned instead.
-            assert got == _TWO_TIER_MOVED[name][1], name
+            assert got == _current(name)[1], name
             continue
         assert got == want, name
         if name == "02888_HK":

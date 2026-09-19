@@ -142,3 +142,36 @@ def test_projecting_legs_sit_in_the_dcf_bucket(leg):
 
 def test_projection_family_and_blend_family_cannot_drift():
     assert d._DCF_PROJECTION_FAMILY == d._DCF_FAMILY_NAMES
+
+
+# ── DCF-family legs project with the live context ──────────────────────────
+
+def _cmv(name, projection=None, growth=0.30):
+    return d._compute_method_value(
+        method_name=name, most_recent={}, revenue_base=1_000.0, shares=10.0,
+        net_debt=0.0, market_cap=10_000.0, wacc=0.10, growth_base=growth,
+        fcf_margin_base=0.20, tgr=0.03, fcf_floor=-0.05, sector="Tech",
+        scenario="base", projection=projection)
+
+
+def test_every_dcf_family_leg_equals_the_core_projection_with_the_same_context():
+    sched = d._decayed_growth_schedule(0.30, "Hyper-Growth Platform")
+    ctx = {"growth_schedule": sched, "wacc_schedule": None, "margin_delta_absolute": -0.02}
+    core = d._project_dcf(1_000.0, 0.20, 0.30, 0.0, 0.10, 0.03, -0.05, 0.0, 10.0,
+                          growth_schedule=sched, margin_delta_absolute=-0.02)[0]
+    for leg in ("DCF (FCF+)", "NRR-adj DCF", "DCF (LTG)", "DCF (5-yr)"):
+        assert _cmv(leg, ctx) == pytest.approx(core), leg
+    # Without the context a leg projects growth flat -- the old defect.
+    assert _cmv("DCF (FCF+)") > _cmv("DCF (FCF+)", ctx)
+
+
+def test_the_backtest_uses_the_live_margin_basis_and_growth_schedule(fake_prices):
+    # Owner earnings need SBC in >=3 of the years known at T-1.
+    s = _series(("2021-02-01", "2022-02-01", "2023-02-01", "2025-02-02", "2026-02-01"))
+    for r in s:
+        r["stock_based_compensation"] = 300.0
+        r["fcf_owner_earnings"] = r["free_cash_flow"] - 300.0
+    _e, _n, rec = _gate(series=s, profile_name="Hyper-Growth Platform")
+    assert rec["fcf_margin_basis"] == "fcf_owner_earnings"
+    assert rec["fcf_margin_t1"] == pytest.approx(0.12)
+    assert rec["growth_schedule"] == "decay"

@@ -5095,9 +5095,16 @@ def _compute_method_value(
     forward_consensus: Optional[dict] = None,
     ticker: str = "",
     end_date: str = "",
+    projection: Optional[dict] = None,
 ) -> Optional[float]:
     """
     Compute intrinsic value per share for a single valuation method.
+
+    projection: the per-scenario projection context the core DCF uses --
+    ``growth_schedule`` (convergence fade / tech decay), ``wacc_schedule``
+    (staged WACC) and ``margin_delta_absolute`` (scenario margin move). Every
+    DCF-family leg projects with it, so a weighted "DCF (FCF+)" and the core
+    "DCF" are one projection, not two.
     Returns None if required data is unavailable.
 
     growth_premium: PEG-inspired multiplier applied to relative-value methods
@@ -5154,9 +5161,20 @@ def _compute_method_value(
     # _DCF_PROJECTION_FAMILY (module constant, defined below) — every name
     # here projects via _project_dcf and therefore consumes fcf_margin_base.
     if method_name in _DCF_PROJECTION_FAMILY:
+        # With the projection context, not without it. Every DCF-family leg
+        # used to project `growth_base` FLAT for ten years with no margin move,
+        # while the core "DCF" key applied the profile's fade/decay schedule,
+        # staged WACC and scenario margin delta -- so the leg that carried the
+        # weight was a different projection from the one labelled "DCF". MELI
+        # (Hyper-Growth Platform, 15%/yr decay): DCF (FCF+) $6,672 at 45%
+        # weight against its own core DCF of $3,807.
+        _pj = projection or {}
         iv, _, _, _ = _project_dcf(
             revenue_base, fcf_margin_base, growth_base, 0.0,
             wacc, tgr, fcf_floor, net_debt, shares,
+            growth_schedule=_pj.get("growth_schedule"),
+            wacc_schedule=_pj.get("wacc_schedule"),
+            margin_delta_absolute=_pj.get("margin_delta_absolute"),
         )
         return iv
 
@@ -8071,16 +8089,44 @@ def _run_backward_gate(
         shares_t1  = t1_row.get("shares_outstanding") or series[-1].get("shares_outstanding")
         net_debt_t1 = t1_row.get("net_debt") or 0.0
 
-        # Build FCF margin from paired FCF/revenue rows (must be from same row to avoid misalignment)
-        fcf_margin_pairs = [
-            r.get("free_cash_flow") / r.get("revenue")
-            for r in series[:-1]
-            if r.get("free_cash_flow") is not None and r.get("revenue") and r["revenue"] > 0
-        ]
-        fcf_margin_t1 = statistics.mean(fcf_margin_pairs) if fcf_margin_pairs else 0.0
+        # The SAME margin basis the live valuation uses, on the rows known at
+        # T-1: owner earnings (stock comp deducted) when SBC is disclosed in
+        # >=3 of the years, the outlier-filtered mean, and the OE<=0 fallback
+        # to the median positive year. The backtest used to average raw
+        # reported FCF instead -- for MELI 23.2% on a 9% net margin, customer
+        # float included -- so it tested a different method from the one that
+        # produces today's number.
+        _hist = series[:-1]
+        _sbc_t1 = sum(1 for r in _hist[-5:] if r.get("stock_based_compensation") is not None)
+        _oe_t1 = _mean_fcf_margin(_hist, field="fcf_owner_earnings")
+        if _oe_t1 is not None and _sbc_t1 >= 3:
+            fcf_margin_t1, _t1_field = _oe_t1, "fcf_owner_earnings"
+        else:
+            fcf_margin_t1, _t1_field = (_mean_fcf_margin(_hist) or 0.0), "free_cash_flow"
+        if fcf_margin_t1 <= 0:
+            _pos_t1 = _median_positive_fcf_margin(_hist, field=_t1_field)
+            if _pos_t1 is not None:
+                fcf_margin_t1 = _pos_t1
+        record["fcf_margin_basis"] = _t1_field
+        record["fcf_margin_t1"] = round(float(fcf_margin_t1), 6)
 
-        # Historical growth rate from T-2 data
+        # Historical growth rate from T-2 data, then the live growth schedule:
+        # convergence fade toward terminal growth for the alpha profiles, the
+        # tech decay for growth-phase tech. Held flat it compounded MELI's 43%
+        # for ten years.
         growth_t1 = _historical_cagr(series[:-1]) or 0.05
+        _schedule_t1: Optional[list[float]] = None
+        if profile_name in _CONVERGENCE_ALPHA_PROFILES:
+            _schedule_t1 = _growth_convergence_schedule(
+                growth_t1, tgr, alpha=_CONVERGENCE_ALPHA, years=_PROJECTION_YEARS)
+        elif profile_name in _GROWTH_DECAY_DELTA:
+            _schedule_t1 = _decayed_growth_schedule(
+                growth_t1, profile_name, years=_PROJECTION_YEARS)
+        _proj_t1 = {"growth_schedule": _schedule_t1}
+        record["growth_t1"] = round(float(growth_t1), 6)
+        record["growth_schedule"] = ("convergence" if profile_name in _CONVERGENCE_ALPHA_PROFILES
+                                     else "decay" if profile_name in _GROWTH_DECAY_DELTA
+                                     else "flat")
 
         if not shares_t1 or shares_t1 <= 0 or not revenue_t1 or revenue_t1 <= 0:
             return False, "Skipped — missing T-1 shares or revenue"
@@ -8104,6 +8150,7 @@ def _run_backward_gate(
         iv_dcf_t1, pv_fcf_t1, pv_tv_t1, _ = _project_dcf(
             revenue_t1, fcf_margin_t1, growth_t1, 0.0,
             wacc, tgr, fcf_floor, net_debt_t1, shares_t1,
+            growth_schedule=_schedule_t1,
         )
         tv_fraction_t1 = (pv_tv_t1 / (pv_fcf_t1 + pv_tv_t1)
                           if (pv_fcf_t1 + pv_tv_t1) > 0 else 0.0)
@@ -8123,6 +8170,7 @@ def _run_backward_gate(
                 if method_name not in method_values_t1:
                     method_values_t1[method_name] = _compute_method_value(
                         method_name=method_name,
+                        projection=_proj_t1,
                         most_recent=t1_row,
                         revenue_base=revenue_t1,
                         shares=shares_t1,
@@ -11155,6 +11203,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
 
             # ── Core DCF projection ───────────────────────────────────────
+            # The same context every DCF-family leg projects with below.
+            _dcf_projection = {
+                "growth_schedule": _growth_schedule,
+                "wacc_schedule": _wacc_schedule,
+                "margin_delta_absolute": md_abs,
+            }
             iv_dcf, pv_fcf, pv_tv, _proj_rows = _project_dcf(
                 revenue_base=revenue_base,
                 fcf_margin_base=fcf_margin_base,
@@ -11557,6 +11611,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         else:
                             method_values[method_name] = _compute_method_value(
                                 method_name=method_name,
+                                projection=_dcf_projection,
                                 most_recent=most_recent,
                                 revenue_base=revenue_base,
                                 shares=shares,
@@ -11617,6 +11672,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     if _shadow_name not in method_values:
                         method_values[_shadow_name] = _compute_method_value(
                             method_name=_shadow_name,
+                            projection=_dcf_projection,
                             most_recent=most_recent,
                             revenue_base=revenue_base,
                             shares=shares,
@@ -11688,6 +11744,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         def _mv(_name: str) -> Optional[float]:
                             return _compute_method_value(
                                 method_name=_name,
+                                projection=_dcf_projection,
                                 most_recent=most_recent,
                                 revenue_base=revenue_base,
                                 shares=shares,
