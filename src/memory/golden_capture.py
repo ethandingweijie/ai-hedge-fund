@@ -508,6 +508,63 @@ def read_fixture(ticker: str) -> tuple[list[dict], dict]:
     return calls, meta
 
 
+def comps_from_entry(entry: dict) -> dict:
+    """The live peer multiples a run resolved, as `get_regional_multiples`
+    returned them, plus the comps age. Static/dynamic fields are not comps and
+    are left out: replay recomputes those from the tables in code."""
+    mu = (entry or {}).get("multiples_used") or {}
+    fields = {}
+    for f, info in (mu.get("fields") or {}).items():
+        if (info or {}).get("basis") in ("industry", "sector") and info.get("value") is not None:
+            fields[f] = {k: info.get(k) for k in
+                         ("value", "basis", "cohort", "peer_count", "key", "exchange")}
+    return {"fields": fields, "comp_age_days": mu.get("comp_age_days")}
+
+
+def write_comps(ticker: str, comps: dict) -> Path:
+    path = fixture_dir(ticker) / "comps.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(comps, fh, indent=1, sort_keys=True)
+    return path
+
+
+def read_comps(ticker: str) -> dict | None:
+    path = fixture_dir(ticker) / "comps.json"
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+class frozen_comps:
+    """Serve a fixture's recorded comps instead of the regional_comps table.
+
+    Without this, replay read the LOCAL store: a local refresh moved every
+    fixture's peer multiples (US names flipped from static tables to live
+    industry medians) with no code change. A fixture without comps.json
+    resolves no live comps at all, which is what a stale store gave it.
+    """
+
+    def __init__(self, comps: dict | None):
+        c = comps or {}
+        self._fields = c.get("fields") or {}
+        self._age = c.get("comp_age_days")
+
+    def __enter__(self):
+        from src.data import regional_comps as rc
+        self._rc = rc
+        self._orig = (rc.get_regional_multiples, rc.latest_refresh_age_days)
+        fields, age = self._fields, self._age
+        rc.get_regional_multiples = lambda *a, **k: {f: dict(v) for f, v in fields.items()}
+        rc.latest_refresh_age_days = lambda *a, **k: age
+        return self
+
+    def __exit__(self, *exc):
+        self._rc.get_regional_multiples, self._rc.latest_refresh_age_days = self._orig
+        return False
+
+
 def read_web_run(ticker: str) -> dict | None:
     path = fixture_dir(ticker) / "web_run.json"
     if not path.exists():

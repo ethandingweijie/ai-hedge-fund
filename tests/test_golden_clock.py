@@ -472,8 +472,10 @@ def test_moving_the_wall_clock_moves_only_the_clock_field(tmp_path):
         f"{_CLOCKED_FIXTURE} no longer projects {_CLOCKED_FIELD}; pick another "
         f"clock-dependent fixture or this test proves nothing"
     )
-    # Rounded to 2dp at the call site, so a ten-day shift is exact to that.
-    assert b[_CLOCKED_FIELD] - a[_CLOCKED_FIELD] == pytest.approx(10.0, abs=0.011)
+    # Since 2026-09-20 replay serves each fixture's comps -- including their
+    # age -- from comps.json, so the clock no longer reaches even this field:
+    # the calendar's blast radius went from one named field to none.
+    assert b[_CLOCKED_FIELD] == a[_CLOCKED_FIELD]
 
     others = sorted(k for k in set(a) | set(b) if k != _CLOCKED_FIELD)
     moved = [k for k in others if a.get(k) != b.get(k)]

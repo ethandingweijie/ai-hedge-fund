@@ -1,0 +1,45 @@
+{
+ "comp_age_days": 3.2,
+ "fields": {
+  "ev_revenue": {
+   "basis": "sector",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "Financial Services",
+   "peer_count": 10,
+   "value": 3.8685
+  },
+  "fcf_yield": {
+   "basis": "sector",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "Financial Services",
+   "peer_count": 11,
+   "value": 0.0015
+  },
+  "growth_avg": {
+   "basis": "sector",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "Financial Services",
+   "peer_count": 9,
+   "value": 0.2115
+  },
+  "pb": {
+   "basis": "sector",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "Financial Services",
+   "peer_count": 10,
+   "value": 1.5228
+  },
+  "pe": {
+   "basis": "sector",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "Financial Services",
+   "peer_count": 9,
+   "value": 12.8361
+  }
+ }
+}

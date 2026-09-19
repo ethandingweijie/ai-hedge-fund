@@ -517,7 +517,7 @@ def test_the_replay_import_really_is_outside_the_replayer_block():
     src = inspect.getsource(
         __import__("src.memory.golden_replay", fromlist=["replay_fixture"]))
     imp = src.index("from src.agents.analysis.dcf_agent import run_dcf_agent")
-    with_blk = src.index("with gc.pinned_env(), gc.Replayer(calls) as rp:")
+    with_blk = src.index("with gc.pinned_env(), gc.Replayer(calls) as rp")
     assert imp < with_blk
 
 

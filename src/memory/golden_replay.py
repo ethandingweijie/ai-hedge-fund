@@ -431,7 +431,8 @@ def project(entry: dict) -> dict[str, Any]:
 
 
 def replay_fixture(name: str, *, frozen_now: Any = None) -> dict:
-    """Replay one fixture directory offline. Never touches network or DB.
+    """Replay one fixture directory offline. Never touches network or DB
+    (regional comps included: they are served from the fixture's comps.json).
 
     The clock is pinned to ``frozen_now``, else ``$GOLDEN_FROZEN_NOW``, else
     the fixture's own ``captured_at`` — the instant the inputs were recorded,
@@ -456,7 +457,11 @@ def replay_fixture(name: str, *, frozen_now: Any = None) -> dict:
         # does not see (a reload, a second name for one module).
         _rebind_all()
 
-    with gc.pinned_env(), gc.Replayer(calls) as rp:
+    # Comps are served from the fixture, never the local regional_comps table.
+    # frozen_comps imports regional_comps, so it must enter AFTER the Replayer:
+    # regional_comps binds `_fmp_get` by value at import, and an import outside
+    # the replay window captures the real network function.
+    with gc.pinned_env(), gc.Replayer(calls) as rp, gc.frozen_comps(gc.read_comps(name)):
         out = run_dcf_agent(state)
 
     entry = (out.get("data", {}).get("dcf_range") or {}).get(ticker)

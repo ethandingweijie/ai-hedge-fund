@@ -1,0 +1,53 @@
+{
+ "comp_age_days": 3.2,
+ "fields": {
+  "ev_ebitda": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "HKSE",
+   "key": "Banks - Diversified",
+   "peer_count": 7,
+   "value": 28.6837
+  },
+  "ev_revenue": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "HKSE",
+   "key": "Banks - Diversified",
+   "peer_count": 7,
+   "value": 7.0667
+  },
+  "fcf_yield": {
+   "basis": "sector",
+   "cohort": "large",
+   "exchange": "HKSE",
+   "key": "Financial Services",
+   "peer_count": 15,
+   "value": 0.0804
+  },
+  "growth_avg": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "HKSE",
+   "key": "Banks - Diversified",
+   "peer_count": 7,
+   "value": 0.4592
+  },
+  "pb": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "HKSE",
+   "key": "Banks - Diversified",
+   "peer_count": 7,
+   "value": 0.7919
+  },
+  "pe": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "HKSE",
+   "key": "Banks - Diversified",
+   "peer_count": 7,
+   "value": 8.3976
+  }
+ }
+}

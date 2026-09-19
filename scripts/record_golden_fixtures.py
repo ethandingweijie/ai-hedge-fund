@@ -176,6 +176,9 @@ def record_one(ticker: str, *, end_date: str | None = None,
     }
 
     calls_path = gc.write_fixture(ticker, doc)
+    # The peer multiples the run resolved, frozen with the fixture: replay must
+    # not read the local comps store, which moves on every refresh.
+    gc.write_comps(ticker, gc.comps_from_entry(entry))
 
     # Persist the archived row so replay's LLM-only inputs are frozen with the
     # fixture rather than re-read from prod (which moves).

@@ -1,0 +1,53 @@
+{
+ "comp_age_days": 3.2,
+ "fields": {
+  "ev_ebitda": {
+   "basis": "sector",
+   "cohort": "large",
+   "exchange": "SES",
+   "key": "Real Estate",
+   "peer_count": 18,
+   "value": 20.8752
+  },
+  "ev_revenue": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "REIT - Retail",
+   "peer_count": 5,
+   "value": 11.1027
+  },
+  "fcf_yield": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "REIT - Retail",
+   "peer_count": 5,
+   "value": 0.1026
+  },
+  "growth_avg": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "REIT - Retail",
+   "peer_count": 5,
+   "value": 0.0107
+  },
+  "pb": {
+   "basis": "industry",
+   "cohort": "all",
+   "exchange": "SES",
+   "key": "REIT - Retail",
+   "peer_count": 5,
+   "value": 0.7662
+  },
+  "pe": {
+   "basis": "sector",
+   "cohort": "large",
+   "exchange": "SES",
+   "key": "Real Estate",
+   "peer_count": 20,
+   "value": 15.195
+  }
+ }
+}
