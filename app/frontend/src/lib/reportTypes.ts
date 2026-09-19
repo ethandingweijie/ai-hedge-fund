@@ -120,6 +120,8 @@ export interface DcfCase {
   method_iv_table?: Record<string, number>;
   // Profile weights list — [{name, weight}] for method-weight columns
   profile_weights?: Array<{ name: string; weight: number }>;
+  // The weight each leg actually carried in the blend (sums to 1).
+  effective_weights?: Array<{ method: string; value_key: string; bucket: string; weight: number }>;
   methods_used?: string[];
   forward_flags?: string[];
   // FX conversion metadata (populated when financials are not in USD)

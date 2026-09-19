@@ -87,9 +87,27 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
   }
 
   const src = dcfRange.data_source ? DATA_SOURCE_INFO[dcfRange.data_source] : undefined;
-  const methodBadges: Array<{ name: string; weight?: number }> =
-    dcfRange.base?.profile_weights
-    ?? (dcfRange.base?.methods_used ?? []).map((name) => ({ name }));
+  // Show the SHARE each leg carried, not the raw profile weight. Profile
+  // weights are relative, not percentages: a promoted analyst SOTP carries
+  // 3.0 against 1.0 for the other legs combined, which is a 75% share -- the
+  // raw number printed as "SOTP (analyst) · 300%" on 09618.HK. The engine's
+  // effective weights already sum to 1 (after proxies, dropped legs and the
+  // asset floor); older runs without them fall back to normalised profile
+  // weights.
+  const methodBadges: Array<{ name: string; weight?: number }> = (() => {
+    const eff = dcfRange.base?.effective_weights;
+    if (eff && eff.length > 0) {
+      const by = new Map<string, number>();
+      for (const e of eff) by.set(e.method, (by.get(e.method) ?? 0) + (e.weight ?? 0));
+      return Array.from(by, ([name, weight]) => ({ name, weight }));
+    }
+    const pw = dcfRange.base?.profile_weights;
+    if (pw && pw.length > 0) {
+      const total = pw.reduce((s, m) => s + (m.weight ?? 0), 0) || 1;
+      return pw.map((m) => ({ name: m.name, weight: (m.weight ?? 0) / total }));
+    }
+    return (dcfRange.base?.methods_used ?? []).map((name) => ({ name }));
+  })();
 
   const hasScenarioData = SCENARIOS.some(({ key }) => dcfRange[key]);
 
