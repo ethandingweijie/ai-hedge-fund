@@ -3428,7 +3428,13 @@ def get_sector_peer_multiples(
         # comps. Regional is industry-level and size-matched so it wins any
         # field it resolves; dynamic still fills fields it does not.
         merged = {**static}
-        if not is_hk:
+        # US only, by market -- not "not HK". The curated basket is US
+        # companies, and the old `not is_hk` test let it into Singapore:
+        # Seatrium (2026-09-20), whose SGX baskets are under the peer floor,
+        # was priced on US Industrials at 18.9x book and 35.8x earnings --
+        # base IV S$14.01 against a S$2.12 price. No market borrows another's
+        # multiples.
+        if _market == "US":
             merged.update(get_dynamic_peer_multiples(sector, profile_name))
         basis: dict[str, dict] = {}
         for field, row in regional.items():
@@ -3444,7 +3450,7 @@ def get_sector_peer_multiples(
         # and the LLM write-up state what a multiple was actually derived
         # from instead of implying a precision the peer set does not support.
         return _stamp(merged, basis)
-    if is_hk:
+    if _market != "US":
         return _stamp(static, {})
 
     dynamic = get_dynamic_peer_multiples(sector, profile_name)

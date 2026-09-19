@@ -214,3 +214,17 @@ def test_a_thick_industry_basket_still_wins(store):
     _seed("Oil, Gas & Coal (family)", "industry", "ev_ebitda", 4.5, 18)
     got = rc.get_regional_multiples("HKSE", "Coal", "Energy")
     assert got["ev_ebitda"]["value"] == 5.0
+
+
+def test_singapore_never_takes_the_us_curated_basket(monkeypatch):
+    """Seatrium, 2026-09-20: SGX baskets under the floor fell through to the US
+    'dynamic' Industrials basket (18.9x book). Non-US markets use their own
+    static table when their comps are thin."""
+    from src.data import sector_profiles as sp
+    monkeypatch.setattr(sp, "get_dynamic_peer_multiples", lambda *a, **k: {"pb": 18.86, "pe": 35.77})
+    monkeypatch.setattr(sp, "_regional_peer_multiples", lambda *a, **k: {})
+    sg = sp.get_sector_peer_multiples("Industrials", ticker="5E2.SI", exchange="SES",
+                                      profile_name="Offshore Marine & Resources (SG)")
+    assert sg.get("pb") != 18.86 and sg.get("pe") != 35.77
+    us = sp.get_sector_peer_multiples("Industrials", ticker="CAT", exchange="NYSE")
+    assert us.get("pb") == 18.86
