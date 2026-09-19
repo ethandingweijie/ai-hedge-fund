@@ -1,9 +1,9 @@
 {
  "_meta": {
-  "generated_at": "2026-09-19T06:28:24+00:00",
+  "generated_at": "2026-09-19T07:17:08+00:00",
   "commit": "30b26702d3c786e1835dd8e5cc629191e3d75c95",
-  "regenerated_at_commit": "4f2062f",
-  "reason": "Two-tier valuation (owner decision 2026-09-19). Tier 1: fundamental IV = DCF + peer-median multiples, the quality x risk x commodity composite no longer multiplies the IV (composite_applied -> 1.0 everywhere). Tier 2: one 12m target rule for every name = spot + capture x (IV_premium - spot), capture unchanged (20-35%, +15pp unanimous), IV_premium = IV with the composite applied to the multiples leg only as a premium bounded by the peer interquartile range of the anchor multiple (fixtures carry no quartiles, so premium = 1.0x here). Forward-multiple / SOTP / normalised convergence / bank P/B / REIT P/FFO targets are kept as pt_bridge.cross_checks; the divergence guard and IV band are skipped under the unified rule. Unweighted legs published as cross_check_methods. Named moves (base IV; base 12m): COST 1324.57->816.88 (composite 1.78); MELI 5578.42->4007.19 (1.85); MU 293.14->182.97 (1.63); 02888_HK 284.38->258.53 (1.10); D05_SI 47.89->43.53 (1.10); 09988_HK 160.84->156.06, BABA 193.13->187.48 (1.036); BN4_SI 5.20->5.90 (0.88 discount removed). IV unchanged where composite was 1.0: AAPL C38U_SI FCX SCHW U96_SI V. Targets now lie between spot and IV on every name: FCX 24.89->48.02 (was below its own IV 26.69), SCHW 44.41->96.46 (IV 75.41), AAPL 257.66->275.57, C38U_SI 1.93->2.10, D05_SI 53.55->59.59, MU 439.71->555.29, 09988_HK 108.49->131.13, COST 1112.96->871.79, MELI 3141.26->2591.33, 02888_HK 257.69->240.64, BABA 151.25->148.43, BN4_SI 8.15->8.50; U96_SI and V unchanged.",
+  "regenerated_at_commit": "fdac4db",
+  "reason": "Peer-bounded 12m premium applies leg by leg to peer-multiple legs only (EV/EBITDA, P/E, EV/Revenue, P/B families and their forward variants), never to DCF or SOTP legs. A sum-of-the-parts already prices each segment at its own multiple: on 09618.HK (prod 2026-09-19 07:07) SOTP (analyst) is 77% of the blend and a 0.825x consolidated EV/EBITDA discount on it pulled the base target from HK$151 to HK$135. Fixtures carry no peer quartiles (premium 1.0x), so the only projection move is the 12m_pt_method label ('multiples leg' -> 'peer-multiple legs') on all 14 names; no numeric leaf moves.",
   "tolerance": 0.05,
   "tickers": 14,
   "note": "Written by --update-snapshots. Do not edit by hand."
@@ -15,7 +15,7 @@
   "captured_at": "2026-09-16T13:22:12+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 240.64,
    "12m_targets.bear": 225.27,
    "12m_targets.bull": 255.77,
@@ -356,7 +356,7 @@
   "captured_at": "2026-09-16T13:23:21+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 131.13,
    "12m_targets.bear": 108.45,
    "12m_targets.bull": 156.84,
@@ -665,7 +665,7 @@
   "captured_at": "2026-09-16T13:19:49+00:00",
   "state_source": "lookup_tables",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 275.57,
    "12m_targets.bear": 243.75,
    "12m_targets.bull": 313.85,
@@ -988,7 +988,7 @@
   "captured_at": "2026-09-16T13:22:59+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 148.43,
    "12m_targets.bear": 123.69,
    "12m_targets.bull": 175.05,
@@ -1316,7 +1316,7 @@
   "captured_at": "2026-09-16T13:23:42+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 8.5,
    "12m_targets.bear": 8.5,
    "12m_targets.bull": 9.59,
@@ -1612,7 +1612,7 @@
   "captured_at": "2026-09-16T13:24:26+00:00",
   "state_source": "lookup_tables",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 2.1,
    "12m_targets.bear": 1.96,
    "12m_targets.bull": 2.26,
@@ -1899,7 +1899,7 @@
   "captured_at": "2026-09-16T13:21:02+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 871.79,
    "12m_targets.bear": 792.14,
    "12m_targets.bull": 958.99,
@@ -2219,7 +2219,7 @@
   "captured_at": "2026-09-16T13:22:34+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 59.59,
    "12m_targets.bear": 55.65,
    "12m_targets.bull": 63.54,
@@ -2538,7 +2538,7 @@
   "captured_at": "2026-09-16T13:24:49+00:00",
   "state_source": "lookup_tables",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 48.02,
    "12m_targets.bear": 43.13,
    "12m_targets.bull": 58.14,
@@ -2838,7 +2838,7 @@
   "captured_at": "2026-09-16T13:20:14+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 2591.33,
    "12m_targets.bear": 2424.69,
    "12m_targets.bull": 2738.4,
@@ -3168,7 +3168,7 @@
   "captured_at": "2026-09-16T13:20:39+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 50% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 555.29,
    "12m_targets.bear": 533.49,
    "12m_targets.bull": 578.22,
@@ -3491,7 +3491,7 @@
   "captured_at": "2026-09-16T13:21:49+00:00",
   "state_source": "lookup_tables",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 96.46,
    "12m_targets.bear": 87.99,
    "12m_targets.bull": 107.93,
@@ -3783,7 +3783,7 @@
   "captured_at": "2026-09-16T13:24:05+00:00",
   "state_source": "prod_web_run",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 5.87,
    "12m_targets.bear": 4.68,
    "12m_targets.bull": 7.06,
@@ -4034,7 +4034,7 @@
   "captured_at": "2026-09-16T13:21:25+00:00",
   "state_source": "lookup_tables",
   "projection": {
-   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, multiples leg at a 1.000x peer-bounded premium",
+   "12m_pt_method": "convergence toward intrinsic value: 35% of the spot-to-IV gap, peer-multiple legs at a 1.000x peer-bounded premium",
    "12m_targets.base": 394.12,
    "12m_targets.bear": 352.98,
    "12m_targets.bull": 433.09,

@@ -44,13 +44,28 @@ def test_premium_uses_the_anchor_multiple_then_falls_back():
     assert d._peer_bounded_premium(1.85, peer, "DCF")["field"] == "ev_ebitda"
 
 
-def test_premium_touches_only_the_multiples_leg():
-    sc = {"intrinsic_value": 70.0, "weight_dcf": 0.3, "weight_multi": 0.7,
-          "iv_dcf": 50.0, "iv_multi": 78.5714}
-    # 0.3*50 + 0.7*78.5714 = 70; premium 1.2 on the multi leg only
-    assert d._premium_adjusted_iv(sc, 1.2) == pytest.approx(0.3 * 50 + 0.7 * 78.5714 * 1.2, rel=1e-4)
-    assert d._premium_adjusted_iv(sc, 1.0) == pytest.approx(70.0)
-    assert d._premium_adjusted_iv({"intrinsic_value": 9.0}, 1.3) == 9.0   # no multiples leg
+def _jd_base():
+    """09618.HK base scenario, production run 2026-09-19 07:07 UTC."""
+    table = {"DCF": 230.11, "SOTP (analyst)": 186.47, "P/E": 126.68, "EV/EBITDA": 301.09}
+    ew = [{"method": "EV/EBITDA", "value_key": "EV/EBITDA", "weight": 0.103},
+          {"method": "P/E", "value_key": "P/E", "weight": 0.064},
+          {"method": "DCF", "value_key": "DCF", "weight": 0.064},
+          {"method": "SOTP (analyst)", "value_key": "SOTP (analyst)", "weight": 0.769}]
+    iv = sum(w["weight"] * table[w["value_key"]] for w in ew)
+    return {"intrinsic_value": iv, "method_iv_table": table, "effective_weights": ew}
+
+
+def test_premium_touches_only_peer_multiple_legs_never_dcf_or_sotp():
+    sc = _jd_base()
+    ivp, legs = d._premium_adjusted_iv(sc, 0.825)
+    expected = (0.103 * 301.09 * 0.825 + 0.064 * 126.68 * 0.825
+                + 0.064 * 230.11 + 0.769 * 186.47)
+    assert ivp == pytest.approx(expected, rel=1e-9)
+    assert sorted(legs) == ["EV/EBITDA", "P/E"]
+    # The SOTP-dominated blend barely moves: the discount no longer reaches it.
+    assert ivp / sc["intrinsic_value"] > 0.95
+    assert d._premium_adjusted_iv(sc, 1.0)[0] == pytest.approx(sc["intrinsic_value"])
+    assert d._premium_adjusted_iv({"intrinsic_value": 9.0}, 1.3) == (9.0, [])
 
 
 # ── cross-checks ──────────────────────────────────────────────────────────

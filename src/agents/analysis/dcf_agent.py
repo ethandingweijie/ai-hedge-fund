@@ -7962,20 +7962,40 @@ def _peer_bounded_premium(signal: Optional[float], peer: Optional[dict],
     return out
 
 
-def _premium_adjusted_iv(scenario: dict, premium: float) -> float:
-    """Scenario IV with `premium` applied to its multiples bucket only.
+#: Legs priced as (peer-median multiple x the company's own metric). Only
+#: these take the peer-bounded premium: a DCF is not a multiple, and a
+#: sum-of-the-parts already prices each segment at ITS own multiple, so a
+#: consolidated peer premium on top would re-price it twice. JD, 2026-09-19:
+#: the SOTP (analyst) leg is 77% of the blend, and a 0.825x EV/EBITDA
+#: discount applied to it pulled the base target from HK$151 to HK$135.
+_PEER_MULTIPLE_LEGS = frozenset(_PEER_FIELD_FOR_METHOD) | frozenset({
+    "Forward P/E", "Forward EV/EBITDA",
+})
 
-    Ratio form, so any scaling applied to the blended IV after the blend
-    (calibration) carries through unchanged."""
+
+def _premium_adjusted_iv(scenario: dict, premium: float) -> tuple:
+    """(scenario IV with `premium` on its peer-multiple legs only, those legs).
+
+    Leg by leg from `effective_weights` x `method_iv_table`, in ratio form so
+    any scaling applied to the blended IV after the blend (calibration)
+    carries through unchanged. No weights -> no premium."""
     iv = scenario.get("intrinsic_value")
-    wd, wm = scenario.get("weight_dcf") or 0.0, scenario.get("weight_multi") or 0.0
-    idc, im = scenario.get("iv_dcf") or 0.0, scenario.get("iv_multi")
-    if not isinstance(iv, (int, float)) or not isinstance(im, (int, float)) or im <= 0 or wm <= 0:
-        return iv
-    base = wd * idc + wm * im
-    if base <= 0:
-        return iv
-    return iv * (wd * idc + wm * im * premium) / base
+    table = scenario.get("method_iv_table") or {}
+    num = den = 0.0
+    legs: list[str] = []
+    for w in scenario.get("effective_weights") or []:
+        v = table.get(w.get("value_key"))
+        wt = w.get("weight") or 0.0
+        if not isinstance(v, (int, float)) or v <= 0 or wt <= 0:
+            continue
+        p = premium if w.get("value_key") in _PEER_MULTIPLE_LEGS else 1.0
+        if p != 1.0 or w.get("value_key") in _PEER_MULTIPLE_LEGS:
+            legs.append(w.get("method"))
+        num += wt * v * p
+        den += wt * v
+    if not isinstance(iv, (int, float)) or den <= 0:
+        return iv, []
+    return iv * num / den, legs
 
 
 def _cross_check_methods(method_iv_table: Optional[dict],
@@ -12845,22 +12865,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _siv = _sr.get("intrinsic_value")
                 if not isinstance(_siv, (int, float)) or _siv <= 0:
                     continue
-                _ivp = _premium_adjusted_iv(_sr, _prem["applied"])
+                _ivp, _prem_legs = _premium_adjusted_iv(_sr, _prem["applied"])
                 _tgt = round(_convergence_bound(_ivp, float(_spot_for_cap), _max_capture), 2)
                 _12m_targets[_sn] = _tgt
                 _pt_rows[_sn] = {"intrinsic_value": _siv,
                                  "iv_with_premium": round(float(_ivp), 4),
+                                 "premium_legs": _prem_legs,
                                  "target": _tgt}
             if _pt_rows:
                 _pt_unified = True
                 _12m_pt_method_label = (
                     f"convergence toward intrinsic value: {_max_capture:.0%} of "
-                    f"the spot-to-IV gap, multiples leg at a "
+                    f"the spot-to-IV gap, peer-multiple legs at a "
                     f"{_prem['applied']:.3f}x peer-bounded premium")
                 _pt_bridge = {
                     "rule": ("target = spot + capture x (IV_premium - spot); "
                              "IV_premium = IV with the peer-bounded premium on "
-                             "the multiples leg only"),
+                             "the peer-multiple legs only (not DCF, not SOTP)"),
                     "spot": float(_spot_for_cap),
                     "capture": _max_capture,
                     "premium": _prem,
