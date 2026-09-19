@@ -5008,8 +5008,9 @@ def _leg_trace(**fields) -> None:
     t = _LEG_TRACE.get()
     if t is None:
         return
-    for k, v in fields.items():
-        t[k] = round(v, 8) if isinstance(v, float) else v
+    # Full precision: the export rebuilds each leg from these inputs, and a
+    # rate rounded to 8 d.p. times a 1e11 revenue base leaves a residual.
+    t.update(fields)
 
 
 def _traced_method_value(**kwargs) -> tuple[Optional[float], dict]:
@@ -8124,7 +8125,7 @@ def _sotp_scenario_from_trees(table: dict, trees: Optional[dict], scenario: str,
         f = _tree_factor(matched.get(r.get("name")), scenario)
         seg += v * f * sm
         detail.append({"segment": r.get("name"), "tree": r.get("name") in matched,
-                       "revenue_factor": round(f, 6), "multiple_band": sm})
+                       "revenue_factor": f, "multiple_band": sm})   # full precision: the export rebuilds from it
     fixed = float(nav) - float(table.get("segment_value") or sum(float(r.get("value") or 0) for r in rows))
     nav_s = seg + fixed
     disc = float(table.get("holdco_discount") or 0.0) / float(nav)

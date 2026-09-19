@@ -183,3 +183,77 @@ def test_data_gaps_lists_structural_and_detected_gaps(wb):
     rows = [ws.cell(row=r, column=2).value or "" for r in range(5, ws.max_row + 1)]
     assert any("balance-sheet or cash-flow forecast" in x for x in rows)
     assert any("missing" in x for x in rows)          # the synthetic statements omit lines
+
+
+# ── DCF-family legs (DCF (FCF+), DCF (5-yr), DCF (LTG), Rev DCF, ...) ───────
+# A production 02020.HK export carried DCF (FCF+) at 40%+ weight as a rounded
+# hardcode, so Blend missed the engine IV by a cent and Data Gaps said nothing.
+
+def _run_with(extra_legs, weights):
+    run = _run()
+    for s in ("bear", "base", "bull"):
+        sc = run["data"]["dcf_range"]["TEST"][s]
+        sc["leg_inputs"] = {**sc["leg_inputs"], **extra_legs}
+        sc["method_iv_table"] = {**sc["method_iv_table"],
+                                 **{k: round(v["value"], 2) for k, v in extra_legs.items()}}
+        sc["effective_weights"] = weights
+        sc["intrinsic_value"] = round(sum(w["weight"] * sc["leg_inputs"][w["value_key"]]["value"]
+                                          for w in weights), 2)
+    return run
+
+
+def _blend_leg_formula(wb, key):
+    ws = wb["Blend"]
+    return next(ws.cell(row=r, column=5).value for r in range(1, ws.max_row + 1)
+                if ws.cell(row=r, column=2).value == key)
+
+
+def test_dcf_variant_with_the_core_projection_links_to_the_core_block():
+    same = {**_dcf_trace(), "fcf_margin_base": round(0.20, 8)}      # 8 d.p. trace = same projection
+    wts = [{"method": "DCF (FCF+)", "value_key": "DCF (FCF+)", "bucket": "dcf", "weight": 0.6},
+           {"method": "P/E", "value_key": "P/E", "bucket": "multi", "weight": 0.4}]
+    wb = load_workbook(io.BytesIO(build_workbook(_run_with({"DCF (FCF+)": same}, wts), "TEST")))
+    f = _blend_leg_formula(wb, "DCF (FCF+)")
+    assert isinstance(f, str) and f.startswith("='DCF'!")
+    labels = [wb["DCF"].cell(row=r, column=1).value or "" for r in range(1, wb["DCF"].max_row + 1)]
+    assert not any("DCF (FCF+)" in x for x in labels)               # no duplicate block
+
+
+def test_dcf_variant_that_projects_differently_gets_its_own_block_and_drivers():
+    five = _dcf_trace(g=0.05, wacc=0.10)
+    five["projection_rows"] = five["projection_rows"][:5]
+    wts = [{"method": "DCF (5-yr)", "value_key": "DCF (5-yr)", "bucket": "dcf", "weight": 0.6},
+           {"method": "P/E", "value_key": "P/E", "bucket": "multi", "weight": 0.4}]
+    wb = load_workbook(io.BytesIO(build_workbook(_run_with({"DCF (5-yr)": five}, wts), "TEST")))
+    ws = wb["DCF"]
+    labels = {ws.cell(row=r, column=1).value: r for r in range(1, ws.max_row + 1)}
+    assert any("DCF (5-yr)" in (x or "") for x in labels)
+    f = _blend_leg_formula(wb, "DCF (5-yr)")
+    assert isinstance(f, str) and f.startswith("='DCF'!")
+    a = [wb["Assumptions"].cell(row=r, column=1).value or "" for r in range(1, wb["Assumptions"].max_row + 1)]
+    assert any("DCF-family leg: DCF (5-yr)" in x for x in a)
+
+
+def test_leg_without_a_formula_carries_the_unrounded_engine_value_and_is_flagged():
+    odd = {"kind": "rule_of_thumb", "value": 123.456789}
+    wts = [{"method": "Odd", "value_key": "Odd", "bucket": "multi", "weight": 0.5},
+           {"method": "P/E", "value_key": "P/E", "bucket": "multi", "weight": 0.5}]
+    wb = load_workbook(io.BytesIO(build_workbook(_run_with({"Odd": odd}, wts), "TEST")))
+    ref = _blend_leg_formula(wb, "Odd")                               # ='Multiples'!$P$n
+    sheet, cell = ref[1:].split("!")
+    assert wb[sheet.strip("'")][cell.replace("$", "")].value == pytest.approx(123.456789)
+    gaps = [wb["Data Gaps"].cell(row=r, column=2).value or "" for r in range(5, wb["Data Gaps"].max_row + 1)]
+    assert any("No metric x multiple form: Odd" in x for x in gaps)
+
+
+def test_blend_leg_no_tab_carries_is_unrounded_and_flagged():
+    run = _run()
+    for s in ("bear", "base", "bull"):
+        sc = run["data"]["dcf_range"]["TEST"][s]
+        sc["effective_weights"] = sc["effective_weights"] + [
+            {"method": "Ghost", "value_key": "Ghost", "bucket": "multi", "weight": 0.0}]
+        sc["leg_inputs"] = {**sc["leg_inputs"], "Ghost": {"kind": "dcf", "value": 77.123456}}   # no projection rows
+    wb = load_workbook(io.BytesIO(build_workbook(run, "TEST")))
+    assert _blend_leg_formula(wb, "Ghost") == pytest.approx(77.123456)
+    gaps = [wb["Data Gaps"].cell(row=r, column=2).value or "" for r in range(5, wb["Data Gaps"].max_row + 1)]
+    assert any("Blend legs not rebuilt by any tab: Ghost" in x for x in gaps)

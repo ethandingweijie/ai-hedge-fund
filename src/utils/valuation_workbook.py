@@ -174,6 +174,35 @@ def _ref(sheet: str, r: int, c: int, absolute: bool = True) -> str:
     return f"'{sheet}'!${col}${r}" if absolute else f"'{sheet}'!{col}{r}"
 
 
+_DCF_DRIVER_KEYS = ("revenue_base", "fcf_margin_base", "margin_delta_absolute", "fcf_floor",
+                    "tgr", "net_debt", "shares", "wacc")
+
+
+def _close(a: Any, b: Any) -> bool:
+    a, b = _num(a), _num(b)
+    if a is None or b is None:
+        return a is None and b is None
+    # 1e-8 absolute: traces recorded before full-precision recording kept 8 d.p.
+    return abs(a - b) <= 1e-8 + 1e-9 * max(abs(a), abs(b))
+
+
+def _same_projection(a: dict, b: dict) -> bool:
+    """True when two DCF traces are the same projection (same drivers, same path)."""
+    if not all(_close(a.get(k) or (0.0 if k == "margin_delta_absolute" else None),
+                      b.get(k) or (0.0 if k == "margin_delta_absolute" else None))
+               for k in _DCF_DRIVER_KEYS):
+        return False
+    ra, rb = a.get("projection_rows") or [], b.get("projection_rows") or []
+    if len(ra) != len(rb):
+        return False
+    wa, wb = a.get("wacc_schedule") or [], b.get("wacc_schedule") or []
+    if len(wa) != len(wb) or not all(_close(x, y) for x, y in zip(wa, wb)):
+        return False
+    return all(_close(x.get("growth_pct"), y.get("growth_pct"))
+               and _close(x.get("reinvest_margin_deduction") or 0.0, y.get("reinvest_margin_deduction") or 0.0)
+               for x, y in zip(ra, rb))
+
+
 class _Book:
     def __init__(self, ticker: str, run: dict, dr: dict,
                  load_members: Optional[Callable[..., list]] = None,
@@ -187,6 +216,8 @@ class _Book:
         self.wb = Workbook()
         self.A: dict[str, str] = {}                    # assumption name -> cell ref
         self.leg_cell: dict[tuple, str] = {}           # (scenario, leg) -> per-share cell
+        self.blend_unlinked: set[str] = set()          # blend legs with no rebuilding cell
+        self.engine_only: set[str] = set()             # legs shown at engine value, no formula
         self.leg_range: dict[str, dict] = {}           # leg -> {scenario: ref}
         self.dcf: dict[str, dict] = {}                 # scenario -> refs
         self.iv_cell: dict[str, str] = {}
@@ -342,6 +373,58 @@ class _Book:
                 self.A[f"w{t + 1}:{s}"] = _ref("Assumptions", r, 3 + j)
             r += 1
         r += 1
+        # DCF-family legs (DCF (5-yr), DCF (LTG), DCF (FCF+), Rev DCF, ...) that
+        # project differently from the core DCF get their own drivers; the ones
+        # that are the same projection link to the core block on the DCF tab.
+        self.dcf_variants: dict[str, dict[str, dict]] = {}
+        for s_ in SCENARIOS:
+            legs = self.scen(s_).get("leg_inputs") or {}
+            core = legs.get("DCF") or {}
+            for leg, tr in legs.items():
+                if leg == "DCF" or tr.get("kind") != "dcf" or not tr.get("projection_rows"):
+                    continue
+                if core.get("projection_rows") and _same_projection(tr, core):
+                    self.dcf_variants.setdefault(leg, {})[s_] = {"same_as_core": True}
+                else:
+                    self.dcf_variants.setdefault(leg, {})[s_] = {"trace": tr}
+        for leg, per in self.dcf_variants.items():
+            own = {s_: v["trace"] for s_, v in per.items() if "trace" in v}
+            if not own:
+                continue
+            sfx = f"|{leg}"
+            sh.section(r, f"DCF-family leg: {leg} (projects differently from the core DCF)", 8); r += 1
+            sh.header(r, ["Driver", "", "Bear", "Base", "Bull"]); r += 1
+            for key, lab, fmt in drivers + [("wacc", "Discount rate (flat, where not staged)", PCT2)]:
+                sh.label(r, 1, lab, indent=1)
+                for j, s_ in enumerate(SCENARIOS):
+                    tr = own.get(s_)
+                    if tr is None:
+                        continue
+                    v = tr.get(key)
+                    if key == "margin_delta_absolute" and v is None:
+                        v = 0.0
+                    sh.put(r, 3 + j, _num(v), fmt)
+                    self.A[f"{key}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                r += 1
+            n_max = max(len(tr.get("projection_rows") or []) for tr in own.values())
+            for t in range(n_max):
+                sh.label(r, 1, f"Revenue growth, year {t + 1}", indent=1)
+                for j, s_ in enumerate(SCENARIOS):
+                    rows = (own.get(s_) or {}).get("projection_rows") or []
+                    if t < len(rows):
+                        sh.put(r, 3 + j, _num(rows[t].get("growth_pct")), PCT2)
+                        self.A[f"g{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                r += 1
+            if any(tr.get("wacc_schedule") for tr in own.values()):
+                for t in range(n_max):
+                    sh.label(r, 1, f"Discount rate, year {t + 1}", indent=1)
+                    for j, s_ in enumerate(SCENARIOS):
+                        st = (own.get(s_) or {}).get("wacc_schedule") or []
+                        if t < len(st):
+                            sh.put(r, 3 + j, _num(st[t]), PCT2)
+                            self.A[f"w{t + 1}:{s_}{sfx}"] = _ref("Assumptions", r, 3 + j)
+                    r += 1
+            r += 1
         sh.section(r, "Target and blend", 6); r += 1
         add("capture", "Share of the IV gap closed in 12 months (capture)", _num(pb.get("capture")), PCT)
         sa = (self.data.get("scenario_analysis") or {}).get(self.ticker) or {}
@@ -350,6 +433,7 @@ class _Book:
         add("dp", "Published rounding (decimal places) for IV and targets", 2, "0")
         add("dp_ggm", "GGM value rounding (decimal places, engine)", 4, "0")
         add("tol", "Reconciliation tolerance (one rounding unit)", 0.01, NUM)
+        add("dp_comps", "Recorded peer-median precision (decimal places, engine)", 4, "0")
         add("calibration", "Calibration multiplier (market bias correction)",
             _num((self.dr.get("calibration") or {}).get("iv_multiplier")) or 1.0, "0.0000")
         r += 1
@@ -758,13 +842,25 @@ class _Book:
             if not tr or not tr.get("projection_rows"):
                 continue
             r = self._dcf_block(sh, r, s, tr) + 2
+        for leg, per in getattr(self, "dcf_variants", {}).items():
+            for s in SCENARIOS:
+                v = per.get(s)
+                if not v:
+                    continue
+                if v.get("same_as_core"):
+                    if s in self.dcf:
+                        self.leg_cell[(s, leg)] = self.dcf[s]["iv"]
+                    continue
+                r = self._dcf_block(sh, r, s, v["trace"], sfx=f"|{leg}", leg=leg) + 2
         if r == 4:
             sh.note(4, 1, "No DCF projection recorded for this run.")
         sh.widths({"A": 42, "B": 14, **{get_column_letter(c): 13 for c in range(3, 14)}})
 
-    def _dcf_block(self, sh: _Sheet, r: int, s: str, tr: dict) -> int:
+    def _dcf_block(self, sh: _Sheet, r: int, s: str, tr: dict, sfx: str = "", leg: str = "DCF") -> int:
+        """One scenario's projection. `sfx` selects a DCF-family leg's own drivers."""
         A = self.A
-        sh.section(r, f"{s.upper()} scenario", 13); r += 1
+        core = not sfx
+        sh.section(r, f"{s.upper()} scenario" + ("" if core else f" — {leg}"), 13); r += 1
         rows = tr.get("projection_rows") or []
         n = len(rows)
         c0 = 3
@@ -786,13 +882,15 @@ class _Book:
         r += 1
         sh.label(r, 1, "Revenue growth"); gr = r
         for t in range(n):
-            sh.put(r, c0 + t, "=" + A[f"g{t + 1}:{s}"], PCT2)
+            sh.put(r, c0 + t, "=" + A[f"g{t + 1}:{s}{sfx}"], PCT2)
         r += 1
         sh.label(r, 1, "Discount rate"); wr = r
         staged = tr.get("wacc_schedule")
         for t in range(n):
             if staged:
-                sh.put(r, c0 + t, "=" + A[f"w{t + 1}:{s}"], PCT2)
+                sh.put(r, c0 + t, "=" + A[f"w{t + 1}:{s}{sfx}"], PCT2)
+            elif not core:
+                sh.put(r, c0 + t, "=" + A[f"wacc:{s}{sfx}"], PCT2)
             elif A.get("wacc"):
                 sh.put(r, c0 + t, "=" + A["wacc"], PCT2)
             else:
@@ -801,7 +899,7 @@ class _Book:
         sh.label(r, 1, "Revenue"); rv = r
         for t in range(n):
             L = get_column_letter(c0 + t)
-            prev = A[f"revenue_base:{s}"] if t == 0 else f"{get_column_letter(c0 + t - 1)}{r}"
+            prev = A[f"revenue_base:{s}{sfx}"] if t == 0 else f"{get_column_letter(c0 + t - 1)}{r}"
             sh.put(r, c0 + t, f"={prev}*(1+{L}{gr})", BIG)
         r += 1
         sh.label(r, 1, "Reinvestment deduction (charge off: 0)"); rd = r
@@ -811,8 +909,8 @@ class _Book:
         sh.label(r, 1, "FCF margin (base + change, within floor and cap)"); mr = r
         for t in range(n):
             L = get_column_letter(c0 + t)
-            sh.put(r, c0 + t, f"=MAX(MIN({A[f'fcf_margin_base:{s}']}+{A[f'margin_delta_absolute:{s}']}"
-                              f"-{L}{rd},{A['margin_cap']}),{A[f'fcf_floor:{s}']})", PCT2)
+            sh.put(r, c0 + t, f"=MAX(MIN({A[f'fcf_margin_base:{s}{sfx}']}+{A[f'margin_delta_absolute:{s}{sfx}']}"
+                              f"-{L}{rd},{A['margin_cap']}),{A[f'fcf_floor:{s}{sfx}']})", PCT2)
         r += 1
         sh.label(r, 1, "Free cash flow"); fr = r
         for t in range(n):
@@ -831,7 +929,7 @@ class _Book:
             sh.put(r, c0 + t, f"={L}{fr}*{L}{dfr}", BIG)
         r += 2
         F, Lc = get_column_letter(c0), get_column_letter(c0 + n - 1)
-        tg, nd, shs = A[f"tgr:{s}"], A[f"net_debt:{s}"], A[f"shares:{s}"]
+        tg, nd, shs = A[f"tgr:{s}{sfx}"], A[f"net_debt:{s}{sfx}"], A[f"shares:{s}{sfx}"]
         out = r
         lines = [
             ("Sum of PV of FCF", f"=SUM({F}{pvr}:{Lc}{pvr})", BIG),
@@ -849,6 +947,9 @@ class _Book:
         for i, (lab, v, fmt) in enumerate(lines):
             sh.label(out + i, 1, lab, bold=lab in ("Intrinsic value per share", "Enterprise value"))
             sh.put(out + i, 2, v, fmt, bold=lab == "Intrinsic value per share")
+        if not core:
+            self.leg_cell[(s, leg)] = _ref("DCF", out + 7, 2)
+            return out + len(lines)
         self.dcf[s] = {"iv": _ref("DCF", out + 7, 2), "pv_fcf": _ref("DCF", out, 2),
                        "pv_tv": _ref("DCF", out + 3, 2), "ev": _ref("DCF", out + 4, 2),
                        "nd": _ref("DCF", out + 5, 2), "eq": _ref("DCF", out + 6, 2),
@@ -979,6 +1080,8 @@ class _Book:
                     self.leg_cell[(s, leg)] = _ref("Multiples", r, 15)
                 else:
                     self.leg_cell.setdefault((s, leg), _ref("Multiples", r, 16))
+                    if tr:
+                        self.engine_only.add(leg)
                 sh.note(r, 18, notes)
                 r += 1
             r += 1
@@ -1035,7 +1138,14 @@ class _Book:
                 eng_row = r
                 r += 1
                 sh.label(r, 5, "Check")
-                sh.put(r, 6, f"=F{r - 2}-F{r - 1}", "0.0000")
+                sh.put(r, 6, f"=ROUND(F{r - 2},{self.A['dp_comps']})-F{r - 1}", "0.0000")
+                # Members come from the latest weekly refresh, not frozen with the
+                # run: a refresh after the valuation date can move the basket.
+                asof = max((str(m.get("computed_at") or "")[:10] for m in members), default="")
+                run_day = str(self.run.get("run_at") or self.data.get("end_date") or "")[:10]
+                sh.note(r, 7, f"members as of refresh {asof or 'unknown'}; run valued {run_day or 'unknown'}"
+                              + ("; basket refreshed after the run, so a non-zero check is basket drift"
+                                 if asof and run_day and asof > run_day else ""))
                 self.comps_summary.append((lab, _ref("Comps", r - 2, 6), f"{len(members)} named peers"))
             else:
                 sh.note(r, 1, "static/dynamic table: no named peer set" if info.get("basis") in
@@ -1163,7 +1273,14 @@ class _Book:
                 sh.put(r, 3, w.get("bucket")).font = Font(color=BLACK)
                 sh.put(r, 4, _num(w.get("weight")), "0.0000")
                 ref = self.leg_cell.get((s, key))
-                sh.put(r, 5, ("=" + ref) if ref else _num((sc.get("method_iv_table") or {}).get(key)), NUM)
+                if ref:
+                    sh.put(r, 5, "=" + ref, NUM)
+                else:
+                    # Not rebuilt anywhere: the engine's unrounded value, flagged on Data Gaps.
+                    tr = (sc.get("leg_inputs") or {}).get(key) or {}
+                    sh.put(r, 5, _num(tr.get("value")) if tr.get("value") is not None
+                           else _num((sc.get("method_iv_table") or {}).get(key)), NUM)
+                    self.blend_unlinked.add(key)
                 sh.put(r, 6, f"=D{r}*E{r}", NUM)
                 self.leg_range.setdefault(key, {})[s] = f"'Blend'!$E${r}"
             last = r
@@ -1298,15 +1415,17 @@ class _Book:
                     gaps.append(("Statements", f"{lab} missing for {', '.join(miss)}",
                                  "Line shows blank; dependent subtotals understate", sev))
         legs_any = any(self.scen(s).get("leg_inputs") for s in SCENARIOS)
-        untraced = sorted({leg for s in SCENARIOS
-                           for leg, tr in (self.scen(s).get("leg_inputs") or {}).items()
-                           if not tr.get("kind") and tr.get("value") is not None})
+        untraced = sorted(self.engine_only)
         if not legs_any:
             gaps.append(("Valuation legs", "Run predates leg-input recording",
                          "All legs show engine values only (no live formula)", "High"))
         elif untraced:
             gaps.append(("Valuation legs", "No metric x multiple form: " + ", ".join(untraced),
                          "These legs show the engine value only", "Low"))
+        unlinked = sorted(self.blend_unlinked - set(untraced))
+        if legs_any and unlinked:
+            gaps.append(("Valuation legs", "Blend legs not rebuilt by any tab: " + ", ".join(unlinked),
+                         "Blend carries the engine's unrounded value as an input", "Medium"))
         if not self.dr.get("wacc_build"):
             gaps.append(("WACC", "Discount-rate build not recorded (run predates it)",
                          "DCF uses the published per-year rates as inputs", "Medium"))

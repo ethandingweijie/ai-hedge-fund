@@ -285,6 +285,9 @@ def fetch_universe(market: str) -> list[dict]:
     return out
 
 
+_RMB_COUNTER = re.compile(r"^8(\d{4})\.HK$")
+
+
 def dedupe_universe(rows: list[dict], exclude_names: Optional[set] = None) -> list[dict]:
     """Drop duplicate securities and known cross-listings.
 
@@ -298,10 +301,20 @@ def dedupe_universe(rows: list[dict], exclude_names: Optional[set] = None) -> li
     """
     seen_names: set[str] = set()
     excluded = exclude_names or set()
+    # HK RMB counters are 8 + the HKD line's four-digit code (82020.HK is
+    # ANTA's 2020.HK). The name match misses them when FMP names the counter
+    # differently -- "ANTA Sports-r", "BYD Company Limited Class H" -- and
+    # both counters then vote in every median (2026-09-19: ANTA twice in its
+    # own HKSE Leisure basket). An RMB-only listing with no HKD line
+    # (87001.HK, Hui Xian REIT) has no base code present and is kept.
+    symbols = {r.get("symbol") for r in rows}
     out: list[dict] = []
     for r in rows:
         key = normalize_name(r["name"])
         if not key:
+            continue
+        m = _RMB_COUNTER.match(str(r.get("symbol") or ""))
+        if m and f"{m.group(1)}.HK" in symbols:
             continue
         if key in seen_names or key in excluded:
             continue
@@ -616,21 +629,38 @@ def _age_days(computed_at: str) -> Optional[float]:
         return None
 
 
+#: A refresh stamps every row it writes with one timestamp; anything older
+#: than the exchange's newest row by more than this was not rewritten by it.
+_SUPERSEDED_SLACK_HOURS = 1.0
+
+
 def load_comps(exchange: str, level: str, key: str, cohort: str = "all",
                max_age_days: float = MAX_AGE_DAYS) -> dict[str, dict]:
     """{field: {value, peer_count, min_market_cap, ...}} for one grouping+cohort.
 
     Empty when nothing is stored or every row is staler than max_age_days.
+
+    Only rows the exchange's LATEST refresh wrote are current. The refresh
+    upserts, so a (grouping, cohort, field) that stops clearing the peer floor
+    keeps its old row; it is superseded, not refreshed. On 2026-09-19 JD
+    (09618.HK) read an HKSE Specialty Retail / large FCF-yield median of
+    0.0017 written on 2026-09-13 under the pre-band rule (negative yields
+    included), while every neighbouring field was hours old -- so the
+    reported comps age said 0.01 days. 412 such rows across all seven
+    markets, mostly FCF yield. A row older than the exchange's newest
+    median row by more than _SUPERSEDED_SLACK_HOURS is skipped.
     """
     if not key:
         return {}
     _ensure_table()
     try:
         rows = _db.query(
-            "SELECT field, value, peer_count, min_market_cap, computed_at "
+            "SELECT field, value, peer_count, min_market_cap, computed_at, "
+            "(SELECT MAX(computed_at) FROM regional_comps n "
+            " WHERE n.exchange = ? AND n.field IN (" + ",".join("?" * len(FIELDS)) + ")) AS newest "
             "FROM regional_comps "
             "WHERE exchange = ? AND level = ? AND key = ? AND cohort = ?",
-            [exchange, level, key, cohort],
+            [exchange, *FIELDS, exchange, level, key, cohort],
         )
     except Exception as exc:
         logger.warning("regional_comps load failed: %s", exc)
@@ -653,6 +683,13 @@ def load_comps(exchange: str, level: str, key: str, cohort: str = "all",
         computed = row["computed_at"]
         age = _age_days(computed)
         if age is not None and age > max_age_days:
+            continue
+        try:
+            newest_age = _age_days(row["newest"])
+        except (KeyError, IndexError):
+            newest_age = None
+        if (age is not None and newest_age is not None
+                and age - newest_age > _SUPERSEDED_SLACK_HOURS / 24.0):
             continue
         out[field] = {
             "value": float(value),

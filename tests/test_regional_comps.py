@@ -536,3 +536,60 @@ class TestDepositaryReceipts:
 
     def test_none_is_safe(self):
         assert not rc.is_depositary_receipt(None)
+
+
+class TestSupersededRows:
+    """The refresh upserts, so a basket that stops clearing the peer floor keeps
+    its old median. JD (09618.HK) read a 6-day-old FCF-yield median of 0.0017
+    (pre-band rule) beside medians written that morning."""
+
+    def _save(self, exchange, key, field, value, peers, when, cohort="all"):
+        rc.save_comps(exchange, [{"level": "industry", "key": key, "cohort": cohort,
+                                  "field": field, "value": value, "peer_count": peers,
+                                  "min_market_cap": 0.0}], when)
+
+    def test_row_the_latest_refresh_did_not_write_is_ignored(self, store):
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        self._save("HKSE", "Specialty Retail", "fcf_yield", 0.0017, 9, (now - timedelta(days=6)).isoformat())
+        self._save("HKSE", "Specialty Retail", "pe", 17.2, 6, now.isoformat())
+        got = rc.load_comps("HKSE", "industry", "Specialty Retail")
+        assert "pe" in got and "fcf_yield" not in got
+
+    def test_rows_of_one_refresh_are_all_current(self, store):
+        from datetime import datetime, timezone
+        when = datetime.now(timezone.utc).isoformat()
+        self._save("HKSE", "Banks", "fcf_yield", 0.08, 9, when)
+        self._save("HKSE", "Banks", "pe", 7.5, 9, when)
+        assert set(rc.load_comps("HKSE", "industry", "Banks")) == {"fcf_yield", "pe"}
+
+    def test_other_exchanges_do_not_supersede(self, store):
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        self._save("SES", "Banks", "pe", 9.0, 9, (now - timedelta(days=3)).isoformat())
+        self._save("HKSE", "Banks", "pe", 7.5, 9, now.isoformat())
+        assert rc.load_comps("SES", "industry", "Banks")["pe"]["value"] == 9.0
+
+    def test_quartile_rows_do_not_count_as_a_refresh(self, store):
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        self._save("HKSE", "Banks", "pe", 7.5, 9, (now - timedelta(days=2)).isoformat())
+        self._save("HKSE", "Banks", "pe__p25", 6.0, 9, now.isoformat())
+        assert rc.load_comps("HKSE", "industry", "Banks")["pe"]["value"] == 7.5
+
+
+class TestRmbCounterBySymbol:
+    def _row(self, sym, name, mcap):
+        return {"symbol": sym, "name": name, "sector": "Consumer Cyclical",
+                "industry": "Leisure", "market_cap": mcap}
+
+    def test_differently_named_rmb_counter_is_dropped(self):
+        rows = [self._row("2020.HK", "ANTA Sports Products Limited", 2.0e11),
+                self._row("82020.HK", "ANTA Sports-r", 1.7e11),
+                self._row("1211.HK", "BYD Company Limited", 9e11),
+                self._row("81211.HK", "BYD Company Limited Class H", 8e11)]
+        assert [r["symbol"] for r in rc.dedupe_universe(rows)] == ["2020.HK", "1211.HK"]
+
+    def test_rmb_only_listing_is_kept(self):
+        rows = [self._row("87001.HK", "Hui Xian Real Estate Investment Trust", 1e10)]
+        assert [r["symbol"] for r in rc.dedupe_universe(rows)] == ["87001.HK"]
