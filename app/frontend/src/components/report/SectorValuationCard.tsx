@@ -299,8 +299,11 @@ function AuditBridgeBar({ bridge }: { bridge: AuditBridge }) {
   return (
     <div className="px-5 py-3">
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          Composite Adjustment Bridge
+        <div
+          className="text-[10px] uppercase tracking-widest text-muted-foreground"
+          title="Quality × risk × commodity signal. It no longer adjusts intrinsic value: the 12-month target applies it as a premium/discount to the peer median multiple, bounded by where the middle half of the peers trade."
+        >
+          Composite Signal · 12m target only
           {hasAnyZ && (
             <span className="ml-2 inline-flex items-center rounded border border-[var(--hairline)] bg-surface-2 px-1 py-px text-[8px] font-semibold text-content-high dark:text-brand">
               V4-β · Z-DRIVEN

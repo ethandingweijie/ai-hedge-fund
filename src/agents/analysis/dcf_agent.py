@@ -7902,6 +7902,91 @@ def _blend_methods(
 
 # ── Backward Logic Gate ───────────────────────────────────────────────────────
 
+# ── Two-tier valuation (owner decision, 2026-09-19) ─────────────────────────
+#
+# Tier 1, the FUNDAMENTAL IV, is DCF plus peer-median multiples and nothing
+# else: no sentiment or quality overlay, so every number in it can be rebuilt
+# from a financial input and a peer multiple. Tier 2, the 12-MONTH TARGET, is
+# derived from that IV by one rule for every name: it converges a stated share
+# of the way from spot toward the IV, after applying a premium or discount to
+# the multiples leg only -- and that premium is bounded by where the actual
+# peers trade (the cohort's interquartile range around the median multiple).
+#
+# Before this, the quality x risk x commodity composite (0.50-1.85) multiplied
+# the IV's multiples leg directly (MELI 1.85, COST 1.78, MSTR 1.75), and the
+# target came from five different recipes, two of which (the bank P/B path)
+# could land on the far side of the IV from spot (SCHW $32.88 against IV
+# $86.42 and price $104.85). Those recipes are still computed, and published
+# as cross-checks in `pt_bridge.cross_checks`.
+
+#: Peer-multiple field that bounds the premium, by the method it re-prices.
+_PEER_FIELD_FOR_METHOD = {
+    "EV/EBITDA": "ev_ebitda", "EV/EBIT": "ev_ebitda", "EV/EBITDAR": "ev_ebitda",
+    "P/E": "pe", "P/E (norm)": "pe", "P/E (Premium)": "pe",
+    "EV/Revenue": "ev_revenue", "EV/Sales": "ev_revenue",
+    "P/B": "pb", "P/BV": "pb", "P/TBV": "pb",
+}
+_PEER_FIELD_ORDER = ("ev_ebitda", "pe", "ev_revenue", "pb")
+
+
+def _peer_bounded_premium(signal: Optional[float], peer: Optional[dict],
+                          anchor_method: str = "") -> dict:
+    """Premium/discount to the peer median, limited to the peers' own range.
+
+    `signal` is the quality x risk x commodity composite: the direction and
+    strength of the case for trading above or below peers. The bound is the
+    cohort's P25/median .. P75/median for the multiple the anchor uses (falling
+    back to the first field that carries quartiles). With no quartiles there is
+    no evidence of dispersion, so no premium is applied -- 1.0x, not a guess.
+    """
+    out: dict = {"signal": None if signal is None else round(float(signal), 6),
+                 "applied": 1.0, "field": None, "bound": None}
+    basis = (peer or {}).get("_comp_basis") or {}
+    field = _PEER_FIELD_FOR_METHOD.get(anchor_method or "")
+    cands = ([field] if field else []) + [f for f in _PEER_FIELD_ORDER if f != field]
+    for f in cands:
+        row = basis.get(f) or {}
+        med, q1, q3 = (peer or {}).get(f), row.get("p25"), row.get("p75")
+        if all(isinstance(v, (int, float)) and v > 0 for v in (med, q1, q3)) and q1 <= med <= q3:
+            lo, hi = q1 / med, q3 / med
+            sig = float(signal) if isinstance(signal, (int, float)) and signal > 0 else 1.0
+            applied = min(hi, max(lo, sig))
+            out.update(field=f, peer_median=med, p25=q1, p75=q3, peer_count=row.get("peer_count"),
+                       lo=round(lo, 6), hi=round(hi, 6), applied=round(applied, 6),
+                       bound=("p75" if sig > hi else "p25" if sig < lo else None),
+                       basis=(f"peer {f} median {med:.4g}x, interquartile {q1:.4g}-{q3:.4g}x "
+                              f"({row.get('peer_count')} peers): premium bounded to "
+                              f"{lo:.3f}-{hi:.3f}x"))
+            return out
+    out["basis"] = "no peer quartiles available: no premium applied (1.0x)"
+    return out
+
+
+def _premium_adjusted_iv(scenario: dict, premium: float) -> float:
+    """Scenario IV with `premium` applied to its multiples bucket only.
+
+    Ratio form, so any scaling applied to the blended IV after the blend
+    (calibration) carries through unchanged."""
+    iv = scenario.get("intrinsic_value")
+    wd, wm = scenario.get("weight_dcf") or 0.0, scenario.get("weight_multi") or 0.0
+    idc, im = scenario.get("iv_dcf") or 0.0, scenario.get("iv_multi")
+    if not isinstance(iv, (int, float)) or not isinstance(im, (int, float)) or im <= 0 or wm <= 0:
+        return iv
+    base = wd * idc + wm * im
+    if base <= 0:
+        return iv
+    return iv * (wd * idc + wm * im * premium) / base
+
+
+def _cross_check_methods(method_iv_table: Optional[dict],
+                         effective_weights: Optional[list]) -> list[str]:
+    """Legs computed and published but carrying no weight in the blend."""
+    used: set = set()
+    for w in effective_weights or []:
+        used.add(w.get("method")); used.add(w.get("value_key"))
+    return sorted(k for k in (method_iv_table or {}) if k not in used)
+
+
 #: Horizon of the gate's forward score: the T-1 model and the T-1 market price
 #: are both scored against the close this many days after the T-1 fiscal
 #: period end.
@@ -11984,7 +12069,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     c_macro=c_macro,
                     forward_flags=forward_flags,
                     dcf_tv_fraction=tv_fraction,
-                    composite_mult=_composite_mult,  # v3.19: biases multi only
+                    # Two-tier valuation: the fundamental IV carries no
+                    # composite. The composite is a SIGNAL for the 12m
+                    # target's peer-bounded premium (see _peer_bounded_premium).
+                    composite_mult=1.0,
                 )
                 # ── Phase 1.2B path-B blend (observation-only) ────────────
                 # The plan asks that an item changing a method or target carry
@@ -12012,7 +12100,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         c_macro=c_macro,
                         forward_flags=_scratch_flags,
                         dcf_tv_fraction=tv_fraction,
-                        composite_mult=_composite_mult,
+                        composite_mult=1.0,
                     )
                     _cyc_rec["base_iv_path_a"] = blended_iv
                     _cyc_rec["base_iv_path_b"] = _iv_b
@@ -12194,6 +12282,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 "weight_dcf":        blend_breakdown.get("weight_dcf"),
                 "weight_multi":      blend_breakdown.get("weight_multi"),
                 "effective_weights": blend_breakdown.get("effective_weights"),
+                # Legs in `method_iv_table` that carry no weight: published as
+                # cross-checks, never as part of the blend.
+                "cross_check_methods": _cross_check_methods(
+                    method_iv_table, blend_breakdown.get("effective_weights")),
                 "composite_applied": blend_breakdown.get("composite", _composite_mult),
                 # NEW: what the blend dropped, and how much of the profile's
                 # intended weight actually voted. `effective_weights` lists
@@ -12736,13 +12828,60 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     + (" + bear floor" if _high_sbc else "")
                 )
 
+        # ── 12m target: one rule for every name (two-tier valuation) ─────────
+        # Converge from spot toward each scenario's IV, with the peer-bounded
+        # premium on the multiples leg. Everything computed above -- forward
+        # multiple, SOTP/normalised convergence, bank P/B, REIT P/FFO -- is kept
+        # as a cross-check. The capture fraction is the existing one (20-35%,
+        # +15pp when all three scenarios sit on the same side of spot).
+        _pt_unified = False
+        _pt_bridge: Optional[dict] = None
+        if _spot_for_cap and float(_spot_for_cap) > 0:
+            _pt_cross = {"method": _12m_pt_method_label, "targets": dict(_12m_targets)}
+            _prem = _peer_bounded_premium(_composite_mult, peer, _anchor_method)
+            _pt_rows: dict = {}
+            for _sn in ("bear", "base", "bull"):
+                _sr = scenario_results.get(_sn) or {}
+                _siv = _sr.get("intrinsic_value")
+                if not isinstance(_siv, (int, float)) or _siv <= 0:
+                    continue
+                _ivp = _premium_adjusted_iv(_sr, _prem["applied"])
+                _tgt = round(_convergence_bound(_ivp, float(_spot_for_cap), _max_capture), 2)
+                _12m_targets[_sn] = _tgt
+                _pt_rows[_sn] = {"intrinsic_value": _siv,
+                                 "iv_with_premium": round(float(_ivp), 4),
+                                 "target": _tgt}
+            if _pt_rows:
+                _pt_unified = True
+                _12m_pt_method_label = (
+                    f"convergence toward intrinsic value: {_max_capture:.0%} of "
+                    f"the spot-to-IV gap, multiples leg at a "
+                    f"{_prem['applied']:.3f}x peer-bounded premium")
+                _pt_bridge = {
+                    "rule": ("target = spot + capture x (IV_premium - spot); "
+                             "IV_premium = IV with the peer-bounded premium on "
+                             "the multiples leg only"),
+                    "spot": float(_spot_for_cap),
+                    "capture": _max_capture,
+                    "premium": _prem,
+                    "scenarios": _pt_rows,
+                    "cross_checks": _pt_cross,
+                }
+                if _composite_bridge is not None:
+                    _composite_bridge["applied_to"] = (
+                        "12m target only, as a peer-bounded premium; the "
+                        "fundamental IV carries no composite")
+
         # ── 12m PT vs DCF IV divergence guard ────────────────────────────────
+        # Skipped when the unified rule set the target: it guarded a target
+        # computed independently of the IV, and the unified target is derived
+        # from the IV and lies between spot and it by construction.
         # If the base 12m PT diverges > 100% from the base DCF IV, the forward-
         # multiple inputs are likely corrupted (e.g. EBITDA mis-parse).  Cap all
         # scenario PTs to 1.5× their corresponding DCF IVs as a safety net.
         _base_iv = scenario_results.get("base", {}).get("intrinsic_value")
         _base_pt = _12m_targets.get("base")
-        if _base_iv and _base_iv > 0 and _base_pt and _base_pt > 0:
+        if not _pt_unified and _base_iv and _base_iv > 0 and _base_pt and _base_pt > 0:
             _pt_iv_ratio = _base_pt / _base_iv
             if _pt_iv_ratio > 2.0:  # 12m PT more than 2× DCF IV
                 progress.update_status(
@@ -12790,7 +12929,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             spot=_spot_for_band, max_capture=_capture_for_band,
             high_sbc=_high_sbc_for_band,
         )
-        if _band_breaches:
+        # The band polices a target computed independently of the IV; skipped
+        # under the unified rule for the same reason as the guard above.
+        if _band_breaches and not _pt_unified:
             _bmsg = "; ".join(
                 f"{_s} ${_p:,.2f} = {_r:.3f}x its own IV ${_iv:,.2f}"
                 for _s, _p, _iv, _r in _band_breaches
@@ -13420,6 +13561,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # §7 of valuation framework: 12m forward-multiple price targets
             "12m_targets":        _12m_targets,
             "12m_pt_method":      _12m_pt_method_label,
+            "pt_bridge":          _pt_bridge,
             # Wall Street consensus 12m PT — for "model vs consensus" sanity
             # display on the frontend. None for HK/SG or when FMP returns no
             # data. Shape: {high, low, consensus, median} or None.

@@ -193,6 +193,8 @@ _BANDS: dict[str, tuple[float, float]] = {
 }
 
 FIELDS = tuple(_BANDS.keys())
+#: Separator for the quartile sibling rows of a field (`ev_ebitda__p25`).
+QUARTILE_SEP = "__"
 
 
 # ── Universe ────────────────────────────────────────────────────────────────
@@ -441,6 +443,22 @@ def compute_medians(baskets: dict[str, list[dict]], metrics: dict[str, dict],
                     "peer_count": len(vals),
                     "min_market_cap": float(floor_mcap),
                 })
+                # Interquartile range of the SAME peer set, stored as sibling
+                # rows (`<field>__p25` / `<field>__p75`) so the table needs no
+                # new column. It is the evidence that bounds the premium or
+                # discount the 12m target may apply to the peer median: a
+                # target multiple outside where the middle half of the actual
+                # peers trade is a policy number, not an observation.
+                if len(vals) >= 4:
+                    q1, _q2, q3 = statistics.quantiles(vals, n=4, method="inclusive")
+                    for suffix, qv in (("p25", q1), ("p75", q3)):
+                        rows.append({
+                            "level": level, "key": key, "cohort": cohort,
+                            "field": f"{field}{QUARTILE_SEP}{suffix}",
+                            "value": round(qv, 6),
+                            "peer_count": len(vals),
+                            "min_market_cap": float(floor_mcap),
+                        })
     return rows
 
 
@@ -607,8 +625,10 @@ def get_regional_multiples(
     for level, key, cohort, floor in rungs:
         if not key:
             continue
-        for field, row in load_comps(exchange, level, key, cohort,
-                                     max_age_days).items():
+        _rung = load_comps(exchange, level, key, cohort, max_age_days)
+        for field, row in _rung.items():
+            if QUARTILE_SEP in field:
+                continue                    # attached to its median below
             if field in resolved or row["peer_count"] < floor:
                 continue
             # A "large" cohort only applies to a target that belongs in it.
@@ -621,6 +641,13 @@ def get_regional_multiples(
                 "cohort": cohort,
                 "peer_count": row["peer_count"],
             }
+            # Quartiles come from the same rung as the median, never another:
+            # a median from the size-matched cohort with a range from the
+            # whole industry would describe two different peer sets.
+            for _q in ("p25", "p75"):
+                _qrow = _rung.get(f"{field}{QUARTILE_SEP}{_q}")
+                if _qrow is not None:
+                    resolved[field][_q] = _qrow["value"]
     # Aging out is the failure mode this module exists to prevent, and it is
     # the one that hides best: every field simply goes missing, the caller
     # keeps its static table, and an HK stock is quietly valued on US

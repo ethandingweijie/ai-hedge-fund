@@ -3329,6 +3329,11 @@ def get_sector_peer_multiples(
             basis[field] = {"basis": row["basis"],
                             "cohort": row.get("cohort", "all"),
                             "peer_count": row["peer_count"]}
+            # Interquartile range of the same peer set, when stored: the
+            # evidence bound on any premium/discount to this median.
+            for _q in ("p25", "p75"):
+                if row.get(_q) is not None:
+                    basis[field][_q] = row[_q]
         # Non-numeric, underscore-prefixed so the numeric consumers that read
         # peer["pe"] / peer.get("ev_ebitda") are unaffected. Lets the report
         # and the LLM write-up state what a multiple was actually derived

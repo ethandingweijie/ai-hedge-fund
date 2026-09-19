@@ -2454,9 +2454,20 @@ def _section_2f(
     aw6 = [page_w * 0.25, page_w * 0.08, page_w * 0.17, page_w * 0.17, page_w * 0.17, page_w * 0.16]
     method_rows = [method_header]
 
-    for mn in all_method_names:
-        w = _pw_map.get(mn)
-        wt_str = f"{w/total_weight:.0%}" if w else "—"
+    # Legs computed but carrying no weight are cross-checks: listed after the
+    # blend under their own heading, never interleaved with the legs that vote.
+    _xchk = set(base.get("cross_check_methods") or [])
+    _in_blend = [mn for mn in all_method_names if mn not in _xchk]
+    _xchk_names = [mn for mn in all_method_names if mn in _xchk]
+    _ordered_names = _in_blend + ([None] if _xchk_names else []) + _xchk_names
+    for mn in _ordered_names:
+        if mn is None:
+            method_rows.append([
+                Paragraph("<i>Cross-checks (computed, not in the blend)</i>", styles["RptBody"]),
+                "", "", "", "", ""])
+            continue
+        w = _pw_map.get(mn) if mn not in _xchk else None
+        wt_str = (f"{w/total_weight:.0%}" if w else "—") if mn not in _xchk else "x-check"
         b_iv  = bear_method_ivs.get(mn)
         ba_iv = base_method_ivs.get(mn)
         bu_iv = bull_method_ivs.get(mn)
