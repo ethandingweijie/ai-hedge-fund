@@ -12,7 +12,9 @@ RUN pip install poetry==1.7.1
 COPY pyproject.toml poetry.lock* /app/
 
 # Configure Poetry to not use a virtual environment
+# Serial install: see docker/Dockerfile.web for the attrs/cffi race.
 RUN poetry config virtualenvs.create false \
+    && poetry config installer.parallel false \
     && poetry install --no-interaction --no-ansi
 
 # Copy rest of the source code

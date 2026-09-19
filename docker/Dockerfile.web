@@ -10,8 +10,24 @@ RUN pip install poetry==1.7.1
 # Copy only dependency files first for better caching
 COPY pyproject.toml poetry.lock* /app/
 
-# Configure Poetry to not use a virtual environment
+# Configure Poetry to not use a virtual environment, and install SERIALLY.
+#
+# With virtualenvs.create false, Poetry installs every package into the same
+# site-packages that each of its `pip` subprocesses imports from, and by default
+# it runs those subprocesses in parallel. attrs and cffi are both dependency
+# leaves, so they land in the same batch: while one worker is still extracting
+# attrs 25.4.0, another starts `pip install cffi`, pip's vendored rich runs
+# `import attr`, gets a half-written package (_make.py present, setters.py not
+# yet complete) and dies with
+#   AttributeError: module 'attr.setters' has no attribute 'pipe'
+#   -> Cannot install cffi
+# rich guards that import with `except ImportError` only, so a partial package
+# is fatal rather than skipped. It is a race, which is why worker and gleaming
+# passed on the same commit while web failed -- twice (15d4e08, 9bff72c), each
+# time on a build with no cached install layer. Serial install removes the race;
+# it costs time only when this layer is rebuilt.
 RUN poetry config virtualenvs.create false \
+    && poetry config installer.parallel false \
     && poetry install --no-interaction --no-ansi
 
 # Copy rest of the source code (bust cache v2)
@@ -36,9 +52,9 @@ COPY . /app/
 # at this one file, all three reinstalled from scratch at the same moment. The web
 # build died inside pip with
 # `AttributeError: module 'attr.setters' has no attribute 'pipe'` -> `Cannot install
-# cffi`, i.e. an attrs older than 20.1, where setters.pipe does not exist. Worker and
-# gleaming ran the identical reinstall and passed, so the breakage is a flake in the
-# package environment -- but the EXPOSURE came from the layer position, not from any
+# cffi` -- the parallel-install race explained at the `poetry install` layer above
+# (not an old attrs: the lock pins 25.4.0). Worker and gleaming ran the identical
+# reinstall and passed because a race does not fire every time -- but the EXPOSURE came from the layer position, not from any
 # dependency change, and web was left serving the previous build. Below `COPY . /app/`
 # it invalidates only layers that every commit invalidates anyway, and it is still in
 # the final image's environment, which is all the runtime needs.
