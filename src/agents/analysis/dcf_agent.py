@@ -4979,6 +4979,51 @@ def _minority_interest(most_recent: dict) -> float:
     return max(mi, 0.0) if mi is not None else 0.0
 
 
+#: Annual line items published in `financials_used` for the Excel export.
+_FINANCIALS_USED_FIELDS: tuple[str, ...] = (
+    "period", "revenue", "gross_profit", "operating_income", "ebit", "ebitda",
+    "net_income", "operating_cash_flow", "capital_expenditure", "free_cash_flow",
+    "stock_based_compensation", "fcf_owner_earnings", "depreciation_and_amortization",
+    "cash_and_equivalents", "short_term_investments", "total_debt", "net_debt",
+    "minority_interest", "total_equity", "total_assets", "shares_outstanding",
+    "book_value_per_share", "dividends_per_share",
+)
+
+
+# ── Leg-input trace (feeds the Excel export) ────────────────────────────────
+#
+# Every valuation leg records the inputs it was computed from, so an analyst
+# can rebuild the number: metric x multiple = EV, less net debt and minority
+# interest = equity, / shares = per share. Context-scoped rather than threaded
+# through `_compute_method_value`'s signature, so the ~40 branches record what
+# they have without changing how they are called. `_traced_method_value` opens
+# a trace; `_leg_trace` writes into whichever trace is open (none: no-op).
+import contextvars as _contextvars
+
+_LEG_TRACE: "_contextvars.ContextVar[Optional[dict]]" = _contextvars.ContextVar(
+    "_LEG_TRACE", default=None)
+
+
+def _leg_trace(**fields) -> None:
+    t = _LEG_TRACE.get()
+    if t is None:
+        return
+    for k, v in fields.items():
+        t[k] = round(v, 8) if isinstance(v, float) else v
+
+
+def _traced_method_value(**kwargs) -> tuple[Optional[float], dict]:
+    """`_compute_method_value` plus the inputs the leg recorded."""
+    trace: dict = {}
+    token = _LEG_TRACE.set(trace)
+    try:
+        value = _compute_method_value(**kwargs)
+    finally:
+        _LEG_TRACE.reset(token)
+    trace["value"] = value
+    return value, trace
+
+
 def _ev_to_equity_ps(
     ev: float,
     net_debt: Optional[float],
@@ -5005,7 +5050,11 @@ def _ev_to_equity_ps(
     """
     if not shares or shares <= 0:
         return None
-    equity = ev - (net_debt or 0.0) - _minority_interest(most_recent)
+    _mi = _minority_interest(most_recent)
+    equity = ev - (net_debt or 0.0) - _mi
+    _leg_trace(ev=float(ev), net_debt=float(net_debt or 0.0),
+               minority_interest=float(_mi), equity=float(equity),
+               shares=float(shares), floored_at_zero=equity < 0)
     return max(equity / shares, 0.0)
 
 
@@ -5031,6 +5080,11 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
             "cohort": b.get("cohort"),
             "peer_count": b.get("peer_count"),
         }
+        # The basket's identity when it came from live comps (absent for
+        # static/dynamic tables), so the export can list the named members.
+        if b.get("key"):
+            fields[name]["key"] = b.get("key")
+            fields[name]["exchange"] = b.get("exchange")
     age = peer.get("_comp_age_days")
     return {
         "fields": fields,
@@ -5169,13 +5223,22 @@ def _compute_method_value(
         # (Hyper-Growth Platform, 15%/yr decay): DCF (FCF+) $6,672 at 45%
         # weight against its own core DCF of $3,807.
         _pj = projection or {}
-        iv, _, _, _ = _project_dcf(
+        iv, _pv_fcf, _pv_tv, _rows = _project_dcf(
             revenue_base, fcf_margin_base, growth_base, 0.0,
             wacc, tgr, fcf_floor, net_debt, shares,
             growth_schedule=_pj.get("growth_schedule"),
             wacc_schedule=_pj.get("wacc_schedule"),
             margin_delta_absolute=_pj.get("margin_delta_absolute"),
         )
+        _leg_trace(kind="dcf", revenue_base=float(revenue_base),
+                   fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
+                   growth_schedule=_pj.get("growth_schedule"),
+                   margin_delta_absolute=_pj.get("margin_delta_absolute"),
+                   wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
+                   tgr=float(tgr), fcf_floor=float(fcf_floor),
+                   net_debt=float(net_debt or 0.0), shares=float(shares),
+                   pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
+                   projection_rows=_rows)
         return iv
 
     # ── Depleting Asset DCF (finite life, no terminal value) ───────────────
@@ -5232,6 +5295,9 @@ def _compute_method_value(
         if ebit is not None and ebit > 0 and wacc > 0:
             nopat = ebit * sm * (1 - _EFFECTIVE_TAX_RATE)   # sm ∈ {0.75, 1.00, 1.25}
             ev = nopat / wacc
+            _leg_trace(kind="capitalised_earnings", metric="EBIT (TTM)", metric_value=float(ebit),
+                       scenario_band=sm, tax_rate=_EFFECTIVE_TAX_RATE, nopat=float(nopat),
+                       capitalisation_rate=float(wacc))
             return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
@@ -5261,6 +5327,19 @@ def _compute_method_value(
         metric = ebit if method_name in _EV_EBIT_METHODS else ebitda
         if metric and metric > 0 and shares > 0:
             ev = metric * mult
+            _leg_trace(kind="ev_multiple",
+                       metric="EBIT (TTM)" if method_name in _EV_EBIT_METHODS else "EBITDA (TTM)",
+                       metric_value=float(metric), multiple=float(mult),
+                       multiple_parts={
+                           "peer_multiple": float(base_mult),
+                           "peer_source": ("tech sub-type table" if _is_tech_subtype(sector, profile_name)
+                                           else "peer median ev_ebitda"),
+                           "scenario_band": sm, "growth_premium": growth_premium,
+                           "sbc_haircut": (0.90 if (_sbc_v and revenue_base and revenue_base > 0
+                                                    and is_tech_sector(sector)
+                                                    and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
+                           "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                              if reported_currency == "CNY" else 1.0)})
             return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
@@ -5286,6 +5365,13 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = norm_ebitda * mult
+        _leg_trace(kind="ev_multiple", metric="EBITDA (5y normalised)",
+                   metric_value=float(norm_ebitda), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(peer.get("ev_ebitda", 12.0)),
+                                   "peer_source": "peer median ev_ebitda",
+                                   "scenario_band": sm, "growth_premium": growth_premium,
+                                   "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                      if reported_currency == "CNY" else 1.0)})
         return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── SOTP (Sum of Parts) — per-segment EV/Revenue multiples ────────────
@@ -5499,6 +5585,8 @@ def _compute_method_value(
                      .get(scenario) or {})
             _scen_ps = _scen.get("per_share_reporting")
             if _scen_ps and _scen_ps > 0:
+                _leg_trace(kind="sotp", source="analyst scenario TP",
+                           table=_sotp_trace_table(table), per_share=float(_scen_ps))
                 return float(_scen_ps)
         # No analyst scenario TP: flex each segment by its revenue tree and
         # the standard multiple band (see _sotp_scenario_from_trees).
@@ -5507,7 +5595,10 @@ def _compute_method_value(
                 table, most_recent.get("segment_scenarios"), scenario, sm)
             if _flex is not None:
                 most_recent.setdefault("_sotp_analyst_flex", {})[scenario] = _flex
+                _leg_trace(kind="sotp", source="segment revenue trees x multiple band",
+                           table=_sotp_trace_table(table), flex=_flex["segments"])
                 return float(_flex["per_share_reporting"])
+        _leg_trace(kind="sotp", source="analyst SOTP (base)", table=_sotp_trace_table(table))
         return table["per_share_reporting"]
 
     # ── EV/Revenue and variants ────────────────────────────────────────────
@@ -5556,6 +5647,16 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = fwd_rev * mult
+        _leg_trace(kind="ev_multiple", metric=f"Revenue (NTM, {scenario})",
+                   metric_value=float(fwd_rev), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(base_mult),
+                                   "peer_source": str(_ev_rev_basis),
+                                   "growth_premium": growth_premium,
+                                   "sbc_haircut": (0.93 if (_sbc_v and revenue_base and revenue_base > 0
+                                                            and is_tech_sector(sector)
+                                                            and abs(_sbc_v) / revenue_base > 0.10) else 1.0),
+                                   "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                      if reported_currency == "CNY" else 1.0)})
         return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # EV/Revenue (trailing TTM) — legacy path for non-growth sectors
@@ -5565,6 +5666,13 @@ def _compute_method_value(
             mult *= peer.get("cn_adr_haircut", 1.0)
         if revenue_base > 0 and shares > 0:
             ev = revenue_base * mult
+            _leg_trace(kind="ev_multiple", metric="Revenue (TTM)",
+                       metric_value=float(revenue_base), multiple=float(mult),
+                       multiple_parts={"peer_multiple": float(peer.get("ev_revenue", 4.0)),
+                                       "peer_source": "peer median ev_revenue",
+                                       "scenario_band": sm, "growth_premium": growth_premium,
+                                       "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                          if reported_currency == "CNY" else 1.0)})
             return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
         return None
 
@@ -5609,6 +5717,12 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebit_fwd * mult
+        _leg_trace(kind="ev_multiple", metric="EBIT (NTM consensus)",
+                   metric_value=float(ebit_fwd), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(base_mult),
+                                   "growth_premium": growth_premium,
+                                   "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                      if reported_currency == "CNY" else 1.0)})
         return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── P/E (TTM / operating) ─────────────────────────────────────────────
@@ -5619,6 +5733,13 @@ def _compute_method_value(
         mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
         eps = (net_income / shares) if (net_income is not None and shares > 0) else None
         if eps and eps > 0:
+            _leg_trace(kind="equity_multiple", metric="Net income (TTM)",
+                       metric_value=float(net_income), shares=float(shares),
+                       per_share_metric=float(eps), multiple=float(mult),
+                       multiple_parts={"peer_multiple": float(peer.get("pe", 18.0)),
+                                       "peer_source": "peer median pe", "scenario_band": sm,
+                                       "growth_premium": growth_premium,
+                                       "sbc_pe_discount": sbc_pe_discount})
             return eps * mult
         return None
 
@@ -5654,6 +5775,17 @@ def _compute_method_value(
         else:
             mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
         eps_norm = norm_ni / shares
+        _leg_trace(kind="equity_multiple",
+                   metric=("Net income (equity x target ROE, bank)"
+                           if (_is_bank and most_recent.get("normalized_net_income") in (None, 0))
+                           else "Net income (5y normalised)"),
+                   metric_value=float(norm_ni), shares=float(shares),
+                   per_share_metric=float(eps_norm), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(_bank_profile_calibration(profile_name)["pe"]
+                                                          if _is_bank else peer.get("pe", 18.0)),
+                                   "peer_source": "bank calibration P/E" if _is_bank else "peer median pe",
+                                   "scenario_band": sm, "growth_premium": growth_premium,
+                                   "sbc_pe_discount": sbc_pe_discount})
         return eps_norm * mult
 
     # ── Forward P/E (consensus EPS × peer P/E) ─────────────────────────────
@@ -5671,6 +5803,15 @@ def _compute_method_value(
         mult = peer.get("pe", 18.0) * growth_premium * sbc_pe_discount
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
+        _leg_trace(kind="equity_multiple", metric=f"EPS (NTM consensus, {scenario})",
+                   metric_value=float(eps_fwd), per_share_metric=float(eps_fwd),
+                   multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(peer.get("pe", 18.0)),
+                                   "peer_source": "peer median pe",
+                                   "growth_premium": growth_premium,
+                                   "sbc_pe_discount": sbc_pe_discount,
+                                   "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                      if reported_currency == "CNY" else 1.0)})
         return eps_fwd * mult
 
     # ── Forward EV/EBITDA (consensus EBITDA × peer EV/EBITDA) ──────────────
@@ -5686,6 +5827,13 @@ def _compute_method_value(
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = ebitda_fwd * mult
+        _leg_trace(kind="ev_multiple", metric=f"EBITDA (NTM consensus, {scenario})",
+                   metric_value=float(ebitda_fwd), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(peer.get("ev_ebitda", 12.0)),
+                                   "peer_source": "peer median ev_ebitda",
+                                   "growth_premium": growth_premium,
+                                   "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
+                                                      if reported_currency == "CNY" else 1.0)})
         return _ev_to_equity_ps(ev, net_debt, most_recent, shares)
 
     # ── P/BV ──────────────────────────────────────────────────────────────
@@ -5781,10 +5929,19 @@ def _compute_method_value(
     if method_name in {"P/BV", "P/Rate Base", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
         mult = peer.get("pb", 2.0) * sm * growth_premium
+        _pb_parts = {"peer_multiple": float(peer.get("pb", 2.0)), "peer_source": "peer median pb",
+                     "scenario_band": sm, "growth_premium": growth_premium}
         if bvps and bvps > 0:
+            _leg_trace(kind="equity_multiple", metric="Book value per share",
+                       per_share_metric=float(bvps), multiple=float(mult),
+                       multiple_parts=_pb_parts)
             return bvps * mult
         # fallback: total_equity / shares
         if total_equity and total_equity > 0 and shares > 0:
+            _leg_trace(kind="equity_multiple", metric="Book value (total equity)",
+                       metric_value=float(total_equity), shares=float(shares),
+                       per_share_metric=float(total_equity / shares), multiple=float(mult),
+                       multiple_parts=_pb_parts)
             return (total_equity / shares) * mult
         return None
 
@@ -5842,6 +5999,13 @@ def _compute_method_value(
         # FCF in _extract_annual_series when SBC is missing).
         fcf = most_recent.get("fcf_owner_earnings") or most_recent.get("free_cash_flow")
         if fcf and fcf > 0 and shares > 0:
+            _leg_trace(kind="yield", metric=("FCF, owner earnings (TTM)"
+                                             if most_recent.get("fcf_owner_earnings") else "FCF (TTM)"),
+                       metric_value=float(fcf), shares=float(shares),
+                       per_share_metric=float(fcf / shares), target_yield=float(target_yield),
+                       multiple=float(1.0 / target_yield),
+                       multiple_parts={"peer_fcf_yield": float(peer.get("fcf_yield", 0.05)),
+                                       "scenario_band": sm, "growth_premium": growth_premium})
             return (fcf / shares) / target_yield
         return None
 
@@ -6036,6 +6200,10 @@ def _compute_method_value(
         # book, i.e. S$18.53 against a S$22.06 TBV/share, valuing DBS below
         # liquidation. Scenario dispersion still flows through `sm`.
         mult = cfg["p_tbv"] * sm
+        _leg_trace(kind="equity_multiple", metric="Tangible book value per share",
+                   per_share_metric=float(tbv_ps), multiple=float(mult),
+                   multiple_parts={"peer_multiple": float(cfg["p_tbv"]),
+                                   "peer_source": "bank calibration P/TBV", "scenario_band": sm})
         return tbv_ps * mult
 
     # ── DDM (S-REIT) — distributions discounted, Singapore convention ─────
@@ -6060,6 +6228,8 @@ def _compute_method_value(
         if ggm is None:
             return None
         value_ps, _target_pb, _a = ggm
+        _leg_trace(kind="ggm", target_pb=_target_pb, assumptions=_a,
+                   value_before_band=float(value_ps), scenario_band=sm)
         return value_ps * sm
 
     # ── Excess Capital — CET1 overlay (bank-specific) ─────────────────────
@@ -7924,6 +8094,18 @@ def _tree_factor(tree: Optional[dict], scenario: str) -> float:
            if tot > 0 else sum(x["rate"] for x in scens) / len(scens))
     r = min(x["rate"] for x in scens) if scenario == "bear" else max(x["rate"] for x in scens)
     return (1.0 + r) / (1.0 + ref) if 1.0 + ref > 0 else 1.0
+
+
+def _sotp_trace_table(table: dict) -> dict:
+    """The analyst SOTP table, reduced to what rebuilds its per-share value."""
+    return {
+        "rows": [{k: r.get(k) for k in ("name", "method", "multiple", "revenue_fwd", "ebit", "value")}
+                 for r in (table.get("rows") or [])],
+        **{k: table.get(k) for k in ("segment_value", "associates", "net_cash", "nav",
+                                     "holdco_discount_pct", "holdco_discount", "final",
+                                     "per_share", "per_share_reporting", "fx_to_reporting",
+                                     "shares")},
+    }
 
 
 def _sotp_scenario_from_trees(table: dict, trees: Optional[dict], scenario: str,
@@ -10382,6 +10564,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             )
             wacc = _wacc_info["wacc"]
             ticker_forward_flags.append(_wacc_info["audit"])
+            # The components, for the Excel export's discount-rate build.
+            _wacc_build = {k: v for k, v in _wacc_info.items() if k != "audit"}
         except Exception as _wacc_exc:  # noqa: BLE001 — never block DCF on audit
             _log.warning("[DCF] %s: hybrid WACC failed, using sector base: %s",
                          ticker, _wacc_exc)
@@ -10389,6 +10573,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 sector, leverage, macro_regime=_risk_appetite,
                 profile=profile_name, is_hk=_is_hk, is_sg=_is_sg,
             )
+            _wacc_build = {"wacc_base": wacc,
+                           "source": "sector/profile table (hybrid cost of debt unavailable)"}
+        # How the sector/profile base rate was assumed: table, lookup key,
+        # embedded country risk, leverage premium, cap, macro overlay. The
+        # same function computes the rate itself, so the two cannot differ.
+        try:
+            from src.data.sector_profiles import wacc_base_breakdown as _wacc_base_breakdown
+            _wacc_build["base_breakdown"] = _wacc_base_breakdown(
+                sector, leverage, macro_regime=_risk_appetite,
+                profile=profile_name or "", is_hk=_is_hk, is_sg=_is_sg)
+        except Exception:  # noqa: BLE001 - disclosure only, never blocks the DCF
+            pass
 
         # ── Insider-activity WACC overlay (Tier 3) ──────────────────────
         # The Phase 2.5 insider_activity_agent populates
@@ -10402,6 +10598,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 state["data"].get("insider_activity", {}) or {}
             ).get(ticker)
             _ins_bps, _ins_audit = _insider_wacc_modifier(_insider_data, _market_cap)
+            _wacc_build["insider_bps"] = _ins_bps
             if _ins_bps != 0.0:
                 wacc = wacc + _ins_bps / 10000.0
                 if _ins_audit:
@@ -10413,6 +10610,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # Deep-research risk_flag → WACC loading (+50bps HIGH, +25bps MEDIUM)
         _risk_flag = dcf_cal.get("risk_flag", "MEDIUM")
         _wacc_loading = {"HIGH": 0.0050, "MEDIUM": 0.0025, "LOW": 0.0}.get(_risk_flag, 0.0025)
+        _wacc_build["research_risk_loading"] = _wacc_loading
+        _wacc_build["research_risk_flag"] = _risk_flag
         if _wacc_loading:
             wacc = wacc + _wacc_loading
             progress.update_status(
@@ -10463,6 +10662,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             "RUB":  0.080,  # Russia — sanctions; use only in non-sanction context
         }
         _crp = _CRP_BY_CURRENCY.get(reported_currency.upper(), 0.0)
+        _wacc_build["country_risk_premium"] = _crp
         if _crp > 0:
             wacc = round(wacc + _crp, 4)
             fx_note = (fx_note or "") + (
@@ -10490,6 +10690,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             ).lower()
             _has_contracted = any(kw in _research_text for kw in _CONTRACTED_KWS)
             if _has_contracted:
+                _wacc_build["contracted_revenue_discount"] = _CONTRACTED_DISCOUNT
                 wacc = round(wacc + _CONTRACTED_DISCOUNT, 4)
                 progress.update_status(
                     agent_id, ticker,
@@ -11203,6 +11404,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
 
             # ── Core DCF projection ───────────────────────────────────────
+            # Per-leg inputs recorded for the Excel export (see _LEG_TRACE).
+            leg_inputs: dict[str, dict] = {}
             # The same context every DCF-family leg projects with below.
             _dcf_projection = {
                 "growth_schedule": _growth_schedule,
@@ -11223,6 +11426,16 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 wacc_schedule=_wacc_schedule,
                 margin_delta_absolute=md_abs,
             )
+            leg_inputs["DCF"] = {
+                "kind": "dcf", "value": iv_dcf,
+                "revenue_base": revenue_base, "fcf_margin_base": fcf_margin_base,
+                "growth_base": g, "growth_schedule": _growth_schedule,
+                "margin_delta_absolute": md_abs, "wacc": wacc,
+                "wacc_schedule": _wacc_schedule, "tgr": tgr, "fcf_floor": fcf_floor,
+                "net_debt": float(net_debt or 0.0), "shares": shares,
+                "pv_fcf_per_share": pv_fcf, "pv_tv_per_share": pv_tv,
+                "projection_rows": _proj_rows,
+            }
 
             # ── Reinvestment disclosure, OBSERVATION-ONLY ─────────────────
             # Computed from the SAME helper the projector would have used, on
@@ -11609,7 +11822,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                             # _blend_methods renormalizes onto multiples.
                             method_values[method_name] = None
                         else:
-                            method_values[method_name] = _compute_method_value(
+                            method_values[method_name], leg_inputs[method_name] = _traced_method_value(
                                 method_name=method_name,
                                 projection=_dcf_projection,
                                 most_recent=most_recent,
@@ -11670,7 +11883,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                     _shadow_methods.append("SOTP (analyst)")
                 for _shadow_name in _shadow_methods:
                     if _shadow_name not in method_values:
-                        method_values[_shadow_name] = _compute_method_value(
+                        method_values[_shadow_name], leg_inputs[_shadow_name] = _traced_method_value(
                             method_name=_shadow_name,
                             projection=_dcf_projection,
                             most_recent=most_recent,
@@ -12155,6 +12368,10 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 # NEW: per-method transparency fields
                 "method_iv_table":   method_iv_table,
                 "profile_weights":   profile_weights,
+                # What each leg was computed from (metric, multiple and its
+                # parts, EV bridge, DCF projection) -- the Excel export
+                # rebuilds every leg from these with live formulas.
+                "leg_inputs":        leg_inputs,
                 "yr1_revenue":       round(yr1_revenue, 0) if yr1_revenue else None,
                 "yr1_ebitda_est":    round(yr1_ebitda_est, 0) if yr1_ebitda_est else None,
                 "yr1_eps_est":       round(yr1_eps_est, 4) if yr1_eps_est else None,
@@ -13498,6 +13715,26 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # path substituted for a distorted reported one. Several legs read
             # it off `most_recent`; none of them recorded which value they used.
             "normalized_net_income": _ledger_num(most_recent.get("normalized_net_income")),
+            # The annual history this valuation was computed from, AFTER the FX
+            # conversion (so in `reported_currency`, the listing currency) and
+            # with the latest quarter's balance sheet overlaid on the final
+            # row where one was newer. The Excel export's Inputs sheet.
+            # Discount-rate build: sector/profile base, hybrid cost-of-debt
+            # adjustment, insider overlay, and the rate actually used.
+            "wacc_build": {**_wacc_build, "leverage": _ledger_num(leverage),
+                           "macro_regime": _risk_appetite, "wacc_final": round(wacc, 6)},
+            "financials_used": {
+                "currency": _output_currency,
+                "source_currency": reported_currency,
+                "fx_rate": round(fx_rate, 6),
+                "source": "FMP annual statements",
+                "balance_sheet_period": most_recent.get("_balance_sheet_period"),
+                "rows": [
+                    {k: (_ledger_num(r.get(k)) if k != "period" else r.get(k))
+                     for k in _FINANCIALS_USED_FIELDS}
+                    for r in series
+                ],
+            },
             "is_cache_copy":         False,
             "ledger_schema":         1,
         }

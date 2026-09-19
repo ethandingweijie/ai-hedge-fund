@@ -1386,3 +1386,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: DCF-family parity (owner-approved 2026-09-19). (a) Every DCF-family leg (DCF (FCF+), NRR-adj DCF, DCF (LTG), DCF (5-yr), ...) now projects with the core DCF's context -- growth fade/decay schedule, staged WACC, scenario margin delta -- instead of growth_base flat for ten years. Only live mover in the basket: MELI (Hyper-Growth Platform, 15%/yr decay), DCF (FCF+) leg in all three scenarios; IV bear/base/bull 3531.09/4007.19/4427.40 -> 2375.97/3109.89/3601.18, base 12m target 2591.33 -> 2277.27. Every other name's IV and target is unchanged (no other weighted DCF-family leg outside the core DCF). (b) The T-1 methodology backtest now uses the live margin basis (owner earnings when SBC is disclosed in >=3 years, outlier-filtered mean, OE<=0 fallback) and the live growth schedule, recorded as calibration_record.fcf_margin_basis / fcf_margin_t1 / growth_t1 / growth_schedule. T-1 IV moves: MELI 9890.4 -> 4127.4 (still fired), MU 153.8 -> 86.7, U96_SI 8.84 -> 5.60 (now passes against 5.52), AAPL 152.8 -> 151.9, COST 680.9 -> 669.5, FCX 21.9 -> 21.4, V 378.9 -> 382.8; other names unchanged. The cash-conversion gate stays observation-only: on payment-float hybrids it went 1 helped / 3 false alarms in 5 firings.
 
+## 2026-09-19T11:12:18+00:00
+
+- regenerated at HEAD: `7e2dbec`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Excel export instrumentation, no valuation move. multiples_used.fields.* gains 'key' and 'exchange' (the comps basket each live peer multiple came from, so the workbook can list its named members) on the six fixtures whose peers resolve from live HK/SG comps: 02888_HK, 09988_HK, BN4_SI, C38U_SI, D05_SI (and none on static/dynamic US tables). No existing leaf changes on any of the 14 names; IVs, targets, legs and weights are byte-identical. New per-run fields (leg_inputs, financials_used, wacc_build incl. base_breakdown) are not in the projection.
+

@@ -61,6 +61,7 @@ HKSE (~5 min at the 11.5 rps token bucket in api.py) and ~150 for SES.
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -469,6 +470,28 @@ _INDEXES = [
     "ON regional_comps(exchange, level, key, cohort)",
 ]
 
+# The NAMED members behind each median, with each member's own multiples, so
+# a valuation can show which companies its peer multiple came from. A new
+# table (not a new column), so CREATE TABLE IF NOT EXISTS is sufficient.
+# `in_band` says whether the member's value passed the plausibility band and
+# therefore entered the median.
+_MEMBERS_DDL = """
+CREATE TABLE IF NOT EXISTS regional_comps_members (
+    exchange     TEXT NOT NULL,
+    level        TEXT NOT NULL,
+    key          TEXT NOT NULL,
+    cohort       TEXT NOT NULL,
+    symbol       TEXT NOT NULL,
+    name         TEXT,
+    market_cap   REAL,
+    metrics_json TEXT NOT NULL,
+    computed_at  TEXT NOT NULL,
+    PRIMARY KEY (exchange, level, key, cohort, symbol)
+)
+"""
+_MEMBERS_INDEX = ("CREATE INDEX IF NOT EXISTS idx_regional_comps_members_lookup "
+                  "ON regional_comps_members(exchange, level, key, cohort)")
+
 _tables_ready_key: Optional[tuple] = None
 
 
@@ -478,7 +501,7 @@ def _ensure_table() -> None:
     if key == _tables_ready_key:
         return
     try:
-        _db.execute_script(";".join([_DDL] + _INDEXES))
+        _db.execute_script(";".join([_DDL] + _INDEXES + [_MEMBERS_DDL, _MEMBERS_INDEX]))
         _tables_ready_key = key
     except Exception as exc:
         logger.warning("regional_comps _ensure_table: %s", exc)
@@ -508,6 +531,79 @@ def save_comps(exchange: str, rows: list[dict], computed_at: str) -> int:
         for r in rows
     ])
     return len(rows)
+
+
+def compute_members(baskets: dict[str, list[dict]], metrics: dict[str, dict],
+                    level: str) -> list[dict]:
+    """One row per (grouping, cohort, member) with the member's multiples."""
+    rows: list[dict] = []
+    for key, members in baskets.items():
+        for cohort, group in split_cohorts(members).items():
+            for m in group:
+                mm = metrics.get(m["symbol"]) or {}
+                if not mm:
+                    continue
+                vals = {}
+                for field in FIELDS:
+                    v = mm.get(field)
+                    try:
+                        f = float(v) if v is not None else None
+                    except (TypeError, ValueError):
+                        f = None
+                    lo, hi = _BANDS[field]
+                    vals[field] = {"value": f,
+                                   "in_band": f is not None and not math.isnan(f)
+                                   and lo <= f <= hi}
+                rows.append({"level": level, "key": key, "cohort": cohort,
+                             "symbol": m["symbol"], "name": m.get("name"),
+                             "market_cap": m.get("market_cap"), "metrics": vals})
+    return rows
+
+
+def save_members(exchange: str, rows: list[dict], computed_at: str) -> int:
+    """Replace this exchange's basket membership with the fresh one.
+
+    Membership is derived data rebuilt on every refresh: a name that left a
+    basket must stop being listed as a peer, so the exchange's rows are
+    replaced rather than upserted.
+    """
+    _ensure_table()
+    _db.execute("DELETE FROM regional_comps_members WHERE exchange = ?", [exchange])
+    if not rows:
+        return 0
+    _db.executemany(
+        "INSERT INTO regional_comps_members (exchange, level, key, cohort, symbol, "
+        "name, market_cap, metrics_json, computed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [[exchange, r["level"], r["key"], r["cohort"], r["symbol"], r.get("name"),
+          float(r["market_cap"]) if r.get("market_cap") is not None else None,
+          json.dumps(r["metrics"]), computed_at] for r in rows])
+    return len(rows)
+
+
+def load_members(exchange: str, level: str, key: str, cohort: str = "all") -> list[dict]:
+    """The named members of one comps basket, largest first. [] if unknown."""
+    if not (exchange and level and key):
+        return []
+    _ensure_table()
+    try:
+        rows = _db.query(
+            "SELECT symbol, name, market_cap, metrics_json, computed_at "
+            "FROM regional_comps_members WHERE exchange = ? AND level = ? "
+            "AND key = ? AND cohort = ?", [exchange, level, key, cohort])
+    except Exception as exc:
+        logger.warning("regional_comps load_members failed: %s", exc)
+        return []
+    out = []
+    for r in rows or []:
+        try:
+            metrics = json.loads(r["metrics_json"] or "{}")
+        except (TypeError, ValueError):
+            metrics = {}
+        out.append({"symbol": r["symbol"], "name": r["name"],
+                    "market_cap": r["market_cap"], "metrics": metrics,
+                    "computed_at": r["computed_at"]})
+    out.sort(key=lambda x: -(x["market_cap"] or 0))
+    return out
 
 
 def _age_days(computed_at: str) -> Optional[float]:
@@ -625,6 +721,9 @@ def get_regional_multiples(
                 "basis": level,
                 "cohort": cohort,
                 "peer_count": row["peer_count"],
+                # The basket's identity, so its named members can be listed.
+                "key": key,
+                "exchange": exchange,
             }
     # Aging out is the failure mode this module exists to prevent, and it is
     # the one that hides best: every field simply goes missing, the caller
@@ -691,11 +790,20 @@ def refresh_regional_comps(
 
     computed_at = datetime.now(timezone.utc).isoformat()
     written = 0
+    members_written = 0
     if persist:
         try:
             written = save_comps(exchange, rows, computed_at)
         except Exception as exc:
             logger.exception("regional_comps persist failed: %s", exc)
+        try:
+            members_written = save_members(
+                exchange,
+                compute_members(industry_baskets, metrics, "industry")
+                + compute_members(sector_baskets, metrics, "sector"),
+                computed_at)
+        except Exception as exc:
+            logger.exception("regional_comps members persist failed: %s", exc)
 
     return {
         "exchange": exchange,
@@ -710,6 +818,7 @@ def refresh_regional_comps(
         "industry_rows": sum(1 for r in rows if r["level"] == "industry"),
         "sector_rows": sum(1 for r in rows if r["level"] == "sector"),
         "persisted": written,
+        "members_persisted": members_written,
         "elapsed_sec": round(time.time() - t0, 1),
     }
 

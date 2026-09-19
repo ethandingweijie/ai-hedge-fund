@@ -1321,7 +1321,10 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     src = _engine_src()
     assert src.count('"normalized_ebit"') == 1, "normalized_ebit gained a reader"
     assert src.count('"normalized_ebitda"') == 2
-    assert src.count('"normalized_net_income"') == 6
+    # SEVEN since 2026-09-19: the P/E (norm) leg trace reads it once more, to
+    # label whether the bank fallback (equity x target ROE) supplied the
+    # earnings -- a disclosure read for the Excel export, not a valuation one.
+    assert src.count('"normalized_net_income"') == 7
     assert src.count("_normalized_earnings(") == 4   # def + three call sites
     assert '_norm_ebit   = _normalized_earnings(series, "ebit",       window=5)' in src
     assert 'most_recent["normalized_ebit"]       = _norm_ebit' in src

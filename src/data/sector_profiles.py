@@ -3328,7 +3328,10 @@ def get_sector_peer_multiples(
             merged[field] = row["value"]
             basis[field] = {"basis": row["basis"],
                             "cohort": row.get("cohort", "all"),
-                            "peer_count": row["peer_count"]}
+                            "peer_count": row["peer_count"],
+                            # Which basket, so the named peers can be listed.
+                            "key": row.get("key"),
+                            "exchange": row.get("exchange")}
         # Non-numeric, underscore-prefixed so the numeric consumers that read
         # peer["pe"] / peer.get("ev_ebitda") are unaffected. Lets the report
         # and the LLM write-up state what a multiple was actually derived
@@ -3386,6 +3389,85 @@ def _regional_peer_multiples(
         return {}
 
 
+#: Leverage premium: +1pp of WACC per 1.0x of net debt / equity above 1.5x.
+WACC_LEVERAGE_THRESHOLD = 1.5
+WACC_LEVERAGE_SLOPE = 0.01
+
+
+def wacc_base_breakdown(
+    sector: str,
+    leverage: float = 0.0,
+    macro_regime: str = "neutral",
+    profile: str = "",
+    is_hk: bool = False,
+    is_sg: bool = False,
+) -> dict:
+    """Every component of the sector/profile base WACC, and the result.
+
+    The single source of the base rate: `get_wacc_for_exchange` returns this
+    function's `wacc`, so what the valuation export shows is, by
+    construction, the rate the engine used. Components:
+
+      market, table, lookup    which table the rate came from and by what key
+      table_rate               the table's rate (embeds any country risk
+                               premium already, for HK/SG sector tables)
+      crp_embedded             the country risk premium inside table_rate
+      leverage, leverage_premium, leverage_premium_applies
+      leverage_cap             premium + overlay may add at most this much
+      macro_regime, macro_overlay
+      wacc                     round(min(table + premium + overlay,
+                                         table + cap), 4)
+    """
+    market = "SG" if is_sg else ("HK" if is_hk else "US")
+    crp = _SG_CRP if is_sg else (_HK_CHINA_CRP if is_hk else 0.0)
+    if sector == "Energy" and profile in _ENERGY_PROFILE_WACC:
+        table, lookup = "Energy profile WACC (Damodaran)", profile
+        rate = _ENERGY_PROFILE_WACC[profile] + crp
+        lev_cap = _ENERGY_LEVERAGE_CAP.get(profile, 0.035)
+    elif sector == "Financials" and profile in _FINANCIALS_PROFILE_WACC:
+        table, lookup = "Financials profile WACC (Damodaran)", profile
+        rate = _FINANCIALS_PROFILE_WACC[profile] + crp
+        lev_cap = _FINANCIALS_LEVERAGE_CAP.get(profile, 0.010)
+    elif is_sg:
+        lookup = sector
+        if sector in SG_SECTOR_WACC:
+            table, rate = "SG sector WACC", SG_SECTOR_WACC[sector]
+        else:
+            table, rate = "US sector WACC + SG country risk", SECTOR_WACC.get(sector, 0.090) + _SG_CRP
+        lev_cap = 0.040
+    elif is_hk:
+        lookup = sector
+        if sector in HK_SECTOR_WACC:
+            table, rate = "HK sector WACC", HK_SECTOR_WACC[sector]
+        else:
+            table, rate = "US sector WACC + China country risk", SECTOR_WACC.get(sector, 0.090) + _HK_CHINA_CRP
+        lev_cap = 0.040
+    else:
+        table, lookup = "US sector WACC (Damodaran)", sector
+        rate = SECTOR_WACC.get(sector, 0.090)
+        lev_cap = 0.040
+        if sector not in SECTOR_WACC:
+            table = "default (sector not in table)"
+    # REITs carry leverage by design; the US path exempts them from the
+    # premium (the HK/SG paths never did, and still do not).
+    applies = not (market == "US" and sector in ("REIT", "RealEstate"))
+    premium = (max(0.0, (leverage - WACC_LEVERAGE_THRESHOLD) * WACC_LEVERAGE_SLOPE)
+               if applies else 0.0)
+    overlay = _MACRO_WACC_OVERLAY.get(macro_regime, 0.0)
+    uncapped = rate + premium + overlay
+    return {
+        "market": market, "table": table, "lookup": lookup,
+        "table_rate": rate, "crp_embedded": crp,
+        "leverage": leverage, "leverage_threshold": WACC_LEVERAGE_THRESHOLD,
+        "leverage_slope": WACC_LEVERAGE_SLOPE,
+        "leverage_premium_applies": applies, "leverage_premium": premium,
+        "leverage_cap": lev_cap,
+        "macro_regime": macro_regime, "macro_overlay": overlay,
+        "cap_binding": uncapped > rate + lev_cap,
+        "wacc": round(min(uncapped, rate + lev_cap), 4),
+    }
+
+
 def get_wacc_for_exchange(
     sector: str,
     leverage: float = 0.0,
@@ -3408,43 +3490,16 @@ def get_wacc_for_exchange(
     7.0% for SG Energy. With terminal value at ~90% of a utility DCF, that gap
     alone put intrinsic value at 6x spot.
 
-    Backward-compatible: both flags False delegates entirely to get_wacc().
+    Both flags False reproduces get_wacc() exactly (pinned by the test below).
+
+    Computed through `wacc_base_breakdown`, the one place the components
+    live, so the valuation export shows the build that produced this rate.
+    Equivalence with the previous inline formula is pinned over every
+    sector x profile x market x leverage x regime combination by
+    tests/test_wacc_base_breakdown.py.
     """
-    if is_sg:
-        # Mirrors the HK branch below, with the Singapore CRP. Kept as a
-        # separate branch rather than a shared helper so each market's
-        # calibration stays independently readable and auditable.
-        overlay = _MACRO_WACC_OVERLAY.get(macro_regime, 0.0)
-        if sector == "Energy" and profile in _ENERGY_PROFILE_WACC:
-            base    = _ENERGY_PROFILE_WACC[profile] + _SG_CRP
-            lev_cap = _ENERGY_LEVERAGE_CAP.get(profile, 0.035)
-        elif sector == "Financials" and profile in _FINANCIALS_PROFILE_WACC:
-            base    = _FINANCIALS_PROFILE_WACC[profile] + _SG_CRP
-            lev_cap = _FINANCIALS_LEVERAGE_CAP.get(profile, 0.010)
-        else:
-            # SG_SECTOR_WACC is defined by the market registry and was, until
-            # now, never read by the DCF.
-            base    = SG_SECTOR_WACC.get(sector, SECTOR_WACC.get(sector, 0.090) + _SG_CRP)
-            lev_cap = 0.040
-        leverage_premium = max(0.0, (leverage - 1.5) * 0.01)
-        return round(min(base + leverage_premium + overlay, base + lev_cap), 4)
-
-    if not is_hk:
-        return get_wacc(sector, leverage, macro_regime=macro_regime, profile=profile)
-
-    overlay = _MACRO_WACC_OVERLAY.get(macro_regime, 0.0)
-    # Energy and Financials sub-profiles: add CRP on top of the US sub-profile base
-    if sector == "Energy" and profile in _ENERGY_PROFILE_WACC:
-        base    = _ENERGY_PROFILE_WACC[profile] + _HK_CHINA_CRP
-        lev_cap = _ENERGY_LEVERAGE_CAP.get(profile, 0.035)
-    elif sector == "Financials" and profile in _FINANCIALS_PROFILE_WACC:
-        base    = _FINANCIALS_PROFILE_WACC[profile] + _HK_CHINA_CRP
-        lev_cap = _FINANCIALS_LEVERAGE_CAP.get(profile, 0.010)
-    else:
-        base    = HK_SECTOR_WACC.get(sector, SECTOR_WACC.get(sector, 0.090) + _HK_CHINA_CRP)
-        lev_cap = 0.040
-    leverage_premium = max(0.0, (leverage - 1.5) * 0.01)
-    return round(min(base + leverage_premium + overlay, base + lev_cap), 4)
+    return wacc_base_breakdown(sector, leverage, macro_regime=macro_regime,
+                               profile=profile, is_hk=is_hk, is_sg=is_sg)["wacc"]
 
 
 # ── 1c. Hybrid WACC with live credit-spread overlay ───────────────────────────
