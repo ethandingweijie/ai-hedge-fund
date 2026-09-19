@@ -320,6 +320,7 @@ export function V2ReportView({
           </div>
         )}
         {tab === 'valuation'  && <ValuationBody
+          runId={runId}
           dcfRange={dcfRange}
           dcfSkipReason={dcfSkipReason}
           scenarioAnalysis={scenarioAnalysis}
@@ -530,7 +531,10 @@ function SummaryBody({
 function ValuationBody({
   dcfRange, dcfSkipReason, scenarioAnalysis, decision, ticker, currentPrice, isRunning,
   sector, pipelineAssets, sections, rawFinancials, profile, saasMetrics, sectorCard, ptHistory,
+  runId,
 }: {
+  /** Saved run id: enables the Excel workbook export. */
+  runId?: string;
   dcfRange: DcfRange | undefined;
   /** Why dcfRange came back {} for this ticker, if known (see DcfMethodologyPanel). */
   dcfSkipReason?: string;
@@ -648,7 +652,8 @@ function ValuationBody({
           sector branch rendered above; the DCF methodology panel follows. ── */}
       {dcfRange?.sotp_breakdown && <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />}
 
-      <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
+      <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason}
+                           runId={isRunning ? null : runId} />
 
       {/* ── Sector Valuation Card (Option B render) ─────────────────── */}
       {sectorCard && <SectorValuationCard payload={sectorCard} />}

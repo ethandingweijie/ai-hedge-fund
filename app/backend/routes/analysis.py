@@ -634,6 +634,38 @@ async def get_run(run_id: str, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"{exc}\n\n{tb}")
 
 
+# ── GET /analysis/runs/{run_id}/workbook ─────────────────────────────────────
+
+@router.get("/runs/{run_id}/workbook")
+async def get_run_workbook(run_id: str, request: Request, ticker: Optional[str] = None,
+                           db: Session = Depends(get_db)):
+    """The run's valuation as a traceable Excel workbook (live formulas).
+
+    Same access rule as GET /runs/{run_id}: the workbook is built only from a
+    run `get_run_result` returns for this user.
+    """
+    from fastapi.responses import Response
+    from app.backend.services import workbook_export_service as wx
+    user_id = _get_user_id(request, db)
+    result = await asyncio.to_thread(analysis_service.get_run_result, run_id, user_id=user_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    try:
+        blob, filename = await asyncio.to_thread(
+            wx.build_run_workbook, {**result, "run_id": run_id},
+            canonical_ticker(ticker) if ticker else None)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No valuation for that ticker in this run")
+    except Exception:
+        logger.exception("workbook export failed for %s", run_id)
+        raise HTTPException(status_code=500, detail="Workbook export failed")
+    return Response(
+        content=blob,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 # ── DELETE /analysis/runs/{run_id} ───────────────────────────────────────────
 
 @router.delete("/runs/{run_id}")

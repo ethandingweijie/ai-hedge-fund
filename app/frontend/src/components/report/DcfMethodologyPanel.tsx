@@ -6,8 +6,10 @@
  * no new computation, it just surfaces profile/rationale/assumption fields
  * that previously reached the frontend untyped and unrendered.
  */
+import { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { downloadRunWorkbook } from '@/lib/api';
 import type { DcfRange } from '@/lib/reportTypes';
 
 interface DcfMethodologyPanelProps {
@@ -16,6 +18,8 @@ interface DcfMethodologyPanelProps {
   /** Why dcfRange came back {} for this ticker (dcf_agent.py early-exit —
    *  insufficient history, no growth rate, etc.), if known. */
   skipReason?: string | null;
+  /** Saved run id. When present, the panel offers the Excel workbook export. */
+  runId?: string | null;
 }
 
 const DATA_SOURCE_INFO: Record<string, { label: string; detail: string; variant: 'success' | 'outline' | 'warning' }> = {
@@ -64,7 +68,36 @@ function friendlySkipReason(reason: string): string {
   return SKIP_REASON_LABELS[code] ?? reason;
 }
 
-export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodologyPanelProps) {
+function ExportWorkbookButton({ runId, ticker }: { runId: string; ticker: string }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <span className="inline-flex items-center gap-2 shrink-0">
+      {err && <span className="text-[10px] text-muted-foreground" title={err}>Export failed</span>}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setErr(null);
+          try {
+            await downloadRunWorkbook(runId, ticker);
+          } catch (e) {
+            setErr(e instanceof Error ? e.message : String(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+        className="h-6 rounded border border-border px-2 text-[10px] font-medium text-foreground hover:bg-muted disabled:opacity-50"
+        title="Download a traceable Excel workbook: every figure rebuilt with live formulas"
+      >
+        {busy ? 'Preparing…' : 'Export Excel'}
+      </button>
+    </span>
+  );
+}
+
+export function DcfMethodologyPanel({ dcfRange, ticker, skipReason, runId }: DcfMethodologyPanelProps) {
   // dcf_agent.py's early-exit branches leave dcf_range[ticker] = {} rather
   // than omitting the key entirely — Object.keys check catches that exact
   // shape (a populated result always has at least `profile` + scenario keys).
@@ -115,11 +148,14 @@ export function DcfMethodologyPanel({ dcfRange, ticker, skipReason }: DcfMethodo
     <Card className="p-4">
       <div className="flex items-center justify-between mb-1 gap-2">
         <h3 className="text-sm font-semibold">Valuation Methodology — {ticker}</h3>
-        {dcfRange.calibration_error && (
-          <Badge variant="warning" className="h-5 px-2 text-[10px] shrink-0">
-            BACKTEST WARNING
-          </Badge>
-        )}
+        <span className="inline-flex items-center gap-2">
+          {dcfRange.calibration_error && (
+            <Badge variant="warning" className="h-5 px-2 text-[10px] shrink-0">
+              BACKTEST WARNING
+            </Badge>
+          )}
+          {runId && <ExportWorkbookButton runId={runId} ticker={ticker} />}
+        </span>
       </div>
 
       <div className="mt-2 space-y-1">

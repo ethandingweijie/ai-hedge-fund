@@ -349,7 +349,7 @@ export function ReportViewPage() {
         {/* Full width: this is the 6-column scenario table that was being
             squeezed into a 403px column, wrapping its headers onto three
             lines. */}
-        <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
+        <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} runId={runId} />
 
         {/* Sector Valuation Card. Mounted here as well as in V2ReportView:
             the mobile view bypasses this JSX entirely, so a card added only

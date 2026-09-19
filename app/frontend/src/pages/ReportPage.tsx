@@ -1404,7 +1404,8 @@ export function ReportPage() {
                 as its own full-width strip — fills the column's remaining
                 height instead of leaving the ladder's sparse-data cards
                 (no bear/bull IV stored) looking like dead space above a gap. */}
-            <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} skipReason={dcfSkipReason} />
+            <DcfMethodologyPanel dcfRange={dcfRange} ticker={liveTicker} skipReason={dcfSkipReason}
+                                 runId={state === 'complete' ? runId : null} />
             {/* ── Sector Valuation Card ────────────────────────────────
                 Mounted here as well as in V2ReportView: the mobile view
                 bypasses this JSX entirely, so a card added only there is

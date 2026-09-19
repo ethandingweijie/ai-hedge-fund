@@ -52,6 +52,34 @@ export function pulseTicker(ticker: string, signal?: AbortSignal): Promise<Respo
 }
 
 /** Fetch the full result for a completed run. */
+/**
+ * Download the run's valuation as a traceable Excel workbook (live formulas,
+ * institutional colour code). Sends the auth header explicitly: this is a
+ * file download, not a JSON call.
+ */
+export async function downloadRunWorkbook(runId: string, ticker?: string): Promise<void> {
+  const qs = ticker ? `?ticker=${encodeURIComponent(ticker)}` : '';
+  const res = await fetch(`${BASE}/analysis/runs/${encodeURIComponent(runId)}/workbook${qs}`, {
+    headers: _authHeaders(),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText);
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get('Content-Disposition') || '';
+  const m = /filename="?([^";]+)"?/i.exec(cd);
+  const name = m ? m[1] : `${ticker || 'valuation'}_valuation.xlsx`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function getRunResult(runId: string): Promise<RunResult> {
   return fetchJson<RunResult>(`${BASE}/analysis/runs/${runId}`);
 }
