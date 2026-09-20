@@ -243,3 +243,19 @@ def test_a_loss_making_cyclical_does_not_crash_the_peak_diagnostic():
         [{"period": f"202{i}-12-31", "net_income": -1e8, "shares_outstanding": 1e8} for i in range(5)],
         {"eps": {"base": 0.5}})
     assert peak is None or peak["max_line"] is None
+
+
+def test_an_empty_peer_set_says_so_rather_than_reading_as_measured():
+    """Seatrium's run recorded `all_static: false` over zero fields, which reads
+    as "these are live multiples" and means the opposite: SGX lists three energy
+    names above the universe floor against a five-peer minimum, so there is no
+    Singapore energy basket and every multiple came from profile defaults."""
+    from src.agents.analysis.dcf_agent import _multiples_trace
+    empty = _multiples_trace({"_comp_market": "SES", "_comp_age_days": 0.11})
+    assert empty["fields"] == {}
+    assert empty["no_peer_multiples"] is True
+    assert empty["all_static"] is False
+
+    live = _multiples_trace({"ev_ebitda": 8.0, "_comp_market": "SES",
+                             "_comp_basis": {"ev_ebitda": {"basis": "live", "peer_count": 7}}})
+    assert live["no_peer_multiples"] is False

@@ -5125,6 +5125,13 @@ def _multiples_trace(peer: Optional[dict]) -> dict:
         # MAX_AGE_DAYS to tell whether these are measured or fallback values.
         "all_static": bool(fields) and all(
             f["basis"] == "static" for f in fields.values()),
+        # No field at all is the case that reads most reassuringly and means
+        # the least: `all_static: false` over an empty set says "not fallback
+        # values" when in fact nothing was measured and every multiple came
+        # from the profile's own defaults. Seatrium priced this way -- SGX
+        # lists three energy names above the universe floor, against a
+        # five-peer minimum, so no Singapore energy basket exists to build.
+        "no_peer_multiples": not fields,
     }
 
 
@@ -12822,6 +12829,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         peer = get_sector_peer_multiples(sector, is_hk=_is_hk, profile_name=profile_name,
                                          ticker=ticker,
                                          market_cap=resolved_mcap)
+        if not _multiples_trace(peer).get("fields"):
+            _no_peers_flag = (
+                f"No peer multiples for {profile_name or sector} in this market: "
+                f"every multiple below is the profile's own default, not a "
+                f"measured comparable set")
+            if _no_peers_flag not in ticker_forward_flags:
+                ticker_forward_flags.append(_no_peers_flag)
         _12m_targets: dict[str, Optional[float]] = {}
         _12m_pt_method_label = "forward multiple (profile-specific)"
         _is_reit = sector in {"REIT", "RealEstate"} or profile_name == "REIT"
