@@ -408,6 +408,12 @@ function ReviewControls({ t, onChanged }: { t: SegmentMemoryTicker; onChanged: (
   );
 }
 
+const SOURCE_LABEL: Record<string, string> = {
+  sec_10k: 'read from the 10-K',
+  sec_10q: 'read from the 10-Q',
+  annual_report_verified: 'annual report, verified twice',
+};
+
 const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
   pv10: 'Reserve value (PV-10)',
   backlog: 'Backlog',
@@ -477,7 +483,10 @@ function IndustryInputsSection({ allowed }: { allowed: boolean }) {
                     {r.ticker}
                     {r.company && <div className="font-normal text-muted-foreground">{r.company}</div>}
                   </td>
-                  <td className="px-3 py-2">{INPUT_LABEL[r.kind] ?? r.kind}</td>
+                  <td className="px-3 py-2">
+                    {INPUT_LABEL[r.kind] ?? r.kind}
+                    {r.source && <div className="text-muted-foreground">{SOURCE_LABEL[r.source] ?? r.source}</div>}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {r.source_url ? (
                       <a href={r.source_url} target="_blank" rel="noreferrer" title={r.quote ?? undefined}
@@ -491,6 +500,8 @@ function IndustryInputsSection({ allowed }: { allowed: boolean }) {
                     {r.checks.map((c) => (
                       <div key={c.check}>{c.ok === false ? '✕' : c.ok ? '✓' : '·'} {c.check}: {c.detail}</div>
                     ))}
+                    {r.omitted_reason && <div>{r.omitted_reason}</div>}
+                    {r.remark && <div className="mt-1 italic">{r.remark}</div>}
                     {r.basis && r.basis !== 'actual' && (
                       <div>✕ not the latest audited actual — a forward figure belongs in the overlay</div>
                     )}

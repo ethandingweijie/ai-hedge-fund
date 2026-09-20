@@ -148,6 +148,25 @@ def _year(text: Optional[str]) -> Optional[int]:
     return int(m.group(0)) if m else None
 
 
+def ground_truth_check(value_usd: Optional[float], gt: Optional[dict]) -> Optional[dict]:
+    """Compare a stored figure with the owner's audited range, in USD.
+
+    The owner audits the panel against the filings (2026-09-20). A figure
+    outside the range they checked is not necessarily wrong -- it may be a
+    different basis, e.g. consolidated versus including joint ventures -- but
+    it must be visible and explained rather than quietly displayed.
+    """
+    if not gt or value_usd is None:
+        return None
+    lo, hi = gt.get("low_usd"), gt.get("high_usd")
+    if not isinstance(lo, (int, float)) or not isinstance(hi, (int, float)):
+        return None
+    ok = lo <= value_usd <= hi
+    return {"check": "owner ground truth", "ok": ok,
+            "detail": (f"${value_usd / 1e9:,.2f}bn vs audited ${lo / 1e9:,.2f}-${hi / 1e9:,.2f}bn"
+                       + ("" if ok else f" -- {gt.get('note') or 'outside the audited range'}"))}
+
+
 def reconcile(kind: str, value: Optional[float], context: dict,
               period: Optional[str] = None) -> list[dict]:
     """Checks for one amount (full units, the context's currency) against FMP.
@@ -340,7 +359,10 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                                                      "book_to_bill", "definition")
                            if data.get(k) is not None} | ({"backlog_kind": data["kind"]} if data.get("kind") else {}),
                 "remark": RESERVE_MEASURE_REMARK if kind == "pv10" else None,
-                "checks": e.get("checks") or [], "ok": e.get("ok"),
+                "checks": (e.get("checks") or []) + [c for c in
+                           [ground_truth_check(e.get("value_usd"), e.get("ground_truth"))] if c],
+                "ground_truth": e.get("ground_truth"), "source": e.get("source"),
+                "ok": e.get("ok"),
                 "model": e.get("model"), "built_at": e.get("built_at"),
                 **rv,
             })

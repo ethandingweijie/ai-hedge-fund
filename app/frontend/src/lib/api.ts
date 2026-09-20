@@ -366,6 +366,12 @@ export interface IndustryInputRow {
   stale?: boolean;
   /** 'actual' unless the pre-fill answered with a period that is not the latest reported one. */
   basis?: string;
+  /** Where the figure came from: sec_10k / sec_10q / annual_report_verified / null for a pre-fill. */
+  source?: string | null;
+  /** The owner's audited range for this figure, checked in the row's checks. */
+  ground_truth?: { low_usd?: number; high_usd?: number; note?: string } | null;
+  omitted_reason?: string | null;
+  remark?: string | null;
   /** Management guidance as a delta on the audited baseline; applies only while the
    *  forward overlay is switched on, and only once accepted on its own. */
   overlay?: {

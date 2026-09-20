@@ -20,8 +20,8 @@
   },
   "WMB": {
    "maintenance_capex": {
-    "at": "2026-09-20T02:30:52+00:00",
-    "reason": "Williams' 10-K (filed 2026-02-24) carries no maintenance or sustaining capital figure: it breaks out growth capital guidance only. The $900MM the pre-fill found is FY2026 guidance from an investor presentation, not a reported actual. Omitted; the midstream leg keeps D&A as the stand-in and says so on the leg."
+    "at": "2026-09-20T02:49:43+00:00",
+    "reason": "Williams discloses no maintenance-capex actual: the FY2025 10-K and the Q4 2025 earnings release (2026-02-10) break out growth capital only. Both state 2026 guidance of $850-950m maintenance capex, which is guidance, not an actual, so it cannot be the baseline. The midstream leg keeps D&A as the stand-in and says so. The owner's audited FY2025 actual of ~$750-800m is not in an SEC filing; supply the analyst-day source and it can be entered with that citation."
    }
   }
  },
@@ -57,7 +57,7 @@
      "value": {
       "currency": "CNY",
       "period": "FY2025",
-      "quote": "標準化度量 579,486 188,337 767,823",
+      "quote": "未来现金流量 898,596 330,920 1,229,516 / 10%贴现率 (319,110) (142,583) (461,693) / 标准化度量 579,486 188,337 767,823 (RMB million, 31 December 2025)",
       "scale": "mn",
       "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3BGcwU0-Fj27mkX5PUxtWEj7XdTXhAWCwXy3zbilhnZl7P3L5JUIBWzZYIrYW7BK1LS1pQgON47m3Qll2EDTX1evIiGKx3eSFycETf52IiTVeAD9V3s4tw1Zos91c4dF1j9e_ebbGRyx7mn4jz7u1W9akfn7m7NRR0RT9GmUSe2Z8-A-U",
       "value": 767823.0
@@ -71,11 +71,19 @@
      "period": "2025-12-31",
      "revenue": 59537872200.0
     },
+    "ground_truth": {
+     "high_usd": 75000000000.0,
+     "low_usd": 60000000000.0,
+     "note": "owner audit $60-75bn; the 2025 annual report's supplementary disclosure gives RMB 767,823m = $114.8bn, verified twice. Adjudicate before accepting."
+    },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
     "secs": 126.2,
-    "value_usd": 114797216730.0
+    "source": "annual_report_verified",
+    "value_usd": 114797216730.0,
+    "verification_note": "Asked twice, independently: both返回 RMB 767,823m, and the table's own arithmetic agrees (future net cash flows 1,229,516 less the 10% discount 461,693 = 767,823; 579,486 domestic + 188,337 overseas). That is US$114.8bn at 0.1495, against the owner's audited $60-75bn -- which would be roughly RMB 400-500bn, so the two are not the same year or the same basis. Left flagged rather than adjusted: the figure a filing prints is not overridden by a range.",
+    "verified_at": "2026-09-20T02:52:51+00:00"
    }
   },
   "02883.HK": {},
@@ -111,6 +119,11 @@
      "period": "2025-12-31",
      "revenue": 833028156.22
     },
+    "ground_truth": {
+     "high_usd": 3000000000.0,
+     "low_usd": 2500000000.0,
+     "note": "pre-fill, not re-read"
+    },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
@@ -121,8 +134,14 @@
   "5WH.SI": {},
   "BKR": {
    "backlog": {
-    "built_at": "2026-09-19T18:11:00+00:00",
+    "basis": "actual",
+    "built_at": "2026-09-20T02:49:43+00:00",
     "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": false
+     },
      {
       "check": "backlog / revenue",
       "detail": "1.45x (plausible 0.05x to 15.0x)",
@@ -132,14 +151,14 @@
     ],
     "company": "Baker Hughes Company",
     "data": {
-     "book_to_bill": 1.6,
+     "book_to_bill": null,
      "kind": "rpo",
      "value": {
       "currency": "USD",
-      "period": "Q2 2026",
-      "quote": "Remaining Performance Obligations (\"RPO\") in the second quarter of 2026 ended at $40.1 billion, an increase of $4.0 billion from the first quarter of 2026.",
+      "period": "Q2 2026 (June 30, 2026)",
+      "quote": "As of June 30, 2026, RPO totaled $40.1 billion, of which OFSE totaled $3.0 billion and IET totaled $37.1 billion",
       "scale": "bn",
-      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEPOETEbv5XrlM0EHeVtaKUYjMbEmPA2QGzF67kQak2VLJ56n6X8rbk5hDc41YGi7qpBa3XnJtbl76R5bDQRF6AsWeohpVN5DhNbDow-xIViVsUs0MJKsYk3KN9N60-1sZe9xbf3YuXLGK6U54RUkmxUlG0npxh0A5Z1s93Et-PP9tle32xj7x8q4PbpxoMYGjAT_92XU5kMZzJxlmfx5zlAIfuLNV05EYoAELxzKVxZ1JwWqcFXEgmRbYOuEY=",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1701605/000170160526000023/bkr-20260630.htm",
       "value": 40.1
      }
     },
@@ -151,10 +170,14 @@
      "period": "2025-12-31",
      "revenue": 27733000000.0
     },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": true,
-    "secs": 8.5,
+    "ground_truth": {
+     "high_usd": 40500000000.0,
+     "low_usd": 39500000000.0,
+     "note": "company total; $37.1bn of it is Industrial & Energy Technology, not oilfield services"
+    },
+    "model": null,
+    "ok": false,
+    "source": "sec_10q",
     "value_usd": 40100000000.0
    }
   },
@@ -172,7 +195,7 @@
     "company": "ConocoPhillips",
     "data": {
      "measure": "standardized_measure",
-     "price_basis": "SEC 12-month average prices: calculated as the unweighted arithmetic average of the first-day-of-the-month price for each month within the 12-month period prior to the end of the reporting period (adjusted only for existing contractual terms)",
+     "price_basis": "12-month average prices (unweighted arithmetic average of the first-day-of-the-month price for each month of the 12 months to year end), end-of-year costs, statutory tax rates and a prescribed 10 percent discount factor",
      "proved_reserves": {
       "period": "FY2025",
       "quote": "Total company, 7,637, 7,812, 6,758.",
@@ -183,7 +206,7 @@
      "value": {
       "currency": "USD",
       "period": "FY2025",
-      "quote": "Discounted future net cash flows at year end ... $ 55,962",
+      "quote": "Discounted future net cash flows $ 7,439 32,453 39,892 5,135 1,370 2,016 1,533 49,946 6,016 55,962 (2025; Total Consolidated Operations $49,946m + Equity Affiliates $6,016m)",
       "scale": "mn",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1163165/000116316526000009/cop-20251231.htm",
       "value": 55962.0
@@ -197,11 +220,18 @@
      "period": "2025-12-31",
      "revenue": 58944000000.0
     },
+    "ground_truth": {
+     "high_usd": 62000000000.0,
+     "low_usd": 50000000000.0,
+     "note": "re-read from the 10-K on 2026-09-20; figure matches the filing exactly"
+    },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
     "secs": 58.8,
-    "value_usd": 55962000000.0
+    "source": "sec_10k",
+    "value_usd": 55962000000.0,
+    "verified_at": "2026-09-20T02:52:51+00:00"
    }
   },
   "DVN": {
@@ -229,7 +259,7 @@
      "value": {
       "currency": "USD",
       "period": "FY2025",
-      "quote": "Standardized measure of discounted future net cash flows. $. 18,765.",
+      "quote": "Standardized measure of discounted future net cash flows $ 18,765 $ 19,770 $ 19,313 (2025, 2024, 2023)",
       "scale": "mn",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1090012/000119312526056485/dvn-20251231.htm",
       "value": 18765.0
@@ -243,11 +273,18 @@
      "period": "2025-12-31",
      "revenue": 17188000000.0
     },
+    "ground_truth": {
+     "high_usd": 21000000000.0,
+     "low_usd": 16000000000.0,
+     "note": "re-read from the 10-K on 2026-09-20; figure matches the filing exactly"
+    },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
     "secs": 44.2,
-    "value_usd": 18765000000.0
+    "source": "sec_10k",
+    "value_usd": 18765000000.0,
+    "verified_at": "2026-09-20T02:52:51+00:00"
    }
   },
   "EOG": {
@@ -288,6 +325,11 @@
      "operating_cash_flow": 10044000000.0,
      "period": "2025-12-31",
      "revenue": 22567000000.0
+    },
+    "ground_truth": {
+     "high_usd": 44000000000.0,
+     "low_usd": 38000000000.0,
+     "note": "10-K total $41,317m"
     },
     "model": null,
     "ok": true,
@@ -331,6 +373,11 @@
      "period": "2025-12-31",
      "revenue": 82626000000.0
     },
+    "ground_truth": {
+     "high_usd": 1320000000.0,
+     "low_usd": 1300000000.0,
+     "note": "FY2025 10-K"
+    },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
@@ -341,30 +388,36 @@
   "HAL": {},
   "KMI": {
    "maintenance_capex": {
-    "built_at": "2026-09-19T17:55:20+00:00",
+    "basis": "actual",
+    "built_at": "2026-09-20T02:49:43+00:00",
     "checks": [
      {
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
       "check": "maintenance_capex / depreciation_and_amortization",
-      "detail": "0.41x (plausible 0.1x to 3.0x)",
+      "detail": "0.39x (plausible 0.1x to 3.0x)",
       "ok": true,
-      "ratio": 0.4113
+      "ratio": 0.3877
      },
      {
       "check": "maintenance capex < OCF",
-      "detail": "0.16x of operating cash flow",
+      "detail": "0.15x of operating cash flow",
       "ok": true
      }
     ],
     "company": "Kinder Morgan, Inc.",
     "data": {
-     "definition": "Investments to maintain the operational integrity and extend the useful life of our assets. Budgeting of maintenance capital expenditures, which we refer to as sustaining capital expenditures, is done annually on a bottom-up basis. For each of our assets, we budget for and make those sustaining capital expenditures that are necessary to maintain safe and efficient operations, meet customer needs and comply with our operating policies and applicable law. We may budget for and make additional sustaining capital expenditures that we expect to produce economic benefits such as increasing efficiency and/or lowering future expenses.",
+     "definition": "Sustaining capital expenditures, consolidated -- what Kinder Morgan calls maintenance capital. Consolidated to match the operating cash flow it is subtracted from; the company's own DCF reconciliation adds $175m of unconsolidated JV sustaining capex, giving total sustaining capital investments of $1,103m",
      "value": {
       "currency": "USD",
-      "period": "FY2024",
-      "quote": "Capital expenditures: Sustaining capital expenditures $ 1,009",
+      "period": "FY2025",
+      "quote": "Capital expenditures: Sustaining capital expenditures $ 951 $ 944 (2025 actual; Expected 2026)",
       "scale": "mn",
-      "source_url": "https://www.sec.gov/Archives/edgar/data/1506307/000150630725000008/kmi-20241231.htm",
-      "value": 1009.0
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1506307/000150630726000011/kmi-20251231.htm",
+      "value": 951.0
      }
     },
     "fmp_context_usd": {
@@ -375,22 +428,26 @@
      "period": "2025-12-31",
      "revenue": 16950000000.0
     },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
+    "ground_truth": {
+     "high_usd": 1100000000.0,
+     "low_usd": 1050000000.0,
+     "note": "the audited range is the total including unconsolidated JV sustaining capex ($1,103m); the stored figure is the consolidated $951m, which is the basis that matches consolidated operating cash flow"
+    },
+    "model": null,
     "ok": true,
     "overlay": {
-     "built_at": "2026-09-20T01:44:33+00:00",
+     "built_at": "2026-09-20T02:49:43+00:00",
      "currency": "USD",
-     "delta_pct": -0.070367,
-     "guidance_value": 938.0,
-     "note": "guidance FY2025E vs actual FY2024",
-     "period": "FY2025E",
-     "quote": "Our capital expenditures for the year ended December 31, 2024, and the amount we expect to spend for 2025 to sustain our assets and expand our business are as follows: ... Sustaining capital expenditures, $, 1,009, $, 938",
+     "delta_pct": -0.007361,
+     "guidance_value": 944.0,
+     "note": "10-K expected 2026 vs FY2025 actual",
+     "period": "Expected 2026",
+     "quote": "Sustaining capital expenditures $ 951 $ 944 (2025; Expected 2026)",
      "scale": "mn",
-     "source_url": "https://www.sec.gov/Archives/edgar/data/1506307/000150630725000008/kmi-20241231.htm"
+     "source_url": "https://www.sec.gov/Archives/edgar/data/1506307/000150630726000011/kmi-20251231.htm"
     },
-    "secs": 27.8,
-    "value_usd": 1009000000.0
+    "source": "sec_10k",
+    "value_usd": 951000000.0
    }
   },
   "OKE": {
@@ -429,6 +486,11 @@
      "period": "2025-12-31",
      "revenue": 33629000000.0
     },
+    "ground_truth": {
+     "high_usd": 600000000.0,
+     "low_usd": 550000000.0,
+     "note": "FY2025 actual $576m; 2026 guidance $550-600m (no overlay stored: the guidance is not in the 10-K this pass read)"
+    },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
@@ -461,7 +523,7 @@
      "value": {
       "currency": "USD",
       "period": "FY2025",
-      "quote": "Standardized measure of discounted future net cash flows $ 29,898 $ 6,729 $ 36,627",
+      "quote": "Standardized measure of discounted future net cash flows $ 29,898 $ 6,729 $ 36,627 (United States, International, Total; balance as of December 31, 2025)",
       "scale": "mn",
       "source_url": "https://www.sec.gov/Archives/edgar/data/797468/000162828026009059/oxy-20251231.htm",
       "value": 36627.0
@@ -475,17 +537,30 @@
      "period": "2025-12-31",
      "revenue": 21593000000.0
     },
+    "ground_truth": {
+     "high_usd": 36700000000.0,
+     "low_usd": 32800000000.0,
+     "note": "re-read from the 10-K on 2026-09-20; figure matches the filing exactly"
+    },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
     "secs": 17.8,
-    "value_usd": 36627000000.0
+    "source": "sec_10k",
+    "value_usd": 36627000000.0,
+    "verified_at": "2026-09-20T02:52:51+00:00"
    }
   },
   "RIG": {
    "backlog": {
-    "built_at": "2026-09-19T18:11:30+00:00",
+    "basis": "actual",
+    "built_at": "2026-09-20T02:49:43+00:00",
     "checks": [
+     {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": false
+     },
      {
       "check": "backlog / revenue",
       "detail": "1.70x (plausible 0.05x to 15.0x)",
@@ -496,13 +571,13 @@
     "company": "Transocean Ltd.",
     "data": {
      "book_to_bill": null,
-     "kind": "total",
+     "kind": "contract_drilling",
      "value": {
       "currency": "USD",
-      "period": "Q2 2026",
-      "quote": "Total contract backlog. $. 6,732.",
+      "period": "Q2 2026 (June 30, 2026)",
+      "quote": "Total contract backlog $ 6,732 ... Our contract backlog includes only firm commitments, which are represented by signed drilling contracts",
       "scale": "mn",
-      "source_url": "https://www.sec.gov/ix?doc=/Archives/edgar/data/1451505/000145150526000030/rig-20260630.htm",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1451505/000145150526000061/rig-20260630x10q.htm",
       "value": 6732.0
      }
     },
@@ -514,22 +589,32 @@
      "period": "2025-12-31",
      "revenue": 3965000000.0
     },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": true,
-    "secs": 27.2,
+    "ground_truth": {
+     "high_usd": 6800000000.0,
+     "low_usd": 6600000000.0,
+     "note": "firm commitments only, as the filing states"
+    },
+    "model": null,
+    "ok": false,
+    "source": "sec_10q",
     "value_usd": 6732000000.0
    }
   },
   "SLB": {
    "backlog": {
-    "built_at": "2026-09-19T18:09:49+00:00",
+    "basis": "actual",
+    "built_at": "2026-09-20T02:49:43+00:00",
     "checks": [
      {
+      "check": "latest reported period",
+      "detail": "figure is 2026; FMP's latest reported year is 2025",
+      "ok": false
+     },
+     {
       "check": "backlog / revenue",
-      "detail": "0.17x (plausible 0.05x to 15.0x)",
+      "detail": "0.18x (plausible 0.05x to 15.0x)",
       "ok": true,
-      "ratio": 0.1652
+      "ratio": 0.1792
      }
     ],
     "company": "Slb N.V.",
@@ -538,11 +623,11 @@
      "kind": "total",
      "value": {
       "currency": "USD",
-      "period": "March 31, 2026",
-      "quote": "Total backlog was $5.9 billion at March 31, 2026, of which approximately 65% is expected to be recognized as revenue over the next 12 months.",
+      "period": "Q2 2026 (June 30, 2026)",
+      "quote": "backlog was $ 6.4 billion at June 30, 2026, of which approximately 70 % is expected to be recognized as revenue over the next 12 months",
       "scale": "bn",
-      "source_url": "https://www.sec.gov/Archives/edgar/data/87347/000119312526190101/slb-20260331.htm",
-      "value": 5.9
+      "source_url": "https://www.sec.gov/Archives/edgar/data/87347/000119312526322595/slb-20260630.htm",
+      "value": 6.4
      }
     },
     "fmp_context_usd": {
@@ -553,20 +638,15 @@
      "period": "2025-12-31",
      "revenue": 35709000000.0
     },
-    "grounding_urls": [
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGmzZVek8cQ4ZHAmwaLR3bUD0EpHF7Kl0popN7Rt4AT2mUvBALXmmSgiNnZ-GBfFmakH8GMdK5NkTz_jm-LiXIxk2aMPsEVVuRC0ggKotyzwL-MqUmwRx7lVv2Af6DoPpeUxv39msxQs0zCKFcnmJLMocIYGEw-wmlNLBlLx1mtJbK2Zx2DN-aisIT2J81BZG7CCfZNkf56tUsfew==",
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF5KnGF270q-z8eSnOBSZGBoR05UM6lZuiTns_fzwDDS7GukEOroDYKoZ8uAbJc_OlinxArd7UjcmMoFcf3fQysd3nl8x4lQ_bxRRqh-z4EbEQ5sx_VRBdQan78McYkmZzEDAFY3igYH1oIbYh4xQ8be8FPzH1YRSsbyooFH0qsGsenknKUnw==",
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEmKYAgVyWL0w_vHr-Ig5zWaH3jOsrvSeTwDoe6Ef4eN0rEreflfK7isarymkfWElCmS8SKNHBcBfZq5UcT9XOYZ_GcS9xxTZZXsK7XDh90CKDJwkRoCxeg1bVCVqi13CqIpJ-a1pN5lEFMYa6Te62ZGKlFSKWIu_dw10Hskw718f1jcZsWsF7F6hUC6wCy1H_kYmKs",
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEU7w2XKYu1ku2bX4Y-uKYhThr0I4N8bFbmsr1wi-tYwoFzdN054TjbjXQA1tIhAfFVDXwI_X4l0Qo9HFm65EBsVS_Nk-37AFHp2v3_BpP2DAnW7Ybemv7iiuU3W4_aq4x7RSC_hxdyDUUZgMsQu0ykvehyhDSuKXg=",
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFDXy4pugZizo2Teof1Xp0khCwdd0GvhT9cA48OHpqwLJqj8TgVecOtwULcbHnNKVf5C--Z_2JVcgN06Bew43EeDIKtn4cN8XqjR4AiOblZnvn5tC-q0boOKX5eCsfDWkLAk2p8LQ7WxMZtsbe9G3K9Qfd8VfgozKzWchtlbme9gF_SbVIa5w==",
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGAtj5OjF1Rx-oESu_-a9YYFIPBPjdlpTelYfXdsd4BtHOE0eSKU45HHyg2-Zwdg-NYHApwoWa7rl_lJe397eydnFMQuKanNy8lLPJSFZPoFZB45lBfpMJww1xBHC7G3hk17RxCzws5F0Uw66LbJNl--3eLtvW_38t_l5ZniYYkEg9y-7E4",
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGcJt9d_3ThzZpAhZxFVil9__SacJ9gt1KQa7FSve9Gy6dHY1cO48_Nj2RlXGBQwcBkSkqzCaCpkONbjC4n88HKCHi_Ez6FVqvK7QVgKwXptUxCpTB0UxvCZoaTkPtKDlS_SSV_Zmpumso1GNspyw_Lx22_D0s-4tcrKqaLahy10wjz",
-     "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQHLpuO5i6TM75QdtvQaLtZG-64hq5j7fqCC8hiUhD1UHY3D7x_zzG30VCa2-K1e5UEb61KjK5CE1CPyThl90PtY9ADTAsqlfibtJtLAeWwFxVeutnEluUyolhwRjWsHc1u20XdtuILt8s_uxWiGpRvsSjJwqUlBU7ejaFsdb7lFTgnftwMMNg=="
-    ],
-    "model": "gemini-3.8-flash",
-    "ok": true,
-    "secs": 574.4,
-    "value_usd": 5900000000.0
+    "ground_truth": {
+     "high_usd": 6800000000.0,
+     "low_usd": 6000000000.0,
+     "note": "Q2 2026 10-Q"
+    },
+    "model": null,
+    "ok": false,
+    "source": "sec_10q",
+    "value_usd": 6400000000.0
    }
   },
   "WMB": {}
