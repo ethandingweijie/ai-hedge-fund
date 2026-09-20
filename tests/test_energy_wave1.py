@@ -228,3 +228,18 @@ def test_singapore_never_takes_the_us_curated_basket(monkeypatch):
     assert sg.get("pb") != 18.86 and sg.get("pe") != 35.77
     us = sp.get_sector_peer_multiples("Industrials", ticker="CAT", exchange="NYSE")
     assert us.get("pb") == 18.86
+
+
+def test_a_loss_making_cyclical_does_not_crash_the_peak_diagnostic():
+    """Transocean, 2026-09-20: the day Oilfield Services & Drilling became a
+    cyclical profile, RIG reached the peak-consensus diagnostic, whose text
+    formatted `max_line` -- None when no year in the history had positive EPS --
+    and the whole run raised TypeError."""
+    import inspect
+    from src.agents.analysis import dcf_agent as d
+    src = inspect.getsource(d.run_dcf_agent)
+    assert 'if _peak["max_line"] is not None else' in src
+    peak = d._peak_consensus_trigger(
+        [{"period": f"202{i}-12-31", "net_income": -1e8, "shares_outstanding": 1e8} for i in range(5)],
+        {"eps": {"base": 0.5}})
+    assert peak is None or peak["max_line"] is None

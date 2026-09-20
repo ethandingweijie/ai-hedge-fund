@@ -12257,12 +12257,21 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                                 f" and mean+{_PEAK_EPS_SIGMA_MULTIPLE:.0f}σ = "
                                 f"{_peak['sigma_line']:.2f}"
                                 if _peak["sigma_line"] is not None else "")
-                            _lines_txt = (
-                                f"forward EPS {_peak['eps_forward']:.2f} against "
+                            # A loss-making history has no positive max, so
+                            # `max_line` is None and there is no multiple-of-max
+                            # arm to describe -- Transocean reached this path the
+                            # day Oilfield Services & Drilling became cyclical
+                            # (2026-09-20) and the old f-string raised on None.
+                            _max_txt = (
                                 f"{_PEAK_EPS_MAX_MULTIPLE:.1f}x the "
                                 f"{_peak['n_years']}-year max "
-                                f"{_peak['eps_max']:.2f} = "
-                                f"{_peak['max_line']:.2f}{_sigma_txt}")
+                                f"{_peak['eps_max']:.2f} = {_peak['max_line']:.2f}"
+                                if _peak["max_line"] is not None else
+                                f"no positive EPS in {_peak['n_years']} years, so no "
+                                f"multiple-of-max line")
+                            _lines_txt = (
+                                f"forward EPS {_peak['eps_forward']:.2f} against "
+                                f"{_max_txt}{_sigma_txt}")
                             if _peak_fired:
                                 if _pb_roe is not None:
                                     _action_txt = (
