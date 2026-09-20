@@ -515,10 +515,33 @@ _INDUSTRY_ASK = {
         "(total backlog, funded backlog, contract drilling backlog, order backlog, or remaining "
         "performance obligations) and its latest book-to-bill ratio if it states one."),
     "maintenance_capex": (
-        "its MAINTENANCE (sustaining) capital expenditure for the latest fiscal year, as the "
-        "company reports it (often in its distributable cash flow reconciliation), and the "
-        "company's definition of it. Growth or expansion capex must not be included."),
+        "its MAINTENANCE (sustaining) capital expenditure for the latest COMPLETED fiscal year, "
+        "as the company reports it (often in its distributable cash flow reconciliation), and the "
+        "company's definition of it. Growth or expansion capex must not be included, and guidance "
+        "for a future year is not a reported figure -- report the actual spend of a year that has "
+        "ended."),
 }
+
+
+_OVERLAY_ASK = {
+    "maintenance_capex": "maintenance (sustaining) capital expenditure",
+    "backlog": "contracted backlog",
+    "pv10": "the discounted value of proved reserves",
+}
+
+
+def industry_overlay_prompt(kind: str, company: str, ticker: str, baseline: str) -> str:
+    """Management's forward figure for a metric whose audited actual is known.
+
+    Kept separate from the actual on purpose (owner, 2026-09-20): the baseline
+    stays the audited historical, and this becomes a delta on it that applies
+    only when the forward overlay is switched on.
+    """
+    return (f"{company} ({ticker}) reported {baseline} as its latest actual "
+            f"{_OVERLAY_ASK[kind]}. Report the company's OWN GUIDANCE or plan for the NEXT "
+            f"fiscal year for the same measure, as management states it (guidance range: give "
+            f"the midpoint). State the fiscal year the guidance is for. If the company has "
+            f"issued no such guidance, omit the figure rather than estimating one.\n" + _AMOUNT_RULE)
 
 
 def industry_input_prompt(kind: str, company: str, ticker: str) -> str:

@@ -72,24 +72,31 @@ async def industry_inputs(admin=Depends(require_model_accuracy_owner)):
     return await asyncio.to_thread(ii.ui_summary)
 
 
-async def _review_input(ticker: str, kind: str, status: str, admin):
+async def _review_input(ticker: str, kind: str, status: str, admin, overlay: bool = False):
     from src.data import industry_inputs as ii
     try:
-        return await asyncio.to_thread(ii.set_review, ticker, kind, status, _actor(admin))
+        return await asyncio.to_thread(ii.set_review, ticker, kind, status, _actor(admin),
+                                       overlay=overlay)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"no {kind!r} input for {ticker!r}")
+        raise HTTPException(status_code=404,
+                            detail=f"no {kind!r} {'overlay ' if overlay else ''}input for {ticker!r}")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.post("/industry-inputs/{ticker}/{kind}/accept")
-async def accept_industry_input(ticker: str, kind: str, admin=Depends(require_model_accuracy_owner)):
-    """Accept these exact figures for live valuations. A rebuilt entry with
-    different figures needs a new acceptance."""
-    return await _review_input(ticker, kind, "accepted", admin)
+async def accept_industry_input(ticker: str, kind: str, overlay: bool = False,
+                                admin=Depends(require_model_accuracy_owner)):
+    """Accept these exact figures for live valuations. `overlay=true` accepts the
+    forward-guidance delta instead of the audited baseline; it applies only while
+    the forward overlay is switched on. A rebuilt entry needs a new acceptance."""
+    return await _review_input(ticker, kind, "accepted", admin, overlay)
 
 
 @router.post("/industry-inputs/{ticker}/{kind}/revoke")
-async def revoke_industry_input(ticker: str, kind: str, admin=Depends(require_model_accuracy_owner)):
-    return await _review_input(ticker, kind, "revoked", admin)
+async def revoke_industry_input(ticker: str, kind: str, overlay: bool = False,
+                                admin=Depends(require_model_accuracy_owner)):
+    return await _review_input(ticker, kind, "revoked", admin, overlay)
 
 
 @router.get("/calibration/{version_id}")

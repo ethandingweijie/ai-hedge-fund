@@ -452,6 +452,17 @@
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
+    "overlay": {
+     "built_at": "2026-09-20T01:44:33+00:00",
+     "currency": "USD",
+     "delta_pct": -0.070367,
+     "guidance_value": 938.0,
+     "note": "guidance FY2025E vs actual FY2024",
+     "period": "FY2025E",
+     "quote": "Our capital expenditures for the year ended December 31, 2024, and the amount we expect to spend for 2025 to sustain our assets and expand our business are as follows: ... Sustaining capital expenditures, $, 1,009, $, 938",
+     "scale": "mn",
+     "source_url": "https://www.sec.gov/Archives/edgar/data/1506307/000150630725000008/kmi-20241231.htm"
+    },
     "secs": 27.8,
     "value_usd": 1009000000.0
    }
@@ -634,30 +645,30 @@
   },
   "WMB": {
    "maintenance_capex": {
-    "built_at": "2026-09-19T17:59:15+00:00",
+    "built_at": "2026-09-20T01:31:35+00:00",
     "checks": [
      {
       "check": "maintenance_capex / depreciation_and_amortization",
-      "detail": "0.38x (plausible 0.1x to 3.0x)",
+      "detail": "0.17x (plausible 0.1x to 3.0x)",
       "ok": true,
-      "ratio": 0.3835
+      "ratio": 0.1674
      },
      {
       "check": "maintenance capex < OCF",
-      "detail": "0.15x of operating cash flow",
+      "detail": "0.07x of operating cash flow",
       "ok": true
      }
     ],
     "company": "The Williams Companies, Inc.",
     "data": {
-     "definition": "Investments in working condition of assets to protect the business. Maintenance capital supporting integrity of pipelines and continued investments in emissions reduction program.",
+     "definition": "The company notes in its non-GAAP Distributable Cash Flow reconciliation that 'Adjustments for maintenance capital expenditures and cash portion of interest expense include our proportionate share of these items of our equity-method investments.' In its investor presentations, Williams defines maintenance capital as 'Investments in working condition of assets to protect the business' that support the 'integrity of pipelines and continued investments in emissions reduction program.'",
      "value": {
       "currency": "USD",
-      "period": "FY2026E",
-      "quote": "Maintenance Capital2 $900MM",
+      "period": "FY2020",
+      "quote": "Maintenance capital expenditures (1) (530) (464) (393)",
       "scale": "mn",
-      "source_url": "https://investor.williams.com",
-      "value": 900.0
+      "source_url": "https://www.sec.gov/Archives/edgar/data/107263/000119312521085137/d131043ddef14a.htm",
+      "value": 393.0
      }
     },
     "fmp_context_usd": {
@@ -671,8 +682,8 @@
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
-    "secs": 231.9,
-    "value_usd": 900000000.0
+    "secs": 220.7,
+    "value_usd": 393000000.0
    }
   }
  },

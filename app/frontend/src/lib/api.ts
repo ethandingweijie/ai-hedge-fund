@@ -364,16 +364,33 @@ export interface IndustryInputRow {
   reviewer?: string | null;
   reviewed_at?: string | null;
   stale?: boolean;
+  /** 'actual' unless the pre-fill answered with a period that is not the latest reported one. */
+  basis?: string;
+  /** Management guidance as a delta on the audited baseline; applies only while the
+   *  forward overlay is switched on, and only once accepted on its own. */
+  overlay?: {
+    delta_pct?: number | null;
+    guidance_value?: number | null;
+    currency?: string | null;
+    scale?: string | null;
+    period?: string | null;
+    source_url?: string | null;
+    quote?: string | null;
+    note?: string | null;
+    status: SegmentMemoryReview['status'];
+  } | null;
+  overlay_allowed?: boolean;
 }
 
 export function getIndustryInputs(): Promise<{ rows: IndustryInputRow[]; kinds: string[] }> {
   return fetchJson(`${BASE}/model-accuracy/industry-inputs`, { headers: { ..._authHeaders() } });
 }
 
-export function reviewIndustryInput(ticker: string, kind: string, action: 'accept' | 'revoke'):
-    Promise<SegmentMemoryReview> {
+export function reviewIndustryInput(ticker: string, kind: string, action: 'accept' | 'revoke',
+                                    overlay = false): Promise<SegmentMemoryReview> {
   return fetchJson(
-    `${BASE}/model-accuracy/industry-inputs/${encodeURIComponent(ticker)}/${encodeURIComponent(kind)}/${action}`,
+    `${BASE}/model-accuracy/industry-inputs/${encodeURIComponent(ticker)}/${encodeURIComponent(kind)}/${action}`
+    + (overlay ? '?overlay=true' : ''),
     { method: 'POST', headers: { ..._authHeaders() } });
 }
 

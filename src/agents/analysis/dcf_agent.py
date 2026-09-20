@@ -283,6 +283,22 @@ def _decayed_growth_schedule(base_growth: float, profile_name: str, years: int =
 # fade on the historical CAGR would pin MELI at its 42% trailing rate forever,
 # which is the opposite failure to the one being fixed.
 
+#: Reserve-backed profiles: an accepted PV-10 / standardized measure floors
+#: the bear case and is published as a cross-check. Never blended (owner,
+#: 2026-09-20): the measure is proved reserves only, after tax, at trailing
+#: SEC prices, and on COP, DVN and OXY it sat 75-79% below the share price.
+_RESERVE_FLOOR_PROFILES: frozenset[str] = frozenset({
+    "Upstream Oil & Gas", "Integrated Oil & Gas",
+})
+
+#: Profiles where contracted backlog is revenue visibility: it bounds the bear
+#: case's near-term revenue decline (owner, 2026-09-20). No EV/Backlog leg --
+#: FMP carries no backlog for peers, so a peer median cannot be taken.
+_BACKLOG_VISIBILITY_PROFILES: frozenset[str] = frozenset({
+    "Oilfield Services & Drilling",
+})
+
+
 #: Profiles where a peak margin IS the cycle, not an inflection. Excluded from
 #: the margin exception to the CAGR gate: at a cycle top the latest EBIT margin
 #: sits above its own multi-year mean by construction, so the exception would
@@ -6052,7 +6068,10 @@ def _compute_method_value(
         from src.data.regional_comps import MIN_VALID_FCF_YIELD
         ocf = most_recent.get("operating_cash_flow")
         maint = most_recent.get("maintenance_capex_accepted")
-        maint_src = "accepted maintenance capex"
+        _maint_d = most_recent.get("_maintenance_capex_detail") or {}
+        maint_src = ("accepted maintenance capex"
+                     + (f", incl. forward overlay {_maint_d.get('delta_pct', 0):+.1%}"
+                        if _maint_d.get("overlay_applied") else ""))
         if maint is None:
             maint = most_recent.get("depreciation_and_amortization")
             maint_src = "D&A (maintenance capex not reported)"
@@ -6062,7 +6081,8 @@ def _compute_method_value(
         target_yield = peer.get("fcf_yield", 0.05) / (sm * growth_premium)
         if dcf_amt <= 0 or target_yield <= MIN_VALID_FCF_YIELD:
             return None
-        _leg_trace(kind="yield", metric=f"Distributable CF: OCF - {maint_src}",
+        _leg_trace(kind="yield", maintenance_capex_audit=(_maint_d or None),
+                   metric=f"Distributable CF: OCF - {maint_src}",
                    metric_value=float(dcf_amt), shares=float(shares),
                    per_share_metric=float(dcf_amt / shares), target_yield=float(target_yield),
                    multiple=float(1.0 / target_yield),
@@ -8239,6 +8259,45 @@ def _sotp_scenario_from_trees(table: dict, trees: Optional[dict], scenario: str,
 # against IV $86.42 and price $104.85). Those recipes are still computed, and
 # published as cross-checks in `pt_bridge.cross_checks`.
 
+def _apply_reserve_floor(scenario_results: dict, floor_ps: Optional[float],
+                         detail: Optional[dict] = None) -> Optional[dict]:
+    """Publish the reserve value as a cross-check; floor the bear case with it.
+
+    Owner decision 2026-09-20. The standardized measure is proved reserves
+    only, after tax, at trailing SEC prices -- 75-79% below price on COP, DVN
+    and OXY -- so it never carries weight in the blend. It does say what the
+    company's own reserves are worth, which is a floor the bear case should
+    not sit under. Returns the record written to the bear scenario, or None.
+    """
+    if not floor_ps or floor_ps <= 0:
+        return None
+    for scen in scenario_results.values():
+        if not isinstance(scen, dict):
+            continue
+        mit = scen.get("method_iv_table")
+        if isinstance(mit, dict):
+            mit["Reserve NPV (PV-10)"] = round(floor_ps, 2)
+            scen["cross_check_methods"] = _cross_check_methods(mit, scen.get("effective_weights"))
+    bear = scenario_results.get("bear")
+    if not isinstance(bear, dict) or not isinstance(bear.get("intrinsic_value"), (int, float)):
+        return None
+    if bear["intrinsic_value"] >= floor_ps:
+        return None
+    before = bear["intrinsic_value"]
+    bear["intrinsic_value"] = round(floor_ps, 2)
+    rec = {"floor_per_share": round(floor_ps, 2), "before": before,
+           "period": (detail or {}).get("period"),
+           "source_url": (detail or {}).get("source_url"),
+           "note": ("after-tax discounted value of proved reserves, less net debt, per "
+                    "share; trailing SEC prices")}
+    bear["reserve_floor"] = rec
+    if isinstance(bear.get("forward_flags"), list):
+        bear["forward_flags"].append(
+            f"Bear case floored at the reserve value: {before:,.2f} -> {floor_ps:,.2f} per "
+            f"share (proved reserves, after tax, less net debt)")
+    return rec
+
+
 def _cross_check_methods(method_iv_table: Optional[dict],
                          effective_weights: Optional[list]) -> list[str]:
     """Legs computed and published but carrying no weight in the blend."""
@@ -9278,9 +9337,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             from src.data import industry_inputs as _ii
             _mc_ccy = (_target_ccy if (reported_currency != _target_ccy and fx_rate > 0
                                        and fx_rate != 1.0) else reported_currency)
-            _mc = _ii.accepted_amount(ticker, "maintenance_capex", _mc_ccy)
-            if _mc is not None:
-                most_recent["maintenance_capex_accepted"] = _mc
+            most_recent["_values_currency"] = _mc_ccy
+            _mc_d = _ii.accepted_detail(ticker, "maintenance_capex", _mc_ccy)
+            if _mc_d and _mc_d.get("value") is not None:
+                most_recent["maintenance_capex_accepted"] = _mc_d["value"]
+                most_recent["_maintenance_capex_detail"] = _mc_d
+                if _mc_d.get("overlay_applied"):
+                    ticker_forward_flags.append(
+                        f"Maintenance capex: forward overlay applied — "
+                        f"{_mc_d['baseline'] / 1e6:,.0f}m actual ({_mc_d.get('period')}) "
+                        f"{_mc_d.get('delta_pct', 0):+.1%} guidance = "
+                        f"{_mc_d['value'] / 1e6:,.0f}m")
         except Exception:                                  # noqa: BLE001
             pass
         most_recent["normalized_ebit"]       = _norm_ebit
@@ -11249,6 +11316,23 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _s_to_c = _sales_to_capital(most_recent)
 
         # Base runs first so its method availability gates bear/bull.
+        # Review-gated industry inputs, resolved once for every scenario.
+        _stmt_ccy = most_recent.get("_values_currency") or reported_currency
+        _pv10_d = _backlog_d = None
+        _backlog_cov = _pv10_floor_ps = None
+        try:
+            from src.data import industry_inputs as _ii_g
+            if profile_name in _RESERVE_FLOOR_PROFILES:
+                _pv10_d = _ii_g.accepted_detail(ticker, "pv10", _stmt_ccy)
+                if _pv10_d and shares and shares > 0:
+                    _pv10_floor_ps = (_pv10_d["value"] - (net_debt or 0.0)) / shares
+            if profile_name in _BACKLOG_VISIBILITY_PROFILES:
+                _backlog_d = _ii_g.accepted_detail(ticker, "backlog", _stmt_ccy)
+                if _backlog_d and revenue_base and revenue_base > 0:
+                    _backlog_cov = _backlog_d["value"] / revenue_base
+        except Exception:                                  # noqa: BLE001
+            _pv10_d = _backlog_d = None
+
         for scenario in ("base", "bear", "bull"):
             # Prefer analyst-dispersion-based growth when available (Feature 1a).
             # Falls back to symmetric multiplier when no analyst coverage / FMP
@@ -11263,6 +11347,17 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # 40% is already best-in-class enterprise SaaS (NET 29%, SNOW 30%,
             # DDOG 28%). Caps don't affect typical growth rates.
             g = max(min(g, 0.40), -0.30)
+            # Contracted backlog is revenue visibility: work already under
+            # contract cannot fall away in the bear year. Coverage of 1.0x or
+            # more floors the decline at zero; 0.4x floors it at -60%.
+            if scenario == "bear" and _backlog_cov is not None and g < 0:
+                _g_floor = -(1.0 - min(_backlog_cov, 1.0))
+                if g < _g_floor:
+                    ticker_forward_flags.append(
+                        f"Bear revenue decline bounded by contracted backlog: "
+                        f"{g:+.1%} -> {_g_floor:+.1%} ({_backlog_cov:.2f}x coverage of "
+                        f"next-year revenue)")
+                    g = _g_floor
 
             # Fix B — multiplicative margin variance: bear compresses base
             # margin (20% legacy / 35% high-SBC), bull expands (20% / 15%).
@@ -12542,6 +12637,9 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # scenario that moved. An invariant that erases the evidence of its own
         # violation cannot be audited, and the next person reading the payload
         # would have no way to tell a clamped 5.20 from a computed one.
+        # ── Reserve floor and cross-check (owner, 2026-09-20) ────────────
+        _apply_reserve_floor(scenario_results, _pv10_floor_ps, _pv10_d)
+
         _order_rec = _enforce_scenario_ordering(scenario_results)
         if _order_rec:
             _base_pivot = _order_rec["base_iv"]

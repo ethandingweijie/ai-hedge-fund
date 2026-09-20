@@ -81,8 +81,14 @@ def build_one(ticker: str, kind: str) -> dict:
     if not isinstance(data, dict):
         raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
     value_usd = gp.amount((data or {}).get("value"), ii._fx("USD"))
-    checks = ii.reconcile(kind, value_usd, ctx)
+    period = (data.get("value") or {}).get("period")
+    checks = ii.reconcile(kind, value_usd, ctx, period=period)
     return {
+        # Audited actual unless a check says the period is not the latest
+        # reported one -- a guidance figure must arrive as an overlay, not as
+        # the baseline (owner, 2026-09-20).
+        "basis": ("actual" if all(c["ok"] is not False for c in checks
+                                  if c["check"] == "latest reported period") else "not_actual"),
         "data": data, "company": ctx["company"], "fmp_context_usd": ctx,
         "value_usd": value_usd, "checks": checks,
         "ok": all(c["ok"] is not False for c in checks),
@@ -92,12 +98,34 @@ def build_one(ticker: str, kind: str) -> dict:
     }
 
 
+def build_overlay(ticker: str, kind: str, base_entry: dict) -> dict:
+    """Management guidance for the next year, stored as a delta on the actual."""
+    v = (base_entry.get("data") or {}).get("value") or {}
+    baseline_txt = f"{v.get('value')} {v.get('currency')} {v.get('scale')} for {v.get('period')}"
+    out = gp.generate(gp.industry_overlay_prompt(kind, base_entry.get("company") or ticker,
+                                                 ticker, baseline_txt),
+                      schema=gp.INDUSTRY_INPUT_SCHEMAS[kind], grounded=True)
+    data = out.get("json") or {}
+    g = data.get("value") or {}
+    usd = ii._fx("USD")
+    g_usd, base_usd = gp.amount(g, usd), base_entry.get("value_usd")
+    if not g_usd or not base_usd:
+        raise ValueError("no cited guidance amount")
+    return {"delta_pct": round(g_usd / base_usd - 1.0, 6),
+            "guidance_value": g.get("value"), "currency": g.get("currency"), "scale": g.get("scale"),
+            "period": g.get("period"), "source_url": g.get("source_url"), "quote": g.get("quote"),
+            "note": f"guidance {g.get('period')} vs actual {v.get('period')}",
+            "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kind", choices=ii.KINDS)
     ap.add_argument("--tickers", default="")
     ap.add_argument("--wave", choices=["1"])
     ap.add_argument("--force", action="store_true")
+    ap.add_argument("--overlay", action="store_true",
+                    help="capture management guidance as a delta on the stored actual")
     a = ap.parse_args(argv)
     jobs = ([(k, t) for k, ts in WAVE1.items() for t in ts] if a.wave == "1"
             else [(a.kind, t.strip()) for t in a.tickers.split(",") if t.strip()])
@@ -106,8 +134,28 @@ def main(argv=None) -> int:
     doc = ii.load() or {"version": 1, "tickers": {}}
     for kind, t in jobs:
         key = ii._key(t)
-        if not a.force and ((doc["tickers"].get(key) or {}).get(kind)):
+        if not a.force and not a.overlay and ((doc["tickers"].get(key) or {}).get(kind)):
             print(f"  {t:<10} {kind:<18} skip (present)")
+            continue
+        if a.overlay:
+            base = (doc["tickers"].get(key) or {}).get(kind)
+            if base and base.get("overlay") and not a.force:
+                print(f"  {t:<10} {kind:<18} overlay present (use --force to rebuild)")
+                continue
+            if not base:
+                print(f"  {t:<10} {kind:<18} no actual to overlay")
+                continue
+            if kind in ii.NO_OVERLAY:
+                print(f"  {t:<10} {kind:<18} overlay refused (measure is defined by trailing prices)")
+                continue
+            try:
+                base["overlay"] = build_overlay(t, kind, base)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  {t:<10} {kind:<18} overlay FAILED {type(exc).__name__}: {str(exc)[:100]}")
+                continue
+            ii.save(doc)
+            o = base["overlay"]
+            print(f"  {t:<10} {kind:<18} overlay {o['delta_pct']:+.1%} ({o['note']})", flush=True)
             continue
         try:
             e = build_one(t, kind)

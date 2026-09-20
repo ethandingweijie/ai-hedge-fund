@@ -24,11 +24,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Callable, Optional
 
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
 KINDS = ("pv10", "backlog", "maintenance_capex")
+
+#: The overlay toggle. Off by default: a valuation runs on audited actuals
+#: unless someone switches the forward view on deliberately.
+OVERLAY_FLAG = "FEATURE_FORWARD_OVERLAY"
+
+#: Kinds an overlay may never touch. The SEC standardized measure is defined by
+#: proved reserves at trailing SEC prices; a forward price deck applied to it
+#: would report a rigid measure as a forward one. Price decks belong on the DCF
+#: and NAV curves, where the audit trail can separate price from reserve life.
+NO_OVERLAY = ("pv10",)
 
 #: Plausibility bounds, each against a figure FMP reports for the same company.
 #: A figure outside them is kept for review with the failed check named -- a
@@ -67,6 +78,12 @@ def save(doc: dict, path: Optional[Path] = None) -> None:
         json.dumps(doc, indent=1, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def overlay_enabled() -> bool:
+    """True when the forward overlay is switched on for this process."""
+    import os
+    return os.getenv(OVERLAY_FLAG, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _key(ticker: str) -> str:
     from src.tools.ticker_canonical import canonical_ticker
     return canonical_ticker(ticker)
@@ -78,8 +95,10 @@ def entry(ticker: str, kind: str, doc: Optional[dict] = None) -> Optional[dict]:
     return e if isinstance(e, dict) and isinstance(e.get("data"), dict) else None
 
 
-def content_hash(e: dict) -> str:
-    blob = json.dumps(e.get("data") or {}, sort_keys=True, ensure_ascii=False)
+def content_hash(e: dict, *, overlay: bool = False) -> str:
+    """What was reviewed: the baseline figures, or the overlay's delta."""
+    part = (e.get("overlay") or {}) if overlay else (e.get("data") or {})
+    blob = json.dumps(part, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
@@ -103,16 +122,38 @@ def _fx(to_ccy: str) -> Callable[[str], Optional[float]]:
     return rate
 
 
+def amount(c, rate):
+    """`gemini_params.amount`, imported lazily so this module stays importable
+    without the Gemini client."""
+    from src.agents.industry.gemini_params import amount as _amount
+    return _amount(c, rate)
+
+
 def amount_of(e: dict, to_ccy: str,
               fx: Optional[Callable[[str], Optional[float]]] = None) -> Optional[float]:
     """The entry's headline amount in full units of `to_ccy`, or None."""
-    from src.agents.industry.gemini_params import amount
     return amount((e.get("data") or {}).get("value"), fx or _fx(to_ccy))
 
 
-def reconcile(kind: str, value: Optional[float], context: dict) -> list[dict]:
-    """Checks for one amount (full units, the context's currency) against FMP."""
+def _year(text: Optional[str]) -> Optional[int]:
+    m = re.search(r"(19|20)\d{2}", str(text or ""))
+    return int(m.group(0)) if m else None
+
+
+def reconcile(kind: str, value: Optional[float], context: dict,
+              period: Optional[str] = None) -> list[dict]:
+    """Checks for one amount (full units, the context's currency) against FMP.
+
+    `period` is the fiscal period the figure is stated for: a pre-fill that
+    answers with guidance for a future year, or with a year long past, is not
+    the latest reported figure even when its magnitude is plausible (Williams,
+    2026-09-20: FY2026E guidance, then FY2020 actuals).
+    """
     checks: list[dict] = []
+    y, latest = _year(period), _year(context.get("period"))
+    if y and latest:
+        checks.append({"check": "latest reported period", "ok": latest - 1 <= y <= latest,
+                       "detail": f"figure is {y}; FMP's latest reported year is {latest}"})
     if value is None:
         return [{"check": "cited_amount", "ok": False,
                  "detail": "no cited amount of known scale and convertible currency"}]
@@ -146,23 +187,28 @@ def _ensure_reviews() -> None:
         _reviews_ready_key = k
 
 
-def review_for(ticker: str, kind: str, e: dict) -> dict:
+def review_for(ticker: str, kind: str, e: dict, *, overlay: bool = False) -> dict:
     from src.data import db as _db
     _ensure_reviews()
     row = _db.query_one("SELECT status, content_hash, reviewer, reviewed_at FROM industry_input_reviews "
-                        "WHERE input_key = ?", [f"{_key(ticker)}|{kind}"])
+                        "WHERE input_key = ?", [_review_key(ticker, kind, overlay)])
     if not row:
         return {"status": "pending", "reviewer": None, "reviewed_at": None, "stale": False}
-    stale = row["content_hash"] != content_hash(e)
+    stale = row["content_hash"] != content_hash(e, overlay=overlay)
     status = row["status"]
     if stale and status == "accepted":
         status = "changed_since_acceptance"
     return {"status": status, "reviewer": row["reviewer"], "reviewed_at": row["reviewed_at"], "stale": stale}
 
 
+def _review_key(ticker: str, kind: str, overlay: bool) -> str:
+    return f"{_key(ticker)}|{kind}" + ("|overlay" if overlay else "")
+
+
 def set_review(ticker: str, kind: str, status: str, reviewer: Optional[str], *,
-               doc: Optional[dict] = None) -> dict:
-    """Record an owner decision. KeyError when there is no entry to review."""
+               doc: Optional[dict] = None, overlay: bool = False) -> dict:
+    """Record an owner decision on the baseline, or on its overlay delta.
+    KeyError when there is no entry (or no overlay) to review."""
     from datetime import datetime, timezone
     from src.data import db as _db
     if status not in ("accepted", "revoked"):
@@ -170,26 +216,70 @@ def set_review(ticker: str, kind: str, status: str, reviewer: Optional[str], *,
     if kind not in KINDS:
         raise KeyError(kind)
     e = entry(ticker, kind, doc)
-    if not e:
-        raise KeyError(f"{ticker}|{kind}")
+    if not e or (overlay and not e.get("overlay")):
+        raise KeyError(f"{ticker}|{kind}" + ("|overlay" if overlay else ""))
+    if overlay and kind in NO_OVERLAY:
+        raise ValueError(f"{kind} may not carry a forward overlay")
     _ensure_reviews()
-    key = f"{_key(ticker)}|{kind}"
+    key = _review_key(ticker, kind, overlay)
     _db.execute("DELETE FROM industry_input_reviews WHERE input_key = ?", [key])
     _db.execute("INSERT INTO industry_input_reviews (input_key, status, content_hash, reviewer, reviewed_at) "
                 "VALUES (?, ?, ?, ?, ?)",
-                [key, status, content_hash(e), reviewer, datetime.now(timezone.utc).isoformat()])
-    return {"input_key": key, **review_for(ticker, kind, e)}
+                [key, status, content_hash(e, overlay=overlay), reviewer,
+                 datetime.now(timezone.utc).isoformat()])
+    return {"input_key": key, **review_for(ticker, kind, e, overlay=overlay)}
 
 
 def accepted_amount(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] = None,
-                    fx: Optional[Callable[[str], Optional[float]]] = None) -> Optional[float]:
-    """The accepted figure in full units of `to_ccy`; None unless the owner
-    accepted exactly these figures."""
+                    fx: Optional[Callable[[str], Optional[float]]] = None,
+                    overlay: Optional[bool] = None) -> Optional[float]:
+    """The figure a valuation may use, in full units of `to_ccy`, or None.
+
+    The baseline is the accepted audited actual. An accepted overlay is applied
+    only when the toggle is on (or `overlay=True` is passed explicitly); see
+    `accepted_detail` for the audit trail behind the number.
+    """
+    d = accepted_detail(ticker, kind, to_ccy, doc=doc, fx=fx, overlay=overlay)
+    return d["value"] if d else None
+
+
+def accepted_detail(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] = None,
+                    fx: Optional[Callable[[str], Optional[float]]] = None,
+                    overlay: Optional[bool] = None) -> Optional[dict]:
+    """{value, baseline, overlay_applied, delta_pct, delta_abs, basis, source} or None.
+
+    The audit trail the owner asked for: what the figure would be on audited
+    actuals alone, and how much of it the forward overlay added.
+    """
     try:
         e = entry(ticker, kind, doc)
         if not e or review_for(ticker, kind, e)["status"] != "accepted":
             return None
-        return amount_of(e, to_ccy, fx)
+        base = amount_of(e, to_ccy, fx)
+        if base is None:
+            return None
+        out = {"value": base, "baseline": base, "overlay_applied": False,
+               "delta_pct": None, "delta_abs": None,
+               "basis": e.get("basis") or "actual",
+               "period": ((e.get("data") or {}).get("value") or {}).get("period"),
+               "source_url": ((e.get("data") or {}).get("value") or {}).get("source_url")}
+        ov = e.get("overlay") or {}
+        want = overlay_enabled() if overlay is None else bool(overlay)
+        if not (want and ov and kind not in NO_OVERLAY):
+            return out
+        if review_for(ticker, kind, e, overlay=True)["status"] != "accepted":
+            return out
+        pct = ov.get("delta_pct")
+        abs_amt = amount({"value": ov.get("delta_value"), "currency": ov.get("currency"),
+                          "scale": ov.get("scale"), "source_url": ov.get("source_url"),
+                          "quote": ov.get("quote")}, fx or _fx(to_ccy)) if ov.get("delta_value") is not None else None
+        value = base * (1.0 + float(pct)) if isinstance(pct, (int, float)) else base
+        if abs_amt is not None:
+            value += abs_amt
+        out.update(value=value, overlay_applied=value != base, delta_pct=pct, delta_abs=abs_amt,
+                   overlay_source=ov.get("source_url"), overlay_period=ov.get("period"),
+                   overlay_note=ov.get("note"))
+        return out
     except Exception:  # noqa: BLE001
         return None
 
@@ -209,8 +299,13 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                 rv = reviews(t, kind, e)
             except Exception:  # noqa: BLE001
                 rv = {"status": "pending", "reviewer": None, "reviewed_at": None, "stale": False}
+            ov = e.get("overlay") or {}
             rows.append({
                 "ticker": t, "company": e.get("company"), "kind": kind,
+                "basis": e.get("basis") or "actual",
+                "overlay": ({**ov, "status": reviews(t, kind, e, overlay=True)["status"]}
+                            if ov and kind not in NO_OVERLAY else None),
+                "overlay_allowed": kind not in NO_OVERLAY,
                 "value": v.get("value"), "currency": v.get("currency"), "scale": v.get("scale"),
                 "period": v.get("period"), "source_url": v.get("source_url"), "quote": v.get("quote"),
                 "detail": {k: data.get(k) for k in ("measure", "price_basis", "proved_reserves",

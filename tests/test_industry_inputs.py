@@ -95,3 +95,111 @@ def test_the_midstream_leg_uses_the_accepted_figure(monkeypatch):
         net_debt=1e9, market_cap=1e10, wacc=0.07, growth_base=0.02, fcf_margin_base=0.1, tgr=0.02,
         fcf_floor=0.0, sector="Energy", scenario="base", profile_name="Midstream / Pipelines")
     assert v == pytest.approx(((3e9 - 0.5e9) / 1e8) / 0.06)
+
+
+# ── forward overlay: actuals are the baseline, guidance is a delta ──────────
+# Owner decision 2026-09-20, after Williams' pre-fill answered with FY2026
+# guidance and then FY2020 actuals.
+
+def _doc_with_overlay(delta_pct=0.10):
+    d = _doc()
+    d["tickers"]["KMI"]["maintenance_capex"]["basis"] = "actual"
+    d["tickers"]["KMI"]["maintenance_capex"]["overlay"] = {
+        "delta_pct": delta_pct, "guidance_value": 1110.0, "currency": "USD", "scale": "mn",
+        "period": "FY2026E", "source_url": "https://ir.kindermorgan.com/guidance",
+        "quote": "2026 sustaining capital of $1,110 million", "note": "guidance FY2026E vs actual FY2024"}
+    return d
+
+
+def test_the_overlay_is_off_by_default(store, monkeypatch):
+    monkeypatch.delenv(ii.OVERLAY_FLAG, raising=False)
+    doc = _doc_with_overlay()
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc)
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc, overlay=True)
+    d = ii.accepted_detail("KMI", "maintenance_capex", "USD", doc=doc, fx=USD)
+    assert d["value"] == pytest.approx(1.009e9) and d["overlay_applied"] is False
+
+
+def test_the_toggle_applies_an_accepted_overlay_with_its_audit_trail(store, monkeypatch):
+    monkeypatch.setenv(ii.OVERLAY_FLAG, "1")
+    doc = _doc_with_overlay()
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc)
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc, overlay=True)
+    d = ii.accepted_detail("KMI", "maintenance_capex", "USD", doc=doc, fx=USD)
+    assert d["baseline"] == pytest.approx(1.009e9)
+    assert d["value"] == pytest.approx(1.009e9 * 1.10)
+    assert d["overlay_applied"] and d["delta_pct"] == pytest.approx(0.10)
+
+
+def test_an_unaccepted_overlay_never_applies(store, monkeypatch):
+    monkeypatch.setenv(ii.OVERLAY_FLAG, "1")
+    doc = _doc_with_overlay()
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc)
+    d = ii.accepted_detail("KMI", "maintenance_capex", "USD", doc=doc, fx=USD)
+    assert d["value"] == pytest.approx(1.009e9) and not d["overlay_applied"]
+
+
+def test_the_baseline_and_the_overlay_are_reviewed_separately(store):
+    doc = _doc_with_overlay()
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc)
+    e = ii.entry("KMI", "maintenance_capex", doc)
+    assert ii.review_for("KMI", "maintenance_capex", e)["status"] == "accepted"
+    assert ii.review_for("KMI", "maintenance_capex", e, overlay=True)["status"] == "pending"
+
+
+def test_a_changed_overlay_needs_a_new_acceptance(store, monkeypatch):
+    monkeypatch.setenv(ii.OVERLAY_FLAG, "1")
+    doc = _doc_with_overlay()
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc)
+    ii.set_review("KMI", "maintenance_capex", "accepted", "owner", doc=doc, overlay=True)
+    moved = _doc_with_overlay(delta_pct=0.25)
+    d = ii.accepted_detail("KMI", "maintenance_capex", "USD", doc=moved, fx=USD)
+    assert not d["overlay_applied"], "a re-stated overlay is not the one that was accepted"
+
+
+def test_the_standardized_measure_never_takes_an_overlay(store):
+    """It is defined by proved reserves at trailing SEC prices; a price-deck
+    delta on it would report a rigid measure as a forward one."""
+    assert "pv10" in ii.NO_OVERLAY
+    doc = {"version": 1, "tickers": {"COP": {"pv10": {
+        "data": {"value": {"value": 55962.0, "currency": "USD", "scale": "mn", "period": "FY2025",
+                           "source_url": "https://x", "quote": "standardized measure"}},
+        "overlay": {"delta_pct": 0.3}}}}}
+    with pytest.raises(ValueError):
+        ii.set_review("COP", "pv10", "accepted", "owner", doc=doc, overlay=True)
+
+
+# ── the two approved uses (owner, 2026-09-20) ──────────────────────────────
+
+def test_the_reserve_value_is_a_cross_check_and_a_bear_floor_not_a_leg():
+    """Blending it would cut every E&P value: COP, DVN and OXY all sit 75-79%
+    below price on the standardized measure."""
+    from src.agents.analysis import dcf_agent as d
+    from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+    for prof in d._RESERVE_FLOOR_PROFILES:
+        names = {m["name"] for m in P["Resources"][prof]["methods"]}
+        assert "Reserve NPV (PV-10)" not in names, prof
+    scen = {"bear": {"intrinsic_value": 20.0, "method_iv_table": {"EV/OCF": 25.0},
+                     "effective_weights": [{"method": "EV/OCF", "value_key": "EV/OCF"}],
+                     "forward_flags": []},
+            "base": {"intrinsic_value": 40.0, "method_iv_table": {"EV/OCF": 40.0},
+                     "effective_weights": [{"method": "EV/OCF", "value_key": "EV/OCF"}]}}
+    rec = d._apply_reserve_floor(scen, 32.02, {"period": "FY2025", "source_url": "https://x"})
+    # Published on every scenario, weighted on none.
+    assert scen["base"]["method_iv_table"]["Reserve NPV (PV-10)"] == 32.02
+    assert "Reserve NPV (PV-10)" in scen["base"]["cross_check_methods"]
+    # The bear case is lifted to the reserve value, and says so.
+    assert scen["bear"]["intrinsic_value"] == 32.02 and rec["before"] == 20.0
+    assert "floored at the reserve value" in scen["bear"]["forward_flags"][0]
+    # A bear above the floor is left alone.
+    scen2 = {"bear": {"intrinsic_value": 50.0, "method_iv_table": {}, "forward_flags": []}}
+    assert d._apply_reserve_floor(scen2, 32.02) is None
+    assert scen2["bear"]["intrinsic_value"] == 50.0
+
+
+def test_backlog_bounds_only_the_bear_decline():
+    from src.agents.analysis import dcf_agent as d
+    assert d._BACKLOG_VISIBILITY_PROFILES == frozenset({"Oilfield Services & Drilling"})
+    src = __import__("inspect").getsource(d.run_dcf_agent)
+    assert 'if scenario == "bear" and _backlog_cov is not None and g < 0:' in src
+    assert "-(1.0 - min(_backlog_cov, 1.0))" in src

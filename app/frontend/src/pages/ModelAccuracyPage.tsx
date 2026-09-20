@@ -414,23 +414,25 @@ const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
   maintenance_capex: 'Maintenance capex',
 };
 
-function IndustryInputReview({ row, onChanged }: { row: IndustryInputRow; onChanged: () => void }) {
+function IndustryInputReview({ row, onChanged, overlay = false }:
+    { row: IndustryInputRow; onChanged: () => void; overlay?: boolean }) {
   const [busy, setBusy] = useState(false);
+  const status = overlay ? (row.overlay?.status ?? 'pending') : row.status;
   const act = (action: 'accept' | 'revoke') => {
     setBusy(true);
-    reviewIndustryInput(row.ticker, row.kind, action)
+    reviewIndustryInput(row.ticker, row.kind, action, overlay)
       .then(() => { toast.success(`${row.ticker} ${INPUT_LABEL[row.kind]} ${action === 'accept' ? 'accepted' : 'revoked'}`); onChanged(); })
       .catch((e: Error) => toast.error(`Could not ${action}: ${e.message}`))
       .finally(() => setBusy(false));
   };
   return (
     <span className="flex gap-2 justify-end">
-      {row.status !== 'accepted' && (
+      {status !== 'accepted' && (
         <Button size="sm" disabled={busy} onClick={() => act('accept')}>
-          {busy ? <Loader2 size={14} className="animate-spin" /> : 'Accept'}
+          {busy ? <Loader2 size={14} className="animate-spin" /> : overlay ? 'Accept overlay' : 'Accept'}
         </Button>
       )}
-      {(row.status === 'accepted' || row.status === 'changed_since_acceptance') && (
+      {(status === 'accepted' || status === 'changed_since_acceptance') && (
         <Button size="sm" variant="outline" disabled={busy} onClick={() => act('revoke')}>Revoke</Button>
       )}
     </span>
@@ -448,7 +450,7 @@ function IndustryInputsSection({ allowed }: { allowed: boolean }) {
   useEffect(() => { if (allowed) reload(); }, [allowed, reload]);
   return (
     <section>
-      <SectionTitle hint="Figures FMP does not report, taken as each filing prints them. Checked against FMP; used in valuations only once accepted. Click a figure for its source.">
+      <SectionTitle hint="Figures FMP does not report, taken as each filing prints them. The baseline is the audited actual; management guidance is a separate delta that applies only while the forward overlay is switched on. Checked against FMP; used in valuations only once accepted. Click a figure for its source.">
         Industry inputs {rows && (
           <Chip strong>{rows.filter((r) => r.status === 'accepted').length} of {rows.length} accepted</Chip>
         )}
@@ -489,6 +491,25 @@ function IndustryInputsSection({ allowed }: { allowed: boolean }) {
                     {r.checks.map((c) => (
                       <div key={c.check}>{c.ok === false ? '✕' : c.ok ? '✓' : '·'} {c.check}: {c.detail}</div>
                     ))}
+                    {r.basis && r.basis !== 'actual' && (
+                      <div>✕ not the latest audited actual — a forward figure belongs in the overlay</div>
+                    )}
+                    {r.overlay && (
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span>
+                          Forward overlay:{' '}
+                          {r.overlay.source_url ? (
+                            <a href={r.overlay.source_url} target="_blank" rel="noreferrer" title={r.overlay.quote ?? undefined}
+                               className="underline decoration-dotted underline-offset-2">
+                              {r.overlay.delta_pct != null ? `${(r.overlay.delta_pct * 100).toFixed(1)}%` : '—'}
+                            </a>
+                          ) : (r.overlay.delta_pct != null ? `${(r.overlay.delta_pct * 100).toFixed(1)}%` : '—')}
+                          {r.overlay.note ? ` · ${r.overlay.note}` : ''}
+                        </span>
+                        <Chip strong={r.overlay.status === 'accepted'}>{REVIEW_LABEL[r.overlay.status] ?? r.overlay.status}</Chip>
+                        <IndustryInputReview row={r} overlay onChanged={reload} />
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2"><Chip strong={r.status === 'accepted'}>{REVIEW_LABEL[r.status] ?? r.status}</Chip></td>
                   <td className="px-3 py-2"><IndustryInputReview row={r} onChanged={reload} /></td>
