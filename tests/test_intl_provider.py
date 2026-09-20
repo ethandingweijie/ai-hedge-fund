@@ -229,11 +229,19 @@ class TestApiRouting:
 
     def test_branches_are_guarded(self):
         import pathlib
+        import re
         src = (pathlib.Path(__file__).parent.parent
                / "src" / "tools" / "api.py").read_text(encoding="utf-8")
         # Every routing branch that now has an FMP arm must be flag-guarded.
         assert src.count("and not fmp_forced()") >= 12
-        assert "from src.tools.intl_provider import fmp_forced, try_fmp" in src
+        # Both names must be imported; the exact spelling of the import line is
+        # not the contract. It read `fmp_forced, try_fmp` until 03af41e added
+        # `detect_market` to the same line, and this assertion failed for a
+        # change that broke nothing.
+        _imp = re.search(r"from src\.tools\.intl_provider import ([^\n]+)", src)
+        assert _imp, "api.py no longer imports from intl_provider"
+        _names = {n.strip() for n in _imp.group(1).split(",")}
+        assert {"fmp_forced", "try_fmp"} <= _names
 
     def test_us_tickers_never_touch_the_dispatcher(self, monkeypatch):
         """A US ticker must not be classified into either market."""

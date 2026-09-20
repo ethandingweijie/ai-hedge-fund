@@ -1410,3 +1410,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Methodology backtest judged by its outcome (owner, 2026-09-20): where a 12-month outcome has matured it decides the status -- model closer or level = passed, market closer = fired -- and the T-1 gap is still reported. The gate already computed the outcome and ignored it: on the Wave 1 sample label and outcome disagreed 4 times in 7 (PetroChina 59% gap but model closer 15% vs 27%; Valero 61% but level; SLB passed at 24% having been wrong at 24% vs 0%). Only calibration_record.status moves, on 5 fixtures; no valuation leaf changes. Also adds Offshore Marine & Resources (SG) to the growth-convergence fade (Seatrium's T-1 backtest projected a 70.5% one-year consensus rate flat for ten years: S$64.56 against a S$2.07 price, now S$4.27); no fixture carries that profile.
 
+## 2026-09-20T03:36:18+00:00
+
+- regenerated at HEAD: `0953e22`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: multiples_used now carries no_peer_multiples, which states that a valuation had no comparable set at all rather than leaving all_static:false to be misread over an empty field set. Values unchanged; the key is additive.
+
