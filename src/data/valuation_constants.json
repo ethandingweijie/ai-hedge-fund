@@ -1,0 +1,31 @@
+{
+ "version": 1,
+ "profiles": {
+  "Midstream / Pipelines": {
+   "target_dcf_yield": 0.0975,
+   "benchmark": "AMZI_coverage_adjusted",
+   "benchmark_detail": {
+    "proxy_symbol": "AMLP",
+    "proxy_name": "Alerian MLP ETF (AMZI tracker)",
+    "index_yield": 0.07,
+    "coverage_factor": 1.4,
+    "formula": "target_dcf_yield = index distribution yield x sector coverage factor"
+   },
+   "tolerance_band": [0.085, 0.11],
+   "inertia_bps": 50,
+   "review_cadence": "quarterly",
+   "macro_triggers": {
+    "ten_year_move_bps": 75,
+    "index_yield_move_bps": 100
+   },
+   "observed_at_last_review": {
+    "ten_year": 0.0501,
+    "index_yield": 0.07
+   },
+   "last_reviewed": "2026-09-20",
+   "effective_until": "2026-11-15",
+   "reviewer": "owner",
+   "note": "Distributable cash flow is capitalised at this yield, NOT at the peer free-cash-flow yield: peer FCF is net of total capex while distributable CF is net of maintenance capex only, and mixing the two priced Energy Transfer at 2.3x spot once its audited maintenance capex replaced the D&A stand-in."
+  }
+ }
+}

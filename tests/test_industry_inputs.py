@@ -94,7 +94,9 @@ def test_the_midstream_leg_uses_the_accepted_figure(monkeypatch):
         method_name="Distributable CF Yield", most_recent=row, revenue_base=1e10, shares=1e8,
         net_debt=1e9, market_cap=1e10, wacc=0.07, growth_base=0.02, fcf_margin_base=0.1, tgr=0.02,
         fcf_floor=0.0, sector="Energy", scenario="base", profile_name="Midstream / Pipelines")
-    assert v == pytest.approx(((3e9 - 0.5e9) / 1e8) / 0.06)
+    from src.data import valuation_constants as vc
+    assert v == pytest.approx(((3e9 - 0.5e9) / 1e8)
+                              / vc.target_dcf_yield("Midstream / Pipelines"))
 
 
 # ── forward overlay: actuals are the baseline, guidance is a delta ──────────

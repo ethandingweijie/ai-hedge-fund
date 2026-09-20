@@ -6091,15 +6091,39 @@ def _compute_method_value(
         if not ocf or maint is None or shares <= 0:
             return None
         dcf_amt = ocf - abs(maint)
-        target_yield = peer.get("fcf_yield", 0.05) / (sm * growth_premium)
+        # The benchmark must be on the numerator's basis. Distributable cash
+        # flow is net of MAINTENANCE capex; the peer FCF yield is net of TOTAL
+        # capex, so capitalising one at the other overstates every name whose
+        # growth capex is large -- which is the whole midstream sector. The
+        # mismatch hid while `maint` fell back to D&A, because OCF - D&A is
+        # roughly free cash flow. Energy Transfer's audited $1.32bn maintenance
+        # capex against $5.68bn of D&A ended that: the leg went to $49.04 on a
+        # $21.14 quote, capitalising a 12.1% market yield at 4.93%.
+        #
+        # So the yield is an owner-set profile constant, grounded in the
+        # Alerian index distribution yield times sector coverage and reviewed
+        # on a quarterly clock (src/data/valuation_constants.py). Where no
+        # constant is authored the leg declines to price rather than reach for
+        # a number from another basis.
+        from src.data import valuation_constants as _vc
+        _yield_src = f"owner-set target distributable-CF yield ({profile_name})"
+        _base_yield = _vc.env_override(profile_name or "") or _vc.target_dcf_yield(profile_name)
+        if not _base_yield:
+            return None
+        target_yield = _base_yield / (sm * growth_premium)
         if dcf_amt <= 0 or target_yield <= MIN_VALID_FCF_YIELD:
             return None
+        _vc_detail = _vc.detail(profile_name) or {}
         _leg_trace(kind="yield", maintenance_capex_audit=(_maint_d or None),
                    metric=f"Distributable CF: OCF - {maint_src}",
                    metric_value=float(dcf_amt), shares=float(shares),
                    per_share_metric=float(dcf_amt / shares), target_yield=float(target_yield),
                    multiple=float(1.0 / target_yield),
-                   multiple_parts={"peer_fcf_yield": float(peer.get("fcf_yield", 0.05)),
+                   multiple_parts={"target_dcf_yield": float(_base_yield),
+                                   "yield_source": _yield_src,
+                                   "benchmark": _vc_detail.get("benchmark"),
+                                   "last_reviewed": _vc_detail.get("last_reviewed"),
+                                   "review_due": _vc_detail.get("review_due"),
                                    "scenario_band": sm, "growth_premium": growth_premium})
         return (dcf_amt / shares) / target_yield
 

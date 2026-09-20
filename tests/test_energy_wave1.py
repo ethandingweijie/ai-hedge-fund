@@ -18,6 +18,7 @@ from src.agents.analysis import dcf_agent
 from src.agents.analysis.dcf_agent import _CYCLICAL_PROFILES, _compute_method_value
 from src.data import industry_profile_map as ipm
 from src.data import regional_comps as rc
+from src.data import valuation_constants as vc
 from src.data.sector_profiles import (
     INDUSTRY_VALUATION_PROFILES as P, _ENERGY_PROFILE_WACC, get_wacc_profile_for_ticker,
 )
@@ -142,11 +143,31 @@ def test_ev_ocf_refuses_without_a_peer_reading(monkeypatch):
 
 
 def test_distributable_cf_uses_da_until_maintenance_capex_is_accepted(monkeypatch):
+    """Only the numerator's basis is at issue here -- the denominator is the
+    owner constant, asserted below."""
+    y = vc.target_dcf_yield("Midstream / Pipelines")
     v = _call("Distributable CF Yield", monkeypatch=monkeypatch)
-    assert v == pytest.approx(((3e9 - 1e9) / 200e6) / 0.06)       # 166.67
+    assert v == pytest.approx(((3e9 - 1e9) / 200e6) / y)
     row = dict(_ROW, maintenance_capex_accepted=1.5e9)
     v2 = _call("Distributable CF Yield", row=row, monkeypatch=monkeypatch)
-    assert v2 == pytest.approx(((3e9 - 1.5e9) / 200e6) / 0.06)
+    assert v2 == pytest.approx(((3e9 - 1.5e9) / 200e6) / y)
+
+
+def test_distributable_cf_capitalises_at_the_owner_yield_not_the_peer_fcf_yield(monkeypatch):
+    """The bug this constant exists to fix: distributable CF is net of
+    maintenance capex, the peer FCF yield is net of total capex. Capitalising
+    one at the other put Energy Transfer at $49.04 on a $21.14 quote."""
+    peer = dict(_PEER, fcf_yield=0.06)
+    v = _call("Distributable CF Yield", peer=peer, monkeypatch=monkeypatch)
+    assert v != pytest.approx(((3e9 - 1e9) / 200e6) / 0.06)
+    assert v == pytest.approx(((3e9 - 1e9) / 200e6)
+                              / vc.target_dcf_yield("Midstream / Pipelines"))
+
+
+def test_a_profile_with_no_authored_yield_declines_to_price(monkeypatch):
+    """Silence beats a number from the wrong basis."""
+    monkeypatch.setattr(vc, "target_dcf_yield", lambda *a, **k: None)
+    assert _call("Distributable CF Yield", monkeypatch=monkeypatch) is None
 
 
 def test_distributable_cf_refuses_a_non_positive_amount(monkeypatch):

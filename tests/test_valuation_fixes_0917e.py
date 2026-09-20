@@ -1058,9 +1058,14 @@ def test_the_fcf_yield_leg_reaches_the_same_scaling_from_the_other_side():
     reported this leg as premium-independent and the breakage as a mystery.
     """
     body = _method_value_src()
-    line = [ln for ln in body.splitlines() if "target_yield = peer" in ln]
-    # FCF Yield and Distributable CF Yield (Wave 1 oil, gas & coal (owner-approved 2026-09-20)) share the rule.
-    assert len(line) == 2
+    # FCF Yield and Distributable CF Yield share the rule. They no longer share
+    # a NUMERATOR for the yield: the distributable leg capitalises at the owner
+    # constant, because the peer FCF yield is net of total capex while
+    # distributable CF is net of maintenance capex only. What this test guards
+    # is the scaling, which is the denominator, and that is unchanged -- so it
+    # matches on the assignment rather than on where the yield came from.
+    line = [ln for ln in body.splitlines() if "target_yield = " in ln and "#" != ln.strip()[:1]]
+    assert len(line) == 2, line
     assert all("/ (sm * growth_premium)" in x for x in line)
     assert "(fcf / shares) / target_yield" in body
 

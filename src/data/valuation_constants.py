@@ -1,0 +1,279 @@
+"""Owner-set valuation constants, with a calibration rule and a review clock.
+
+A profile constant that never moves goes stale; one that tracks the market
+daily stops being a fundamental anchor and starts being the price. This module
+holds the middle: a stored constant the engine reads, a formula that proposes
+what it should be, and an inertia rule that refuses to move it for noise.
+
+The first constant is the midstream target distributable-cash-flow yield.
+`Distributable CF Yield` used to capitalise (OCF - maintenance capex) at the
+peer *free* cash flow yield, which is net of total capex -- two different
+bases. While maintenance capex fell back to D&A the numerator was roughly FCF
+and the mismatch stayed hidden; Energy Transfer's audited $1.32bn maintenance
+capex broke the accident and the leg priced ET at $49 against a $21 quote.
+
+The constant is grounded in a published benchmark rather than chosen:
+
+    target_dcf_yield = index distribution yield x sector coverage factor
+
+with the Alerian MLP index (AMLP as the tradable proxy) supplying the yield and
+midstream coverage of ~1.4-1.7x supplying the factor.
+
+Nothing here writes a new constant into effect on its own. `calibrate` returns
+a proposal; `apply_proposal` records it only when an owner accepts, the same
+review gate `industry_inputs` uses for cited figures.
+"""
+from __future__ import annotations
+
+import json
+import os
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
+
+_PATH = Path(__file__).resolve().parent / "valuation_constants.json"
+
+#: A quarter, for the scheduled review. The cadence is the reporting cycle --
+#: mid-February, May, August and November -- so the clock is set from the last
+#: review rather than to fixed calendar dates.
+_REVIEW_DAYS = 91
+
+
+def load(path: Optional[Path] = None) -> dict:
+    p = Path(path or _PATH)
+    if not p.exists():
+        return {"version": 1, "profiles": {}}
+    with open(p, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def save(doc: dict, path: Optional[Path] = None) -> None:
+    p = Path(path or _PATH)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+
+
+def entry(profile: Optional[str], doc: Optional[dict] = None) -> Optional[dict]:
+    if not profile:
+        return None
+    return ((doc or load()).get("profiles") or {}).get(profile)
+
+
+def target_dcf_yield(profile: Optional[str], doc: Optional[dict] = None) -> Optional[float]:
+    """The stored yield for this profile, or None when none is authored.
+
+    None is a real answer: a caller with no constant must say what it fell back
+    to rather than substitute a number from a different basis.
+    """
+    e = entry(profile, doc)
+    v = (e or {}).get("target_dcf_yield")
+    return float(v) if isinstance(v, (int, float)) and v > 0 else None
+
+
+def detail(profile: Optional[str], doc: Optional[dict] = None,
+           today: Optional[date] = None) -> Optional[dict]:
+    """The constant plus the audit trail behind it: benchmark, band, review
+    clock, and whether that clock has run out."""
+    e = entry(profile, doc)
+    if not e:
+        return None
+    due, reasons = review_due(profile, doc=doc, today=today)
+    return {
+        "value": target_dcf_yield(profile, doc),
+        "benchmark": e.get("benchmark"),
+        "benchmark_detail": e.get("benchmark_detail"),
+        "tolerance_band": e.get("tolerance_band"),
+        "last_reviewed": e.get("last_reviewed"),
+        "effective_until": e.get("effective_until"),
+        "review_due": due,
+        "review_reasons": reasons,
+        "note": e.get("note"),
+    }
+
+
+def _as_date(v) -> Optional[date]:
+    try:
+        return datetime.fromisoformat(str(v)[:10]).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def review_due(profile: Optional[str], doc: Optional[dict] = None,
+               today: Optional[date] = None,
+               ten_year: Optional[float] = None,
+               index_yield: Optional[float] = None) -> tuple[bool, list[str]]:
+    """Is this constant due for review, and why.
+
+    Three clocks, any of which is sufficient: the scheduled quarter has ended,
+    the 10-year Treasury has moved past its trigger (pipeline distributions
+    compete with fixed income), or the benchmark index has re-rated past its.
+    The macro arguments are optional so the scheduled check works offline.
+    """
+    e = entry(profile, doc)
+    if not e:
+        return False, []
+    today = today or datetime.now(timezone.utc).date()
+    reasons: list[str] = []
+
+    until = _as_date(e.get("effective_until"))
+    last = _as_date(e.get("last_reviewed"))
+    if until and today > until:
+        reasons.append(f"scheduled review passed ({e.get('effective_until')})")
+    elif not until and last and today - last > timedelta(days=_REVIEW_DAYS):
+        reasons.append(f"more than a quarter since review ({e.get('last_reviewed')})")
+
+    obs = e.get("observed_at_last_review") or {}
+    trig = e.get("macro_triggers") or {}
+    for key, val, label, bps_key in (
+            ("ten_year", ten_year, "10-year Treasury", "ten_year_move_bps"),
+            ("index_yield", index_yield, "benchmark index yield", "index_yield_move_bps")):
+        prior, limit = obs.get(key), trig.get(bps_key)
+        if val is None or not isinstance(prior, (int, float)) or not limit:
+            continue
+        move_bps = abs(val - prior) * 1e4
+        if move_bps >= limit:
+            reasons.append(f"{label} moved {move_bps:.0f}bps since review "
+                           f"({prior:.2%} -> {val:.2%}), trigger {limit}bps")
+    return bool(reasons), reasons
+
+
+def calibrate(profile: str, *, index_yield: float, coverage_factor: Optional[float] = None,
+              ten_year: Optional[float] = None, doc: Optional[dict] = None,
+              today: Optional[date] = None) -> dict:
+    """Propose what the constant should be. Never writes.
+
+    The raw candidate is the benchmark formula. Two rules stand between it and
+    the stored value, and both are reported rather than applied silently:
+
+      inertia -- a move smaller than the profile's threshold is noise, and a
+                 cash-flow anchor that tracks weekly index moves is just price;
+      band    -- a candidate outside the owner's tolerance band is not clamped
+                 quietly. It is clamped AND flagged, because a benchmark that
+                 leaves the band is telling you the band needs a decision, not
+                 that the number needs rounding.
+    """
+    doc = doc or load()
+    e = entry(profile, doc)
+    if not e:
+        raise KeyError(profile)
+    bd = e.get("benchmark_detail") or {}
+    cov = coverage_factor if coverage_factor is not None else bd.get("coverage_factor")
+    if not cov or index_yield <= 0:
+        raise ValueError("index yield and coverage factor are both required")
+
+    current = target_dcf_yield(profile, doc)
+    raw = float(index_yield) * float(cov)
+    lo, hi = (e.get("tolerance_band") or [None, None])
+    clamped = raw
+    outside = False
+    if isinstance(lo, (int, float)) and isinstance(hi, (int, float)):
+        clamped = min(max(raw, lo), hi)
+        outside = raw < lo or raw > hi
+
+    inertia = float(e.get("inertia_bps") or 0) / 1e4
+    move = abs(clamped - current) if current else None
+    held = bool(current and move is not None and move < inertia)
+    proposed = current if held else clamped
+
+    due, reasons = review_due(profile, doc=doc, today=today,
+                              ten_year=ten_year, index_yield=index_yield)
+    return {
+        "profile": profile,
+        "current": current,
+        "raw_candidate": raw,
+        "proposed": proposed,
+        "changed": bool(current is None or abs(proposed - current) > 1e-12),
+        "held_by_inertia": held,
+        "move_bps": None if move is None else round(move * 1e4, 1),
+        "inertia_bps": e.get("inertia_bps"),
+        "outside_band": outside,
+        "tolerance_band": e.get("tolerance_band"),
+        "inputs": {"index_yield": index_yield, "coverage_factor": cov,
+                   "ten_year": ten_year},
+        "review_due": due,
+        "review_reasons": reasons,
+        "as_of": (today or datetime.now(timezone.utc).date()).isoformat(),
+    }
+
+
+def apply_proposal(proposal: dict, *, reviewer: str, doc: Optional[dict] = None,
+                   effective_until: Optional[str] = None,
+                   path: Optional[Path] = None) -> dict:
+    """Record an accepted proposal. Called only behind an explicit owner
+    acceptance -- calibration proposes, the owner decides."""
+    doc = doc or load(path)
+    profile = proposal["profile"]
+    e = entry(profile, doc)
+    if not e:
+        raise KeyError(profile)
+    today = _as_date(proposal.get("as_of")) or datetime.now(timezone.utc).date()
+    e["target_dcf_yield"] = round(float(proposal["proposed"]), 6)
+    bd = e.setdefault("benchmark_detail", {})
+    bd["index_yield"] = proposal["inputs"]["index_yield"]
+    bd["coverage_factor"] = proposal["inputs"]["coverage_factor"]
+    obs = e.setdefault("observed_at_last_review", {})
+    obs["index_yield"] = proposal["inputs"]["index_yield"]
+    if proposal["inputs"].get("ten_year") is not None:
+        obs["ten_year"] = proposal["inputs"]["ten_year"]
+    e["last_reviewed"] = today.isoformat()
+    e["effective_until"] = effective_until or (today + timedelta(days=_REVIEW_DAYS)).isoformat()
+    e["reviewer"] = reviewer
+    e.setdefault("history", []).append({
+        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "value": e["target_dcf_yield"], "raw_candidate": proposal["raw_candidate"],
+        "held_by_inertia": proposal["held_by_inertia"],
+        "outside_band": proposal["outside_band"], "reviewer": reviewer,
+        "inputs": proposal["inputs"],
+    })
+    save(doc, path)
+    return e
+
+
+# ── Benchmark feed ──────────────────────────────────────────────────────────
+
+def fetch_index_yield(symbol: str = "AMLP") -> Optional[dict]:
+    """Trailing distribution yield of the benchmark proxy, from FMP.
+
+    Trailing four declared distributions over the current price, rather than
+    FMP's own `yield` field, so the number is reproducible from the rows and a
+    changed distribution shows up the quarter it is declared.
+    """
+    from src.data.regional_comps import _fmp_get
+    _S = "https://financialmodelingprep.com/stable"
+    divs = _fmp_get(f"{_S}/dividends", {"symbol": symbol, "limit": 8}, api_key=None)
+    quote = _fmp_get(f"{_S}/quote", {"symbol": symbol}, api_key=None)
+    if not isinstance(divs, list) or not divs or not isinstance(quote, list) or not quote:
+        return None
+    price = quote[0].get("price")
+    paid = [float(d.get("dividend") or 0) for d in divs[:4]]
+    if not price or price <= 0 or not any(paid):
+        return None
+    return {"symbol": symbol, "price": float(price), "trailing_4": paid,
+            "annual": sum(paid), "yield": sum(paid) / float(price),
+            "latest_date": divs[0].get("date")}
+
+
+def fetch_ten_year() -> Optional[float]:
+    """The 10-year Treasury, for the out-of-cycle macro trigger."""
+    from src.data.regional_comps import _fmp_get
+    rows = _fmp_get("https://financialmodelingprep.com/stable/treasury-rates",
+                    {}, api_key=None)
+    if not isinstance(rows, list) or not rows:
+        return None
+    v = rows[0].get("year10")
+    return float(v) / 100.0 if isinstance(v, (int, float)) else None
+
+
+def env_override(profile: str) -> Optional[float]:
+    """An escape hatch for a run that must price on a different yield, e.g.
+    a what-if. Named per profile so one override cannot silently move another.
+    """
+    key = "DCF_YIELD_" + "".join(
+        c if c.isalnum() else "_" for c in profile.upper()).strip("_")
+    raw = os.environ.get(key)
+    try:
+        v = float(raw) if raw else 0.0
+    except ValueError:
+        return None
+    return v if v > 0 else None
