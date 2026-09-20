@@ -84,6 +84,11 @@ _INCOME_MAP: dict[str, str] = {
     "depreciationAndAmortization":       "depreciation_and_amortization",
     "epsDiluted":                        "earnings_per_share",
     "weightedAverageShsOutDil":          "shares_outstanding",
+    # The basic count exists only to measure dilution against the diluted one:
+    # the engine values on a CURRENT share count (market cap / price, which is
+    # basic and current) and scales it by this filing's diluted/basic ratio, so
+    # recency and dilution both survive. See the shares block in dcf_agent.
+    "weightedAverageShsOut":             "shares_outstanding_basic",
     "interestExpense":                   "interest_expense",
     "incomeTaxExpense":                  "income_tax_expense",
     # Sector-specific additions

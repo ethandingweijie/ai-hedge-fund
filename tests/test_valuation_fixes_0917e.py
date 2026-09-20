@@ -220,9 +220,11 @@ _PT_BAND_RE = re.compile(
 #: reasoning is in tests/golden/CHANGELOG.md under the relative-floor entry.
 _FLOOR_MOVED = {
     "FCX": {
-        "base_iv": 26.69,          # was 25.58, +4.34%
-        "bear_iv": 16.90,          # was 16.06, +5.23%
-        "bull_iv": 46.92,          # was 45.52, +3.08%
+        # Restated onto the current share count (sixth re-baseline, 2026-09-20);
+        # the relative-floor deltas this table records are unchanged by it.
+        "base_iv": 26.78,          # was 25.58, +4.34% at the old divisor
+        "bear_iv": 16.95,          # was 16.06, +5.23% at the old divisor
+        "bull_iv": 47.08,          # was 45.52, +3.08% at the old divisor
         "targets": (18.66, 24.89, 31.11),   # was (17.89, 23.85, 29.81)
         "band_ratio": 2.552,       # was 2.659; still outside [0.33, 2.50]
         "norm_ebitda_delta": 1.0466,
@@ -309,10 +311,38 @@ _DCF_PARITY_MOVED = {
 }
 
 
+#: ── THE SIXTH RE-BASELINE: the current share count (owner, 2026-09-20)
+#:
+#: Every per-share value now divides by the share count the company has TODAY
+#: -- market cap / price, scaled by the filing's diluted/basic ratio -- instead
+#: of the trailing weighted-average diluted count from its last annual filing.
+#: Valero was dividing by 309.0mn against 287.9mn actually outstanding.
+#:
+#: The fixtures that move are exactly the ones with a live quote: HK and SG
+#: names fetch none, so 02888_HK, 09988_HK, BN4_SI, D05_SI, C38U_SI and U96_SI
+#: are bit-identical and are deliberately absent from this table. Nothing here
+#: is a valuation decision -- each value is its predecessor times that name's
+#: own share ratio.
+_SHARES_MOVED = {
+    #            base_iv   bear_iv   bull_iv   targets (bear, base, bull)
+    "BABA":     (188.07,   138.44,   241.48,   (123.91, 148.72, 175.43)),
+    "COST":     (819.32,   591.08,   1069.22,  (792.76, 872.64, 960.10)),
+    "MELI":     (3109.88,  2375.96,  3601.17,  (2020.40, 2277.27, 2449.22)),
+    "MU":       (182.26,   138.83,   227.95,   (533.22, 554.93, 577.77)),
+    # Never moved by an earlier re-baseline, so these carry no row in the
+    # tables above; their pre-fix pins live in _PREFIX / _BEAR_IV_UNMOVED.
+    "AAPL":     (224.55,   159.55,   302.75,   (245.44, 277.94, 317.04)),
+    "V":        (451.18,   327.41,   568.42,   (358.75, 402.07, 443.10)),
+    "SCHW":     (76.50,    51.95,    109.73,   (88.25, 96.84, 108.47)),
+}
+
+
 def _current(name: str) -> tuple:
     """The latest re-baselined (base, bear, bull, targets) for a moved name."""
-    return _DCF_PARITY_MOVED.get(name) or _TWO_TIER_MOVED[name]
-_TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (43.13, 48.02, 58.14)}
+    return (_SHARES_MOVED.get(name) or _DCF_PARITY_MOVED.get(name)
+            or _TWO_TIER_MOVED[name])
+#: Restated onto the current share count (sixth re-baseline).
+_TWO_TIER_TARGETS_UNMOVED_IV = {"FCX": (43.16, 48.07, 58.22)}
 
 
 def _bear_gate_b_roic(projection: dict) -> float | None:
@@ -663,6 +693,10 @@ def test_base_iv_is_unchanged_in_thirteen_and_fcx_is_the_named_exception():
             # this fix; the pre-fix pin stays as history.
             assert fx["base_iv"] == _current(name)[0], name
             continue
+        if name in _SHARES_MOVED:
+            # Moved only by the sixth re-baseline (current share count).
+            assert fx["base_iv"] == _SHARES_MOVED[name][0], name
+            continue
         assert fx["base_iv"] == _PREFIX[name][0], name
 
 
@@ -813,8 +847,8 @@ def test_the_sign_flips_changed_only_their_flag_text():
                 oc["weight_lost_vs_base"], name
             assert p["scenarios.bear.ordering_composition.single_method"] is True, name
             continue
-        if name in _TWO_TIER_MOVED:
-            assert p["scenarios.bear.intrinsic_value"] == _TWO_TIER_MOVED[name][1], name
+        if name in _TWO_TIER_MOVED or name in _SHARES_MOVED:
+            assert p["scenarios.bear.intrinsic_value"] == _current(name)[1], name
             continue
         assert p["scenarios.bear.intrinsic_value"] == _BEAR_IV_UNMOVED[name], name
 
@@ -993,8 +1027,10 @@ def test_meli_bear_floor_mechanics_and_its_policy_conflict():
 
 def test_the_bear_deactivations_raise_bear_iv_and_nothing_else_does():
     """Direction check on the five: a surviving terminal value can only add."""
-    raised = {"02888_HK": 236.10, "AAPL": 156.17, "COST": 956.33,
-              "MELI": 4940.12, "V": 310.93}
+    # AAPL and V restated onto the current share count (sixth re-baseline);
+    # the direction check against `before` is unaffected, which is the point.
+    raised = {"02888_HK": 236.10, "AAPL": 159.55, "COST": 956.33,
+              "MELI": 4940.12, "V": 327.41}
     before = {"02888_HK": 236.57, "AAPL": 146.37, "COST": 923.28,
               "MELI": 4588.16, "V": 276.28}
     for name, want in raised.items():

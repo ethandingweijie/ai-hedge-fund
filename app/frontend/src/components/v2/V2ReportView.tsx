@@ -59,6 +59,7 @@ import { DcfMethodologyPanel } from '@/components/report/DcfMethodologyPanel';
 import { ExportFab } from '@/components/report/ExportFab';
 import { PriceTargetPanel } from '@/components/report/PriceTargetPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
+import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
 import { PriceTargetHistoryStrip } from '@/components/report/PriceTargetHistoryStrip';
 import { PriorReportCard } from '@/components/report/PriorReportCard';
 import { ProgressHeader } from '@/components/report/ProgressHeader';
@@ -650,6 +651,7 @@ function ValuationBody({
           ticker (dcf_range[ticker].sotp_breakdown). Stacks below whichever
           sector branch rendered above; the DCF methodology panel follows. ── */}
       {dcfRange?.sotp_breakdown && <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />}
+      {dcfRange?.segment_sotp && <SegmentSotpPanel sotp={dcfRange.segment_sotp} />}
 
       <DcfMethodologyPanel dcfRange={dcfRange} ticker={ticker} skipReason={dcfSkipReason} />
 

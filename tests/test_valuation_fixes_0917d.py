@@ -612,10 +612,23 @@ def test_the_published_fcf_yield_values_match_the_current_baseline():
     snap = _snapshot()
     # decision 5's recorded values. `bear` entries are PRE-Gate-B, when the
     # premium was forced to exactly 1.0 and so scaled the leg by nothing.
+    #
+    # RE-STRUCK AGAIN 2026-09-20, and again the mover is not this leg. Every
+    # per-share value in the engine now divides by the CURRENT share count
+    # (market cap / price, scaled by the filing's diluted/basic ratio) instead
+    # of the trailing weighted-average diluted count from the last annual
+    # filing. The leg is linear in 1/shares, so each fixture moved by exactly
+    # its own share ratio and by nothing else:
+    #
+    #     AAPL  x1.0216      COST  x1.0030      V  x1.0530
+    #
+    # The relationship this test exists to guard is untouched -- bear is still
+    # its pre-Gate-B value times the published premium, to 3dp -- so only the
+    # recorded literals are restated onto the new divisor.
     expected = {
-        "AAPL": {"bear": 134.25, "base": 191.01, "bull": 246.30},
-        "COST": {"bear": 633.89, "base": 903.06, "bull": 1149.12},
-        "V":    {"bear": 270.16, "base": 410.30, "bull": 515.24},
+        "AAPL": {"bear": 137.10, "base": 195.14, "bull": 251.62},
+        "COST": {"bear": 635.95, "base": 905.75, "bull": 1152.55},
+        "V":    {"bear": 284.55, "base": 432.04, "bull": 542.55},
     }
     for fx, per in expected.items():
         proj = snap[fx]["projection"]

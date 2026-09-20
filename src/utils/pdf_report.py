@@ -1925,6 +1925,93 @@ def _intel_compact(short_int: dict, earn_q: dict, insider_act: dict, news_sent: 
     return [_block_table(body, [width * 0.50, width * 0.50], styles)]
 
 
+_SEG_TYPE_LABEL = {
+    "refining": "Refining", "midstream": "Midstream", "chemicals": "Chemicals",
+    "renewable_fuels": "Renewable fuels", "ethanol": "Ethanol",
+    "fuel_marketing": "Fuel marketing", "upstream": "Upstream",
+    "oilfield_services": "Oilfield services", "equity_method": "Equity-accounted",
+    "non_business": "Not a business",
+}
+
+
+def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
+    """The segment sum-of-the-parts, with the arithmetic behind each part.
+
+    Printed under Valuation Summary (owner, 2026-09-20). Every column is a step
+    of the calculation -- revenue, the margin used to estimate segment EBITDA,
+    the through-cycle band and where in it the multiple sits -- because the
+    figure this replaced was a single unexplained number and it was wrong by
+    an order of magnitude.
+    """
+    b = dcf_t.get("segment_sotp") or {}
+    rows = b.get("segments") or []
+    if not rows:
+        return []
+    # The report's price currency is already set for this ticker by
+    # _set_price_currency; the block is in that same currency.
+    sym = _cs()
+    lab_w = width * 0.26
+    col_w = (width - lab_w) / 6.0
+    st_l = ParagraphStyle("_ssl", fontName="Helvetica", fontSize=6.5, leading=8)
+    st_lb = ParagraphStyle("_sslb", parent=st_l, fontName="Helvetica-Bold")
+    st_v = ParagraphStyle("_ssv", parent=st_l, alignment=2)
+    st_vb = ParagraphStyle("_ssvb", parent=st_v, fontName="Helvetica-Bold")
+
+    def bn(v):
+        if not isinstance(v, (int, float)):
+            return "--"
+        return f"{sym}{v / 1e9:,.2f}B" if abs(v) >= 1e9 else f"{sym}{v / 1e6:,.0f}M"
+
+    def pct(v):
+        return f"{v * 100:.1f}%" if isinstance(v, (int, float)) else "--"
+
+    def mult(r):
+        if (r.get("basis") or "") == "carrying_value":
+            return "at book"
+        m = r.get("multiple")
+        if not isinstance(m, (int, float)):
+            return "--"
+        band = r.get("band") or []
+        return (f"{m:.2f}x ({band[0]:g}-{band[1]:g}x)"
+                if len(band) == 2 else f"{m:.2f}x")
+
+    head = ["Segment", "Revenue", "Margin", "EBITDA est.", "Multiple", "EV", "% of EV"]
+    data = [[Paragraph(f"<b>{_wh(h)}</b>", st_vb if i else st_lb) for i, h in enumerate(head)]]
+    for r in rows:
+        seg = _strip(str(r.get("segment") or ""))
+        ty = _SEG_TYPE_LABEL.get(r.get("type") or "", r.get("type") or "")
+        data.append([
+            Paragraph(f"{seg}<br/><font size=5.5 color='#666666'>{_strip(str(ty))}</font>", st_l),
+            Paragraph(bn(r.get("revenue")), st_v),
+            Paragraph(pct(r.get("ebitda_margin")), st_v),
+            Paragraph(bn(r.get("ebitda")), st_v),
+            Paragraph(mult(r), st_v),
+            Paragraph(bn(r.get("ev")), st_v),
+            Paragraph(pct(r.get("share_of_ev")), st_v),
+        ])
+    data.append([Paragraph("<b>Total enterprise value</b>", st_lb),
+                 Paragraph("", st_v), Paragraph("", st_v), Paragraph("", st_v),
+                 Paragraph("", st_v), Paragraph(f"<b>{bn(b.get('total_ev'))}</b>", st_vb),
+                 Paragraph("", st_v)])
+    t = Table(data, colWidths=[lab_w] + [col_w] * 6, hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, -1), 0.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1), ("RIGHTPADDING", (0, 0), (-1, -1), 1),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.5, C_NAVY),
+        ("LINEABOVE", (0, len(data) - 1), (-1, len(data) - 1), 0.5, C_NAVY),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    ps = b.get("value_per_share")
+    lead = ("Sum of the parts by business segment"
+            + (f" -- {_money(ps)} per share" if isinstance(ps, (int, float)) else ""))
+    out = [Spacer(1, 6), Paragraph(lead, styles["RptLabel"]), Spacer(1, 2), t]
+    note = _strip(str(b.get("basis_note") or ""))
+    if note:
+        out += [Spacer(1, 2), Paragraph(f"<font size=5.5 color='#666666'>{note}</font>",
+                                        styles["RptBody"])]
+    return out
+
+
 def _valuation_summary(dcf_t: dict, scen: dict, styles, page_w: float) -> list:
     """Intrinsic value → 12m target, per scenario, by the one rule every name uses."""
     pb = dcf_t.get("pt_bridge") or {}
@@ -2533,6 +2620,7 @@ def generate_pdf_report(result: dict, output_path: str | None = None,
         # ── Valuation Summary: intrinsic value to 12-month target ──
         story.append(Paragraph("Valuation Summary", styles["RptSubsection"]))
         story.extend(_valuation_summary(dcf_ticker, scen, styles, page_w))
+        story.extend(_segment_sotp_block_pdf(dcf_ticker, styles, page_w))
         story.append(Spacer(1, 8))
 
         # ── Risk Assessment (value-trap checks + risk flags) ──

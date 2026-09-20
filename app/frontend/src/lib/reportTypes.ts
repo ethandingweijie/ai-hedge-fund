@@ -296,6 +296,36 @@ export interface SaasMetrics {
   evidence?: string | null;
 }
 
+// ── Segment SOTP (business segments priced on EV/EBITDA bands) ──────────────
+// Emitted by dcf_agent._segment_sotp_block at dcf_range[ticker].segment_sotp.
+// Separate from `sotp_breakdown` below, which is the ANALYST SOTP.
+export interface SegmentSotpRow {
+  segment: string;
+  type?: string | null;
+  /** 'ev_ebitda' | 'carrying_value' | 'ev_revenue' | 'excluded' */
+  basis?: string | null;
+  revenue?: number | null;
+  ebitda_margin?: number | null;
+  ebitda_margin_source?: string | null;
+  /** Estimated from revenue x margin — NOT a disclosed figure. */
+  ebitda?: number | null;
+  band?: number[] | null;
+  multiple?: number | null;
+  ev?: number | null;
+  share_of_ev?: number | null;
+  note?: string | null;
+}
+
+export interface SegmentSotp {
+  currency?: string | null;
+  segments: SegmentSotpRow[];
+  total_ev?: number | null;
+  value_per_share?: number | null;
+  shares?: number | null;
+  priced_share_of_revenue?: number | null;
+  basis_note?: string | null;
+}
+
 // ── GS-style SOTP breakdown (Tier 1 report package) ─────────────────────────
 // Emitted by src/agents/analysis/sotp_report_extras.build_sotp_breakdown at
 // dcf_range[ticker].sotp_breakdown; null/absent for tickers without SOTP
@@ -463,6 +493,7 @@ export interface DcfRange {
   reit_breakdown?: ReitBreakdown | null;
   bank_breakdown?: BankBreakdown | null;
   sotp_breakdown?: SotpBreakdown | null;
+  segment_sotp?: SegmentSotp | null;
   // Methodology-transparency fields — already emitted by
   // src/agents/analysis/dcf_agent.py (dcf_range[ticker] dict) but previously
   // untyped/unused on the frontend. See DcfMethodologyPanel.

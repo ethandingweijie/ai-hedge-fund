@@ -1320,12 +1320,23 @@ def test_normalized_ebit_is_computed_for_every_name_and_read_by_nothing():
     """
     src = _engine_src()
     assert src.count('"normalized_ebit"') == 1, "normalized_ebit gained a reader"
-    assert src.count('"normalized_ebitda"') == 2
+    # THREE since 2026-09-20: the segment SOTP reconciles its estimated segment
+    # EBITDA to this figure, so the parts sum to the company's own normalised
+    # earnings. Phillips 66's segments summed to $16.6bn of EBITDA against the
+    # $9.8bn it reported, because a peer basket's margin is a pure-play margin
+    # and segment revenue is not pure-play revenue.
+    assert src.count('"normalized_ebitda"') == 3
     # SEVEN since 2026-09-19: the P/E (norm) leg trace reads it once more, to
     # label whether the bank fallback (equity x target ROE) supplied the
     # earnings -- a disclosure read for the Excel export, not a valuation one.
     assert src.count('"normalized_net_income"') == 7
-    assert src.count("_normalized_earnings(") == 4   # def + three call sites
+    # SIX since 2026-09-20: the FCF Yield leg on a cyclical profile now stands
+    # on the same five-year normalisation as the EV/EBITDA and P/E legs, so
+    # `_norm_fcf` is computed beside the other three (with a `free_cash_flow`
+    # fallback for filers disclosing no SBC, hence two new call sites, not one).
+    # Before this the blend was two-thirds mean-reverted and one-fifth raw TTM:
+    # Phillips 66's FCF leg priced $64.31 against a $273.13 quote off a trough.
+    assert src.count("_normalized_earnings(") == 6   # def + five call sites
     assert '_norm_ebit   = _normalized_earnings(series, "ebit",       window=5)' in src
     assert 'most_recent["normalized_ebit"]       = _norm_ebit' in src
 

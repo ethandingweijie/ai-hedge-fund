@@ -43,6 +43,7 @@ import { BankValuationPanel }  from '@/components/report/bank/BankValuationPanel
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
+import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
 import { CitationPanel }       from '@/components/report/CitationPanel';
 import { StockPanel }          from '@/components/report/StockPanel';
 import { PriceTargetPanel }    from '@/components/report/PriceTargetPanel';
@@ -1400,6 +1401,9 @@ export function ReportPage() {
                 V2ReportView; the DCF methodology panel follows. */}
             {dcfRange?.sotp_breakdown && (
               <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />
+            )}
+            {dcfRange?.segment_sotp && (
+              <SegmentSotpPanel sotp={dcfRange.segment_sotp} />
             )}
             {/* Sits directly below the DCF ladder in the same column instead of
                 as its own full-width strip — fills the column's remaining

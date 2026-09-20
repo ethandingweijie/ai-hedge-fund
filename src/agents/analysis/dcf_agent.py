@@ -1933,9 +1933,275 @@ def _classify_segment(name: str, tier: str = "default") -> tuple[str, float]:
     return "default", mults["default"]
 
 
+#: Accounting lines that are not businesses. FMP's product segmentation hands
+#: back "Consolidation, Eliminations" as though it were a division: for
+#: Phillips 66 that line carried $55.8bn, 61% of the segmentation's total, and
+#: the SOTP leg valued it at 3x revenue -- $167.5bn of "value" in an
+#: intersegment netting row.
+#: How much of a company's segmented revenue must carry a multiple before the
+#: SOTP is allowed to speak for the whole company.
+_SOTP_MIN_PRICED_REVENUE: float = 0.85
+
+_SEGMENT_NON_BUSINESS: tuple[str, ...] = (
+    "consolidation", "elimination", "intersegment", "corporate and other",
+    "unallocated", "reconciling", "adjustments and other",
+)
+
+
+def _is_non_business_segment(name: str) -> bool:
+    n = (name or "").lower()
+    return any(k in n for k in _SEGMENT_NON_BUSINESS)
+
+
+#: Energy segment types, matched before the generic keyword table so a refinery
+#: is never read as something else. Marathon's "Refining And Marketing" matched
+#: the generic "marketing" rule and was valued as ADVERTISING at 6.5x revenue --
+#: $807.6bn of enterprise value, six times the company's own.
+#:
+#: Order matters: the most specific phrase wins.
+_ENERGY_SEGMENT_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("refining and marketing", "refining & marketing", "refining",
+      "refinery", "refined product"),                         "refining"),
+    (("midstream", "pipeline", "gathering and processing",
+      "logistics and storage", "terminalling"),               "midstream"),
+    (("petrochemical", "chemical", "olefins", "polyolefins"), "chemicals"),
+    (("renewable diesel", "renewable fuel", "sustainable aviation",
+      "biodiesel", "renewable naphtha", "neat saf"),          "renewable_fuels"),
+    (("ethanol", "distillers grain"),                         "ethanol"),
+    (("marketing and specialties", "marketing & specialties",
+      "m&s", "fuel marketing", "retail marketing"),           "fuel_marketing"),
+    (("exploration and production", "upstream", "e&p"),       "upstream"),
+    (("oilfield", "well services", "drilling", "offshore rig"), "oilfield_services"),
+)
+
+#: What each energy segment type is worth, as the owner set it (2026-09-20):
+#: a through-cycle EV/EBITDA band per business type, NOT a revenue multiple.
+#:
+#: Segment EBITDA is not disclosed -- the SEC extractor returns profit=None for
+#: all three refiners -- so it is ESTIMATED as segment revenue x the margin its
+#: own peer basket implies (ev_revenue / ev_ebitda, US large cohort, comps
+#: refreshed 2026-09-19). Both steps are recorded on the leg, because an
+#: estimated EBITDA presented as a disclosed one is the kind of number this
+#: whole exercise exists to stop.
+#:
+#: `margin_source` names the basket the margin came from. `None` multiple means
+#: the owner has not set a band for that type yet: those segments are priced at
+#: nothing and named on the leg, so a partial SOTP cannot masquerade as a whole
+#: one.
+#: Where in each band the segment is valued. The owner set the bands as ranges
+#: and then chose the top of them (2026-09-20), so this is named rather than
+#: buried in an expression: "high" is a position, and a later decision to move
+#: to the midpoint is a one-word change with every leg's trace recording which
+#: position produced it.
+_SEGMENT_BAND_POSITION: str = "high"
+
+
+def _band_multiple(band: tuple[float, float], position: str = _SEGMENT_BAND_POSITION) -> float:
+    lo, hi = float(band[0]), float(band[1])
+    if position == "low":
+        return lo
+    if position == "mid":
+        return (lo + hi) / 2.0
+    return hi
+
+
+_SEGMENT_EBITDA_MULTIPLES: dict[str, dict] = {
+    "refining":        {"band": (5.0, 6.5),  "margin": 0.0886,
+                        "margin_source": "Oil & Gas Refining & Marketing (US, large, n=8)"},
+    "midstream":       {"band": (9.0, 12.0), "margin": 0.3595,
+                        "margin_source": "Oil & Gas Midstream (US, large, n=10)"},
+    "chemicals":       {"band": (7.0, 9.0),  "margin": 0.0683,
+                        "margin_source": "Chemicals (US, large, n=7)"},
+    # Owner-set 2026-09-20. Above refining because the cash flows are steadier,
+    # below midstream because none of them is fee-based infrastructure. The
+    # margins here are ESTIMATES, not peer baskets -- FMP has no clean
+    # comparable set for any of the three -- and `margin_source` says so, so
+    # nobody reads them later as measured. Fuel marketing is deliberately thin:
+    # most of Phillips 66's $85.9bn M&S line is fuel bought to be resold.
+    "renewable_fuels": {"band": (6.0, 8.0),  "margin": 0.10,
+                        "margin_source": "owner estimate (no peer basket)"},
+    "ethanol":         {"band": (4.0, 6.0),  "margin": 0.06,
+                        "margin_source": "owner estimate (no peer basket)"},
+    "fuel_marketing":  {"band": (6.0, 8.0),  "margin": 0.02,
+                        "margin_source": "owner estimate (no peer basket); thin by "
+                                         "construction -- largely resold fuel"},
+    "upstream":        {"band": None, "margin": None, "margin_source": None},
+    "oilfield_services": {"band": None, "margin": None, "margin_source": None},
+}
+
+
+def _reconcile_segment_ebitda(parts: list[dict], company_ebitda: Optional[float]) -> list[dict]:
+    """Scale estimated segment EBITDA so the parts sum to the whole.
+
+    A peer basket's margin is a PURE-PLAY margin, and a segment's revenue is
+    not a pure-play company's revenue: it carries intersegment transfers and
+    low-margin resale. Phillips 66's midstream line took the 35.9% margin of
+    standalone midstream operators onto $21.2bn of largely NGL marketing
+    revenue, and the segment EBITDA estimates summed to $16.6bn against $9.8bn
+    the company actually reported -- 70% too high, in a leg carrying 40% of the
+    blend.
+
+    A sum-of-the-parts is an argument about MIX, not about level: the level is
+    already known from the income statement. So the mix each margin implies is
+    kept and the level is reconciled to the company's own normalised EBITDA.
+    Segments held at carrying value are not scaled -- they are not EBITDA.
+    """
+    if not company_ebitda or company_ebitda <= 0:
+        return parts
+    est = [p for p in parts if p.get("basis") == "ev_ebitda" and p.get("ebitda_estimated")]
+    raw_sum = sum(p["ebitda_estimated"] for p in est)
+    if raw_sum <= 0:
+        return parts
+    scaler = float(company_ebitda) / raw_sum
+    for p in est:
+        p["ebitda_unreconciled"] = p["ebitda_estimated"]
+        p["ebitda_estimated"] = p["ebitda_estimated"] * scaler
+        p["ev"] = p["ebitda_estimated"] * p["multiple"]
+        p["reconciliation_scaler"] = scaler
+    return parts
+
+
+def _classify_energy_segment(name: str, member: str = "") -> Optional[str]:
+    """The energy business type behind a segment label, or None.
+
+    Reads the XBRL member alongside the label: Valero's note breaks its
+    refining segment into product rows ("Gasoline and Blendstocks",
+    "Distillates") that say nothing about the business, while the member they
+    all carry -- vlo_RefiningMember -- says exactly which segment they are.
+    """
+    hay = f"{member or ''} {name or ''}".lower().replace("_", " ")
+    for keywords, seg_type in _ENERGY_SEGMENT_KEYWORDS:
+        if any(k in hay for k in keywords):
+            return seg_type
+    return None
+
+
+def _sotp_parts(segments: dict[str, float], tier: str = "default",
+                members: Optional[dict[str, str]] = None,
+                assets: Optional[dict[str, float]] = None,
+                company_ebitda: Optional[float] = None) -> list[dict]:
+    """The per-segment working behind a SOTP: revenue, type, multiple, EV.
+
+    Exists so the leg can be checked. `SOTP (segments)` published $2,621 a
+    share for Marathon -- six times its quote, an implied EV of $832.9bn -- and
+    `leg_inputs` carried only the aggregate, so nothing in the record showed
+    that the figure came from multiplying refining REVENUE by a multiple meant
+    for businesses with margins refiners do not have.
+    """
+    parts: list[dict] = []
+    members = members or {}
+    assets = assets or {}
+    for seg_name, seg_rev in (segments or {}).items():
+        if seg_rev is None or seg_rev <= 0:
+            # An equity-accounted segment reports no revenue to consolidate --
+            # Phillips 66's Chemicals line is the CPChem 50/50 JV and prints
+            # zero -- so a revenue multiple misses it entirely. The owner's
+            # decision (2026-09-20) is to carry it at the book value the filing
+            # discloses, on a basis the leg names rather than blends silently.
+            _ca = assets.get(seg_name)
+            if _ca and _ca > 0:
+                parts.append({"segment": seg_name, "revenue": 0.0,
+                              "type": _classify_energy_segment(
+                                  seg_name, members.get(seg_name, "")) or "equity_method",
+                              "basis": "carrying_value",
+                              "multiple": None, "ev": float(_ca),
+                              "carrying_value": float(_ca),
+                              "note": "equity-accounted: held at the segment assets "
+                                      "the filing discloses, not a multiple"})
+            continue
+        if _is_non_business_segment(seg_name):
+            parts.append({"segment": seg_name, "revenue": float(seg_rev),
+                          "type": "non_business", "basis": "excluded",
+                          "multiple": None, "ev": 0.0,
+                          "note": "an accounting line, not a business"})
+            continue
+        e_type = _classify_energy_segment(seg_name, members.get(seg_name, ""))
+        if e_type:
+            cfg = _SEGMENT_EBITDA_MULTIPLES.get(e_type) or {}
+            band, margin = cfg.get("band"), cfg.get("margin")
+            if not band or not margin:
+                # The owner has not set a band for this type. Priced at
+                # nothing and named, rather than valued on a guess.
+                parts.append({"segment": seg_name, "revenue": float(seg_rev),
+                              "type": e_type, "basis": "ev_ebitda",
+                              "multiple": None, "ev": 0.0,
+                              "note": "no owner-set EV/EBITDA band for this "
+                                      "segment type -- unpriced"})
+                continue
+            mult = _band_multiple(band)
+            seg_ebitda = float(seg_rev) * float(margin)
+            parts.append({"segment": seg_name, "revenue": float(seg_rev),
+                          "type": e_type, "basis": "ev_ebitda",
+                          "ebitda_margin": float(margin),
+                          "ebitda_margin_source": cfg.get("margin_source"),
+                          "ebitda_estimated": seg_ebitda,
+                          "band": list(band), "band_position": _SEGMENT_BAND_POSITION,
+                          "multiple": float(mult),
+                          "ev": seg_ebitda * mult})
+            continue
+        seg_type, mult = _classify_segment(seg_name, tier=tier)
+        parts.append({"segment": seg_name, "revenue": float(seg_rev),
+                      "type": seg_type, "basis": "ev_revenue",
+                      "multiple": float(mult),
+                      "ev": float(seg_rev) * float(mult)})
+    return _reconcile_segment_ebitda(parts, company_ebitda)
+
+
+def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
+                        currency: Optional[str]) -> Optional[dict]:
+    """The segment SOTP as the report and the PDF render it, or None.
+
+    Reads the leg's own trace rather than recomputing, so what a reader sees is
+    exactly what the valuation used -- including the estimated EBITDA behind
+    every multiple, which is the part a segment SOTP most easily hides.
+    """
+    leg = ((base_scenario or {}).get("leg_inputs") or {}).get("SOTP (segments)")
+    if not isinstance(leg, dict):
+        return None
+    parts = leg.get("segments") or []
+    if not parts:
+        return None
+    total_ev = float(leg.get("metric_value") or 0.0)
+    rows = []
+    for p in parts:
+        ev = float(p.get("ev") or 0.0)
+        rows.append({
+            "segment": p.get("segment"),
+            "type": p.get("type"),
+            "basis": p.get("basis"),
+            "revenue": p.get("revenue"),
+            "ebitda_margin": p.get("ebitda_margin"),
+            "ebitda_margin_source": p.get("ebitda_margin_source"),
+            "ebitda": p.get("ebitda_estimated"),
+            "band": p.get("band"),
+            "band_position": p.get("band_position"),
+            "ebitda_unreconciled": p.get("ebitda_unreconciled"),
+            "reconciliation_scaler": p.get("reconciliation_scaler"),
+            "multiple": p.get("multiple"),
+            "ev": ev,
+            "share_of_ev": (ev / total_ev) if total_ev > 0 else None,
+            "note": p.get("note"),
+        })
+    return {
+        "currency": currency,
+        "segments": rows,
+        "total_ev": total_ev,
+        "value_per_share": leg.get("value"),
+        "shares": shares,
+        "priced_share_of_revenue": leg.get("priced_share_of_revenue"),
+        "basis_note": ("Segment EBITDA is estimated as segment revenue x the margin "
+                       "its peer basket implies; it is not a disclosed figure. "
+                       "Multiples are owner-set through-cycle EV/EBITDA bands, "
+                       f"applied at the {_SEGMENT_BAND_POSITION} end of each band."),
+    }
+
+
 def _sotp_enterprise_value(
     segments: dict[str, float],
     tier: str = "default",
+    members: Optional[dict[str, str]] = None,
+    assets: Optional[dict[str, float]] = None,
+    company_ebitda: Optional[float] = None,
 ) -> Optional[float]:
     """Sum per-segment EV using tier-adjusted type multiples.
 
@@ -1944,12 +2210,8 @@ def _sotp_enterprise_value(
     """
     if not segments:
         return None
-    total_ev = 0.0
-    for seg_name, seg_rev in segments.items():
-        if seg_rev is None or seg_rev <= 0:
-            continue
-        _, mult = _classify_segment(seg_name, tier=tier)
-        total_ev += seg_rev * mult
+    total_ev = sum(p["ev"] for p in _sotp_parts(segments, tier=tier, members=members,
+                                                assets=assets, company_ebitda=company_ebitda))
     return total_ev if total_ev > 0 else None
 
 
@@ -5499,7 +5761,24 @@ def _compute_method_value(
         # uplifting SOTP so it tracks market cap for healthy market-multiple
         # names. Tier is driven by the sector profile (see _PROFILE_TIER_MAP).
         tier = _resolve_segment_tier(sector, profile_name)
-        total_ev = _sotp_enterprise_value(seg, tier=tier)
+        _members = most_recent.get("segment_members") or {}
+        _assets = most_recent.get("segment_assets") or {}
+        # Reconciled to the same five-year normalised EBITDA the anchor leg
+        # uses, so the SOTP and the multiple legs stand on one earnings base.
+        _co_ebitda = most_recent.get("normalized_ebitda") or most_recent.get("ebitda")
+        _parts = _sotp_parts(seg, tier=tier, members=_members, assets=_assets,
+                             company_ebitda=_co_ebitda)
+        # A SOTP that prices only part of the company is not a valuation of the
+        # company. Phillips 66's segmentation is 61% an eliminations line; below
+        # this bar the leg declines rather than publish a fraction as a whole.
+        _priced = sum(p["revenue"] for p in _parts if p.get("multiple"))
+        _all_rev = sum(p["revenue"] for p in _parts) or 1.0
+        if _priced / _all_rev < _SOTP_MIN_PRICED_REVENUE:
+            most_recent.setdefault("_sotp_refusals", {})[profile_name or "?"] = {
+                "priced_share": _priced / _all_rev, "parts": _parts}
+            return None
+        total_ev = _sotp_enterprise_value(seg, tier=tier, members=_members,
+                                          assets=_assets, company_ebitda=_co_ebitda)
         if total_ev is None:
             return None
         # Apply growth premium to the aggregate, same pattern as EV/Revenue.
@@ -5508,6 +5787,11 @@ def _compute_method_value(
         # Equity = EV − net_debt; when net_debt < 0 (net cash), this adds the
         # cash pile back — matches the standard SOTP accounting for AAPL etc.
         total_ev *= growth_premium
+        _leg_trace(kind="sotp", metric="Sum of segment EVs",
+                   metric_value=float(total_ev), shares=float(shares),
+                   tier=tier, segments=_parts,
+                   priced_share_of_revenue=_priced / _all_rev,
+                   growth_premium=growth_premium)
         return _ev_to_equity_ps(total_ev, net_debt, most_recent, shares)
 
     # ── SOTP 12m (probabilistic) — Monte Carlo with scenario trees ────────
@@ -6036,9 +6320,20 @@ def _compute_method_value(
         # when SBC isn't disclosed (fcf_owner_earnings is seeded to reported
         # FCF in _extract_annual_series when SBC is missing).
         fcf = most_recent.get("fcf_owner_earnings") or most_recent.get("free_cash_flow")
+        _fcf_label = ("FCF, owner earnings (TTM)"
+                      if most_recent.get("fcf_owner_earnings") else "FCF (TTM)")
+        # On a cyclical the same normalisation the EV/EBITDA and P/E legs use --
+        # mean margin on revenue over five years, IQR-trimmed -- so the whole
+        # blend stands on one basis. Anywhere else the TTM figure is the right
+        # one and this is a no-op.
+        if profile_name in _CYCLICAL_PROFILES:
+            _norm = most_recent.get("normalized_fcf_owner_earnings")
+            if _norm and _norm > 0:
+                fcf = _norm
+                _fcf_label = ("FCF, owner earnings (5y normalised)"
+                              if most_recent.get("fcf_owner_earnings") else "FCF (5y normalised)")
         if fcf and fcf > 0 and shares > 0:
-            _leg_trace(kind="yield", metric=("FCF, owner earnings (TTM)"
-                                             if most_recent.get("fcf_owner_earnings") else "FCF (TTM)"),
+            _leg_trace(kind="yield", metric=_fcf_label,
                        metric_value=float(fcf), shares=float(shares),
                        per_share_metric=float(fcf / shares), target_yield=float(target_yield),
                        multiple=float(1.0 / target_yield),
@@ -7537,9 +7832,18 @@ _SEGMENT_SOTP_TICKERS: frozenset[str] = frozenset({
 
 #: Co-equal anchor weight, not the 3.0 (=75%) the ANALYST SOTP carries. A
 #: filing-derived segment map is better evidence than a research note, but
-#: this path still values each segment on a revenue multiple keyed off its
+#: the pilot path values each segment on a revenue multiple keyed off its
 #: name, so it earns a seat at the table rather than the table.
 _SEGMENT_SOTP_WEIGHT = 0.40
+
+#: Profiles whose segment SOTP is priced on owner-set through-cycle EV/EBITDA
+#: bands per business type, with the per-segment working recorded (see
+#: `_SEGMENT_EBITDA_MULTIPLES`). That is a materially better instrument than
+#: the name-keyed revenue multiple the pilot set uses, so it is promoted into
+#: the blend rather than shadow-computed (owner, 2026-09-20).
+_SEGMENT_SOTP_PROFILES: frozenset[str] = frozenset({
+    "Refining & Marketing",
+})
 
 
 #: Tickers whose profile gains SOTP / NAV from a COMPLETE look-through even
@@ -7626,7 +7930,8 @@ def _promote_lookthrough_sotp(profile_data, ticker, end_date):
 
 
 def _promote_segment_sotp(profile_data: Optional[dict], ticker: str,
-                          has_breakdown: bool) -> tuple[Optional[dict], bool]:
+                          has_breakdown: bool,
+                          profile_name: Optional[str] = None) -> tuple[Optional[dict], bool]:
     """Add "SOTP (segments)" to this ticker's profile at a co-equal weight.
 
     Copy-on-write: profile dicts are references into
@@ -7638,7 +7943,9 @@ def _promote_segment_sotp(profile_data: Optional[dict], ticker: str,
     Returns the input unchanged when there is nothing to promote, so every
     ticker outside the pilot set stays bit-identical.
     """
-    if (not has_breakdown or ticker not in _SEGMENT_SOTP_TICKERS
+    _eligible = (ticker in _SEGMENT_SOTP_TICKERS
+                 or (profile_name or "") in _SEGMENT_SOTP_PROFILES)
+    if (not has_breakdown or not _eligible
             or not profile_data or not profile_data.get("methods")):
         return profile_data, False
     methods = profile_data["methods"]
@@ -9157,6 +9464,36 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 )
                 shares = _shares_implied
                 _shares_source = "quote_cross_check"
+            elif _shares_implied > 0:
+                # Recency (owner decision, 2026-09-20). Below the 25% band the
+                # line-item count was kept, and the line item is the trailing
+                # WEIGHTED AVERAGE diluted count from the last annual filing --
+                # an average over a year that has already ended. For a company
+                # retiring stock it is stale by construction: Valero divided by
+                # 309.0mn against 287.9mn actually outstanding (+7.3%), Marathon
+                # by 305.0mn against 291.9mn (+4.5%) while retiring 16.9% a
+                # year. Every per-share value came out low by that much, for no
+                # reason other than the age of the divisor.
+                #
+                # Market cap / price is the count the company has today, but it
+                # is BASIC, so taking it alone would quietly drop dilution and
+                # flatter every heavy issuer of stock comp. The filing's own
+                # diluted/basic ratio is carried across instead, so the count is
+                # current AND still diluted. The ratio is bounded: above 1.30 it
+                # is not dilution, it is a mismatched pair of figures, and the
+                # trailing count is the safer answer.
+                _basic = most_recent.get("shares_outstanding_basic")
+                _dilution = None
+                if _basic and _basic > 0 and shares and shares > 0:
+                    _r = shares / _basic
+                    if 1.0 <= _r <= 1.30:
+                        _dilution = _r
+                if _dilution is not None:
+                    shares = _shares_implied * _dilution
+                    _shares_source = "quote_current_diluted"
+                else:
+                    shares = _shares_implied
+                    _shares_source = "quote_current_basic"
 
         # ── FX Conversion (ADR / cross-listed tickers) ───────────────────
         # Some tickers trade on US exchanges (ADRs or direct listings) but
@@ -9394,8 +9731,18 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         _norm_ni     = _normalized_earnings(series, "net_income", window=5)
         _norm_ebitda = _normalized_earnings(series, "ebitda",     window=5)
         _norm_ebit   = _normalized_earnings(series, "ebit",       window=5)
+        # Owner decision 2026-09-20: a cyclical profile normalises its EARNINGS
+        # legs and then capitalised raw TTM cash flow in the FCF leg, so the
+        # blend was two-thirds mean-reverted and one-fifth whatever the last
+        # twelve months happened to be. At the bottom of a cycle that is a
+        # trough number carrying 20% of the weight: Phillips 66's FCF leg
+        # priced $64.31 against a $273.13 quote on $2.73bn of TTM owner
+        # earnings, while its own five-year median is $4.16bn.
+        _norm_fcf = (_normalized_earnings(series, "fcf_owner_earnings", window=5)
+                     or _normalized_earnings(series, "free_cash_flow", window=5))
         most_recent["normalized_net_income"] = _norm_ni
         most_recent["normalized_ebitda"]     = _norm_ebitda
+        most_recent["normalized_fcf_owner_earnings"] = _norm_fcf
         # Review-gated industry input (Wave 1): an owner-accepted maintenance
         # capex replaces the D&A stand-in in the Distributable CF Yield leg. In
         # the currency the statements are now in -- the listing currency when
@@ -9451,6 +9798,52 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # PROFIT this parser also returns is not consumed by that path, so a
         # loss-making division is still valued on its top line. That is the
         # next piece of work, not this one.
+        #
+        # Energy names take the filing note in PREFERENCE to FMP, not merely as
+        # a fallback (owner, 2026-09-20). FMP returned Phillips 66 a PRODUCT cut
+        # -- "Consolidation, Eliminations" $55.8bn, "Natural Gas Liquids",
+        # "Crude Oil" -- while the 10-K note carries the business segments the
+        # multiples are actually set for: Midstream, Chemicals, Refining, M&S,
+        # Renewable Fuels. A product line is not a business, and the SOTP is
+        # priced per business.
+        # Keyed off the FMP INDUSTRY, not `sector`. The sector in scope here is
+        # the pre-routing one the pipeline seeds, and it is a placeholder: it
+        # reads "Tech" for Phillips 66, so a sector test silently never fired.
+        # The industry comes from the classification cache the comps path
+        # already populates, and the family is the same one the peer baskets
+        # pool on -- which is exactly the set the segment multiples are written
+        # for.
+        try:
+            from src.data.regional_comps import family_of as _family_of
+            _seg_prefers_note = (
+                _family_of(_company_industry(ticker)) == "Oil, Gas & Coal (family)")
+        except Exception:                                  # noqa: BLE001
+            _seg_prefers_note = False
+        if _seg_prefers_note:
+            try:
+                from src.tools.segment_providers import get_segment_footnote
+                _fn_e = get_segment_footnote(ticker, end_date)
+                # A zero-revenue row is kept when it discloses assets: an
+                # equity-accounted segment consolidates no revenue but is still
+                # part of the company (Phillips 66's CPChem JV), and dropping it
+                # here is what made it invisible to the SOTP.
+                _rows_e = [r for r in ((_fn_e or {}).get("segments") or [])
+                           if (isinstance(r.get("revenue"), (int, float)) and r["revenue"] > 0)
+                           or (isinstance(r.get("assets"), (int, float)) and r["assets"] > 0)]
+                if len([r for r in _rows_e if (r.get("revenue") or 0) > 0]) >= 2:
+                    product_segments = [{
+                        "period_end": (_fn_e.get("period_end") or end_date),
+                        "segments": {r["name"]: float(r.get("revenue") or 0.0) for r in _rows_e},
+                    }]
+                    most_recent["segment_members"] = {
+                        r["name"]: str(r.get("member") or "") for r in _rows_e}
+                    most_recent["segment_assets"] = {
+                        r["name"]: float(r["assets"]) for r in ((_fn_e or {}).get("segments") or [])
+                        if isinstance(r.get("assets"), (int, float)) and r["assets"] > 0}
+                    _log.info("[dcf] %s: segment map from the filing note, preferred "
+                              "over FMP product lines (%d segments)", ticker, len(_rows_e))
+            except Exception:                              # noqa: BLE001
+                pass
         if not product_segments and ticker in _SEGMENT_SOTP_TICKERS:
             try:
                 from src.tools.segment_providers import get_segment_footnote
@@ -10444,7 +10837,8 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                       "look-through", ticker)
 
         profile_data, _seg_sotp_on = _promote_segment_sotp(
-            profile_data, ticker, bool(most_recent.get("segment_breakdown")))
+            profile_data, ticker, bool(most_recent.get("segment_breakdown")),
+            profile_name=profile_name)
         if _seg_sotp_on:
             _log.info("[dcf] %s: SOTP (segments) promoted at %.2f from the "
                       "filing segment note", ticker, _SEGMENT_SOTP_WEIGHT)
@@ -13979,6 +14373,14 @@ def run_dcf_agent(state: AgentState) -> AgentState:
             # static market table, or the US dynamic basket), the peer count
             # behind it, and how old the comp refresh was.
             "multiples_used":        _multiples_trace(peer),
+            # The segment SOTP's working, lifted to the top level so the report
+            # and the PDF can show what the parts are and what each was valued
+            # on. Distinct from `sotp_breakdown`, which is the ANALYST SOTP
+            # (BABA, 09988.HK, 09618.HK) and carries forward estimates and
+            # elasticities this one has no equivalent of.
+            "segment_sotp":          _segment_sotp_block(
+                                         (scenario_results.get("base") or {}), shares,
+                                         _output_currency),
             # B1 prediction ledger -- see _param_version / _consensus_at_run.
             "routing_trace":         {**_routing_trace,
                                       "final_sector": sector,

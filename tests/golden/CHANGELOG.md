@@ -1418,3 +1418,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: multiples_used now carries no_peer_multiples, which states that a valuation had no comparable set at all rather than leaving all_static:false to be misread over an empty field set. Values unchanged; the key is additive.
 
+## 2026-09-20T14:09:41+00:00
+
+- regenerated at HEAD: `a2e6db4`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Refiner audit (owner, 2026-09-20), four changes: (1) valuations divide by the CURRENT share count scaled by the filing's diluted/basic ratio, not the trailing weighted-average diluted count -- Valero was dividing by 309.0mn against 287.9mn outstanding; (2) the FCF Yield leg on a cyclical profile uses the same 5y normalisation as the EV/EBITDA and P/E legs instead of raw TTM; (3) segment SOTP identifies the business and prices it on owner-set through-cycle EV/EBITDA bands, with segment EBITDA reconciled to the company's normalised EBITDA -- it previously multiplied segment REVENUE by a multiple keyed off the segment's NAME, valuing Marathon's refining arm as ADVERTISING at 6.5x revenue; (4) accounting lines such as 'Consolidation, Eliminations' are no longer valued as businesses. Share count moves every per-share leg, so every fixture moves.
+

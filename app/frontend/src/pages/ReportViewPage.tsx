@@ -28,6 +28,7 @@ import { BankValuationPanel } from '@/components/report/bank/BankValuationPanel'
 import { BiopharmaValuationPanel } from '@/components/report/biopharma/BiopharmaValuationPanel';
 import { TechValuationPanel } from '@/components/report/tech/TechValuationPanel';
 import { SotpAnalystPanel } from '@/components/report/SotpAnalystPanel';
+import { SegmentSotpPanel } from '@/components/report/SegmentSotpPanel';
 import { CitationPanel } from '@/components/report/CitationPanel';
 import { ResearchSummaryPanel } from '@/components/report/ResearchSummaryPanel';
 import { IndustryBriefPanel } from '@/components/report/IndustryBriefPanel';
@@ -345,6 +346,12 @@ export function ReportViewPage() {
             breakdown, NAV bridge, multiple basis, scenario TPs. */}
         {dcfRange?.sotp_breakdown && (
           <SotpAnalystPanel breakdown={dcfRange.sotp_breakdown} />
+        )}
+
+        {/* Segment SOTP — business segments on their own EV/EBITDA bands.
+            Separate from the analyst SOTP above: a name can have either. */}
+        {dcfRange?.segment_sotp && (
+          <SegmentSotpPanel sotp={dcfRange.segment_sotp} />
         )}
 
         {/* Full width: this is the 6-column scenario table that was being
