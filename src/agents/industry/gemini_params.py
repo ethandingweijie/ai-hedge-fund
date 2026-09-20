@@ -505,11 +505,14 @@ INDUSTRY_INPUT_SCHEMAS: dict = {
 
 _INDUSTRY_ASK = {
     "pv10": (
-        "the discounted value of its PROVED oil and gas reserves at the latest fiscal year end. "
-        "Prefer the standardized measure of discounted future net cash flows from the annual "
-        "report's supplementary oil and gas disclosures; use the company's PV-10 only if it does "
-        "not publish the standardized measure. Include total proved reserves and the price deck "
-        "the value uses. Total company, not a single basin."),
+        "the discounted value of its PROVED oil and gas reserves at the latest fiscal year end, "
+        "taken from the SUPPLEMENTAL disclosures on oil and gas producing activities (unaudited) "
+        "-- 'Standardized Measure of Discounted Future Net Cash Flows' under ASC 932 for US "
+        "filers, or the equivalent supplementary disclosure a 20-F / annual report carries for a "
+        "non-US filer. Report the TOTAL COMPANY figure exactly as the table prints it, with no "
+        "adjustment, no escalation and no netting of anything the table does not net. Use the "
+        "company's own PV-10 only when it publishes no standardized measure, and say which of the "
+        "two the figure is. Include total proved reserves and the price basis the table states."),
     "backlog": (
         "its contracted BACKLOG at the latest reported period end, using the company's own term "
         "(total backlog, funded backlog, contract drilling backlog, order backlog, or remaining "

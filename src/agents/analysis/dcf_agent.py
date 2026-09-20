@@ -285,8 +285,10 @@ def _decayed_growth_schedule(base_growth: float, profile_name: str, years: int =
 
 #: Reserve-backed profiles: an accepted PV-10 / standardized measure floors
 #: the bear case and is published as a cross-check. Never blended (owner,
-#: 2026-09-20): the measure is proved reserves only, after tax, at trailing
-#: SEC prices, and on COP, DVN and OXY it sat 75-79% below the share price.
+#: 2026-09-20): the standardized measure (ASC 932 / SEC rules) is bound to a
+#: 12-month unweighted trailing average price and a mandatory 10% discount
+#: rate -- an accounting disclosure, not a fair market valuation -- and on COP,
+#: DVN and OXY it sat 75-79% below the share price.
 _RESERVE_FLOOR_PROFILES: frozenset[str] = frozenset({
     "Upstream Oil & Gas", "Integrated Oil & Gas",
 })
@@ -381,6 +383,10 @@ _CONVERGENCE_ALPHA_PROFILES: frozenset[str] = frozenset({
     "Airlines",
     "Steel / Metals",
     "Specialty Chemicals",
+    # Energy services: a one-year consensus jump is an order-book swing, not a
+    # decade's growth. Seatrium's T-1 backtest projected 70.5% for ten years
+    # and valued it at S$64.56 against a S$2.07 price (owner, 2026-09-20).
+    "Offshore Marine & Resources (SG)",
     "Upstream Oil & Gas",
     "Integrated Oil & Gas",
     "Refining & Marketing",
@@ -8285,11 +8291,12 @@ def _apply_reserve_floor(scenario_results: dict, floor_ps: Optional[float],
         return None
     before = bear["intrinsic_value"]
     bear["intrinsic_value"] = round(floor_ps, 2)
+    from src.data.industry_inputs import RESERVE_MEASURE_REMARK
     rec = {"floor_per_share": round(floor_ps, 2), "before": before,
            "period": (detail or {}).get("period"),
            "source_url": (detail or {}).get("source_url"),
-           "note": ("after-tax discounted value of proved reserves, less net debt, per "
-                    "share; trailing SEC prices")}
+           "note": ("after-tax discounted value of proved reserves, less net debt, per share"),
+           "assumption": RESERVE_MEASURE_REMARK}
     bear["reserve_floor"] = rec
     if isinstance(bear.get("forward_flags"), list):
         bear["forward_flags"].append(
@@ -8359,6 +8366,11 @@ def _run_backward_gate(
 
     Returns (calibration_error, calibration_note, calibration_record).
     calibration_error=True means the model is >25% off → flag "Calibration Error".
+    The status is decided by the 12-month OUTCOME when one has matured (owner,
+    2026-09-20): model closer or level = passed, market closer = fired. The T-1
+    gap is reported either way. Without a matured outcome the T-1 tolerance
+    decides, as it always did.
+
     calibration_record is the same result as structured fields, plus a forward
     score: the T-1 model and the T-1 market price, each against the close
     `_T1_FORWARD_HORIZON_DAYS` later. The contemporaneous gap cannot tell a
@@ -8555,7 +8567,8 @@ def _run_backward_gate(
         if iv_t1 <= 0:
             return _skip("T-1 model returned non-positive IV")
 
-        # Forward score (observation only; the flag below does not read it).
+        # Forward score. Since 2026-09-20 this DECIDES the status when it has
+        # matured -- see the module note on _outcome_status.
         if fwd_dt <= end_dt:
             fwd_close = _close_on_or_before(prices, fwd_dt)
             if fwd_close is not None:
@@ -8579,6 +8592,29 @@ def _run_backward_gate(
         error_pct = abs(iv_t1 - actual_price) / actual_price
         record["error_pct"] = error_pct
         _when = f" on {record['t1_price_date']}"
+        _fwd = record.get("forward") or {}
+        _verdict = _fwd.get("verdict")
+
+        # ── The outcome decides, where there is one ──────────────────────
+        if _verdict in ("MODEL_CLOSER", "MARKET_CLOSER", "TIE"):
+            record["status_basis"] = "forward_outcome"
+            _m, _k = _fwd.get("model_error_pct"), _fwd.get("market_error_pct")
+            _scored = (f"12m later the {'model' if _verdict == 'MODEL_CLOSER' else 'market'} was "
+                       f"closer ({_m:.0%} vs {_k:.0%})" if _verdict != "TIE" and
+                       isinstance(_m, (int, float)) and isinstance(_k, (int, float))
+                       else (f"12m later model and market were level "
+                             f"({_m:.0%} vs {_k:.0%})" if isinstance(_m, (int, float))
+                             and isinstance(_k, (int, float)) else "12m outcome scored"))
+            _gap = (f"T-1 {method_label} IV ${iv_t1:.2f} vs price ${actual_price:.2f}{_when} "
+                    f"= {error_pct:.0%} gap")
+            if _verdict == "MARKET_CLOSER":
+                record["status"] = "fired"
+                return True, f"Calibration Error: {_gap}; {_scored}", record
+            record["status"] = "passed"
+            return False, f"T-1 passed on outcome ({method_label}): {_gap}; {_scored}", record
+
+        # ── No matured outcome: the T-1 tolerance still rules ────────────
+        record["status_basis"] = "t1_tolerance"
         if error_pct > _CALIBRATION_TOLERANCE:
             record["status"] = "fired"
             note = (f"Calibration Error: T-1 {method_label} IV ${iv_t1:.2f} vs actual "

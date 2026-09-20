@@ -1402,3 +1402,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 1 oil, gas & coal (owner-approved 2026-09-20): new Integrated Oil & Gas, Midstream / Pipelines, Refining & Marketing (mid-cycle anchor + 0.20 forward leg), Oilfield Services & Drilling and Coal profiles; Upstream re-anchored on EV/OCF; EV/OCF comps field; scoped industry routing for the seven oil, gas & coal industries. No fixture is in scope (FCX is Copper, U96.SI Diversified Utilities): only param_version, the hash of the profile constants, changes. Also: replay now serves each fixture's regional comps from tests/fixtures/golden/<name>/comps.json (frozen from this baseline's multiples_used) instead of the local regional_comps table, which moved every fixture's peer multiples when the local store was refreshed.
 
+## 2026-09-20T02:23:19+00:00
+
+- regenerated at HEAD: `a686085`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Methodology backtest judged by its outcome (owner, 2026-09-20): where a 12-month outcome has matured it decides the status -- model closer or level = passed, market closer = fired -- and the T-1 gap is still reported. The gate already computed the outcome and ignored it: on the Wave 1 sample label and outcome disagreed 4 times in 7 (PetroChina 59% gap but model closer 15% vs 27%; Valero 61% but level; SLB passed at 24% having been wrong at 24% vs 0%). Only calibration_record.status moves, on 5 fixtures; no valuation leaf changes. Also adds Offshore Marine & Resources (SG) to the growth-convergence fade (Seatrium's T-1 backtest projected a 70.5% one-year consensus rate flat for ten years: S$64.56 against a S$2.07 price, now S$4.27); no fixture carries that profile.
+

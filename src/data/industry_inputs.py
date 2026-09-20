@@ -35,6 +35,14 @@ KINDS = ("pv10", "backlog", "maintenance_capex")
 #: unless someone switches the forward view on deliberately.
 OVERLAY_FLAG = "FEATURE_FORWARD_OVERLAY"
 
+#: What the reserve figure is, stated wherever it is shown (owner, 2026-09-20).
+RESERVE_MEASURE_REMARK = (
+    "The standardized measure (ASC 932 / SEC rules) is strictly bound to a 12-month "
+    "unweighted historical trailing average price (or unescalated year-end pricing) "
+    "and a mandatory 10% discount rate. It is an accounting disclosure, not a fair "
+    "market valuation."
+)
+
 #: Kinds an overlay may never touch. The SEC standardized measure is defined by
 #: proved reserves at trailing SEC prices; a forward price deck applied to it
 #: would report a rigid measure as a forward one. Price decks belong on the DCF
@@ -284,11 +292,31 @@ def accepted_detail(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] 
         return None
 
 
+def omit(doc: dict, ticker: str, kind: str, reason: str) -> dict:
+    """Record that an input is deliberately not carried for this name.
+
+    A figure that was wrong (a different measure, or none disclosed) is removed
+    and the omission stated: an input that is silently absent reads the same as
+    one nobody looked for.
+    """
+    from datetime import datetime, timezone
+    key = _key(ticker)
+    (doc.setdefault("tickers", {}).get(key) or {}).pop(kind, None)
+    doc.setdefault("omitted", {}).setdefault(key, {})[kind] = {
+        "reason": reason, "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    return doc
+
+
 def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None) -> dict:
     """Rows for the Model Accuracy review panel."""
     d = doc if doc is not None else load()
     reviews = reviews or review_for
     rows = []
+    for t, kinds in sorted((d.get("omitted") or {}).items()):
+        for kind, o in sorted((kinds or {}).items()):
+            rows.append({"ticker": t, "kind": kind, "status": "omitted",
+                         "omitted_reason": (o or {}).get("reason"), "checks": [],
+                         "remark": RESERVE_MEASURE_REMARK if kind == "pv10" else None})
     for t, kinds in sorted((d.get("tickers") or {}).items()):
         for kind, e in sorted((kinds or {}).items()):
             if not isinstance(e, dict) or not isinstance(e.get("data"), dict):
@@ -311,6 +339,7 @@ def ui_summary(*, doc: Optional[dict] = None, reviews: Optional[Callable] = None
                 "detail": {k: data.get(k) for k in ("measure", "price_basis", "proved_reserves",
                                                      "book_to_bill", "definition")
                            if data.get(k) is not None} | ({"backlog_kind": data["kind"]} if data.get("kind") else {}),
+                "remark": RESERVE_MEASURE_REMARK if kind == "pv10" else None,
                 "checks": e.get("checks") or [], "ok": e.get("ok"),
                 "model": e.get("model"), "built_at": e.get("built_at"),
                 **rv,

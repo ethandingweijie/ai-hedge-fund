@@ -1,27 +1,66 @@
 {
+ "omitted": {
+  "02883.HK": {
+   "backlog": {
+    "at": "2026-09-20T01:59:24+00:00",
+    "reason": "The figure returned was the IFRS 15 remaining-performance-obligation disclosure (RMB 1.78bn, 0.04x revenue), not COSL's contracted backlog. Omitted unless a total long-term contract value is disclosed: an RPO subset would understate revenue visibility."
+   }
+  },
+  "5WH.SI": {
+   "pv10": {
+    "at": "2026-09-20T02:30:52+00:00",
+    "reason": "Rex International publishes no standardized measure or PV-10: SGX/IFRS filers are not required to, and the pre-fill returned nothing citable in two attempts. Omitted, so no reserve floor applies to this name."
+   }
+  },
+  "HAL": {
+   "backlog": {
+    "at": "2026-09-20T01:59:24+00:00",
+    "reason": "Halliburton does not disclose a backlog figure; the pre-fill returned none. Omitted rather than substituted, so the OFS bear-case revenue bound simply does not apply."
+   }
+  },
+  "WMB": {
+   "maintenance_capex": {
+    "at": "2026-09-20T02:30:52+00:00",
+    "reason": "Williams' 10-K (filed 2026-02-24) carries no maintenance or sustaining capital figure: it breaks out growth capital guidance only. The $900MM the pre-fill found is FY2026 guidance from an investor presentation, not a reported actual. Omitted; the midstream leg keeps D&A as the stand-in and says so on the leg."
+   }
+  }
+ },
  "tickers": {
   "00883.HK": {
    "pv10": {
-    "built_at": "2026-09-19T17:53:23+00:00",
+    "basis": "actual",
+    "built_at": "2026-09-20T02:10:48+00:00",
     "checks": [
      {
-      "check": "cited_amount",
-      "detail": "no cited amount of known scale and convertible currency",
-      "ok": false
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "pv10 / market_cap",
+      "detail": "0.80x (plausible 0.05x to 10.0x)",
+      "ok": true,
+      "ratio": 0.8028
      }
     ],
     "company": "CNOOC Limited",
     "data": {
      "measure": "standardized_measure",
-     "price_basis": "",
-     "proved_reserves": null,
+     "price_basis": "本公司採用了報告日之前的12個月的首日平均油價用於估計未來證實儲量中的年產量，以確定未來的現金流量。",
+     "proved_reserves": {
+      "period": "2025-12-31",
+      "quote": "截至二零二五年十二月三十一日，本公司擁有淨證實儲量77.7億桶油當量",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3BGcwU0-Fj27mkX5PUxtWEj7XdTXhAWCwXy3zbilhnZl7P3L5JUIBWzZYIrYW7BK1LS1pQgON47m3Qll2EDTX1evIiGKx3eSFycETf52IiTVeAD9V3s4tw1Zos91c4dF1j9e_ebbGRyx7mn4jz7u1W9akfn7m7NRR0RT9GmUSe2Z8-A-U",
+      "unit": "億桶油當量",
+      "value": 77.7
+     },
      "value": {
-      "currency": "USD",
-      "period": "",
-      "quote": "",
-      "scale": "units",
-      "source_url": "",
-      "value": 0.0
+      "currency": "CNY",
+      "period": "FY2025",
+      "quote": "標準化度量 579,486 188,337 767,823",
+      "scale": "mn",
+      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF3BGcwU0-Fj27mkX5PUxtWEj7XdTXhAWCwXy3zbilhnZl7P3L5JUIBWzZYIrYW7BK1LS1pQgON47m3Qll2EDTX1evIiGKx3eSFycETf52IiTVeAD9V3s4tw1Zos91c4dF1j9e_ebbGRyx7mn4jz7u1W9akfn7m7NRR0RT9GmUSe2Z8-A-U",
+      "value": 767823.0
      }
     },
     "fmp_context_usd": {
@@ -34,50 +73,12 @@
     },
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
-    "ok": false,
-    "secs": 586.5,
-    "value_usd": null
+    "ok": true,
+    "secs": 126.2,
+    "value_usd": 114797216730.0
    }
   },
-  "02883.HK": {
-   "backlog": {
-    "built_at": "2026-09-19T18:12:10+00:00",
-    "checks": [
-     {
-      "check": "backlog / revenue",
-      "detail": "0.04x (plausible 0.05x to 15.0x)",
-      "ok": false,
-      "ratio": 0.0354
-     }
-    ],
-    "company": "China Oilfield Services Limited",
-    "data": {
-     "book_to_bill": null,
-     "kind": "rpo",
-     "value": {
-      "currency": "CNY",
-      "period": "FY2025",
-      "quote": "The transaction price allocated to the remaining performance obligations (performed or partially performed) as at 31. December 2025 and 2024 and the expected timing of recognising revenue are as follows: As at 31 December 2025 ... Total. 305,021. 1,118,911. 269,241. 86,986. 1,780,159.",
-      "scale": "thousands",
-      "source_url": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFUpx4CEhEBdTJ9M75Y--bsGi0_kMoH_tOQaWjhjdIB1UwNvxRW3EGXo34F_44lDWlQNGOP12bpxF_F7T0oih_uB2jNX2oqmgGp0iq-krhpWuQk6GfpVC9jl8xy6DzZejD44FlnJ2idi7CawtAUuHBxVv16fooyHuHC6ZrMW9yh5jY=",
-      "value": 1780159.0
-     }
-    },
-    "fmp_context_usd": {
-     "company": "China Oilfield Services Limited",
-     "depreciation_and_amortization": 851853408.85,
-     "market_cap": 8088459313.8632,
-     "operating_cash_flow": 1687958331.3600001,
-     "period": "2025-12-31",
-     "revenue": 7517733199.0642
-    },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": false,
-    "secs": 35.2,
-    "value_usd": 266151572.09
-   }
-  },
+  "02883.HK": {},
   "03337.HK": {
    "backlog": {
     "built_at": "2026-09-19T18:12:23+00:00",
@@ -117,45 +118,7 @@
     "value_usd": 2768401915.0
    }
   },
-  "5WH.SI": {
-   "pv10": {
-    "built_at": "2026-09-19T17:54:49+00:00",
-    "checks": [
-     {
-      "check": "cited_amount",
-      "detail": "no cited amount of known scale and convertible currency",
-      "ok": false
-     }
-    ],
-    "company": "Rex International Holding Limited",
-    "data": {
-     "measure": "pv10",
-     "price_basis": "Not reported",
-     "proved_reserves": null,
-     "value": {
-      "currency": "USD",
-      "period": "FY2024",
-      "quote": "",
-      "scale": "mn",
-      "source_url": "https://www.rexih.com",
-      "value": 0.0
-     }
-    },
-    "fmp_context_usd": {
-     "company": "Rex International Holding Limited",
-     "depreciation_and_amortization": 0.0,
-     "market_cap": 68492647.7066,
-     "operating_cash_flow": -739.63,
-     "period": "2026-01-31",
-     "revenue": 0.0
-    },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": false,
-    "secs": 80.7,
-    "value_usd": null
-   }
-  },
+  "5WH.SI": {},
   "BKR": {
    "backlog": {
     "built_at": "2026-09-19T18:11:00+00:00",
@@ -289,26 +252,33 @@
   },
   "EOG": {
    "pv10": {
-    "built_at": "2026-09-19T17:42:24+00:00",
+    "basis": "actual",
+    "built_at": "2026-09-20T02:30:52+00:00",
     "checks": [
      {
-      "check": "cited_amount",
-      "detail": "no cited amount of known scale and convertible currency",
-      "ok": false
+      "check": "latest reported period",
+      "detail": "figure is 2025; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "pv10 / market_cap",
+      "detail": "0.54x (plausible 0.05x to 10.0x)",
+      "ok": true,
+      "ratio": 0.5378
      }
     ],
     "company": "EOG Resources, Inc.",
     "data": {
      "measure": "standardized_measure",
-     "price_basis": "",
+     "price_basis": "12-month average prices used for 2025 future cash inflows: United States crude oil $66.37/bbl, NGL $20.87/bbl, natural gas $2.77/MMBtu; Trinidad crude oil $62.23/bbl, natural gas $3.70/MMBtu",
      "proved_reserves": null,
      "value": {
       "currency": "USD",
-      "period": "",
-      "quote": "",
-      "scale": "units",
-      "source_url": "",
-      "value": 0.0
+      "period": "FY2025",
+      "quote": "Standardized measure of discounted future net cash flows relating to proved oil and gas reserves $ 40,877 $ 440 $ 41,317 (United States, Trinidad, Total; in millions, at December 31, 2025)",
+      "scale": "mn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/821189/000082118926000054/eog-20251231.htm",
+      "value": 41317.0
      }
     },
     "fmp_context_usd": {
@@ -319,11 +289,10 @@
      "period": "2025-12-31",
      "revenue": 22567000000.0
     },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": false,
-    "secs": 722.7,
-    "value_usd": null
+    "model": null,
+    "ok": true,
+    "source": "sec_10k",
+    "value_usd": 41317000000.0
    }
   },
   "ET": {
@@ -369,50 +338,7 @@
     "value_usd": 1316000000.0
    }
   },
-  "HAL": {
-   "backlog": {
-    "built_at": "2026-09-19T18:10:48+00:00",
-    "checks": [
-     {
-      "check": "positive",
-      "detail": "amount 0 is not positive",
-      "ok": false
-     },
-     {
-      "check": "backlog / revenue",
-      "detail": "0.00x (plausible 0.05x to 15.0x)",
-      "ok": false,
-      "ratio": 0.0
-     }
-    ],
-    "company": "Halliburton Company",
-    "data": {
-     "book_to_bill": null,
-     "kind": "rpo",
-     "value": {
-      "currency": "USD",
-      "period": "FY2024",
-      "quote": "Revenue allocated to remaining performance obligations for these long-term contracts is not material.",
-      "scale": "mn",
-      "source_url": "https://www.sec.gov/Archives/edgar/data/45012/000004501225000010/hal-20241231.htm",
-      "value": 0.0
-     }
-    },
-    "fmp_context_usd": {
-     "company": "Halliburton Company",
-     "depreciation_and_amortization": 1136000000.0,
-     "market_cap": 28102779805.0,
-     "operating_cash_flow": 2926000000.0,
-     "period": "2025-12-31",
-     "revenue": 22184000000.0
-    },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": false,
-    "secs": 55.8,
-    "value_usd": 0.0
-   }
-  },
+  "HAL": {},
   "KMI": {
    "maintenance_capex": {
     "built_at": "2026-09-19T17:55:20+00:00",
@@ -643,49 +569,7 @@
     "value_usd": 5900000000.0
    }
   },
-  "WMB": {
-   "maintenance_capex": {
-    "built_at": "2026-09-20T01:31:35+00:00",
-    "checks": [
-     {
-      "check": "maintenance_capex / depreciation_and_amortization",
-      "detail": "0.17x (plausible 0.1x to 3.0x)",
-      "ok": true,
-      "ratio": 0.1674
-     },
-     {
-      "check": "maintenance capex < OCF",
-      "detail": "0.07x of operating cash flow",
-      "ok": true
-     }
-    ],
-    "company": "The Williams Companies, Inc.",
-    "data": {
-     "definition": "The company notes in its non-GAAP Distributable Cash Flow reconciliation that 'Adjustments for maintenance capital expenditures and cash portion of interest expense include our proportionate share of these items of our equity-method investments.' In its investor presentations, Williams defines maintenance capital as 'Investments in working condition of assets to protect the business' that support the 'integrity of pipelines and continued investments in emissions reduction program.'",
-     "value": {
-      "currency": "USD",
-      "period": "FY2020",
-      "quote": "Maintenance capital expenditures (1) (530) (464) (393)",
-      "scale": "mn",
-      "source_url": "https://www.sec.gov/Archives/edgar/data/107263/000119312521085137/d131043ddef14a.htm",
-      "value": 393.0
-     }
-    },
-    "fmp_context_usd": {
-     "company": "The Williams Companies, Inc.",
-     "depreciation_and_amortization": 2347000000.0,
-     "market_cap": 88129216358.0,
-     "operating_cash_flow": 5898000000.0,
-     "period": "2025-12-31",
-     "revenue": 11950000000.0
-    },
-    "grounding_urls": [],
-    "model": "gemini-3.8-flash",
-    "ok": true,
-    "secs": 220.7,
-    "value_usd": 393000000.0
-   }
-  }
+  "WMB": {}
  },
  "version": 1
 }

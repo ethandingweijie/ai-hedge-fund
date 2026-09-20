@@ -86,9 +86,25 @@ def test_forward_score_waits_until_the_horizon_has_passed(fake_prices):
     assert fake_prices == [("2025-01-18", "2025-12-01")]
 
 
-def test_flag_verdict_is_unchanged_by_the_forward_score(fake_prices):
+def test_a_matured_outcome_decides_the_verdict(fake_prices):
+    """Owner decision 2026-09-20. The gate used to report only the T-1 gap,
+    while computing who was closer a year later and ignoring it. On the Wave 1
+    sample the two disagreed four times in seven: PetroChina (59% gap, model
+    closer after 12m) and Valero (61%, level) were misses for being right;
+    SLB passed at 24% having been wrong. The outcome now decides."""
     err, note, rec = _gate()
-    assert rec["status"] == ("fired" if err else "passed")
+    fwd = rec["forward"]["verdict"]
+    assert rec["status_basis"] == "forward_outcome"
+    assert rec["status"] == ("fired" if fwd == "MARKET_CLOSER" else "passed")
+    assert err is (fwd == "MARKET_CLOSER")
+    assert note.startswith("Calibration Error" if err else "T-1 passed on outcome")
+    assert f"{rec['error_pct']:.0%} gap" in note          # the T-1 gap is still reported
+
+
+def test_without_a_matured_outcome_the_tolerance_still_rules(fake_prices):
+    err, note, rec = _gate(end_date="2025-12-01")
+    assert rec["forward"]["verdict"] == "NOT_MATURED"
+    assert rec["status_basis"] == "t1_tolerance"
     assert (rec["error_pct"] > d._CALIBRATION_TOLERANCE) is err
     assert note.startswith("Calibration Error" if err else "T-1 passed")
 

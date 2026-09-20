@@ -76,7 +76,16 @@ def build_one(ticker: str, kind: str) -> dict:
     ctx = fmp_context(ticker)
     schema = gp.INDUSTRY_INPUT_SCHEMAS[kind]
     t0 = time.time()
-    out = gp.generate(gp.industry_input_prompt(kind, ctx["company"], ticker), schema=schema, grounded=True)
+    # Grounded reserve/backlog calls read long filings; 90s (the client default)
+    # timed out repeatedly on EOG, Rex and Williams. Two attempts, longer each.
+    for attempt, timeout in enumerate((180.0, 300.0)):
+        try:
+            out = gp.generate(gp.industry_input_prompt(kind, ctx["company"], ticker),
+                              schema=schema, grounded=True, timeout=timeout)
+            break
+        except Exception:                                  # noqa: BLE001
+            if attempt:
+                raise
     data = out.get("json")
     if not isinstance(data, dict):
         raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
