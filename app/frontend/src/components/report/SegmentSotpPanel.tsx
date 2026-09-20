@@ -132,7 +132,9 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
               <td className="py-2">Total enterprise value</td>
               <td colSpan={4} />
               <td className="text-right tabular-nums py-2">{fmtBn(sotp.total_ev, sym)}</td>
-              <td />
+              <td className="text-right tabular-nums py-2">
+                {fmtPct(sotp.checks?.share_of_ev_sum ?? null)}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -174,6 +176,9 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
       </div>
 
       <div className="space-y-1 text-[11px] text-muted-foreground">
+        {(sotp.checks?.reminders ?? []).map((r, i) => (
+          <div key={`chk-${i}`} className="font-medium text-foreground">{r}</div>
+        ))}
         {anyEstimated && <div>{sotp.basis_note}</div>}
         {rows.some((r) => r.ebitda_margin_source) && (
           <div>
@@ -185,11 +190,6 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
           <div>
             Segments shown without a multiple carry no owner-set band and are
             valued at nothing in the total.
-          </div>
-        )}
-        {sotp.priced_share_of_revenue != null && sotp.priced_share_of_revenue < 1 && (
-          <div>
-            {fmtPct(sotp.priced_share_of_revenue)} of segmented revenue is priced.
           </div>
         )}
       </div>

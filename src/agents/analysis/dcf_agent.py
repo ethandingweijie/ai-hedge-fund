@@ -2182,6 +2182,31 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
             "share_of_ev": (ev / total_ev) if total_ev > 0 else None,
             "note": p.get("note"),
         })
+    # The check the owner asked to be standing (2026-09-20): a sum of the parts
+    # has to sum. Two ways it can fail to, and they fail differently:
+    #
+    #   share_of_ev -- the parts' shares of enterprise value must come to 100%.
+    #     This is arithmetic, and a miss means a negative or unpriced EV slipped
+    #     into the total rather than being excluded from it.
+    #   revenue priced -- the fraction of segmented revenue that carries a
+    #     multiple. Arithmetic cannot see this one: Phillips 66's parts summed
+    #     to exactly 100% of a total that covered 51% of the company.
+    #
+    # Both are reported, and the reminder names whichever fell short, because a
+    # SOTP that quietly values half a company reads exactly like one that does
+    # not.
+    _share_sum = sum(r["share_of_ev"] for r in rows if r.get("share_of_ev") is not None)
+    _priced_rev = leg.get("priced_share_of_revenue")
+    _reminders = []
+    if rows and abs(_share_sum - 1.0) > 1e-6:
+        _reminders.append(
+            f"Segment shares of enterprise value sum to {_share_sum:.1%}, not 100%.")
+    if isinstance(_priced_rev, (int, float)) and _priced_rev < 0.999:
+        _unpriced = [r["segment"] for r in rows
+                     if r.get("multiple") is None and r.get("basis") != "carrying_value"]
+        _reminders.append(
+            f"Only {_priced_rev:.0%} of segmented revenue carries a multiple"
+            + (f"; unpriced: {', '.join(str(u) for u in _unpriced)}." if _unpriced else "."))
     return {
         "currency": currency,
         "segments": rows,
@@ -2189,6 +2214,13 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
         "value_per_share": leg.get("value"),
         "shares": shares,
         "priced_share_of_revenue": leg.get("priced_share_of_revenue"),
+        "checks": {
+            "share_of_ev_sum": _share_sum,
+            "share_of_ev_sums_to_100": bool(rows) and abs(_share_sum - 1.0) <= 1e-6,
+            "revenue_fully_priced": bool(isinstance(_priced_rev, (int, float))
+                                         and _priced_rev >= 0.999),
+            "reminders": _reminders,
+        },
         "basis_note": ("Segment EBITDA is estimated as segment revenue x the margin "
                        "its peer basket implies; it is not a disclosed figure. "
                        "Multiples are owner-set through-cycle EV/EBITDA bands, "

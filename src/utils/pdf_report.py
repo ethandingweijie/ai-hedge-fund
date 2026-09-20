@@ -1989,10 +1989,11 @@ def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
             Paragraph(bn(r.get("ev")), st_v),
             Paragraph(pct(r.get("share_of_ev")), st_v),
         ])
+    _chk = b.get("checks") or {}
     data.append([Paragraph("<b>Total enterprise value</b>", st_lb),
                  Paragraph("", st_v), Paragraph("", st_v), Paragraph("", st_v),
                  Paragraph("", st_v), Paragraph(f"<b>{bn(b.get('total_ev'))}</b>", st_vb),
-                 Paragraph("", st_v)])
+                 Paragraph(f"<b>{pct(_chk.get('share_of_ev_sum'))}</b>", st_vb)])
     t = Table(data, colWidths=[lab_w] + [col_w] * 6, hAlign="LEFT")
     t.setStyle(TableStyle([
         ("TOPPADDING", (0, 0), (-1, -1), 0.8), ("BOTTOMPADDING", (0, 0), (-1, -1), 0.8),
@@ -2005,6 +2006,8 @@ def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     lead = ("Sum of the parts by business segment"
             + (f" -- {_money(ps)} per share" if isinstance(ps, (int, float)) else ""))
     out = [Spacer(1, 6), Paragraph(lead, styles["RptLabel"]), Spacer(1, 2), t]
+    for _rem in (_chk.get("reminders") or []):
+        out += [Spacer(1, 2), Paragraph(f"<b>{_strip(str(_rem))}</b>", styles["RptBody"])]
     note = _strip(str(b.get("basis_note") or ""))
     if note:
         out += [Spacer(1, 2), Paragraph(f"<font size=5.5 color='#666666'>{note}</font>",

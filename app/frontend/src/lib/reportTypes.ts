@@ -324,6 +324,13 @@ export interface SegmentSotp {
   shares?: number | null;
   priced_share_of_revenue?: number | null;
   basis_note?: string | null;
+  /** A sum of the parts has to sum — see _segment_sotp_block. */
+  checks?: {
+    share_of_ev_sum?: number | null;
+    share_of_ev_sums_to_100?: boolean | null;
+    revenue_fully_priced?: boolean | null;
+    reminders?: string[] | null;
+  } | null;
 }
 
 // ── GS-style SOTP breakdown (Tier 1 report package) ─────────────────────────

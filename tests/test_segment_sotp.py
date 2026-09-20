@@ -142,3 +142,52 @@ class TestTheRecord:
 
     def test_no_segments_means_no_block(self):
         assert d._segment_sotp_block({"leg_inputs": {}}, 1e6, "USD") is None
+
+
+class TestItSumsTo100:
+    """A sum of the parts has to sum (owner, 2026-09-20).
+
+    Two independent ways it can fail, and arithmetic only sees one of them.
+    """
+
+    def _block(self, parts, priced=1.0):
+        total = sum(p["ev"] for p in parts)
+        return d._segment_sotp_block(
+            {"leg_inputs": {"SOTP (segments)": {
+                "segments": parts, "metric_value": total, "value": 100.0,
+                "priced_share_of_revenue": priced}}}, 400e6, "USD")
+
+    def test_a_complete_sotp_sums_to_100_and_says_nothing(self):
+        parts = d._sotp_parts({"Refining": 74.9e9, "Midstream": 21.2e9})
+        blk = self._block(parts)
+        assert blk["checks"]["share_of_ev_sums_to_100"] is True
+        assert blk["checks"]["share_of_ev_sum"] == pytest.approx(1.0)
+        assert blk["checks"]["revenue_fully_priced"] is True
+        assert blk["checks"]["reminders"] == []
+
+    def test_partly_priced_revenue_is_reminded_even_though_the_shares_sum(self):
+        """Phillips 66 before its bands were set: the parts summed to exactly
+        100% of a total covering 51% of the company. The shares cannot see it."""
+        parts = d._sotp_parts({"Refining": 74.9e9, "Midstream": 21.2e9})
+        blk = self._block(parts, priced=0.51)
+        assert blk["checks"]["share_of_ev_sums_to_100"] is True
+        assert blk["checks"]["revenue_fully_priced"] is False
+        assert any("51%" in r for r in blk["checks"]["reminders"])
+
+    def test_the_reminder_names_the_unpriced_segments(self):
+        parts = d._sotp_parts({"Refining": 74.9e9, "Hydrogen ventures": 5e9})
+        blk = self._block(parts, priced=0.88)
+        joined = " ".join(blk["checks"]["reminders"])
+        assert "Hydrogen ventures" in joined or "carries a multiple" in joined
+
+    def test_shares_that_do_not_sum_are_reported(self):
+        parts = [{"segment": "A", "revenue": 1e9, "ev": 6e9, "type": "refining",
+                  "basis": "ev_ebitda", "multiple": 6.0},
+                 {"segment": "B", "revenue": 1e9, "ev": -1e9, "type": "refining",
+                  "basis": "ev_ebitda", "multiple": 6.0}]
+        blk = d._segment_sotp_block(
+            {"leg_inputs": {"SOTP (segments)": {
+                "segments": parts, "metric_value": 6e9, "value": 10.0,
+                "priced_share_of_revenue": 1.0}}}, 1e6, "USD")
+        assert blk["checks"]["share_of_ev_sums_to_100"] is False
+        assert any("not 100%" in r for r in blk["checks"]["reminders"])
