@@ -158,6 +158,13 @@ DATABASE_URL=<prod proxy url> python scripts/run_dynamic_multiples_update.py --c
 Expect about 226 US, 172 HK and 18 SG multiples. That count is per basket per
 field, because most baskets carry both EV/EBITDA and P/E.
 
+**Dry run against production, 2026-09-21 (nothing written):** 224 US, 174 HKSE,
+18 SES baskets would get a multiple. The same run against the local store
+(corrected Step A history) gives 227 / 174 / 18, and the local store is now
+populated (`--commit`, local sqlite only) so Step D could be measured before
+the production switch-on. The `--commit` against production is the one step
+still waiting on the owner's go-ahead.
+
 ### Step D: measure the impact and verify the log
 
 ```bash
@@ -177,6 +184,28 @@ Then open Model Accuracy → **Dynamic multiples** and confirm:
 On the old (wrong) basis the measured impact was: VLO −14.7%, PSX −13.4%,
 MU −3.0%, V +7.3%, and zero for AAPL, MSFT, NVDA, COST, LMT, Tencent, JPM and
 DBS. **Re-measure.** The V figure was mostly the §3.1 artefact.
+
+**Re-measured on the corrected basis, 2026-09-21 (local store, off vs on):**
+
+| Ticker | Profile | Base IV off -> on | Change | Normalised leg |
+|---|---|---|---|---|
+| VLO | Refining & Marketing | 228.20 -> 200.24 | **−12.3%** | EV/EBITDA (norm) 8.47x -> 5.39x at 0.24; P/E (norm) 14.63x -> 8.28x at 0.06 |
+| PSX | Refining & Marketing | 176.02 -> 155.41 | **−11.7%** | same basket, same multiples |
+| V | Payment Networks | 297.54 -> 312.08 | **+4.9%** | P/E (norm) 15.71x -> 18.89x at 0.40 |
+| MU | Memory / DRAM-NAND | 274.14 -> 285.00 | **+4.0%** | P/E (norm) 38.10x -> 41.97x at 0.45 |
+| AAPL, MSFT, NVDA, COST, LMT, 00700.HK | no normalised leg | unchanged | 0.0% | - |
+| JPM, D05.SI | bank | unchanged | 0.0% | P/E (norm) stays on the bank calibration P/E (12.0x / 13.0x) |
+
+V moved +4.9% against +7.3% on the old basis, which is the §3.1 artefact
+leaving. The refiners move **further below consensus**: Wave 1 already recorded
+VLO −24% and PSX −34% against consensus as an open deviation, and the dynamic
+refining multiple (5.39x, inside the owner's 4.5-6.5x band) takes roughly
+another twelve points off. That is the engine doing what it was asked to do at
+a crack trough, but the owner should see it before the switch-on, not after.
+
+Found in passing: COST classifies as `Hyperscaler / Tech Conglom` (it has no
+pin and FMP labels it `Discount Stores`, which has no row). A Wave 4 baseline
+defect, recorded in `docs/waves_2_5_stage2_probe.md`.
 
 ### From a cloud session (Claude Code on the web)
 
