@@ -315,6 +315,13 @@ def accepted_detail(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] 
                "basis": e.get("basis") or "actual",
                "period": ((e.get("data") or {}).get("value") or {}).get("period"),
                "source_url": ((e.get("data") or {}).get("value") or {}).get("source_url")}
+        if kind == "backlog":
+            # What the company calls it (funded, total, RPO, ...) and its cited
+            # book-to-bill, for the backlog-coverage DCF. Inside the content hash.
+            _bd = e.get("data") or {}
+            out["backlog_kind"] = _bd.get("kind")
+            _b2b = _bd.get("book_to_bill")
+            out["book_to_bill"] = float(_b2b) if isinstance(_b2b, (int, float)) and _b2b > 0 else None
         if kind == "rate_base":
             # Accepted with the amount: the content hash covers the whole entry,
             # so an edited ROE or equity layer revokes the acceptance too.

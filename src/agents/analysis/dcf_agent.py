@@ -5620,6 +5620,52 @@ def _compute_method_value(
     scenario_mult = {"bear": 0.75, "base": 1.00, "bull": 1.25}
     sm = scenario_mult.get(scenario, 1.0)
 
+    # ── Backlog-coverage DCF ───────────────────────────────────────────────
+    # Wins by BRANCH ORDER: these names stay in _DCF_PROJECTION_FAMILY, because
+    # that set is what the OE<=0 disable gate knocks out, and a bounded
+    # projection must be knocked out by it too. It rewrites years 1-3 of the
+    # growth path and hands the rest to `_project_dcf` unchanged -- one
+    # projection engine, never a fork. With no accepted backlog it runs the
+    # UNBOUNDED projection rather than returning None (that would drop a 0.30
+    # anchor on every ticker without an accepted figure); `run_dcf_agent` says
+    # so on the valuation. Traced as kind="dcf" with its own projection rows,
+    # which the workbook links to the core DCF block when the bound did not
+    # bind and gives its own block when it did.
+    if method_name in _BACKLOG_BOUNDED_METHODS or method_name in _CONTRACTED_BACKLOG_METHODS:
+        _pj = projection or {}
+        # Left exactly as the core DCF has it (None = flat growth) unless a bound
+        # is applied, so the unbounded leg is byte-identical to the family branch.
+        _sched = _pj.get("growth_schedule")
+        _bl = most_recent.get("backlog_accepted")
+        _bl_d = most_recent.get("_backlog_detail") or {}
+        _bound = None
+        if _bl and _bl > 0 and revenue_base and revenue_base > 0:
+            _cov = float(_bl) / float(revenue_base)
+            _b2b = None if method_name in _CONTRACTED_BACKLOG_METHODS else _bl_d.get("book_to_bill")
+            _sched, _moved = _bound_growth_schedule(
+                list(_sched or [growth_base] * _PROJECTION_YEARS), _backlog_growth_bounds(_cov, _b2b))
+            _bound = {"backlog": float(_bl), "backlog_kind": _bl_d.get("backlog_kind"),
+                      "coverage_years": round(_cov, 4), "book_to_bill": _b2b,
+                      "period": _bl_d.get("period"), "source_url": _bl_d.get("source_url"),
+                      "years_bounded": _BACKLOG_BOUND_YEARS, "moved": _moved}
+        iv, _pv_fcf, _pv_tv, _rows = _project_dcf(
+            revenue_base, fcf_margin_base, growth_base, 0.0,
+            wacc, tgr, fcf_floor, net_debt, shares,
+            growth_schedule=_sched,
+            wacc_schedule=_pj.get("wacc_schedule"),
+            margin_delta_absolute=_pj.get("margin_delta_absolute"),
+        )
+        _leg_trace(kind="dcf", revenue_base=float(revenue_base),
+                   fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
+                   growth_schedule=_sched,
+                   margin_delta_absolute=_pj.get("margin_delta_absolute"),
+                   wacc=float(wacc), wacc_schedule=_pj.get("wacc_schedule"),
+                   tgr=float(tgr), fcf_floor=float(fcf_floor),
+                   net_debt=float(net_debt or 0.0), shares=float(shares),
+                   pv_fcf_per_share=float(_pv_fcf), pv_tv_per_share=float(_pv_tv),
+                   projection_rows=_rows, **({"backlog_bound": _bound} if _bound else {}))
+        return iv
+
     # ── DCF / DCF variants ─────────────────────────────────────────────────
     # _DCF_PROJECTION_FAMILY (module constant, defined below) — every name
     # here projects via _project_dcf and therefore consumes fcf_margin_base.
@@ -7049,6 +7095,7 @@ def _compute_method_value(
 _DCF_FAMILY_NAMES: frozenset[str] = frozenset({
     "DCF", "DCF (2-stage)", "DCF (FCF+)", "NRR-adj DCF",
     "Rev DCF (ARR)", "Backlog DCF", "PPA-backed DCF",
+    "Backlog-coverage DCF", "Contracted-backlog DCF",
     "Unit Econ DCF", "Power Price DCF", "Reverse DCF",
     "DCF (Levered)", "Rev DCF (Mkt Sh)",
     # These four project cash flows through `_project_dcf` exactly like the
@@ -7121,6 +7168,51 @@ _LOOKTHROUGH_ANCHORS = frozenset({"SOTP / NAV", "SOTP / NAV (look-through)"})
 #: profile quietly ran on 0.80 of its stated weight. Profiles without a
 #: template are unaffected -- the method returns None and the proxy stands.
 _LOOKTHROUGH_METHODS = _LOOKTHROUGH_ANCHORS | frozenset({"NAV Discount"})
+
+#: Backlog-coverage DCF (Wave 3 design, built early at the owner's priority,
+#: 2026-09-21). The core projection with years 1-3 of its growth path bounded
+#: by work that is already under contract. Two spellings of one leg, plus the
+#: contracted-book variant for fixed-volume multi-year contracts (uranium, SWU),
+#: which has no order-intake ratio and therefore no ceiling.
+_BACKLOG_BOUNDED_METHODS: frozenset[str] = frozenset({"Backlog DCF", "Backlog-coverage DCF"})
+_CONTRACTED_BACKLOG_METHODS: frozenset[str] = frozenset({"Contracted-backlog DCF"})
+_BACKLOG_BOUND_YEARS = 3
+
+
+def _backlog_growth_bounds(coverage: float, book_to_bill: Optional[float] = None,
+                           years: int = _BACKLOG_BOUND_YEARS) -> list[tuple[float, Optional[float]]]:
+    """[(floor, ceiling)] for years 1..`years` of revenue growth.
+
+        coverage = backlog / revenue base            -- years of contracted work
+        floor_t  = -(1 - min(coverage / t, 1))       -- year t is covered iff coverage >= t
+        ceil_t   = book_to_bill - 1  (when cited)    -- orders, not hope, cap the ramp
+
+    The floor generalises the bear-only one in `run_dcf_agent`; at t = 1 they
+    are the same expression, so the two cannot double-apply. The ceiling is
+    book-to-bill and nothing else: a "revenue <= backlog" ceiling would assume
+    zero new awards and drive a 1.5x-coverage prime to zero revenue in year 3.
+    Years after `years` are untouched -- the standard fade.
+    """
+    ceil = (float(book_to_bill) - 1.0) if (book_to_bill and book_to_bill > 0) else None
+    return [(-(1.0 - min(max(coverage, 0.0) / t, 1.0)), ceil) for t in range(1, years + 1)]
+
+
+def _bound_growth_schedule(schedule: list[float],
+                           bounds: list[tuple[float, Optional[float]]]) -> tuple[list[float], list[dict]]:
+    """(bounded schedule, one record per year a bound actually moved)."""
+    out, moved = list(schedule), []
+    for i, (lo, hi) in enumerate(bounds):
+        if i >= len(out):
+            break
+        g = out[i]
+        # A ceiling below the floor cannot both hold; contracted work wins.
+        new = max(min(g, hi) if hi is not None else g, lo)
+        if new != g:
+            moved.append({"year": i + 1, "from": float(g), "to": float(new),
+                          "bound": "floor" if new > g else "ceiling"})
+            out[i] = new
+    return out, moved
+
 
 #: Forward legs on forward multiples (owner rule 2026-09-21: "default to NTM
 #: EV/EBITDA or FY1/FY2 blended P/E rather than trailing LTM figures"). OFF by
@@ -12039,6 +12131,36 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 _backlog_d = _ii_g.accepted_detail(ticker, "backlog", _stmt_ccy)
                 if _backlog_d and revenue_base and revenue_base > 0:
                     _backlog_cov = _backlog_d["value"] / revenue_base
+            # Backlog-coverage DCF: the accepted figure rides on `most_recent` to
+            # the leg. Resolved for any profile that DECLARES such a leg, whether
+            # or not it also takes the bear-only floor above.
+            _bl_legs = [m.get("name") for m in ((profile_data or {}).get("methods") or [])
+                        if m.get("name") in _BACKLOG_BOUNDED_METHODS | _CONTRACTED_BACKLOG_METHODS]
+            if _bl_legs:
+                _bl_leg_d = _backlog_d or _ii_g.accepted_detail(ticker, "backlog", _stmt_ccy)
+                _bl_has = bool(_bl_leg_d and _bl_leg_d.get("value") and revenue_base and revenue_base > 0)
+                if _bl_has:
+                    most_recent["backlog_accepted"] = _bl_leg_d["value"]
+                    most_recent["_backlog_detail"] = _bl_leg_d
+                    ticker_forward_flags.append(
+                        f"{_bl_legs[0]}: years 1-3 of revenue growth bounded by accepted backlog "
+                        f"({_bl_leg_d['value'] / revenue_base:.2f}x of revenue, {_bl_leg_d.get('period')}"
+                        + (f", book-to-bill {_bl_leg_d['book_to_bill']:.2f}" if _bl_leg_d.get("book_to_bill") else "")
+                        + ")")
+                else:
+                    ticker_forward_flags.append(
+                        f"{_bl_legs[0]} ran UNBOUNDED: no accepted backlog figure, so it is the "
+                        f"core DCF projection under another name until one is accepted")
+                gate_evaluations.append({
+                    "gate_id": "GATE_BACKLOG_VISIBILITY",
+                    "metric": "backlog_coverage_years",
+                    "raw_input_path_a": None,
+                    "gated_output_path_b": (round(_bl_leg_d["value"] / revenue_base, 4) if _bl_has else None),
+                    "basis": ("accepted backlog / revenue base" if _bl_has
+                              else "no accepted backlog: leg ran the unbounded projection"),
+                    "leg": _bl_legs[0],
+                    "applied": _bl_has,
+                })
         except Exception:                                  # noqa: BLE001
             _pv10_d = _backlog_d = None
 
