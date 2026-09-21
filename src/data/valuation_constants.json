@@ -245,5 +245,145 @@
    },
    "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 5.17x (2025, US large cohort, n=7), which had de-rated from 10.07x in 2021 as commodity chemical spreads compressed. The original 7-9x band sat entirely above the market and was superseded. The band is +/-20% around the 5.2x baseline: 4.16x-6.24x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple."
   }
+ },
+ "multiple_bands": {
+  "_doc": [
+   "Owner plausibility bands on multiple LEVELS, per (market, profile, field).",
+   "They FLAG and never clamp: see check_multiples in valuation_constants.py,",
+   "which has no return path carrying a value. Distinct from",
+   "regional_comps._BANDS (drops a peer before the median), from",
+   "dynamic_multiples.MAX_DEVIATION (caps the engine's quarterly move, and",
+   "does clamp by the owner's choice), and from SEGMENT_BASELINES bands.",
+   "Market keys match multiples_used.comp_market: US / HKSE / SES.",
+   "Resolution is most-specific-first: (market, profile), (market, *),",
+   "(*, profile), (*, *). No match is no opinion.",
+   "",
+   "Ranges supplied by the owner 2026-09-21 as SECTOR forward P/E (and",
+   "EV/EBITDA for A&D). The sector -> profile mapping below is the",
+   "assistant's reading and is the thing to check at each wave's Stage 3",
+   "checkpoint; the numbers themselves are the owner's.",
+   "Early-stage biotech deliberately carries NO pe band: the owner's note",
+   "is that it trades on P/S or rNPV, and HK pre-revenue names are unrated.",
+   "Wave 3-5 profiles that do not exist yet (Defense Primes, Commercial",
+   "Aerospace & Aftermarket, Defense Tech & Space, and the staples splits)",
+   "get their rows when those profiles are authored."
+  ],
+  "reviewed": {
+   "last_reviewed": "2026-09-21",
+   "reviewer": "owner",
+   "review_cadence": "quarterly"
+  },
+  "bands": {
+   "US": {
+    "Aerospace & Defense": {
+     "pe": [
+      25.0,
+      30.0
+     ],
+     "ev_ebitda": [
+      14.0,
+      18.0
+     ]
+    },
+    "Food & Beverage": {
+     "pe": [
+      21.0,
+      23.0
+     ]
+    },
+    "Household / Personal": {
+     "pe": [
+      21.0,
+      23.0
+     ]
+    },
+    "Large Cap Pharma": {
+     "pe": [
+      18.0,
+      22.0
+     ]
+    },
+    "MedTech / Devices": {
+     "pe": [
+      18.0,
+      22.0
+     ]
+    },
+    "CDMO / Life Science Tools": {
+     "pe": [
+      18.0,
+      22.0
+     ]
+    },
+    "Managed Care": {
+     "pe": [
+      18.0,
+      22.0
+     ]
+    },
+    "Healthcare Providers / Services": {
+     "pe": [
+      18.0,
+      22.0
+     ]
+    }
+   },
+   "HKSE": {
+    "Aerospace & Defense": {
+     "pe": [
+      12.0,
+      18.0
+     ]
+    },
+    "Food & Beverage": {
+     "pe": [
+      10.0,
+      15.0
+     ]
+    },
+    "Household / Personal": {
+     "pe": [
+      10.0,
+      15.0
+     ]
+    },
+    "Large Cap Pharma": {
+     "pe": [
+      20.0,
+      35.0
+     ]
+    }
+   },
+   "SES": {
+    "Aerospace & Engineering (SG)": {
+     "pe": [
+      16.0,
+      20.0
+     ],
+     "ev_ebitda": [
+      10.0,
+      13.0
+     ]
+    },
+    "Agribusiness & Food (SG)": {
+     "pe": [
+      11.0,
+      13.0
+     ]
+    },
+    "Packaged Consumer & Lifestyle (SG)": {
+     "pe": [
+      11.0,
+      13.0
+     ]
+    },
+    "Healthcare Provider (SG)": {
+     "pe": [
+      12.0,
+      15.0
+     ]
+    }
+   }
+  }
  }
 }
