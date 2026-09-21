@@ -70,22 +70,28 @@ CRACK_SPIKE = 0.25
 #: which borrows the regime factor of the named one and says so.
 SEGMENT_BASELINES: dict[str, dict] = {
     "refining":        {"baseline": 5.5,  "band": (4.5, 6.5),
-                        "basket": "Oil & Gas Refining & Marketing", "crack_rule": True},
+                        "basket": "Oil & Gas Refining & Marketing", "crack_rule": True,
+                        "band_rationale": "Owner's through-cycle EV/EBITDA band for refining: high cyclicality and terminal transition risk keep it the lowest band here. The market validates it -- the large-cohort through-cycle multiple ran 4.25x-5.54x over 2021-2025 and stood at 5.54x in 2025 against the 5.5x baseline. The low end (4.5x) is the trough the crack-spread rule forces when the 3-2-1 crack runs more than 25% above its long-run mean, so a crack spike is never capitalised."},
     # Owner, 2026-09-21: re-based on the market's through-cycle multiple
     # (14.14x, 2025, large cohort), which had re-rated above the original
     # 9-12x band. Band = the owner's +/-20% outlier guard around it.
     "midstream":       {"baseline": 14.1, "band": (11.28, 16.92),
-                        "basket": "Oil & Gas Midstream"},
+                        "basket": "Oil & Gas Midstream",
+                        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 14.14x (2025, US large cohort, n=10), which had re-rated from 8.08x in 2021 as fee-based infrastructure was repriced. The original 9-12x band sat entirely below the market and would have clamped every proposal to it, so it was superseded. The band is the owner's +/-20% outlier guard around the 14.1x baseline: 11.28x-16.92x."},
     "fuel_marketing":  {"baseline": 7.0,  "band": (6.0, 8.0),
-                        "basket": "Oil & Gas Refining & Marketing", "proxy": True},
+                        "basket": "Oil & Gas Refining & Marketing", "proxy": True,
+                        "band_rationale": 'Owner band 6-8x: fuel marketing and specialties earn steadier cash flows than refining (volume and margin over a wholesale cost, not the crack spread) but are not fee-based infrastructure, so they sit between the two. No peer basket exists, so the band has no market check; the 2% EBITDA margin is an owner estimate, deliberately thin because most of the revenue is resold fuel.'},
     "renewable_fuels": {"baseline": 7.0,  "band": (6.0, 8.0),
-                        "basket": "Oil & Gas Refining & Marketing", "proxy": True},
+                        "basket": "Oil & Gas Refining & Marketing", "proxy": True,
+                        "band_rationale": 'Owner band 6-8x: renewable diesel and SAF carry policy-supported margins (credits, blending mandates) that are steadier than the crack but policy-dependent, so they sit above refining and below midstream. No peer basket exists, so the band has no market check; the 10% EBITDA margin is an owner estimate.'},
     "ethanol":         {"baseline": 5.0,  "band": (4.0, 6.0),
-                        "basket": "Oil & Gas Refining & Marketing", "proxy": True},
+                        "basket": "Oil & Gas Refining & Marketing", "proxy": True,
+                        "band_rationale": "Owner band 4-6x: ethanol is a commodity-spread business (corn against ethanol and co-products) with less scale and pricing power than refining, so its band sits at and below refining's. No peer basket exists, so the band has no market check; the 6% EBITDA margin is an owner estimate."},
     # Owner, 2026-09-21: re-based on the market's through-cycle multiple
     # (5.17x, 2025, large cohort), which had de-rated below the original 7-9x
     # band. Band = +/-20% around it.
-    "chemicals":       {"baseline": 5.2,  "band": (4.16, 6.24), "basket": "Chemicals"},
+    "chemicals":       {"baseline": 5.2,  "band": (4.16, 6.24), "basket": "Chemicals",
+                        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 5.17x (2025, US large cohort, n=7), which had de-rated from 10.07x in 2021 as commodity chemical spreads compressed. The original 7-9x band sat entirely above the market and was superseded. The band is +/-20% around the 5.2x baseline: 4.16x-6.24x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple."},
     # E&P is valued on the ASC 932 standardized measure as an unblended bear
     # floor (owner spec), not on a dynamic multiple: no baseline here.
 }
@@ -410,6 +416,7 @@ def propose(segment_type: str, exchange: str = "US") -> dict:
         "segment_type": segment_type,
         "mode": "calibrated" if lo is not None else "recommend",
         "baseline": baseline, "band": [lo, hi] if lo is not None else None,
+        "band_rationale": cfg.get("band_rationale"),
         "basket": basket, "basket_is_proxy": bool(cfg.get("proxy")),
         "market_multiple_now": None if cfg.get("proxy") else market_now,
         "real_rate": {"now": r_now, "mean_5y": r_mean, "delta": d_rate, "source": rr["source"]},
@@ -492,6 +499,7 @@ def accept_value(segment_type: str, value: float, reviewer: str, basis: str) -> 
     doc = vc.load()
     entry = {"multiple": float(value), "accepted_at": date.today().isoformat(),
              "reviewer": reviewer, "basis": basis,
+             "band_rationale": cfg.get("band_rationale"),
              "derivation": {**context, "band": [lo, hi] if lo is not None else None,
                             "owner_set": True}}
     doc.setdefault("segment_multiples", {})[segment_type] = entry
@@ -504,7 +512,8 @@ def accept(proposal: dict, reviewer: str) -> dict:
     from src.data import valuation_constants as vc
     doc = vc.load()
     entry = {"multiple": proposal["proposed"], "accepted_at": date.today().isoformat(),
-             "reviewer": reviewer, "derivation": proposal}
+             "reviewer": reviewer, "band_rationale": proposal.get("band_rationale"),
+             "derivation": proposal}
     doc.setdefault("segment_multiples", {})[proposal["segment_type"]] = entry
     vc.save(doc)
     return entry

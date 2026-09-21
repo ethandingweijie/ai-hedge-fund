@@ -74,6 +74,16 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
   // Any estimated EBITDA on the table means the caveat has to be on it too.
   const anyEstimated = rows.some((r) => r.ebitda != null);
   const anyUnpriced = rows.some((r) => r.multiple == null && r.basis !== 'carrying_value');
+  // One rationale per business type, in first-appearance order.
+  const bandNotes: [string, string][] = [];
+  const seenTypes = new Set<string>();
+  for (const r of rows) {
+    const ty = r.type ?? '';
+    if (r.band_rationale && ty && !seenTypes.has(ty)) {
+      seenTypes.add(ty);
+      bandNotes.push([ty, r.band_rationale]);
+    }
+  }
 
   return (
     <Card className="p-4 sm:p-5 space-y-4">
@@ -176,6 +186,20 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
           <span className="tabular-nums">{fmtBn(sotp.total_ev, sym)}</span>
         </div>
       </div>
+
+      {/* Why each band sits where it does -- one line per business type,
+          so a reader can see what the multiple was bounded by and why. */}
+      {bandNotes.length > 0 && (
+        <div className="space-y-1.5 border-t border-border/40 pt-3">
+          <div className={LABEL_CLS}>Band rationale</div>
+          {bandNotes.map(([type, text]) => (
+            <div key={`band-${type}`} className="text-[11px] text-muted-foreground">
+              <span className="font-medium text-foreground">{TYPE_LABEL[type] ?? type}:</span>{' '}
+              {text}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-1 text-[11px] text-muted-foreground">
         {(sotp.checks?.reminders ?? []).map((r, i) => (

@@ -2010,6 +2010,18 @@ def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     out = [Spacer(1, 6), Paragraph(lead, styles["RptLabel"]), Spacer(1, 2), t]
     for _rem in (_chk.get("reminders") or []):
         out += [Spacer(1, 2), Paragraph(f"<b>{_strip(str(_rem))}</b>", styles["RptBody"])]
+    # Why each band sits where it does, once per business type.
+    _seen: set = set()
+    _notes = []
+    for r in rows:
+        ty = r.get("type") or ""
+        if r.get("band_rationale") and ty and ty not in _seen:
+            _seen.add(ty)
+            _notes.append((_SEG_TYPE_LABEL.get(ty, ty), _strip(str(r["band_rationale"]))))
+    if _notes:
+        out += [Spacer(1, 3), Paragraph("Band rationale", styles["RptLabel"])]
+        for lab, text in _notes:
+            out += [Paragraph(f"<font size=5.8><b>{lab}:</b> {text}</font>", styles["RptBody"])]
     note = _strip(str(b.get("basis_note") or ""))
     if note:
         out += [Spacer(1, 2), Paragraph(f"<font size=5.5 color='#666666'>{note}</font>",

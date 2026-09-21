@@ -246,3 +246,30 @@ class TestOwnerSetValues:
         assert {k: v["multiple"] for k, v in sm.items()} == {
             "refining": 4.5, "midstream": 14.1, "chemicals": 5.2}
         assert all(v["reviewer"] == "owner" for v in sm.values())
+
+
+class TestBandRationale:
+    """Every band says why it sits where it does (owner, 2026-09-21)."""
+
+    def test_every_band_has_a_rationale(self):
+        for t, cfg in dm.SEGMENT_BASELINES.items():
+            assert len(cfg.get("band_rationale") or "") > 80, t
+
+    def test_a_rebased_band_says_what_it_replaced_and_why(self):
+        for t, old in (("midstream", "9-12x"), ("chemicals", "7-9x")):
+            text = dm.SEGMENT_BASELINES[t]["band_rationale"]
+            assert old in text and "superseded" in text and "+/-20%" in text, t
+
+    def test_a_band_with_no_basket_says_it_has_no_market_check(self):
+        for t in ("fuel_marketing", "renewable_fuels", "ethanol"):
+            assert "no market check" in dm.SEGMENT_BASELINES[t]["band_rationale"], t
+
+    def test_the_proposal_the_record_and_the_sotp_part_all_carry_it(self, world):
+        from src.agents.analysis import dcf_agent as d
+        from src.data import valuation_constants as vc
+        assert dm.propose("midstream")["band_rationale"] == \
+            dm.SEGMENT_BASELINES["midstream"]["band_rationale"]
+        for t, rec in (vc.load().get("segment_multiples") or {}).items():
+            assert rec["band_rationale"] == dm.SEGMENT_BASELINES[t]["band_rationale"], t
+        p = d._sotp_parts({"Midstream": 20e9})[0]
+        assert p["band_rationale"] == dm.SEGMENT_BASELINES["midstream"]["band_rationale"]

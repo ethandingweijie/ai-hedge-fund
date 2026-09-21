@@ -2138,8 +2138,10 @@ def _sotp_parts(segments: dict[str, float], tier: str = "default",
             # valuation. Without one, the static band position stands -- and the
             # part says which of the two it is.
             mult, mult_source, dyn_band = _band_multiple(band),                 f"static band ({_SEGMENT_BAND_POSITION} end)", None
+            band_rationale = None
             try:
                 from src.data import dynamic_multiples as _dm
+                band_rationale = (_dm.SEGMENT_BASELINES.get(e_type) or {}).get("band_rationale")
                 _acc = _dm.accepted(e_type)
                 if _acc and isinstance(_acc.get("multiple"), (int, float)):
                     mult = float(_acc["multiple"])
@@ -2156,6 +2158,7 @@ def _sotp_parts(segments: dict[str, float], tier: str = "default",
                           "band": list(dyn_band or band),
                           "band_position": _SEGMENT_BAND_POSITION,
                           "multiple": float(mult), "multiple_source": mult_source,
+                          "band_rationale": band_rationale,
                           "ev": seg_ebitda * mult})
             continue
         seg_type, mult = _classify_segment(seg_name, tier=tier)
@@ -2195,6 +2198,7 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
             "band": p.get("band"),
             "band_position": p.get("band_position"),
             "multiple_source": p.get("multiple_source"),
+            "band_rationale": p.get("band_rationale"),
             "ebitda_unreconciled": p.get("ebitda_unreconciled"),
             "reconciliation_scaler": p.get("reconciliation_scaler"),
             "multiple": p.get("multiple"),

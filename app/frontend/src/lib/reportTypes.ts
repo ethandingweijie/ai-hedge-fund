@@ -313,6 +313,8 @@ export interface SegmentSotpRow {
   multiple?: number | null;
   /** "static band (high end)" or "dynamic, accepted <date>" (Phase 2). */
   multiple_source?: string | null;
+  /** Why the band sits where it does -- stored with the multiple. */
+  band_rationale?: string | null;
   ev?: number | null;
   share_of_ev?: number | null;
   note?: string | null;
