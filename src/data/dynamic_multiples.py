@@ -732,8 +732,8 @@ def _baskets_with_history(exchange: str) -> list[tuple[str, str]]:
     from src.data import regional_comps as rc
     rc._ensure_table()
     rows = _db.query("SELECT DISTINCT level, key FROM regional_comps_history "
-                     "WHERE exchange = ? AND field IN (?, ?)",
-                     [exchange, "ev_ebitda_norm", "pe_norm"]) or []
+                     "WHERE exchange = ? AND field IN (?, ?) AND source NOT LIKE ?",
+                     [exchange, "ev_ebitda_norm", "pe_norm", "%_superseded"]) or []
     return sorted((dict(r)["level"], dict(r)["key"]) for r in rows)
 
 

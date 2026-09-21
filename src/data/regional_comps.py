@@ -672,9 +672,15 @@ def load_history(exchange: str, key: str, field: str, cohort: str = "all",
     wins.
     """
     _ensure_table()
+    # Rows labelled "*_superseded" are kept for the audit and never read. The
+    # through-cycle basis was corrected on 2026-09-21 (EV / mean-margin x
+    # revenue, not EV / mean EBITDA level); a basket-year the corrected rebuild
+    # no longer produces keeps its old-basis row under that label rather than
+    # being deleted or silently read.
     sql = ("SELECT as_of, value, peer_count, source, level FROM regional_comps_history "
-           "WHERE exchange = ? AND key = ? AND field = ? AND cohort = ?")
-    params: list = [exchange, key, field, cohort]
+           "WHERE exchange = ? AND key = ? AND field = ? AND cohort = ? "
+           "AND source NOT LIKE ?")
+    params: list = [exchange, key, field, cohort, "%_superseded"]
     if level:
         sql += " AND level = ?"
         params.append(level)

@@ -632,3 +632,19 @@ def test_roic_and_the_normalised_multiples_are_banded_fields():
     for f in ("roic", "ev_ebitda_norm", "pe_norm"):
         assert f in rc.FIELDS
     assert rc._clean("roic", [0.1, 5.0, -3.0]) == [0.1]
+
+
+def test_a_superseded_row_is_kept_but_never_read(store):
+    """The through-cycle basis was corrected on 2026-09-21. A basket-year the
+    corrected rebuild no longer produces keeps its old row, relabelled, so it
+    is neither deleted nor read."""
+    row = {"level": "industry", "key": "Coal", "cohort": "all", "field": "ev_ebitda_norm",
+           "value": 9.9, "peer_count": 7}
+    rc.save_history("US", [row], as_of="2023-12-31", source="backfill_superseded")
+    rc.save_history("US", [dict(row, value=5.1)], as_of="2024-12-31", source="backfill")
+    h = rc.load_history("US", "Coal", "ev_ebitda_norm", "all")
+    assert [(r["as_of"], r["value"]) for r in h] == [("2024-12-31", 5.1)]
+    from src.data import db as _db
+    n = _db.query_one("SELECT COUNT(*) AS n FROM regional_comps_history "
+                      "WHERE source = ?", ["backfill_superseded"])
+    assert dict(n)["n"] == 1, "kept for the audit, not deleted"
