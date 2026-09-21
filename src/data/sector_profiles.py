@@ -4171,11 +4171,16 @@ def classify_valuation_profile(
         return "Traditional Retail"
 
     if sector == "Industrials":
-        if debt_to_equity > 1.5:
-            return "Automotive (OEM)"
-        if revenue_cagr < 0.08:
-            return "Capital Goods"
-        return "Aerospace & Defense"
+        # A business model is never inferred from a ratio (owner, 2026-09-21).
+        # This ladder used to read: D/E > 1.5 -> Automotive (OEM); revenue CAGR
+        # < 8% -> Capital Goods; else Aerospace & Defense. So a levered defence
+        # prime classified as a car maker, and any industrial growing at 8% as
+        # a defence contractor -- NuScale, a pre-revenue reactor designer, was
+        # valued on Aerospace & Defense in the Wave 2 baseline. Car makers and
+        # defence names are reached by what they ARE: a pin, the Damodaran
+        # `Auto & Truck` mapping, or an industry row. Everything else unmapped
+        # is priced on the sector's generic method set.
+        return "Capital Goods"
 
     if sector == "Telco":
         return "Stable Growth"

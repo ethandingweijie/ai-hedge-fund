@@ -96,3 +96,23 @@ def test_the_profile_still_declares_the_proxy_so_no_weight_is_lost():
     from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
     leg = next(m for m in P["Energy"][PROFILE]["methods"] if m["name"] == "P/Rate Base")
     assert leg["implementable"] is False and leg["proxy"] == "P/BV"
+
+
+# ── C3: a business model is never inferred from a ratio ──────────────────────
+
+def test_an_unmapped_industrial_is_capital_goods_whatever_its_growth_or_leverage():
+    """The old ladder sent D/E > 1.5 to Automotive (OEM) and CAGR >= 8% to
+    Aerospace & Defense. NuScale (SMR) was valued as a defence contractor in the
+    Wave 2 Stage 0 baseline on exactly that rule."""
+    from itertools import product
+    from src.data.sector_profiles import classify_valuation_profile
+    for cagr, fcf, de, pre in product((-0.10, 0.03, 0.08, 0.45), (-0.20, 0.04, 0.25),
+                                      (0.0, 1.4, 1.6, 9.0), (False, True)):
+        assert classify_valuation_profile("Industrials", cagr, fcf, de, is_pre_revenue=pre,
+                                          revenue_base=5e9) == "Capital Goods"
+
+
+def test_car_makers_and_defence_names_are_still_reached_by_what_they_are():
+    from src.data.sector_profiles import TICKER_SECTOR_LOOKUP as pins
+    assert {pins[t][1] for t in ("GM", "F", "TM")} == {"Automotive (OEM)"}
+    assert {pins[t][1] for t in ("LMT", "RTX", "BA", "GE")} == {"Aerospace & Defense"}
