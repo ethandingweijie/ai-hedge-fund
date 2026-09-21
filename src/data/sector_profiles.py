@@ -221,6 +221,36 @@ _FINANCIALS_LEVERAGE_CAP: dict[str, float] = {
     "Brokerage":                  0.025,
 }
 
+# ── Per-profile base WACC, by sector ─────────────────────────────────────────
+#
+# The one registry both WACC functions consult. A sector listed here prices a
+# recognised profile at its own rate; an unrecognised profile, and every sector
+# not listed, falls back to the flat SECTOR_WACC rate. The Energy and Financials
+# entries ARE the two tables above (same objects, not copies), so the older
+# names stay valid and cannot drift. A new sector is one entry here plus its
+# rate table -- no new branch in get_wacc or wacc_base_breakdown.
+#
+# Each sector carries (rates, leverage caps, default cap for a profile with no
+# cap of its own).
+_PROFILE_WACC: dict[str, dict[str, float]] = {
+    "Energy":     _ENERGY_PROFILE_WACC,
+    "Financials": _FINANCIALS_PROFILE_WACC,
+}
+_PROFILE_LEVERAGE_CAP: dict[str, tuple[dict[str, float], float]] = {
+    "Energy":     (_ENERGY_LEVERAGE_CAP, 0.035),
+    "Financials": (_FINANCIALS_LEVERAGE_CAP, 0.010),
+}
+_DEFAULT_LEVERAGE_CAP = 0.040
+
+
+def _profile_wacc_rate(sector: str, profile: str) -> "tuple[float, float] | None":
+    """(base rate, leverage cap) for a profile with its own rate, else None."""
+    rates = _PROFILE_WACC.get(sector)
+    if not rates or profile not in rates:
+        return None
+    caps, default_cap = _PROFILE_LEVERAGE_CAP.get(sector, ({}, _DEFAULT_LEVERAGE_CAP))
+    return rates[profile], caps.get(profile, default_cap)
+
 
 # ── Balance-sheet financials: which profiles may carry an EV or DCF leg ──────
 #
@@ -446,15 +476,12 @@ def get_wacc(sector: str, leverage: float = 0.0,
     Returns base WACC when sector is unrecognised (safe default = 9%).
     Backward-compatible: profile="" behaves identically to the prior two-arg signature.
     """
-    if sector == "Energy" and profile in _ENERGY_PROFILE_WACC:
-        base    = _ENERGY_PROFILE_WACC[profile]
-        lev_cap = _ENERGY_LEVERAGE_CAP.get(profile, 0.035)
-    elif sector == "Financials" and profile in _FINANCIALS_PROFILE_WACC:
-        base    = _FINANCIALS_PROFILE_WACC[profile]
-        lev_cap = _FINANCIALS_LEVERAGE_CAP.get(profile, 0.010)
+    own = _profile_wacc_rate(sector, profile)
+    if own is not None:
+        base, lev_cap = own
     else:
         base    = SECTOR_WACC.get(sector, 0.090)
-        lev_cap = 0.040
+        lev_cap = _DEFAULT_LEVERAGE_CAP
     # REITs and Business Trusts have high leverage by design (35-45% LTV is standard).
     # Do NOT apply leverage premium — the 5.5% empirical WACC already reflects this.
     if sector in ("REIT", "RealEstate"):
@@ -3532,14 +3559,10 @@ def wacc_base_breakdown(
     """
     market = "SG" if is_sg else ("HK" if is_hk else "US")
     crp = _SG_CRP if is_sg else (_HK_CHINA_CRP if is_hk else 0.0)
-    if sector == "Energy" and profile in _ENERGY_PROFILE_WACC:
-        table, lookup = "Energy profile WACC (Damodaran)", profile
-        rate = _ENERGY_PROFILE_WACC[profile] + crp
-        lev_cap = _ENERGY_LEVERAGE_CAP.get(profile, 0.035)
-    elif sector == "Financials" and profile in _FINANCIALS_PROFILE_WACC:
-        table, lookup = "Financials profile WACC (Damodaran)", profile
-        rate = _FINANCIALS_PROFILE_WACC[profile] + crp
-        lev_cap = _FINANCIALS_LEVERAGE_CAP.get(profile, 0.010)
+    own = _profile_wacc_rate(sector, profile)
+    if own is not None:
+        table, lookup = f"{sector} profile WACC (Damodaran)", profile
+        rate, lev_cap = own[0] + crp, own[1]
     elif is_sg:
         lookup = sector
         if sector in SG_SECTOR_WACC:

@@ -75,3 +75,27 @@ def test_the_components_rebuild_the_rate(sector, profile):
 def test_us_reits_are_exempt_from_the_leverage_premium_and_hk_sg_are_not():
     assert sp.wacc_base_breakdown("REIT", 9.0)["leverage_premium"] == 0.0
     assert sp.wacc_base_breakdown("REIT", 9.0, is_hk=True)["leverage_premium"] > 0.0
+
+
+def test_the_older_table_names_are_the_registry_entries_not_copies():
+    """The registry generalises the two tables; the old names must stay bound
+    to the same objects so neither can drift from the other."""
+    assert sp._PROFILE_WACC["Energy"] is sp._ENERGY_PROFILE_WACC
+    assert sp._PROFILE_WACC["Financials"] is sp._FINANCIALS_PROFILE_WACC
+    assert sp._PROFILE_LEVERAGE_CAP["Energy"][0] is sp._ENERGY_LEVERAGE_CAP
+    assert sp._PROFILE_LEVERAGE_CAP["Financials"][0] is sp._FINANCIALS_LEVERAGE_CAP
+
+
+def test_a_new_sector_is_one_registry_entry_and_no_new_branch(monkeypatch):
+    monkeypatch.setitem(sp._PROFILE_WACC, "Industrials", {"Defense Primes": 0.071})
+    us = sp.wacc_base_breakdown("Industrials", profile="Defense Primes")
+    assert us["table"] == "Industrials profile WACC (Damodaran)"
+    assert us["table_rate"] == pytest.approx(0.071)
+    assert us["leverage_cap"] == sp._DEFAULT_LEVERAGE_CAP
+    assert sp.get_wacc("Industrials", profile="Defense Primes") == us["wacc"]
+    hk = sp.wacc_base_breakdown("Industrials", profile="Defense Primes", is_hk=True)
+    assert hk["table_rate"] == pytest.approx(0.071 + sp._HK_CHINA_CRP)
+    # A profile the sector does not list keeps the flat sector rate.
+    flat = sp.wacc_base_breakdown("Industrials", profile="Capital Goods")
+    assert flat["table"] == "US sector WACC (Damodaran)"
+    assert flat["table_rate"] == sp.SECTOR_WACC["Industrials"]
