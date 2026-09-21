@@ -421,6 +421,7 @@ const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
   backlog: 'Backlog',
   maintenance_capex: 'Maintenance capex',
   rate_base: 'Regulated rate base',
+  fcf_guidance: 'FCF guidance (faded overlay)',
 };
 
 function IndustryInputReview({ row, onChanged, overlay = false }:

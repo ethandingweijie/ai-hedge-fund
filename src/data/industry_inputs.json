@@ -712,7 +712,7 @@
   "GEV": {
    "backlog": {
     "basis": "actual",
-    "built_at": "2026-09-21T14:43:51+00:00",
+    "built_at": "2026-09-21T16:14:30+00:00",
     "checks": [
      {
       "check": "latest reported period",
@@ -730,9 +730,17 @@
     "data": {
      "book_to_bill": null,
      "kind": "rpo",
+     "orders": {
+      "currency": "USD",
+      "period": "FY2025",
+      "quote": "In 2025, orders of $59.3 billion increased +34% organically, driven by robust equipment growth at Power and Electrification, with services growth in each segment.",
+      "scale": "bn",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/1996810/000199681026000012/ge-vrnv_standardxrgbxevrgrna.jpg",
+      "value": 59.3
+     },
      "value": {
       "currency": "USD",
-      "period": "Q2 2026",
+      "period": "2Q2026",
       "quote": "As of June 30, 2026, the aggregate amount of the contracted revenues allocated to our unsatisfied (or partially unsatisfied) performance obligations were $ 176,284 million.",
       "scale": "mn",
       "source_url": "https://www.sec.gov/Archives/edgar/data/1996810/000199681026000148/gev-20260630.htm",
@@ -742,7 +750,7 @@
     "fmp_context_usd": {
      "company": "GE Vernova Inc.",
      "depreciation_and_amortization": 853000000.0,
-     "market_cap": 255701562688.0,
+     "market_cap": 255147588800.0,
      "net_ppe": 6006000000.0,
      "operating_cash_flow": 4988000000.0,
      "period": "2025-12-31",
@@ -751,8 +759,60 @@
     "grounding_urls": [],
     "model": "gemini-3.8-flash",
     "ok": true,
-    "secs": 23.5,
+    "secs": 26.3,
     "value_usd": 176284000000.0
+   },
+   "fcf_guidance": {
+    "basis": "actual",
+    "built_at": "2026-09-21T16:14:52+00:00",
+    "checks": [
+     {
+      "check": "guidance period",
+      "detail": "guidance is for 2026; FMP's latest reported year is 2025",
+      "ok": true
+     },
+     {
+      "check": "fcf_guidance / revenue",
+      "detail": "0.32x (plausible 0.01x to 0.45x)",
+      "ok": true,
+      "ratio": 0.3152
+     }
+    ],
+    "company": "GE Vernova Inc.",
+    "data": {
+     "drivers": "Management states: 'Given the strength we\\'ve seen in orders and resulting down payments, in addition to the higher adjusted EBITDA, we\\'re increasing our 2026 free cash flow guidance to between $11.5 billion and $12.5 billion, up from $6.5 billion to $7.5 billion.' Management also noted: 'In terms of our 2026 cash profile, in the first half of the year, we received a significant amount of down payments for the large number of slot reservation agreements signed at Gas Power. As a result, and as our guidance implies, we expect our free cash flow in the first half of the year to be substantially higher than the second half, as many of these slot reservations convert to orders.'",
+     "guidance_range": "revenue of $45.5-$46.5 billion and free cash flow of $11.5-$12.5 billion",
+     "revenue": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "GE Vernova is raising its 2026 financial guidance and now expects revenue of $45.5-$46.5 billion, up from $44.5-$45.5 billion, and free cash flow* of $11.5-$12.5 billion, up from $6.5-$7.5 billion",
+      "scale": "bn",
+      "source_url": "https://www.gevernova.com/news/press-releases/ge-vernova-reports-second-quarter-2026-financial-results-raises-2026-financial",
+      "value": 46.0
+     },
+     "value": {
+      "currency": "USD",
+      "period": "FY2026E",
+      "quote": "GE Vernova is raising its 2026 financial guidance and now expects revenue of $45.5-$46.5 billion, up from $44.5-$45.5 billion, and free cash flow* of $11.5-$12.5 billion, up from $6.5-$7.5 billion",
+      "scale": "bn",
+      "source_url": "https://www.gevernova.com/news/press-releases/ge-vernova-reports-second-quarter-2026-financial-results-raises-2026-financial",
+      "value": 12.0
+     }
+    },
+    "fmp_context_usd": {
+     "company": "GE Vernova Inc.",
+     "depreciation_and_amortization": 853000000.0,
+     "market_cap": 255147588800.0,
+     "net_ppe": 6006000000.0,
+     "operating_cash_flow": 4988000000.0,
+     "period": "2025-12-31",
+     "revenue": 38068000000.0
+    },
+    "grounding_urls": [],
+    "model": "gemini-3.8-flash",
+    "ok": true,
+    "secs": 16.8,
+    "value_usd": 12000000000.0
    }
   },
   "HAL": {},

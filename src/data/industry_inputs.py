@@ -29,7 +29,11 @@ from pathlib import Path
 from typing import Callable, Optional
 
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
-KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base")
+KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base", "fcf_guidance")
+
+#: Kinds that ARE guidance. Everywhere else a figure for a year that has not
+#: ended fails its period check; here one for a year that HAS ended does.
+GUIDANCE_KINDS = ("fcf_guidance",)
 
 #: The overlay toggle. Off by default: a valuation runs on audited actuals
 #: unless someone switches the forward view on deliberately.
@@ -63,6 +67,9 @@ BOUNDS = {
     # about half of a holding company's with a large unregulated arm (NextEra); it excludes
     # construction work in progress, so it rarely exceeds net plant.
     "rate_base": ("net_ppe", 0.25, 1.5),
+    # Guided FCF / latest reported revenue: a margin. Under 1% is a scale error read
+    # low; over 45% of LAST year's revenue is bn-for-mn or a cumulative multi-year figure.
+    "fcf_guidance": ("revenue", 0.01, 0.45),
 }
 
 #: Ratios a rate order can plausibly carry. An allowed ROE outside 6-14% or an equity
@@ -195,8 +202,14 @@ def reconcile(kind: str, value: Optional[float], context: dict,
         # guidance. Flows -- capex, and a rate base projected for a future year
         # -- stay bound to years that have ended.
         hi = latest + 1 if kind == "backlog" else latest
-        checks.append({"check": "latest reported period", "ok": latest - 1 <= y <= hi,
-                       "detail": f"figure is {y}; FMP's latest reported year is {latest}"})
+        if kind in GUIDANCE_KINDS:
+            # The opposite test: guidance is for a year that has NOT ended, and
+            # stale guidance for a year already reported is an actual, not this.
+            checks.append({"check": "guidance period", "ok": latest < y <= latest + 2,
+                           "detail": f"guidance is for {y}; FMP's latest reported year is {latest}"})
+        else:
+            checks.append({"check": "latest reported period", "ok": latest - 1 <= y <= hi,
+                           "detail": f"figure is {y}; FMP's latest reported year is {latest}"})
     if value is None:
         return [{"check": "cited_amount", "ok": False,
                  "detail": "no cited amount of known scale and convertible currency"}]
@@ -322,6 +335,16 @@ def accepted_detail(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] 
             out["backlog_kind"] = _bd.get("kind")
             _b2b = _bd.get("book_to_bill")
             out["book_to_bill"] = float(_b2b) if isinstance(_b2b, (int, float)) and _b2b > 0 else None
+            # Orders booked in the latest completed year, so a book-to-bill can be
+            # DERIVED (orders / that year's revenue) when the company states none.
+            out["orders"] = amount(_bd.get("orders"), fx or _fx(to_ccy)) if _bd.get("orders") else None
+            out["orders_period"] = (_bd.get("orders") or {}).get("period")
+        if kind == "fcf_guidance":
+            _gd = e.get("data") or {}
+            _g_rev = amount(_gd.get("revenue"), fx or _fx(to_ccy)) if _gd.get("revenue") else None
+            out["guided_revenue"] = _g_rev
+            out["guided_margin"] = (base / _g_rev) if (_g_rev and _g_rev > 0) else None
+            out["guidance_range"] = _gd.get("guidance_range")
         if kind == "rate_base":
             # Accepted with the amount: the content hash covers the whole entry,
             # so an edited ROE or equity layer revokes the acceptance too.

@@ -47,6 +47,9 @@ WAVE1 = {
 WAVE2 = {
     "rate_base": ["NEE", "DUK", "SO", "00002.HK", "00006.HK", "01816.HK"],
     "backlog": ["CCJ", "LEU", "GEV", "BE"],
+    # Owner, 2026-09-22: the FCF guidance overlay, faded (valuation_constants
+    # `fcf_guidance_fade`). GE Vernova is the first name that needs it.
+    "fcf_guidance": ["GEV"],
 }
 WAVES = {"1": WAVE1, "2": WAVE2}
 

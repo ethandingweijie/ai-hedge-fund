@@ -3454,6 +3454,7 @@ def _project_dcf(
     margin_delta_absolute: Optional[float] = None,
     include_terminal: bool = True,
     sales_to_capital: Optional[float] = None,
+    margin_schedule: Optional[list[float]] = None,
 ) -> tuple[float, float, float, list[dict]]:
     """
     Core DCF engine.  Returns (intrinsic_value_per_share, pv_fcf_sum_per_share,
@@ -3574,7 +3575,12 @@ def _project_dcf(
         g_t   = _g_by_year[t - 1]
         w_t   = _w_by_year[t - 1]
         rev_t = rev_t * (1 + g_t)
-        if margin_delta_absolute is not None:
+        if margin_schedule is not None:
+            # A per-year margin path (the faded FCF-guidance overlay). The
+            # terminal below takes the LAST year's margin, which is how a fade
+            # to a floor becomes the terminal margin without a second rule.
+            margin_t = margin_schedule[min(t, len(margin_schedule)) - 1]
+        elif margin_delta_absolute is not None:
             margin_t = fcf_margin_base + margin_delta_absolute
         else:
             margin_t = fcf_margin_base + margin_delta_per_year * t
@@ -5690,13 +5696,32 @@ def _compute_method_value(
                       "coverage_years": round(_cov, 4), "book_to_bill": _b2b,
                       "period": _bl_d.get("period"), "source_url": _bl_d.get("source_url"),
                       "years_bounded": _BACKLOG_BOUND_YEARS, "moved": _moved}
+        # FCF guidance overlay, FADED (owner, 2026-09-22): never held flat. An
+        # accepted guidance sets years 1-3, fades over years 4-7 and sits on the
+        # steady-state floor from year 8 into the terminal. The scenario's margin
+        # move scales the whole path, so bear <= base <= bull is preserved.
+        _m_sched, _fade = None, None
+        _fg = most_recent.get("_fcf_guidance_detail") or {}
+        if _fg.get("guided_margin"):
+            from src.data import valuation_constants as _vc_fg
+            _fade = _vc_fg.fcf_guidance_margin_schedule(_fg["guided_margin"], years=_PROJECTION_YEARS)
+            if _fade:
+                _md = _pj.get("margin_delta_absolute") or 0.0
+                _scale = (1.0 + _md / fcf_margin_base) if fcf_margin_base and fcf_margin_base > 0 else 1.0
+                _m_sched = [m * _scale for m in _fade["schedule"]]
         iv, _pv_fcf, _pv_tv, _rows = _project_dcf(
             revenue_base, fcf_margin_base, growth_base, 0.0,
             wacc, tgr, fcf_floor, net_debt, shares,
             growth_schedule=_sched,
             wacc_schedule=_pj.get("wacc_schedule"),
             margin_delta_absolute=_pj.get("margin_delta_absolute"),
+            margin_schedule=_m_sched,
         )
+        if _fade:
+            _bound = {**(_bound or {}), "fcf_guidance_fade": {
+                **_fade, "scenario_scale": round(_scale, 6), "audited_base_margin": float(fcf_margin_base),
+                "guidance_range": _fg.get("guidance_range"), "period": _fg.get("period"),
+                "source_url": _fg.get("source_url")}}
         _leg_trace(kind="dcf", revenue_base=float(revenue_base),
                    fcf_margin_base=float(fcf_margin_base), growth_base=float(growth_base),
                    growth_schedule=_sched,
@@ -7254,6 +7279,46 @@ def _bound_growth_schedule(schedule: list[float],
                           "bound": "floor" if new > g else "ceiling"})
             out[i] = new
     return out, moved
+
+
+def _long_cycle_gate(ticker: str, sector: str, most_recent: dict, revenue_base: float,
+                     end_date: str, forward_consensus: Optional[dict]) -> Optional[dict]:
+    """{eligible, profile, record, flag} for a name with an ACCEPTED backlog, else None.
+
+    Forward sales are consensus NTM revenue when the run has it, else the
+    revenue base (and the record says which). Book-to-bill is the company's
+    cited figure, else accepted orders over the revenue of the year they were
+    booked in. The contract-liability share is read by src/data/long_cycle.py.
+    """
+    from src.data import industry_inputs as _ii_lc
+    from src.data import valuation_constants as _vc_lc
+    ccy = most_recent.get("_values_currency") or "USD"
+    bl = _ii_lc.accepted_detail(ticker, "backlog", ccy)
+    if not bl or not bl.get("value") or not revenue_base or revenue_base <= 0:
+        return None
+    fwd = ((forward_consensus or {}).get("revenue") or {}).get("base")
+    fwd_basis = "consensus NTM revenue"
+    if not (isinstance(fwd, (int, float)) and fwd > 0):
+        fwd, fwd_basis = revenue_base, "latest revenue (no consensus revenue on this run)"
+    b2b, b2b_basis = bl.get("book_to_bill"), "cited by the company"
+    if not b2b and bl.get("orders"):
+        b2b, b2b_basis = bl["orders"] / revenue_base, f"accepted orders ({bl.get('orders_period')}) / revenue"
+    from src.data.long_cycle import contract_liability_share
+    _cl = contract_liability_share(ticker, end_date)
+    share = _cl["share"] if _cl else None
+    v = _vc_lc.long_cycle_eligibility(sector=sector, backlog_coverage=bl["value"] / fwd,
+                                      book_to_bill=b2b, contract_liability_share=share)
+    parts = "; ".join(f"{c['rule']} {c['value'] if c['value'] is not None else 'not available'} "
+                      f"(> {c['minimum']}) {'ok' if c['ok'] else 'FAILS'}" for c in v["checks"])
+    verdict = (f"eligible -> {v['profile']}" if v["eligible"]
+               else "NOT eligible" + ("" if v["sector_in_scope"] else f" (sector {sector} out of scope)"))
+    return {"eligible": v["eligible"], "profile": v["profile"],
+            "flag": f"Backlog-Gated Long Cycle: {verdict}. {parts}.",
+            "record": {"gate_id": "GATE_LONG_CYCLE_ELIGIBILITY", "metric": "long_cycle_eligibility",
+                       "raw_input_path_a": None, "gated_output_path_b": None,
+                       "checks": v["checks"], "forward_sales_basis": fwd_basis,
+                       "book_to_bill_basis": b2b_basis if b2b else None,
+                       "basis": parts, "applied": v["eligible"]}}
 
 
 #: Forward legs on forward multiples (owner rule 2026-09-21: "default to NTM
@@ -10147,6 +10212,13 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                 pass
             # Wave 2: an owner-accepted regulated rate base, with the rate
             # order's allowed ROE and equity layer, feeds the P/Rate Base leg.
+            # FCF guidance: an OVERLAY (owner rule 2026-09-20), so it needs both an
+            # acceptance AND the forward-overlay switch. Read only by a
+            # backlog-coverage DCF leg, which fades it.
+            if _ii.overlay_enabled():
+                _fg_d = _ii.accepted_detail(ticker, "fcf_guidance", _mc_ccy)
+                if _fg_d and _fg_d.get("guided_margin"):
+                    most_recent["_fcf_guidance_detail"] = _fg_d
             _rb_d = _ii.accepted_detail(ticker, "rate_base", _mc_ccy)
             if _rb_d and _rb_d.get("value") is not None:
                 most_recent["rate_base_accepted"] = _rb_d["value"]
@@ -11175,6 +11247,24 @@ def run_dcf_agent(state: AgentState) -> AgentState:
         # but its historical t1_row carries no sotp_assumptions → method
         # value None → skipped and renormalized → T-1 calibration and
         # every no-SOTP ticker stay bit-identical.
+        # ── Backlog-Gated Long Cycle: eligibility is a GATE (owner, 2026-09-22) ──
+        # Evaluated only for a name with an owner-ACCEPTED backlog, so it costs
+        # nothing and changes nothing for everyone else. All three rules must hold
+        # on figures that exist; a missing one fails.
+        try:
+            _lc = _long_cycle_gate(ticker, sector, most_recent, revenue_base, end_date,
+                                   forward_consensus)
+            if _lc:
+                gate_evaluations.append(_lc["record"])
+                ticker_forward_flags.append(_lc["flag"])
+                if _lc["eligible"]:
+                    _lc_data = (INDUSTRY_VALUATION_PROFILES.get(sector) or {}).get(_lc["profile"]) \
+                        or INDUSTRY_VALUATION_PROFILES["Industrials"].get(_lc["profile"])
+                    if _lc_data:
+                        profile_name, profile_data = _lc["profile"], _lc_data
+        except Exception:                                  # noqa: BLE001
+            pass
+
         # B4: an ACTIVE calibration's fitted method weights for this (sector,
         # profile), and its market IV multiplier. Nothing is active until a
         # proposal is promoted; until then both hooks hand back their input,

@@ -94,6 +94,67 @@ def cost_of_equity(profile: Optional[str], market: Optional[str] = "US",
     return float(v) if isinstance(v, (int, float)) and 0.03 <= v <= 0.20 else None
 
 
+def long_cycle_eligibility(*, sector: Optional[str], backlog_coverage: Optional[float],
+                           book_to_bill: Optional[float], contract_liability_share: Optional[float],
+                           doc: Optional[dict] = None) -> dict:
+    """{eligible, profile, checks} for the Backlog-Gated Long Cycle profile.
+
+    All three rules must hold, on figures that exist. A rule whose input is
+    MISSING fails: eligibility is a claim about the company, and a claim that
+    cannot be checked is not made. `checks` names each rule, its reading and its
+    threshold, so a valuation can say exactly why a name did or did not qualify.
+    """
+    cfg = (doc or load()).get("backlog_gated_long_cycle") or {}
+    rules = (
+        ("backlog coverage of forward sales", backlog_coverage, cfg.get("min_backlog_coverage_forward_sales")),
+        ("book-to-bill", book_to_bill, cfg.get("min_book_to_bill")),
+        ("contract liabilities / (receivables + inventory)", contract_liability_share,
+         cfg.get("min_contract_liability_share")),
+    )
+    checks = []
+    for name, value, floor in rules:
+        ok = (isinstance(value, (int, float)) and isinstance(floor, (int, float)) and value > floor)
+        checks.append({"rule": name, "value": (round(float(value), 4) if isinstance(value, (int, float)) else None),
+                       "minimum": floor, "ok": bool(ok)})
+    in_sector = (sector in (cfg.get("sectors") or [])) if sector else False
+    return {"eligible": bool(cfg) and in_sector and all(c["ok"] for c in checks),
+            "profile": cfg.get("profile"), "sector_in_scope": in_sector, "checks": checks}
+
+
+def fcf_guidance_margin_schedule(guided_margin: Optional[float], years: int = 10,
+                                 doc: Optional[dict] = None) -> Optional[dict]:
+    """{schedule, explicit_margin, floor, ...} for an accepted FCF guidance, or None.
+
+        years 1..E          the guided margin, capped at the owner's ceiling
+        years E+1..E+F      minus `fade_bps_per_year` each year, never below the floor
+        years after, and the terminal (which takes the last year's margin): the floor
+
+    None when the guidance is not above the floor: there is nothing to fade, and
+    a guided margin BELOW the steady-state floor must not be lifted onto it.
+    """
+    cfg = (doc or load()).get("fcf_guidance_fade") or {}
+    floor, ceil = cfg.get("floor_margin"), cfg.get("explicit_margin_ceiling")
+    e_years, f_years, bps = cfg.get("explicit_years"), cfg.get("fade_years"), cfg.get("fade_bps_per_year")
+    if not all(isinstance(x, (int, float)) for x in (guided_margin, floor, ceil, e_years, f_years, bps)):
+        return None
+    if guided_margin <= floor:
+        return None
+    explicit = min(float(guided_margin), float(ceil))
+    step = float(bps) / 10000.0
+    sched = []
+    for t in range(1, years + 1):
+        if t <= e_years:
+            m = explicit
+        elif t <= e_years + f_years:
+            m = max(explicit - step * (t - e_years), float(floor))
+        else:
+            m = float(floor)
+        sched.append(round(m, 6))
+    return {"schedule": sched, "guided_margin": float(guided_margin), "explicit_margin": explicit,
+            "ceiling_applied": guided_margin > ceil, "floor": float(floor),
+            "explicit_years": int(e_years), "fade_years": int(f_years), "fade_bps_per_year": float(bps)}
+
+
 #: Reason codes, in the order they are tested. The label is what a reader sees.
 UNRATED_REASONS = {
     "pre_revenue": "Unrated — pre-revenue",

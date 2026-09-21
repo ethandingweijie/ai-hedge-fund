@@ -112,7 +112,8 @@ class TestTheAllowlistIsTheOwnersList:
         assert "Capital Goods / Hardware" not in every
         # 98 -> 103 with the five profiles of Wave 1 oil, gas & coal (owner-approved 2026-09-20); none is the fourth name.
         # 103 -> 104 with Wave 2's hardware OEM profile (2026-09-21); still not the fourth name.
-        assert len(every) == 104, (
+        # 104 -> 105 with Backlog-Gated Long Cycle (2026-09-22); still not the fourth name.
+        assert len(every) == 105, (
             "the taxonomy changed size, so re-check whether the fourth name "
             "exists now and whether the decomposition is still the right reading")
         for name in OWNER_LISTED[:3]:

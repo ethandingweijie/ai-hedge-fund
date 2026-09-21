@@ -2640,6 +2640,29 @@ INDUSTRY_VALUATION_PROFILES: dict[str, dict[str, dict]] = {
             "excluded": [],
             "rationale": "Capital-intensive and cyclical; P/B serves as a floor for manufacturing assets.",
         },
+        # Owner, 2026-09-22. Long-cycle equipment makers whose ORDER BOOK, not their
+        # trailing earnings, describes them: heavy power equipment, nuclear, grid
+        # infrastructure. GE Vernova on Capital Goods published $318 against a $955
+        # quote because every weighted leg was trailing, on a company whose earnings
+        # are inflecting, while the two legs that see the inflection carried no
+        # weight. Kept apart from short-cycle industrials (Dover, Illinois Tool
+        # Works), which Capital Goods still serves.
+        #
+        # NOT reachable by industry row, pin or classifier. A name arrives only
+        # through dcf_agent's eligibility gate (valuation_constants
+        # `backlog_gated_long_cycle`): backlog > 3.0x forward sales, book-to-bill
+        # > 1.5x, contract liabilities > 50% of receivables plus inventory -- all
+        # on owner-ACCEPTED filing figures. Fail one and the name stays where it was.
+        "Backlog-Gated Long Cycle": {
+            "methods": [
+                {"name": "Backlog-coverage DCF", "weight": 0.35, "anchor": True,  "implementable": True},
+                {"name": "Forward EV/EBITDA",    "weight": 0.25, "anchor": False, "implementable": True},
+                {"name": "Forward P/E",          "weight": 0.20, "anchor": False, "implementable": True},
+                {"name": "EV/EBITDA",            "weight": 0.20, "anchor": False, "implementable": True},
+            ],
+            "excluded": ["FCF Yield", "ROIC vs WACC"],
+            "rationale": "A multi-year contracted order book with price escalation is the structural visibility a cash-flow forecast rests on; forward legs carry the earnings inflection trailing ones cannot.",
+        },
         "Capital Goods": {
             "methods": [
                 {"name": "EV/EBITDA",    "weight": 0.40, "anchor": True,  "implementable": True},
@@ -4237,6 +4260,8 @@ def classify_valuation_profile(
         # Rung 10 — Traditional Retail.
         return "Traditional Retail"
 
+    # NOTE: "Backlog-Gated Long Cycle" is never returned from here. It is reached
+    # only through dcf_agent's eligibility gate, on owner-accepted filing figures.
     if sector == "Industrials":
         # A business model is never inferred from a ratio (owner, 2026-09-21).
         # This ladder used to read: D/E > 1.5 -> Automotive (OEM); revenue CAGR

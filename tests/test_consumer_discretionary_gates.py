@@ -453,6 +453,10 @@ def test_gate_vocabulary_is_closed_and_has_eleven_members():
         "GATE_GROWTH_CAGR_DIVERGENCE",
         "GATE_GROWTH_REINVESTMENT",
         "GATE_INVENTORY_STRESS",
+        # Fourteenth (2026-09-22): records, for a name with an accepted backlog,
+        # each of the three long-cycle eligibility rules with its reading and
+        # threshold. `applied` is the verdict, so it is an expression, not a literal.
+        "GATE_LONG_CYCLE_ELIGIBILITY",
         "GATE_MARGIN_TURNAROUND",
         "GATE_PT_IV_BAND",
         "GATE_REVENUE_SCALE_CAP",
@@ -1032,9 +1036,17 @@ def test_the_projector_has_none_of_the_inputs_the_briefs_patch_needs():
         "wacc", "tgr", "fcf_floor", "net_debt", "shares", "years",
         "growth_schedule", "wacc_schedule", "margin_delta_absolute",
         "include_terminal", "sales_to_capital",
+        # 2026-09-22: a per-year MARGIN path, for the faded FCF-guidance overlay
+        # (years 1-3 guided, 4-7 fading, 8-10 and the terminal on a floor). It
+        # was on the absent list below as part of the rejected sketch; it is
+        # admitted because it keeps exactly the property this test defends --
+        # the projector is still margin-only. It carries ten margins, not ten
+        # years of EBIT, D&A and capex, and None reproduces the old path exactly
+        # (pinned in tests/test_backlog_gated_long_cycle.py).
+        "margin_schedule",
     ], params
     for absent in ("overrides", "effective_tax_rate", "capex", "da",
-                   "depreciation", "ebit", "margin_schedule",
+                   "depreciation", "ebit",
                    "reinvestment_deduction"):
         assert absent not in params, f"{absent!r} is now a parameter"
     src = _engine_src()
@@ -1682,7 +1694,8 @@ def test_the_normalized_ni_flag_promises_a_leg_most_profiles_do_not_have():
                 with_norm += 1
     # Wave 1 oil, gas & coal (owner-approved 2026-09-20): +5 profiles, all five with a normalised leg.
     # Wave 2 power & transition (owner-confirmed 2026-09-21): +1 profile, with a normalised anchor.
-    assert (total, with_norm) == (105, 34), (total, with_norm)
+    # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
+    assert (total, with_norm) == (106, 34), (total, with_norm)
     # "Most" means a majority; the earlier 0.30 bound was the census at the
     # time, not the claim (33/104 = 32% after Wave 1).
     assert with_norm / total < 0.50, "most profiles have no normalized leg"
@@ -2050,7 +2063,8 @@ def test_the_swap_population_is_thirty_seven_of_ninety_nine():
     # (EBITDA x EV/EBITDA) became a real trailing "P/E" carrying the anchor flag, so it
     # joins the swap population and its anchors: a utility in a depressed year is
     # priced on normalised earnings like every other trailing-P/E profile.
-    assert (tot, trail, elig, anchored) == (105, 38, 38, 14)
+    # Backlog-Gated Long Cycle (2026-09-22): +1 profile, no normalised leg and no trailing P/E.
+    assert (tot, trail, elig, anchored) == (106, 38, 38, 14)
     # The swap now names every trailing P/E spelling that exists in the taxonomy,
     # so `elig == trail` is the invariant. If a fifth spelling ever appears, this
     # is the assertion that says the map is stale rather than the census drifting.

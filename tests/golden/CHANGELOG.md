@@ -1434,3 +1434,11 @@ This entry supersedes nothing: the 2026-09-18T14:40:47 entry above records the f
 - tolerance: ±5% on numeric leaves
 - reason: Wave 2: owner-confirmed method tables for Regulated Utility, Merchant Power and IPP plus the new Clean Tech / Power Equipment OEM profile change the profile-weights digest in param_version; no valuation leaf moved on any fixture
 
+## 2026-09-21T16:29:55+00:00
+
+- regenerated at HEAD: `c9f0499`
+- fixtures recorded at: `30b26702d3c786e1835dd8e5cc629191e3d75c95`
+- tickers: 14
+- tolerance: ±5% on numeric leaves
+- reason: Backlog-Gated Long Cycle profile added (owner 2026-09-22): the profile-weights digest in param_version changes on every fixture; no valuation leaf moved
+

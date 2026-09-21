@@ -489,12 +489,26 @@ class BacklogValue(BaseModel):
                     "backlog, order backlog, or remaining performance obligations (RPO)")
     value: Cited = Field(description="Backlog at the latest reported period end, total for the company")
     book_to_bill: Optional[float] = Field(default=None, description="Latest reported book-to-bill ratio, if stated")
+    orders: Optional[Cited] = Field(
+        default=None, description="Total ORDERS booked in the latest COMPLETED fiscal year, as the company "
+                                  "reports them, so a book-to-bill can be formed when none is stated")
 
 
 class MaintenanceCapex(BaseModel):
     """Capital expenditure to sustain the existing asset base (midstream)."""
     value: Cited = Field(description="Maintenance (sustaining) capital expenditure for the latest fiscal year")
     definition: str = Field(description="How the company defines maintenance capex, as it states it")
+
+
+class FcfGuidance(BaseModel):
+    """Management's free-cash-flow guidance for the next fiscal year (an OVERLAY,
+    never a baseline: owner rule 2026-09-20)."""
+    value: Cited = Field(description="Guided free cash flow for the next fiscal year; the MIDPOINT when a range is given")
+    revenue: Cited = Field(description="Guided revenue for the SAME fiscal year; the midpoint when a range is given")
+    guidance_range: str = Field(description="The guidance exactly as management states it, both ranges, "
+                                            "e.g. 'FCF $11.5-12.5bn on revenue of $45.5-46.5bn'")
+    drivers: str = Field(description="What management says drives the cash flow, in its own words -- in "
+                                     "particular customer advances, progress payments or reservation fees")
 
 
 class RateBase(BaseModel):
@@ -519,6 +533,7 @@ INDUSTRY_INPUT_SCHEMAS: dict = {
     "backlog": BacklogValue,
     "maintenance_capex": MaintenanceCapex,
     "rate_base": RateBase,
+    "fcf_guidance": FcfGuidance,
 }
 
 _INDUSTRY_ASK = {
@@ -534,7 +549,14 @@ _INDUSTRY_ASK = {
     "backlog": (
         "its contracted BACKLOG at the latest reported period end, using the company's own term "
         "(total backlog, funded backlog, contract drilling backlog, order backlog, or remaining "
-        "performance obligations) and its latest book-to-bill ratio if it states one."),
+        "performance obligations) and its latest book-to-bill ratio if it states one. Also report "
+        "the total ORDERS it booked in the latest completed fiscal year, as it reports them."),
+    "fcf_guidance": (
+        "management's most recent FREE CASH FLOW GUIDANCE for the NEXT fiscal year and its REVENUE "
+        "guidance for the same year, exactly as stated (give the midpoint of each range and quote "
+        "both ranges), and what management says drives that cash flow -- customer advances, progress "
+        "payments, reservation fees. This is guidance and must be for a fiscal year that has NOT "
+        "ended; if the company has issued no free-cash-flow guidance, omit the figure."),
     "maintenance_capex": (
         "its MAINTENANCE (sustaining) capital expenditure for the latest COMPLETED fiscal year, "
         "as the company reports it (often in its distributable cash flow reconciliation), and the "
@@ -555,6 +577,7 @@ _INDUSTRY_ASK = {
 
 
 _OVERLAY_ASK = {
+    "fcf_guidance": "free cash flow",
     "rate_base": "regulated rate base",
     "maintenance_capex": "maintenance (sustaining) capital expenditure",
     "backlog": "contracted backlog",
