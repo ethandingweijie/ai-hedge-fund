@@ -176,6 +176,26 @@ def test_with_the_flag_on_a_forward_metric_meets_a_forward_multiple_and_the_trac
     assert tr["multiple_parts"]["peer_source"] == "peer median ev_ebitda_ntm (forward basis)"
 
 
+def _basis(**rungs):
+    return {f: {"basis": lvl, "key": key} for f, (lvl, key) in rungs.items()}
+
+
+@pytest.mark.parametrize("basis,expect", [
+    # Xiaomi, measured 2026-09-22: industry trailing median, only a SECTOR forward one.
+    (_basis(pe=("industry", "Consumer Electronics"), pe_ntm=("sector", "Technology")), 20.0),
+    (_basis(pe=("industry", "Oil & Gas Drilling"), pe_ntm=("industry", "Oil, Gas & Coal (family)")), 20.0),
+    # Like for like, or the forward basket is the MORE specific one: use it.
+    (_basis(pe=("industry", "Solar"), pe_ntm=("industry", "Solar")), 15.0),
+    (_basis(pe=("sector", "Utilities"), pe_ntm=("industry", "Independent Power Producers")), 15.0),
+    (_basis(pe=("static", None), pe_ntm=("sector", "Energy")), 15.0),
+])
+def test_a_forward_multiple_from_a_broader_basket_than_the_trailing_one_is_not_used(basis, expect, monkeypatch):
+    """Fixing the basis must never cost the comparability."""
+    monkeypatch.setenv(dcf_agent.NTM_FORWARD_FLAG, "true")
+    v, tr = _leg("Forward P/E", monkeypatch, peer={**PEER, "_comp_basis": basis})
+    assert tr["multiple_parts"]["peer_multiple"] == expect
+
+
 def test_a_basket_with_no_forward_median_keeps_the_trailing_one_even_with_the_flag_on(monkeypatch):
     monkeypatch.setenv(dcf_agent.NTM_FORWARD_FLAG, "true")
     v, tr = _leg("Forward P/E", monkeypatch, peer={"pe": 20.0})

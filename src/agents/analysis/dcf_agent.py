@@ -7344,9 +7344,33 @@ def _forward_peer_multiple(peer: dict, field: str, default: float) -> tuple[floa
     and the trace names it; otherwise the trailing one, exactly as before.
     """
     ntm = peer.get(f"{field}_ntm")
-    if _ntm_forward_enabled() and isinstance(ntm, (int, float)) and ntm > 0:
+    if (_ntm_forward_enabled() and isinstance(ntm, (int, float)) and ntm > 0
+            and _basket_rank(peer, f"{field}_ntm") >= _basket_rank(peer, field)):
         return float(ntm), f"peer median {field}_ntm (forward basis)"
     return float(peer.get(field, default)), f"peer median {field}"
+
+
+def _basket_rank(peer: dict, field: str) -> int:
+    """How specific the basket behind one field is: industry 3, a same-market
+    family 2, sector 1, static table or unknown 0.
+
+    Comps resolve FIELD BY FIELD, so two fields of one name can come from
+    different baskets. Measured 2026-09-22: HKSE `Consumer Electronics` has an
+    industry P/E median (7 names) and NO forward one, so Xiaomi's forward leg
+    took the whole-sector NTM median (20.7x) in place of its industry's trailing
+    18.5x -- a basis fix that quietly swapped the peer set. A forward multiple is
+    used only when its basket is at least as specific as the trailing one's;
+    fixing the basis must never cost the comparability.
+    """
+    b = (peer.get("_comp_basis") or {}).get(field) or {}
+    level = b.get("basis")
+    if level == "industry":
+        try:
+            from src.data.regional_comps import INDUSTRY_FAMILIES
+            return 2 if b.get("key") in INDUSTRY_FAMILIES else 3
+        except Exception:                                  # noqa: BLE001
+            return 3
+    return 1 if level == "sector" else 0
 
 
 #: The same idea, generalised: a method declared `implementable: False` with a
