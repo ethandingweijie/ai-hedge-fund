@@ -2128,15 +2128,30 @@ def _sotp_parts(segments: dict[str, float], tier: str = "default",
                               "note": "no owner-set EV/EBITDA band for this "
                                       "segment type -- unpriced"})
                 continue
-            mult = _band_multiple(band)
+            # An owner-ACCEPTED dynamic multiple wins (Phase 2): the engine in
+            # src/data/dynamic_multiples.py proposes a regime-adjusted multiple
+            # with its derivation, and only an accepted one reaches a
+            # valuation. Without one, the static band position stands -- and the
+            # part says which of the two it is.
+            mult, mult_source, dyn_band = _band_multiple(band),                 f"static band ({_SEGMENT_BAND_POSITION} end)", None
+            try:
+                from src.data import dynamic_multiples as _dm
+                _acc = _dm.accepted(e_type)
+                if _acc and isinstance(_acc.get("multiple"), (int, float)):
+                    mult = float(_acc["multiple"])
+                    mult_source = f"dynamic, accepted {_acc.get('accepted_at')}"
+                    dyn_band = (_acc.get("derivation") or {}).get("band")
+            except Exception:                              # noqa: BLE001
+                pass
             seg_ebitda = float(seg_rev) * float(margin)
             parts.append({"segment": seg_name, "revenue": float(seg_rev),
                           "type": e_type, "basis": "ev_ebitda",
                           "ebitda_margin": float(margin),
                           "ebitda_margin_source": cfg.get("margin_source"),
                           "ebitda_estimated": seg_ebitda,
-                          "band": list(band), "band_position": _SEGMENT_BAND_POSITION,
-                          "multiple": float(mult),
+                          "band": list(dyn_band or band),
+                          "band_position": _SEGMENT_BAND_POSITION,
+                          "multiple": float(mult), "multiple_source": mult_source,
                           "ev": seg_ebitda * mult})
             continue
         seg_type, mult = _classify_segment(seg_name, tier=tier)
@@ -2175,6 +2190,7 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
             "ebitda": p.get("ebitda_estimated"),
             "band": p.get("band"),
             "band_position": p.get("band_position"),
+            "multiple_source": p.get("multiple_source"),
             "ebitda_unreconciled": p.get("ebitda_unreconciled"),
             "reconciliation_scaler": p.get("reconciliation_scaler"),
             "multiple": p.get("multiple"),
@@ -2224,7 +2240,9 @@ def _segment_sotp_block(base_scenario: dict, shares: Optional[float],
         "basis_note": ("Segment EBITDA is estimated as segment revenue x the margin "
                        "its peer basket implies; it is not a disclosed figure. "
                        "Multiples are owner-set through-cycle EV/EBITDA bands, "
-                       f"applied at the {_SEGMENT_BAND_POSITION} end of each band."),
+                       f"applied at the {_SEGMENT_BAND_POSITION} end of each band "
+                       "unless the owner has accepted a dynamic multiple for the "
+                       "segment type, which the row then says."),
     }
 
 

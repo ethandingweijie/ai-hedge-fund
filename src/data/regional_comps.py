@@ -195,6 +195,18 @@ _BANDS: dict[str, tuple[float, float]] = {
     # priced on (EV/DACF's reportable cousin). Same key-metrics-ttm call as
     # EV/EBITDA, so it costs no extra request.
     "ev_ocf":     (0.5, 60.0),
+    # Return on invested capital, the second factor of the dynamic multiples
+    # engine (a basket re-rates when its returns move against their own
+    # history). Same key-metrics-ttm call, no extra request. The band drops the
+    # readings that are an artefact of a near-zero or negative capital base.
+    "roic":       (-0.50, 1.00),
+    # EV over the member's mean EBITDA across the history window -- the
+    # through-cycle multiple. Backfill-only for now (the weekly refresh sees
+    # one year of EBITDA and cannot form it); same band as ev_ebitda.
+    "ev_ebitda_norm": (0.5, 100.0),
+    # Market cap over the member's mean net income: the through-cycle P/E, for
+    # industries that anchor on earnings rather than EBITDA. Backfill-only.
+    "pe_norm":    (1.0, 200.0),
 }
 
 #: Same-market pools for industries whose individual baskets are too thin.
@@ -392,6 +404,7 @@ def fetch_name_multiples(symbol: str) -> Optional[dict]:
         out["ev_revenue"] = _safe_float(row.get("evToSalesTTM"))
         out["fcf_yield"] = _safe_float(row.get("freeCashFlowYieldTTM"))
         out["ev_ocf"] = _safe_float(row.get("evToOperatingCashFlowTTM"))
+        out["roic"] = _safe_float(row.get("returnOnInvestedCapitalTTM"))
 
     rt = _fmp_get(f"{_STABLE}/ratios-ttm", {"symbol": symbol}, api_key=None)
     if isinstance(rt, list) and rt:
@@ -535,6 +548,31 @@ CREATE TABLE IF NOT EXISTS regional_comps_members (
 _MEMBERS_INDEX = ("CREATE INDEX IF NOT EXISTS idx_regional_comps_members_lookup "
                   "ON regional_comps_members(exchange, level, key, cohort)")
 
+# Append-only history of every median ever computed (Phase 2, 2026-09-21).
+# `regional_comps` is upserted in place, so until this table existed only
+# today's median survived a refresh -- and the dynamic multiples engine cannot
+# be backtested against a series that is overwritten weekly. `source` says
+# whether a row was measured by a refresh or reconstructed by the backfill,
+# because a backfilled median carries survivorship bias (it is built from
+# TODAY's basket membership) and must never be read as a measured one.
+_HISTORY_DDL = """
+CREATE TABLE IF NOT EXISTS regional_comps_history (
+    exchange    TEXT NOT NULL,
+    level       TEXT NOT NULL,
+    key         TEXT NOT NULL,
+    cohort      TEXT NOT NULL,
+    field       TEXT NOT NULL,
+    value       REAL NOT NULL,
+    peer_count  INTEGER NOT NULL,
+    as_of       TEXT NOT NULL,
+    source      TEXT NOT NULL,
+    recorded_at TEXT NOT NULL,
+    PRIMARY KEY (exchange, level, key, cohort, field, as_of, source)
+)
+"""
+_HISTORY_INDEX = ("CREATE INDEX IF NOT EXISTS idx_regional_comps_history_lookup "
+                  "ON regional_comps_history(exchange, key, field, cohort)")
+
 _tables_ready_key: Optional[tuple] = None
 
 
@@ -544,7 +582,8 @@ def _ensure_table() -> None:
     if key == _tables_ready_key:
         return
     try:
-        _db.execute_script(";".join([_DDL] + _INDEXES + [_MEMBERS_DDL, _MEMBERS_INDEX]))
+        _db.execute_script(";".join([_DDL] + _INDEXES + [_MEMBERS_DDL, _MEMBERS_INDEX,
+                                                           _HISTORY_DDL, _HISTORY_INDEX]))
         _tables_ready_key = key
     except Exception as exc:
         logger.warning("regional_comps _ensure_table: %s", exc)
@@ -563,6 +602,14 @@ ON CONFLICT(exchange, level, key, cohort, field) DO UPDATE SET
 """
 
 
+_HISTORY_SQL = """
+INSERT INTO regional_comps_history
+    (exchange, level, key, cohort, field, value, peer_count, as_of, source, recorded_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(exchange, level, key, cohort, field, as_of, source) DO NOTHING
+"""
+
+
 def save_comps(exchange: str, rows: list[dict], computed_at: str) -> int:
     if not rows:
         return 0
@@ -573,7 +620,53 @@ def save_comps(exchange: str, rows: list[dict], computed_at: str) -> int:
          float(r.get("min_market_cap") or 0.0), computed_at]
         for r in rows
     ])
+    # History is best-effort by design: a failure here must never cost the
+    # live table its refresh, so it is logged and swallowed.
+    try:
+        save_history(exchange, rows, as_of=str(computed_at)[:10], source="refresh")
+    except Exception as exc:                                   # noqa: BLE001
+        logger.warning("regional_comps history append failed: %s", exc)
     return len(rows)
+
+
+def save_history(exchange: str, rows: list[dict], as_of: str, source: str) -> int:
+    """Append medians to the history table. Idempotent per (as_of, source)."""
+    if not rows:
+        return 0
+    _ensure_table()
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _db.executemany(_HISTORY_SQL, [
+        [exchange, r["level"], r["key"], r.get("cohort", "all"), r["field"],
+         float(r["value"]), int(r["peer_count"]), as_of, source, now]
+        for r in rows
+    ])
+    return len(rows)
+
+
+def load_history(exchange: str, key: str, field: str, cohort: str = "all",
+                 level: Optional[str] = None) -> list[dict]:
+    """The dated series for one basket field, oldest first.
+
+    Each row carries its `source`, so a caller can tell a measured refresh from
+    a reconstructed backfill. When both exist for one date the measured row
+    wins.
+    """
+    _ensure_table()
+    sql = ("SELECT as_of, value, peer_count, source, level FROM regional_comps_history "
+           "WHERE exchange = ? AND key = ? AND field = ? AND cohort = ?")
+    params: list = [exchange, key, field, cohort]
+    if level:
+        sql += " AND level = ?"
+        params.append(level)
+    rows = _db.query(sql + " ORDER BY as_of", params) or []
+    by_date: dict[str, dict] = {}
+    for r in rows:
+        r = dict(r)
+        prev = by_date.get(r["as_of"])
+        if prev is None or (prev["source"] != "refresh" and r["source"] == "refresh"):
+            by_date[r["as_of"]] = r
+    return [by_date[d] for d in sorted(by_date)]
 
 
 def compute_members(baskets: dict[str, list[dict]], metrics: dict[str, dict],

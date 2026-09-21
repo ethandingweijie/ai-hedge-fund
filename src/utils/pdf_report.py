@@ -1980,6 +1980,8 @@ def _segment_sotp_block_pdf(dcf_t: dict, styles, width: float) -> list:
     for r in rows:
         seg = _strip(str(r.get("segment") or ""))
         ty = _SEG_TYPE_LABEL.get(r.get("type") or "", r.get("type") or "")
+        if str(r.get("multiple_source") or "").startswith("dynamic"):
+            ty = f"{ty} - dynamic multiple"
         data.append([
             Paragraph(f"{seg}<br/><font size=5.5 color='#666666'>{_strip(str(ty))}</font>", st_l),
             Paragraph(bn(r.get("revenue")), st_v),

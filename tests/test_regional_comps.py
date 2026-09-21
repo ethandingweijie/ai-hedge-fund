@@ -593,3 +593,42 @@ class TestRmbCounterBySymbol:
     def test_rmb_only_listing_is_kept(self):
         rows = [self._row("87001.HK", "Hui Xian Real Estate Investment Trust", 1e10)]
         assert [r["symbol"] for r in rc.dedupe_universe(rows)] == ["87001.HK"]
+
+
+# ── history (Phase 2): every median ever computed, not just today's ─────────
+
+def test_a_refresh_appends_to_history_rather_than_overwriting(store):
+    """`regional_comps` is upserted in place; the dynamic multiples engine
+    needs the series, so every save also lands in the append-only history."""
+    row = {"level": "industry", "key": "Oil & Gas Refining & Marketing",
+           "cohort": "large", "field": "ev_ebitda", "value": 7.6, "peer_count": 8}
+    rc.save_comps("US", [row], "2026-09-12T00:00:00")
+    rc.save_comps("US", [dict(row, value=7.9)], "2026-09-19T00:00:00")
+    h = rc.load_history("US", "Oil & Gas Refining & Marketing", "ev_ebitda", "large")
+    assert [(r["as_of"], r["value"]) for r in h] == [("2026-09-12", 7.6), ("2026-09-19", 7.9)]
+    assert all(r["source"] == "refresh" for r in h)
+
+
+def test_a_measured_row_outranks_a_backfilled_one_for_the_same_date(store):
+    """A backfilled median is built from today's membership (survivorship
+    bias); when a measured one exists for the date, the measured one wins."""
+    row = {"level": "industry", "key": "Oil & Gas Midstream", "cohort": "large",
+           "field": "ev_ebitda_norm", "value": 14.0, "peer_count": 10}
+    rc.save_history("US", [row], as_of="2025-12-31", source="backfill")
+    rc.save_history("US", [dict(row, value=13.5)], as_of="2025-12-31", source="refresh")
+    h = rc.load_history("US", "Oil & Gas Midstream", "ev_ebitda_norm", "large")
+    assert len(h) == 1 and h[0]["value"] == 13.5 and h[0]["source"] == "refresh"
+
+
+def test_history_is_idempotent_per_date_and_source(store):
+    row = {"level": "industry", "key": "Coal", "cohort": "all", "field": "roic",
+           "value": 0.09, "peer_count": 7}
+    rc.save_history("US", [row], as_of="2024-12-31", source="backfill")
+    rc.save_history("US", [row], as_of="2024-12-31", source="backfill")
+    assert len(rc.load_history("US", "Coal", "roic", "all")) == 1
+
+
+def test_roic_and_the_normalised_multiples_are_banded_fields():
+    for f in ("roic", "ev_ebitda_norm", "pe_norm"):
+        assert f in rc.FIELDS
+    assert rc._clean("roic", [0.1, 5.0, -3.0]) == [0.1]

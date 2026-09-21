@@ -118,6 +118,7 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
                   <div className="font-medium">{r.segment}</div>
                   <div className="text-[11px] text-muted-foreground">
                     {TYPE_LABEL[r.type ?? ''] ?? r.type}
+                    {r.multiple_source?.startsWith('dynamic') && ' · dynamic multiple'}
                   </div>
                 </td>
                 <td className="text-right tabular-nums py-2">{fmtBn(r.revenue, sym)}</td>
@@ -149,6 +150,7 @@ export function SegmentSotpPanel({ sotp }: { sotp: SegmentSotp }) {
             </div>
             <div className="text-[11px] text-muted-foreground mt-0.5">
               {TYPE_LABEL[r.type ?? ''] ?? r.type} · {fmtPct(r.share_of_ev)} of EV
+              {r.multiple_source?.startsWith('dynamic') && ' · dynamic multiple'}
             </div>
             <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
               <div>
