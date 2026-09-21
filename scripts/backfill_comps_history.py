@@ -71,6 +71,14 @@ def member_history(symbol: str) -> dict[str, dict[str, float]]:
     inc = rc._fmp_get(f"{_S}/income-statement",
                       {"symbol": symbol, "period": "annual", "limit": 10}, api_key=None)
     inc = inc if isinstance(inc, list) else []
+    # Both sides of a through-cycle ratio must be in one currency. FMP reports
+    # key-metrics EV in the statement currency (CNOOC and Tencent both RMB on
+    # both sides; DBS SGD), so they agree today -- but a HKD quote against RMB
+    # statements would put an FX rate inside the multiple, so the derived
+    # fields are skipped for any company whose two sources disagree.
+    km_ccy = {str(r.get("reportedCurrency") or "") for r in (rows if isinstance(rows, list) else [])}
+    inc_ccy = {str(r.get("reportedCurrency") or "") for r in inc}
+    ccy_ok = (len(km_ccy) == 1 and km_ccy == inc_ccy)
     ebitda = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("ebitda")) for r in inc}
     eb_vals = [v for v in ebitda.values() if v is not None and v > 0]
     eb_mean = (sum(eb_vals) / len(eb_vals)) if len(eb_vals) >= 3 else None
@@ -89,17 +97,22 @@ def member_history(symbol: str) -> dict[str, dict[str, float]]:
             continue
         vals = {cf: rc._safe_float(r.get(kf)) for kf, cf in _KM_FIELDS.items()}
         ev = rc._safe_float(r.get("enterpriseValue"))
-        if ev and ev > 0 and eb_mean:
+        if ccy_ok and ev and ev > 0 and eb_mean:
             vals["ev_ebitda_norm"] = ev / eb_mean
         mc = rc._safe_float(r.get("marketCap"))
-        if mc and mc > 0 and ni_mean:
+        if ccy_ok and mc and mc > 0 and ni_mean:
             vals["pe_norm"] = mc / ni_mean
         out[yr] = {k: v for k, v in vals.items() if v is not None}
     return out
 
 
 def build(exchange: str = "US", preset: str | None = None) -> list[dict]:
-    universe = rc.dedupe_universe(rc.fetch_universe(exchange))
+    # Same exclusion as the live refresh: a Singapore listing whose primary
+    # line is in Hong Kong belongs to the HK baskets, not SG's.
+    exclude: set[str] = set()
+    if exchange == "SES":
+        exclude = {rc.normalize_name(r["name"]) for r in rc.fetch_universe("HKSE")}
+    universe = rc.dedupe_universe(rc.fetch_universe(exchange), exclude_names=exclude)
     industry, sector, _syms = rc.build_baskets(universe)
     levels = [("industry", industry, rc.MIN_INDUSTRY_PEERS),
               ("sector", sector, rc.MIN_SECTOR_PEERS)]
