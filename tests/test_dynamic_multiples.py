@@ -233,18 +233,20 @@ class TestOwnerSetValues:
             dm.accept_value("refining", 9.0, reviewer="owner", basis="x")
 
     def test_the_rebased_bands_hold_the_owner_starting_points(self):
-        for t, v in (("refining", 4.50), ("midstream", 14.1), ("chemicals", 5.2)):
+        # Midstream and chemicals re-anchored on the corrected-basis market
+        # readings (Step B, 2026-09-21); refining keeps its crack-rule trough.
+        for t, v in (("refining", 4.50), ("midstream", 12.18), ("chemicals", 6.58)):
             lo, hi = dm.SEGMENT_BASELINES[t]["band"]
             assert lo <= v <= hi, t
-        assert dm.SEGMENT_BASELINES["midstream"]["baseline"] == 14.1
-        assert dm.SEGMENT_BASELINES["chemicals"]["baseline"] == 5.2
+        assert dm.SEGMENT_BASELINES["midstream"]["baseline"] == 12.18
+        assert dm.SEGMENT_BASELINES["chemicals"]["baseline"] == 6.58
         assert dm.SEGMENT_BASELINES["refining"]["baseline"] == 5.5
 
     def test_the_shipped_record_carries_the_three_starting_points(self):
         from src.data import valuation_constants as vc
         sm = vc.load().get("segment_multiples") or {}
         assert {k: v["multiple"] for k, v in sm.items()} == {
-            "refining": 4.5, "midstream": 14.1, "chemicals": 5.2}
+            "refining": 4.5, "midstream": 12.18, "chemicals": 6.58}
         assert all(v["reviewer"] == "owner" for v in sm.values())
 
 

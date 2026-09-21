@@ -108,21 +108,23 @@
    "band_rationale": "Owner's through-cycle EV/EBITDA band for refining: high cyclicality and terminal transition risk keep it the lowest band here. The market validates it -- the large-cohort through-cycle multiple ran 4.25x-5.54x over 2021-2025 and stood at 5.54x in 2025 against the 5.5x baseline. The low end (4.5x) is the trough the crack-spread rule forces when the 3-2-1 crack runs more than 25% above its long-run mean, so a crack spike is never capitalised."
   },
   "midstream": {
-   "multiple": 14.1,
+   "multiple": 12.18,
    "accepted_at": "2026-09-21",
    "reviewer": "owner",
-   "basis": "owner starting point 2026-09-21: the market's through-cycle multiple (14.14x, 2025, large cohort)",
+   "basis": "owner Step B 2026-09-21: the corrected-basis market through-cycle multiple (12.18x, 2025, US large cohort); replaces 14.1x read off the old basis",
+   "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 12.18x (2025, US large cohort). An earlier reading of 14.14x on the old mean-EBITDA-level basis set a 14.1x starting point that sat above the corrected market; it was replaced. The original 9-12x band sat wholly below the market's 2024 peak of 14.34x and was superseded before that. The band is the owner's +/-20% outlier guard around the 12.18x baseline: 9.74x-14.62x.",
    "derivation": {
     "segment_type": "midstream",
     "mode": "calibrated",
-    "baseline": 14.1,
+    "baseline": 12.18,
     "band": [
-     11.28,
-     16.92
+     9.744,
+     14.616
     ],
+    "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 12.18x (2025, US large cohort). An earlier reading of 14.14x on the old mean-EBITDA-level basis set a 14.1x starting point that sat above the corrected market; it was replaced. The original 9-12x band sat wholly below the market's 2024 peak of 14.34x and was superseded before that. The band is the owner's +/-20% outlier guard around the 12.18x baseline: 9.74x-14.62x.",
     "basket": "Oil & Gas Midstream",
     "basket_is_proxy": false,
-    "market_multiple_now": 14.139903,
+    "market_multiple_now": 12.178945,
     "real_rate": {
      "now": 0.024686363636363638,
      "mean_5y": 0.014485036202735318,
@@ -144,11 +146,11 @@
       "b2": 2.0
      },
      "ols": {
-      "b1": 14.201781900441583,
-      "b2": -4.255129134979418,
-      "a": 2.3624491250950306,
+      "b1": -4.142402649168411,
+      "b2": -21.747276038758287,
+      "a": 2.3612626263088963,
       "n": 5,
-      "r2": 0.7298500107251809
+      "r2": 0.7687411252663863
      },
      "note": "regressors collinear (corr -0.91): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
      "cohort": "large",
@@ -167,31 +169,31 @@
     },
     "crack": null,
     "rules": [],
-    "raw": 12.916962601014756,
-    "proposed": 12.917,
+    "raw": 11.158057055344662,
+    "proposed": 11.1581,
     "flags": [],
     "as_of": "2026-09-21",
-    "owner_set": true,
-    "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 14.14x (2025, US large cohort, n=10), which had re-rated from 8.08x in 2021 as fee-based infrastructure was repriced. The original 9-12x band sat entirely below the market and would have clamped every proposal to it, so it was superseded. The band is the owner's +/-20% outlier guard around the 14.1x baseline: 11.28x-16.92x."
-   },
-   "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 14.14x (2025, US large cohort, n=10), which had re-rated from 8.08x in 2021 as fee-based infrastructure was repriced. The original 9-12x band sat entirely below the market and would have clamped every proposal to it, so it was superseded. The band is the owner's +/-20% outlier guard around the 14.1x baseline: 11.28x-16.92x."
+    "owner_set": true
+   }
   },
   "chemicals": {
-   "multiple": 5.2,
+   "multiple": 6.58,
    "accepted_at": "2026-09-21",
    "reviewer": "owner",
-   "basis": "owner starting point 2026-09-21: the market's through-cycle multiple (5.17x, 2025, large cohort)",
+   "basis": "owner Step B 2026-09-21: the corrected-basis market through-cycle multiple (6.58x, 2025, US large cohort); replaces 5.2x read off the old basis",
+   "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 6.58x (2025, US large cohort), de-rated from 9.31x in 2021 as commodity chemical spreads compressed. An earlier reading of 5.17x on the old basis set a 5.2x starting point that sat below the corrected market; it was replaced. The original 7-9x band was superseded. The band is +/-20% around the 6.58x baseline: 5.26x-7.90x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple.",
    "derivation": {
     "segment_type": "chemicals",
     "mode": "calibrated",
-    "baseline": 5.2,
+    "baseline": 6.58,
     "band": [
-     4.16,
-     6.24
+     5.264,
+     7.896
     ],
+    "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 6.58x (2025, US large cohort), de-rated from 9.31x in 2021 as commodity chemical spreads compressed. An earlier reading of 5.17x on the old basis set a 5.2x starting point that sat below the corrected market; it was replaced. The original 7-9x band was superseded. The band is +/-20% around the 6.58x baseline: 5.26x-7.90x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple.",
     "basket": "Chemicals",
     "basket_is_proxy": false,
-    "market_multiple_now": 5.170582,
+    "market_multiple_now": 6.57935,
     "real_rate": {
      "now": 0.024686363636363638,
      "mean_5y": 0.014485036202735318,
@@ -213,11 +215,11 @@
       "b2": 2.0
      },
      "ols": {
-      "b1": 41.94230408167704,
-      "b2": 19.356891916506985,
-      "a": 2.007100035944201,
+      "b1": 19.638843171505926,
+      "b2": 9.306885409563101,
+      "a": 2.0187681009399654,
       "n": 5,
-      "r2": 0.9950627288177801
+      "r2": 0.803941649999334
      },
      "note": "regressors collinear (corr -0.98): slopes not identified, prior used; prior-dominated: the history is too short to overrule it",
      "cohort": "large",
@@ -236,14 +238,12 @@
     },
     "crack": null,
     "rules": [],
-    "raw": 4.622135907289239,
-    "proposed": 4.6221,
+    "raw": 5.848779667300614,
+    "proposed": 5.8488,
     "flags": [],
     "as_of": "2026-09-21",
-    "owner_set": true,
-    "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 5.17x (2025, US large cohort, n=7), which had de-rated from 10.07x in 2021 as commodity chemical spreads compressed. The original 7-9x band sat entirely above the market and was superseded. The band is +/-20% around the 5.2x baseline: 4.16x-6.24x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple."
-   },
-   "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 5.17x (2025, US large cohort, n=7), which had de-rated from 10.07x in 2021 as commodity chemical spreads compressed. The original 7-9x band sat entirely above the market and was superseded. The band is +/-20% around the 5.2x baseline: 4.16x-6.24x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple."
+    "owner_set": true
+   }
   }
  }
 }

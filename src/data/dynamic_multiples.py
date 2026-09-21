@@ -73,11 +73,11 @@ SEGMENT_BASELINES: dict[str, dict] = {
                         "basket": "Oil & Gas Refining & Marketing", "crack_rule": True,
                         "band_rationale": "Owner's through-cycle EV/EBITDA band for refining: high cyclicality and terminal transition risk keep it the lowest band here. The market validates it -- the large-cohort through-cycle multiple ran 4.25x-5.54x over 2021-2025 and stood at 5.54x in 2025 against the 5.5x baseline. The low end (4.5x) is the trough the crack-spread rule forces when the 3-2-1 crack runs more than 25% above its long-run mean, so a crack spike is never capitalised."},
     # Owner, 2026-09-21: re-based on the market's through-cycle multiple
-    # (14.14x, 2025, large cohort), which had re-rated above the original
-    # 9-12x band. Band = the owner's +/-20% outlier guard around it.
-    "midstream":       {"baseline": 14.1, "band": (11.28, 16.92),
+    # on the CORRECTED basis (12.18x, 2025, large cohort). Band = the owner's
+    # +/-20% outlier guard around it.
+    "midstream":       {"baseline": 12.18, "band": (9.744, 14.616),
                         "basket": "Oil & Gas Midstream",
-                        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 14.14x (2025, US large cohort, n=10), which had re-rated from 8.08x in 2021 as fee-based infrastructure was repriced. The original 9-12x band sat entirely below the market and would have clamped every proposal to it, so it was superseded. The band is the owner's +/-20% outlier guard around the 14.1x baseline: 11.28x-16.92x."},
+                        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 12.18x (2025, US large cohort). An earlier reading of 14.14x on the old mean-EBITDA-level basis set a 14.1x starting point that sat above the corrected market; it was replaced. The original 9-12x band sat wholly below the market's 2024 peak of 14.34x and was superseded before that. The band is the owner's +/-20% outlier guard around the 12.18x baseline: 9.74x-14.62x."},
     "fuel_marketing":  {"baseline": 7.0,  "band": (6.0, 8.0),
                         "basket": "Oil & Gas Refining & Marketing", "proxy": True,
                         "band_rationale": 'Owner band 6-8x: fuel marketing and specialties earn steadier cash flows than refining (volume and margin over a wholesale cost, not the crack spread) but are not fee-based infrastructure, so they sit between the two. No peer basket exists, so the band has no market check; the 2% EBITDA margin is an owner estimate, deliberately thin because most of the revenue is resold fuel.'},
@@ -88,10 +88,10 @@ SEGMENT_BASELINES: dict[str, dict] = {
                         "basket": "Oil & Gas Refining & Marketing", "proxy": True,
                         "band_rationale": "Owner band 4-6x: ethanol is a commodity-spread business (corn against ethanol and co-products) with less scale and pricing power than refining, so its band sits at and below refining's. No peer basket exists, so the band has no market check; the 6% EBITDA margin is an owner estimate."},
     # Owner, 2026-09-21: re-based on the market's through-cycle multiple
-    # (5.17x, 2025, large cohort), which had de-rated below the original 7-9x
-    # band. Band = +/-20% around it.
-    "chemicals":       {"baseline": 5.2,  "band": (4.16, 6.24), "basket": "Chemicals",
-                        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple, 5.17x (2025, US large cohort, n=7), which had de-rated from 10.07x in 2021 as commodity chemical spreads compressed. The original 7-9x band sat entirely above the market and was superseded. The band is +/-20% around the 5.2x baseline: 4.16x-6.24x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple."},
+    # on the CORRECTED basis (6.58x, 2025, large cohort). Band = +/-20%
+    # around it.
+    "chemicals":       {"baseline": 6.58, "band": (5.264, 7.896), "basket": "Chemicals",
+                        "band_rationale": "Re-based by the owner 2026-09-21 on the market's through-cycle multiple on the CORRECTED basis (EV / mean-margin x revenue), 6.58x (2025, US large cohort), de-rated from 9.31x in 2021 as commodity chemical spreads compressed. An earlier reading of 5.17x on the old basis set a 5.2x starting point that sat below the corrected market; it was replaced. The original 7-9x band was superseded. The band is +/-20% around the 6.58x baseline: 5.26x-7.90x. An equity-accounted chemicals JV is held at book value instead and never reaches this multiple."},
     # E&P is valued on the ASC 932 standardized measure as an unblended bear
     # floor (owner spec), not on a dynamic multiple: no baseline here.
 }
