@@ -87,7 +87,15 @@ the band anchoring, the crack rule and the flags.
 
 ## 4. Finish the rollout (in order)
 
-### Step A: rebuild history on the corrected basis
+### Step A: rebuild history on the corrected basis ✅ DONE 2026-09-21
+
+Rebuilt locally (US 6,975 / HKSE 4,510 / SES 415 basket-year medians) and
+promoted with `scripts/promote_corrected_history.py`: 11,900 corrected rows
+copied with replace. The 83 through-cycle rows the corrected rebuild did not
+reproduce (US 54, HKSE 28, SES 1) were relabelled `backfill_superseded`, kept
+for the audit and never read (`19f2b6b`). Verified: 0 old-basis through-cycle
+rows remain readable in production. The notes below are kept for reference.
+
 
 A rebuild into the **local** store was running on the old machine: US done
 (6,975 medians), HK in progress, SG pending. Local sqlite does not travel with
@@ -111,6 +119,19 @@ Check afterwards: `regional_comps_history` should hold about 7,000 US rows,
 about 4,500 HKSE and about 400 SES, all with `source='backfill'`.
 
 ### Step B: re-read the energy starting points on the corrected basis
+
+**Corrected readings (2025, US large cohort, production), for the owner:**
+
+| Segment | Old-basis reading | Corrected reading | Owner-set multiple | Band |
+|---|---|---|---|---|
+| Refining | 5.54x | **6.37x** | 4.50x (crack trough) | 4.5-6.5x |
+| Midstream | 14.14x | **12.18x** | 14.1x | 11.28-16.92x |
+| Chemicals | 5.17x | **6.58x** | 5.2x | 4.16-6.24x (market now ABOVE it) |
+
+Midstream 14.1x now sits above the corrected market and chemicals 5.2x well
+below it, with the market outside the chemicals band. Both starting points
+were read off the old basis. Ask the owner whether to re-anchor.
+
 
 Midstream 14.1x and chemicals 5.2x were read off the **old** basis (§3.1).
 Before populating, run:
