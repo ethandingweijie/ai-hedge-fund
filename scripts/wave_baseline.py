@@ -67,7 +67,11 @@ def baseline_one(ticker: str, end: str, key: str) -> dict:
         "industry_routing": (rt.get("industry_routing") or {}).get("enabled"),
         "profile_fallback_used": dr.get("profile_fallback_used"),
         "anchor_method": dr.get("anchor_method"),
-        "anchor_in_blend": any(e.get("method") == dr.get("anchor_method") for e in ew),
+        # A trailing P/E anchor that the normalisation swap moved to P/E (norm) is
+        # still the anchor, under the name it was priced on.
+        "anchor_in_blend": any(e.get("method") in (dr.get("anchor_method"),
+                                                   d._PE_NORM_SWAP_LEGS.get(dr.get("anchor_method") or ""))
+                               for e in ew),
         "effective_weights": [
             {"method": e.get("method"), "value_key": e.get("value_key"), "weight": e.get("weight")} for e in ew],
         "proxied_weight": round(sum(e.get("weight") or 0 for e in proxied), 4),
