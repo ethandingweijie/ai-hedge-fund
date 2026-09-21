@@ -161,3 +161,103 @@ class TestTheShippedConfig:
 
     def test_the_note_records_why_the_constant_exists(self):
         assert "maintenance capex" in (vc.entry(MID) or {}).get("note", "")
+
+
+# ── Owner plausibility bands on multiple levels ─────────────────────────────
+#
+# A fourth band object in this tree. The property that makes it safe is that it
+# cannot alter a number: `check_multiples` returns records, never values.
+
+class TestMultipleBands:
+    DOC = {"multiple_bands": {"bands": {
+        "US":   {"Widgets": {"pe": [10.0, 20.0], "ev_ebitda": [5.0, 9.0]},
+                 "*":       {"pe": [4.0, 40.0]}},
+        "*":    {"Widgets": {"pb": [0.5, 3.0]},
+                 "*":       {"ev_revenue": [0.3, 15.0]}},
+    }}}
+
+    def test_most_specific_key_wins(self):
+        assert vc.multiple_band("US", "Widgets", "pe", self.DOC) == (10.0, 20.0, "US/Widgets")
+
+    def test_market_wildcard_before_profile_wildcard(self):
+        """A US-wide band beats a cross-market band for the same profile."""
+        assert vc.multiple_band("US", "Other", "pe", self.DOC) == (4.0, 40.0, "US/*")
+
+    def test_profile_band_reaches_across_markets(self):
+        assert vc.multiple_band("HKSE", "Widgets", "pb", self.DOC) == (0.5, 3.0, "*/Widgets")
+
+    def test_full_wildcard_is_the_last_resort(self):
+        assert vc.multiple_band("HKSE", "Other", "ev_revenue", self.DOC) == (0.3, 15.0, "*/*")
+
+    def test_no_band_authored_is_no_opinion_not_a_pass(self):
+        assert vc.multiple_band("US", "Widgets", "fcf_yield", self.DOC) is None
+        assert vc.check_multiples("US", "Widgets", {"fcf_yield": 99.0}, self.DOC) == []
+
+    def test_in_band_reports_nothing(self):
+        assert vc.check_multiples("US", "Widgets", {"pe": 15.0, "ev_ebitda": 7.0}, self.DOC) == []
+
+    def test_edges_are_inclusive(self):
+        assert vc.check_multiples("US", "Widgets", {"pe": 10.0}, self.DOC) == []
+        assert vc.check_multiples("US", "Widgets", {"pe": 20.0}, self.DOC) == []
+
+    def test_a_breach_names_the_side_the_band_and_the_key(self):
+        (rec,) = vc.check_multiples("US", "Widgets", {"pe": 25.0}, self.DOC)
+        assert rec["field"] == "pe" and rec["value"] == 25.0
+        assert rec["band"] == [10.0, 20.0] and rec["source_key"] == "US/Widgets"
+        assert rec["side"] == "above"
+        assert rec["distance_pct"] == pytest.approx(0.25)
+
+    def test_a_low_breach_measures_from_the_floor(self):
+        (rec,) = vc.check_multiples("US", "Widgets", {"pe": 5.0}, self.DOC)
+        assert rec["side"] == "below"
+        assert rec["distance_pct"] == pytest.approx(-0.5)
+
+    def test_the_band_never_alters_a_value(self):
+        """The whole point. No caller can consume a clamped multiple, because
+        check_multiples produces none -- it reports the value it was given."""
+        fields = {"pe": 1e6, "ev_ebitda": -3.0, "ev_revenue": 0.001}
+        before = dict(fields)
+        recs = vc.check_multiples("US", "Widgets", fields, self.DOC)
+        assert fields == before, "check_multiples mutated its input"
+        for r in recs:
+            assert r["value"] == before[r["field"]]
+        # and nothing in a record is a substitute value
+        assert all(set(r) == {"field", "value", "band", "source_key", "side",
+                              "market", "profile", "distance_pct"} for r in recs)
+
+    def test_non_numeric_and_nan_are_skipped_not_flagged(self):
+        assert vc.check_multiples("US", "Widgets",
+                                  {"pe": None, "ev_ebitda": float("nan")}, self.DOC) == []
+
+    def test_a_malformed_band_is_ignored_rather_than_half_applied(self):
+        bad = {"multiple_bands": {"bands": {"US": {"W": {
+            "pe": [20.0, 10.0], "pb": [1.0], "ev_ebitda": ["a", "b"]}}}}}
+        for f in ("pe", "pb", "ev_ebitda"):
+            assert vc.multiple_band("US", "W", f, bad) is None
+
+    def test_the_shipped_table_is_authored_and_reviewed(self):
+        assert vc.bands_reviewed().get("reviewer") == "owner"
+        assert vc.multiple_band("US", "Aerospace & Defense", "pe") == (25.0, 30.0,
+                                                                      "US/Aerospace & Defense")
+
+    def test_early_stage_biotech_carries_no_pe_band(self):
+        """The owner's note: it trades on P/S or rNPV, and HK pre-revenue names
+        are unrated. A P/E band there would flag every healthy reading."""
+        assert vc.multiple_band("US", "Pre-approval Biotech", "pe") is None
+        assert vc.multiple_band("HKSE", "Pre-approval Biotech", "pe") is None
+
+    def test_every_shipped_band_field_is_a_real_comps_field(self):
+        """A band keyed on a field name the peer dict never uses can never fire."""
+        from src.data.regional_comps import FIELDS
+        for market, profiles in vc._bands_doc().items():
+            for profile, fields in profiles.items():
+                for field in fields:
+                    assert field in FIELDS, f"{market}/{profile}: unknown field {field!r}"
+
+    def test_every_shipped_band_profile_is_a_real_profile(self):
+        """Except the wildcard. A band on a misspelled profile is inert."""
+        from src.data.sector_profiles import INDUSTRY_VALUATION_PROFILES as P
+        known = {p for profs in P.values() for p in profs} | {"*"}
+        for market, profiles in vc._bands_doc().items():
+            for profile in profiles:
+                assert profile in known, f"{market}: unknown profile {profile!r}"

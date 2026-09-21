@@ -353,8 +353,8 @@ _PB_ROE_MIN_PB: float = 0.20
 _PEAK_MIN_OBSERVATIONS_FOR_SIGMA: int = 4
 
 #: The trailing legs a cyclical profile should be carrying mid-cycle rather than
-#: at whatever point in the cycle the last filing happened to land. Three of the
-#: eight _CYCLICAL_PROFILES already use the normalised spelling — Mining (Major)
+#: at whatever point in the cycle the last filing happened to land. Three of
+#: the _CYCLICAL_PROFILES already use the normalised spelling — Mining (Major)
 #: and Digital Asset Mining on EV/EBITDA, Memory / DRAM-NAND on P/E — which is
 #: the evidence that the table's intent is normalisation and the plain legs are
 #: oversights rather than a deliberate choice. Keys are matched exactly, so

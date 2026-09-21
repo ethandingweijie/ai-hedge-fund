@@ -277,3 +277,81 @@ def env_override(profile: str) -> Optional[float]:
     except ValueError:
         return None
     return v if v > 0 else None
+
+
+# ── Owner plausibility bands on multiple LEVELS ──────────────────────────────
+#
+# A fourth kind of band, and the three it must not be confused with:
+#
+#   regional_comps._BANDS        drops one peer's reading before the median;
+#   dynamic_multiples.MAX_DEVIATION  caps how far the quarterly engine may move
+#                                a basket's multiple from its own baseline --
+#                                it CLAMPS, by the owner's choice;
+#   SEGMENT_BASELINES[..]["band"]  accept_value refuses a segment multiple
+#                                outside it.
+#
+# This one is a sanity range on the RESULTING LEVEL, per (market, profile,
+# field). It only ever reports. `check_multiples` has no return path that
+# carries a value, so a caller cannot consume a clamped number: there is none
+# to consume. A multiple outside its band is telling you the band or the cohort
+# needs a decision -- the same argument `calibrate` makes about tolerance_band,
+# minus the clamp that argument then contradicts.
+#
+# Resolution is most-specific-first: (market, profile), (market, "*"),
+# ("*", profile), ("*", "*"). No match is no opinion, not a pass.
+
+_BAND_WILDCARD = "*"
+
+
+def _bands_doc(doc: Optional[dict] = None) -> dict:
+    return ((doc or load()).get("multiple_bands") or {}).get("bands") or {}
+
+
+def multiple_band(market: Optional[str], profile: Optional[str], field: str,
+                  doc: Optional[dict] = None) -> Optional[tuple[float, float, str]]:
+    """(lo, hi, the key that supplied it), or None when no band is authored."""
+    bands = _bands_doc(doc)
+    mk, pf = (market or _BAND_WILDCARD), (profile or _BAND_WILDCARD)
+    for m, p in ((mk, pf), (mk, _BAND_WILDCARD), (_BAND_WILDCARD, pf),
+                 (_BAND_WILDCARD, _BAND_WILDCARD)):
+        pair = ((bands.get(m) or {}).get(p) or {}).get(field)
+        if (isinstance(pair, (list, tuple)) and len(pair) == 2
+                and all(isinstance(v, (int, float)) for v in pair)):
+            lo, hi = float(pair[0]), float(pair[1])
+            if lo < hi:
+                return lo, hi, f"{m}/{p}"
+    return None
+
+
+def check_multiples(market: Optional[str], profile: Optional[str],
+                    fields: dict, doc: Optional[dict] = None) -> list[dict]:
+    """One record per field whose value sits outside its authored band.
+
+    Returns records only. Nothing here rounds, clips or substitutes a multiple:
+    the caller keeps the value it had and says so.
+    """
+    out: list[dict] = []
+    for field, value in sorted((fields or {}).items()):
+        if not isinstance(value, (int, float)) or value != value:
+            continue
+        band = multiple_band(market, profile, field, doc)
+        if band is None:
+            continue
+        lo, hi, source_key = band
+        if lo <= value <= hi:
+            continue
+        side = "below" if value < lo else "above"
+        edge = lo if value < lo else hi
+        out.append({
+            "field": field, "value": float(value), "band": [lo, hi],
+            "source_key": source_key, "side": side,
+            "market": market or _BAND_WILDCARD,
+            "profile": profile or _BAND_WILDCARD,
+            "distance_pct": (float(value) / edge - 1.0) if edge else None,
+        })
+    return out
+
+
+def bands_reviewed(doc: Optional[dict] = None) -> dict:
+    """Who last reviewed the band table, and when."""
+    return ((doc or load()).get("multiple_bands") or {}).get("reviewed") or {}

@@ -2,7 +2,7 @@
   "_doc": [
     "FMP industry -> (sector, valuation profile).",
     "",
-    "The routing unit is the INDUSTRY, not the ticker. 72 rows cover 100/100 of",
+    "The routing unit is the INDUSTRY, not the ticker. The rows cover 100/100 of",
     "the HK large-cap universe and generalise to any future listing in the same",
     "industry, where a per-ticker table would need a new row for every name.",
     "",
