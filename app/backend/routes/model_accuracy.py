@@ -10,6 +10,7 @@ import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from app.backend.routes.deps import require_model_accuracy_owner
 
@@ -97,6 +98,52 @@ async def accept_industry_input(ticker: str, kind: str, overlay: bool = False,
 async def revoke_industry_input(ticker: str, kind: str, overlay: bool = False,
                                 admin=Depends(require_model_accuracy_owner)):
     return await _review_input(ticker, kind, "revoked", admin, overlay)
+
+
+# ── Dynamic multiples: the quarterly update log (owner, 2026-09-21) ─────────
+
+@router.get("/dynamic-multiples")
+async def dynamic_multiples(admin=Depends(require_model_accuracy_owner)):
+    """The quarterly multiple update's log. Answers three questions: did the
+    update RUN (each run and what it did), did it reach the engine for EVERY
+    industry (baskets with history vs baskets with a live multiple, per market),
+    and did the multiples REACH VALUATIONS (recorded by the valuations
+    themselves when a normalised leg priced on one)."""
+    from src.data import dynamic_multiples as dm
+    return await asyncio.to_thread(dm.log_report)
+
+
+class _PinBody(BaseModel):
+    exchange: str
+    level: str
+    key: str
+    field: str
+    value: float
+
+
+class _BasketBody(BaseModel):
+    exchange: str
+    level: str
+    key: str
+    field: str
+
+
+@router.post("/dynamic-multiples/pin")
+async def pin_dynamic_multiple(body: _PinBody, admin=Depends(require_model_accuracy_owner)):
+    """Owner override: set this basket's multiple and exempt it from the
+    quarterly automation until unpinned."""
+    from src.data import dynamic_multiples as dm
+    if body.value <= 0:
+        raise HTTPException(status_code=422, detail="a multiple must be positive")
+    return await asyncio.to_thread(dm.pin, body.exchange, body.level, body.key, body.field,
+                                   body.value, _actor(admin))
+
+
+@router.post("/dynamic-multiples/unpin")
+async def unpin_dynamic_multiple(body: _BasketBody, admin=Depends(require_model_accuracy_owner)):
+    """Hand the basket back to the automation; it re-proposes next quarter."""
+    from src.data import dynamic_multiples as dm
+    return await asyncio.to_thread(dm.unpin, body.exchange, body.level, body.key, body.field)
 
 
 @router.get("/calibration/{version_id}")

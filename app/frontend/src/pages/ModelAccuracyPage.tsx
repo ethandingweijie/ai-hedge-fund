@@ -25,6 +25,8 @@ import { useAuth } from '@/contexts/auth-context';
 import {
   getModelAccuracyOverview, getCalibrationDetail, getSegmentMemory, reviewSegmentMemory,
   getIndustryInputs, reviewIndustryInput, type IndustryInputRow,
+  getDynamicMultiples, pinDynamicMultiple, unpinDynamicMultiple,
+  type DynamicMultiplesLog, type DynamicMultipleRow,
   promoteCalibration, rollbackCalibration, dismissCalibration,
   type CalibrationCard, type CalibrationDetail, type DiagnosticCard, type ModelAccuracyOverview,
   type SegmentMemory, type SegmentMemoryTicker,
@@ -445,6 +447,141 @@ function IndustryInputReview({ row, onChanged, overlay = false }:
   );
 }
 
+const FIELD_LABEL: Record<string, string> = {
+  ev_ebitda_norm: 'EV/EBITDA (through-cycle)',
+  pe_norm: 'P/E (through-cycle)',
+};
+
+/** The quarterly multiple update, confirmed three ways (owner 2026-09-21):
+ *  it RAN, it reached the engine for EVERY industry, and the multiples
+ *  REACHED VALUATIONS -- the last one recorded by the valuations themselves. */
+function DynamicMultiplesSection({ allowed }: { allowed: boolean }) {
+  const [log, setLog] = useState<DynamicMultiplesLog | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const reload = useCallback(() => {
+    getDynamicMultiples().then(setLog).catch((e: Error) => setError(e.message));
+  }, []);
+  useEffect(() => { if (allowed) reload(); }, [allowed, reload]);
+
+  const rowKey = (r: DynamicMultipleRow) => `${r.exchange}|${r.level}|${r.key}|${r.field}`;
+  const onPin = async (r: DynamicMultipleRow) => {
+    const input = window.prompt(`Pin ${r.key} (${r.exchange}, ${FIELD_LABEL[r.field] ?? r.field}) at what multiple?`,
+      r.multiple.toFixed(2));
+    const v = input ? parseFloat(input) : NaN;
+    if (!isFinite(v) || v <= 0) return;
+    setBusy(rowKey(r));
+    try { await pinDynamicMultiple(r, v); reload(); } finally { setBusy(null); }
+  };
+  const onUnpin = async (r: DynamicMultipleRow) => {
+    setBusy(rowKey(r));
+    try { await unpinDynamicMultiple(r); reload(); } finally { setBusy(null); }
+  };
+
+  const last = log?.runs?.[0];
+  const totals = last?.summary?.totals ?? {};
+  const rows = (log?.multiples ?? []).filter((r) =>
+    !filter || r.key.toLowerCase().includes(filter.toLowerCase()) || r.exchange.toLowerCase() === filter.toLowerCase());
+
+  return (
+    <section>
+      <SectionTitle hint="Every industry's through-cycle multiple, updated automatically each quarter after the comps history backfill (the 2nd of Jan/Apr/Jul/Oct). Bounded to ±20% of the industry's own through-cycle average; moves under 5% are held as noise; a pinned industry is left alone. Valuations use it in the normalised legs, EV/EBITDA (norm) and P/E (norm).">
+        Dynamic multiples {log && (
+          <Chip strong>{log.multiples.length} live</Chip>
+        )}
+      </SectionTitle>
+      {error && <Card className="p-4 text-sm text-foreground">Could not load the multiples log: {error}</Card>}
+      {log && (
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Card className="p-4">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">1 · Update ran</div>
+              {last ? (
+                <>
+                  <div className="text-sm font-medium mt-1">{last.run_at.replace('T', ' ').slice(0, 16)} UTC</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {totals.initial ?? 0} new · {totals.updated ?? 0} updated · {totals.held_inertia ?? 0} held
+                    · {totals.pinned ?? 0} pinned · {totals.insufficient_history ?? 0} too little history
+                  </div>
+                  <div className="text-xs text-muted-foreground">trigger: {last.trigger}</div>
+                </>
+              ) : <div className="text-sm mt-1">No update has run yet.</div>}
+            </Card>
+            <Card className="p-4">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">2 · In the engine, every industry</div>
+              {Object.entries(log.coverage).map(([ex, c]) => (
+                <div key={ex} className="text-xs mt-1 tabular-nums">
+                  <span className="font-medium">{ex}</span>: {c.multiples_live} of {c.multiple_slots} multiples live
+                  <span className="text-muted-foreground"> ({c.baskets_with_history} baskets)</span>
+                </div>
+              ))}
+            </Card>
+            <Card className="p-4">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">3 · Reached valuations</div>
+              <div className="text-sm font-medium mt-1 tabular-nums">{log.reached_valuations.tickers} valuations</div>
+              <div className="text-xs text-muted-foreground mt-1 tabular-nums">
+                across {log.reached_valuations.baskets_used} industries;
+                {' '}{log.reached_valuations.baskets_used_since_last_update} since the last update
+              </div>
+              <div className="text-xs text-muted-foreground">
+                auto-update {log.switches.auto_update_enabled ? 'on' : 'OFF'} · valuations read it
+                {' '}{log.switches.valuations_read_enabled ? 'on' : 'OFF'}
+              </div>
+            </Card>
+          </div>
+          <Card className="p-0 overflow-x-auto">
+            <div className="p-3 border-b border-border">
+              <input className="w-full sm:w-72 bg-transparent border border-border rounded px-2 py-1 text-xs"
+                     placeholder="Filter by industry or market (US, HKSE, SES)"
+                     value={filter} onChange={(e) => setFilter(e.target.value)} />
+            </div>
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-muted-foreground border-b border-border">
+                  <th className="text-left p-2">Market</th>
+                  <th className="text-left p-2">Industry</th>
+                  <th className="text-left p-2">Multiple</th>
+                  <th className="text-right p-2">Live</th>
+                  <th className="text-right p-2">Baseline</th>
+                  <th className="text-right p-2">Band</th>
+                  <th className="text-right p-2">Market now</th>
+                  <th className="text-left p-2">Source</th>
+                  <th className="p-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.slice(0, 300).map((r) => (
+                  <tr key={rowKey(r)} className="border-b border-border/40">
+                    <td className="p-2">{r.exchange}</td>
+                    <td className="p-2">{r.key}<span className="text-muted-foreground"> · {r.level}</span></td>
+                    <td className="p-2">{FIELD_LABEL[r.field] ?? r.field}</td>
+                    <td className="p-2 text-right tabular-nums font-medium">{r.multiple.toFixed(2)}x</td>
+                    <td className="p-2 text-right tabular-nums">{r.baseline != null ? `${r.baseline.toFixed(2)}x` : '—'}</td>
+                    <td className="p-2 text-right tabular-nums">
+                      {r.band_lo != null && r.band_hi != null ? `${r.band_lo.toFixed(1)}–${r.band_hi.toFixed(1)}x` : '—'}
+                    </td>
+                    <td className="p-2 text-right tabular-nums">{r.market_now != null ? `${r.market_now.toFixed(2)}x` : '—'}</td>
+                    <td className="p-2">{r.pinned ? `pinned (${r.source})` : r.source}</td>
+                    <td className="p-2 text-right">
+                      {r.pinned
+                        ? <Button size="sm" variant="outline" disabled={busy === rowKey(r)} onClick={() => onUnpin(r)}>Unpin</Button>
+                        : <Button size="sm" variant="outline" disabled={busy === rowKey(r)} onClick={() => onPin(r)}>Pin</Button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {rows.length > 300 && (
+              <div className="p-2 text-xs text-muted-foreground">Showing 300 of {rows.length}; filter to narrow.</div>
+            )}
+          </Card>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /** Inputs FMP does not carry, cited as filed and checked against FMP. Nothing
  *  reaches a valuation until accepted here (owner decision 2026-09-20). */
 function IndustryInputsSection({ allowed }: { allowed: boolean }) {
@@ -751,6 +888,8 @@ export function ModelAccuracyPage() {
             <SegmentMemorySection allowed={allowed} />
 
             <IndustryInputsSection allowed={allowed} />
+
+            <DynamicMultiplesSection allowed={allowed} />
 
             {data.history.length > 0 && (
               <section>

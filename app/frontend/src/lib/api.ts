@@ -400,6 +400,67 @@ export function reviewIndustryInput(ticker: string, kind: string, action: 'accep
     { method: 'POST', headers: { ..._authHeaders() } });
 }
 
+// ── Dynamic multiples: the quarterly update log (owner, 2026-09-21) ────────
+export interface DynamicMultipleRun {
+  run_id: string;
+  run_at: string;
+  trigger: string;
+  summary: {
+    totals?: Record<string, number>;
+    markets?: Record<string, Record<string, number>>;
+  };
+}
+
+export interface DynamicMultipleRow {
+  exchange: string;
+  level: string;
+  key: string;
+  field: string;
+  multiple: number;
+  baseline?: number | null;
+  band_lo?: number | null;
+  band_hi?: number | null;
+  market_now?: number | null;
+  source: string;
+  pinned: number | boolean;
+  effective_at: string;
+}
+
+export interface DynamicMultiplesLog {
+  runs: DynamicMultipleRun[];
+  coverage: Record<string, { baskets_with_history: number; multiple_slots: number; multiples_live: number }>;
+  reached_valuations: {
+    baskets_used: number;
+    baskets_used_since_last_update: number;
+    tickers: number;
+    by_basket: { exchange: string; level: string; key: string; field: string; tickers: number; last_used: string }[];
+  };
+  multiples: DynamicMultipleRow[];
+  switches: { auto_update_enabled: boolean; valuations_read_enabled: boolean };
+}
+
+export function getDynamicMultiples(): Promise<DynamicMultiplesLog> {
+  return fetchJson(`${BASE}/model-accuracy/dynamic-multiples`, { headers: { ..._authHeaders() } });
+}
+
+export function pinDynamicMultiple(row: { exchange: string; level: string; key: string; field: string },
+                                   value: number): Promise<DynamicMultipleRow> {
+  return fetchJson(`${BASE}/model-accuracy/dynamic-multiples/pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify({ ...row, value }),
+  });
+}
+
+export function unpinDynamicMultiple(row: { exchange: string; level: string; key: string; field: string },
+): Promise<DynamicMultipleRow> {
+  return fetchJson(`${BASE}/model-accuracy/dynamic-multiples/unpin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+    body: JSON.stringify(row),
+  });
+}
+
 export function getSegmentMemory(): Promise<SegmentMemory> {
   return fetchJson(`${BASE}/model-accuracy/segment-memory`, { headers: { ..._authHeaders() } });
 }

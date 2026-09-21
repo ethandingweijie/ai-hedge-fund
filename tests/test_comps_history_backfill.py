@@ -14,6 +14,15 @@ from src.data import comps_history_backfill as bf
 from src.data import regional_comps as rc
 
 
+@pytest.fixture(autouse=True)
+def _no_live_multiples_update(monkeypatch):
+    """run_quarterly_backfill now chains the dynamic multiples update. A test
+    that exercises the backfill without an isolated store must not let that
+    update run for real: one did, and wrote 172 Hong Kong rows into the local
+    development database. Off by default here; tests that want it opt in."""
+    monkeypatch.setenv("DYNAMIC_MULTIPLES_AUTO_DISABLED", "true")
+
+
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -145,3 +154,57 @@ class TestTheEngineIgnoresTheIncompleteYear:
         b = dm.fit_betas("Oil & Gas Midstream")
         assert str(this) not in b["years"]
         assert str(this) not in b["series"]
+
+
+class TestTheThroughCycleBasis:
+    """The through-cycle multiple is built on the normalised leg's own basis:
+    EV / (mean margin x that year's revenue). The first version divided by the
+    mean EBITDA LEVEL, which inflated every grower's multiple (Visa P/E (norm)
+    15.7x -> 20.5x on the artefact alone)."""
+
+    def _stub(self, monkeypatch, revenue, ebitda, ev, ni=None, mc=None):
+        years = [str(2021 + i) for i in range(len(revenue))]
+        km = [{"date": f"{y}-12-31", "reportedCurrency": "USD", "enterpriseValue": e,
+               "marketCap": (mc or ev)[i], "evToEBITDA": e / eb}
+              for i, (y, e, eb) in enumerate(zip(years, ev, ebitda))]
+        inc = [{"date": f"{y}-12-31", "reportedCurrency": "USD", "revenue": r, "ebitda": eb,
+                "netIncome": (ni or ebitda)[i]}
+               for i, (y, r, eb) in enumerate(zip(years, revenue, ebitda))]
+
+        def fmp_get(url, params, api_key=None):
+            return km if "key-metrics" in url else inc
+
+        monkeypatch.setattr(rc, "_fmp_get", fmp_get)
+        return years
+
+    def test_growth_does_not_inflate_the_multiple(self, monkeypatch):
+        """Constant 20% margin, revenue doubling, EV at a constant 10x
+        EBITDA: the through-cycle multiple is 10x every year. The old
+        mean-level basis read the last year at 10 x 160 / 100 = 16x."""
+        rev = [100.0, 130.0, 160.0, 200.0]
+        eb = [r * 0.20 for r in rev]
+        ev = [e * 10.0 for e in eb]
+        years = self._stub(monkeypatch, rev, eb, ev)
+        h = bf.member_history("X")
+        for y in years:
+            assert h[y]["ev_ebitda_norm"] == pytest.approx(10.0), y
+
+    def test_a_margin_peak_is_normalised_away(self, monkeypatch):
+        """Flat revenue, margin spikes in one year while EV holds: the
+        through-cycle multiple stays level where the TTM one collapses."""
+        rev = [100.0, 100.0, 100.0, 100.0]
+        eb = [10.0, 10.0, 30.0, 10.0]         # a peak year
+        ev = [150.0, 150.0, 150.0, 150.0]
+        years = self._stub(monkeypatch, rev, eb, ev)
+        h = bf.member_history("X")
+        ttm = [h[y]["ev_ebitda"] for y in years]
+        norm = [h[y]["ev_ebitda_norm"] for y in years]
+        assert max(ttm) / min(ttm) == pytest.approx(3.0)
+        assert max(norm) == pytest.approx(min(norm))
+
+    def test_a_loss_making_average_has_no_multiple(self, monkeypatch):
+        rev = [100.0, 100.0, 100.0]
+        eb = [-5.0, -5.0, -5.0]
+        self._stub(monkeypatch, rev, eb, [100.0, 100.0, 100.0])
+        h = bf.member_history("X")
+        assert all("ev_ebitda_norm" not in v for v in h.values())

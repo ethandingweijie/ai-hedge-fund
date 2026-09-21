@@ -269,7 +269,7 @@ def _ols2(y: list[float], x1: list[float], x2: list[float]) -> Optional[dict]:
 
 
 def fit_betas(basket: str, exchange: str = "US", prior_key: str = "default",
-              field: str = "ev_ebitda_norm") -> dict:
+              field: str = "ev_ebitda_norm", level: Optional[str] = None) -> dict:
     """Fit the two slopes on a basket's history and shrink them to the prior."""
     from src.data import regional_comps as rc
     prior = PRIORS.get(prior_key) or PRIORS["default"]
@@ -282,12 +282,12 @@ def fit_betas(basket: str, exchange: str = "US", prior_key: str = "default",
     # that must not be fitted on or quoted as "the market now".
     this_year = date.today().year
     for c in ("large", "all"):
-        hm = {r["as_of"][:4]: r["value"] for r in rc.load_history(exchange, basket, field, c)
+        hm = {r["as_of"][:4]: r["value"] for r in rc.load_history(exchange, basket, field, c, level)
               if int(r["as_of"][:4]) < this_year}
         if len(hm) >= 3:
             hist_m, cohort = hm, c
             hist_r = {r["as_of"][:4]: r["value"]
-                      for r in rc.load_history(exchange, basket, "roic", c)
+                      for r in rc.load_history(exchange, basket, "roic", c, level)
                       if int(r["as_of"][:4]) < this_year}
             break
     rr = annual_mean(real_rate_series()["series"])
@@ -517,3 +517,393 @@ def accept(proposal: dict, reviewer: str) -> dict:
     doc.setdefault("segment_multiples", {})[proposal["segment_type"]] = entry
     vc.save(doc)
     return entry
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ALL INDUSTRIES (owner, 2026-09-21)
+#
+# Every comps basket with through-cycle history -- US, HKSE, SES, industry and
+# sector level -- gets a dynamic multiple, updated automatically each quarter
+# after the backfill. The owner chose AUTO-APPLY WITHIN GUARDRAILS:
+#
+#   * baseline = the basket's own multi-year through-cycle average;
+#   * the same rate / ROIC adjustment as the energy segments, bounded to
+#     +/-20% of baseline, every clamp flagged;
+#   * a move under 5% of the current multiple is held as noise;
+#   * a basket the owner PINS is never touched by the automation;
+#   * DYNAMIC_MULTIPLES_AUTO_DISABLED=true stops the quarterly update and
+#     DYNAMIC_MULTIPLES_ENABLED=false stops valuations reading the table.
+#
+# It reaches a valuation only through the NORMALISED legs, EV/EBITDA (norm) and
+# P/E (norm) (owner choice): those legs multiply through-cycle earnings, and the
+# trailing peer median they used is the wrong basis for that -- the mismatch
+# the refining audit found. Forward legs keep the live peer multiple, which is
+# the right partner for next year's earnings. The bank P/E (norm) leg uses an
+# owner-calibrated P/E rather than a peer multiple and is left as it is.
+#
+# Everything is logged so the owner can confirm, each quarter, that the update
+# RAN, that it reached the engine for EVERY industry, and that the multiples
+# REACHED VALUATIONS (dynamic_multiples_usage, written by the valuation itself).
+# ═══════════════════════════════════════════════════════════════════════════
+
+#: A quarterly move smaller than this is noise and the current multiple holds.
+INERTIA = 0.05
+
+_DM_DDL = """
+CREATE TABLE IF NOT EXISTS dynamic_multiples (
+    exchange        TEXT NOT NULL,
+    level           TEXT NOT NULL,
+    key             TEXT NOT NULL,
+    field           TEXT NOT NULL,
+    multiple        REAL NOT NULL,
+    baseline        REAL,
+    band_lo         REAL,
+    band_hi         REAL,
+    market_now      REAL,
+    source          TEXT NOT NULL,
+    pinned          INTEGER NOT NULL DEFAULT 0,
+    effective_at    TEXT NOT NULL,
+    derivation_json TEXT,
+    PRIMARY KEY (exchange, level, key, field)
+)
+"""
+_DM_AUDIT_DDL = """
+CREATE TABLE IF NOT EXISTS dynamic_multiples_audit (
+    run_id          TEXT NOT NULL,
+    exchange        TEXT NOT NULL,
+    level           TEXT NOT NULL,
+    key             TEXT NOT NULL,
+    field           TEXT NOT NULL,
+    previous        REAL,
+    proposed        REAL,
+    applied         REAL,
+    action          TEXT NOT NULL,
+    reason          TEXT,
+    run_at          TEXT NOT NULL,
+    PRIMARY KEY (run_id, exchange, level, key, field)
+)
+"""
+_DM_RUNS_DDL = """
+CREATE TABLE IF NOT EXISTS dynamic_multiples_runs (
+    run_id          TEXT PRIMARY KEY,
+    run_at          TEXT NOT NULL,
+    trigger         TEXT NOT NULL,
+    summary_json    TEXT NOT NULL
+)
+"""
+_DM_USAGE_DDL = """
+CREATE TABLE IF NOT EXISTS dynamic_multiples_usage (
+    ticker          TEXT NOT NULL,
+    leg             TEXT NOT NULL,
+    exchange        TEXT NOT NULL,
+    level           TEXT NOT NULL,
+    key             TEXT NOT NULL,
+    field           TEXT NOT NULL,
+    multiple        REAL NOT NULL,
+    effective_at    TEXT,
+    used_at         TEXT NOT NULL,
+    PRIMARY KEY (ticker, leg)
+)
+"""
+
+_dm_ready: Optional[tuple] = None
+
+
+def _dm_db():
+    from src.data import db as _db
+    return _db
+
+
+def _ensure_dm_tables() -> None:
+    global _dm_ready
+    _db = _dm_db()
+    key = ("pg",) if _db.is_postgres() else ("sqlite", _db.get_db_path())
+    if key == _dm_ready:
+        return
+    _db.execute_script(";".join([_DM_DDL, _DM_AUDIT_DDL, _DM_RUNS_DDL, _DM_USAGE_DDL]))
+    _dm_ready = key
+
+
+_FINANCIAL_KEYS = ("bank", "insurance", "asset management", "capital markets",
+                   "credit services", "financial", "mortgage", "shell companies")
+_SKIP_KEYS = ("reit",)
+
+
+def industry_fields(key: str) -> list[str]:
+    """Every through-cycle multiple a basket carries: both normalised legs
+    read one, so both are kept -- except that a financial has no meaningful
+    EBITDA, and a REIT is valued on its own path."""
+    k = (key or "").lower()
+    if any(x in k for x in _SKIP_KEYS):
+        return []
+    if any(x in k for x in _FINANCIAL_KEYS):
+        return ["pe_norm"]
+    return ["ev_ebitda_norm", "pe_norm"]
+
+
+def industry_anchor_field(key: str) -> Optional[str]:
+    """Which through-cycle multiple a basket is valued on.
+
+    Balance-sheet financials anchor on earnings, not EBITDA (a bank's EBITDA is
+    not a meaningful figure), so they take the through-cycle P/E. REITs are
+    valued on their own P/FFO path and get no dynamic multiple here.
+    """
+    k = (key or "").lower()
+    if any(x in k for x in _SKIP_KEYS):
+        return None
+    if any(x in k for x in _FINANCIAL_KEYS):
+        return "pe_norm"
+    return "ev_ebitda_norm"
+
+
+#: live comps field -> the through-cycle field that replaces it in a normalised leg
+LIVE_TO_NORM = {"ev_ebitda": "ev_ebitda_norm", "pe": "pe_norm"}
+
+
+def propose_industry(exchange: str, level: str, key: str,
+                     field: Optional[str] = None) -> Optional[dict]:
+    """The proposed through-cycle multiple for one basket, with its working.
+
+    None when the basket has too little complete-year history to say anything.
+    """
+    field = field or industry_anchor_field(key)
+    if not field:
+        return None
+    b = fit_betas(key, exchange, "default", field, level=level)
+    series = b["series"]
+    if len(series) < 3:
+        return None
+    baseline = statistics.fmean(series.values())
+    market_now = series[max(series)]
+    rr = real_rate_series()
+    r_now, r_mean = latest(rr["series"]), trailing_mean(rr["series"], 5)
+    d_rate = (r_now - r_mean) if (r_now is not None and r_mean is not None) else 0.0
+    from src.data import regional_comps as rc
+    roic_rows = [r for r in rc.load_history(exchange, key, "roic", b["cohort"], level)
+                 if int(r["as_of"][:4]) < date.today().year]
+    roic_now = roic_rows[-1]["value"] if roic_rows else None
+    d_roic = ((roic_now - b["roic_mean"])
+              if (roic_now is not None and b.get("roic_mean") is not None) else 0.0)
+    t1, t2 = b["b1"] * d_rate, b["b2"] * d_roic
+    raw = baseline * math.exp(t1 + t2)
+    lo, hi = baseline * (1 - MAX_DEVIATION), baseline * (1 + MAX_DEVIATION)
+    proposed = min(max(raw, lo), hi)
+    flags = []
+    if proposed != raw:
+        flags.append(f"clamped from {raw:.2f}x to {proposed:.2f}x (+/-20% of baseline)")
+    if not (lo <= market_now <= hi):
+        flags.append(f"market through-cycle multiple {market_now:.2f}x is "
+                     f"{'above' if market_now > hi else 'below'} the band "
+                     f"{lo:.2f}-{hi:.2f}x")
+    if exchange != "US":
+        flags.append("real-rate factor uses the US 10y real yield as the proxy")
+    return {
+        "exchange": exchange, "level": level, "key": key, "field": field,
+        "baseline": baseline, "band": [lo, hi], "market_now": market_now,
+        "years": sorted(series), "series": series,
+        "betas": {k: b[k] for k in ("b1", "b2", "n", "shrink_weight", "note",
+                                    "cohort", "regressor_corr")},
+        "terms": {"rate": t1, "roic": t2}, "raw": raw,
+        "proposed": round(proposed, 4), "flags": flags,
+        "band_rationale": (f"Baseline is this basket's own through-cycle average "
+                           f"({baseline:.2f}x over {min(series)}-{max(series)}, "
+                           f"{b['cohort']} cohort); the band is the owner's +/-20% "
+                           f"outlier guard around it. Auto-applied quarterly."),
+        "as_of": date.today().isoformat(),
+    }
+
+
+def current_multiple(exchange: str, level: str, key: str, field: str) -> Optional[dict]:
+    """The multiple valuations read for this basket, or None."""
+    try:
+        _ensure_dm_tables()
+        row = _dm_db().query_one(
+            "SELECT multiple, effective_at, source, pinned, baseline, band_lo, band_hi "
+            "FROM dynamic_multiples WHERE exchange = ? AND level = ? AND key = ? AND field = ?",
+            [exchange, level, key, field])
+        return dict(row) if row else None
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
+def _baskets_with_history(exchange: str) -> list[tuple[str, str]]:
+    _db = _dm_db()
+    from src.data import regional_comps as rc
+    rc._ensure_table()
+    rows = _db.query("SELECT DISTINCT level, key FROM regional_comps_history "
+                     "WHERE exchange = ? AND field IN (?, ?)",
+                     [exchange, "ev_ebitda_norm", "pe_norm"]) or []
+    return sorted((dict(r)["level"], dict(r)["key"]) for r in rows)
+
+
+def _basket_fields(exchange: str) -> list[tuple[str, str, Optional[str]]]:
+    """(level, key, field) for every basket; field None marks a skipped REIT."""
+    out: list[tuple[str, str, Optional[str]]] = []
+    for level, key in _baskets_with_history(exchange):
+        fields = industry_fields(key)
+        if not fields:
+            out.append((level, key, None))
+        out.extend((level, key, f) for f in fields)
+    return out
+
+
+def update_all(markets: tuple[str, ...], trigger: str = "quarterly") -> dict:
+    """Apply the quarterly update to every basket. Returns the run summary.
+
+    Owner decision: auto-apply within guardrails. Pinned baskets are skipped,
+    moves under INERTIA are held, everything is written to the audit.
+    """
+    import json as _json
+    import uuid
+    _ensure_dm_tables()
+    _db = _dm_db()
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    run_id = f"{now[:10]}-{uuid.uuid4().hex[:8]}"
+    counts = {"evaluated": 0, "updated": 0, "initial": 0, "held_inertia": 0,
+              "pinned": 0, "insufficient_history": 0, "skipped_reit": 0}
+    per_market: dict[str, dict] = {}
+    for ex in markets:
+        mc = {k: 0 for k in counts}
+        for level, key, field in _basket_fields(ex):
+            if field is None:
+                mc["skipped_reit"] += 1
+                continue
+            mc["evaluated"] += 1
+            cur = current_multiple(ex, level, key, field)
+            if cur and cur.get("pinned"):
+                mc["pinned"] += 1
+                _audit(run_id, ex, level, key, field, cur["multiple"], None, cur["multiple"],
+                       "pinned", "owner-pinned: the automation leaves it alone", now)
+                continue
+            p = propose_industry(ex, level, key, field)
+            if not p:
+                mc["insufficient_history"] += 1
+                continue
+            prev = cur["multiple"] if cur else None
+            if prev and abs(p["proposed"] / prev - 1.0) < INERTIA:
+                mc["held_inertia"] += 1
+                _audit(run_id, ex, level, key, field, prev, p["proposed"], prev, "held",
+                       f"move {p['proposed'] / prev - 1.0:+.1%} under the {INERTIA:.0%} inertia", now)
+                continue
+            _db.execute(
+                "INSERT INTO dynamic_multiples (exchange, level, key, field, multiple, baseline, "
+                "band_lo, band_hi, market_now, source, pinned, effective_at, derivation_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?) "
+                "ON CONFLICT (exchange, level, key, field) DO UPDATE SET "
+                "multiple = excluded.multiple, baseline = excluded.baseline, "
+                "band_lo = excluded.band_lo, band_hi = excluded.band_hi, "
+                "market_now = excluded.market_now, source = excluded.source, "
+                "effective_at = excluded.effective_at, derivation_json = excluded.derivation_json",
+                [ex, level, key, field, p["proposed"], p["baseline"], p["band"][0], p["band"][1],
+                 p["market_now"], "auto", now, _json.dumps(p, default=str)])
+            action = "updated" if prev else "initial"
+            mc[action] += 1
+            _audit(run_id, ex, level, key, field, prev, p["proposed"], p["proposed"], action,
+                   "; ".join(p["flags"]) or None, now)
+        per_market[ex] = mc
+        for k in counts:
+            counts[k] += mc[k]
+    summary = {"run_id": run_id, "run_at": now, "trigger": trigger,
+               "totals": counts, "markets": per_market}
+    _db.execute("INSERT INTO dynamic_multiples_runs (run_id, run_at, trigger, summary_json) "
+                "VALUES (?, ?, ?, ?)", [run_id, now, trigger, _json.dumps(summary)])
+    return summary
+
+
+def _audit(run_id, ex, level, key, field, previous, proposed, applied, action, reason, now):
+    _dm_db().execute(
+        "INSERT INTO dynamic_multiples_audit (run_id, exchange, level, key, field, previous, "
+        "proposed, applied, action, reason, run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [run_id, ex, level, key, field, previous, proposed, applied, action, reason, now])
+
+
+def pin(exchange: str, level: str, key: str, field: str, value: float, reviewer: str) -> dict:
+    """Owner override: set a basket's multiple and exempt it from automation."""
+    _ensure_dm_tables()
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _dm_db().execute(
+        "INSERT INTO dynamic_multiples (exchange, level, key, field, multiple, source, pinned, "
+        "effective_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?) "
+        "ON CONFLICT (exchange, level, key, field) DO UPDATE SET multiple = excluded.multiple, "
+        "source = excluded.source, pinned = 1, effective_at = excluded.effective_at",
+        [exchange, level, key, field, float(value), f"owner:{reviewer}", now])
+    return current_multiple(exchange, level, key, field)
+
+
+def unpin(exchange: str, level: str, key: str, field: str) -> Optional[dict]:
+    """Hand a basket back to the automation (it re-proposes next quarter)."""
+    _ensure_dm_tables()
+    _dm_db().execute("UPDATE dynamic_multiples SET pinned = 0 WHERE exchange = ? AND level = ? "
+                     "AND key = ? AND field = ?", [exchange, level, key, field])
+    return current_multiple(exchange, level, key, field)
+
+
+def record_usage(ticker: str, leg: str, exchange: str, level: str, key: str,
+                 field: str, multiple: float, effective_at: Optional[str]) -> None:
+    """Written by a valuation when a normalised leg priced on a dynamic
+    multiple -- the evidence that the multiple REACHED a valuation."""
+    try:
+        _ensure_dm_tables()
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _dm_db().execute(
+            "INSERT INTO dynamic_multiples_usage (ticker, leg, exchange, level, key, field, "
+            "multiple, effective_at, used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT (ticker, leg) DO UPDATE SET exchange = excluded.exchange, "
+            "level = excluded.level, key = excluded.key, field = excluded.field, "
+            "multiple = excluded.multiple, effective_at = excluded.effective_at, "
+            "used_at = excluded.used_at",
+            [ticker, leg, exchange, level, key, field, float(multiple), effective_at, now])
+    except Exception:                                          # noqa: BLE001
+        pass
+
+
+def log_report(limit_runs: int = 8) -> dict:
+    """What the Model Accuracy log shows: did it run, did it reach every
+    industry, did it reach valuations."""
+    import json as _json
+    _ensure_dm_tables()
+    _db = _dm_db()
+    runs = [dict(r) for r in (_db.query(
+        "SELECT run_id, run_at, trigger, summary_json FROM dynamic_multiples_runs "
+        "ORDER BY run_at DESC LIMIT ?", [limit_runs]) or [])]
+    for r in runs:
+        r["summary"] = _json.loads(r.pop("summary_json") or "{}")
+    coverage = {}
+    for ex in ("US", "HKSE", "SES"):
+        slots = [bf for bf in _basket_fields(ex) if bf[2]]
+        live = _db.query_one("SELECT COUNT(*) AS n FROM dynamic_multiples WHERE exchange = ?",
+                             [ex])
+        coverage[ex] = {"baskets_with_history": len({(l, k) for l, k, _ in slots}),
+                        "multiple_slots": len(slots),
+                        "multiples_live": int(dict(live)["n"]) if live else 0}
+    last_run_at = runs[0]["run_at"] if runs else None
+    usage_rows = [dict(r) for r in (_db.query(
+        "SELECT exchange, level, key, field, COUNT(DISTINCT ticker) AS tickers, "
+        "MAX(used_at) AS last_used FROM dynamic_multiples_usage "
+        "GROUP BY exchange, level, key, field ORDER BY tickers DESC") or [])]
+    since = [u for u in usage_rows if last_run_at and str(u["last_used"]) >= str(last_run_at)]
+    table = [dict(r) for r in (_db.query(
+        "SELECT exchange, level, key, field, multiple, baseline, band_lo, band_hi, market_now, "
+        "source, pinned, effective_at FROM dynamic_multiples ORDER BY exchange, level, key") or [])]
+    return {
+        "runs": runs,
+        "coverage": coverage,
+        "reached_valuations": {
+            "baskets_used": len(usage_rows),
+            "baskets_used_since_last_update": len(since),
+            "tickers": sum(int(u["tickers"]) for u in usage_rows),
+            "by_basket": usage_rows[:200],
+        },
+        "multiples": table,
+        "switches": {
+            "auto_update_enabled": os.environ.get(
+                "DYNAMIC_MULTIPLES_AUTO_DISABLED", "false").lower() != "true",
+            "valuations_read_enabled": enabled(),
+        },
+    }
+
+
+def enabled() -> bool:
+    """Whether valuations read the dynamic multiples table."""
+    return os.environ.get("DYNAMIC_MULTIPLES_ENABLED", "true").lower() == "true"

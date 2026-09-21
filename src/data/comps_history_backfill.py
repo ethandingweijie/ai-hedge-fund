@@ -81,29 +81,46 @@ def member_history(symbol: str) -> dict[str, dict[str, float]]:
     km_ccy = {str(r.get("reportedCurrency") or "") for r in (rows if isinstance(rows, list) else [])}
     inc_ccy = {str(r.get("reportedCurrency") or "") for r in inc}
     ccy_ok = (len(km_ccy) == 1 and km_ccy == inc_ccy)
+    # THE BASIS (corrected 2026-09-21). The normalised legs value
+    #     mean margin over the window x CURRENT revenue
+    # (`_normalized_earnings`), so the through-cycle multiple must be built on
+    # exactly that basis:
+    #     EV_t / (mean EBITDA margin x revenue_t)
+    # The first version divided by the mean EBITDA LEVEL instead. For a company
+    # that grows, the mean level sits well below current earnings, so the
+    # multiple came out inflated -- and was then applied to earnings that are
+    # not deflated, overvaluing every grower. Visa's P/E (norm) went 15.7x ->
+    # 20.5x on that artefact alone. A flat-revenue cyclical is barely touched
+    # either way, which is why the refiners did not show it. Built this way,
+    # growth cancels between the multiple and the earnings it is applied to.
+    rev = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("revenue")) for r in inc}
     ebitda = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("ebitda")) for r in inc}
-    eb_vals = [v for v in ebitda.values() if v is not None and v > 0]
-    eb_mean = (sum(eb_vals) / len(eb_vals)) if len(eb_vals) >= 3 else None
-    # The same normalisation for industries that anchor on earnings rather than
-    # EBITDA (banks, insurers): market cap over mean net income. A mean that is
-    # not positive has no multiple, rather than a negative one.
-    ni_vals = [rc._safe_float(r.get("netIncome")) for r in inc]
-    ni_vals = [v for v in ni_vals if v is not None]
-    ni_mean = (sum(ni_vals) / len(ni_vals)) if len(ni_vals) >= 3 else None
-    if ni_mean is not None and ni_mean <= 0:
-        ni_mean = None
+    ni = {str(r.get("date") or "")[:4]: rc._safe_float(r.get("netIncome")) for r in inc}
+    eb_m = [ebitda[y] / rev[y] for y in rev
+            if rev.get(y) and rev[y] > 0 and ebitda.get(y) is not None]
+    ni_m = [ni[y] / rev[y] for y in rev
+            if rev.get(y) and rev[y] > 0 and ni.get(y) is not None]
+    eb_margin = (sum(eb_m) / len(eb_m)) if len(eb_m) >= 3 else None
+    ni_margin = (sum(ni_m) / len(ni_m)) if len(ni_m) >= 3 else None
+    # A mean margin that is not positive has no multiple, rather than a
+    # negative one.
+    if eb_margin is not None and eb_margin <= 0:
+        eb_margin = None
+    if ni_margin is not None and ni_margin <= 0:
+        ni_margin = None
     out: dict[str, dict[str, float]] = {}
     for r in rows if isinstance(rows, list) else []:
         yr = str(r.get("date") or "")[:4]
         if not yr.isdigit():
             continue
         vals = {cf: rc._safe_float(r.get(kf)) for kf, cf in _KM_FIELDS.items()}
+        rev_y = rev.get(yr)
         ev = rc._safe_float(r.get("enterpriseValue"))
-        if ccy_ok and ev and ev > 0 and eb_mean:
-            vals["ev_ebitda_norm"] = ev / eb_mean
+        if ccy_ok and ev and ev > 0 and eb_margin and rev_y and rev_y > 0:
+            vals["ev_ebitda_norm"] = ev / (eb_margin * rev_y)
         mc = rc._safe_float(r.get("marketCap"))
-        if ccy_ok and mc and mc > 0 and ni_mean:
-            vals["pe_norm"] = mc / ni_mean
+        if ccy_ok and mc and mc > 0 and ni_margin and rev_y and rev_y > 0:
+            vals["pe_norm"] = mc / (ni_margin * rev_y)
         out[yr] = {k: v for k, v in vals.items() if v is not None}
     return out
 
@@ -200,4 +217,17 @@ def run_quarterly_backfill(force: bool = False) -> Optional[dict]:
         except Exception as exc:                               # noqa: BLE001
             logger.exception("[comps_history] %s failed: %s", m, exc)
             out[m] = {"error": str(exc)[:200]}
+    # Then the multiples themselves, for every industry (owner, 2026-09-21:
+    # automated, within guardrails). Runs on the history just rebuilt, so the
+    # quarter's multiples and the quarter's data can never be out of step.
+    # DYNAMIC_MULTIPLES_AUTO_DISABLED=true stops this step and only this step.
+    if os.environ.get("DYNAMIC_MULTIPLES_AUTO_DISABLED", "false").lower() != "true":
+        try:
+            from src.data import dynamic_multiples as _dm
+            ok = [m for m in markets() if "error" not in (out.get(m) or {})]
+            out["_multiples"] = _dm.update_all(tuple(ok), trigger="quarterly")
+            logger.info("[dynamic_multiples] %s", out["_multiples"].get("totals"))
+        except Exception as exc:                               # noqa: BLE001
+            logger.exception("[dynamic_multiples] update failed: %s", exc)
+            out["_multiples"] = {"error": str(exc)[:200]}
     return out

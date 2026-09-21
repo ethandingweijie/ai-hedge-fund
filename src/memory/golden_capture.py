@@ -593,6 +593,10 @@ PINNED_ENV = {
     "ASSUMPTION_STEWARD": "true",
     "EARNINGS_ASSUMPTIONS": "true",
     "VALUATION_CALIBRATION_DISABLED": "false",
+    # Dynamic multiples are a DB table updated each quarter; a replay reading
+    # it would move with the table. Off in replay -- the live path is covered
+    # by tests/test_dynamic_multiples_industry.py.
+    "DYNAMIC_MULTIPLES_ENABLED": "false",
     "PYTHONUTF8": "1",
 }
 

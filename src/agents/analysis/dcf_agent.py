@@ -2080,6 +2080,43 @@ def _classify_energy_segment(name: str, member: str = "") -> Optional[str]:
     return None
 
 
+def _dynamic_norm_multiple(peer: dict, live_field: str, ticker: Optional[str],
+                           leg: str) -> tuple[Optional[float], Optional[str]]:
+    """The industry's through-cycle multiple for a normalised leg, or (None, None).
+
+    Owner decision 2026-09-21: the normalised legs price through-cycle earnings,
+    so they take the basket's through-cycle multiple -- updated automatically
+    each quarter -- instead of the trailing peer median, which is the wrong
+    basis for normalised earnings (the refining audit's finding). The basket is
+    the one the live peer multiple itself resolved from, read off its recorded
+    provenance, so the dynamic multiple and the peer set can never disagree
+    about which industry this is. Falls back to the peer median whenever there
+    is no dynamic multiple, and records every use so the Model Accuracy log can
+    show the multiple actually reached a valuation.
+    """
+    try:
+        from src.data import dynamic_multiples as _dm
+        if not _dm.enabled():
+            return None, None
+        b = ((peer or {}).get("_comp_basis") or {}).get(live_field) or {}
+        key, ex, level = b.get("key"), b.get("exchange"), b.get("basis")
+        norm_field = _dm.LIVE_TO_NORM.get(live_field)
+        if not (key and ex and norm_field and level in ("industry", "sector")):
+            return None, None
+        row = _dm.current_multiple(ex, level, key, norm_field)
+        if not row or not isinstance(row.get("multiple"), (int, float)) or row["multiple"] <= 0:
+            return None, None
+        if ticker:
+            _dm.record_usage(ticker, leg, ex, level, key, norm_field,
+                             float(row["multiple"]), row.get("effective_at"))
+        src = (f"dynamic through-cycle {norm_field} ({ex} {level}: {key}; "
+               f"{'owner-pinned' if row.get('pinned') else 'auto'} "
+               f"{str(row.get('effective_at') or '')[:10]})")
+        return float(row["multiple"]), src
+    except Exception:                                          # noqa: BLE001
+        return None, None
+
+
 def _sotp_parts(segments: dict[str, float], tier: str = "default",
                 members: Optional[dict[str, str]] = None,
                 assets: Optional[dict[str, float]] = None,
@@ -5719,14 +5756,16 @@ def _compute_method_value(
         norm_ebitda = most_recent.get("normalized_ebitda")
         if norm_ebitda is None or norm_ebitda <= 0 or shares <= 0:
             return None
-        mult = peer.get("ev_ebitda", 12.0) * sm * growth_premium
+        _dyn, _dyn_src = _dynamic_norm_multiple(peer, "ev_ebitda", ticker, "EV/EBITDA (norm)")
+        _base_mult = _dyn if _dyn else peer.get("ev_ebitda", 12.0)
+        mult = _base_mult * sm * growth_premium
         if reported_currency == "CNY":
             mult *= peer.get("cn_adr_haircut", 1.0)
         ev = norm_ebitda * mult
         _leg_trace(kind="ev_multiple", metric="EBITDA (5y normalised)",
                    metric_value=float(norm_ebitda), multiple=float(mult),
-                   multiple_parts={"peer_multiple": float(peer.get("ev_ebitda", 12.0)),
-                                   "peer_source": "peer median ev_ebitda",
+                   multiple_parts={"peer_multiple": float(_base_mult),
+                                   "peer_source": _dyn_src or "peer median ev_ebitda",
                                    "scenario_band": sm, "growth_premium": growth_premium,
                                    "cn_adr_haircut": (peer.get("cn_adr_haircut", 1.0)
                                                       if reported_currency == "CNY" else 1.0)})
@@ -6149,11 +6188,15 @@ def _compute_method_value(
                 norm_ni = eq * _target_roe
         if norm_ni is None or norm_ni <= 0 or shares <= 0:
             return None
+        _dyn_pe, _dyn_pe_src = (None, None)
         if _is_bank:
+            # The bank leg prices on its owner-calibrated P/E, not a peer
+            # multiple, and is left as it is.
             cfg = _bank_profile_calibration(profile_name)
             mult = cfg["pe"] * sm * growth_premium * sbc_pe_discount
         else:
-            mult = peer.get("pe", 18.0) * sm * growth_premium * sbc_pe_discount
+            _dyn_pe, _dyn_pe_src = _dynamic_norm_multiple(peer, "pe", ticker, "P/E (norm)")
+            mult = (_dyn_pe if _dyn_pe else peer.get("pe", 18.0)) * sm * growth_premium * sbc_pe_discount
         eps_norm = norm_ni / shares
         _leg_trace(kind="equity_multiple",
                    metric=("Net income (equity x target ROE, bank)"
@@ -6162,8 +6205,9 @@ def _compute_method_value(
                    metric_value=float(norm_ni), shares=float(shares),
                    per_share_metric=float(eps_norm), multiple=float(mult),
                    multiple_parts={"peer_multiple": float(_bank_profile_calibration(profile_name)["pe"]
-                                                          if _is_bank else peer.get("pe", 18.0)),
-                                   "peer_source": "bank calibration P/E" if _is_bank else "peer median pe",
+                                                          if _is_bank else (_dyn_pe or peer.get("pe", 18.0))),
+                                   "peer_source": ("bank calibration P/E" if _is_bank
+                                                   else (_dyn_pe_src or "peer median pe")),
                                    "scenario_band": sm, "growth_premium": growth_premium,
                                    "sbc_pe_discount": sbc_pe_discount})
         return eps_norm * mult
