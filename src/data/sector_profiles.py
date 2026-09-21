@@ -3067,7 +3067,6 @@ SECTOR_PEER_MULTIPLES: dict[str, dict[str, float]] = {
     "Digital Asset Mining": {"ev_ebitda": 10.0, "pe": 18.0, "ev_revenue": 3.5, "pb": 1.3,  "fcf_yield": 0.050, "growth_avg": 0.15},
     "BTC Treasury / Proxy": {"ev_ebitda": 14.0, "pe": 22.0, "ev_revenue": 4.5, "pb": 1.8,  "fcf_yield": 0.040, "growth_avg": 0.20},
     "Crypto Exchange":      {"ev_ebitda": 16.0, "pe": 28.0, "ev_revenue": 8.0, "pb": 5.0,  "fcf_yield": 0.035, "growth_avg": 0.18},
-    "Asset Manager":        {"ev_ebitda": 13.0, "pe": 15.0, "ev_revenue": 4.5, "pb": 2.8,  "fcf_yield": 0.050, "growth_avg": 0.05},
     "Fintech/Stablecoin":   {"ev_ebitda": 18.0, "pe": 26.0, "ev_revenue": 5.5, "pb": 3.5,  "fcf_yield": 0.040, "growth_avg": 0.15},
     "Energy":              {"ev_ebitda": 10.0, "pe": 16.0, "ev_revenue": 2.5,  "pb": 1.8,  "fcf_yield": 0.055, "growth_avg": 0.04},
     # Regulated Utility sub-profile: higher EV/EBITDA (12.5x) and P/E (18x) than
@@ -4580,7 +4579,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     # ── Communication Services → Tech (digital advertising / search platforms) ─
     "GOOGL": ("Tech", "Hyperscaler / Tech Conglomerate", "Information Services", "Alphabet — Search + YouTube + GCP + AI capex"),
     "GOOG":  ("Tech", "Hyperscaler / Tech Conglomerate", "Information Services", "Alphabet class C — same business as GOOGL"),
-    "GOOG":  ("Tech", "",              "Information Services",            "Alphabet Class C"),
     "META":  ("Tech", "Hyperscaler / Tech Conglomerate", "Software (Entertainment)", "Meta — Ads + AI capex + Reality Labs; hyperscaler-like capex lens"),
 
     # ── Communication Services → Telco ────────────────────────────────────────
@@ -4873,9 +4871,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "CNC":   ("HealthcareServices", "Managed Care", "Healthcare Support Services", "Centene — Medicaid/ACA"),
 
     # ── Energy ────────────────────────────────────────────────────────────────
-    "XOM":   ("Resources", "",              "Oil/Gas (Integrated)",      "ExxonMobil — integrated O&G → Resources"),
-    "CVX":   ("Resources", "",              "Oil/Gas (Integrated)",      "Chevron"),
-    "COP":   ("Resources", "",              "Oil/Gas (Production and Exploration)", "ConocoPhillips"),
     "VST":   ("Energy",    "Merchant Power", "Power",                    "Vistra Energy — competitive power gen; NOT regulated utility"),
     "NEE":   ("Energy",    "Regulated Utility", "Utility (General)",     "NextEra Energy"),
     "DUK":   ("Energy",    "Regulated Utility", "Utility (General)",     "Duke Energy"),
@@ -4975,7 +4970,6 @@ TICKER_SECTOR_LOOKUP: dict[str, _TL] = {
     "09888.HK": ("Tech",        "",  "AI & Internet",            "Baidu Group"),
     "00772.HK": ("Tech",        "",  "Digital Content",          "China Literature"),
     "00020.HK": ("Tech",        "",  "AI / Vision",              "SenseTime"),
-    "01810.HK": ("Tech",        "",  "Electronics",              "Xiaomi Group"),
     "01024.HK": ("Tech",        "",  "Software (Internet)",      "Kuaishou Technology"),
     "00981.HK": ("Semiconductor", "", "Semiconductors",           "SMIC — HK foundry"),
     "01347.HK": ("Semiconductor", "", "Semiconductors",           "Hua Hong Semi — specialty foundry"),

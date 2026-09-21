@@ -134,3 +134,64 @@ def test_classify_fallthrough_uses_explicit_default():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ── 7. duplicate literal keys silently shadow each other ─────────────────────
+#
+# A dict literal with the same key twice keeps the LAST one, with no error and
+# no warning. Found live on GOOG: the curated row
+#     "GOOG": ("Tech", "Hyperscaler / Tech Conglomerate", ..., "same business as GOOGL")
+# was overwritten thirty lines later by
+#     "GOOG": ("Tech", "", ...)
+# so Alphabet's two share classes routed to different profiles -- GOOGL to the
+# Hyperscaler table, GOOG to the classifier -- while the shadowed line's own
+# comment stated the intent that had been lost. XOM, CVX, COP and 01810.HK
+# carried the same shape, there harmlessly (the specific row happened to come
+# second). Line numbers move; this does not.
+
+import ast
+import pathlib
+
+
+def _duplicate_keys_in_dict_literals(path: pathlib.Path) -> dict[str, list[str]]:
+    """{assigned name: [keys appearing more than once]} for every module-level
+    dict literal in the file."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    dups: dict[str, list[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        value, targets = node.value, (
+            node.targets if isinstance(node, ast.Assign) else [node.target])
+        if not isinstance(value, ast.Dict):
+            continue
+        name = next((t.id for t in targets if isinstance(t, ast.Name)), None)
+        if not name:
+            continue
+        seen, repeated = set(), []
+        for k in value.keys:
+            if not isinstance(k, ast.Constant) or not isinstance(k.value, str):
+                continue
+            if k.value in seen:
+                repeated.append(k.value)
+            seen.add(k.value)
+        if repeated:
+            dups[name] = sorted(set(repeated))
+    return dups
+
+
+@pytest.mark.parametrize("relpath", [
+    "src/data/sector_profiles.py",
+    "src/data/regional_comps.py",
+    "src/agents/analysis/dcf_agent.py",
+])
+def test_no_dict_literal_shadows_one_of_its_own_keys(relpath):
+    path = pathlib.Path(__file__).resolve().parents[1] / relpath
+    dups = _duplicate_keys_in_dict_literals(path)
+    assert not dups, f"{relpath}: duplicate keys silently shadowed: {dups}"
+
+
+def test_alphabet_share_classes_route_identically():
+    """GOOG and GOOGL are one company. A regression here means the duplicate
+    key came back, or one class was edited without the other."""
+    assert TICKER_SECTOR_LOOKUP["GOOG"][:2] == TICKER_SECTOR_LOOKUP["GOOGL"][:2]

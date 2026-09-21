@@ -11,7 +11,9 @@ as Apparel / Athletic Wear, CATL as Aerospace & Defense, AIA as FinTech and
 Zijin Gold as Specialty Chemicals.
 
 An industry row covers every company in that industry, including ones nobody
-has curated yet, so 71 rows cover 100 of 100 HK large caps.
+has curated yet, so the rows cover 100 of 100 HK large caps. The exact count is
+not repeated here: it went stale twice (71, then 72, against 76 today) because
+prose cannot be checked. `test_industry_profile_map` counts the live table.
 
 This module only RESOLVES the mapping. Nothing here is wired into the valuation
 path yet -- see `profile_for_industry` callers.
