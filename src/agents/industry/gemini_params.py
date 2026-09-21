@@ -497,10 +497,28 @@ class MaintenanceCapex(BaseModel):
     definition: str = Field(description="How the company defines maintenance capex, as it states it")
 
 
+class RateBase(BaseModel):
+    """Regulated rate base and the return the regulator allows on it (utilities)."""
+    value: Cited = Field(description="Total regulated rate base at the latest reported period end, "
+                                     "all jurisdictions combined, as the company states it")
+    allowed_roe: Optional[CitedRatio] = Field(
+        default=None, description="Authorised (allowed) return on equity, decimal; the rate-base-weighted "
+                                  "average across jurisdictions if the company states one")
+    equity_ratio: Optional[CitedRatio] = Field(
+        default=None, description="Authorised equity share of the regulatory capital structure, decimal "
+                                  "(e.g. 0.52 for a 52% equity layer)")
+    jurisdiction: str = Field(description="The regulator(s) the figures are set by, as the filing names them "
+                                          "(e.g. 'Florida PSC', 'Hong Kong Scheme of Control')")
+    basis: str = Field(description="What the rate base covers and how the company measures it, as it states "
+                                   "it (e.g. 'year-end regulatory capital employed', 'average net fixed assets "
+                                   "under the Scheme of Control')")
+
+
 INDUSTRY_INPUT_SCHEMAS: dict = {
     "pv10": ReserveValue,
     "backlog": BacklogValue,
     "maintenance_capex": MaintenanceCapex,
+    "rate_base": RateBase,
 }
 
 _INDUSTRY_ASK = {
@@ -523,10 +541,21 @@ _INDUSTRY_ASK = {
         "company's definition of it. Growth or expansion capex must not be included, and guidance "
         "for a future year is not a reported figure -- report the actual spend of a year that has "
         "ended."),
+    "rate_base": (
+        "its total REGULATED RATE BASE at the latest reported period end (the asset base its "
+        "regulators allow it to earn a return on -- 'rate base', 'regulatory capital employed', "
+        "'regulated asset base', or under Hong Kong's Scheme of Control 'average net fixed "
+        "assets'), all jurisdictions combined, using the company's own term and figure. Also "
+        "report the AUTHORISED return on equity and the AUTHORISED equity share of the "
+        "regulatory capital structure as the company or its rate orders state them, and name "
+        "the regulator(s). A projected or targeted rate base for a future year is not a reported "
+        "figure. Where the regime sets a permitted return on assets and no return on equity "
+        "(the Scheme of Control), omit the return on equity rather than deriving one."),
 }
 
 
 _OVERLAY_ASK = {
+    "rate_base": "regulated rate base",
     "maintenance_capex": "maintenance (sustaining) capital expenditure",
     "backlog": "contracted backlog",
     "pv10": "the discounted value of proved reserves",

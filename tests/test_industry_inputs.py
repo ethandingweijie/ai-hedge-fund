@@ -205,3 +205,60 @@ def test_backlog_bounds_only_the_bear_decline():
     src = __import__("inspect").getsource(d.run_dcf_agent)
     assert 'if scenario == "bear" and _backlog_cov is not None and g < 0:' in src
     assert "-(1.0 - min(_backlog_cov, 1.0))" in src
+
+
+# ── rate base (Wave 2: regulated utilities) ──────────────────────────────────
+
+def _rate_base_doc(roe=0.108, equity=0.596, amount=71.0):
+    data = {"value": {"value": amount, "currency": "USD", "scale": "bn", "period": "FY2025",
+                      "source_url": "https://investor.nexteraenergy.com/x",
+                      "quote": "regulatory capital employed of approximately $71 billion"},
+            "jurisdiction": "Florida PSC", "basis": "year-end regulatory capital employed"}
+    if roe is not None:
+        data["allowed_roe"] = {"value": roe, "period": "2025", "source_url": "https://x", "quote": "10.8%"}
+    if equity is not None:
+        data["equity_ratio"] = {"value": equity, "period": "2025", "source_url": "https://x", "quote": "59.6%"}
+    return {"version": 1, "tickers": {"NEE": {"rate_base": {"data": data, "checks": [], "ok": True}}}}
+
+
+def test_rate_base_is_a_kind_the_generic_accept_route_already_serves():
+    from src.agents.industry import gemini_params as gp
+    assert "rate_base" in ii.KINDS and "rate_base" in ii.BOUNDS
+    assert set(gp.INDUSTRY_INPUT_SCHEMAS) == set(ii.KINDS) == set(gp._INDUSTRY_ASK) == set(gp._OVERLAY_ASK)
+
+
+def test_a_pending_rate_base_is_never_used_and_an_accepted_one_carries_its_rate_order(store):
+    doc = _rate_base_doc()
+    assert ii.accepted_detail("NEE", "rate_base", "USD", doc=doc, fx=USD) is None
+    ii.set_review("NEE", "rate_base", "accepted", "owner", doc=doc)
+    d = ii.accepted_detail("NEE", "rate_base", "USD", doc=doc, fx=USD)
+    assert d["value"] == pytest.approx(71e9)
+    assert d["allowed_roe"] == pytest.approx(0.108) and d["equity_ratio"] == pytest.approx(0.596)
+    assert d["jurisdiction"] == "Florida PSC"
+
+
+def test_editing_the_allowed_roe_revokes_the_acceptance(store):
+    doc = _rate_base_doc()
+    ii.set_review("NEE", "rate_base", "accepted", "owner", doc=doc)
+    assert ii.accepted_detail("NEE", "rate_base", "USD", doc=_rate_base_doc(roe=0.118), fx=USD) is None
+
+
+def test_a_percentage_read_as_a_decimal_fails_its_rate_order_check():
+    data = _rate_base_doc(roe=10.8)["tickers"]["NEE"]["rate_base"]["data"]
+    checks = ii.reconcile("rate_base", 71e9, {"net_ppe": 140e9}, data=data)
+    assert [c["ok"] for c in checks if c["check"] == "allowed_roe"] == [False]
+    assert [c["ok"] for c in checks if c["check"] == "rate_base / net_ppe"] == [True]
+    # bn read as mn: 0.0005x of net plant.
+    assert any(c["ok"] is False for c in ii.reconcile("rate_base", 71e6, {"net_ppe": 140e9}, data=data))
+
+
+def test_a_regime_with_no_allowed_roe_is_reported_not_failed(store):
+    """Hong Kong's Scheme of Control permits a return on net fixed assets and
+    sets no ROE. The entry is still reviewable; the method falls back without it."""
+    doc = _rate_base_doc(roe=None, equity=None)
+    data = doc["tickers"]["NEE"]["rate_base"]["data"]
+    checks = ii.reconcile("rate_base", 71e9, {"net_ppe": 140e9}, data=data)
+    assert [c["ok"] for c in checks if c["check"] in ("allowed_roe", "equity_ratio")] == [None, None]
+    ii.set_review("NEE", "rate_base", "accepted", "owner", doc=doc)
+    d = ii.accepted_detail("NEE", "rate_base", "USD", doc=doc, fx=USD)
+    assert d["allowed_roe"] is None and d["equity_ratio"] is None

@@ -420,6 +420,7 @@ const INPUT_LABEL: Record<IndustryInputRow['kind'], string> = {
   pv10: 'Reserve value (PV-10)',
   backlog: 'Backlog',
   maintenance_capex: 'Maintenance capex',
+  rate_base: 'Regulated rate base',
 };
 
 function IndustryInputReview({ row, onChanged, overlay = false }:

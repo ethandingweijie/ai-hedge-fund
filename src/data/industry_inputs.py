@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 STORE_PATH = Path(__file__).resolve().parent / "industry_inputs.json"
-KINDS = ("pv10", "backlog", "maintenance_capex")
+KINDS = ("pv10", "backlog", "maintenance_capex", "rate_base")
 
 #: The overlay toggle. Off by default: a valuation runs on audited actuals
 #: unless someone switches the forward view on deliberately.
@@ -59,7 +59,17 @@ BOUNDS = {
     "backlog": ("revenue", 0.05, 15.0),
     # Maintenance capex / D&A: sustaining spend is a fraction of to about three times D&A.
     "maintenance_capex": ("depreciation_and_amortization", 0.1, 3.0),
+    # Rate base / net PP&E: the regulated asset base is most of a pure utility's plant and
+    # about half of a holding company's with a large unregulated arm (NextEra); it excludes
+    # construction work in progress, so it rarely exceeds net plant.
+    "rate_base": ("net_ppe", 0.25, 1.5),
 }
+
+#: Ratios a rate order can plausibly carry. An allowed ROE outside 6-14% or an equity
+#: layer outside 30-65% is a percentage read as a decimal (or the reverse), or a
+#: return on ASSETS reported as a return on equity (Hong Kong's Scheme of Control
+#: permits 8% on net fixed assets and sets no ROE at all).
+RATE_ORDER_BOUNDS = {"allowed_roe": (0.06, 0.14), "equity_ratio": (0.30, 0.65)}
 
 _DDL_REVIEWS = """
 CREATE TABLE IF NOT EXISTS industry_input_reviews (
@@ -168,7 +178,7 @@ def ground_truth_check(value_usd: Optional[float], gt: Optional[dict]) -> Option
 
 
 def reconcile(kind: str, value: Optional[float], context: dict,
-              period: Optional[str] = None) -> list[dict]:
+              period: Optional[str] = None, data: Optional[dict] = None) -> list[dict]:
     """Checks for one amount (full units, the context's currency) against FMP.
 
     `period` is the fiscal period the figure is stated for: a pre-fill that
@@ -200,6 +210,15 @@ def reconcile(kind: str, value: Optional[float], context: dict,
         if isinstance(ocf, (int, float)) and ocf > 0:
             checks.append({"check": "maintenance capex < OCF", "ok": value < ocf,
                            "detail": f"{value / ocf:.2f}x of operating cash flow"})
+    if kind == "rate_base":
+        for name, (r_lo, r_hi) in RATE_ORDER_BOUNDS.items():
+            r = ((data or {}).get(name) or {}).get("value")
+            if isinstance(r, (int, float)):
+                checks.append({"check": name, "ok": r_lo <= r <= r_hi,
+                               "detail": f"{r:.2%} (plausible {r_lo:.0%} to {r_hi:.0%})"})
+            else:
+                checks.append({"check": name, "ok": None,
+                               "detail": f"no {name.replace('_', ' ')} stated; the method falls back without it"})
     return checks
 
 
@@ -290,6 +309,13 @@ def accepted_detail(ticker: str, kind: str, to_ccy: str, *, doc: Optional[dict] 
                "basis": e.get("basis") or "actual",
                "period": ((e.get("data") or {}).get("value") or {}).get("period"),
                "source_url": ((e.get("data") or {}).get("value") or {}).get("source_url")}
+        if kind == "rate_base":
+            # Accepted with the amount: the content hash covers the whole entry,
+            # so an edited ROE or equity layer revokes the acceptance too.
+            for name in RATE_ORDER_BOUNDS:
+                r = ((e.get("data") or {}).get(name) or {}).get("value")
+                out[name] = float(r) if isinstance(r, (int, float)) else None
+            out["jurisdiction"] = (e.get("data") or {}).get("jurisdiction")
         ov = e.get("overlay") or {}
         want = overlay_enabled() if overlay is None else bool(overlay)
         if not (want and ov and kind not in NO_OVERLAY):

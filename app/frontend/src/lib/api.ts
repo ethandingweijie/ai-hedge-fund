@@ -348,7 +348,7 @@ export interface SegmentMemory {
 export interface IndustryInputRow {
   ticker: string;
   company?: string | null;
-  kind: 'pv10' | 'backlog' | 'maintenance_capex';
+  kind: 'pv10' | 'backlog' | 'maintenance_capex' | 'rate_base';
   value?: number | null;
   currency?: string | null;
   scale?: string | null;

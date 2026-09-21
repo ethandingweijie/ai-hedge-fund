@@ -71,6 +71,18 @@ def target_dcf_yield(profile: Optional[str], doc: Optional[dict] = None) -> Opti
     return float(v) if isinstance(v, (int, float)) and v > 0 else None
 
 
+def cost_of_equity(profile: Optional[str], doc: Optional[dict] = None) -> Optional[float]:
+    """The owner-set cost of equity for this profile, or None when none is authored.
+
+    Read by the P/Rate Base leg, whose justified multiple is
+    (allowed ROE - g) / (CoE - g). None means the leg declines and its declared
+    proxy prices the weight: a cost of equity is never inferred from a sector
+    WACC, which is a blended rate on a different basis.
+    """
+    v = (entry(profile, doc) or {}).get("cost_of_equity")
+    return float(v) if isinstance(v, (int, float)) and 0.03 <= v <= 0.20 else None
+
+
 def detail(profile: Optional[str], doc: Optional[dict] = None,
            today: Optional[date] = None) -> Optional[dict]:
     """The constant plus the audit trail behind it: benchmark, band, review

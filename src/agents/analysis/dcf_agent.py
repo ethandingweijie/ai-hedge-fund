@@ -6350,7 +6350,57 @@ def _compute_method_value(
                 return (total_equity / shares) * mult
         # no live mNAV → fall through to the peer-P/B path below
 
-    if method_name in {"P/BV", "P/Rate Base", "NAV Discount", "SOTP / NAV",
+    # ── P/Rate Base — the regulator's own arithmetic (regulated utilities) ──
+    # A regulator authorises a return on the EQUITY layer of the rate base, so
+    # the justified multiple on that layer is the Gordon form the bank GGM leg
+    # uses: (allowed ROE - g) / (CoE - g). Until Wave 2 this name sat in the
+    # P/BV set below and priced book value x peer P/B under a rate-base label.
+    #
+    #   equity rate base = rate base x authorised equity ratio
+    #   value per share  = equity rate base / shares x multiple x scenario band
+    #
+    # No net-debt bridge: the equity layer is already the equity-funded slice,
+    # and subtracting net debt would deduct the debt layer twice. No growth
+    # premium: a PEG premium on a regulator-capped return is incoherent (the
+    # live-mNAV branch above makes the same argument).
+    #
+    # Three inputs, none of them guessed. The rate base and the allowed ROE
+    # are owner-accepted filing figures; the cost of equity is an owner-set
+    # profile constant. Missing any one, the leg returns None and the P/BV
+    # proxy the profile declares prices the weight instead -- requested
+    # alongside via _PER_TICKER_METHODS, so no weight is ever lost.
+    if method_name == "P/Rate Base":
+        from src.data import valuation_constants as _vc
+        _rb = most_recent.get("rate_base_accepted")
+        _rb_d = most_recent.get("_rate_base_detail") or {}
+        _roe = _rb_d.get("allowed_roe")
+        _coe = _vc.cost_of_equity(profile_name)
+        if not (_rb and _rb > 0 and _roe and _coe and shares > 0):
+            return None
+        _g = min(float(tgr or 0.0), _coe - 0.01)
+        if _roe <= _g:
+            return None
+        _eq_ratio, _eq_src = _rb_d.get("equity_ratio"), "authorised equity ratio (rate order)"
+        if not _eq_ratio:
+            _debt = most_recent.get("total_debt")
+            if not (total_equity and total_equity > 0 and _debt is not None and _debt >= 0):
+                return None
+            _eq_ratio = total_equity / (total_equity + _debt)
+            _eq_src = "book equity / (book equity + debt): no authorised ratio stated"
+        _just = (_roe - _g) / (_coe - _g)
+        mult = _just * sm
+        _eq_rb = _rb * _eq_ratio
+        _leg_trace(kind="equity_multiple", rate_base_audit=_rb_d,
+                   metric=f"Equity rate base: rate base x {_eq_src}",
+                   metric_value=float(_eq_rb), shares=float(shares),
+                   per_share_metric=float(_eq_rb / shares), multiple=float(mult),
+                   multiple_parts={"justified_multiple": float(_just), "allowed_roe": float(_roe),
+                                   "cost_of_equity": float(_coe), "g": float(_g),
+                                   "equity_ratio": float(_eq_ratio), "scenario_band": sm,
+                                   "peer_source": f"(allowed ROE - g) / (CoE - g); CoE owner-set ({profile_name})"})
+        return (_eq_rb / shares) * mult
+
+    if method_name in {"P/BV", "NAV Discount", "SOTP / NAV",
                        "NAV (Project)", "Pipeline NAV"}:
         mult = peer.get("pb", 2.0) * sm * growth_premium
         _pb_parts = {"peer_multiple": float(peer.get("pb", 2.0)), "peer_source": "peer median pb",
@@ -7028,6 +7078,14 @@ _LOOKTHROUGH_ANCHORS = frozenset({"SOTP / NAV", "SOTP / NAV (look-through)"})
 #: profile quietly ran on 0.80 of its stated weight. Profiles without a
 #: template are unaffected -- the method returns None and the proxy stands.
 _LOOKTHROUGH_METHODS = _LOOKTHROUGH_ANCHORS | frozenset({"NAV Discount"})
+
+#: The same idea, generalised: a method declared `implementable: False` with a
+#: proxy, that becomes exact for a ticker once its review-gated input has been
+#: accepted. It is requested ALONGSIDE its proxy; the blend takes the real value
+#: when there is one and the proxy when there is not. "P/Rate Base" needs an
+#: accepted rate base plus an owner-set cost of equity, and prices as P/BV --
+#: exactly as before -- for every ticker that has neither.
+_PER_TICKER_METHODS = _LOOKTHROUGH_METHODS | frozenset({"P/Rate Base"})
 
 
 def _industry_routed_profile(ticker: str, sector: str, end_date: str = "",
@@ -9864,6 +9922,12 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         f"{_mc_d['baseline'] / 1e6:,.0f}m actual ({_mc_d.get('period')}) "
                         f"{_mc_d.get('delta_pct', 0):+.1%} guidance = "
                         f"{_mc_d['value'] / 1e6:,.0f}m")
+            # Wave 2: an owner-accepted regulated rate base, with the rate
+            # order's allowed ROE and equity layer, feeds the P/Rate Base leg.
+            _rb_d = _ii.accepted_detail(ticker, "rate_base", _mc_ccy)
+            if _rb_d and _rb_d.get("value") is not None:
+                most_recent["rate_base_accepted"] = _rb_d["value"]
+                most_recent["_rate_base_detail"] = _rb_d
         except Exception:                                  # noqa: BLE001
             pass
         most_recent["normalized_ebit"]       = _norm_ebit
@@ -12403,7 +12467,7 @@ def run_dcf_agent(state: AgentState) -> AgentState:
                         # completes, so ask for the real method too. When the
                         # look-through does not complete it returns None and
                         # the proxy already requested here stands, unchanged.
-                        if m["name"] in _LOOKTHROUGH_METHODS:
+                        if m["name"] in _PER_TICKER_METHODS:
                             methods_to_compute.add(m["name"])
 
                 # ── Growth premium: growth-vs-sector, quality-gated by ROIC ──

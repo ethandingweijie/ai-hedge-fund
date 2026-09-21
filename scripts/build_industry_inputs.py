@@ -41,6 +41,15 @@ WAVE1 = {
     "backlog": ["SLB", "HAL", "BKR", "RIG", "02883.HK", "03337.HK"],
 }
 
+#: Wave 2 (power & transition). Rate base for the regulated names, including the
+#: two the owner pinned to Regulated Utility against their FMP label (00006.HK,
+#: 01816.HK); contracted backlog for the fuel-cycle names and the turbine OEM.
+WAVE2 = {
+    "rate_base": ["NEE", "DUK", "SO", "00002.HK", "00006.HK", "01816.HK"],
+    "backlog": ["CCJ", "LEU", "GEV", "BE"],
+}
+WAVES = {"1": WAVE1, "2": WAVE2}
+
 
 def _fmp(path: str, params: dict):
     from src.tools.api import _fmp_get
@@ -56,6 +65,7 @@ def fmp_context(ticker: str) -> dict:
     prof = (_fmp("profile", {"symbol": sym}) or [{}])[0]
     inc = (_fmp("income-statement", {"symbol": sym, "limit": 1}) or [{}])[0]
     cf = (_fmp("cash-flow-statement", {"symbol": sym, "limit": 1}) or [{}])[0]
+    bs = (_fmp("balance-sheet-statement", {"symbol": sym, "limit": 1}) or [{}])[0]
     rep = (inc.get("reportedCurrency") or cf.get("reportedCurrency") or "USD")
     r_rep, r_list = usd(rep), usd(prof.get("currency") or "USD")
 
@@ -69,6 +79,7 @@ def fmp_context(ticker: str) -> dict:
         "depreciation_and_amortization": conv(cf.get("depreciationAndAmortization")
                                               or inc.get("depreciationAndAmortization"), r_rep),
         "operating_cash_flow": conv(cf.get("operatingCashFlow"), r_rep),
+        "net_ppe": conv(bs.get("propertyPlantEquipmentNet"), r_rep),
     }
 
 
@@ -91,7 +102,7 @@ def build_one(ticker: str, kind: str) -> dict:
         raise gp.GeminiParseError(f"{ticker}/{kind}: no structured answer")
     value_usd = gp.amount((data or {}).get("value"), ii._fx("USD"))
     period = (data.get("value") or {}).get("period")
-    checks = ii.reconcile(kind, value_usd, ctx, period=period)
+    checks = ii.reconcile(kind, value_usd, ctx, period=period, data=data)
     return {
         # Audited actual unless a check says the period is not the latest
         # reported one -- a guidance figure must arrive as an overlay, not as
@@ -131,15 +142,15 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kind", choices=ii.KINDS)
     ap.add_argument("--tickers", default="")
-    ap.add_argument("--wave", choices=["1"])
+    ap.add_argument("--wave", choices=sorted(WAVES))
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--overlay", action="store_true",
                     help="capture management guidance as a delta on the stored actual")
     a = ap.parse_args(argv)
-    jobs = ([(k, t) for k, ts in WAVE1.items() for t in ts] if a.wave == "1"
+    jobs = ([(k, t) for k, ts in WAVES[a.wave].items() for t in ts] if a.wave
             else [(a.kind, t.strip()) for t in a.tickers.split(",") if t.strip()])
     if not jobs or any(k is None for k, _ in jobs):
-        ap.error("give --wave 1, or --kind with --tickers")
+        ap.error("give --wave N, or --kind with --tickers")
     doc = ii.load() or {"version": 1, "tickers": {}}
     for kind, t in jobs:
         key = ii._key(t)
